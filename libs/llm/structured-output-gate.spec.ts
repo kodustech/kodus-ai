@@ -182,6 +182,14 @@ describe('a code block quoted before the answer does not hide the answer', () =>
         await expect(repairAndValidate(reviewWire, raw)).resolves.toEqual(answer);
     });
 
+    it('recovers the answer when bracketed prose sits between the quoted block and the answer', async () => {
+        const raw =
+            'The header is read here:\n```ruby\nENV["KEY"]\n```\n' +
+            'so `opts[:secret]` can be nil.\n' +
+            JSON.stringify(answer);
+        await expect(repairAndValidate(reviewWire, raw)).resolves.toEqual(answer);
+    });
+
     it('keeps Markdown fences that sit inside the string values of a bare answer', async () => {
         const withCode = {
             suggestions: [

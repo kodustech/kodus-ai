@@ -471,9 +471,11 @@ export async function repairAndValidate<T = unknown>(
  * The places the answer can be in free-form text, best guess first. The first is
  * what {@link extractJsonFromText} returns; when the model quotes a code block
  * before its answer that is the quote, so the remaining candidates give the
- * validating caller the answer to fall back on: the text after each fenced
- * block (last fence first, so a bare answer written after the quotes wins over
- * an example quoted earlier), then each fenced block itself, last first. Fences
+ * validating caller the answer to fall back on: every balanced value in the
+ * text after each fenced block, in order (last fence first, so a bare answer
+ * written after the quotes wins over an example quoted earlier, and bracketed
+ * prose before it only adds a candidate that fails), then each fenced block
+ * itself, last first. Fences
  * are never stripped from the text: a bare answer can carry Markdown fences
  * inside its string values (`improvedCode`), and removing them would corrupt it.
  * Reasoning is dropped first, so a schema-valid example quoted in a <think>
@@ -493,10 +495,21 @@ function jsonCandidates(rawText: string): string[] {
     const answerText = stripReasoning(rawText);
     const fenced = [...answerText.matchAll(/```[^\n`]*\n?([\s\S]*?)```/g)];
     for (const block of [...fenced].reverse()) {
-        const after = sliceBalancedJson(
-            answerText.slice((block.index ?? 0) + block[0].length),
-        );
-        add(after != null ? after.replace(/,(\s*[}\]])/g, '$1') : null);
+        // Every balanced value after the fence, in order: bracketed prose such as
+        // `opts[:secret]` between the quote and the answer is one more candidate
+        // that fails to parse, not the end of the search.
+        let rest = answerText.slice((block.index ?? 0) + block[0].length);
+        for (;;) {
+            const start = rest.search(/[{[]/);
+            if (start < 0) break;
+            const value = sliceBalancedJson(rest.slice(start));
+            if (value == null) {
+                rest = rest.slice(start + 1);
+                continue;
+            }
+            add(value.replace(/,(\s*[}\]])/g, '$1'));
+            rest = rest.slice(start + value.length);
+        }
     }
     for (const block of fenced.reverse()) {
         add(extractJsonFromText(block[1]));
