@@ -135,6 +135,7 @@ describe('declared env provider', () => {
             API_LLM_PROVIDER_MODEL: 'gpt-5.6-luna',
             API_LLM_PROVIDER: 'openai_compatible',
             API_LLM_API_KEY: 'sk-x',
+            API_LLM_BASE_URL: 'https://api.openai.com/v1',
         });
         expect(resolveEnvProvider()).toMatchObject({
             kind: 'openai_compat',

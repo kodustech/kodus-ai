@@ -104,6 +104,15 @@ export function describeEnvLLMConfig(
     env: NodeJS.ProcessEnv = process.env,
 ): EnvLLMDescriptor {
     const envMode = env.API_LLM_PROVIDER_MODEL ?? 'auto';
+    const declared = resolveDeclaredEnvProvider(env);
+    if (declared.kind === 'invalid') {
+        return {
+            configured: false,
+            model: envMode,
+            providerSource: 'declared',
+            invalidReason: declared.reason,
+        };
+    }
     if (envMode === 'auto') {
         return { configured: false };
     }
@@ -156,15 +165,6 @@ export function describeEnvLLMConfig(
             : out;
     };
 
-    const declared = resolveDeclaredEnvProvider(env);
-    if (declared.kind === 'invalid') {
-        return {
-            configured: false,
-            model: envMode,
-            providerSource: 'declared',
-            invalidReason: declared.reason,
-        };
-    }
     if (declared.kind === 'declared') {
         const { config, warnings } = declared;
         return baseDescriptor({

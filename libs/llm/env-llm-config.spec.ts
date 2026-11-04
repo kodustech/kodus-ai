@@ -633,20 +633,32 @@ describe('describeEnvLLMConfig — declared provider (#1687)', () => {
 
     it('carries the disagreement warning and the temperature override', () => {
         const descriptor = describeEnvLLMConfig({
-            API_LLM_PROVIDER_MODEL: 'gpt-5.6-luna',
-            API_LLM_PROVIDER: 'openai',
+            API_LLM_PROVIDER_MODEL: 'claude-sonnet-4-6',
+            API_LLM_PROVIDER: 'anthropic',
             API_LLM_API_KEY: 'sk-a',
-            API_OPEN_AI_API_KEY: 'sk-b',
+            API_ANTHROPIC_API_KEY: 'sk-b',
             API_LLM_TEMPERATURE_OVERRIDE: '1',
         } as any);
         expect(descriptor).toMatchObject({
             configured: true,
-            providerId: 'openai',
-            baseUrl: 'https://api.openai.com/v1',
+            providerId: 'anthropic',
             temperatureOverride: 1,
             warnings: [
-                'API_LLM_API_KEY and API_OPEN_AI_API_KEY are both set to different values; API_LLM_API_KEY is used.',
+                'API_LLM_API_KEY and API_ANTHROPIC_API_KEY are both set to different values; API_LLM_API_KEY is used.',
             ],
+        });
+    });
+
+    it('reports a provider set next to the cloud (auto) model as invalid', () => {
+        expect(
+            describeEnvLLMConfig({
+                API_LLM_PROVIDER_MODEL: 'auto',
+                API_LLM_PROVIDER: 'openai',
+            } as any),
+        ).toMatchObject({
+            configured: false,
+            invalidReason:
+                'API_LLM_PROVIDER requires API_LLM_PROVIDER_MODEL. Set it to the model to run.',
         });
     });
 

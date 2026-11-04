@@ -1,5 +1,8 @@
 import { describeEnvLLMConfig } from '@libs/llm/env-llm-config';
-import { isEndpointSuffixWarning } from '@libs/llm/env-declared-provider';
+import {
+    isEndpointSuffixWarning,
+    isForeignHostWarning,
+} from '@libs/llm/env-declared-provider';
 import { LLM_TASK } from '@libs/llm/llm-tasks';
 import { LLM } from '@libs/llm/llm';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
@@ -99,13 +102,21 @@ function envModelResults(
                       impact: 'As written, the URL would fail on every call; Kodus calls the corrected one instead.',
                       fix: 'Remove the endpoint path from that variable so it ends at the API root (usually /v1).',
                   }
-                : {
-                      check: 'llm.env_conflict',
-                      status: 'warn',
-                      title: warning,
-                      impact: 'One of the two values is ignored, and it may be the one you meant.',
-                      fix: 'Keep only the API_LLM_* variable, or give both the same value.',
-                  },
+                : isForeignHostWarning(warning)
+                  ? {
+                        check: 'llm.env_base_url',
+                        status: 'warn',
+                        title: warning,
+                        impact: 'A proxy that only speaks the OpenAI-compatible protocol fails on every call.',
+                        fix: 'For a proxy, set API_LLM_PROVIDER=openai_compatible; otherwise remove API_OPENAI_FORCE_BASE_URL.',
+                    }
+                  : {
+                        check: 'llm.env_conflict',
+                        status: 'warn',
+                        title: warning,
+                        impact: 'One of the two values is ignored, and it may be the one you meant.',
+                        fix: 'Keep only the API_LLM_* variable, or give both the same value.',
+                    },
         );
     }
 

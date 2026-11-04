@@ -470,14 +470,39 @@ describe('doctor checks — each condition in scope, one at a time', () => {
 
         it('warns when the generic and the legacy key disagree', async () => {
             const env = cleanEnv();
-            env.API_LLM_PROVIDER = 'openai';
+            env.API_LLM_PROVIDER = 'anthropic';
             env.API_LLM_API_KEY = 'sk-other-key-0987654321';
+            env.API_ANTHROPIC_API_KEY = 'sk-ant-key-1234567890';
             const results = await llmCheck(llmDeps()).run(ctx({ env }));
             expect(
                 results.find((r) => r.check === 'llm.env_conflict'),
             ).toMatchObject({
                 status: 'warn',
-                title: 'API_LLM_API_KEY and API_OPEN_AI_API_KEY are both set to different values; API_LLM_API_KEY is used.',
+                title: 'API_LLM_API_KEY and API_ANTHROPIC_API_KEY are both set to different values; API_LLM_API_KEY is used.',
+            });
+            expectActionable(results);
+        });
+
+        it('does not flag the OpenAI key kept for embeddings as a conflict', async () => {
+            const env = cleanEnv();
+            env.API_LLM_PROVIDER = 'openai';
+            env.API_LLM_API_KEY = 'sk-other-key-0987654321';
+            const results = await llmCheck(llmDeps()).run(ctx({ env }));
+            expect(
+                results.find((r) => r.check === 'llm.env_conflict'),
+            ).toBeUndefined();
+        });
+
+        it('warns when the legacy base URL points a declared openai at another host', async () => {
+            const env = cleanEnv();
+            env.API_LLM_PROVIDER = 'openai';
+            env.API_OPENAI_FORCE_BASE_URL = 'https://openrouter.test/api/v1';
+            const results = await llmCheck(llmDeps()).run(ctx({ env }));
+            expect(
+                results.find((r) => r.check === 'llm.env_base_url'),
+            ).toMatchObject({
+                status: 'warn',
+                fix: 'For a proxy, set API_LLM_PROVIDER=openai_compatible; otherwise remove API_OPENAI_FORCE_BASE_URL.',
             });
             expectActionable(results);
         });
@@ -485,6 +510,7 @@ describe('doctor checks — each condition in scope, one at a time', () => {
         it('warns when the env reasoning effort is one the model cannot honor', async () => {
             const env = cleanEnv();
             env.API_LLM_PROVIDER = 'openai_compatible';
+            env.API_LLM_BASE_URL = 'https://api.minimax.test/v1';
             env.API_LLM_PROVIDER_MODEL = 'minimax-m2.5';
             env.API_LLM_REASONING_EFFORT = 'none';
             const results = await llmCheck(llmDeps()).run(ctx({ env }));

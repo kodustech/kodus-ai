@@ -10,14 +10,44 @@ describe('resolveDeclaredEnvProvider', () => {
         ).toEqual({ kind: 'inferred' });
     });
 
-    it('ignores everything on cloud (auto), even a declared provider', () => {
+    it('rejects a provider set next to the cloud (auto) model instead of ignoring it', () => {
         expect(
             resolveDeclaredEnvProvider({
                 API_LLM_PROVIDER_MODEL: 'auto',
                 API_LLM_PROVIDER: 'openai',
                 API_LLM_API_KEY: 'sk-x',
             } as any),
+        ).toEqual({
+            kind: 'invalid',
+            reason: 'API_LLM_PROVIDER, API_LLM_API_KEY require API_LLM_PROVIDER_MODEL. Set it to the model to run.',
+        });
+        expect(
+            resolveDeclaredEnvProvider({
+                API_LLM_PROVIDER: 'openai',
+            } as any).kind,
+        ).toBe('invalid');
+    });
+
+    it('leaves cloud (auto) with no API_LLM_* var to inference', () => {
+        expect(
+            resolveDeclaredEnvProvider({
+                API_LLM_PROVIDER_MODEL: 'auto',
+                API_OPEN_AI_API_KEY: 'sk-embeddings',
+            } as any),
         ).toEqual({ kind: 'inferred' });
+    });
+
+    it('trims the model id', () => {
+        const result = resolveDeclaredEnvProvider(
+            env({
+                API_LLM_PROVIDER: 'openai',
+                API_LLM_API_KEY: 'k',
+                API_LLM_PROVIDER_MODEL: 'gpt-x ',
+            }),
+        );
+        expect(result.kind === 'declared' && result.config.model).toBe(
+            'gpt-x',
+        );
     });
 
     it.each([
@@ -128,9 +158,9 @@ describe('resolveDeclaredEnvProvider', () => {
     it('never puts a key value in a warning', () => {
         const result = resolveDeclaredEnvProvider(
             env({
-                API_LLM_PROVIDER: 'openai',
+                API_LLM_PROVIDER: 'anthropic',
                 API_LLM_API_KEY: 'sk-generic-secret',
-                API_OPEN_AI_API_KEY: 'sk-legacy-secret',
+                API_ANTHROPIC_API_KEY: 'sk-legacy-secret',
             }),
         );
         expect(result.kind).toBe('declared');
@@ -176,32 +206,49 @@ describe('resolveDeclaredEnvProvider', () => {
         );
     });
 
-    it('still runs anthropic on API_OPEN_AI_API_KEY alone, as installs did before', () => {
-        const result = resolveDeclaredEnvProvider(
-            env({
-                API_LLM_PROVIDER: 'anthropic',
-                API_OPEN_AI_API_KEY: 'sk-ant-legacy',
-            }),
-        );
-        expect(result.kind === 'declared' && result.config.apiKey).toBe(
-            'sk-ant-legacy',
-        );
+    it('never sends the OpenAI-named key to a declared anthropic', () => {
+        expect(
+            resolveDeclaredEnvProvider(
+                env({
+                    API_LLM_PROVIDER: 'anthropic',
+                    API_OPEN_AI_API_KEY: 'sk-proj-embeddings',
+                }),
+            ),
+        ).toEqual({
+            kind: 'invalid',
+            reason: 'API_LLM_PROVIDER=anthropic has no API key. Set API_LLM_API_KEY or API_ANTHROPIC_API_KEY.',
+        });
     });
 
     it('prefers the generic key and warns when the legacy one disagrees', () => {
         const result = resolveDeclaredEnvProvider(
             env({
-                API_LLM_PROVIDER: 'openai',
+                API_LLM_PROVIDER: 'anthropic',
                 API_LLM_API_KEY: 'sk-new',
-                API_OPEN_AI_API_KEY: 'sk-old',
+                API_ANTHROPIC_API_KEY: 'sk-old',
             }),
         );
         expect(result.kind).toBe('declared');
         if (result.kind !== 'declared') return;
         expect(result.config.apiKey).toBe('sk-new');
         expect(result.warnings).toEqual([
-            'API_LLM_API_KEY and API_OPEN_AI_API_KEY are both set to different values; API_LLM_API_KEY is used.',
+            'API_LLM_API_KEY and API_ANTHROPIC_API_KEY are both set to different values; API_LLM_API_KEY is used.',
         ]);
+    });
+
+    it('does not report API_OPEN_AI_API_KEY as a conflict: it is also the embeddings key', () => {
+        const result = resolveDeclaredEnvProvider(
+            env({
+                API_LLM_PROVIDER: 'openai_compatible',
+                API_LLM_API_KEY: 'vllm-key',
+                API_LLM_BASE_URL: 'https://vllm.test/v1',
+                API_OPEN_AI_API_KEY: 'sk-embeddings',
+            }),
+        );
+        expect(result.kind === 'declared' && result.config.apiKey).toBe(
+            'vllm-key',
+        );
+        expect(result.kind === 'declared' && result.warnings).toEqual([]);
     });
 
     it('does not warn when generic and legacy agree', () => {
@@ -218,33 +265,78 @@ describe('resolveDeclaredEnvProvider', () => {
     it('falls back to the legacy key and base URL when the generic ones are empty', () => {
         const result = resolveDeclaredEnvProvider(
             env({
-                API_LLM_PROVIDER: 'anthropic',
-                API_OPEN_AI_API_KEY: 'sk-ant',
+                API_LLM_PROVIDER: 'openai_compatible',
+                API_OPEN_AI_API_KEY: 'gw-key',
                 API_OPENAI_FORCE_BASE_URL: 'https://gateway.test/v1',
             }),
         );
         expect(result).toEqual({
             kind: 'declared',
             config: {
-                provider: 'anthropic',
+                provider: 'openai_compatible',
                 model: 'some-model',
-                apiKey: 'sk-ant',
+                apiKey: 'gw-key',
                 baseURL: 'https://gateway.test/v1',
             },
             warnings: [],
         });
     });
 
-    it('defaults openai_compatible to the OpenAI endpoint', () => {
+    it('leaves API_OPENAI_FORCE_BASE_URL out of a declared anthropic', () => {
         const result = resolveDeclaredEnvProvider(
             env({
-                API_LLM_PROVIDER: 'openai_compatible',
-                API_LLM_API_KEY: 'k',
+                API_LLM_PROVIDER: 'anthropic',
+                API_ANTHROPIC_API_KEY: 'sk-ant',
+                API_OPENAI_FORCE_BASE_URL: 'https://openrouter.test/api/v1',
             }),
+        );
+        expect(result.kind === 'declared' && result.config.baseURL).toBe(
+            undefined,
+        );
+    });
+
+    it('warns when API_OPENAI_FORCE_BASE_URL points a declared openai at another host', () => {
+        const result = resolveDeclaredEnvProvider(
+            env({
+                API_LLM_PROVIDER: 'openai',
+                API_OPEN_AI_API_KEY: 'k',
+                API_OPENAI_FORCE_BASE_URL: 'https://openrouter.test/api/v1',
+            }),
+        );
+        expect(result.kind === 'declared' && result.warnings).toEqual([
+            'API_OPENAI_FORCE_BASE_URL is not the provider host (openrouter.test); API_LLM_PROVIDER=openai calls the native API on it.',
+        ]);
+        const own = resolveDeclaredEnvProvider(
+            env({
+                API_LLM_PROVIDER: 'openai',
+                API_OPEN_AI_API_KEY: 'k',
+                API_OPENAI_FORCE_BASE_URL: 'https://api.openai.com/v1',
+            }),
+        );
+        expect(own.kind === 'declared' && own.warnings).toEqual([]);
+    });
+
+    it('defaults openai to the OpenAI endpoint', () => {
+        const result = resolveDeclaredEnvProvider(
+            env({ API_LLM_PROVIDER: 'openai', API_LLM_API_KEY: 'k' }),
         );
         expect(result.kind === 'declared' && result.config.baseURL).toBe(
             'https://api.openai.com/v1',
         );
+    });
+
+    it('requires a base URL for openai_compatible instead of dialing OpenAI', () => {
+        expect(
+            resolveDeclaredEnvProvider(
+                env({
+                    API_LLM_PROVIDER: 'openai_compatible',
+                    API_LLM_API_KEY: 'deepseek-key',
+                }),
+            ),
+        ).toEqual({
+            kind: 'invalid',
+            reason: 'API_LLM_PROVIDER=openai_compatible has no endpoint of its own. Set API_LLM_BASE_URL.',
+        });
     });
 
     it('accepts keyless Vertex through ADC', () => {

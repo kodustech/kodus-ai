@@ -376,5 +376,8 @@ export interface SelfHostedEnvVars {
         default?: string;
         /** No endpoint of its own: the config cannot run without one. */
         required?: boolean;
+        /** The provider's own host. A legacy var pointing elsewhere is warned
+         *  about: the native API is called on it. */
+        nativeHost?: string;
     };
 }

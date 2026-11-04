@@ -61,6 +61,33 @@ export function isEndpointSuffixWarning(warning: string): boolean {
     return warning.includes(ENDPOINT_SUFFIX);
 }
 
+const FOREIGN_HOST = 'is not the provider host';
+
+/** A legacy base URL var that points the native API at another host. */
+function foreignHostWarning(
+    varName: string,
+    host: string,
+    provider: string,
+): string {
+    return `${varName} ${FOREIGN_HOST} (${host}); API_LLM_PROVIDER=${provider} calls the native API on it.`;
+}
+
+export function isForeignHostWarning(warning: string): boolean {
+    return warning.includes(FOREIGN_HOST);
+}
+
+function hostOf(url: string): string | undefined {
+    try {
+        return new URL(url).hostname.toLowerCase();
+    } catch {
+        return undefined;
+    }
+}
+
+/** Also the platform embeddings key (libs/common/utils/document.ts), so a value
+ *  different from API_LLM_API_KEY is expected, not a conflict. */
+const SHARED_KEY_VARS: readonly string[] = ['API_OPEN_AI_API_KEY'];
+
 export interface DeclaredEnvModel {
     provider: DeclaredEnvProvider;
     model: string;
@@ -104,7 +131,11 @@ function pick(
     const legacyName = legacy.find((name) => read(env, name));
     const legacyValue = legacyName ? read(env, legacyName) : undefined;
     if (genericValue) {
-        if (legacyValue && legacyValue !== genericValue) {
+        if (
+            legacyValue &&
+            legacyValue !== genericValue &&
+            !SHARED_KEY_VARS.includes(legacyName!)
+        ) {
             warnings.push(
                 `${generic} and ${legacyName} are both set to different values; ${generic} is used.`,
             );
@@ -117,11 +148,23 @@ function pick(
 export function resolveDeclaredEnvProvider(
     env: NodeJS.ProcessEnv = process.env,
 ): DeclaredEnvResolution {
-    const model = env.API_LLM_PROVIDER_MODEL ?? 'auto';
-    // Cloud (`auto`) never reads the env model, declared or not.
-    if (model === 'auto') return { kind: 'inferred' };
-
     const provider = read(env, 'API_LLM_PROVIDER');
+    // Cloud (`auto`) never reads the env model, so a provider or generic var
+    // set next to it would be silently ignored.
+    if ((env.API_LLM_PROVIDER_MODEL ?? 'auto') === 'auto') {
+        const stated = [
+            ...(provider ? ['API_LLM_PROVIDER'] : []),
+            ...GENERIC_VARS.filter((name) => read(env, name)),
+        ];
+        return stated.length
+            ? {
+                  kind: 'invalid',
+                  reason: `${stated.join(', ')} ${stated.length > 1 ? 'require' : 'requires'} API_LLM_PROVIDER_MODEL. Set it to the model to run.`,
+              }
+            : { kind: 'inferred' };
+    }
+    const model = read(env, 'API_LLM_PROVIDER_MODEL');
+
     if (!provider) {
         const orphan = GENERIC_VARS.filter((name) => read(env, name));
         return orphan.length
@@ -140,7 +183,7 @@ export function resolveDeclaredEnvProvider(
     }
     const declared = provider as DeclaredEnvProvider;
 
-    if (!model.trim()) {
+    if (!model) {
         return {
             kind: 'invalid',
             reason: 'API_LLM_PROVIDER is set but API_LLM_PROVIDER_MODEL is empty.',
@@ -179,6 +222,16 @@ export function resolveDeclaredEnvProvider(
     const baseURL = repairBaseUrl(rawBase.value);
     if (baseURL !== rawBase.value) {
         warnings.push(endpointSuffixWarning(rawBase.from!, baseURL!));
+    }
+    const nativeHost = vars.baseURL?.nativeHost;
+    const host = baseURL && hostOf(baseURL);
+    if (
+        nativeHost &&
+        host &&
+        host !== nativeHost &&
+        rawBase.from === vars.baseURL?.legacyVar
+    ) {
+        warnings.push(foreignHostWarning(rawBase.from!, host, declared));
     }
     const vertexLocation = read(env, 'API_VERTEX_AI_LOCATION');
 

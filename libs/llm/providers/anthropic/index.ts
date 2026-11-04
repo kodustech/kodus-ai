@@ -373,11 +373,12 @@ export const anthropicModule: ProviderModule = {
     modelListing: anthropicModelListing,
     selfHostedEnv: (id) => {
         if (id === 'anthropic') {
+            // The OpenAI-named vars are left to the inference path: on a
+            // self-hosted install they usually hold an OpenAI key (embeddings)
+            // and an OpenAI-protocol proxy URL.
             return {
-                // The inference path has always read a Claude key from the
-                // OpenAI-named var too, so it stays second.
-                apiKeyVars: ['API_ANTHROPIC_API_KEY', 'API_OPEN_AI_API_KEY'],
-                baseURL: { legacyVar: 'API_OPENAI_FORCE_BASE_URL' },
+                apiKeyVars: ['API_ANTHROPIC_API_KEY'],
+                baseURL: {},
             };
         }
         if (id === 'anthropic_compatible') {
