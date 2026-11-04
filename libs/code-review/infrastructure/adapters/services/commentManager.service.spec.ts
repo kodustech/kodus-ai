@@ -392,6 +392,35 @@ describe('CommentManagerService.generateSummaryPR', () => {
             expect(getClassification(thrown)).toBeDefined();
         });
 
+        it('leaves a failed read of the PR unclassified and never calls the model', async () => {
+            (tracedGenerateText as jest.Mock).mockClear();
+            const readError = Object.assign(
+                new Error('Resource not accessible by integration'),
+                { name: 'HttpError', status: 403 },
+            );
+            codeManagementService.getPullRequestByNumber.mockRejectedValue(
+                readError,
+            );
+
+            const thrown = await service
+                .generateSummaryPR(
+                    stubPR,
+                    stubRepository,
+                    [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                )
+                .catch((e) => e);
+
+            expect(thrown).toBe(readError);
+            expect(getClassification(thrown)).toBeUndefined();
+            expect(
+                codeManagementService.getPullRequestByNumber,
+            ).toHaveBeenCalledTimes(1);
+            expect(tracedGenerateText).not.toHaveBeenCalled();
+        });
+
         // Production 2026-09-28: a gateway with a smaller window than the model
         // name suggests rejected the single summary call ("Your input exceeds
         // the context window of this model"), and the retry re-sent the same

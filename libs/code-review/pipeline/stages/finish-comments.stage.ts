@@ -15,7 +15,6 @@ import {
     FileChange,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
-    classifyLLMError,
     getClassification,
     llmErrorLogLevel,
 } from '@libs/llm/error-classifier';
@@ -320,12 +319,26 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     summaryPR,
                 );
             } catch (error) {
-                // Terminal BYOK (suspended key / no credit) → warn: user's
-                // provider config, not a Kodus fault. Real fault stays error.
-                this.logger[llmErrorLogLevel(error)]({
+                // Terminal BYOK (suspended key / no credit) on the model call →
+                // warn: user's provider config, not a Kodus fault. A git
+                // platform failure (collect/publish) stays error.
+                const level =
+                    summaryStep === 'generate'
+                        ? llmErrorLogLevel(error)
+                        : 'error';
+                this.logger[level]({
                     message: `${SUMMARY_STEP_FAILURE[summaryStep]} for PR#${pullRequest.number}`,
                     context: this.stageName,
                     error,
+                    metadata: {
+                        organizationAndTeamData,
+                        prNumber: pullRequest.number,
+                        repository: {
+                            id: repository?.id,
+                            name: repository?.name,
+                        },
+                        summaryStep,
+                    },
                 });
 
                 const summaryError =
@@ -354,17 +367,12 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 // 404") instead of the generic "unexpected error" fallback.
                 // Only fills the slot when no agent failure already claimed it
                 // — a core-agent failure is the more important thing to report.
-                // A failure outside the model call keeps only a classification
-                // attached where it was thrown; without one the slot stays
-                // empty and the run reports the platform's own message.
-                const classification =
-                    getClassification(summaryError) ??
-                    (summaryStep === 'generate'
-                        ? classifyLLMError(
-                              summaryError,
-                              resolvedProvider(context, summaryError),
-                          )
-                        : undefined);
+                // Only a classification attached where it was thrown counts:
+                // generateSummaryPR attaches one to every failed model call, so
+                // an error without one (the PR read, the write) is the git
+                // platform's, the slot stays empty and the run reports the
+                // platform's own message.
+                const classification = getClassification(summaryError);
 
                 // The pipeline context is Immer-frozen once an earlier stage
                 // (e.g. agent-review) ran updateContext, so a direct

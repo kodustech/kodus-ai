@@ -1,6 +1,14 @@
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { UpdateCommentsAndGenerateSummaryStage } from './finish-comments.stage';
 import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
+import {
+    attachClassification,
+    classifyLLMError,
+} from '@libs/llm/error-classifier';
+
+/** A failed model call as generateSummaryPR throws it: classified. */
+const modelFailure = (error: Error) =>
+    attachClassification(error, classifyLLMError(error));
 import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 
 /**
@@ -475,10 +483,12 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
     it('records lastReviewError so the PR comment can name the provider failure', async () => {
         const { stage, commentManagerService } = makeStage();
         commentManagerService.generateSummaryPR.mockRejectedValue(
-            Object.assign(new Error('Path not found: /chat/completions'), {
-                name: 'AI_APICallError',
-                statusCode: 404,
-            }),
+            modelFailure(
+                Object.assign(new Error('Path not found: /chat/completions'), {
+                    name: 'AI_APICallError',
+                    statusCode: 404,
+                }),
+            ),
         );
 
         const result = await (stage as any).executeStage(summaryFailContext());
@@ -517,10 +527,12 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
     it('still reads a failed model call of the summary as an LLM failure', async () => {
         const { stage, commentManagerService } = makeStage();
         commentManagerService.generateSummaryPR.mockRejectedValue(
-            Object.assign(new Error('Unauthorized'), {
-                name: 'AI_APICallError',
-                statusCode: 401,
-            }),
+            modelFailure(
+                Object.assign(new Error('Unauthorized'), {
+                    name: 'AI_APICallError',
+                    statusCode: 401,
+                }),
+            ),
         );
 
         const result = await (stage as any).executeStage(summaryFailContext());
@@ -532,6 +544,25 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         expect(
             commentManagerService.updateSummarizationInPR,
         ).not.toHaveBeenCalled();
+    });
+
+    // generateSummaryPR reads the PR from the git platform before calling the
+    // model; a 403 there arrives unclassified and is the platform's error.
+    it('does not report a failed read of the PR inside the summary as an LLM failure', async () => {
+        const { stage, commentManagerService } = makeStage();
+        commentManagerService.generateSummaryPR.mockRejectedValue(
+            Object.assign(new Error('Resource not accessible by integration'), {
+                name: 'HttpError',
+                status: 403,
+            }),
+        );
+
+        const result = await (stage as any).executeStage(summaryFailContext());
+
+        expect(result.lastReviewError).toBeUndefined();
+        expect(describePipelineError(result.errors[0]).text).toBe(
+            'Resource not accessible by integration',
+        );
     });
 
     it('does NOT flag reviewHasPartialErrors for a summary-only failure (#1844)', async () => {

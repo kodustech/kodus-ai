@@ -448,15 +448,17 @@ export class CommentManagerService implements ICommentManagerService {
         let overflowBudget: number | undefined;
         let lastPromptTokens: number | undefined;
 
+        // Read once, outside the model retry: a failed read is the code host's
+        // error, and the catch below would classify it as the model's.
+        const updatedPR =
+            await this.codeManagementService.getPullRequestByNumber({
+                organizationAndTeamData,
+                repository,
+                prNumber: pullRequest?.number,
+            });
+
         while (retryCount < maxRetries) {
             try {
-                const updatedPR =
-                    await this.codeManagementService.getPullRequestByNumber({
-                        organizationAndTeamData,
-                        repository,
-                        prNumber: pullRequest?.number,
-                    });
-
                 this.logger.log({
                     message: `GenerateSummaryPR: Start PR#${pullRequest?.number}. After get PR data`,
                     context: CommentManagerService.name,
