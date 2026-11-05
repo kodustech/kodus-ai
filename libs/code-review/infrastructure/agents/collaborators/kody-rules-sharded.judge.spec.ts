@@ -96,6 +96,44 @@ describe('shardViolationsSchema — model JSON parsing', () => {
         expect(wire.required).toContain('violations');
     });
 
+    describe('wire validate() on an off-schema shard reply', () => {
+        const violation = { ruleId: 'r-1', suggestionContent: 'x' };
+        const validate = (v: unknown) =>
+            (shardViolationsWireSchema as any).validate(v);
+
+        it.each([
+            ['{result:D}', { result: { violations: [violation] } }],
+            ['{data:D}', { data: { violations: [violation] } }],
+            ['{result:{result:D}}', { result: { result: { violations: [violation] } } }],
+            ['{content:D}', { content: { violations: [violation] } }],
+            ['{"0":D}', { '0': { violations: [violation] } }],
+            ['{Violations:[…]}', { Violations: [violation] }],
+            ['{issues:[…]}', { issues: [violation] }],
+            ['a single bare violation', violation],
+        ])('recovers the violation from %s', (_label, value) => {
+            const r = validate(value);
+            expect(r.success).toBe(true);
+            expect(r.value.violations).toHaveLength(1);
+            expect(r.value.violations[0].ruleId).toBe('r-1');
+        });
+
+        it.each([
+            ['an {error} object', { error: 'rate limited', code: 429 }],
+            [
+                'a provider envelope',
+                { choices: [{ message: { content: '{"violations":[]}' } }] },
+            ],
+            ['an unknown key', { answer: 'no violations found' }],
+        ])('rejects %s instead of reading it as a clean shard', (_l, value) => {
+            expect(validate(value).success).toBe(false);
+        });
+
+        it('still reads {} and {violations:[]} as a clean shard', () => {
+            expect(validate({}).value.violations).toEqual([]);
+            expect(validate({ violations: [] }).value.violations).toEqual([]);
+        });
+    });
+
     it('wire schema validate() applies the lenient zod parse (missing keys → null)', () => {
         const result = (shardViolationsWireSchema as any).validate({
             violations: [{ ruleId: 1, suggestionContent: 'x' }],

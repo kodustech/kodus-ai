@@ -22,6 +22,9 @@
 import { jsonSchema, type Schema } from 'ai';
 import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import { z } from 'zod';
+import { createLogger } from '@libs/core/log/logger';
+import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
+import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 import { recoverRuleUuid } from './finding-mapper';
 import {
     extensionScopeAppliesToFile,
@@ -170,6 +173,47 @@ export const shardViolationsSchema = z.object({
         .default([]),
 });
 
+const shardLogger = createLogger('KodyRulesShardedJudge');
+
+/**
+ * The lenient schema reads any object without `violations` as a clean shard,
+ * so a wrapped, renamed or `{error}` reply lost its violations without a trace.
+ * Recover the known shapes; return undefined for an object that still carries
+ * no `violations`, so the executor re-asks and the shard counts as errored.
+ * `{}` stays a clean shard.
+ */
+function reshapeShardReply(value: unknown): unknown {
+    let reason: string | undefined;
+    let v = normalizeEnvelope(value, 'violations', ['issues', 'findings'], {
+        liftEmptyArray: true,
+        onRecover: (r) => {
+            reason = r;
+        },
+    });
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const obj = v as Record<string, unknown>;
+        if (!('violations' in obj) && 'ruleId' in obj) {
+            v = { violations: [obj] };
+            reason = 'lifted-single-violation';
+        } else if (!('violations' in obj) && Object.keys(obj).length > 0) {
+            shardLogger.warn({
+                message: `${LLM_ENVELOPE_TAG} kody-rules shard reply has no violations key; rejecting it so the shard is re-asked or counted as errored`,
+                context: 'KodyRulesShardedJudge',
+                metadata: { keys: Object.keys(obj).slice(0, 10) },
+            });
+            return undefined;
+        }
+    }
+    if (reason) {
+        shardLogger.warn({
+            message: `${LLM_ENVELOPE_TAG} recovered off-schema kody-rules shard reply (${reason})`,
+            context: 'KodyRulesShardedJudge',
+            metadata: { reason },
+        });
+    }
+    return v;
+}
+
 /**
  * WIRE schema for the shard call — what the provider actually sends as
  * `response_format`. This CANNOT be the zod object above passed directly:
@@ -190,7 +234,16 @@ export const shardViolationsWireSchema: Schema<
     }) as any,
     {
         validate: (value) => {
-            const r = shardViolationsSchema.safeParse(value);
+            const shaped = reshapeShardReply(value);
+            if (shaped === undefined) {
+                return {
+                    success: false,
+                    error: new Error(
+                        'shard reply has no violations key (off-schema)',
+                    ),
+                };
+            }
+            const r = shardViolationsSchema.safeParse(shaped);
             return r.success
                 ? { success: true, value: r.data }
                 : { success: false, error: r.error };
