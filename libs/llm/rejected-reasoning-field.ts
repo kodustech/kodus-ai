@@ -128,7 +128,10 @@ export function rejectedReasoning(
         const field = named ?? (m[1].toLowerCase() as ReasoningField);
         // Defined, not merely present: the SDK keeps `reasoning_effort:
         // undefined` in the recorded values, and JSON leaves it off the wire.
-        if (body[field] === undefined) return undefined;
+        // A refusal that asks for the off value is the exception: the model
+        // reasons by default, so a body without the effort gets the same 400,
+        // and the upstream names the value to send (#2350).
+        if (body[field] === undefined && !off) return undefined;
         return { field, off, refusedType: thinkingType(body[field]) };
     }
     return undefined;
@@ -170,14 +173,17 @@ export function withoutReasoningField<
 }
 
 /**
- * The call params with `field` set to off, or undefined when no provider option
- * carries it or it is already off. Only the effort has an off value ('none').
+ * The call params with `field` set to off, or undefined when nothing changes.
+ * Only the effort has an off value ('none'). When no provider option carries
+ * the effort (Thinking Off sends none), it is added under `namespace`, the
+ * options key the slot's adapter reads; without one there is nowhere to put it.
  */
 export function withReasoningOff<
     P extends { providerOptions?: Record<string, unknown> },
->(params: P, field: ReasoningField): P | undefined {
-    const options = params?.providerOptions;
-    if (!options || field !== 'reasoning_effort') return undefined;
+>(params: P, field: ReasoningField, namespace?: string): P | undefined {
+    if (field !== 'reasoning_effort') return undefined;
+    const options = params?.providerOptions ?? {};
+    let carried = false;
     let changed = false;
     const next: Record<string, unknown> = {};
     for (const [ns, value] of Object.entries(options)) {
@@ -187,12 +193,27 @@ export function withReasoningOff<
         }
         const kept = { ...(value as Record<string, unknown>) };
         for (const key of OPTION_KEYS[field]) {
-            if (key in kept && kept[key] !== 'none') {
-                kept[key] = 'none';
-                changed = true;
+            if (key in kept && kept[key] !== undefined) {
+                carried = true;
+                if (kept[key] !== 'none') {
+                    kept[key] = 'none';
+                    changed = true;
+                }
             }
         }
         next[ns] = kept;
+    }
+    if (!carried && namespace) {
+        const existing = next[namespace];
+        next[namespace] = {
+            ...(existing &&
+            typeof existing === 'object' &&
+            !Array.isArray(existing)
+                ? (existing as Record<string, unknown>)
+                : {}),
+            reasoningEffort: 'none',
+        };
+        changed = true;
     }
     return changed ? { ...params, providerOptions: next } : undefined;
 }
@@ -271,6 +292,7 @@ export function withoutRefusedFields<
     slot: NormalizedModel | undefined,
     organizationId: string | undefined,
     now = Date.now(),
+    namespace?: string,
 ): P {
     const key = slotKey(slot, organizationId);
     const fields = key ? refusals.get(key) : undefined;
@@ -297,7 +319,7 @@ export function withoutRefusedFields<
         }
         out =
             (off
-                ? withReasoningOff(out, field)
+                ? withReasoningOff(out, field, namespace)
                 : withoutReasoningField(out, field)) ?? out;
     }
     if (fields.size === 0) refusals.delete(key!);
