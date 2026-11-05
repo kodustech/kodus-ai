@@ -242,6 +242,48 @@ describe("UnfollowedCitations", () => {
         );
     });
 
+    it("merges the spellings first, then shows the five most cited files (#2384)", () => {
+        const files = ["a", "b", "c", "d", "e", "f"].map(
+            (n) => `rules/${n}.md`,
+        );
+        mockResolve.mockReturnValue(
+            found(
+                files.map((path) => ({ path, kind: "doc", repository: RULES })),
+            ),
+        );
+        render(
+            <UnfollowedCitations
+                agentId="valves"
+                citations={[
+                    // One file, two spellings: 20 findings, the most cited.
+                    {
+                        file: "irrigation-rules/rules/a.md",
+                        findings: 12,
+                        pullRequests: 4,
+                    },
+                    { file: "rules/a.md", findings: 8, pullRequests: 3 },
+                    ...["b", "c", "d", "e", "f"].map((n, i) => ({
+                        file: `irrigation-rules/rules/${n}.md`,
+                        findings: 6 - i,
+                        pullRequests: 1,
+                    })),
+                ]}
+                knowledge={[]}
+                repositories={[RULES]}
+                canEdit
+                teamId="team-1"
+                repositoryId="repo-1"
+                onFollow={jest.fn()}
+            />,
+        );
+
+        const rows = screen.getAllByRole("listitem");
+        expect(rows).toHaveLength(5);
+        expect(rows[0]).toHaveTextContent("rules/a.md");
+        expect(rows[0]).toHaveTextContent("20 findings dropped");
+        expect(screen.queryByText("rules/f.md")).not.toBeInTheDocument();
+    });
+
     it("warns before following a file of this repository that also feeds Kody Rules", () => {
         // Only this repository's files feed Kody Rules; the check never
         // flags another repository's.
