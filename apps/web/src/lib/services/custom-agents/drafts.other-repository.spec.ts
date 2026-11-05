@@ -381,6 +381,23 @@ describe("mentionedFilesNotFollowed", () => {
         ).toEqual([]);
     });
 
+    it("reads a code-quoted or longer place phrase", () => {
+        for (const place of [
+            "in the `pump-rules` repository",
+            "in our shared pump rules repository",
+            "no repositório `acme/pump-rules`",
+        ]) {
+            expect(
+                mentionedFilesNotFollowed(
+                    `Read stack/node/valves.mdc ${place} before commenting.`,
+                    [RULES],
+                    [],
+                    "valves",
+                ),
+            ).toEqual([]);
+        }
+    });
+
     it('does not take "in the repository" (this one) as another repository', () => {
         expect(
             mentionedFilesNotFollowed(

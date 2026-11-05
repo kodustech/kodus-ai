@@ -1134,15 +1134,14 @@ export type MentionedFile = Pick<KnowledgeItem, "path" | "kind" | "repository">;
 const MENTIONED_FILE =
     /(?:^|[\s`'"(\[<])((?:[\w.-]+\/)*[\w.-]+\.(?:mdc|mdx|md|markdown))(?=$|[\s`'".,;:!?)\]>])/gi;
 
-
 /** A phrase that names where a file lives: a named repository after "in",
  *  "from"… ("in the pump-rules repository", "from our rules repo"), the
  *  Portuguese "no repositório X", or "repository owner/name". */
 const REPOSITORY_PLACE = new RegExp(
     [
-        String.raw`\b(?:in|from|on|at|inside|under)\s+(?:(?:the|our|a|their|its|this)\s+)?(?:(?!(?:the|our|a|their|its|this)\b)[\w./-]+\s+){1,2}(?:repo|repository)\b`,
-        String.raw`\b(?:no|na|do|da|em)\s+(?:nosso\s+|o\s+)?reposit[óo]rio\s+[\w./-]+`,
-        String.raw`\b(?:repo|repository|reposit[óo]rio)\s+[\w.-]+\/[\w./-]+`,
+        String.raw`\b(?:in|from|on|at|inside|under)\s+(?:(?:the|our|a|their|its|this)\s+)?(?:(?!(?:the|our|a|their|its|this)\b)[\x60'"]?[\w./-]+[\x60'"]?\s+){1,4}(?:repo|repository)\b`,
+        String.raw`\b(?:no|na|do|da|em)\s+(?:nosso\s+|o\s+)?reposit[óo]rio\s+[\x60'"]?[\w./-]+`,
+        String.raw`\b(?:repo|repository|reposit[óo]rio)\s+[\x60'"]?[\w.-]+\/[\w./-]+`,
     ].join("|"),
     "gi",
 );
