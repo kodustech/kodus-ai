@@ -304,7 +304,8 @@ describe('checkClaims — an unused import is about the file that imports it (#1
 
     it('does not publish an unused import from a finding that names no file', async () => {
         const lookup = fakeLookup({
-            grep: () => 'helpers/timing.js:1:export function debounce(fn, ms) {',
+            grep: () =>
+                'helpers/timing.js:1:export function debounce(fn, ms) {',
         });
         const res = await checkClaims({
             violations: [
@@ -313,6 +314,112 @@ describe('checkClaims — an unused import is about the file that imports it (#1
                     existingCode: 'import { debounce } from "./timing.js";',
                 }),
             ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('unverifiable');
+    });
+
+    it('judges a re-export by the files that import it, as before', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                "src/index.ts:1:export { debounce } from './timing';\nsrc/app.ts:9:  debounce(run, 200);",
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/index.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'debounce',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('src/app.ts:9');
+    });
+
+    it("judges a package __init__.py's import by the files that import the package", async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'pkg/__init__.py:1:from .core import helper\napp/main.py:4:    helper()',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'pkg/__init__.py',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'helper',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('app/main.py:4');
+    });
+
+    it('does not judge a claim as an import when the cited import names another symbol', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'src/a.ts:10:export function formatTotal(n) {\nsrc/b.ts:4:  formatTotal(sum)',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 10,
+                    relevantLinesEnd: 12,
+                    claimKind: 'unused',
+                    claimSymbol: 'formatTotal',
+                    existingCode:
+                        "import { x } from './x';\n\nexport function formatTotal(n) {",
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('src/b.ts:4');
+    });
+
+    it('reads only the import statement, not the rest of the cited code, when it spans lines', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'src/a.ts:12:export function formatTotal(n) {\nsrc/b.ts:4:  formatTotal(sum)',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 12,
+                    relevantLinesEnd: 14,
+                    claimKind: 'unused',
+                    claimSymbol: 'formatTotal',
+                    existingCode:
+                        "import {\n  x,\n} from './x';\nexport function formatTotal(n) {",
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('src/b.ts:4');
+    });
+
+    it('does not publish an unused import bound under another name', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:2:import { debounce as wait } from "./timing.js";\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+        });
+        const res = await checkClaims({
+            violations: [importLine()],
             changedFiles: [],
             lookup,
         });

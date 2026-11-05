@@ -178,11 +178,12 @@ function isElsewhere(match: GrepMatch, violation: ShardViolation): boolean {
 
 /**
  * A line that brings a name in from another module, in the languages the
- * rules review: `import`, `from x import`, `export … from`, `require(`,
- * `use`, `using`, and stylesheet `@import`/`@use`/`@forward`.
+ * rules review: `import`, `from x import`, `require(`, `use`, `using`, and
+ * stylesheet `@import`/`@use`/`@forward`. A re-export (`export … from`) is not
+ * one: its users are the files that import it, so it keeps the any-file rule.
  */
 const IMPORT_LINE =
-    /^\s*(?:import\b|from\s+\S+\s+import\b|export\s+(?:\*|\{[^}]*\})\s*from\b|(?:const|let|var)\s+[^=]+=\s*require\s*\(|use\s+[A-Za-z_\\:{]|using\s+[\w.]+\s*;|@(?:import|use|forward)\b)/;
+    /^\s*(?:import\b|from\s+\S+\s+import\b|(?:const|let|var)\s+[^=]+=\s*require\s*\(|use\s+[A-Za-z_\\:{]|using\s+[\w.]+\s*;|@(?:import|use|forward)\b)/;
 
 /**
  * Imports whose name is not how the file uses them: a stylesheet module (its
@@ -192,29 +193,67 @@ const IMPORT_LINE =
 const UNCHECKABLE_IMPORT =
     /^\s*(?:@(?:import|use|forward)\b|using\s+[\w.]+\s*;)/;
 
+/** The most lines one import statement is read across. */
+const MAX_IMPORT_LINES = 50;
+
+/**
+ * The statement starting at `lines[start]`: that line, plus the lines until
+ * its braces or parentheses close (a multi-line `import {` or `from x import (`).
+ */
+function statementAt(lines: string[], start: number): string {
+    const taken: string[] = [];
+    let depth = 0;
+    for (let i = start; i < lines.length && i < start + MAX_IMPORT_LINES; i++) {
+        taken.push(lines[i]);
+        depth += (lines[i].match(/[{(]/g) ?? []).length;
+        depth -= (lines[i].match(/[})]/g) ?? []).length;
+        if (depth <= 0) break;
+    }
+    return taken.join('\n');
+}
+
 /**
  * The import statement an `unused` claim is about, if it is about one: read
  * from the repository's own text of the finding's lines first, then from the
  * code the finding cites (a name on its own line of a multi-line import).
+ * Only a statement that names the claimed symbol counts: a finding about
+ * another symbol whose cited code happens to hold an import is not about it.
+ * A package's `__init__.py` re-exports what it imports, so its imports keep
+ * the any-file rule.
  */
 function importStatementOf(
     violation: ShardViolation,
     matches: GrepMatch[],
+    symbol: string,
 ): string | undefined {
     const file = normalizePath(violation.relevantFile ?? '');
+    if (file === '__init__.py' || file.endsWith('/__init__.py')) {
+        return undefined;
+    }
     const own = matches
         .filter((m) => m.file === file && !isElsewhere(m, violation))
         .map((m) => m.text);
     const cited = (violation.existingCode ?? '').split('\n');
-    return [...own, ...cited].find((line) => IMPORT_LINE.test(line));
+    const statements = [
+        ...own.filter((line) => IMPORT_LINE.test(line)),
+        ...cited.flatMap((line, i) =>
+            IMPORT_LINE.test(line) ? [statementAt(cited, i)] : [],
+        ),
+    ];
+    return statements.find((statement) => hasIdentifier(statement, symbol));
+}
+
+/** The identifier occurs in the text, not as a part of a longer one. */
+function hasIdentifier(text: string, symbol: string): boolean {
+    return new RegExp(
+        `(^|[^A-Za-z0-9_$])${escapeRegex(symbol)}([^A-Za-z0-9_$]|$)`,
+    ).test(text);
 }
 
 /** The symbol as a whole identifier in the line, not a part of a longer one. */
 function namesSymbol(text: string, symbol: string): boolean {
     if (!text) return true; // no text to read: count it, as before
-    return new RegExp(
-        `(^|[^A-Za-z0-9_$])${escapeRegex(symbol)}([^A-Za-z0-9_$]|$)`,
-    ).test(text);
+    return hasIdentifier(text, symbol);
 }
 
 async function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
@@ -294,11 +333,22 @@ async function refute(
         // local import also occurs where it is defined, and other files may
         // import and use the same name: neither makes this import used. Only
         // a use in the same file, outside the finding, refutes it.
-        const statement = importStatementOf(violation, matches);
+        const statement = importStatementOf(violation, matches, claim.symbol!);
         if (statement !== undefined) {
             if (UNCHECKABLE_IMPORT.test(statement)) {
                 throw new UnverifiableClaimError(
                     `"${statement.trim()}" is not used by its name, so a search cannot tell whether it is used`,
+                );
+            }
+            // `import { x as y }`: the file uses `y`, which the search for `x`
+            // does not see.
+            if (
+                new RegExp(
+                    `(^|[^A-Za-z0-9_$])${escapeRegex(claim.symbol!)}\\s+as\\s+[A-Za-z_$]`,
+                ).test(statement)
+            ) {
+                throw new UnverifiableClaimError(
+                    `"${claim.symbol}" is imported under another name, so a search for it cannot tell whether it is used`,
                 );
             }
             // A PR-level finding names no file, so there is no importing file
