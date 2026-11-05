@@ -349,7 +349,7 @@ describe("mentionedFilesNotFollowed", () => {
     it("does not end a sentence at the dot inside a file name", () => {
         expect(
             mentionedFilesNotFollowed(
-                "Use docs/a.md and rules.md from the pump-rules repository.",
+                "In the pump-rules repository, see docs/a.md and rules.md.",
                 [RULES],
                 [],
                 "valves",
