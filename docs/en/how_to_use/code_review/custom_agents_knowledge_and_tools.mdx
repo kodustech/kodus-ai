@@ -67,7 +67,7 @@ Teams often keep their rules in one repository and apply them to many. Pick it u
 - The agent cites it as `owner/repo:path`, and the comment links the file.
 - When the rules repository is private and the reviewed one is public, the comment names the file without quoting it.
 
-When an agent's instructions name a linked repository it follows nothing from, its page says so and offers **Browse its rules**. When they name a rule file (`.md`, `.mdc`, `.mdx`, `.txt`) the agent does not follow, the page offers **Follow it** for that file, in the repository the instructions place it in. A followed doc goes into the agent's prompt whole, so the agent no longer depends on deciding to read it, and its findings can cite it.
+When an agent's instructions name a linked repository it follows nothing from, its page says so and offers **Browse its rules**. When they name a rule file (`.md`, `.mdc`, `.mdx`) the agent does not follow, the page offers **Follow it** for that file, in the repository the instructions place it in. A followed doc goes into the agent's prompt whole, so the agent no longer depends on deciding to read it, and its findings can cite it.
 
 <Warning>
   A file marked **Also a Kody Rules source** already feeds Kody Rules. Linking it to an agent too can make the same rule comment twice.

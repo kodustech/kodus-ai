@@ -309,6 +309,30 @@ describe("mentionedFilesNotFollowed", () => {
         ]);
     });
 
+    // Review: instructions name files that are not rules, and use "repository"
+    // for code ("the repository pattern"), not for where a file lives.
+    it("offers no file that is not a rule: README, CHANGELOG, requirements.txt", () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Flag new deps not pinned in requirements.txt. Make sure CHANGELOG.md is updated, see README.md.",
+                [],
+                [],
+                "valves",
+            ),
+        ).toEqual([]);
+    });
+
+    it('reads "repository" as a location only in the sentence that names the file', () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Use the repository pattern. Read docs/conventions.md before reviewing.",
+                [],
+                [],
+                "valves",
+            ),
+        ).toEqual([{ path: "docs/conventions.md", kind: "doc" }]);
+    });
+
     it("guesses nothing: a repository that is not linked, a code file, a URL", () => {
         expect(
             mentionedFilesNotFollowed(

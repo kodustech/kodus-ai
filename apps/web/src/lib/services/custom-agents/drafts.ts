@@ -1132,9 +1132,25 @@ export type MentionedFile = Pick<KnowledgeItem, "path" | "kind" | "repository">;
 /** A text file named in prose: `rules/x.mdc`, `CLAUDE.md`, never a URL or a
  *  code file (instructions name code to look at, not rules to follow). */
 const MENTIONED_FILE =
-    /(?:^|[\s`'"(\[<])((?:[\w.-]+\/)*[\w.-]+\.(?:mdc|mdx|md|markdown|txt))(?=$|[\s`'".,;:!?)\]>])/gi;
+    /(?:^|[\s`'"(\[<])((?:[\w.-]+\/)*[\w.-]+\.(?:mdc|mdx|md|markdown))(?=$|[\s`'".,;:!?)\]>])/gi;
 
 const REPOSITORY_WORD = /\b(reposit[óo]rio|repository|repo)\b/i;
+
+/** Files a repository has that are never a rule to follow. */
+const NOT_A_RULE_FILE =
+    /^(readme|changelog|changes|history|license|licence|notice|authors|contributors)\.(md|mdx|markdown)$/i;
+
+/** The sentence around a position: a repository named there says where a
+ *  file lives ("in the pump-rules repository"); one in another sentence is
+ *  about something else ("use the repository pattern"). */
+const sentenceAround = (text: string, start: number, end: number) => {
+    const before = text.slice(0, start);
+    const from = Math.max(
+        ...[".", "\n", ";", "!", "?"].map((mark) => before.lastIndexOf(mark)),
+    );
+    const after = text.slice(end).search(/[.\n;!?](\s|$)/);
+    return text.slice(from + 1, after < 0 ? text.length : end + after);
+};
 
 const escapeRegExp = (value: string) =>
     value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1183,8 +1199,6 @@ export const mentionedFilesNotFollowed = (
         })
         .filter((mention) => !insideAFile(mention.at))
         .sort((a, b) => a.at - b.at);
-    const namesNoRepository =
-        mentions.length === 0 && !REPOSITORY_WORD.test(text);
     const byFullName = new Map(
         names.map(({ repository, full }) => [full, repository]),
     );
@@ -1222,7 +1236,15 @@ export const mentionedFilesNotFollowed = (
         const before = prefixed
             ? undefined
             : mentions.filter((mention) => mention.at < at).pop();
-        if (!prefixed && !before && !namesNoRepository) continue;
+        if (
+            !prefixed &&
+            !before &&
+            REPOSITORY_WORD.test(sentenceAround(text, at, at + cited.length))
+        ) {
+            // The sentence places the file in a repository that is not linked.
+            continue;
+        }
+        if (NOT_A_RULE_FILE.test(cited.split("/").pop() ?? "")) continue;
         const item = knowledgeItemFromPath(prefixed ? prefixed.rest : cited);
         if (!item) continue;
         const repository = prefixed?.repository ?? before?.repository;
