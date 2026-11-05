@@ -30,6 +30,17 @@ import {
     buildLangfuseTelemetry,
     toAiSdkTelemetryArgs,
 } from '@libs/core/log/langfuse';
+import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
+import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import {
+    GAP_AGENTS,
+    GAP_AGENT_MAX_FINDINGS,
+    GAP_AGENT_SYSTEM_PROMPT,
+    buildFindReadersTool,
+    buildFindSiblingsTool,
+    buildRunSnippetTool,
+    gapAgentMaxSteps,
+} from './gap-agents';
 import {
     HEAVY_LENS_MAX_FINDINGS,
     HEAVY_LENS_MAX_STEPS,
@@ -72,6 +83,11 @@ export interface HeavyLensEnvironment {
     contextWindowTokens?: number;
     overheadTokens?: number;
     providerOptions?: Readonly<Record<string, unknown>>;
+    /** The sandbox's commands, for the experiment's agents' tools
+     *  (gap-agents.ts). Without them those agents do not run. */
+    remoteCommands?: RemoteCommands;
+    /** The sandbox can run a program (E2B): the code-execution agent runs. */
+    sandboxCanRun?: boolean;
 }
 
 /**
@@ -86,7 +102,7 @@ export function buildHeavyLensPasses(
     const { input } = env;
     const lensDiff = heavyLensDiff(input.changedFiles, input.fileTiers);
     if (!lensDiff) return [];
-    return heavyLensesFor(input.allowedLabels).map((lens) => ({
+    return [...heavyLensesFor(input.allowedLabels).map((lens) => ({
         label: `lens-${lens.id}`,
         findingLabel: lens.label,
         maxFindings: HEAVY_LENS_MAX_FINDINGS,
@@ -116,7 +132,55 @@ export function buildHeavyLensPasses(
             providerOptions: env.providerOptions,
             acceptsRevisions: !!input.previousDecisions?.length,
         }),
-    }));
+    })), ...buildGapAgentPasses(env, lensDiff)];
+}
+
+/**
+ * The experiment's agents (gap-agents.ts), with the lens prompt, their own
+ * tools on top of the finder's, and the larger step budget. They need the
+ * repository, so none runs self-contained; the code-execution agent runs only
+ * where the sandbox can run a program.
+ */
+function buildGapAgentPasses(env: HeavyLensEnvironment, lensDiff: string): HeavyLensPass[] {
+    const { input } = env;
+    const remote = env.remoteCommands;
+    if (env.isSelfContained || !remote) return [];
+    const changed = new Set((input.changedFiles ?? []).map((f) => String(f?.filename ?? '')));
+    const maxSteps = gapAgentMaxSteps(changed.size);
+    const allowed = input.allowedLabels;
+    return GAP_AGENTS.filter((a) => !allowed || allowed.includes(a.label))
+        .filter((a) => a.tools !== 'exec' || env.sandboxCanRun)
+        .map((agent) => {
+            const own =
+                agent.tools === 'readers'
+                    ? buildFindReadersTool(remote, changed)
+                    : agent.tools === 'siblings'
+                      ? buildFindSiblingsTool(remote)
+                      : buildRunSnippetTool(remote);
+            return {
+                label: `lens-${agent.id}`,
+                findingLabel: agent.label,
+                maxFindings: GAP_AGENT_MAX_FINDINGS,
+                prompt: buildHeavyLensPrompt(agent, lensDiff, env.claudeWording, false, input.lensBatch),
+                spec: buildFinderAgentSpec({
+                    systemPrompt: GAP_AGENT_SYSTEM_PROMPT,
+                    modelId: env.modelId,
+                    fallbackModelId: env.fallbackModelId,
+                    usageRunName: input.usageRunName,
+                    agentName: input.agentName,
+                    tools: new InMemoryToolRegistry([...env.tools.list(), own]),
+                    labels: [agent.label],
+                    compressor: env.contextWindowTokens
+                        ? new ContextWindowCompressor(env.contextWindowTokens, {
+                              overheadTokens: env.overheadTokens,
+                          })
+                        : undefined,
+                    maxSteps,
+                    providerOptions: env.providerOptions,
+                    acceptsRevisions: !!input.previousDecisions?.length,
+                }),
+            };
+        });
 }
 
 /** The lenses as the finder's `heavyLenses` hook, or none to run. */

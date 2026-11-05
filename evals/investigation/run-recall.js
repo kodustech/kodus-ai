@@ -145,11 +145,16 @@ function preflightVerdict(output, modelId) {
     const model = TIER0[modelId]?.managed ? null : (TIER0[modelId] && TIER0[modelId].doModel) || modelId;
     const { finderProfileFor } = require(path.join(__dirname, '../../libs/code-review/infrastructure/agents/core/finder-model-profile.ts'));
     const { heavyLensesFor } = require(path.join(__dirname, '../../libs/ee/heavy-mode/heavy-lenses.ts'));
+    const { GAP_AGENTS } = require(path.join(__dirname, '../../libs/ee/heavy-mode/gap-agents.ts'));
     const generalist = (parsed.manifest?.loops || []).find((l) => /generalist/i.test(l.agentName || ''));
     const expected = expectedRun({
         model,
         profile: finderProfileFor(generalist?.modelName || model),
-        lensCount: heavyLensesFor(generalist?.allowedLabels || undefined).length,
+        // The M3 lenses plus the experiment's agents (gap-agents.ts): the
+        // code-execution one only where the sandbox runs programs (E2B).
+        lensCount:
+            heavyLensesFor(generalist?.allowedLabels || undefined).length +
+            GAP_AGENTS.filter((a) => (generalist?.allowedLabels || ['bug']).includes(a.label)).filter((a) => a.tools !== 'exec' || process.env.RECALL_SANDBOX === 'e2b').length,
     });
     return checkManifest(parsed.manifest, expected);
 }

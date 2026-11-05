@@ -50,6 +50,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/core/review-finding';
 import { inspectFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import { buildHeavyLensRun } from '@libs/ee/heavy-mode/heavy-lens-passes';
+import { sandboxCanRun } from '@libs/ee/heavy-mode/gap-agents';
 import { createLogger } from '@libs/core/log/logger';
 import {
     type AgentLoopInput,
@@ -339,9 +340,12 @@ export async function runAgentLoopViaCore(
         ? withClaudeOneProblem(input.userPrompt)
         : input.userPrompt;
 
-    // Heavy mode: the M3 lenses of the categories the team has on.
+    // Heavy mode: the M3 lenses of the categories the team has on, and the
+    // experiment's agents (libs/ee/heavy-mode/gap-agents.ts).
     const heavyLenses = input.heavy
         ? buildHeavyLensRun({
+              remoteCommands: secrets.remoteCommands,
+              sandboxCanRun: await sandboxCanRun(secrets.remoteCommands),
               input,
               claudeWording,
               isSelfContained,
