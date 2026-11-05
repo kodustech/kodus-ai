@@ -301,7 +301,14 @@ async function refute(
                     `"${statement.trim()}" is not used by its name, so a search cannot tell whether it is used`,
                 );
             }
-            const file = normalizePath(violation.relevantFile ?? '');
+            // A PR-level finding names no file, so there is no importing file
+            // to search: the claim cannot be checked either way.
+            if (!violation.relevantFile) {
+                throw new UnverifiableClaimError(
+                    `"${statement.trim()}" names no file, so a search cannot tell whether the file that imports it uses it`,
+                );
+            }
+            const file = normalizePath(violation.relevantFile);
             const usedHere = elsewhere.filter(
                 (m) => m.file === file && namesSymbol(m.text, claim.symbol!),
             );

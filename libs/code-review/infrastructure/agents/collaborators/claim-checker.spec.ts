@@ -302,6 +302,24 @@ describe('checkClaims — an unused import is about the file that imports it (#1
         expect(res.dropped[0].reason).toContain('unverifiable');
     });
 
+    it('does not publish an unused import from a finding that names no file', async () => {
+        const lookup = fakeLookup({
+            grep: () => 'helpers/timing.js:1:export function debounce(fn, ms) {',
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    relevantFile: undefined,
+                    existingCode: 'import { debounce } from "./timing.js";',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('unverifiable');
+    });
+
     it('still drops a non-import unused claim when another file uses the symbol', async () => {
         const lookup = fakeLookup({
             grep: () =>
