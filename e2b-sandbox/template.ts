@@ -72,3 +72,14 @@ export const kodusBenchmarkTemplate = Template()
     .fromBaseImage()
     .aptInstall(['ca-certificates', 'git', 'ripgrep', 'unzip'])
     .runCmd([...installSecurityTools]);
+
+/**
+ * Benchmark template for the code-execution experiment: the benchmark
+ * sandbox plus the runtimes of the benchmark's repositories (node and python
+ * come with the base image; ruby, go and java added), so an agent can run a
+ * snippet of the changed code. Built under its own alias, never production.
+ */
+export const kodusBenchmarkExecTemplate = Template()
+    .fromBaseImage()
+    .aptInstall(['ca-certificates', 'git', 'ripgrep', 'unzip', 'ruby', 'golang-go', 'default-jdk-headless'])
+    .runCmd([...installSecurityTools]);

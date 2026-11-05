@@ -271,7 +271,8 @@ class InvestigationAgentProvider {
 
             stage = 'run-review';
             // RECALL_SANDBOX=none: the review production runs when no sandbox could be created.
-            const sandbox = process.env.RECALL_SANDBOX === 'none' ? 'none' : undefined;
+            // RECALL_SANDBOX=e2b: production's E2B sandbox (shared/review-stage.js checkoutE2B).
+            const sandbox = ['none', 'e2b'].includes(process.env.RECALL_SANDBOX) ? process.env.RECALL_SANDBOX : undefined;
             const stages = reviewStagesFromEnv();
             const review = await reviewPullRequest({ pr: prOf(caseData), team: teamOf(caseData, this.teamConfig), route, permissionService, stages, ...(sandbox && { sandbox }) });
             if (review.skipped) throw new Error(`production skipped the review: ${review.skipped}`);

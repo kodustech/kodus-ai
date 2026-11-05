@@ -592,10 +592,80 @@ async function repositoryFor({ repo, prNumber, headRef, headSha, baseRef, baseSh
         return { cloneUrl: inline.cloneUrl, branch: inline.branch, baseBranch: inline.base, head: inline.branch, prNumber: undefined, commit: false, cleanup: inline.cleanup };
     }
     const cloneUrl = await mirrorFor({ repo, prNumber, headSha, baseRef, baseSha });
-    return { cloneUrl, branch: headRef, baseBranch: baseRef, head: prNumber ? `refs/pull/${prNumber}/head` : `refs/eval/${headSha}`, prNumber: prNumber || undefined, commit: !prNumber && !!headSha, headSha, cleanup: async () => undefined };
+    return { repo, cloneUrl, branch: headRef, baseBranch: baseRef, head: prNumber ? `refs/pull/${prNumber}/head` : `refs/eval/${headSha}`, prNumber: prNumber || undefined, commit: !prNumber && !!headSha, headSha, cleanup: async () => undefined };
 }
 
-async function checkout(repository) {
+// RECALL_SANDBOX=e2b: production's E2B sandbox (E2BSandboxService) on the
+// benchmark template that carries the repositories' runtimes, cloning the PR
+// from GitHub at the dataset's head commit. Every sandbox the eval creates is
+// tracked and killed: at the end of its case, and by killEvalSandboxes() when
+// the run ends or aborts (production pauses a sandbox on timeout and leaves the
+// kill to a reaper the eval does not have).
+const E2B_BENCH_TEMPLATE = 'kodus-sandbox-bench-exec';
+const E2B_EVAL_STAGE = 'eval-recall';
+const liveE2B = new Map();
+async function checkoutE2B(repository) {
+    const fs = require('fs');
+    const env = (() => {
+        try {
+            return require('dotenv').parse(fs.readFileSync(path.join(__dirname, '../../.env')));
+        } catch {
+            return {};
+        }
+    })();
+    const cfg = { API_E2B_KEY: process.env.API_E2B_KEY || env.API_E2B_KEY, API_E2B_TEMPLATE_ID: E2B_BENCH_TEMPLATE };
+    if (!cfg.API_E2B_KEY) throw new Error('RECALL_SANDBOX=e2b needs API_E2B_KEY');
+    if (!repository.repo || !repository.headSha) throw new Error('RECALL_SANDBOX=e2b needs a GitHub repository and the head commit');
+    const { E2BSandboxService } = lib('sandbox/infrastructure/providers/e2b-sandbox.service.ts');
+    const sandbox = await new E2BSandboxService({ get: (k) => cfg[k] }).createSandboxWithRepo({
+        cloneUrl: `https://github.com/${repository.repo}.git`,
+        authToken: '',
+        branch: repository.branch,
+        baseBranch: repository.baseBranch,
+        platform: 'github',
+        checkoutSha: repository.headSha,
+        sandboxMetadata: { stage: E2B_EVAL_STAGE },
+    });
+    sandbox.baseBranch = repository.baseBranch;
+    liveE2B.set(sandbox.sandboxId, sandbox);
+    const cleanup = sandbox.cleanup;
+    sandbox.cleanup = async () => {
+        try {
+            await cleanup();
+        } finally {
+            liveE2B.delete(sandbox.sandboxId);
+            await repository.cleanup();
+        }
+    };
+    return sandbox;
+}
+
+/** Kills every E2B sandbox this process created and every running or paused
+ *  sandbox an eval run left behind (tagged eval-recall). */
+async function killEvalSandboxes() {
+    for (const sb of [...liveE2B.values()]) await sb.cleanup().catch(() => undefined);
+    const key = process.env.API_E2B_KEY || (() => {
+        try {
+            return require('dotenv').parse(require('fs').readFileSync(path.join(__dirname, '../../.env'))).API_E2B_KEY;
+        } catch {
+            return undefined;
+        }
+    })();
+    if (!key) return 0;
+    const { Sandbox } = require('e2b');
+    let killed = 0;
+    const paginator = Sandbox.list({ apiKey: key, query: { metadata: { stage: E2B_EVAL_STAGE } } });
+    while (paginator.hasNext) {
+        for (const info of await paginator.nextItems()) {
+            await Sandbox.kill(info.sandboxId, { apiKey: key }).catch(() => undefined);
+            killed += 1;
+        }
+    }
+    return killed;
+}
+
+async function checkout(repository, sandboxMode = 'alive') {
+    if (sandboxMode === 'e2b') return checkoutE2B(repository);
     const { LocalSandboxService } = lib('sandbox/infrastructure/providers/local-sandbox.service.ts');
     const sandbox = await new LocalSandboxService(undefined).createSandboxWithRepo({
         cloneUrl: repository.cloneUrl,
@@ -766,7 +836,7 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
     let sandbox = null;
     if (sandboxMode !== 'none') {
         try {
-            sandbox = await inStage('sandbox', () => checkout(repo));
+            sandbox = await inStage('sandbox', () => checkout(repo, sandboxMode));
         } catch (error) {
             await repo.cleanup();
             throw error;
@@ -802,4 +872,4 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
     }
 }
 
-module.exports = { reviewPullRequest, prepareReview, teamContext, buildAgentReviewStage, observeTheLoop, observeTheReview, observedLoops, loopKey, teamStore, platform, checkout };
+module.exports = { reviewPullRequest, prepareReview, teamContext, buildAgentReviewStage, observeTheLoop, observeTheReview, observedLoops, loopKey, teamStore, platform, checkout, killEvalSandboxes };

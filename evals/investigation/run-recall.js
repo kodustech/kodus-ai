@@ -569,6 +569,21 @@ async function main() {
     console.log(
         `(concorrência: ${concurrency}${process.env.RECALL_HEAVY === '1' ? ' · HEAVY' : ''})\n`,
     );
+    // RECALL_SANDBOX=e2b: no sandbox outlives the run, whatever ends it.
+    if (process.env.RECALL_SANDBOX === 'e2b') {
+        const { killEvalSandboxes } = require('../shared/review-stage');
+        const stale = await killEvalSandboxes();
+        if (stale) console.log(`E2B: killed ${stale} sandbox(es) an earlier eval run left behind`);
+        for (const sig of ['SIGINT', 'SIGTERM']) {
+            process.once(sig, () => {
+                killEvalSandboxes().finally(() => process.exit(130));
+            });
+        }
+        const exit = process.exit.bind(process);
+        process.exit = (code) => {
+            killEvalSandboxes().finally(() => exit(code));
+        };
+    }
     let cursor = 0;
     // Preflight (preflight.js): the first case runs alone and its manifest is
     // checked against what this run asked for before the others are paid for.
