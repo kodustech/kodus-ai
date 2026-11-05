@@ -195,13 +195,22 @@ const UNCHECKABLE_IMPORT =
 
 /**
  * A JSX file's pragma: with the classic runtime every element compiles to a
- * call on it, so the file uses it without ever writing its name.
+ * call on it, so the file uses it without ever writing its name. Plain `.js`
+ * files carry JSX too (Create React App, Preact).
  */
-const JSX_FILE = /\.(?:jsx|tsx)$/;
+const JSX_FILE = /\.(?:jsx|tsx|js|mjs|cjs)$/;
 const JSX_PRAGMAS = new Set(['React', 'h']);
 
 /** The most lines one import statement is read across. */
 const MAX_IMPORT_LINES = 50;
+
+/**
+ * A string literal (group 1), or a comment: a line comment, a block comment
+ * (to the end of the text when it never closes), or `#` after whitespace or a
+ * line start (group 2 keeps that whitespace).
+ */
+const STRING_OR_COMMENT =
+    /("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|(?![\s\S]))|(^|\s)#[^\n]*/gm;
 
 /**
  * A statement read two ways. `prose` drops comments and keeps strings: a
@@ -210,68 +219,36 @@ const MAX_IMPORT_LINES = 50;
  * inside a string or a comment is not read as part of it.
  */
 function readStatement(text: string): { prose: string; code: string } {
-    let prose = '';
-    let code = '';
-    let quote = '';
-    let i = 0;
-    while (i < text.length) {
-        const c = text[i];
-        if (quote) {
-            prose += c;
-            if (c === '\\') {
-                prose += text[i + 1] ?? '';
-                i += 2;
-                continue;
-            }
-            if (c === quote) {
-                quote = '';
-                code += '""';
-            }
-            i++;
-            continue;
-        }
-        if (c === '"' || c === "'" || c === '`') {
-            quote = c;
-            prose += c;
-            i++;
-            continue;
-        }
-        const lineComment =
-            text.startsWith('//', i) ||
-            (c === '#' && (i === 0 || /\s/.test(text[i - 1])));
-        if (lineComment) {
-            const end = text.indexOf('\n', i);
-            i = end === -1 ? text.length : end;
-            continue;
-        }
-        if (text.startsWith('/*', i)) {
-            const end = text.indexOf('*/', i + 2);
-            i = end === -1 ? text.length : end + 2;
-            continue;
-        }
-        prose += c;
-        code += c;
-        i++;
-    }
+    const prose = text.replace(
+        STRING_OR_COMMENT,
+        (_m, str?: string, lead?: string) => str ?? lead ?? '',
+    );
+    const code = text.replace(
+        STRING_OR_COMMENT,
+        (_m, str?: string, lead?: string) => (str ? '""' : (lead ?? '')),
+    );
     return { prose, code };
+}
+
+/** Open minus closed braces and parentheses in the code. */
+function depthOf(code: string): number {
+    return (
+        (code.match(/[{(]/g) ?? []).length - (code.match(/[})]/g) ?? []).length
+    );
 }
 
 /**
  * The statement starting at `lines[start]`: that line, plus the lines until
  * its braces or parentheses close (a multi-line `import {` or `from x import (`),
- * counted outside strings and comments.
+ * counted outside strings and comments, a comment spanning lines included.
  */
 function statementAt(lines: string[], start: number): string {
-    const taken: string[] = [];
-    let depth = 0;
-    for (let i = start; i < lines.length && i < start + MAX_IMPORT_LINES; i++) {
-        taken.push(lines[i]);
-        const { code } = readStatement(lines[i]);
-        depth += (code.match(/[{(]/g) ?? []).length;
-        depth -= (code.match(/[})]/g) ?? []).length;
-        if (depth <= 0) break;
-    }
-    return taken.join('\n');
+    const window = lines.slice(start, start + MAX_IMPORT_LINES);
+    const end = window.findIndex(
+        (_line, k) =>
+            depthOf(readStatement(window.slice(0, k + 1).join('\n')).code) <= 0,
+    );
+    return window.slice(0, end === -1 ? window.length : end + 1).join('\n');
 }
 
 /**

@@ -505,6 +505,48 @@ describe('checkClaims — an unused import is about the file that imports it (#1
         expect(res.dropped[0].reason).toContain('unverifiable');
     });
 
+    it('does not publish an unused React import in a .js file, which may hold JSX', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                "src/Card.js:1:import React from 'react';\nsrc/List.js:1:import React from 'react';",
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/Card.js',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'React',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('unverifiable');
+    });
+
+    it('reads a multi-line import past a block comment that spans lines and holds a brace', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:4:  debounce,\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    relevantLinesStart: 4,
+                    relevantLinesEnd: 4,
+                    existingCode:
+                        'import { /* formerly:\n  } */\n  formatDate,\n  debounce,\n} from "./timing.js";',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
     it('still drops a non-import unused claim when another file uses the symbol', async () => {
         const lookup = fakeLookup({
             grep: () =>
