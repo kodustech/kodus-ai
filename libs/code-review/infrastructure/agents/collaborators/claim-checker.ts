@@ -193,20 +193,82 @@ const IMPORT_LINE =
 const UNCHECKABLE_IMPORT =
     /^\s*(?:@(?:import|use|forward)\b|using\s+[\w.]+\s*;)/;
 
+/**
+ * A JSX file's pragma: with the classic runtime every element compiles to a
+ * call on it, so the file uses it without ever writing its name.
+ */
+const JSX_FILE = /\.(?:jsx|tsx)$/;
+const JSX_PRAGMAS = new Set(['React', 'h']);
+
 /** The most lines one import statement is read across. */
 const MAX_IMPORT_LINES = 50;
 
 /**
+ * A statement read two ways. `prose` drops comments and keeps strings: a
+ * stylesheet or Go import names its module in a string. `code` also drops
+ * strings: what is left is what the language binds, so a brace, `as` or name
+ * inside a string or a comment is not read as part of it.
+ */
+function readStatement(text: string): { prose: string; code: string } {
+    let prose = '';
+    let code = '';
+    let quote = '';
+    let i = 0;
+    while (i < text.length) {
+        const c = text[i];
+        if (quote) {
+            prose += c;
+            if (c === '\\') {
+                prose += text[i + 1] ?? '';
+                i += 2;
+                continue;
+            }
+            if (c === quote) {
+                quote = '';
+                code += '""';
+            }
+            i++;
+            continue;
+        }
+        if (c === '"' || c === "'" || c === '`') {
+            quote = c;
+            prose += c;
+            i++;
+            continue;
+        }
+        const lineComment =
+            text.startsWith('//', i) ||
+            (c === '#' && (i === 0 || /\s/.test(text[i - 1])));
+        if (lineComment) {
+            const end = text.indexOf('\n', i);
+            i = end === -1 ? text.length : end;
+            continue;
+        }
+        if (text.startsWith('/*', i)) {
+            const end = text.indexOf('*/', i + 2);
+            i = end === -1 ? text.length : end + 2;
+            continue;
+        }
+        prose += c;
+        code += c;
+        i++;
+    }
+    return { prose, code };
+}
+
+/**
  * The statement starting at `lines[start]`: that line, plus the lines until
- * its braces or parentheses close (a multi-line `import {` or `from x import (`).
+ * its braces or parentheses close (a multi-line `import {` or `from x import (`),
+ * counted outside strings and comments.
  */
 function statementAt(lines: string[], start: number): string {
     const taken: string[] = [];
     let depth = 0;
     for (let i = start; i < lines.length && i < start + MAX_IMPORT_LINES; i++) {
         taken.push(lines[i]);
-        depth += (lines[i].match(/[{(]/g) ?? []).length;
-        depth -= (lines[i].match(/[})]/g) ?? []).length;
+        const { code } = readStatement(lines[i]);
+        depth += (code.match(/[{(]/g) ?? []).length;
+        depth -= (code.match(/[})]/g) ?? []).length;
         if (depth <= 0) break;
     }
     return taken.join('\n');
@@ -216,10 +278,10 @@ function statementAt(lines: string[], start: number): string {
  * The import statement an `unused` claim is about, if it is about one: read
  * from the repository's own text of the finding's lines first, then from the
  * code the finding cites (a name on its own line of a multi-line import).
- * Only a statement that names the claimed symbol counts: a finding about
- * another symbol whose cited code happens to hold an import is not about it.
- * A package's `__init__.py` re-exports what it imports, so its imports keep
- * the any-file rule.
+ * Only a statement that names the claimed symbol outside a comment counts: a
+ * finding about another symbol whose cited code happens to hold an import is
+ * not about it. A package's `__init__.py` re-exports what it imports, so its
+ * imports keep the any-file rule.
  */
 function importStatementOf(
     violation: ShardViolation,
@@ -240,7 +302,9 @@ function importStatementOf(
             IMPORT_LINE.test(line) ? [statementAt(cited, i)] : [],
         ),
     ];
-    return statements.find((statement) => hasIdentifier(statement, symbol));
+    return statements.find((statement) =>
+        hasIdentifier(readStatement(statement).prose, symbol),
+    );
 }
 
 /** The identifier occurs in the text, not as a part of a longer one. */
@@ -340,17 +404,6 @@ async function refute(
                     `"${statement.trim()}" is not used by its name, so a search cannot tell whether it is used`,
                 );
             }
-            // `import { x as y }`: the file uses `y`, which the search for `x`
-            // does not see.
-            if (
-                new RegExp(
-                    `(^|[^A-Za-z0-9_$])${escapeRegex(claim.symbol!)}\\s+as\\s+[A-Za-z_$]`,
-                ).test(statement)
-            ) {
-                throw new UnverifiableClaimError(
-                    `"${claim.symbol}" is imported under another name, so a search for it cannot tell whether it is used`,
-                );
-            }
             // A PR-level finding names no file, so there is no importing file
             // to search: the claim cannot be checked either way.
             if (!violation.relevantFile) {
@@ -358,7 +411,36 @@ async function refute(
                     `"${statement.trim()}" names no file, so a search cannot tell whether the file that imports it uses it`,
                 );
             }
-            const file = normalizePath(violation.relevantFile);
+            if (
+                JSX_FILE.test(violation.relevantFile) &&
+                JSX_PRAGMAS.has(claim.symbol!)
+            ) {
+                throw new UnverifiableClaimError(
+                    `"${claim.symbol}" may be used by every JSX element in ${violation.relevantFile} without its name, so a search cannot tell whether it is used`,
+                );
+            }
+            const { code } = readStatement(statement);
+            // `import { x as y }` / `import x as y`: the file uses `y`, which the
+            // search for `x` does not see.
+            if (
+                new RegExp(
+                    `(^|[^A-Za-z0-9_$])${escapeRegex(claim.symbol!)}\\s+as\\s+[A-Za-z_$]`,
+                ).test(code)
+            ) {
+                throw new UnverifiableClaimError(
+                    `"${claim.symbol}" is bound under a different name in "${statement.trim()}", so a search for "${claim.symbol}" cannot tell whether it is used`,
+                );
+            }
+        }
+        // The same-file rule needs the claimed name to be what the statement
+        // binds. When it is only in the module's path (Go's `import f "fmt"`,
+        // `import "./x"`), the binding may be another name: judge it as main
+        // does, by a use in any file.
+        if (
+            statement !== undefined &&
+            hasIdentifier(readStatement(statement).code, claim.symbol!)
+        ) {
+            const file = normalizePath(violation.relevantFile!);
             const usedHere = elsewhere.filter(
                 (m) => m.file === file && namesSymbol(m.text, claim.symbol!),
             );

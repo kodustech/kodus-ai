@@ -427,6 +427,84 @@ describe('checkClaims — an unused import is about the file that imports it (#1
         expect(res.dropped[0].reason).toContain('unverifiable');
     });
 
+    it('reads a multi-line import to its real end when a comment holds a brace', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:3:  debounce,\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    existingCode:
+                        'import { // see } below\n  formatDate,\n  debounce,\n} from "./timing.js" with { type: "js" };',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('does not read "as" in a comment on the import as an alias', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:2:import { debounce } from "./timing.js"; // was debounce as wait\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+        });
+        const res = await checkClaims({
+            violations: [importLine()],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('judges an import that names the symbol only in its path as main does', async () => {
+        // Go binds `f`, not `fmt`: the same-file search for `fmt` cannot see it.
+        const lookup = fakeLookup({
+            grep: () =>
+                'cmd/main.go:3:import f "fmt"\ninternal/log.go:5:\tfmt.Println(msg)',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'cmd/main.go',
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    claimKind: 'unused',
+                    claimSymbol: 'fmt',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('internal/log.go:5');
+    });
+
+    it('does not publish an unused React import in a JSX file, which the classic runtime uses without its name', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                "src/Card.tsx:1:import React from 'react';\nsrc/List.tsx:1:import React from 'react';",
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/Card.tsx',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'React',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('unverifiable');
+    });
+
     it('still drops a non-import unused claim when another file uses the symbol', async () => {
         const lookup = fakeLookup({
             grep: () =>
