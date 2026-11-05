@@ -212,6 +212,16 @@ function writtenKeep(text) {
  *  read these and fails open by contract, so for these rows the two extractors
  *  are expected to differ. An unquoted Python-style `False` is not JSON and is
  *  still unread by both. */
+/** A `keep` value spelled as a string or a number, read as coerceKeep reads it. */
+function quotedKeepValue(raw) {
+    if (raw === 1 || raw === 0) return raw === 1;
+    if (typeof raw !== 'string') return undefined;
+    const t = raw.trim().toLowerCase();
+    if (t === 'true' || t === 'yes') return true;
+    if (t === 'false' || t === 'no') return false;
+    return undefined;
+}
+
 function writtenKeepQuoted(text) {
     const m = String(text || '').match(
         /"(?:keep|shouldKeep|should_keep|decision|verdict)"\s*:\s*("\s*(?:false|true|no|yes)\s*"|[01]\b)/gi,
@@ -255,24 +265,35 @@ for (const row of rows) {
         row.calledVerdictTool && typeof row.toolPayload?.keep === 'boolean'
             ? row.toolPayload.keep
             : undefined;
-    const strictWritten = row.expect ? undefined : writtenKeep(row.text);
     // Spelled as a string or a number: read by code-review, not by the harness.
+    const toolQuoted =
+        row.expect || !row.calledVerdictTool || toolKeep !== undefined
+            ? undefined
+            : quotedKeepValue(row.toolPayload?.keep);
+    const strictWritten = row.expect ? undefined : writtenKeep(row.text);
     const quotedWritten =
-        row.expect || toolKeep !== undefined || strictWritten !== undefined
+        row.expect ||
+        toolKeep !== undefined ||
+        toolQuoted !== undefined ||
+        strictWritten !== undefined
             ? undefined
             : writtenKeepQuoted(row.text);
     const written = strictWritten ?? quotedWritten;
-    const delivered = toolKeep ?? written;
+    const fromTool = toolKeep ?? toolQuoted;
+    const delivered = fromTool ?? written;
     const want = row.expect ?? {
         keep: delivered === undefined ? true : delivered,
         parseMode:
-            toolKeep !== undefined
+            fromTool !== undefined
                 ? 'tool'
                 : written === undefined
                   ? 'default-keep'
                   : 'text',
     };
-    const quotedShape = quotedWritten !== undefined;
+    const quotedShape = toolQuoted !== undefined || quotedWritten !== undefined;
+    // What the harness reads on such a row: a strict verdict in the text, else
+    // it fails open.
+    const harnessWant = strictWritten ?? true;
     const keepOk = err ? false : got.keep === want.keep;
     const modeOk = err ? false : got.parseMode === want.parseMode;
     // The loss this issue is about: the model wrote a refutation and the gate kept it.
@@ -282,7 +303,7 @@ for (const row of rows) {
     const agree = err
         ? false
         : quotedShape
-          ? gotGeneric.keep === true
+          ? gotGeneric.keep === harnessWant
           : got.keep === gotGeneric.keep;
     results.push({
         quotedShape,

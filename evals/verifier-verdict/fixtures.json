@@ -115,6 +115,18 @@
             "text": ""
         },
         {
+            "id": "derived-tool-quoted-boolean",
+            "model": "(derived expectation)",
+            "source": "no `expect`: the verdict tool's payload spells keep as a string. A refutation for the code-review verifier (coerceKeep), read from the payload; the business-rules harness fails open on it by contract.",
+            "finishReason": "stop",
+            "calledVerdictTool": true,
+            "toolPayload": {
+                "keep": "false",
+                "rationale": "refuted, keep quoted"
+            },
+            "text": ""
+        },
+        {
             "id": "derived-text-quoted-boolean",
             "model": "(derived expectation)",
             "source": "no `expect`: a quoted boolean is a refutation for the code-review verifier (coerceKeep, verifier.agent.contract.spec.ts row21..row23); the business-rules harness fails open on it by contract.",

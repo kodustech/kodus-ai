@@ -128,6 +128,18 @@ describe('shardViolationsSchema — model JSON parsing', () => {
             expect(validate(value).success).toBe(false);
         });
 
+        it('keeps every violation of an index-keyed reply {"0":v,"1":v}', () => {
+            const r = validate({
+                '0': violation,
+                '1': { ...violation, ruleId: 'r-2' },
+            });
+            expect(r.success).toBe(true);
+            expect(r.value.violations.map((v: any) => v.ruleId)).toEqual([
+                'r-1',
+                'r-2',
+            ]);
+        });
+
         it('still reads {} and {violations:[]} as a clean shard', () => {
             expect(validate({}).value.violations).toEqual([]);
             expect(validate({ violations: [] }).value.violations).toEqual([]);

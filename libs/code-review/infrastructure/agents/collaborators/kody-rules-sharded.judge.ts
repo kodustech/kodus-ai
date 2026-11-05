@@ -184,6 +184,18 @@ const shardLogger = createLogger('KodyRulesShardedJudge');
  */
 function reshapeShardReply(value: unknown): unknown {
     let reason: string | undefined;
+    // An array written as an object keyed by index ({"0":v,"1":v}): read every
+    // entry, not just "0", which normalizeEnvelope would unwrap alone.
+    if (
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        Object.keys(value).length > 1 &&
+        Object.keys(value).every((k) => /^\d+$/.test(k))
+    ) {
+        value = Object.values(value);
+        reason = 'lifted-index-keyed-object';
+    }
     let v = normalizeEnvelope(value, 'violations', ['issues', 'findings'], {
         liftEmptyArray: true,
         onRecover: (r) => {
