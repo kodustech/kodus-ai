@@ -171,21 +171,3 @@ export function failedCallUsage(
     }
     return own;
 }
-
-/**
- * Span attributes for a call aborted while a request was in flight (#2389).
- * The provider never answered that request, so there is no usage to record;
- * its input is estimated so the gap is known and can be counted. Kept out of
- * the usage fields: an estimate is never billed. Undefined unless the call's
- * own signal was aborted with a request outstanding.
- */
-export function abortedInFlightAttrs(
-    signal: AbortSignal | undefined,
-    inFlightInputTokens: number | undefined,
-): Record<string, unknown> | undefined {
-    if (!signal?.aborted || !inFlightInputTokens) return undefined;
-    return {
-        abortedInFlight: true,
-        abortedInFlightInputTokensEstimate: inFlightInputTokens,
-    };
-}

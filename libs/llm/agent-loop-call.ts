@@ -37,20 +37,10 @@ import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
 import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { getLlmObservability } from '@libs/llm/llm-observability';
 import {
-    abortedInFlightAttrs,
     createStepUsageTally,
     type AiSdkUsageInput,
 } from '@libs/llm/ai-sdk-usage';
-import { estimateTextTokens } from '@libs/llm/token-estimate';
-
-/** JSON for the token estimate; a value that will not serialize counts as empty. */
-function safeStringify(value: unknown): string {
-    try {
-        return JSON.stringify(value) ?? '';
-    } catch {
-        return '';
-    }
-}
+import { abortedInFlightAttrs } from '@libs/llm/aborted-in-flight';
 import {
     hardTimeout,
     timeoutSignal,
@@ -252,21 +242,20 @@ export async function runAgentLoopCall(
     // error: heavy mode aborts its lenses with the generalist's error object, and
     // usage stored on it would be read again by every lens's span.
     const finishedSteps = createStepUsageTally();
-    // The input of the step whose request is out and not answered yet, so an
+    // The prompt of the step whose request is out and not answered yet, so an
     // abort that lands on it is recorded as a known gap, never billed (#2389).
-    let inFlightInputTokens: number | undefined;
+    // Kept by reference and tokenized only if that abort happens.
+    let inFlightPrompt: { system: unknown; messages: unknown } | undefined;
     const prepareStep = async (opts: any) => {
         const directive: any = await loop.prepareStep?.(opts);
-        inFlightInputTokens = estimateTextTokens(
-            safeStringify({
-                system: directive?.system ?? systemArg,
-                messages: directive?.messages ?? opts?.messages,
-            }),
-        );
+        inFlightPrompt = {
+            system: directive?.system ?? systemArg,
+            messages: directive?.messages ?? opts?.messages,
+        };
         return directive;
     };
     const onStepFinish = (event: any) => {
-        inFlightInputTokens = undefined;
+        inFlightPrompt = undefined;
         finishedSteps.add(event?.usage);
         return loop.onStepFinish?.(event);
     };
@@ -325,7 +314,7 @@ export async function runAgentLoopCall(
             !!telemetryMetadata,
             spanName ?? runName,
             finishedSteps.total,
-            () => abortedInFlightAttrs(signal, inFlightInputTokens),
+            () => abortedInFlightAttrs(signal, () => inFlightPrompt),
         );
 
     // Belt over the AbortSignal suspenders. `signal` above is a REQUEST: several

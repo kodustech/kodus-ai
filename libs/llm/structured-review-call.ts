@@ -83,8 +83,7 @@ import {
     sleep,
 } from '@libs/llm/retry-policy';
 import { getLlmObservability } from '@libs/llm/llm-observability';
-import { abortedInFlightAttrs } from '@libs/llm/ai-sdk-usage';
-import { estimateTextTokens } from '@libs/llm/token-estimate';
+import { abortedInFlightAttrs } from '@libs/llm/aborted-in-flight';
 
 const logger = createLogger('StructuredReviewCall');
 
@@ -563,9 +562,8 @@ async function runReviewCall<T>(
                   attrsOnError: () =>
                       abortedInFlightAttrs(
                           signal,
-                          estimateTextTokens(
+                          () =>
                               `${systemOverride ?? system}\n${override?.prompt ?? user}`,
-                          ),
                       ),
               })
             : exec();
