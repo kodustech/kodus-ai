@@ -333,6 +333,30 @@ describe("mentionedFilesNotFollowed", () => {
         ).toEqual([{ path: "docs/conventions.md", kind: "doc" }]);
     });
 
+    it("places a file by a linked repository named after it in the same sentence", () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Read stack/node/valves.mdc in irrigation-rules before commenting.",
+                [RULES],
+                [],
+                "valves",
+            ),
+        ).toEqual([
+            { path: "stack/node/valves.mdc", kind: "doc", repository: RULES },
+        ]);
+    });
+
+    it("does not end a sentence at the dot inside a file name", () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Use docs/a.md and rules.md from the pump-rules repository.",
+                [RULES],
+                [],
+                "valves",
+            ),
+        ).toEqual([]);
+    });
+
     it("guesses nothing: a repository that is not linked, a code file, a URL", () => {
         expect(
             mentionedFilesNotFollowed(

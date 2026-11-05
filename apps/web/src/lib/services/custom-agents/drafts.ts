@@ -1144,12 +1144,17 @@ const NOT_A_RULE_FILE =
  *  file lives ("in the pump-rules repository"); one in another sentence is
  *  about something else ("use the repository pattern"). */
 const sentenceAround = (text: string, start: number, end: number) => {
-    const before = text.slice(0, start);
-    const from = Math.max(
-        ...[".", "\n", ";", "!", "?"].map((mark) => before.lastIndexOf(mark)),
-    );
-    const after = text.slice(end).search(/[.\n;!?](\s|$)/);
-    return text.slice(from + 1, after < 0 ? text.length : end + after);
+    // A mark ends a sentence only before whitespace or the end: the dot in
+    // "a.md" does not.
+    const boundary = /[.;!?](?=\s|$)|\n/g;
+    let from = 0;
+    for (const mark of text.slice(0, start).matchAll(boundary)) {
+        from = (mark.index ?? 0) + 1;
+    }
+    boundary.lastIndex = 0;
+    const after = boundary.exec(text.slice(end));
+    const to = after ? end + after.index : text.length;
+    return { from, to, text: text.slice(from, to) };
 };
 
 const escapeRegExp = (value: string) =>
@@ -1236,10 +1241,22 @@ export const mentionedFilesNotFollowed = (
         const before = prefixed
             ? undefined
             : mentions.filter((mention) => mention.at < at).pop();
+        const sentence = sentenceAround(text, at, at + cited.length);
+        // A linked repository named later in the file's own sentence places
+        // it too ("read x.mdc in irrigation-rules").
+        const inSentence =
+            prefixed || before
+                ? undefined
+                : mentions.find(
+                      (mention) =>
+                          mention.at >= sentence.from &&
+                          mention.at < sentence.to,
+                  );
         if (
             !prefixed &&
             !before &&
-            REPOSITORY_WORD.test(sentenceAround(text, at, at + cited.length))
+            !inSentence &&
+            REPOSITORY_WORD.test(sentence.text)
         ) {
             // The sentence places the file in a repository that is not linked.
             continue;
@@ -1247,7 +1264,10 @@ export const mentionedFilesNotFollowed = (
         if (NOT_A_RULE_FILE.test(cited.split("/").pop() ?? "")) continue;
         const item = knowledgeItemFromPath(prefixed ? prefixed.rest : cited);
         if (!item) continue;
-        const repository = prefixed?.repository ?? before?.repository;
+        const repository =
+            prefixed?.repository ??
+            before?.repository ??
+            inSentence?.repository;
         const file: MentionedFile = {
             ...item,
             ...(repository && { repository }),
