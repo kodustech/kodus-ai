@@ -282,6 +282,49 @@ describe('checkClaims — an unused import is about the file that imports it (#1
         expect(res.kept).toHaveLength(1);
     });
 
+    it('counts the same text as a use when it sits outside the import the finding cites', async () => {
+        // The import is on lines 10-12; `  debounce,` on line 8 is a shorthand
+        // property of an object above it, a few lines away and with the same
+        // text as the import's member line.
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:8:  debounce,\nhelpers/report.js:11:  debounce,',
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    relevantLinesStart: 10,
+                    relevantLinesEnd: 10,
+                    existingCode:
+                        'import {\n  debounce,\n} from "./timing.js";',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('helpers/report.js:8');
+    });
+
+    it('does not count the import own member line below the finding as a use', async () => {
+        const lookup = fakeLookup({
+            grep: () => 'helpers/report.js:11:  debounce,',
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    relevantLinesStart: 10,
+                    relevantLinesEnd: 10,
+                    existingCode:
+                        'import {\n  debounce,\n} from "./timing.js";',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
     it('does not publish an unused stylesheet import, whose members are used rather than its name', async () => {
         const lookup = fakeLookup({
             grep: () =>
@@ -697,6 +740,22 @@ describe('checkClaims — an unused import, in every language the rules review',
             verdict: 'publish',
         },
         {
+            lang: 'Java, the package line is not a use',
+            file: 'src/A.java',
+            line: 'import com.acme.Money;',
+            symbol: 'Money',
+            uses: ['src/A.java:0:package com.acme.app;'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'Java static, another path through the same package',
+            file: 'src/A.java',
+            line: 'import static com.acme.Util.round;',
+            symbol: 'round',
+            uses: ['src/A.java:9:    com.acme.Util.log(x);'],
+            verdict: 'publish',
+        },
+        {
             lang: 'Java, used',
             file: 'src/A.java',
             line: 'import com.acme.Money;',
@@ -754,6 +813,23 @@ describe('checkClaims — an unused import, in every language the rules review',
             uses: ['src/a.rs:7:    let c = Cash::new();'],
             verdict: 'drop',
             reason: 'src/a.rs:7',
+        },
+        {
+            lang: 'Rust, another path through the same crate',
+            file: 'src/a.rs',
+            line: 'use std::fmt::Display;',
+            symbol: 'Display',
+            uses: ['src/a.rs:9:    let s = std::mem::take(&mut x);'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'Python, a dotted import binds its first name',
+            file: 'app/a.py',
+            line: 'import os.path',
+            symbol: 'os',
+            uses: ['app/a.py:8:cwd = os.getcwd()'],
+            verdict: 'drop',
+            reason: 'app/a.py:8',
         },
         {
             lang: 'Rust glob',
@@ -855,6 +931,30 @@ describe('checkClaims — an unused import, in every language the rules review',
             line: 'using System.Linq;',
             symbol: 'Linq',
             verdict: 'unverifiable',
+        },
+        {
+            lang: 'C# static',
+            file: 'src/A.cs',
+            line: 'using static System.Math;',
+            symbol: 'Math',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'C++ using-declaration, unused',
+            file: 'src/a.cpp',
+            line: 'using std::cout;',
+            symbol: 'cout',
+            uses: ['src/a.cpp:9:  std::cerr << x;'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'C++ using-declaration, used',
+            file: 'src/a.cpp',
+            line: 'using std::cout;',
+            symbol: 'cout',
+            uses: ['src/a.cpp:9:  cout << x;'],
+            verdict: 'drop',
+            reason: 'src/a.cpp:9',
         },
         {
             lang: 'C++',

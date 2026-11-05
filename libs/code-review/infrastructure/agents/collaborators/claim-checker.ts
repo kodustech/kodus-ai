@@ -191,12 +191,13 @@ const IMPORT_LINE =
 /**
  * Imports that bring a module's members into scope without naming them: the
  * file then uses the members, never the name a search looks for. Stylesheet
- * modules, C# `using` and C++ `using namespace` (not `using X = Y;`), OCaml/F#
- * `open`, and wildcards
+ * modules, C# `using X.Y;` and `using static`, C++ `using namespace` (not
+ * `using std::cout;`, which binds `cout`, nor `using X = Y;`), OCaml/F# `open`,
+ * and wildcards
  * (`*`, `._`, `::*`, `from x import *`, Go's `import . "x"`).
  */
 const NAMESPACE_IMPORT =
-    /^\s*(?:@(?:import|use|forward)\b|using\s+(?:static\s+|namespace\s+)?[\p{L}_][\p{L}\p{N}_.:]*\s*;|open\s)|(?:\.|::|\\)\s*[*_]\s*(?:[;,)}\]\n]|$)|\bimport\s+\*\s*(?:[;\n]|$)|^\s*(?:import\s+)?\.\s+""/mu;
+    /^\s*(?:@(?:import|use|forward)\b|using\s+(?:namespace\s+[\p{L}_][\p{L}\p{N}_.:]*|(?:static\s+)?(?:global::)?[\p{L}_][\p{L}\p{N}_.]*)\s*;|open\s)|(?:\.|::|\\)\s*[*_]\s*(?:[;,)}\]\n]|$)|\bimport\s+\*\s*(?:[;\n]|$)|^\s*(?:import\s+)?\.\s+""/mu;
 
 /**
  * Files whose `import`/`use` brings a whole module in: Elixir, Perl and Swift
@@ -319,11 +320,18 @@ function statementAt(lines: string[], start: number): string {
  * not about it. A package's `__init__.py` re-exports what it imports, so its
  * imports keep the any-file rule.
  */
+interface ImportStatement {
+    text: string;
+    /** The statement's first line within the cited code; absent when it was
+     *  read from the repository's own line. */
+    citedLine?: number;
+}
+
 function importStatementOf(
     violation: ShardViolation,
     matches: GrepMatch[],
     symbol: string,
-): string | undefined {
+): ImportStatement | undefined {
     const file = normalizePath(violation.relevantFile ?? '');
     if (file === '__init__.py' || file.endsWith('/__init__.py')) {
         return undefined;
@@ -332,14 +340,18 @@ function importStatementOf(
         .filter((m) => m.file === file && !isElsewhere(m, violation))
         .map((m) => m.text);
     const cited = (violation.existingCode ?? '').split('\n');
-    const statements = [
-        ...own.filter((line) => IMPORT_LINE.test(line)),
+    const statements: ImportStatement[] = [
+        ...own
+            .filter((line) => IMPORT_LINE.test(line))
+            .map((text) => ({ text })),
         ...cited.flatMap((line, i) =>
-            IMPORT_LINE.test(line) ? [statementAt(cited, i)] : [],
+            IMPORT_LINE.test(line)
+                ? [{ text: statementAt(cited, i), citedLine: i }]
+                : [],
         ),
     ];
     return statements.find((statement) =>
-        hasIdentifier(readStatement(statement).prose, symbol),
+        hasIdentifier(readStatement(statement.text).prose, symbol),
     );
 }
 
@@ -386,22 +398,35 @@ function importItemOf(code: string, symbol: string): string[] | undefined {
     return found;
 }
 
+/** What joins the segments of a module path: `a.b`, `a::b`, `A\\B`. */
+const PATH_SEPARATORS = new Set(['.', '::', '\\']);
+const PYTHON_FILE = /\.pyi?$/;
+
 /**
  * The names an import item may bind for `symbol`: every identifier in it but
- * the import keywords and a Python `from` module path. `x as y`, `B => C`,
- * `a::b as c` and `import numpy as np` all name the alias the file uses; a
- * path segment is kept too (Python's `import os.path` binds `os`), which can
- * only make the import look used.
+ * the import keywords, a Python `from` module path, and the leading segments
+ * of a module path. `x as y`, `B => C`, `a::b as c` and `import numpy as np`
+ * all name the alias the file uses. `import com.acme.Money;` and
+ * `use std::fmt::Display;` bind only the last segment: `com` and `std` occur
+ * in the file's own package line and in other paths, which are not uses.
+ * Python's `import os.path` binds `os`, so there the first segment is kept.
  */
-function boundNames(statement: string, symbol: string): string[] {
+function boundNames(statement: string, symbol: string, file: string): string[] {
     const item = importItemOf(readStatement(statement).code, symbol) ?? [];
+    const python = PYTHON_FILE.test(file);
     let inFromPath = false;
-    const names = item.filter((token) => {
+    const names = item.filter((token, k) => {
         if (token === 'from') inFromPath = true;
         if (token === 'import') inFromPath = false;
-        return (
-            !inFromPath && IDENTIFIER.test(token) && !IMPORT_KEYWORDS.has(token)
-        );
+        if (
+            inFromPath ||
+            !IDENTIFIER.test(token) ||
+            IMPORT_KEYWORDS.has(token)
+        ) {
+            return false;
+        }
+        if (!PATH_SEPARATORS.has(item[k + 1] ?? '')) return true;
+        return python && !PATH_SEPARATORS.has(item[k - 1] ?? '');
     });
     return [...new Set(names)];
 }
@@ -424,26 +449,23 @@ function bringsNamespace(statement: string, file: string): boolean {
 /**
  * A grep hit on the import's own lines, for a statement read across several
  * lines from the code the finding cites: the finding may sit on `import {`
- * while the name is on a member line below it, which is not a use.
+ * while the name is on a member line below it, which is not a use. The cited
+ * code starts at the finding's first line, so the statement's lines are known
+ * exactly; a hit counts only at its own place in them with its own text. A
+ * `createUser,` shorthand property a few lines below the import is a use.
  */
 function isStatementLine(
     match: GrepMatch,
     violation: ShardViolation,
-    statement: string,
+    statement: ImportStatement,
 ): boolean {
-    const lines = statement
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean);
+    if (statement.citedLine === undefined) return false;
+    const start = violation.relevantLinesStart;
+    if (start === undefined) return false;
+    const lines = statement.text.split('\n');
     if (lines.length < 2) return false;
-    const start = violation.relevantLinesStart ?? match.line;
-    const end = violation.relevantLinesEnd ?? start;
-    const reach = lines.length - 1;
-    return (
-        match.line >= start - reach &&
-        match.line <= end + reach &&
-        lines.includes(match.text.trim())
-    );
+    const k = match.line - (start + statement.citedLine);
+    return k >= 0 && k < lines.length && lines[k].trim() === match.text.trim();
 }
 
 /**
@@ -454,13 +476,13 @@ function isStatementLine(
  * name (it is only in the module path, `import f "fmt"`): judge it as main.
  */
 async function judgeImport(
-    statement: string,
+    statement: ImportStatement,
     symbol: string,
     violation: ShardViolation,
     matches: GrepMatch[],
     lookup: ClaimCheckInput['lookup'],
 ): Promise<string | null | undefined> {
-    const shown = statement.trim().replace(/\s+/g, ' ');
+    const shown = statement.text.trim().replace(/\s+/g, ' ');
     // A PR-level finding names no file, so there is no importing file to
     // search: the claim cannot be checked either way.
     if (!violation.relevantFile) {
@@ -469,7 +491,7 @@ async function judgeImport(
         );
     }
     const file = normalizePath(violation.relevantFile);
-    if (bringsNamespace(statement, file)) {
+    if (bringsNamespace(statement.text, file)) {
         throw new UnverifiableClaimError(
             `"${shown}" brings a module's members in without naming them, so a search cannot tell whether it is used`,
         );
@@ -479,7 +501,7 @@ async function judgeImport(
             `"${symbol}" may be used by every JSX element in ${file} without its name, so a search cannot tell whether it is used`,
         );
     }
-    const names = boundNames(statement, symbol);
+    const names = boundNames(statement.text, symbol, file);
     if (names.length === 0) return undefined;
     if (names.length > MAX_BOUND_NAMES) {
         throw new UnverifiableClaimError(
