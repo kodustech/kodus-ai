@@ -18,7 +18,8 @@ import {
     prompt_kodyrules_detect_references_system,
     prompt_kodyrules_detect_references_user,
 } from '@libs/common/utils/prompts/kodyRulesExternalReferences';
-import { extractJsonFromResponse } from '@libs/common/utils/prompt-parser.utils';
+import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
+import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 import { getModelName, trialDefaultModel } from '@libs/llm/byok-to-vercel';
 import { LLM } from '@libs/llm/llm';
 
@@ -54,6 +55,75 @@ export function stripControlMarkers(text: string): string {
         (acc, marker) =>
             acc.replace(new RegExp(escapeRegExp(marker), 'gi'), ''),
         text,
+    );
+}
+
+/** A reference carrying a control marker under any key, in any case. */
+function hasControlMarker(ref: IDetectedReference): boolean {
+    return Object.values(ref).some(isControlMarker);
+}
+
+/** The text inside a reply that is itself one JSON string ("\"[...]\""). */
+function unquoteJsonString(raw: unknown): unknown {
+    if (typeof raw !== 'string' || !raw.trim().startsWith('"')) return raw;
+    try {
+        const inner = JSON.parse(raw);
+        return typeof inner === 'string' ? inner : raw;
+    } catch {
+        return raw;
+    }
+}
+
+/**
+ * The reference list in the detector's text reply: a bare array, or one
+ * fenced, wrapped in prose, under a wrapper key, or a single reference sent
+ * without the array. Only items naming a file are kept. Null when the reply
+ * holds no list.
+ */
+function parseReferenceReply(
+    raw: unknown,
+    onRecover: (reason: string) => void,
+): IDetectedReference[] | null {
+    const opts = { liftEmptyArray: true, onRecover };
+    let value = normalizeEnvelope(
+        unquoteJsonString(raw),
+        'items',
+        ['references', 'refs', 'files'],
+        opts,
+    );
+    // A provider response body written out as the text: read its content.
+    const content = (
+        value as { choices?: { message?: { content?: unknown } }[] }
+    )?.choices?.[0]?.message?.content;
+    if (typeof content === 'string') {
+        onRecover('unwrapped-provider-envelope');
+        value = normalizeEnvelope(
+            unquoteJsonString(content),
+            'items',
+            ['references', 'refs', 'files'],
+            opts,
+        );
+    }
+    const isObject = (v: unknown): v is Record<string, unknown> =>
+        !!v && typeof v === 'object' && !Array.isArray(v);
+    let items: unknown;
+    if (isObject(value) && Array.isArray(value.items)) {
+        items = value.items;
+    } else if (
+        isObject(value) &&
+        (typeof value.fileName === 'string' ||
+            typeof value.filePath === 'string')
+    ) {
+        onRecover('lifted-single-reference');
+        items = [value];
+    } else {
+        return null;
+    }
+    return (items as unknown[]).filter(
+        (item): item is IDetectedReference =>
+            isObject(item) &&
+            (typeof item.fileName === 'string' ||
+                typeof item.filePath === 'string'),
     );
 }
 
@@ -209,20 +279,33 @@ export class ReferenceDetectorService {
                 teamId: organizationAndTeamData.teamId,
             },
         });
-        if (!raw) {
+        const recoveries: string[] = [];
+        const refs = parseReferenceReply(raw, (r) => recoveries.push(r));
+        if (!refs) {
+            this.logger.warn({
+                message: `${LLM_ENVELOPE_TAG} reference detector reply has no reference list; nothing detected and the result is not cached`,
+                context: ReferenceDetectorService.name,
+                metadata: {
+                    replyType: typeof raw,
+                    replyLength: typeof raw === 'string' ? raw.length : 0,
+                    organizationAndTeamData,
+                    requirementId: params.requirementId,
+                },
+            });
             return { references: [], reliable: false };
         }
-
-        const parsedRaw = extractJsonFromResponse(raw);
-        if (!parsedRaw || !Array.isArray(parsedRaw)) {
-            return { references: [], reliable: false };
+        if (recoveries.length > 0) {
+            this.logger.warn({
+                message: `${LLM_ENVELOPE_TAG} recovered an off-shape reference detector reply (${recoveries.join('+')})`,
+                context: ReferenceDetectorService.name,
+                metadata: {
+                    reasons: recoveries,
+                    organizationAndTeamData,
+                    requirementId: params.requirementId,
+                },
+            });
         }
-        const parsed = parsedRaw.filter(
-            (ref: any) =>
-                !isControlMarker(ref?.filePath) &&
-                !isControlMarker(ref?.fileName) &&
-                !isControlMarker(ref?.originalText),
-        );
+        const parsed = refs.filter((ref) => !hasControlMarker(ref));
 
         this.logger.debug({
             message: 'Detected external references',
@@ -234,7 +317,7 @@ export class ReferenceDetectorService {
             },
         });
 
-        return { references: parsed as IDetectedReference[], reliable: true };
+        return { references: parsed, reliable: true };
     }
 
     extractMarkers(promptText: string, references: IFileReference[]): string[] {

@@ -480,13 +480,10 @@ describe('SafeguardPipelineService — LLM.run boundary contract (#1786 off-sche
         });
     });
 
-    describe('Layer 2 — KNOWN #1786 GAP: prompt-only verifier silently drops on off-schema', () => {
-        // verifyWithPromptOnly returns `keep: result.verdict` verbatim. When the
-        // model returns a non-throwing off-schema shape whose top-level `verdict`
-        // is not a boolean, `keep` becomes `undefined`, and execute's prompt-only
-        // fallback then DROPS the suggestion (data loss) instead of applying the
-        // documented keep-as-safe-default. These assert the CORRECT (non-degrading)
-        // behavior, so they are green today and flip red the day the bug is fixed.
+    describe('Layer 2 — prompt-only verifier keeps the suggestion on an off-schema verdict', () => {
+        // A non-throwing off-schema shape whose top-level `verdict` is not a
+        // boolean must keep the suggestion: only a verdict that reads as false
+        // drops it.
         const promptOnlyOffSchema: Array<[string, unknown]> = [
             ['an empty object', {}],
             ['a {result:{verdict}} wrapper', { result: { verdict: true, evidence: 'x' } }],
@@ -495,7 +492,7 @@ describe('SafeguardPipelineService — LLM.run boundary contract (#1786 off-sche
         ];
 
         for (const [label, shape] of promptOnlyOffSchema) {
-            it.failing(
+            it(
                 `verifyWithPromptOnly off-schema (${label}) should default to keep=true`,
                 async () => {
                     mockGenerate.mockReset();
@@ -507,14 +504,12 @@ describe('SafeguardPipelineService — LLM.run boundary contract (#1786 off-sche
                         baseParams([{ id: 's1' }]),
                     );
 
-                    // Currently `keep` is `undefined` for these shapes → this
-                    // assertion fails today (so it.failing is green).
                     expect(r.keep).toBe(true);
                 },
             );
         }
 
-        it.failing(
+        it(
             'execute (prompt-only) must NOT silently drop a suggestion when the verifier returns {}',
             async () => {
                 const suggestions = [
@@ -743,8 +738,7 @@ describe('SafeguardPipelineService — prompt-only boundary FULL I/O matrix (#17
     // =============================================== B. semantic-but-wrong value
     describe('B. semantic-but-wrong value encodings', () => {
         // The model encoded a boolean the wrong way. Correct behavior = decode to
-        // a real boolean; prod passes the raw value through → keep is a string or
-        // number (wrong precision, silent). Pin the decoded truth (it.failing).
+        // a real boolean.
         const encodings: Array<[string, unknown, boolean]> = [
             // 'false' as a string is truthy: passed through raw it keeps a
             // suggestion the model refuted.
@@ -752,7 +746,7 @@ describe('SafeguardPipelineService — prompt-only boundary FULL I/O matrix (#17
         ];
 
         for (const [label, shape, expected] of encodings) {
-            it.failing(
+            it(
                 `${label} → should decode to strict keep=${expected}`,
                 async () => {
                     const r = await runPromptOnly(shape);
