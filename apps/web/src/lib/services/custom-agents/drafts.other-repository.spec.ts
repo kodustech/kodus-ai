@@ -346,6 +346,19 @@ describe("mentionedFilesNotFollowed", () => {
         ]);
     });
 
+    it("does not end a sentence at a wrapped line", () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Read stack/node/valves.mdc\nin irrigation-rules before commenting.",
+                [RULES],
+                [],
+                "valves",
+            ),
+        ).toEqual([
+            { path: "stack/node/valves.mdc", kind: "doc", repository: RULES },
+        ]);
+    });
+
     it("does not end a sentence at the dot inside a file name", () => {
         expect(
             mentionedFilesNotFollowed(

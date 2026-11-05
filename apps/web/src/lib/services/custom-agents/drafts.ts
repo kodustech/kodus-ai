@@ -1140,21 +1140,23 @@ const REPOSITORY_WORD = /\b(reposit[óo]rio|repository|repo)\b/i;
 const NOT_A_RULE_FILE =
     /^(readme|changelog|changes|history|license|licence|notice|authors|contributors)\.(md|mdx|markdown)$/i;
 
-/** The sentence around a position: a repository named there says where a
- *  file lives ("in the pump-rules repository"); one in another sentence is
- *  about something else ("use the repository pattern"). */
-const sentenceAround = (text: string, start: number, end: number) => {
-    // A mark ends a sentence only before whitespace or the end: the dot in
-    // "a.md" does not.
-    const boundary = /[.;!?](?=\s|$)|\n/g;
-    let from = 0;
-    for (const mark of text.slice(0, start).matchAll(boundary)) {
-        from = (mark.index ?? 0) + 1;
+/** Where each sentence ends: a mark before whitespace or the end of the
+ *  text (the dot in "a.md" ends nothing), or a blank line (a wrapped line
+ *  does not end one). A repository named in a file's sentence says where
+ *  the file lives ("in the pump-rules repository"); one in another sentence
+ *  is about something else ("use the repository pattern"). */
+const SENTENCE_END = /[.;!?](?=\s|$)|\n[ \t]*\n/g;
+
+/** The sentence a position falls in, as an index over `ends`. */
+const sentenceIndex = (ends: number[], position: number) => {
+    let low = 0;
+    let high = ends.length;
+    while (low < high) {
+        const mid = (low + high) >> 1;
+        if (ends[mid] <= position) low = mid + 1;
+        else high = mid;
     }
-    boundary.lastIndex = 0;
-    const after = boundary.exec(text.slice(end));
-    const to = after ? end + after.index : text.length;
-    return { from, to, text: text.slice(from, to) };
+    return low;
 };
 
 const escapeRegExp = (value: string) =>
@@ -1213,6 +1215,23 @@ export const mentionedFilesNotFollowed = (
             .filter((entry) => isLinked(entry, { agentId }))
             .map(knowledgeKey),
     );
+    const ends = [...text.matchAll(SENTENCE_END)].map(
+        (mark) => (mark.index ?? 0) + mark[0].length,
+    );
+    // The first linked repository each sentence names, and the sentences
+    // that name a repository at all, computed once for every file.
+    const repositoryBySentence = new Map<number, string>();
+    for (const mention of mentions) {
+        const sentence = sentenceIndex(ends, mention.at);
+        if (!repositoryBySentence.has(sentence)) {
+            repositoryBySentence.set(sentence, mention.repository);
+        }
+    }
+    const sentencesNamingARepository = new Set(
+        [...text.matchAll(new RegExp(REPOSITORY_WORD.source, "gi"))].map(
+            (word) => sentenceIndex(ends, word.index ?? 0),
+        ),
+    );
     const offered = new Set<string>();
     const found: MentionedFile[] = [];
     for (const { cited, at } of files) {
@@ -1241,22 +1260,16 @@ export const mentionedFilesNotFollowed = (
         const before = prefixed
             ? undefined
             : mentions.filter((mention) => mention.at < at).pop();
-        const sentence = sentenceAround(text, at, at + cited.length);
+        const sentence = sentenceIndex(ends, at);
         // A linked repository named later in the file's own sentence places
         // it too ("read x.mdc in irrigation-rules").
         const inSentence =
-            prefixed || before
-                ? undefined
-                : mentions.find(
-                      (mention) =>
-                          mention.at >= sentence.from &&
-                          mention.at < sentence.to,
-                  );
+            prefixed || before ? undefined : repositoryBySentence.get(sentence);
         if (
             !prefixed &&
             !before &&
             !inSentence &&
-            REPOSITORY_WORD.test(sentence.text)
+            sentencesNamingARepository.has(sentence)
         ) {
             // The sentence places the file in a repository that is not linked.
             continue;
@@ -1265,9 +1278,7 @@ export const mentionedFilesNotFollowed = (
         const item = knowledgeItemFromPath(prefixed ? prefixed.rest : cited);
         if (!item) continue;
         const repository =
-            prefixed?.repository ??
-            before?.repository ??
-            inSentence?.repository;
+            prefixed?.repository ?? before?.repository ?? inSentence;
         const file: MentionedFile = {
             ...item,
             ...(repository && { repository }),
