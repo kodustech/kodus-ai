@@ -14,6 +14,7 @@ import {
     MAX_REFUSAL_RETRIES,
     REFUSAL_MEMORY_MS,
     rejectedReasoningField,
+    withReasoningOff,
 } from './rejected-reasoning-field';
 import './providers';
 
@@ -561,5 +562,38 @@ describe('an OpenAI reasoning model with tools', () => {
         });
         expect(up.bodies).toHaveLength(1);
         expect(up.bodies[0].reasoning_effort).toBeUndefined();
+    });
+});
+
+describe('withReasoningOff', () => {
+    it('adds the effort under the adapter namespace when only another namespace carries one', () => {
+        const out = withReasoningOff(
+            { providerOptions: { openai: { reasoningEffort: 'low' } } },
+            'reasoning_effort',
+            'openaiCompatible',
+        );
+        expect(out?.providerOptions).toEqual({
+            openai: { reasoningEffort: 'none' },
+            openaiCompatible: { reasoningEffort: 'none' },
+        });
+    });
+
+    it('turns off the effort the adapter namespace already carries, adding nothing else', () => {
+        const out = withReasoningOff(
+            {
+                providerOptions: {
+                    openaiCompatible: { reasoningEffort: 'high' },
+                },
+            },
+            'reasoning_effort',
+            'openaiCompatible',
+        );
+        expect(out?.providerOptions).toEqual({
+            openaiCompatible: { reasoningEffort: 'none' },
+        });
+    });
+
+    it('changes nothing without a namespace when no option carries the effort', () => {
+        expect(withReasoningOff({}, 'reasoning_effort')).toBeUndefined();
     });
 });

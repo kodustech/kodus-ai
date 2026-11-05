@@ -194,7 +194,9 @@ export function withReasoningOff<
         const kept = { ...(value as Record<string, unknown>) };
         for (const key of OPTION_KEYS[field]) {
             if (key in kept && kept[key] !== undefined) {
-                carried = true;
+                // Only the adapter's own key reaches the wire: an effort left
+                // under another provider's namespace is not carried (#2350).
+                if (!namespace || ns === namespace) carried = true;
                 if (kept[key] !== 'none') {
                     kept[key] = 'none';
                     changed = true;
