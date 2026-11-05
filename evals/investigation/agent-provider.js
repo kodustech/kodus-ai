@@ -73,6 +73,52 @@ function reviewOptionsFromEnv() {
     return { bug: on.has('bug'), security: on.has('security'), performance: on.has('performance') };
 }
 
+// RECALL_STAGES=finder|verify|full: where the review ends (shared/review-stage.js).
+// finder: the finder's passes alone, no verify; verify: the finder with its
+// verify; full (default): every step production runs before posting.
+function reviewStagesFromEnv() {
+    return process.env.RECALL_STAGES || 'full';
+}
+
+// What a case ran, read off what production's code received and did: the
+// model and its settings per agent loop, the categories (allowed labels) the
+// generalist was given, the passes each finder run made, the fields the
+// finder submitted, the sandbox, the call graph and where the review ended.
+// run-recall.js checks it against what the run asked for (its preflight).
+function manifestOf(review, route, stages) {
+    const loops = review.loops.map((l) => ({
+        agentName: l.params.agentName ?? null,
+        modelName: l.params.modelName ?? null,
+        byokProvider: l.params.byokProvider ?? null,
+        reasoningEffort: l.params.reasoningEffort ?? null,
+        reviewMode: l.params.reviewMode ?? null,
+        heavy: !!l.params.heavy,
+        maxSteps: l.params.maxSteps ?? null,
+        skipSynthesisRescue: !!l.params.skipSynthesisRescue,
+        allowedLabels: l.params.allowedLabels ? [...l.params.allowedLabels].sort() : null,
+        conventionGuides: Array.isArray(l.params.conventionGuides) ? l.params.conventionGuides.length : 0,
+        callGraphChars: (l.params.callGraph || '').length,
+        files: l.params.changedFiles?.length ?? null,
+        steps: l.result?.steps ?? null,
+    }));
+    const finderRuns = (review.finder || []).map((run) => ({
+        agentName: run.agentName,
+        passes: run.passes.map((p) => p.label),
+        // Every key the finder put in a submitted finding, over all its passes.
+        submittedFields: [...new Set(run.passes.flatMap((p) => (p.raw || []).flatMap((r) => (r.suggestions || []).flatMap((s) => Object.keys(s || {})))))].sort(),
+        verify: run.verify.length ? (run.verify[0].skipped ? 'not-run' : 'ran') : 'no-candidates',
+        candidates: run.candidates?.length ?? 0,
+    }));
+    return {
+        stages,
+        stoppedAfter: review.stoppedAfter ?? null,
+        route: route.route,
+        sandbox: review.sandbox,
+        loops,
+        finderRuns,
+    };
+}
+
 // What the team set, from the case's data: its language, its memories as a
 // member writes them (stored by production's write, shared/review-stage.js
 // teamStore), and the review options and prompt overrides it saved. A run's
@@ -226,13 +272,16 @@ class InvestigationAgentProvider {
             stage = 'run-review';
             // RECALL_SANDBOX=none: the review production runs when no sandbox could be created.
             const sandbox = process.env.RECALL_SANDBOX === 'none' ? 'none' : undefined;
-            const review = await reviewPullRequest({ pr: prOf(caseData), team: teamOf(caseData, this.teamConfig), route, permissionService, ...(sandbox && { sandbox }) });
+            const stages = reviewStagesFromEnv();
+            const review = await reviewPullRequest({ pr: prOf(caseData), team: teamOf(caseData, this.teamConfig), route, permissionService, stages, ...(sandbox && { sandbox }) });
             if (review.skipped) throw new Error(`production skipped the review: ${review.skipped}`);
             // The stage records a failed agent or step and goes on with what it has:
-            // a review that failed measured the failure, not the finder.
-            const failure = review.context?.lastReviewError;
+            // a review that failed measured the failure, not the finder. A run that
+            // ends after the agents (RECALL_STAGES) is stopped there by the eval,
+            // and the stage records that stop as its failure.
+            const failure = review.stoppedAfter ? null : review.context?.lastReviewError;
             if (failure) throw new Error(`production review failed: ${failure.category} ${String(failure.providerMessage || failure.friendlyMessage || '').slice(0, 200)}`);
-            const failedAgents = (review.context?.errors || []).filter((e) => /agent|review/i.test(String(e?.stage || e?.message || '')));
+            const failedAgents = (review.context?.errors || []).filter((e) => !/eval stop: RECALL_STAGES/.test(String(e?.message || '')) && /agent|review/i.test(String(e?.stage || e?.message || '')));
             if (!review.loops.length) {
                 throw new Error(
                     `production ran no finder loop the eval could observe${failedAgents.length ? `: ${failedAgents.map((e) => e.message).join('; ').slice(0, 300)}` : ''}`,
@@ -262,6 +311,8 @@ class InvestigationAgentProvider {
                 stages: global.__EVAL_CASE_ALS?.getStore()?.byStage || null,
                 // What the dedup kept (review-stage.js), scored as its own step.
                 dedupFindings: review.dedupOut,
+                // What this case ran, checked by run-recall.js's preflight.
+                manifest: manifestOf(review, route, stages),
                 discarded: review.discarded.map((d) => ({ relevantFile: d.relevantFile, relevantLinesStart: d.relevantLinesStart, priorityStatus: d.priorityStatus })),
                 trace: {
                     steps: agentResult.steps,
@@ -321,4 +372,4 @@ class InvestigationAgentProvider {
 
 module.exports = InvestigationAgentProvider;
 // For the specs: how a case reaches production's review.
-module.exports.internals = { resolveRoute, evalPermissionService, reviewOptionsFromEnv, combineLoops, refutedFindings, teamOf, prOf, NotAProductionRoute };
+module.exports.internals = { resolveRoute, evalPermissionService, reviewOptionsFromEnv, reviewStagesFromEnv, manifestOf, combineLoops, refutedFindings, teamOf, prOf, NotAProductionRoute };

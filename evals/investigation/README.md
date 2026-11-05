@@ -69,6 +69,25 @@ PR, which trip when the engine breaks rather than when recall wobbles.
 generalist plus the M3 lenses. `RECALL_SANDBOX=none` reviews it with no
 sandbox, as production does when none could be created: no tools, the diff only.
 
+`RECALL_STAGES=finder|verify|full` says where each review ends. `finder`: the
+finder's passes (generalist, synthesis rescue where the model's profile has it,
+M3 lenses on a heavy run) and nothing after them, the verify not called;
+`verify`: the finder with its verify; `full` (default): every step production
+runs before posting. A run that ends early scores nothing past that point; its
+dump keeps every candidate with its pass and verify verdict
+(`finderPasses[].verify[].items`), which `evals/gold-v3-recall` scores.
+
+Every case records a `manifest`: what production's code received and did (the
+model and effort per agent loop, the categories the generalist was given, the
+finder's passes and the fields it submitted, the sandbox, the call graph, where
+the review ended). The preflight (`preflight.js`) runs the first case alone and
+checks its manifest against what the run asked for: the categories
+(`RECALL_CATEGORIES`, else all three), the model and effort, the synthesis
+rescue as the model's production profile has it, the M3 lenses on a heavy run,
+the lean five-field output, a sandbox, and the stages. Any difference exits 2
+before the other cases are paid for. `RECALL_PREFLIGHT=off` skips it, and is the
+only way to run with `RECALL_SANDBOX=none`.
+
 Refused with exit 2: a subscription model (`@sub`) and a model not in
 `evals/shared/tier0-models.js`.
 

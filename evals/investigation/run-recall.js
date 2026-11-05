@@ -134,6 +134,25 @@ function writeJson(file, payload) {
 }
 
 const { evaluateGate } = require('./gate');
+const { expectedRun, checkManifest } = require('./preflight');
+
+// What the run asked for against the first case's manifest (preflight.js).
+// The model's production settings come from production's own tables.
+function preflightVerdict(output, modelId) {
+    const parsed = tryParseJson(output);
+    if (!parsed) return { problems: ['the first case was not measured (no output), so the run could not be checked'], warnings: [] };
+    // The managed route (`kodus-managed`) names no model: production picks its default.
+    const model = TIER0[modelId]?.managed ? null : (TIER0[modelId] && TIER0[modelId].doModel) || modelId;
+    const { finderProfileFor } = require(path.join(__dirname, '../../libs/code-review/infrastructure/agents/core/finder-model-profile.ts'));
+    const { heavyLensesFor } = require(path.join(__dirname, '../../libs/ee/heavy-mode/heavy-lenses.ts'));
+    const generalist = (parsed.manifest?.loops || []).find((l) => /generalist/i.test(l.agentName || ''));
+    const expected = expectedRun({
+        model,
+        profile: finderProfileFor(generalist?.modelName || model),
+        lensCount: heavyLensesFor(generalist?.allowedLabels || undefined).length,
+    });
+    return checkManifest(parsed.manifest, expected);
+}
 
 function tryParseJson(value) {
     if (typeof value !== 'string') return null;
@@ -215,6 +234,8 @@ function runMetaOf(args) {
         // heavy = generalist plus the M3 lenses. A regime axis: never compare a
         // heavy entry with a normal one unlabelled.
         heavy: process.env.RECALL_HEAVY === '1',
+        // Where each review ended: finder (no verify), verify, or full.
+        stages: process.env.RECALL_STAGES || 'full',
         // RECALL_REASONING_EFFORT reaches the finder as the BYOK model's
         // reasoningEffort (agent-provider.js resolveRoute), which production
         // maps per provider; without it the BYOK slot sets none.
@@ -393,6 +414,8 @@ async function main() {
     );
 
     const submissionResults = [];
+    // Each case's output, for the preflight (preflight.js) to read the first one's manifest.
+    const outputsByCase = new Map();
     // O checkpoint deriva do --output, nao do modelo: duas rodadas do MESMO
     // modelo em paralelo (braços de A/B) escreviam no mesmo arquivo e se
     // sobrescreviam. A submission final ja usava --output; o checkpoint nao,
@@ -442,6 +465,8 @@ async function main() {
             console.log(`INFRA ${caseId} ${row.reason.slice(0, 180)}`);
             return;
         }
+
+        outputsByCase.set(caseId, apiResult.output);
 
         if (NO_JUDGE) {
             unscored += 1;
@@ -545,6 +570,28 @@ async function main() {
         `(concorrência: ${concurrency}${process.env.RECALL_HEAVY === '1' ? ' · HEAVY' : ''})\n`,
     );
     let cursor = 0;
+    // Preflight (preflight.js): the first case runs alone and its manifest is
+    // checked against what this run asked for before the others are paid for.
+    if (process.env.RECALL_PREFLIGHT !== 'off') {
+        const first = selectedTests[0];
+        const firstId = first.vars?.caseId || first.description || 'unknown-case';
+        cursor = 1;
+        try {
+            await runOneCase(first);
+        } catch (error) {
+            infraFailures += 1;
+            rows.push({ caseId: firstId, status: 'infra', reason: error instanceof Error ? error.message : String(error) });
+        }
+        const verdict = preflightVerdict(outputsByCase.get(firstId), args.model);
+        for (const w of verdict.warnings) console.log(`PREFLIGHT warning: ${w}`);
+        if (verdict.problems.length) {
+            console.error(`\nPREFLIGHT FAILED on ${firstId}: the run is not what was asked, so nothing else was run.`);
+            for (const p of verdict.problems) console.error(`  - ${p}`);
+            console.error('Fix the run, or set RECALL_PREFLIGHT=off for a deliberate odd run.');
+            process.exit(2);
+        }
+        console.log(`PREFLIGHT ok on ${firstId}${selectedTests.length > 1 ? `: running the other ${selectedTests.length - 1}` : ''}\n`);
+    }
     const worker = async () => {
         for (;;) {
             const idx = cursor++;
