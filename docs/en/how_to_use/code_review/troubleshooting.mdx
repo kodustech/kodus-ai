@@ -81,3 +81,10 @@ Work through this quick checklist:
 <Card title="Limits & Pricing" icon="scale-balanced" href="/en/how_to_use/pricing">
   Learn about suggested limits and how they affect reviews.
 </Card>
+
+## Merge queue removes PRs while waiting for Kody Code Review
+
+On GitHub, when `Kody Code Review` is a required check and a PR enters the merge queue, Kody reports the PR's last finished review result on the commit the queue tests. No new review runs. This needs Kody connected through the GitHub App; with a personal access token Kody posts no checks.
+
+If a queued PR still waits for the check, its latest commit had no finished Kody review when it entered the queue, for example because an admin bypassed the required check. Let Kody finish a review on the PR, then add it to the queue again.
+
