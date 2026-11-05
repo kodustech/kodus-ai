@@ -392,6 +392,17 @@ describe("mentionedFilesNotFollowed", () => {
         ).toEqual([{ path: "docs/conventions.md", kind: "doc" }]);
     });
 
+    it("keeps a crossing place phrase whose own sentence names an owner/name place", () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Read docs/conventions.md in acme/rules. Repository notes follow.",
+                [],
+                [],
+                "valves",
+            ),
+        ).toEqual([]);
+    });
+
     it("reads a code-quoted or longer place phrase", () => {
         for (const place of [
             "in the `pump-rules` repository",

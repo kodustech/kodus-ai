@@ -1242,15 +1242,17 @@ export const mentionedFilesNotFollowed = (
     // nothing. The bare word is not a place: "use the repository pattern",
     // "keep the repository tidy" and "in the repository" (this one) are not.
     const sentencesPlacingInARepository = new Set(
-        [...text.matchAll(REPOSITORY_PLACE)]
-            .map((place) => [
-                sentenceIndex(ends, place.index ?? 0),
-                sentenceIndex(ends, (place.index ?? 0) + place[0].length - 1),
-            ])
-            // A phrase that crosses a sentence end ("…the rules. Our
-            // repository…") places nothing.
-            .filter(([first, last]) => first === last)
-            .map(([sentence]) => sentence),
+        [...text.matchAll(REPOSITORY_PLACE)].flatMap((place) => {
+            const start = place.index ?? 0;
+            const first = sentenceIndex(ends, start);
+            const last = sentenceIndex(ends, start + place[0].length - 1);
+            if (first === last) return [first];
+            // A phrase that crosses a sentence end places nothing ("in full.
+            // Pump repository notes follow."), unless its own sentence
+            // already names an owner/name place ("in acme/rules. Repository
+            // notes follow.").
+            return text.slice(start, ends[first]).includes("/") ? [first] : [];
+        }),
     );
     const offered = new Set<string>();
     const found: MentionedFile[] = [];
