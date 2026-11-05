@@ -359,6 +359,28 @@ describe("mentionedFilesNotFollowed", () => {
         ]);
     });
 
+    it("reads the word repository only on the file's own line", () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Read docs/conventions.md before reviewing,\nand keep the repository tidy.",
+                [],
+                [],
+                "valves",
+            ),
+        ).toEqual([{ path: "docs/conventions.md", kind: "doc" }]);
+    });
+
+    it("ends a sentence at a CRLF blank line", () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Read docs/conventions.md\r\n\r\nirrigation-rules holds the pump rules",
+                [RULES],
+                [],
+                "valves",
+            ),
+        ).toEqual([{ path: "docs/conventions.md", kind: "doc" }]);
+    });
+
     it("does not end a sentence at the dot inside a file name", () => {
         expect(
             mentionedFilesNotFollowed(

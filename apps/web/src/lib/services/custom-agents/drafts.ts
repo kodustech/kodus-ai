@@ -1145,7 +1145,7 @@ const NOT_A_RULE_FILE =
  *  does not end one). A repository named in a file's sentence says where
  *  the file lives ("in the pump-rules repository"); one in another sentence
  *  is about something else ("use the repository pattern"). */
-const SENTENCE_END = /[.;!?](?=\s|$)|\n[ \t]*\n/g;
+const SENTENCE_END = /[.;!?](?=\s|$)|\r?\n[ \t]*\r?\n/g;
 
 /** The sentence a position falls in, as an index over `ends`. */
 const sentenceIndex = (ends: number[], position: number) => {
@@ -1227,9 +1227,15 @@ export const mentionedFilesNotFollowed = (
             repositoryBySentence.set(sentence, mention.repository);
         }
     }
-    const sentencesNamingARepository = new Set(
+    // The word "repository" stops an offer only in the file's own sentence AND
+    // on its own line: in another sentence ("use the repository pattern") or
+    // a wrapped neighbour line it is as likely about something else.
+    const lineEnds = [...text.matchAll(/\n/g)].map((nl) => (nl.index ?? 0) + 1);
+    const placeOf = (position: number) =>
+        `${sentenceIndex(lineEnds, position)}:${sentenceIndex(ends, position)}`;
+    const placesNamingARepository = new Set(
         [...text.matchAll(new RegExp(REPOSITORY_WORD.source, "gi"))].map(
-            (word) => sentenceIndex(ends, word.index ?? 0),
+            (word) => placeOf(word.index ?? 0),
         ),
     );
     const offered = new Set<string>();
@@ -1269,7 +1275,7 @@ export const mentionedFilesNotFollowed = (
             !prefixed &&
             !before &&
             !inSentence &&
-            sentencesNamingARepository.has(sentence)
+            placesNamingARepository.has(placeOf(at))
         ) {
             // The sentence places the file in a repository that is not linked.
             continue;
