@@ -370,6 +370,28 @@ describe("mentionedFilesNotFollowed", () => {
         ).toEqual([{ path: "docs/conventions.md", kind: "doc" }]);
     });
 
+    it("offers nothing when the place wraps onto the next line of the file's sentence", () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Read stack/node/valves.mdc\nin the pump-rules repository before commenting.",
+                [RULES],
+                [],
+                "valves",
+            ),
+        ).toEqual([]);
+    });
+
+    it('does not take "in the repository" (this one) as another repository', () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Read docs/conventions.md in the repository before commenting.",
+                [],
+                [],
+                "valves",
+            ),
+        ).toEqual([{ path: "docs/conventions.md", kind: "doc" }]);
+    });
+
     it("ends a sentence at a CRLF blank line", () => {
         expect(
             mentionedFilesNotFollowed(

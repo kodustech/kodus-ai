@@ -1134,7 +1134,18 @@ export type MentionedFile = Pick<KnowledgeItem, "path" | "kind" | "repository">;
 const MENTIONED_FILE =
     /(?:^|[\s`'"(\[<])((?:[\w.-]+\/)*[\w.-]+\.(?:mdc|mdx|md|markdown))(?=$|[\s`'".,;:!?)\]>])/gi;
 
-const REPOSITORY_WORD = /\b(reposit[óo]rio|repository|repo)\b/i;
+
+/** A phrase that names where a file lives: a named repository after "in",
+ *  "from"… ("in the pump-rules repository", "from our rules repo"), the
+ *  Portuguese "no repositório X", or "repository owner/name". */
+const REPOSITORY_PLACE = new RegExp(
+    [
+        String.raw`\b(?:in|from|on|at|inside|under)\s+(?:(?:the|our|a|their|its|this)\s+)?(?:(?!(?:the|our|a|their|its|this)\b)[\w./-]+\s+){1,2}(?:repo|repository)\b`,
+        String.raw`\b(?:no|na|do|da|em)\s+(?:nosso\s+|o\s+)?reposit[óo]rio\s+[\w./-]+`,
+        String.raw`\b(?:repo|repository|reposit[óo]rio)\s+[\w.-]+\/[\w./-]+`,
+    ].join("|"),
+    "gi",
+);
 
 /** Files a repository has that are never a rule to follow. */
 const NOT_A_RULE_FILE =
@@ -1227,15 +1238,13 @@ export const mentionedFilesNotFollowed = (
             repositoryBySentence.set(sentence, mention.repository);
         }
     }
-    // The word "repository" stops an offer only in the file's own sentence AND
-    // on its own line: in another sentence ("use the repository pattern") or
-    // a wrapped neighbour line it is as likely about something else.
-    const lineEnds = [...text.matchAll(/\n/g)].map((nl) => (nl.index ?? 0) + 1);
-    const placeOf = (position: number) =>
-        `${sentenceIndex(lineEnds, position)}:${sentenceIndex(ends, position)}`;
-    const placesNamingARepository = new Set(
-        [...text.matchAll(new RegExp(REPOSITORY_WORD.source, "gi"))].map(
-            (word) => placeOf(word.index ?? 0),
+    // A sentence that places a file in a repository that is not linked
+    // ("in the pump-rules repository", "no repositório acme/rules") offers
+    // nothing. The bare word is not a place: "use the repository pattern",
+    // "keep the repository tidy" and "in the repository" (this one) are not.
+    const sentencesPlacingInARepository = new Set(
+        [...text.matchAll(REPOSITORY_PLACE)].map((place) =>
+            sentenceIndex(ends, place.index ?? 0),
         ),
     );
     const offered = new Set<string>();
@@ -1275,7 +1284,7 @@ export const mentionedFilesNotFollowed = (
             !prefixed &&
             !before &&
             !inSentence &&
-            placesNamingARepository.has(placeOf(at))
+            sentencesPlacingInARepository.has(sentence)
         ) {
             // The sentence places the file in a repository that is not linked.
             continue;
