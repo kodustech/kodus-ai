@@ -127,6 +127,8 @@ export function readClaim(violation: ShardViolation): Claim {
 interface GrepMatch {
     file: string;
     line: number;
+    /** The matched line's text ('' when the provider answered without it). */
+    text: string;
 }
 
 /**
@@ -143,8 +145,14 @@ function parseGrep(output: string): GrepMatch[] {
     }
     const matches: GrepMatch[] = [];
     for (const raw of text.split('\n')) {
-        const m = /^(.+?):(\d+):/.exec(raw.trim());
-        if (m) matches.push({ file: normalizePath(m[1]), line: Number(m[2]) });
+        const m = /^(.+?):(\d+):(.*)$/.exec(raw.trim());
+        if (m) {
+            matches.push({
+                file: normalizePath(m[1]),
+                line: Number(m[2]),
+                text: m[3],
+            });
+        }
     }
     return matches;
 }
@@ -166,6 +174,47 @@ function isElsewhere(match: GrepMatch, violation: ShardViolation): boolean {
     const end = violation.relevantLinesEnd ?? start;
     if (start === undefined || end === undefined) return true;
     return match.line < start || match.line > end;
+}
+
+/**
+ * A line that brings a name in from another module, in the languages the
+ * rules review: `import`, `from x import`, `export … from`, `require(`,
+ * `use`, `using`, and stylesheet `@import`/`@use`/`@forward`.
+ */
+const IMPORT_LINE =
+    /^\s*(?:import\b|from\s+\S+\s+import\b|export\s+(?:\*|\{[^}]*\})\s*from\b|(?:const|let|var)\s+[^=]+=\s*require\s*\(|use\s+[A-Za-z_\\:{]|using\s+[\w.]+\s*;|@(?:import|use|forward)\b)/;
+
+/**
+ * Imports whose name is not how the file uses them: a stylesheet module (its
+ * variables and mixins are used, not its name) and a C# namespace. A search
+ * for the name cannot tell used from unused, so the claim is unverifiable.
+ */
+const UNCHECKABLE_IMPORT =
+    /^\s*(?:@(?:import|use|forward)\b|using\s+[\w.]+\s*;)/;
+
+/**
+ * The import statement an `unused` claim is about, if it is about one: read
+ * from the repository's own text of the finding's lines first, then from the
+ * code the finding cites (a name on its own line of a multi-line import).
+ */
+function importStatementOf(
+    violation: ShardViolation,
+    matches: GrepMatch[],
+): string | undefined {
+    const file = normalizePath(violation.relevantFile ?? '');
+    const own = matches
+        .filter((m) => m.file === file && !isElsewhere(m, violation))
+        .map((m) => m.text);
+    const cited = (violation.existingCode ?? '').split('\n');
+    return [...own, ...cited].find((line) => IMPORT_LINE.test(line));
+}
+
+/** The symbol as a whole identifier in the line, not a part of a longer one. */
+function namesSymbol(text: string, symbol: string): boolean {
+    if (!text) return true; // no text to read: count it, as before
+    return new RegExp(
+        `(^|[^A-Za-z0-9_$])${escapeRegex(symbol)}([^A-Za-z0-9_$]|$)`,
+    ).test(text);
 }
 
 async function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
@@ -241,6 +290,28 @@ async function refute(
     const elsewhere = matches.filter((m) => isElsewhere(m, violation));
 
     if (claim.kind === 'unused') {
+        // An unused IMPORT is about the file that imports it (#1724 QA). Every
+        // local import also occurs where it is defined, and other files may
+        // import and use the same name: neither makes this import used. Only
+        // a use in the same file, outside the finding, refutes it.
+        const statement = importStatementOf(violation, matches);
+        if (statement !== undefined) {
+            if (UNCHECKABLE_IMPORT.test(statement)) {
+                throw new UnverifiableClaimError(
+                    `"${statement.trim()}" is not used by its name, so a search cannot tell whether it is used`,
+                );
+            }
+            const file = normalizePath(violation.relevantFile ?? '');
+            const usedHere = elsewhere.filter(
+                (m) => m.file === file && namesSymbol(m.text, claim.symbol!),
+            );
+            if (usedHere.length === 0) return null;
+            const where = usedHere
+                .slice(0, 3)
+                .map((m) => `${m.file}:${m.line}`)
+                .join(', ');
+            return `claimed "${claim.symbol}" is unused, but this file uses it at ${where}`;
+        }
         if (elsewhere.length === 0) return null;
         const where = elsewhere
             .slice(0, 3)
@@ -319,7 +390,11 @@ function restates(violation: ShardViolation, claim: Claim): boolean {
 
     if (claim.symbol) {
         const escaped = claim.symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        if (new RegExp(`(^|[^A-Za-z0-9_$])${escaped}([^A-Za-z0-9_$]|$)`).test(text)) {
+        if (
+            new RegExp(`(^|[^A-Za-z0-9_$])${escaped}([^A-Za-z0-9_$]|$)`).test(
+                text,
+            )
+        ) {
             return true;
         }
     }

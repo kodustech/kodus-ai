@@ -72,9 +72,8 @@ describe('readClaim — what a violation actually claims', () => {
 
     it('treats a missing claim with no path as none (KRC-21)', () => {
         expect(
-            readClaim(
-                violation({ claimKind: 'missing', claimSymbol: 'thing' }),
-            ).kind,
+            readClaim(violation({ claimKind: 'missing', claimSymbol: 'thing' }))
+                .kind,
         ).toBe('none');
     });
 
@@ -195,6 +194,130 @@ describe('checkClaims — unused (KRC-03, KRC-04)', () => {
     });
 });
 
+describe('checkClaims — an unused import is about the file that imports it (#1724 QA)', () => {
+    // QA on GitLab: report.js adds `import { debounce } from "./timing.js"`
+    // and never uses it. The only other occurrence is the definition in
+    // timing.js, which every local import has, so the true finding was dropped.
+    const importLine = (over: Partial<ShardViolation> = {}) =>
+        violation({
+            relevantFile: 'helpers/report.js',
+            relevantLinesStart: 2,
+            relevantLinesEnd: 2,
+            claimKind: 'unused',
+            claimSymbol: 'debounce',
+            ...over,
+        });
+
+    it('keeps it when the symbol occurs only where it is defined', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:2:import { debounce } from "./timing.js";\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+        });
+        const res = await checkClaims({
+            violations: [importLine()],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.dropped).toEqual([]);
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('keeps it when other files import and use the same symbol', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:2:import { debounce } from "./timing.js";\nsrc/search.js:1:import { debounce } from "../helpers/timing.js";\nsrc/search.js:9:  debounce(run, 200);',
+        });
+        const res = await checkClaims({
+            violations: [importLine()],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('drops it when the importing file uses the symbol outside the finding', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:2:import { debounce } from "./timing.js";\nhelpers/report.js:24:  const save = debounce(write, 300);',
+        });
+        const res = await checkClaims({
+            violations: [importLine()],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('helpers/report.js:24');
+    });
+
+    it('does not count a longer identifier in the same file as a use', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:2:import { debounce } from "./timing.js";\nhelpers/report.js:30:  const debounced = true;',
+        });
+        const res = await checkClaims({
+            violations: [importLine()],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('reads a multi-line import from the code the finding cites', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:3:  debounce,\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    existingCode:
+                        'import {\n  formatDate,\n  debounce,\n} from "./timing.js";',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('does not publish an unused stylesheet import, whose members are used rather than its name', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'src/app/theme.scss:3:@import "variables";\nsrc/app/other.scss:1:@import "variables";',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/app/theme.scss',
+                    claimKind: 'unused',
+                    claimSymbol: 'variables',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('unverifiable');
+    });
+
+    it('still drops a non-import unused claim when another file uses the symbol', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'src/orders/order-mapper.ts:3:export function formatDate(d) {\nsrc/invoices/print.ts:8:  formatDate(d)',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({ claimKind: 'unused', claimSymbol: 'formatDate' }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+    });
+});
+
 describe('checkClaims — missing (KRC-03, KRC-04)', () => {
     it('drops a finding claiming a path is missing when the repository has it', async () => {
         const lookup = fakeLookup({ exists: () => true });
@@ -287,8 +410,7 @@ describe('checkClaims — duplicate (KRC-03, KRC-04)', () => {
 
     it('does not let the finding own lines stand in as the pre-existing helper', async () => {
         const lookup = fakeLookup({
-            grep: () =>
-                'src/orders/order-mapper.ts:3:function formatDate(d) {',
+            grep: () => 'src/orders/order-mapper.ts:3:function formatDate(d) {',
         });
         const res = await checkClaims({
             violations: [
@@ -473,7 +595,11 @@ describe('checkClaims — batch behavior (KRC-07)', () => {
             },
         });
         const violations = Array.from({ length: 10 }, (_, i) =>
-            violation({ ruleUuid: `r${i}`, claimKind: 'unused', claimSymbol: 's' }),
+            violation({
+                ruleUuid: `r${i}`,
+                claimKind: 'unused',
+                claimSymbol: 's',
+            }),
         );
 
         await checkClaims({
@@ -500,7 +626,11 @@ describe('checkClaims — batch behavior (KRC-07)', () => {
             },
         });
         const violations = Array.from({ length: 12 }, (_, i) =>
-            violation({ ruleUuid: `r${i}`, claimKind: 'unused', claimSymbol: 's' }),
+            violation({
+                ruleUuid: `r${i}`,
+                claimKind: 'unused',
+                claimSymbol: 's',
+            }),
         );
 
         // No `concurrency` passed: the default must BE the shard's limit, not a
@@ -646,7 +776,7 @@ describe('claim check groups by (rule, file), not by finding', () => {
         expect(lookup.grepCalls).toHaveLength(0);
     });
 
-    it('does not let one file\'s refutation drop another file\'s finding', async () => {
+    it("does not let one file's refutation drop another file's finding", async () => {
         const refuted = violation({
             ruleUuid: 'rule-no-unused-imports',
             relevantFile: 'src/a.ts',
@@ -727,7 +857,8 @@ describe('claim check groups by (rule, file), not by finding', () => {
                 violations: [dupWithPath('src/shared/slugify.ts')],
                 changedFiles: [{ filename: 'src/blog/slug.ts' } as any],
                 lookup: fakeLookup({
-                    grep: () => 'src/shared/strings.ts:9:export function slugify',
+                    grep: () =>
+                        'src/shared/strings.ts:9:export function slugify',
                     exists: () => false,
                 }),
             });
@@ -741,7 +872,8 @@ describe('claim check groups by (rule, file), not by finding', () => {
                 violations: [dupWithPath('src/shared/strings.ts')],
                 changedFiles: [{ filename: 'src/blog/slug.ts' } as any],
                 lookup: fakeLookup({
-                    grep: () => 'src/shared/strings.ts:9:export function slugify',
+                    grep: () =>
+                        'src/shared/strings.ts:9:export function slugify',
                     exists: () => true,
                 }),
             });
@@ -757,7 +889,8 @@ describe('claim check groups by (rule, file), not by finding', () => {
                 violations: [dupWithPath('src/shared')],
                 changedFiles: [{ filename: 'src/blog/slug.ts' } as any],
                 lookup: fakeLookup({
-                    grep: () => 'src/shared/strings.ts:9:export function slugify',
+                    grep: () =>
+                        'src/shared/strings.ts:9:export function slugify',
                     exists: () => false,
                 }),
             });
@@ -773,7 +906,8 @@ describe('claim check groups by (rule, file), not by finding', () => {
                     { filename: 'src/shared/new-helper.ts' } as any,
                 ],
                 lookup: fakeLookup({
-                    grep: () => 'src/shared/new-helper.ts:1:export function slugify',
+                    grep: () =>
+                        'src/shared/new-helper.ts:1:export function slugify',
                     exists: () => false,
                 }),
             });
@@ -789,7 +923,11 @@ describe('checkClaims — a file named with a leading slash', () => {
     it('checks a claim once when siblings name its path with and without the slash', async () => {
         const exists = jest.fn().mockReturnValue(true);
         const lookup = fakeLookup({ exists });
-        const sibling = (relevantFile: string, claimPath: string, line: number) =>
+        const sibling = (
+            relevantFile: string,
+            claimPath: string,
+            line: number,
+        ) =>
             violation({
                 relevantFile,
                 relevantLinesStart: line,
@@ -800,8 +938,16 @@ describe('checkClaims — a file named with a leading slash', () => {
 
         const res = await checkClaims({
             violations: [
-                sibling('/src/orders/order-mapper.ts', '/src/orders/order-mapper.spec.ts', 3),
-                sibling('src/orders/order-mapper.ts', 'src/orders/order-mapper.spec.ts', 7),
+                sibling(
+                    '/src/orders/order-mapper.ts',
+                    '/src/orders/order-mapper.spec.ts',
+                    3,
+                ),
+                sibling(
+                    'src/orders/order-mapper.ts',
+                    'src/orders/order-mapper.spec.ts',
+                    7,
+                ),
             ],
             changedFiles: [{ filename: '/src/orders/order-mapper.ts' }],
             lookup,
