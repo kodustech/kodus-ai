@@ -206,21 +206,19 @@ function writtenKeep(text) {
     return value === true || value === false ? value : undefined;
 }
 
-/** The same read, but also accepting the quoted forms a model sometimes emits
- *  (`"keep": "false"`, `"decision": "no"`). The parser does NOT read these: the
- *  boolean-as-string / boolean-as-yes-no shapes are pinned as known degradations
- *  in core-agent-loop.adapter.spec.ts (`row 21`..`row 23`, it.failing) for the
- *  artifact path, and the text path inherits that contract deliberately. Counted
- *  and reported, never gated — turning it into a failure here would claim a bug
- *  the code does not have, and fixing it is a separate decision that would flip
- *  those pinned rows. */
-function writtenKeepLoose(text) {
+/** The verdict as the code-review verifier reads it when `keep` is spelled as
+ *  a string or a number: "true"/"false", "yes"/"no" (any case), 1/0
+ *  (llm-verdict.ts `coerceKeep`). The business-rules verifier's harness does not
+ *  read these and fails open by contract, so for these rows the two extractors
+ *  are expected to differ. An unquoted Python-style `False` is not JSON and is
+ *  still unread by both. */
+function writtenKeepQuoted(text) {
     const m = String(text || '').match(
-        /"(?:keep|shouldKeep|should_keep|decision|verdict)"\s*:\s*(false|true|"no"|"yes"|"false"|"true")/gi,
+        /"(?:keep|shouldKeep|should_keep|decision|verdict)"\s*:\s*("\s*(?:false|true|no|yes)\s*"|[01]\b)/gi,
     );
     if (!m || !m.length) return undefined;
-    const last = m[m.length - 1].toLowerCase();
-    return !(last.includes('false') || last.includes('"no"'));
+    const value = m[m.length - 1].split(':').pop().replace(/"/g, '').trim().toLowerCase();
+    return !(value === 'false' || value === 'no' || value === '0');
 }
 
 const rows = loadRows();
@@ -257,7 +255,13 @@ for (const row of rows) {
         row.calledVerdictTool && typeof row.toolPayload?.keep === 'boolean'
             ? row.toolPayload.keep
             : undefined;
-    const written = row.expect ? undefined : writtenKeep(row.text);
+    const strictWritten = row.expect ? undefined : writtenKeep(row.text);
+    // Spelled as a string or a number: read by code-review, not by the harness.
+    const quotedWritten =
+        row.expect || toolKeep !== undefined || strictWritten !== undefined
+            ? undefined
+            : writtenKeepQuoted(row.text);
+    const written = strictWritten ?? quotedWritten;
     const delivered = toolKeep ?? written;
     const want = row.expect ?? {
         keep: delivered === undefined ? true : delivered,
@@ -268,20 +272,20 @@ for (const row of rows) {
                   ? 'default-keep'
                   : 'text',
     };
-    // Delivered in a shape the parser does not read (quoted boolean / yes-no).
-    const unreadShape =
-        !row.expect &&
-        toolKeep === undefined &&
-        written === undefined &&
-        writtenKeepLoose(row.text) !== undefined;
+    const quotedShape = quotedWritten !== undefined;
     const keepOk = err ? false : got.keep === want.keep;
     const modeOk = err ? false : got.parseMode === want.parseMode;
     // The loss this issue is about: the model wrote a refutation and the gate kept it.
     const lostRefutation = !err && want.keep === false && got.keep === true;
-    // Both extractors must agree — the bug lived in two places.
-    const agree = err ? false : got.keep === gotGeneric.keep;
+    // Both extractors must agree — the bug lived in two places. On a quoted
+    // keep the harness fails open by contract instead.
+    const agree = err
+        ? false
+        : quotedShape
+          ? gotGeneric.keep === true
+          : got.keep === gotGeneric.keep;
     results.push({
-        unreadShape,
+        quotedShape,
         row,
         got,
         gotGeneric,
@@ -348,14 +352,13 @@ console.log(
             .join(' ') || '-'
     }`,
 );
-const unread = results.filter((r) => r.unreadShape);
+const quoted = results.filter((r) => r.quotedShape);
 console.log(
     `refutations delivered ${results.filter((r) => r.want.keep === false).length} | LOST ${lost.length} | other failures ${failed.length} | parseMode drift ${modeDrift.length}`,
 );
-if (unread.length) {
-    // Reported, never gated: see writtenKeepLoose.
+if (quoted.length) {
     console.log(
-        `${unread.length} row(s) delivered a verdict as a quoted boolean or yes/no — a shape the parser does not read by design (core-agent-loop.adapter.spec.ts row 21..23, it.failing).`,
+        `${quoted.length} row(s) delivered keep as a string or a number — read by the code-review verifier; the business-rules harness fails open on it by contract (see writtenKeepQuoted).`,
     );
 }
 
