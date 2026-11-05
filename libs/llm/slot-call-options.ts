@@ -40,5 +40,21 @@ export function resolveSlotCallOptions(
         options.maxOutputTokens = slot.maxOutputTokens;
     }
 
+    // @ai-sdk/anthropic caps output at 4096 for any model id it does not
+    // recognise. Known Claude ids get the SDK's own capability ceiling; every
+    // OTHER id on the anthropic_compatible transport (Kimi, GLM, DeepSeek,
+    // MiniMax, …) is unknown to the SDK and silently floors every call to 4096
+    // when maxOutputTokens is left unset. Send a large default so the model can
+    // use its own ceiling instead of the SDK's fallback floor. A real Claude id
+    // proxied over this transport (^claude[-_]) is still known to the SDK and
+    // must NOT be defaulted here — it already gets the correct ceiling.
+    if (
+        !options.maxOutputTokens &&
+        (slot?.provider as string) === 'anthropic_compatible' &&
+        !/^claude[-_]/i.test(slot?.model ?? '')
+    ) {
+        options.maxOutputTokens = 32_768;
+    }
+
     return options;
 }
