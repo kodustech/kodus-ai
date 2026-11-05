@@ -3044,13 +3044,21 @@ export class ForgejoService implements Omit<
             const authDetail = await this.getAuthDetails(
                 params.organizationAndTeamData,
             );
-            if (!authDetail) return null;
+            if (!authDetail) {
+                throw new Error(
+                    `No Forgejo credentials to update PR #${params.prNumber}`,
+                );
+            }
 
             const repoInfo = this.extractRepoInfo(
                 params.repository.name,
                 'updateDescriptionInPullRequest',
             );
-            if (!repoInfo) return null;
+            if (!repoInfo) {
+                throw new Error(
+                    `No Forgejo repository named "${params.repository.name}" to update PR #${params.prNumber}`,
+                );
+            }
 
             const client = this.createForgejoClient(authDetail);
 
@@ -3071,6 +3079,9 @@ export class ForgejoService implements Omit<
                 body: {
                     body: description,
                 },
+                // The client answers an HTTP error with `{ error }` unless told
+                // to throw, and an unthrown error is a silent success (#2380).
+                throwOnError: true,
             });
 
             return result.data;
@@ -3080,7 +3091,9 @@ export class ForgejoService implements Omit<
                 context: ForgejoService.name,
                 error,
             });
-            return null;
+            // The summary step reports a failed write only when it throws, as
+            // on GitHub and GitLab; returning null read as a success (#2380).
+            throw error;
         }
     }
 
