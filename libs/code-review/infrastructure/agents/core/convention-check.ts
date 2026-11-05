@@ -462,16 +462,23 @@ export function isTeamSystemSource(
     if (!file || /[\/\\]/.test(file) || /\.[a-z0-9]{1,8}$/i.test(file)) {
         return false;
     }
+    // Tool names carry the connection's name sanitized (`Planck_Tracker`,
+    // custom-agent-mcp.tools.ts); the model cites it as it reads
+    // ("Planck Tracker issue IRR-12"). Compared with every separator as a
+    // space on both sides.
+    const words = (value: string) =>
+        value
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
     const systems = new Set(
         teamSystemTools
-            .map((tool) => tool.split('__')[0]?.trim().toLowerCase())
-            .filter((system): system is string => !!system),
+            .map((tool) => words(tool.split('__')[0] ?? ''))
+            .filter((system) => !!system),
     );
-    const lower = file.toLowerCase();
+    const cited = words(file);
     return [...systems].some(
-        (system) =>
-            lower.startsWith(system) &&
-            !/[a-z0-9]/i.test(lower.charAt(system.length)),
+        (system) => cited === system || cited.startsWith(`${system} `),
     );
 }
 

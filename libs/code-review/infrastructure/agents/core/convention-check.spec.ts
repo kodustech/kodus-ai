@@ -964,6 +964,19 @@ describe('isTeamSystemSource', () => {
         );
     });
 
+    it('matches a connection named with spaces, as the model writes it (sanitized in the tool name)', () => {
+        const planck = ['Planck_Tracker__get_issue'];
+        expect(
+            isTeamSystemSource(cites('Planck Tracker issue IRR-12'), planck),
+        ).toBe(true);
+        expect(
+            isTeamSystemSource(cites('planck-tracker: IRR-12'), planck),
+        ).toBe(true);
+        expect(isTeamSystemSource(cites('Planck issue IRR-12'), planck)).toBe(
+            false,
+        );
+    });
+
     it('never takes a file, another system, or a longer word', () => {
         expect(isTeamSystemSource(cites('Tracker issue IRR-12'), [])).toBe(
             false,
