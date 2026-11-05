@@ -152,24 +152,22 @@ export function createStepUsageTally(): {
 }
 
 /**
- * The error, carrying `usage` for {@link readAiSdkUsageFromError} when it has
- * none of its own. An error that already carries the provider's usage keeps it.
+ * The usage to record for a call that threw: what the error carries (the
+ * provider's own report) or the tally of the steps the loop finished, whichever
+ * covers more. The SDK puts only the LAST step's usage on an output error, and
+ * an abort carries none, so the tally is the larger one after a multi-step loop.
+ * Undefined when neither reports a billed token.
  */
-export function withUsageOnError(
+export function failedCallUsage(
     err: unknown,
-    usage: AiSdkUsageInput,
-): unknown {
-    if (!usage || !err || typeof err !== 'object') return err;
-    if (readAiSdkUsageFromError(err)) return err;
-    try {
-        Object.defineProperty(err, 'usage', {
-            value: usage,
-            configurable: true,
-            writable: true,
-            enumerable: false,
-        });
-    } catch {
-        // A frozen error keeps its shape; the span records no usage, as before.
+    finishedSteps?: AiSdkUsageInput,
+): { usage: AiSdkUsage; finishReason?: string } | undefined {
+    const own = readAiSdkUsageFromError(err);
+    const tally = finishedSteps ? readAiSdkUsage(finishedSteps) : undefined;
+    const size = (u?: AiSdkUsage) =>
+        (u?.inputTokens ?? 0) + (u?.outputTokens ?? 0);
+    if (tally && size(tally) > 0 && size(tally) >= size(own?.usage)) {
+        return { usage: tally, finishReason: own?.finishReason };
     }
-    return err;
+    return own;
 }

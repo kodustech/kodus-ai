@@ -38,7 +38,7 @@ import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { getLlmObservability } from '@libs/llm/llm-observability';
 import {
     createStepUsageTally,
-    withUsageOnError,
+    type AiSdkUsageInput,
 } from '@libs/llm/ai-sdk-usage';
 import {
     hardTimeout,
@@ -214,6 +214,7 @@ export async function runAgentLoopCall(
         exec: () => Promise<T>,
         traced: boolean,
         span: string = name,
+        usageOnError?: () => AiSdkUsageInput,
     ): Promise<T> =>
         observability
             ? observability.runAiSdkLLMInSpan<any>({
@@ -229,11 +230,14 @@ export async function runAgentLoopCall(
                   traced,
                   attrs: spanAttrs,
                   exec,
+                  usageOnError,
               })
             : exec();
 
     // The steps the provider already answered, so a loop that throws after them
-    // (an abort, the hard timeout) still hands their usage to the span (#2389).
+    // (an abort) still reports their usage to its own span (#2389). Kept off the
+    // error: heavy mode aborts its lenses with the generalist's error object, and
+    // usage stored on it would be read again by every lens's span.
     const finishedSteps = createStepUsageTally();
     const onStepFinish = (event: any) => {
         finishedSteps.add(event?.usage);
@@ -241,11 +245,6 @@ export async function runAgentLoopCall(
     };
 
     const exec = () =>
-        generateLoop().catch((err: unknown) => {
-            throw withUsageOnError(err, finishedSteps.total());
-        });
-
-    const generateLoop = () =>
         generateText({
             model: inv.model as any,
             maxRetries: AGENT_STEP_MAX_RETRIES,
@@ -293,7 +292,13 @@ export async function runAgentLoopCall(
     // (a bare unit test) runs directly, still gets the model/loop, just no span.
     // Traced under the same condition that turns the SDK telemetry on above. ──
     const run = () =>
-        usageSpan(runName, exec, !!telemetryMetadata, spanName ?? runName);
+        usageSpan(
+            runName,
+            exec,
+            !!telemetryMetadata,
+            spanName ?? runName,
+            finishedSteps.total,
+        );
 
     // Belt over the AbortSignal suspenders. `signal` above is a REQUEST: several
     // OpenAI-compatible proxies accept the connection, ignore the abort and

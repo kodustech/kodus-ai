@@ -55,7 +55,7 @@ import { resolveModelConfig } from '@libs/llm/model-invocation';
 import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
 import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { agentModelIdentity } from '@libs/llm/model-identity';
-import { readAiSdkUsageFromError } from '@libs/llm/ai-sdk-usage';
+import { readAiSdkUsage } from '@libs/llm/ai-sdk-usage';
 import {
     setLlmObservability,
     getLlmObservability,
@@ -344,9 +344,14 @@ describe('row19 tool-call repair delegation (repairToolCall → repairInvalidToo
 // ─────────────────────────────────────────────────────────────────────────────
 describe('a loop that fails after some steps finished (#2389)', () => {
     const stepEvent = (usage: any) => ({ usage, toolCalls: [] });
+    /** What the loop hands its span for a failed call. */
+    const usageOnError = () =>
+        spanPort.runAiSdkLLMInSpan.mock.calls[0][0].usageOnError?.();
 
-    it('hands the finished steps’ usage to the span on an abort', async () => {
+    it('hands its span the finished steps’ summed usage, and leaves the error alone', async () => {
         const inner = jest.fn();
+        const abort = new Error('This operation was aborted');
+        abort.name = 'AbortError';
         mockGenerate.mockImplementationOnce(async (args: any) => {
             await args.onStepFinish(
                 stepEvent({
@@ -364,17 +369,18 @@ describe('a loop that fails after some steps finished (#2389)', () => {
                     totalTokens: 220,
                 }),
             );
-            const abort = new Error('This operation was aborted');
-            abort.name = 'AbortError';
             throw abort;
         });
         const err: any = await runAgentLoopCall({
             ...baseParams(),
             loop: { ...baseParams().loop, onStepFinish: inner },
         }).catch((e) => e);
-        expect(err.name).toBe('AbortError');
+        expect(err).toBe(abort);
+        // Heavy mode aborts its lenses with this same object: nothing the
+        // generalist measured may ride on it into their spans.
+        expect(err.usage).toBeUndefined();
         expect(inner).toHaveBeenCalledTimes(2);
-        expect(readAiSdkUsageFromError(err)?.usage).toEqual({
+        expect(readAiSdkUsage(usageOnError())).toEqual({
             inputTokens: 300,
             outputTokens: 30,
             totalTokens: 330,
@@ -384,23 +390,24 @@ describe('a loop that fails after some steps finished (#2389)', () => {
         });
     });
 
-    it('keeps the usage an error already carries', async () => {
-        mockGenerate.mockImplementationOnce(async (args: any) => {
-            await args.onStepFinish(
-                stepEvent({ inputTokens: 5, outputTokens: 5, totalTokens: 10 }),
-            );
-            throw Object.assign(new Error('no object'), {
-                usage: { inputTokens: 7, outputTokens: 1, totalTokens: 8 },
-            });
-        });
-        const err: any = await runAgentLoopCall(baseParams()).catch((e) => e);
-        expect(readAiSdkUsageFromError(err)?.usage.totalTokens).toBe(8);
+    it('hands nothing when no step finished', async () => {
+        mockGenerate.mockRejectedValueOnce(new Error('boom'));
+        await runAgentLoopCall(baseParams()).catch(() => undefined);
+        expect(usageOnError()).toBeUndefined();
     });
 
-    it('adds nothing when no step finished', async () => {
-        mockGenerate.mockRejectedValueOnce(new Error('boom'));
-        const err: any = await runAgentLoopCall(baseParams()).catch((e) => e);
-        expect(readAiSdkUsageFromError(err)).toBeUndefined();
+    it('keeps the tool-repair span on its own usage', async () => {
+        await runAgentLoopCall(baseParams());
+        await genArgs().repairToolCall({
+            toolCall: { toolName: 't1', input: '{}' },
+            inputSchema: async () => ({}),
+            error: new Error('bad input'),
+        });
+        const repairInSpan = mockRepair.mock.calls[0][0].inSpan;
+        await repairInSpan(async () => ({}));
+        const repairSpan = spanPort.runAiSdkLLMInSpan.mock.calls.at(-1)[0];
+        expect(repairSpan.runName).toBe('agent.run-tool-repair');
+        expect(repairSpan.usageOnError).toBeUndefined();
     });
 });
 

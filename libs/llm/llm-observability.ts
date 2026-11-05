@@ -1,3 +1,4 @@
+import type { AiSdkUsageInput } from '@libs/llm/ai-sdk-usage';
 /**
  * Narrow observability PORT for the LLM primitive (dependency inversion).
  *
@@ -41,6 +42,9 @@ export interface LlmObservability {
         traced?: boolean;
         attrs?: Record<string, any>;
         exec: () => Promise<T>;
+        /** On a throw, the usage the caller measured itself (an agent loop's
+         *  finished steps), recorded when it covers more than the error's own. */
+        usageOnError?: () => AiSdkUsageInput;
     }): Promise<T>;
 }
 
