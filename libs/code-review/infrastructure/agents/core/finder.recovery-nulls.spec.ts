@@ -157,9 +157,12 @@ describe('#2384 — prose recovery reads a null field as absent', () => {
                 'org',
                 'code-review-generalist',
             );
+            // openai_compatible sends the schema itself first (json_schema):
+            // the one route where a strict provider reads every field.
+            expect(wire.requests).toHaveLength(1);
             const schema =
-                wire.requests[0]?.response_format?.json_schema?.schema;
-            if (!schema) return; // this route sent json_object: the schema is in the prompt
+                wire.requests[0].response_format?.json_schema?.schema;
+            expect(schema).toBeDefined();
             const item = schema.properties.suggestions.items;
             expect(item.required).toEqual(
                 expect.arrayContaining([

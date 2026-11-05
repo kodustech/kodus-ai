@@ -272,6 +272,30 @@ describe("mentionedFilesNotFollowed", () => {
         ]);
     });
 
+    it("does not take a repository name inside a file's path as a mention for the files after it", () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Follow irrigation-rules/valves.md and docs/conventions.md.",
+                [RULES],
+                [],
+                "valves",
+            ),
+        ).toEqual([
+            { path: "valves.md", kind: "doc", repository: RULES },
+            { path: "docs/conventions.md", kind: "doc" },
+        ]);
+        expect(
+            mentionedFilesNotFollowed(
+                `Read ${RULES}/stack/node/valves.mdc first.`,
+                [RULES],
+                [],
+                "valves",
+            ),
+        ).toEqual([
+            { path: "stack/node/valves.mdc", kind: "doc", repository: RULES },
+        ]);
+    });
+
     it("guesses nothing: a repository that is not linked, a code file, a URL", () => {
         expect(
             mentionedFilesNotFollowed(

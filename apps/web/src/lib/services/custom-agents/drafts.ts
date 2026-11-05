@@ -1158,10 +1158,20 @@ export const mentionedFilesNotFollowed = (
     agentId: string,
 ): MentionedFile[] => {
     const text = instructions.toLowerCase();
-    const mentions = repositories
-        .flatMap((repository) => {
-            const full = repository.toLowerCase();
-            const name = full.split("/").pop() ?? full;
+    const files = [...instructions.matchAll(MENTIONED_FILE)].map((match) => {
+        const at = (match.index ?? 0) + match[0].indexOf(match[1]);
+        return { cited: match[1], at, end: at + match[1].length };
+    });
+    // A repository's name inside a file's path names no repository for the
+    // files after it ("rules/api.md" is not a mention of `acme/rules`).
+    const insideAFile = (at: number) =>
+        files.some((file) => at >= file.at && at < file.end);
+    const names = repositories.map((repository) => {
+        const full = repository.toLowerCase();
+        return { repository, full, name: full.split("/").pop() ?? full };
+    });
+    const mentions = names
+        .flatMap(({ repository, full, name }) => {
             const pattern = new RegExp(
                 `(^|[^a-z0-9_.-])(${escapeRegExp(full)}|${escapeRegExp(name)})($|[^a-z0-9_-])`,
                 "g",
@@ -1171,27 +1181,44 @@ export const mentionedFilesNotFollowed = (
                 at: (match.index ?? 0) + match[1].length,
             }));
         })
+        .filter((mention) => !insideAFile(mention.at))
         .sort((a, b) => a.at - b.at);
     const namesNoRepository =
         mentions.length === 0 && !REPOSITORY_WORD.test(text);
+    const followed = new Set(
+        knowledge
+            .filter((entry) => isLinked(entry, { agentId }))
+            .map(knowledgeKey),
+    );
+    const offered = new Set<string>();
     const found: MentionedFile[] = [];
-    for (const match of instructions.matchAll(MENTIONED_FILE)) {
-        const item = knowledgeItemFromPath(match[1]);
+    for (const { cited, at } of files) {
+        const lower = cited.toLowerCase();
+        // A path that starts with a linked repository names it, as a
+        // citation does (`citationCandidates`).
+        const prefixed = names
+            .map(({ repository, full, name }) =>
+                lower.startsWith(`${full}/`)
+                    ? { repository, rest: cited.slice(full.length + 1) }
+                    : lower.startsWith(`${name}/`)
+                      ? { repository, rest: cited.slice(name.length + 1) }
+                      : null,
+            )
+            .find(Boolean);
+        const before = prefixed
+            ? undefined
+            : mentions.filter((mention) => mention.at < at).pop();
+        if (!prefixed && !before && !namesNoRepository) continue;
+        const item = knowledgeItemFromPath(prefixed ? prefixed.rest : cited);
         if (!item) continue;
-        const at = (match.index ?? 0) + match[0].indexOf(match[1]);
-        const before = mentions.filter((mention) => mention.at < at).pop();
-        if (!before && !namesNoRepository) continue;
+        const repository = prefixed?.repository ?? before?.repository;
         const file: MentionedFile = {
             ...item,
-            ...(before && { repository: before.repository }),
+            ...(repository && { repository }),
         };
-        const followed = knowledge.some(
-            (entry) =>
-                sameKnowledge(entry, file) && isLinked(entry, { agentId }),
-        );
-        if (followed || found.some((other) => sameKnowledge(other, file))) {
-            continue;
-        }
+        const key = knowledgeKey(file);
+        if (followed.has(key) || offered.has(key)) continue;
+        offered.add(key);
         found.push(file);
     }
     return found;
