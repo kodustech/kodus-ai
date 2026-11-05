@@ -221,7 +221,7 @@ describe('ExecuteCliReviewUseCase', () => {
         });
     });
 
-    describe('resolveRepoInstructions', () => {
+    describe('resolveRepoScopedSettings', () => {
         const org = { organizationId: 'org-1', teamId: 'team-1' };
         const changedFiles = [{ filename: 'services/billing/pay.ts' }];
         const parameter = (repoConfigs: Record<string, unknown> = {}) => ({
@@ -229,7 +229,7 @@ describe('ExecuteCliReviewUseCase', () => {
             repositories: [{ id: 'repo-1', name: 'api', configs: repoConfigs }],
         });
         const resolve = (useCase: any, stored: any, repoId = 'repo-1') =>
-            useCase.resolveRepoInstructions(
+            useCase.resolveRepoScopedSettings(
                 org,
                 { id: repoId, name: 'api' },
                 stored,
@@ -294,6 +294,49 @@ describe('ExecuteCliReviewUseCase', () => {
             expect(
                 codeBaseConfigService.getMergedCodeReviewConfigs,
             ).not.toHaveBeenCalled();
+        });
+
+        it('takes the review mode from the repository, its directory or kodus-config.yml, as PR reviews do', async () => {
+            const { useCase, codeBaseConfigService } = createMocks();
+            codeBaseConfigService.getMergedCodeReviewConfigs.mockResolvedValue({
+                reviewMode: 'heavy',
+            });
+
+            await expect(resolve(useCase, parameter())).resolves.toMatchObject({
+                reviewMode: 'heavy',
+            });
+        });
+
+        it("keeps the repository's stored review mode over the global one when the merged config cannot be read", async () => {
+            const { useCase, codeBaseConfigService } = createMocks();
+            codeBaseConfigService.getMergedCodeReviewConfigs.mockRejectedValue(
+                new Error('yml read failed'),
+            );
+
+            await expect(
+                resolve(useCase, {
+                    configs: { reviewMode: 'balanced' },
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            name: 'api',
+                            configs: { reviewMode: 'heavy' },
+                        },
+                    ],
+                }),
+            ).resolves.toMatchObject({ reviewMode: 'heavy' });
+        });
+
+        it('uses the global review mode when the repository is unknown', async () => {
+            const { useCase } = createMocks();
+
+            await expect(
+                resolve(
+                    useCase,
+                    { configs: { reviewMode: 'heavy' } },
+                    'global',
+                ),
+            ).resolves.toMatchObject({ reviewMode: 'heavy' });
         });
 
         it('asks the git host nothing when the repository is unknown', async () => {
@@ -667,6 +710,41 @@ describe('ExecuteCliReviewUseCase', () => {
                 );
             },
         );
+
+        it('runs the review mode of the repository matched by git remote, not only the global one', async () => {
+            const {
+                useCase,
+                parametersService,
+                kodyRulesService,
+                codeBaseConfigService,
+            } = createMocks();
+            parametersService.findByKey.mockResolvedValue({
+                toObject: () => ({
+                    configValue: {
+                        configs: {},
+                        repositories: [
+                            {
+                                id: '123',
+                                name: 'my-repo',
+                                http_url: 'https://github.com/org/my-repo',
+                                configs: { reviewMode: 'heavy' },
+                            },
+                        ],
+                    },
+                }),
+            });
+            kodyRulesService.findByOrganizationId.mockResolvedValue(null);
+            codeBaseConfigService.getMergedCodeReviewConfigs.mockResolvedValue({
+                reviewMode: 'heavy',
+            });
+
+            const result = await (useCase as any).loadUserConfigWithRules(
+                orgAndTeam,
+                { remote: 'https://github.com/org/my-repo.git' },
+            );
+
+            expect(result.config.reviewMode).toBe('heavy');
+        });
 
         it('should use "global" repositoryId when no git context', async () => {
             const {
