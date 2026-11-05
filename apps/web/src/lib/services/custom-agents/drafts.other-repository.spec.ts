@@ -471,4 +471,95 @@ describe("mentionedFilesNotFollowed", () => {
             ),
         ).toEqual([]);
     });
+
+    describe("the file's own sentence decides where it lives", () => {
+        const placed = (text: string, repositories: string[]) =>
+            mentionedFilesNotFollowed(text, repositories, [], "valves").map(
+                (file) => `${file.repository ?? "(reviewed)"}:${file.path}`,
+            );
+
+        it("places a file by its own sentence over a repository named earlier", () => {
+            expect(
+                placed(
+                    "Read irrigation-rules first. Read docs/pumps.md in pump-rules.",
+                    [RULES, OTHER_RULES],
+                ),
+            ).toEqual([`${OTHER_RULES}:docs/pumps.md`]);
+        });
+
+        it("offers nothing when its own sentence names a repository that is not linked, even after a linked one", () => {
+            expect(
+                placed(
+                    "Read irrigation-rules first. Read docs/pumps.md in the pump-rules repository.",
+                    [RULES],
+                ),
+            ).toEqual([]);
+        });
+
+        it("does not take another owner's repository for the linked one of the same name", () => {
+            expect(
+                placed(
+                    "Read docs/pumps.md in the repository other/irrigation-rules.",
+                    [RULES],
+                ),
+            ).toEqual([]);
+            expect(
+                placed("Read docs/pumps.md in other/irrigation-rules.", [
+                    RULES,
+                ]),
+            ).toEqual([]);
+        });
+
+        it("offers nothing for a file placed in an owner/name that is not linked", () => {
+            expect(placed("Read docs/pumps.md in acme/rules.", [])).toEqual([]);
+            expect(
+                placed(
+                    "Read docs/pumps.md from https://github.com/acme/rules.",
+                    [],
+                ),
+            ).toEqual([]);
+        });
+
+        it("places a file by a linked owner/name or its URL", () => {
+            expect(
+                placed(`Read docs/pumps.md in ${OTHER_RULES}.`, [
+                    RULES,
+                    OTHER_RULES,
+                ]),
+            ).toEqual([`${OTHER_RULES}:docs/pumps.md`]);
+            expect(
+                placed(
+                    `Read docs/pumps.md from https://github.com/${OTHER_RULES}.`,
+                    [RULES, OTHER_RULES],
+                ),
+            ).toEqual([`${OTHER_RULES}:docs/pumps.md`]);
+        });
+
+        it("gives each file of one sentence the place right after it", () => {
+            expect(
+                placed(
+                    "Read docs/a.md in the irrigation-rules repository and docs/b.md in the pump-rules repository.",
+                    [RULES],
+                ),
+            ).toEqual([`${RULES}:docs/a.md`]);
+        });
+
+        it("still places a file by a linked repository named in an earlier sentence", () => {
+            expect(
+                placed(
+                    "Our rules live in irrigation-rules. Read docs/pumps.md.",
+                    [RULES],
+                ),
+            ).toEqual([`${RULES}:docs/pumps.md`]);
+        });
+
+        it("does not take a link to an issue or a deep folder as a repository", () => {
+            expect(
+                placed(
+                    "As discussed in https://github.com/acme/app/issues/12, read docs/pumps.md.",
+                    [],
+                ),
+            ).toEqual(["(reviewed):docs/pumps.md"]);
+        });
+    });
 });

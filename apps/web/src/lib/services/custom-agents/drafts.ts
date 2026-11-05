@@ -1136,12 +1136,14 @@ const MENTIONED_FILE =
 
 /** A phrase that names where a file lives: a named repository after "in",
  *  "from"… ("in the pump-rules repository", "from our rules repo"), the
- *  Portuguese "no repositório X", or "repository owner/name". */
+ *  Portuguese "no repositório X", "repository owner/name", or an
+ *  `owner/name` (a URL too) after "in", "from"… ("in acme/rules"). */
 const REPOSITORY_PLACE = new RegExp(
     [
         String.raw`\b(?:in|from|on|at|inside|under)\s+(?:(?:the|our|a|their|its|this)\s+)?(?:(?!(?:the|our|a|their|its|this)\b)[\x60'"]?[\w./-]+[\x60'"]?\s+){1,4}(?:repo|repository)\b`,
         String.raw`\b(?:no|na|do|da|em)\s+(?:nosso\s+|o\s+)?reposit[óo]rio\s+[\x60'"]?[\w./-]+`,
         String.raw`\b(?:repo|repository|reposit[óo]rio)\s+[\x60'"]?[\w.-]+\/[\w./-]+`,
+        String.raw`\b(?:in|from|on|at|inside|under)\s+(?:the\s+)?[\x60'"]?(?:https?:\/\/[\w.-]+\/)?[\w.-]+\/[\w.-]+(?![\w/-])`,
     ].join("|"),
     "gi",
 );
@@ -1179,10 +1181,13 @@ const escapeRegExp = (value: string) =>
  * and a finding cannot cite a rule from a file the agent does not follow. A
  * followed doc goes into the agent's prompt whole (#2384).
  *
- * A file is placed only where the text says it is: in the linked repository
- * named last before it, or in the reviewed repository when the instructions
- * name no repository at all. A file after a repository that is not linked is
- * left out rather than guessed.
+ * A file is placed by the most explicit place the text gives it: a path that
+ * starts with a linked repository's full name, then a place phrase in its own
+ * sentence ("in the pump-rules repository", "in acme/rules"), then a linked
+ * repository its sentence names, then the linked repository named last before
+ * it, and the reviewed repository when the instructions name none. A file
+ * whose own place is not a linked repository is left out rather than guessed:
+ * "Follow it" must never add a source other than the one the text names.
  */
 export const mentionedFilesNotFollowed = (
     instructions: string,
@@ -1203,17 +1208,27 @@ export const mentionedFilesNotFollowed = (
         const full = repository.toLowerCase();
         return { repository, full, name: full.split("/").pop() ?? full };
     });
+    // A full name may follow a `/` (a URL); a bare name may not: in
+    // "other/irrigation-rules" it is another owner's repository, not an
+    // alias of the linked `greenhouse/irrigation-rules`.
     const mentions = names
-        .flatMap(({ repository, full, name }) => {
-            const pattern = new RegExp(
-                `(^|[^a-z0-9_.-])(${escapeRegExp(full)}|${escapeRegExp(name)})($|[^a-z0-9_-])`,
-                "g",
-            );
-            return [...text.matchAll(pattern)].map((match) => ({
-                repository,
-                at: (match.index ?? 0) + match[1].length,
-            }));
-        })
+        .flatMap(({ repository, full, name }) =>
+            [
+                new RegExp(
+                    `(^|[^a-z0-9_.-])${escapeRegExp(full)}(?=$|[^a-z0-9_-])`,
+                    "g",
+                ),
+                new RegExp(
+                    `(^|[^a-z0-9_./-])${escapeRegExp(name)}(?=$|[^a-z0-9_/-])`,
+                    "g",
+                ),
+            ].flatMap((pattern) =>
+                [...text.matchAll(pattern)].map((match) => ({
+                    repository,
+                    at: (match.index ?? 0) + match[1].length,
+                })),
+            ),
+        )
         .filter((mention) => !insideAFile(mention.at))
         .sort((a, b) => a.at - b.at);
     const byFullName = new Map(
@@ -1228,35 +1243,43 @@ export const mentionedFilesNotFollowed = (
     const ends = [...text.matchAll(SENTENCE_END)].map(
         (mark) => (mark.index ?? 0) + mark[0].length,
     );
-    // The first linked repository each sentence names, and the sentences
-    // that name a repository at all, computed once for every file.
-    const repositoryBySentence = new Map<number, string>();
-    for (const mention of mentions) {
-        const sentence = sentenceIndex(ends, mention.at);
-        if (!repositoryBySentence.has(sentence)) {
-            repositoryBySentence.set(sentence, mention.repository);
+    const sentenceOf = (position: number) => sentenceIndex(ends, position);
+    // Every place phrase, with the linked repository it names if any. A
+    // phrase over a file's own path is the file, not a place ("the rules in
+    // docs/rules.md"). One that crosses a sentence end places nothing ("in
+    // full. Pump repository notes follow."), unless its own sentence already
+    // names an owner/name place ("in acme/rules. Repository notes follow.").
+    const places = [...text.matchAll(REPOSITORY_PLACE)].flatMap((place) => {
+        const start = place.index ?? 0;
+        let end = start + place[0].length;
+        if (files.some((file) => file.at < end && file.end > start)) return [];
+        const sentence = sentenceOf(start);
+        if (sentenceOf(end - 1) !== sentence) {
+            if (!text.slice(start, ends[sentence]).includes("/")) return [];
+            end = ends[sentence];
         }
-    }
-    // A sentence that places a file in a repository that is not linked
-    // ("in the pump-rules repository", "no repositório acme/rules") offers
-    // nothing. The bare word is not a place: "use the repository pattern",
-    // "keep the repository tidy" and "in the repository" (this one) are not.
-    const sentencesPlacingInARepository = new Set(
-        [...text.matchAll(REPOSITORY_PLACE)].flatMap((place) => {
-            const start = place.index ?? 0;
-            const first = sentenceIndex(ends, start);
-            const last = sentenceIndex(ends, start + place[0].length - 1);
-            if (first === last) return [first];
-            // A phrase that crosses a sentence end places nothing ("in full.
-            // Pump repository notes follow."), unless its own sentence
-            // already names an owner/name place ("in acme/rules. Repository
-            // notes follow.").
-            return text.slice(start, ends[first]).includes("/") ? [first] : [];
-        }),
-    );
+        const named = mentions.find(
+            (mention) => mention.at >= start && mention.at < end,
+        );
+        return [{ sentence, at: start, repository: named?.repository }];
+    });
+    // The one that belongs to a file in its sentence: the one right after it
+    // ("docs/b.md in the pump-rules repository"), else the last before it
+    // ("In the pump-rules repository, read docs/a.md"), else the first after.
+    const nearest = <T extends { at: number }>(
+        candidates: T[],
+        file: { at: number; end: number },
+    ) =>
+        candidates.find(
+            (candidate) =>
+                candidate.at >= file.end &&
+                /^[\s\x60'"),]*$/.test(text.slice(file.end, candidate.at)),
+        ) ??
+        candidates.filter((candidate) => candidate.at < file.at).pop() ??
+        candidates[0];
     const offered = new Set<string>();
     const found: MentionedFile[] = [];
-    for (const { cited, at } of files) {
+    for (const { cited, at, end } of files) {
         const lower = cited.toLowerCase();
         // A path that starts with a linked repository's full name names it.
         // One that starts with its bare name is ambiguous ("rules/api.md"
@@ -1279,28 +1302,29 @@ export const mentionedFilesNotFollowed = (
                   rest: cited.split("/").slice(prefixLength).join("/"),
               }
             : null;
-        const before = prefixed
-            ? undefined
-            : mentions.filter((mention) => mention.at < at).pop();
-        const sentence = sentenceIndex(ends, at);
-        // A linked repository named later in the file's own sentence places
-        // it too ("read x.mdc in irrigation-rules").
-        const inSentence =
-            prefixed || before ? undefined : repositoryBySentence.get(sentence);
-        if (
-            !prefixed &&
-            !before &&
-            !inSentence &&
-            sentencesPlacingInARepository.has(sentence)
-        ) {
-            // The sentence places the file in a repository that is not linked.
-            continue;
+        const sentence = sentenceOf(at);
+        const placesHere = places.filter((p) => p.sentence === sentence);
+        const mentionsHere = mentions.filter(
+            (mention) => sentenceOf(mention.at) === sentence,
+        );
+        let repository: string | undefined;
+        if (prefixed) {
+            repository = prefixed.repository;
+        } else if (placesHere.length) {
+            // The sentence says where the file lives: there, or nowhere.
+            repository = nearest(placesHere, { at, end }).repository;
+            if (!repository) continue;
+        } else if (mentionsHere.length) {
+            // "read x.mdc in irrigation-rules"
+            repository = nearest(mentionsHere, { at, end }).repository;
+        } else {
+            repository = mentions
+                .filter((mention) => mention.at < at)
+                .pop()?.repository;
         }
         if (NOT_A_RULE_FILE.test(cited.split("/").pop() ?? "")) continue;
         const item = knowledgeItemFromPath(prefixed ? prefixed.rest : cited);
         if (!item) continue;
-        const repository =
-            prefixed?.repository ?? before?.repository ?? inSentence;
         const file: MentionedFile = {
             ...item,
             ...(repository && { repository }),
