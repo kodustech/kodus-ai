@@ -37,9 +37,20 @@ import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
 import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { getLlmObservability } from '@libs/llm/llm-observability';
 import {
+    abortedInFlightAttrs,
     createStepUsageTally,
     type AiSdkUsageInput,
 } from '@libs/llm/ai-sdk-usage';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
+
+/** JSON for the token estimate; a value that will not serialize counts as empty. */
+function safeStringify(value: unknown): string {
+    try {
+        return JSON.stringify(value) ?? '';
+    } catch {
+        return '';
+    }
+}
 import {
     hardTimeout,
     timeoutSignal,
@@ -215,6 +226,7 @@ export async function runAgentLoopCall(
         traced: boolean,
         span: string = name,
         usageOnError?: () => AiSdkUsageInput,
+        attrsOnError?: (err: unknown) => Record<string, unknown> | undefined,
     ): Promise<T> =>
         observability
             ? observability.runAiSdkLLMInSpan<any>({
@@ -231,6 +243,7 @@ export async function runAgentLoopCall(
                   attrs: spanAttrs,
                   exec,
                   usageOnError,
+                  attrsOnError,
               })
             : exec();
 
@@ -239,7 +252,21 @@ export async function runAgentLoopCall(
     // error: heavy mode aborts its lenses with the generalist's error object, and
     // usage stored on it would be read again by every lens's span.
     const finishedSteps = createStepUsageTally();
+    // The input of the step whose request is out and not answered yet, so an
+    // abort that lands on it is recorded as a known gap, never billed (#2389).
+    let inFlightInputTokens: number | undefined;
+    const prepareStep = async (opts: any) => {
+        const directive: any = await loop.prepareStep?.(opts);
+        inFlightInputTokens = estimateTextTokens(
+            safeStringify({
+                system: directive?.system ?? systemArg,
+                messages: directive?.messages ?? opts?.messages,
+            }),
+        );
+        return directive;
+    };
     const onStepFinish = (event: any) => {
+        inFlightInputTokens = undefined;
         finishedSteps.add(event?.usage);
         return loop.onStepFinish?.(event);
     };
@@ -279,7 +306,7 @@ export async function runAgentLoopCall(
             // Loop seams from the runner's policies — forwarded verbatim, plus the
             // hard step ceiling the harness always wants.
             stopWhen: [...((loop.stopWhen as any[]) ?? []), stepCountIs(loop.maxSteps)],
-            ...(loop.prepareStep ? { prepareStep: loop.prepareStep as any } : {}),
+            prepareStep,
             onStepFinish,
             ...(telemetryMetadata
                 ? toAiSdkTelemetryArgs(
@@ -298,6 +325,7 @@ export async function runAgentLoopCall(
             !!telemetryMetadata,
             spanName ?? runName,
             finishedSteps.total,
+            () => abortedInFlightAttrs(signal, inFlightInputTokens),
         );
 
     // Belt over the AbortSignal suspenders. `signal` above is a REQUEST: several

@@ -210,6 +210,29 @@ describe('ObservabilityService.runAiSdkLLMInSpan', () => {
             expect(usageAttrs()[0].finishReason).toBe('stop');
         });
 
+        it('stamps the attributes the caller gives for a failed call, outside the billed usage', async () => {
+            const { service, span, usageAttrs } = buildService();
+            await service
+                .runAiSdkLLMInSpan({
+                    spanName: 'heavy-lens',
+                    exec: async () => {
+                        throw new Error('aborted');
+                    },
+                    attrsOnError: () => ({
+                        abortedInFlight: true,
+                        abortedInFlightInputTokensEstimate: 1200,
+                    }),
+                })
+                .catch(() => undefined);
+            const stamped = span.setAttributes.mock.calls.map(([a]: any) => a);
+            expect(stamped).toContainEqual({
+                abortedInFlight: true,
+                abortedInFlightInputTokensEstimate: 1200,
+            });
+            // An estimate is never billed: no usage, no `tu`.
+            expect(usageAttrs()).toHaveLength(0);
+        });
+
         it('does not replace a larger usage the error reports', async () => {
             const { service, usageAttrs } = buildService();
             const err = Object.assign(new Error('No object generated'), {

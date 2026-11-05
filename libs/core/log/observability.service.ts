@@ -431,6 +431,10 @@ export class ObservabilityService implements OnModuleInit {
          *  finished steps), recorded when it covers more than the error's own:
          *  an abort carries none, and an output error only the last step's. */
         usageOnError?: () => AiSdkUsageInput;
+        /** On a throw, attributes to stamp on the span besides usage (an
+         *  in-flight abort and its estimated input). Not part of `tu`, so
+         *  never billed. */
+        attrsOnError?: (err: unknown) => Record<string, unknown> | undefined;
     }): Promise<T> {
         // agentName/phase: prefer explicit attrs (the agent-loop path sets them so
         // the phase column is exact, e.g. 'conversation' not 'conversationAgent');
@@ -509,6 +513,10 @@ export class ObservabilityService implements OnModuleInit {
                         span?.setAttributes?.(
                             usageAttrs(failed.usage, failed.finishReason),
                         );
+                    }
+                    const extra = params.attrsOnError?.(err);
+                    if (extra) {
+                        span?.setAttributes?.(extra);
                     }
                     throw err;
                 }

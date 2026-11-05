@@ -83,6 +83,8 @@ import {
     sleep,
 } from '@libs/llm/retry-policy';
 import { getLlmObservability } from '@libs/llm/llm-observability';
+import { abortedInFlightAttrs } from '@libs/llm/ai-sdk-usage';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 
 const logger = createLogger('StructuredReviewCall');
 
@@ -490,6 +492,10 @@ async function runReviewCall<T>(
             prompt?: string;
         },
     ): Promise<T> => {
+        // Cap hung provider calls at `timeoutMs` (default 10min) instead of the
+        // 30min agent-level fallback; also feeds the BYOK limiter cancellation.
+        // Kept here so a span can tell an abort from any other failure (#2389).
+        const signal = timeoutSignal(timeoutMs ?? LLM_CALL_TIMEOUT_MS);
         const exec = () =>
             tracedGenerateText({
                 model: model as any,
@@ -516,10 +522,8 @@ async function runReviewCall<T>(
                 // Pin the AI SDK's OWN retry to 0 (ai@7 defaults to 2) so it can't
                 // stack under the app-level D-00c re-issue and the wrapper catch.
                 maxRetries: 0,
-                // Cap hung provider calls at `timeoutMs` (default 10min) instead of
-                // the 30min agent-level fallback; also feeds the BYOK limiter
-                // cancellation. A secondary pass may pass a shorter budget.
-                abortSignal: timeoutSignal(timeoutMs ?? LLM_CALL_TIMEOUT_MS),
+                // A secondary pass may pass a shorter budget (see `signal`).
+                abortSignal: signal,
                 ...toAiSdkTelemetryArgs(
                     buildLangfuseTelemetry(
                         runName,
@@ -554,6 +558,15 @@ async function runReviewCall<T>(
                       ? { ...spanAttrs, ...extraAttrs }
                       : spanAttrs,
                   exec,
+                  // The one request was out when the deadline aborted it: its
+                  // input is the known gap, never billed (#2389).
+                  attrsOnError: () =>
+                      abortedInFlightAttrs(
+                          signal,
+                          estimateTextTokens(
+                              `${systemOverride ?? system}\n${override?.prompt ?? user}`,
+                          ),
+                      ),
               })
             : exec();
 

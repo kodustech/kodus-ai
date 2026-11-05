@@ -396,6 +396,86 @@ describe('a loop that fails after some steps finished (#2389)', () => {
         expect(usageOnError()).toBeUndefined();
     });
 
+    /** What the loop stamps on its span besides usage, for a failed call. */
+    const attrsOnError = (err: unknown) =>
+        spanPort.runAiSdkLLMInSpan.mock.calls[0][0].attrsOnError?.(err);
+
+    it('marks an abort that lands on a request in flight, with its estimated input', async () => {
+        const stop = new AbortController();
+        mockGenerate.mockImplementationOnce(async (args: any) => {
+            await args.prepareStep({ stepNumber: 0, messages: [] });
+            await args.onStepFinish(
+                stepEvent({
+                    inputTokens: 50,
+                    outputTokens: 5,
+                    totalTokens: 55,
+                }),
+            );
+            // Step 2 goes out and the caller aborts before it answers.
+            await args.prepareStep({
+                stepNumber: 1,
+                messages: [{ role: 'user', content: 'x'.repeat(400) }],
+            });
+            stop.abort(new Error('lenses stopped'));
+            throw stop.signal.reason;
+        });
+        const err = await runAgentLoopCall({
+            ...baseParams(),
+            signal: stop.signal,
+        } as any).catch((e) => e);
+        const attrs = attrsOnError(err);
+        expect(attrs?.abortedInFlight).toBe(true);
+        expect(attrs?.abortedInFlightInputTokensEstimate).toBeGreaterThan(0);
+        // The billed usage stays the finished steps only.
+        expect(readAiSdkUsage(usageOnError()).totalTokens).toBe(55);
+    });
+
+    it('marks nothing when no request was out at the abort', async () => {
+        const stop = new AbortController();
+        mockGenerate.mockImplementationOnce(async (args: any) => {
+            await args.prepareStep({ stepNumber: 0, messages: [] });
+            await args.onStepFinish(
+                stepEvent({
+                    inputTokens: 50,
+                    outputTokens: 5,
+                    totalTokens: 55,
+                }),
+            );
+            stop.abort(new Error('stopped between steps'));
+            throw stop.signal.reason;
+        });
+        const err = await runAgentLoopCall({
+            ...baseParams(),
+            signal: stop.signal,
+        } as any).catch((e) => e);
+        expect(attrsOnError(err)).toBeUndefined();
+    });
+
+    it('marks nothing for a failure that is not an abort', async () => {
+        mockGenerate.mockImplementationOnce(async (args: any) => {
+            await args.prepareStep({ stepNumber: 0, messages: [] });
+            throw new Error('500 from the provider');
+        });
+        const err = await runAgentLoopCall(baseParams()).catch((e) => e);
+        expect(attrsOnError(err)).toBeUndefined();
+    });
+
+    it('still runs the runner’s own prepareStep and returns its directive', async () => {
+        const directive = { activeTools: ['t1'] };
+        const inner = jest.fn().mockResolvedValue(directive);
+        mockGenerate.mockImplementationOnce(async (args: any) => {
+            expect(
+                await args.prepareStep({ stepNumber: 0, messages: [] }),
+            ).toBe(directive);
+            return OK_RESULT();
+        });
+        await runAgentLoopCall({
+            ...baseParams(),
+            loop: { ...baseParams().loop, prepareStep: inner },
+        });
+        expect(inner).toHaveBeenCalledTimes(1);
+    });
+
     it('keeps the tool-repair span on its own usage', async () => {
         await runAgentLoopCall(baseParams());
         await genArgs().repairToolCall({
