@@ -244,4 +244,135 @@ describe('GithubChecksService', () => {
             expect(result).toBe(false);
         });
     });
+    describe('findLatestCompletedCheckRun', () => {
+        const params = {
+            organizationAndTeamData: mockOrganizationAndTeamData,
+            repository: mockRepository,
+            headSha: 'head-sha',
+            name: 'Kody Code Review',
+        };
+
+        it('returns the most recently completed run, ignoring order and runs still in progress', async () => {
+            mockOctokit.checks.listForRef.mockResolvedValue({
+                data: {
+                    check_runs: [
+                        {
+                            id: 1,
+                            status: 'completed',
+                            conclusion: 'failure',
+                            completed_at: '2026-11-05T10:00:00Z',
+                            html_url: 'https://github.com/run/1',
+                            output: { title: 'Code Review Failed', summary: 'x' },
+                        },
+                        {
+                            id: 3,
+                            status: 'in_progress',
+                            conclusion: null,
+                            completed_at: null,
+                        },
+                        {
+                            id: 2,
+                            status: 'completed',
+                            conclusion: 'success',
+                            completed_at: '2026-11-05T11:00:00Z',
+                            html_url: 'https://github.com/run/2',
+                            output: { title: 'Code Review Complete', summary: 'y' },
+                        },
+                    ],
+                },
+            });
+
+            const result = await service.findLatestCompletedCheckRun(params);
+
+            expect(mockOctokit.checks.listForRef).toHaveBeenCalledWith({
+                owner: 'kodus-ai',
+                repo: 'kodus',
+                ref: 'head-sha',
+                check_name: 'Kody Code Review',
+                status: 'completed',
+                filter: 'all',
+                per_page: 100,
+            });
+            expect(result).toEqual({
+                id: 2,
+                conclusion: 'success',
+                title: 'Code Review Complete',
+                htmlUrl: 'https://github.com/run/2',
+            });
+        });
+
+        it('returns null when no run has completed', async () => {
+            mockOctokit.checks.listForRef.mockResolvedValue({
+                data: { check_runs: [] },
+            });
+
+            await expect(
+                service.findLatestCompletedCheckRun(params),
+            ).resolves.toBeNull();
+        });
+
+        it('returns null under PAT auth without calling GitHub', async () => {
+            mockGithubService.getGithubAuthDetails.mockResolvedValue({
+                authMode: AuthMode.TOKEN,
+            } as any);
+
+            await expect(
+                service.findLatestCompletedCheckRun(params),
+            ).resolves.toBeNull();
+            expect(mockOctokit.checks.listForRef).not.toHaveBeenCalled();
+        });
+
+        it('throws when GitHub fails, so the caller can tell an error from no run', async () => {
+            mockOctokit.checks.listForRef.mockRejectedValue(new Error('boom'));
+
+            await expect(
+                service.findLatestCompletedCheckRun(params),
+            ).rejects.toThrow('boom');
+        });
+    });
+
+    describe('createCompletedCheckRun', () => {
+        it('creates a completed check run carrying the given conclusion', async () => {
+            mockOctokit.checks.create.mockResolvedValue({ data: { id: 77 } });
+
+            const result = await service.createCompletedCheckRun({
+                organizationAndTeamData: mockOrganizationAndTeamData,
+                repository: mockRepository,
+                headSha: 'queue-sha',
+                name: 'Kody Code Review',
+                conclusion: 'neutral',
+                detailsUrl: 'https://github.com/run/2',
+                output: { title: 'Code Review Complete', summary: 's' },
+            });
+
+            expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    owner: 'kodus-ai',
+                    repo: 'kodus',
+                    name: 'Kody Code Review',
+                    head_sha: 'queue-sha',
+                    status: 'completed',
+                    conclusion: 'neutral',
+                    details_url: 'https://github.com/run/2',
+                    output: { title: 'Code Review Complete', summary: 's' },
+                }),
+            );
+            expect(result).toBe(77);
+        });
+
+        it('throws when GitHub fails', async () => {
+            mockOctokit.checks.create.mockRejectedValue(new Error('boom'));
+
+            await expect(
+                service.createCompletedCheckRun({
+                    organizationAndTeamData: mockOrganizationAndTeamData,
+                    repository: mockRepository,
+                    headSha: 'queue-sha',
+                    name: 'Kody Code Review',
+                    conclusion: 'success',
+                    output: { title: 't', summary: 's' },
+                }),
+            ).rejects.toThrow('boom');
+        });
+    });
 });

@@ -41,11 +41,113 @@ const checkConclusionMap = {
     [CheckConclusion.NEUTRAL]: GithubCheckConclusion.NEUTRAL,
     [CheckConclusion.SKIPPED]: GithubCheckConclusion.SKIPPED,
 } as const;
+export interface CompletedGithubCheckRun {
+    id: number;
+    conclusion: string;
+    title?: string;
+    htmlUrl?: string;
+}
+
 @Injectable()
 export class GithubChecksService implements IChecksAdapter {
     private readonly logger = createLogger(GithubChecksService.name);
 
     constructor(private readonly gitHubService: GithubService) {}
+
+    /**
+     * Newest completed run with this name on the commit. Returns null under
+     * PAT auth (no Checks API) or when none has completed; throws on GitHub
+     * errors so callers can tell "no run" from "could not read".
+     */
+    async findLatestCompletedCheckRun(
+        params: FindCheckRunParams,
+    ): Promise<CompletedGithubCheckRun | null> {
+        const { organizationAndTeamData, repository, headSha, name } = params;
+
+        const authDetails = await this.gitHubService.getGithubAuthDetails(
+            organizationAndTeamData,
+        );
+        if (authDetails.authMode === AuthMode.TOKEN) {
+            return null;
+        }
+
+        const octokit = await this.gitHubService.getAuthenticatedOctokit(
+            organizationAndTeamData,
+        );
+
+        const response = await octokit.checks.listForRef({
+            owner: repository.owner,
+            repo: repository.name,
+            ref: headSha,
+            check_name: name,
+            status: GithubCheckStatus.COMPLETED,
+            filter: 'all',
+            per_page: 100,
+        });
+
+        const latest = (response.data.check_runs ?? [])
+            .filter(
+                (run) =>
+                    run.status === GithubCheckStatus.COMPLETED &&
+                    run.conclusion &&
+                    run.completed_at,
+            )
+            .sort(
+                (a, b) =>
+                    Date.parse(b.completed_at) - Date.parse(a.completed_at),
+            )[0];
+
+        if (!latest) {
+            return null;
+        }
+
+        return {
+            id: latest.id,
+            conclusion: latest.conclusion,
+            title: latest.output?.title ?? undefined,
+            htmlUrl: latest.html_url ?? undefined,
+        };
+    }
+
+    async createCompletedCheckRun(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { owner: string; name: string };
+        headSha: string;
+        name: string;
+        conclusion: string;
+        detailsUrl?: string;
+        output: { title: string; summary: string };
+    }): Promise<number> {
+        const {
+            organizationAndTeamData,
+            repository,
+            headSha,
+            name,
+            conclusion,
+            detailsUrl,
+            output,
+        } = params;
+
+        const octokit = await this.gitHubService.getAuthenticatedOctokit(
+            organizationAndTeamData,
+        );
+
+        const now = new Date().toISOString();
+        const response = await octokit.checks.create({
+            owner: repository.owner,
+            repo: repository.name,
+            name,
+            head_sha: headSha,
+            status: GithubCheckStatus.COMPLETED,
+            conclusion: conclusion as GithubCheckConclusion,
+            started_at: now,
+            completed_at: now,
+            ...(detailsUrl ? { details_url: detailsUrl } : {}),
+            output,
+        });
+
+        return response.data.id;
+    }
 
     async findCheckRun(params: FindCheckRunParams): Promise<number | null> {
         const { organizationAndTeamData, repository, headSha, name } = params;
