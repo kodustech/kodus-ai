@@ -413,7 +413,7 @@ describe('checkClaims — an unused import is about the file that imports it (#1
         expect(res.dropped[0].reason).toContain('src/b.ts:4');
     });
 
-    it('does not publish an unused import bound under another name', async () => {
+    it('keeps an unused import bound under another name when the file never uses that name', async () => {
         const lookup = fakeLookup({
             grep: () =>
                 'helpers/report.js:2:import { debounce as wait } from "./timing.js";\nhelpers/timing.js:1:export function debounce(fn, ms) {',
@@ -423,8 +423,25 @@ describe('checkClaims — an unused import is about the file that imports it (#1
             changedFiles: [],
             lookup,
         });
+        expect(res.kept).toHaveLength(1);
+        expect(lookup.grepCalls).toHaveLength(2);
+    });
+
+    it('drops an import bound under another name when the file uses that name', async () => {
+        const lookup = fakeLookup({
+            grep: (pattern) =>
+                pattern === 'wait'
+                    ? 'helpers/report.js:2:import { debounce as wait } from "./timing.js";\nhelpers/report.js:14:  wait(save, 300);'
+                    : 'helpers/report.js:2:import { debounce as wait } from "./timing.js";\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+        });
+        const res = await checkClaims({
+            violations: [importLine()],
+            changedFiles: [],
+            lookup,
+        });
         expect(res.kept).toEqual([]);
-        expect(res.dropped[0].reason).toContain('unverifiable');
+        expect(res.dropped[0].reason).toContain('helpers/report.js:14');
+        expect(res.dropped[0].reason).toContain('bound as debounce, wait');
     });
 
     it('reads a multi-line import to its real end when a comment holds a brace', async () => {
@@ -578,6 +595,327 @@ describe('checkClaims — an unused import is about the file that imports it (#1
             lookup,
         });
         expect(res.kept).toEqual([]);
+    });
+});
+
+describe('checkClaims — an unused import, in every language the rules review', () => {
+    // Each case: the import line the finding is on, the symbol it claims is
+    // unused, and what the repository answers. `uses` is the file's own text
+    // of every name the search asks for; `elsewhere` is a definition or use in
+    // another file, which never makes this import used.
+    type Case = {
+        lang: string;
+        file: string;
+        line: string;
+        symbol: string;
+        uses?: string[];
+        elsewhere?: string;
+        verdict: 'publish' | 'drop' | 'unverifiable';
+        reason?: string;
+    };
+    const CASES: Case[] = [
+        {
+            lang: 'TypeScript',
+            file: 'src/a.ts',
+            line: 'import { formatDate } from "./dates";',
+            symbol: 'formatDate',
+            elsewhere: 'src/dates.ts:3:export function formatDate(d) {',
+            verdict: 'publish',
+        },
+        {
+            lang: 'TypeScript, used',
+            file: 'src/a.ts',
+            line: 'import { formatDate } from "./dates";',
+            symbol: 'formatDate',
+            uses: ['src/a.ts:9:  formatDate(now)'],
+            verdict: 'drop',
+            reason: 'src/a.ts:9',
+        },
+        {
+            lang: 'TypeScript type-only',
+            file: 'src/a.ts',
+            line: 'import type { Money } from "./money";',
+            symbol: 'Money',
+            uses: ['src/a.ts:7:let total: Money;'],
+            verdict: 'drop',
+            reason: 'src/a.ts:7',
+        },
+        {
+            lang: 'CommonJS',
+            file: 'src/a.js',
+            line: "const { slugify } = require('./text');",
+            symbol: 'slugify',
+            elsewhere: 'src/text.js:1:function slugify(s) {',
+            verdict: 'publish',
+        },
+        {
+            lang: 'Python',
+            file: 'app/a.py',
+            line: 'from app.dates import format_date',
+            symbol: 'format_date',
+            elsewhere: 'app/dates.py:4:def format_date(d):',
+            verdict: 'publish',
+        },
+        {
+            lang: 'Python, module path is not a use',
+            file: 'app/a.py',
+            line: 'from app.dates import format_date',
+            symbol: 'format_date',
+            uses: ['app/a.py:12:    app.run()'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'Python alias, used',
+            file: 'app/a.py',
+            line: 'import numpy as np',
+            symbol: 'numpy',
+            uses: ['app/a.py:8:x = np.zeros(3)'],
+            verdict: 'drop',
+            reason: 'app/a.py:8',
+        },
+        {
+            lang: 'Python alias, unused',
+            file: 'app/a.py',
+            line: 'import numpy as np',
+            symbol: 'numpy',
+            elsewhere: 'app/b.py:1:import numpy',
+            verdict: 'publish',
+        },
+        {
+            lang: 'Python wildcard',
+            file: 'app/a.py',
+            line: 'from os.path import *',
+            symbol: 'os',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'Java',
+            file: 'src/A.java',
+            line: 'import com.acme.Money;',
+            symbol: 'Money',
+            elsewhere: 'src/Money.java:3:public class Money {',
+            verdict: 'publish',
+        },
+        {
+            lang: 'Java, used',
+            file: 'src/A.java',
+            line: 'import com.acme.Money;',
+            symbol: 'Money',
+            uses: ['src/A.java:11:    Money total;'],
+            verdict: 'drop',
+            reason: 'src/A.java:11',
+        },
+        {
+            lang: 'Java wildcard',
+            file: 'src/A.java',
+            line: 'import java.util.*;',
+            symbol: 'util',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'Kotlin alias, used',
+            file: 'src/A.kt',
+            line: 'import com.acme.Money as Cash',
+            symbol: 'Money',
+            uses: ['src/A.kt:6:val c: Cash = Cash()'],
+            verdict: 'drop',
+            reason: 'src/A.kt:6',
+        },
+        {
+            lang: 'Scala rename, used',
+            file: 'src/A.scala',
+            line: 'import com.acme.{Money => Cash}',
+            symbol: 'Money',
+            uses: ['src/A.scala:5:  val c = Cash(1)'],
+            verdict: 'drop',
+            reason: 'src/A.scala:5',
+        },
+        {
+            lang: 'Scala rename, unused',
+            file: 'src/A.scala',
+            line: 'import com.acme.{Money => Cash}',
+            symbol: 'Money',
+            elsewhere: 'src/Money.scala:1:case class Money(v: Int)',
+            verdict: 'publish',
+        },
+        {
+            lang: 'Rust, one name of a group',
+            file: 'src/a.rs',
+            line: 'use crate::money::{Money, Rate};',
+            symbol: 'Rate',
+            uses: ['src/a.rs:9:    let m = Money::new();'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'Rust alias, used',
+            file: 'src/a.rs',
+            line: 'use crate::money::Money as Cash;',
+            symbol: 'Money',
+            uses: ['src/a.rs:7:    let c = Cash::new();'],
+            verdict: 'drop',
+            reason: 'src/a.rs:7',
+        },
+        {
+            lang: 'Rust glob',
+            file: 'src/a.rs',
+            line: 'use std::io::*;',
+            symbol: 'io',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'PHP',
+            file: 'src/A.php',
+            line: 'use App\\Models\\User;',
+            symbol: 'User',
+            elsewhere: 'src/Models/User.php:5:class User {',
+            verdict: 'publish',
+        },
+        {
+            lang: 'PHP, used',
+            file: 'src/A.php',
+            line: 'use App\\Models\\User;',
+            symbol: 'User',
+            uses: ['src/A.php:10:User::find(1);'],
+            verdict: 'drop',
+            reason: 'src/A.php:10',
+        },
+        {
+            lang: 'Go named import, unused',
+            file: 'cmd/a.go',
+            line: 'import str "strings"',
+            symbol: 'str',
+            elsewhere: 'cmd/b.go:3:import str "strings"',
+            verdict: 'publish',
+        },
+        {
+            lang: 'Go path import keeps main rule',
+            file: 'cmd/a.go',
+            line: 'import "strings"',
+            symbol: 'strings',
+            elsewhere: 'cmd/b.go:9:\tstrings.TrimSpace(s)',
+            verdict: 'drop',
+            reason: 'cmd/b.go:9',
+        },
+        {
+            lang: 'Go dot import',
+            file: 'cmd/a.go',
+            line: 'import . "strings"',
+            symbol: 'strings',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'Lua',
+            file: 'lib/a.lua',
+            line: 'local json = require("json")',
+            symbol: 'json',
+            elsewhere: 'lib/b.lua:1:local json = require("json")',
+            verdict: 'publish',
+        },
+        {
+            lang: 'Elixir alias with as:, used',
+            file: 'lib/a.ex',
+            line: 'alias MyApp.Money, as: Cash',
+            symbol: 'Money',
+            uses: ['lib/a.ex:6:    Cash.new(1)'],
+            verdict: 'drop',
+            reason: 'lib/a.ex:6',
+        },
+        {
+            lang: 'Elixir import',
+            file: 'lib/a.ex',
+            line: 'import Ecto.Query',
+            symbol: 'Query',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'Haskell explicit list',
+            file: 'src/A.hs',
+            line: 'import Data.Map (fromList)',
+            symbol: 'fromList',
+            elsewhere: 'src/B.hs:2:import Data.Map (fromList)',
+            verdict: 'publish',
+        },
+        {
+            lang: 'Haskell whole module',
+            file: 'src/A.hs',
+            line: 'import Data.List',
+            symbol: 'List',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'Swift module',
+            file: 'App/A.swift',
+            line: 'import Foundation',
+            symbol: 'Foundation',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'C#',
+            file: 'src/A.cs',
+            line: 'using System.Linq;',
+            symbol: 'Linq',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'C++',
+            file: 'src/a.cpp',
+            line: 'using namespace std;',
+            symbol: 'std',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'OCaml',
+            file: 'src/a.ml',
+            line: 'open Printf',
+            symbol: 'Printf',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'SCSS',
+            file: 'src/a.scss',
+            line: '@use "sass:math" as m;',
+            symbol: 'math',
+            verdict: 'unverifiable',
+        },
+    ];
+
+    it.each(CASES)('$lang: $verdict', async (c: Case) => {
+        const own = `${c.file}:1:${c.line}`;
+        const lines = [own, ...(c.uses ?? []), c.elsewhere].filter(
+            (l): l is string => Boolean(l),
+        );
+        // As rg answers: only the lines whose text matches the pattern.
+        const lookup = fakeLookup({
+            grep: (pattern) =>
+                lines
+                    .filter((l) =>
+                        new RegExp(pattern).test(
+                            l.split(':').slice(2).join(':'),
+                        ),
+                    )
+                    .join('\n'),
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: c.file,
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: c.symbol,
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        if (c.verdict === 'publish') {
+            expect(res.kept).toHaveLength(1);
+            return;
+        }
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain(
+            c.verdict === 'unverifiable' ? 'unverifiable' : c.reason!,
+        );
     });
 });
 

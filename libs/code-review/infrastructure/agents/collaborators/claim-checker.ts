@@ -177,21 +177,80 @@ function isElsewhere(match: GrepMatch, violation: ShardViolation): boolean {
 }
 
 /**
- * A line that brings a name in from another module, in the languages the
- * rules review: `import`, `from x import`, `require(`, `use`, `using`, and
+ * A line that brings names in from another module, by the keyword that opens
+ * it in the languages the rules review: `import` (JS/TS, Java, Kotlin, Scala,
+ * Swift, Go, Dart, Haskell, Elixir), `from x import` (Python), `use` (Rust,
+ * PHP, Perl, Elixir), `using` (C#), `alias` (Elixir), `open` (OCaml, F#),
+ * `require`/`require_relative` and `x = require(` (Ruby, Lua, CommonJS), and
  * stylesheet `@import`/`@use`/`@forward`. A re-export (`export … from`) is not
  * one: its users are the files that import it, so it keeps the any-file rule.
  */
 const IMPORT_LINE =
-    /^\s*(?:import\b|from\s+\S+\s+import\b|(?:const|let|var)\s+[^=]+=\s*require\s*\(|use\s+[A-Za-z_\\:{]|using\s+[\w.]+\s*;|@(?:import|use|forward)\b)/;
+    /^\s*(?:import\b|from\s+\S+\s+import\b|(?:const|let|var|local)\s+[^=]+=\s*require\s*\(|require(?:_relative)?\b|use\s+[\p{L}_\\:{]|using\s+[\p{L}_]|alias\s+[\p{L}_]|open\s+[\p{L}_]|@(?:import|use|forward)\b)/u;
 
 /**
- * Imports whose name is not how the file uses them: a stylesheet module (its
- * variables and mixins are used, not its name) and a C# namespace. A search
- * for the name cannot tell used from unused, so the claim is unverifiable.
+ * Imports that bring a module's members into scope without naming them: the
+ * file then uses the members, never the name a search looks for. Stylesheet
+ * modules, C# `using` and C++ `using namespace` (not `using X = Y;`), OCaml/F#
+ * `open`, and wildcards
+ * (`*`, `._`, `::*`, `from x import *`, Go's `import . "x"`).
  */
-const UNCHECKABLE_IMPORT =
-    /^\s*(?:@(?:import|use|forward)\b|using\s+[\w.]+\s*;)/;
+const NAMESPACE_IMPORT =
+    /^\s*(?:@(?:import|use|forward)\b|using\s+(?:static\s+|namespace\s+)?[\p{L}_][\p{L}\p{N}_.:]*\s*;|open\s)|(?:\.|::|\\)\s*[*_]\s*(?:[;,)}\]\n]|$)|\bimport\s+\*\s*(?:[;\n]|$)|^\s*(?:import\s+)?\.\s+""/mu;
+
+/**
+ * Files whose `import`/`use` brings a whole module in: Elixir, Perl and Swift
+ * always, Haskell unless the import is `qualified` or lists its names without
+ * `hiding`.
+ */
+const NAMESPACE_IMPORT_FILE = /\.(?:ex|exs|pl|pm|swift)$/;
+const HASKELL_FILE = /\.l?hs$/;
+
+/** Keywords of import statements: never a name the statement binds. */
+const IMPORT_KEYWORDS = new Set([
+    'import',
+    'from',
+    'as',
+    'use',
+    'using',
+    'require',
+    'require_relative',
+    'alias',
+    'open',
+    'type',
+    'typeof',
+    'static',
+    'qualified',
+    'hiding',
+    'only',
+    'except',
+    'const',
+    'let',
+    'var',
+    'local',
+    'pub',
+    'crate',
+    'self',
+    'super',
+    'mod',
+    'export',
+    'default',
+    'show',
+    'hide',
+    'deferred',
+    'library',
+    'package',
+    'of',
+    'with',
+    'in',
+    'function',
+    'func',
+    'namespace',
+    'given',
+]);
+
+/** The most names one import item is checked by. */
+const MAX_BOUND_NAMES = 8;
 
 /**
  * A JSX file's pragma: with the classic runtime every element compiles to a
@@ -287,8 +346,169 @@ function importStatementOf(
 /** The identifier occurs in the text, not as a part of a longer one. */
 function hasIdentifier(text: string, symbol: string): boolean {
     return new RegExp(
-        `(^|[^A-Za-z0-9_$])${escapeRegex(symbol)}([^A-Za-z0-9_$]|$)`,
+        `(^|[^\\p{L}\\p{N}_$])${escapeRegex(symbol)}([^\\p{L}\\p{N}_$]|$)`,
+        'u',
     ).test(text);
+}
+
+/** An identifier, a separator or a bracket of a statement's code. */
+const TOKEN = /[\p{L}_$][\p{L}\p{N}_$]*|::|=>|[{}()[\],\n:.\\]/gu;
+const IDENTIFIER = /^[\p{L}_$]/u;
+const OPENERS = new Set(['{', '(', '[']);
+const CLOSERS = new Set(['}', ')', ']']);
+
+/**
+ * The item of an import that holds `symbol`: the piece between commas (or
+ * lines, inside brackets) of the innermost bracket group around it, or the
+ * statement itself when it has none. An option written `key: value` (Elixir's
+ * `as: Name`) belongs to the item before it.
+ */
+function importItemOf(code: string, symbol: string): string[] | undefined {
+    const stack: string[][][] = [[[]]];
+    let found: string[] | undefined;
+    for (const token of code.match(TOKEN) ?? []) {
+        const group = stack[stack.length - 1];
+        const item = group[group.length - 1];
+        if (OPENERS.has(token)) {
+            stack.push([[]]);
+        } else if (CLOSERS.has(token)) {
+            if (stack.length > 1) stack.pop();
+        } else if (token === ',' || (token === '\n' && stack.length > 1)) {
+            group.push([]);
+        } else if (token === ':' && item.length === 1 && group.length > 1) {
+            group[group.length - 2].push(...item, token);
+            group.pop();
+        } else if (token !== '\n') {
+            item.push(token);
+            if (token === symbol && !found) found = item;
+        }
+    }
+    return found;
+}
+
+/**
+ * The names an import item may bind for `symbol`: every identifier in it but
+ * the import keywords and a Python `from` module path. `x as y`, `B => C`,
+ * `a::b as c` and `import numpy as np` all name the alias the file uses; a
+ * path segment is kept too (Python's `import os.path` binds `os`), which can
+ * only make the import look used.
+ */
+function boundNames(statement: string, symbol: string): string[] {
+    const item = importItemOf(readStatement(statement).code, symbol) ?? [];
+    let inFromPath = false;
+    const names = item.filter((token) => {
+        if (token === 'from') inFromPath = true;
+        if (token === 'import') inFromPath = false;
+        return (
+            !inFromPath && IDENTIFIER.test(token) && !IMPORT_KEYWORDS.has(token)
+        );
+    });
+    return [...new Set(names)];
+}
+
+/** Whether the import brings a module's members in without naming them. */
+function bringsNamespace(statement: string, file: string): boolean {
+    const { code } = readStatement(statement);
+    if (NAMESPACE_IMPORT.test(code)) return true;
+    if (NAMESPACE_IMPORT_FILE.test(file))
+        return /^\s*(?:import|use)\b/.test(code);
+    if (HASKELL_FILE.test(file)) {
+        return (
+            !/\bqualified\b/.test(code) &&
+            (!code.includes('(') || /\bhiding\b/.test(code))
+        );
+    }
+    return false;
+}
+
+/**
+ * A grep hit on the import's own lines, for a statement read across several
+ * lines from the code the finding cites: the finding may sit on `import {`
+ * while the name is on a member line below it, which is not a use.
+ */
+function isStatementLine(
+    match: GrepMatch,
+    violation: ShardViolation,
+    statement: string,
+): boolean {
+    const lines = statement
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+    if (lines.length < 2) return false;
+    const start = violation.relevantLinesStart ?? match.line;
+    const end = violation.relevantLinesEnd ?? start;
+    const reach = lines.length - 1;
+    return (
+        match.line >= start - reach &&
+        match.line <= end + reach &&
+        lines.includes(match.text.trim())
+    );
+}
+
+/**
+ * The verdict on an unused claim about an import (#1724 QA): only a use in the
+ * file that imports it refutes it. Every local import also occurs where it is
+ * defined, and other files may import and use the same name: neither makes
+ * this import used. Undefined when the statement does not bind the claimed
+ * name (it is only in the module path, `import f "fmt"`): judge it as main.
+ */
+async function judgeImport(
+    statement: string,
+    symbol: string,
+    violation: ShardViolation,
+    matches: GrepMatch[],
+    lookup: ClaimCheckInput['lookup'],
+): Promise<string | null | undefined> {
+    const shown = statement.trim().replace(/\s+/g, ' ');
+    // A PR-level finding names no file, so there is no importing file to
+    // search: the claim cannot be checked either way.
+    if (!violation.relevantFile) {
+        throw new UnverifiableClaimError(
+            `"${shown}" names no file, so a search cannot tell whether the file that imports it uses it`,
+        );
+    }
+    const file = normalizePath(violation.relevantFile);
+    if (bringsNamespace(statement, file)) {
+        throw new UnverifiableClaimError(
+            `"${shown}" brings a module's members in without naming them, so a search cannot tell whether it is used`,
+        );
+    }
+    if (JSX_FILE.test(file) && JSX_PRAGMAS.has(symbol)) {
+        throw new UnverifiableClaimError(
+            `"${symbol}" may be used by every JSX element in ${file} without its name, so a search cannot tell whether it is used`,
+        );
+    }
+    const names = boundNames(statement, symbol);
+    if (names.length === 0) return undefined;
+    if (names.length > MAX_BOUND_NAMES) {
+        throw new UnverifiableClaimError(
+            `"${shown}" binds more names than the check reads`,
+        );
+    }
+    const others = names.filter((name) => name !== symbol);
+    const hits = others.length
+        ? [
+              ...matches,
+              ...parseGrep(
+                  await lookup.grep(others.map(escapeRegex).join('|')),
+              ),
+          ]
+        : matches;
+    const uses = hits.filter(
+        (m) =>
+            m.file === file &&
+            isElsewhere(m, violation) &&
+            !IMPORT_LINE.test(m.text) &&
+            !isStatementLine(m, violation, statement) &&
+            names.some((name) => namesSymbol(m.text, name)),
+    );
+    if (uses.length === 0) return null;
+    const where = [...new Set(uses.map((m) => `${m.file}:${m.line}`))]
+        .slice(0, 3)
+        .join(', ');
+    const bound = others.length ? ` (bound as ${names.join(', ')})` : '';
+    return `claimed "${symbol}" is unused, but this file uses it${bound} at ${where}`;
 }
 
 /** The symbol as a whole identifier in the line, not a part of a longer one. */
@@ -370,63 +590,16 @@ async function refute(
     const elsewhere = matches.filter((m) => isElsewhere(m, violation));
 
     if (claim.kind === 'unused') {
-        // An unused IMPORT is about the file that imports it (#1724 QA). Every
-        // local import also occurs where it is defined, and other files may
-        // import and use the same name: neither makes this import used. Only
-        // a use in the same file, outside the finding, refutes it.
         const statement = importStatementOf(violation, matches, claim.symbol!);
         if (statement !== undefined) {
-            if (UNCHECKABLE_IMPORT.test(statement)) {
-                throw new UnverifiableClaimError(
-                    `"${statement.trim()}" is not used by its name, so a search cannot tell whether it is used`,
-                );
-            }
-            // A PR-level finding names no file, so there is no importing file
-            // to search: the claim cannot be checked either way.
-            if (!violation.relevantFile) {
-                throw new UnverifiableClaimError(
-                    `"${statement.trim()}" names no file, so a search cannot tell whether the file that imports it uses it`,
-                );
-            }
-            if (
-                JSX_FILE.test(violation.relevantFile) &&
-                JSX_PRAGMAS.has(claim.symbol!)
-            ) {
-                throw new UnverifiableClaimError(
-                    `"${claim.symbol}" may be used by every JSX element in ${violation.relevantFile} without its name, so a search cannot tell whether it is used`,
-                );
-            }
-            const { code } = readStatement(statement);
-            // `import { x as y }` / `import x as y`: the file uses `y`, which the
-            // search for `x` does not see.
-            if (
-                new RegExp(
-                    `(^|[^A-Za-z0-9_$])${escapeRegex(claim.symbol!)}\\s+as\\s+[A-Za-z_$]`,
-                ).test(code)
-            ) {
-                throw new UnverifiableClaimError(
-                    `"${claim.symbol}" is bound under a different name in "${statement.trim()}", so a search for "${claim.symbol}" cannot tell whether it is used`,
-                );
-            }
-        }
-        // The same-file rule needs the claimed name to be what the statement
-        // binds. When it is only in the module's path (Go's `import f "fmt"`,
-        // `import "./x"`), the binding may be another name: judge it as main
-        // does, by a use in any file.
-        if (
-            statement !== undefined &&
-            hasIdentifier(readStatement(statement).code, claim.symbol!)
-        ) {
-            const file = normalizePath(violation.relevantFile!);
-            const usedHere = elsewhere.filter(
-                (m) => m.file === file && namesSymbol(m.text, claim.symbol!),
+            const verdict = await judgeImport(
+                statement,
+                claim.symbol!,
+                violation,
+                matches,
+                lookup,
             );
-            if (usedHere.length === 0) return null;
-            const where = usedHere
-                .slice(0, 3)
-                .map((m) => `${m.file}:${m.line}`)
-                .join(', ');
-            return `claimed "${claim.symbol}" is unused, but this file uses it at ${where}`;
+            if (verdict !== undefined) return verdict;
         }
         if (elsewhere.length === 0) return null;
         const where = elsewhere
