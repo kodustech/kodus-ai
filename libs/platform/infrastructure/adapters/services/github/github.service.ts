@@ -672,7 +672,9 @@ export class GithubService
             'GET /user/installations',
             { per_page: 100 },
         );
-        if (!installations.some((i) => String(i.id) === installationId)) {
+        // GitHub's list can carry null entries; one must not end the link
+        // with "Cannot read properties of null (reading 'id')".
+        if (!installations.some((i) => String(i?.id) === installationId)) {
             throw new BadRequestException(
                 'Your GitHub account cannot access this installation of the Kodus app. Ask an owner of the GitHub organization to connect it.',
             );

@@ -154,6 +154,14 @@ describe('GitHub installation linking', () => {
         expect(svc.handleIntegration).not.toHaveBeenCalled();
     });
 
+    it('links when GitHub lists a null entry among the user installations', async () => {
+        const { svc, paginate } = setup({});
+        paginate.mockResolvedValue([null, { id: 4242 }]);
+        await expect(link(svc)).resolves.toEqual(
+            expect.objectContaining({ success: true }),
+        );
+    });
+
     it('refuses when GitHub rejects the code', async () => {
         const { svc } = setup({ codeAccepted: false });
         await expect(link(svc)).rejects.toThrow(
