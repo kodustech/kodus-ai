@@ -158,6 +158,16 @@ const FORMATTER_PATH = 'code-review/infrastructure/agents/engine/format-and-shap
 const CONSUMERS = ['code-review/infrastructure/agents/core/core-agent-loop.adapter.ts', 'code-review/pipeline/stages/agent-review.stage.ts'];
 const finderRun = new AsyncLocalStorage();
 let finderObserved = false;
+// Thrown where a RECALL_STAGES run ends (after the agents).
+class StopAfterAgents extends Error {
+    constructor(stages) {
+        super(`eval stop: RECALL_STAGES=${stages} ends the review after the agents`);
+        this.name = 'StopAfterAgents';
+    }
+}
+// The review stages a run measures: the finder alone, the finder and its
+// verify, or every step production runs before posting.
+const REVIEW_STAGES = ['finder', 'verify', 'full'];
 function swapExports(rel, patch) {
     const file = require.resolve(path.join(LIBS, rel));
     const real = require(file);
@@ -183,7 +193,13 @@ function observeFinderPasses() {
             const run = finderRun.getStore();
             if (!run) return real.runVerificationPass(args, ctx);
             const startedAt = Date.now();
-            const out = await inStage('finder.verify', () => real.runVerificationPass(args, ctx));
+            // RECALL_STAGES=finder: the run measures the finder alone, so the
+            // verify is not called and every candidate goes on, marked not-run.
+            // The finder's passes are untouched: the rescue runs before the verify.
+            const skipVerify = observedLoops.getStore()?.stages === 'finder';
+            const out = skipVerify
+                ? { kept: [...args.candidates], keptVerdicts: args.candidates.map(() => ({ keep: true })), dropped: [], skipped: true }
+                : await inStage('finder.verify', () => real.runVerificationPass(args, ctx));
             const idx = (c) => args.candidates.indexOf(c);
             run.verify.push({
                 // The first pass judges every candidate; a second one is the
@@ -195,6 +211,14 @@ function observeFinderPasses() {
                 skipped: !!out.skipped,
                 ms: Date.now() - startedAt,
                 candidates: args.candidates.map((c) => findingKey(c)),
+                // The candidates themselves, for scoring the finder before the verify.
+                items: args.candidates.map((c) => ({
+                    relevantFile: c.relevantFile,
+                    relevantLinesStart: c.relevantLinesStart ?? null,
+                    relevantLinesEnd: c.relevantLinesEnd ?? null,
+                    label: c.label ?? null,
+                    suggestionContent: c.suggestionContent || '',
+                })),
                 kept: out.kept.map((c, i) => ({ index: idx(c), parseMode: out.keptVerdicts?.[i]?.parseMode ?? null })),
                 dropped: out.dropped.map((d) => ({ index: idx(d.candidate), rationale: d.verdict?.rationale ?? null, parseMode: d.verdict?.parseMode ?? null })),
             });
@@ -284,6 +308,20 @@ function observeFinderPasses() {
     // Every later step, timed and counted the same way. To measure another step,
     // add its AgentReviewStage method here.
     const { AgentReviewStage } = lib('code-review/pipeline/stages/agent-review.stage.ts');
+
+    // RECALL_STAGES=finder|verify: the run ends once the agents return, before
+    // the anchoring and every later step (repeat drop, dedup, severity,
+    // enrichment), so none of them is paid for. The stage catches the stop
+    // like any failure; reviewPullRequest reports it as `stoppedAfter`.
+    const anchor = AgentReviewStage.prototype.anchorSuggestionsToDiff;
+    AgentReviewStage.prototype.anchorSuggestionsToDiff = function stopOrAnchor(...args) {
+        const store = observedLoops.getStore();
+        if (store?.stages && store.stages !== 'full') {
+            store.stoppedAfter = store.stages;
+            throw new StopAfterAgents(store.stages);
+        }
+        return anchor.apply(this, args);
+    };
     for (const [method, stage] of [['dropRepeats', 'repeat-drop'], ['dedupSuggestionStreams', 'dedup'], ['reclassifyAndFilterSeverity', 'severity'], ['enrichFinderSuggestions', 'enrichment']]) {
         const original = AgentReviewStage.prototype[method];
         AgentReviewStage.prototype[method] = function staged(...args) {
@@ -581,11 +619,12 @@ async function checkout(repository) {
 
 // The team's config as getConfig resolves it, with the codeReview task's model
 // routed as ValidateConfigStage routes it.
-async function routedTeamConfig({ team, route, permissionService, codeManagement, repository, preliminaryFiles }) {
+async function routedTeamConfig({ team, route, permissionService, codeManagement, repository, preliminaryFiles, heavy = false }) {
     const { routeCodeReviewModel } = lib('code-review/pipeline/stages/route-code-review-model.ts');
     const store = await teamStore(team, permissionService);
     const codeReviewConfig = await resolveTeamConfig({ permissionService, store, codeManagement, repository, preliminaryFiles });
-    const routed = routeCodeReviewModel(route.storedConfig, codeReviewConfig);
+    // A heavy review routes the codeReviewHeavy task, as ValidateConfigStage does.
+    const routed = routeCodeReviewModel(route.storedConfig, codeReviewConfig, heavy);
     codeReviewConfig.resolvedModelSlot = routed.resolvedModelSlot;
     codeReviewConfig.byokConfig = routed.resolvedModelSlot;
     return codeReviewConfig;
@@ -658,6 +697,7 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
             codeManagement,
             repository: { id: repository.id, name: repository.name },
             preliminaryFiles: prFiles,
+            heavy: !!pr.heavy,
         });
 
         let context = {
@@ -702,7 +742,8 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
  * agentLoop: (params, secrets) => output, run in place of each agent loop.
  * observeSteps: record what each post-agent step received (observeTheReview).
  */
-async function reviewPullRequest({ pr, team = {}, route, permissionService, previousDecisions, previousDecisionsUseCase, decisions, agentLoop, observeSteps, sandbox: sandboxMode = 'alive', wrapSandbox }) {
+async function reviewPullRequest({ pr, team = {}, route, permissionService, previousDecisions, previousDecisionsUseCase, decisions, agentLoop, observeSteps, sandbox: sandboxMode = 'alive', wrapSandbox, stages = 'full' }) {
+    if (!REVIEW_STAGES.includes(stages)) throw new Error(`unknown review stages '${stages}' (known: ${REVIEW_STAGES.join(', ')})`);
     observeFinderPasses();
     observeTheLoop();
     observeTheRuleAgent();
@@ -733,7 +774,7 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
     }
     try {
         const stage = buildAgentReviewStage({ permissionService, codeManagement, previousDecisionsUseCase: decisionsUseCase });
-        const store = { loops: [], agentLoop, steps: observeSteps ? {} : undefined, finder: [] };
+        const store = { loops: [], agentLoop, steps: observeSteps ? {} : undefined, finder: [], stages, stoppedAfter: null };
         const ruleReviews = [];
         const reviewed = sandbox ? { ...context, sandboxHandle: wrapSandbox ? wrapSandbox(sandbox) : sandbox } : context;
         const out = await observedRuleReviews.run(ruleReviews, () => observedLoops.run(store, () => inStage('agent-review', () => stage.execute(reviewed))));
@@ -750,6 +791,10 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
             dedupOut: store.dedupOut ?? null,
             context: out,
             errors: out.errors || [],
+            // Where a RECALL_STAGES run ended (null: every step ran), and the
+            // sandbox the review read the repository through.
+            stoppedAfter: store.stoppedAfter,
+            sandbox: sandbox ? { type: sandbox.type || null, hasRun: typeof sandbox.run === 'function' } : null,
         };
     } finally {
         if (sandbox) await sandbox.cleanup();
