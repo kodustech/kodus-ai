@@ -446,6 +446,35 @@ export function isToolSource(
     );
 }
 
+/**
+ * A finding resting on a record in one of the team's systems the agent can
+ * read (`Tracker__get_issue` → "Tracker issue IRR-12"). The prompt tells the
+ * agent to cite that record; it quotes no guide, so the quote gate would drop
+ * it as "not a guide linked to this review" (#2384). It is checked as a bug
+ * instead, by the verifier like any other finding. A path or a file name
+ * stays a guide citation.
+ */
+export function isTeamSystemSource(
+    finding: FinderSuggestion,
+    teamSystemTools: readonly string[] = [],
+): boolean {
+    const file = (finding.source?.file ?? '').trim();
+    if (!file || /[\/\\]/.test(file) || /\.[a-z0-9]{1,8}$/i.test(file)) {
+        return false;
+    }
+    const systems = new Set(
+        teamSystemTools
+            .map((tool) => tool.split('__')[0]?.trim().toLowerCase())
+            .filter((system): system is string => !!system),
+    );
+    const lower = file.toLowerCase();
+    return [...systems].some(
+        (system) =>
+            lower.startsWith(system) &&
+            !/[a-z0-9]/i.test(lower.charAt(system.length)),
+    );
+}
+
 /** The model cites a rule written in the agent's instructions by the name the
  *  prompt gives them (`<TeamInstructions>`). */
 export function isTeamInstructionsSource(file: string): boolean {

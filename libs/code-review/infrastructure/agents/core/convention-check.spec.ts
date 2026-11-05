@@ -15,6 +15,7 @@ import {
     findQuoteSection,
     isLinkedGuide,
     isProvenByAstGrep,
+    isTeamSystemSource,
     isToolSource,
     makeTargetBranchGuideLister,
     makeTargetBranchGuideReader,
@@ -933,5 +934,49 @@ describe('isToolSource', () => {
         );
         expect(isToolSource(cites('docs/style.md'))).toBe(false);
         expect(isToolSource(cites('TeamInstructions'))).toBe(false);
+    });
+});
+
+describe('isTeamSystemSource', () => {
+    const cites = (file: string) =>
+        ({
+            kind: 'convention',
+            source: { file, section: '', quote: 'Every drain takes the lock' },
+        }) as unknown as FinderSuggestion;
+    const systems = [
+        'Tracker__get_issue',
+        'Tracker__list_documents',
+        'Wiki__search',
+    ];
+
+    it('takes a record of a system the agent has, by the system name it starts with', () => {
+        expect(isTeamSystemSource(cites('Tracker issue IRR-12'), systems)).toBe(
+            true,
+        );
+        expect(isTeamSystemSource(cites('tracker: IRR-12'), systems)).toBe(
+            true,
+        );
+        expect(isTeamSystemSource(cites('Tracker__get_issue'), systems)).toBe(
+            true,
+        );
+        expect(isTeamSystemSource(cites('Wiki page Drains'), systems)).toBe(
+            true,
+        );
+    });
+
+    it('never takes a file, another system, or a longer word', () => {
+        expect(isTeamSystemSource(cites('Tracker issue IRR-12'), [])).toBe(
+            false,
+        );
+        expect(isTeamSystemSource(cites('docs/tracker.md'), systems)).toBe(
+            false,
+        );
+        expect(isTeamSystemSource(cites('Tracker.md'), systems)).toBe(false);
+        expect(isTeamSystemSource(cites('Jira issue IRR-12'), systems)).toBe(
+            false,
+        );
+        expect(isTeamSystemSource(cites('TrackerRules guide'), systems)).toBe(
+            false,
+        );
     });
 });

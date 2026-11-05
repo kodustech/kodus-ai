@@ -35,6 +35,7 @@ import { LlmVerifier } from '@libs/code-review/infrastructure/agents/core/verifi
 import { ConventionVerifier } from '@libs/code-review/infrastructure/agents/core/convention-verifier.agent';
 import {
     checkConventionQuotes,
+    isTeamSystemSource,
     isToolSource,
     isProvenByAstGrep,
     type AstGrepOutputLog,
@@ -1066,13 +1067,18 @@ export async function runFinderWithVerify(
     // Without `conventionCheck` everything below sees only `bugs` = all.
     const verifyT0 = Date.now();
     const route = params.conventionCheck
-        ? await routeByKind(suggestions, params.conventionCheck, {
-              organizationId: params.telemetryMetadata?.organizationId,
-              teamId: params.telemetryMetadata?.teamId,
-              repositoryId: params.telemetryMetadata?.repositoryId,
-              pullRequestId: params.telemetryMetadata?.pullRequestId,
-              agent: params.agentName,
-          })
+        ? await routeByKind(
+              suggestions,
+              params.conventionCheck,
+              {
+                  organizationId: params.telemetryMetadata?.organizationId,
+                  teamId: params.telemetryMetadata?.teamId,
+                  repositoryId: params.telemetryMetadata?.repositoryId,
+                  pullRequestId: params.telemetryMetadata?.pullRequestId,
+                  agent: params.agentName,
+              },
+              params.teamSystemTools,
+          )
         : {
               bugs: suggestions,
               proven: [] as FinderSuggestion[],
@@ -1432,6 +1438,7 @@ async function routeByKind(
     suggestions: FinderSuggestion[],
     check: ConventionCheckParams,
     logContext: Record<string, unknown> = {},
+    teamSystemTools: readonly string[] = [],
 ): Promise<{
     bugs: FinderSuggestion[];
     proven: FinderSuggestion[];
@@ -1439,10 +1446,14 @@ async function routeByKind(
     sectionOf: Map<FinderSuggestion, string>;
     rejected: ConventionCheckRejected[];
 }> {
-    // A "convention" sourced from a tool's output (e.g. a CLI) quotes no
-    // rule, so the quote gate would drop it: it is checked as a bug instead.
+    // A "convention" sourced from a tool's output (e.g. a CLI) or from a
+    // record in one of the team's systems quotes no rule, so the quote gate
+    // would drop it: it is checked as a bug instead.
+    const notAGuide = (s: FinderSuggestion) =>
+        isToolSource(s, check.guideFiles) ||
+        isTeamSystemSource(s, teamSystemTools);
     const toolSourced = suggestions.filter(
-        (s) => s.kind === 'convention' && isToolSource(s, check.guideFiles),
+        (s) => s.kind === 'convention' && notAGuide(s),
     );
     const bugs = [
         ...suggestions.filter((s) => s.kind !== 'convention'),
@@ -1453,7 +1464,7 @@ async function routeByKind(
         })),
     ];
     const candidates = suggestions.filter(
-        (s) => s.kind === 'convention' && !isToolSource(s, check.guideFiles),
+        (s) => s.kind === 'convention' && !notAGuide(s),
     );
     if (candidates.length === 0) {
         return {
