@@ -127,20 +127,6 @@ export const agentTurnSchema = z.object({
     evidence: z.string().optional(),
 });
 
-/**
- * The verdict as a strict boolean. Only a verdict that reads as false drops
- * the suggestion; anything unreadable keeps it, the safe default.
- */
-function readKeepVerdict(raw: unknown): boolean {
-    if (typeof raw === 'boolean') return raw;
-    if (raw === 0) return false;
-    if (typeof raw === 'string') {
-        const t = raw.trim().toLowerCase();
-        if (t === 'false' || t === 'no') return false;
-    }
-    return true;
-}
-
 @Injectable()
 export class SafeguardPipelineService {
     private readonly logger = createLogger(SafeguardPipelineService.name);
@@ -691,10 +677,7 @@ Evidence field in ${params.languageResultPrompt}.`;
                 },
             });
 
-            return {
-                keep: readKeepVerdict(result.verdict),
-                evidence: result.evidence,
-            };
+            return { keep: result.verdict, evidence: result.evidence };
         } catch (error) {
             // Parse/LLM failure — keep suggestion (safe default)
             this.logger.warn({
