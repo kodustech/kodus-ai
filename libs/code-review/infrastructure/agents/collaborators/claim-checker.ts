@@ -502,7 +502,10 @@ async function judgeImport(
         );
     }
     const names = boundNames(statement.text, symbol, file);
-    if (names.length === 0) return undefined;
+    // The claimed name is not one the item binds (a module path segment,
+    // Python's `from` path): the claim is not about this import's binding,
+    // so it is judged as main does, by a use in any file.
+    if (!names.includes(symbol)) return undefined;
     if (names.length > MAX_BOUND_NAMES) {
         throw new UnverifiableClaimError(
             `"${shown}" binds more names than the check reads`,
