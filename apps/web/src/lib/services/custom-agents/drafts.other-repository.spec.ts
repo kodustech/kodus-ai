@@ -272,7 +272,9 @@ describe("mentionedFilesNotFollowed", () => {
         ]);
     });
 
-    it("does not take a repository name inside a file's path as a mention for the files after it", () => {
+    // "irrigation-rules/valves.md" may be the reviewed repository's own
+    // folder: only the full owner/repo prefix places a file elsewhere.
+    it("takes no repository name inside a path as a mention, and places a file by its full owner/repo prefix only", () => {
         expect(
             mentionedFilesNotFollowed(
                 "Follow irrigation-rules/valves.md and docs/conventions.md.",
@@ -280,10 +282,7 @@ describe("mentionedFilesNotFollowed", () => {
                 [],
                 "valves",
             ),
-        ).toEqual([
-            { path: "valves.md", kind: "doc", repository: RULES },
-            { path: "docs/conventions.md", kind: "doc" },
-        ]);
+        ).toEqual([{ path: "docs/conventions.md", kind: "doc" }]);
         expect(
             mentionedFilesNotFollowed(
                 `Read ${RULES}/stack/node/valves.mdc first.`,

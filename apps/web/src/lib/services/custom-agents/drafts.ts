@@ -1185,6 +1185,10 @@ export const mentionedFilesNotFollowed = (
         .sort((a, b) => a.at - b.at);
     const namesNoRepository =
         mentions.length === 0 && !REPOSITORY_WORD.test(text);
+    const byFullName = new Map(
+        names.map(({ repository, full }) => [full, repository]),
+    );
+    const bareNames = new Set(names.map(({ name }) => name));
     const followed = new Set(
         knowledge
             .filter((entry) => isLinked(entry, { agentId }))
@@ -1194,17 +1198,17 @@ export const mentionedFilesNotFollowed = (
     const found: MentionedFile[] = [];
     for (const { cited, at } of files) {
         const lower = cited.toLowerCase();
-        // A path that starts with a linked repository names it, as a
-        // citation does (`citationCandidates`).
-        const prefixed = names
-            .map(({ repository, full, name }) =>
-                lower.startsWith(`${full}/`)
-                    ? { repository, rest: cited.slice(full.length + 1) }
-                    : lower.startsWith(`${name}/`)
-                      ? { repository, rest: cited.slice(name.length + 1) }
-                      : null,
-            )
-            .find(Boolean);
+        // A path that starts with a linked repository's full name names it.
+        // One that starts with its bare name is ambiguous ("rules/api.md"
+        // may be the reviewed repository's own folder): nothing is offered.
+        const segments = lower.split("/");
+        const owner = byFullName.get(segments.slice(0, 2).join("/"));
+        if (!owner && segments.length > 1 && bareNames.has(segments[0])) {
+            continue;
+        }
+        const prefixed = owner
+            ? { repository: owner, rest: cited.split("/").slice(2).join("/") }
+            : null;
         const before = prefixed
             ? undefined
             : mentions.filter((mention) => mention.at < at).pop();
