@@ -5,7 +5,9 @@ describe('parseMergeQueueRef', () => {
 
     it('reads the PR number and base branch from a merge queue branch', () => {
         expect(
-            parseMergeQueueRef(`refs/heads/gh-readonly-queue/main/pr-1-${base}`),
+            parseMergeQueueRef(
+                `refs/heads/gh-readonly-queue/main/pr-1-${base}`,
+            ),
         ).toEqual({ prNumber: 1, baseBranch: 'main' });
     });
 

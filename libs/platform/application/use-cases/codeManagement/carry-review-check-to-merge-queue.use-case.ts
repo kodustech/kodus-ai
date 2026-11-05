@@ -65,9 +65,10 @@ export class CarryReviewCheckToMergeQueueUseCase {
         };
 
         const done = (result: CarryReviewCheckResult, error?: unknown) => {
-            const message = result.carried
-                ? 'Carried Kody check to merge queue commit'
-                : `Kody check not carried to merge queue commit: ${result.reason}`;
+            const message =
+                'reason' in result
+                    ? `Kody check not carried to merge queue commit: ${result.reason}`
+                    : 'Carried Kody check to merge queue commit';
             const logMetadata = { ...metadata, ...result };
 
             if (error) {

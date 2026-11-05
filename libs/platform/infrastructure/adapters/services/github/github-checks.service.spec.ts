@@ -262,7 +262,10 @@ describe('GithubChecksService', () => {
                             conclusion: 'failure',
                             completed_at: '2026-11-05T10:00:00Z',
                             html_url: 'https://github.com/run/1',
-                            output: { title: 'Code Review Failed', summary: 'x' },
+                            output: {
+                                title: 'Code Review Failed',
+                                summary: 'x',
+                            },
                         },
                         {
                             id: 3,
@@ -276,7 +279,10 @@ describe('GithubChecksService', () => {
                             conclusion: 'success',
                             completed_at: '2026-11-05T11:00:00Z',
                             html_url: 'https://github.com/run/2',
-                            output: { title: 'Code Review Complete', summary: 'y' },
+                            output: {
+                                title: 'Code Review Complete',
+                                summary: 'y',
+                            },
                         },
                     ],
                 },

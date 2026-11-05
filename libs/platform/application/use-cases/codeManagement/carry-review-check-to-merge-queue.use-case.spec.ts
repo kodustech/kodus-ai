@@ -15,7 +15,10 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
         createCompletedCheckRun: jest.Mock;
     };
 
-    const organizationAndTeamData = { organizationId: 'org-1', teamId: 'team-1' };
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
     const baseSha = 'b849a34be3d6e2b91399a6ddca1a4d3ea153839d';
     const queueSha = '8abdf355fd81b893471909152d4c95964c449407';
     const headSha = '60c06c3da6bbe7dc34f94201a5361aa050b670e7';
@@ -62,7 +65,10 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CarryReviewCheckToMergeQueueUseCase,
-                { provide: WebhookContextService, useValue: webhookContextService },
+                {
+                    provide: WebhookContextService,
+                    useValue: webhookContextService,
+                },
                 { provide: CodeManagementService, useValue: codeManagement },
                 { provide: GithubChecksService, useValue: checks },
             ],
@@ -168,7 +174,10 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
 
     it.each([
         ['an ordinary branch push', { ref: 'refs/heads/main' }],
-        ['the queue branch being deleted', { deleted: true, after: '0'.repeat(40) }],
+        [
+            'the queue branch being deleted',
+            { deleted: true, after: '0'.repeat(40) },
+        ],
     ])('ignores %s', async (_label, overrides) => {
         await expect(useCase.execute(queuePush(overrides))).resolves.toEqual({
             carried: false,

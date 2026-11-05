@@ -26,6 +26,8 @@ import { SavePullRequestUseCase } from '@libs/platformData/application/use-cases
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CodeManagementService } from '../../adapters/services/codeManagement.service';
+import { CarryReviewCheckToMergeQueueUseCase } from '@libs/platform/application/use-cases/codeManagement/carry-review-check-to-merge-queue.use-case';
+import { isMergeQueuePush } from './merge-queue-ref';
 import {
     IOutboxMessageRepository,
     OUTBOX_MESSAGE_REPOSITORY_TOKEN,
@@ -53,6 +55,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         private readonly enqueueImplementationCheckUseCase: EnqueueImplementationCheckUseCase,
         @Inject(OUTBOX_MESSAGE_REPOSITORY_TOKEN)
         private readonly outboxRepository: IOutboxMessageRepository,
+        private readonly carryReviewCheckToMergeQueueUseCase: CarryReviewCheckToMergeQueueUseCase,
         @Optional()
         private readonly enqueueAstGraphUpdateOnMergedUseCase?: EnqueueAstGraphUpdateOnMergedUseCase,
     ) {}
@@ -61,6 +64,12 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         // Verify if the event is from GitHub
         if (params.platformType !== PlatformType.GITHUB) {
             return false;
+        }
+
+        // Pushes are only handled for merge queue branches, to report
+        // Kody's check on the commit the queue tests.
+        if (params.event === 'push') {
+            return isMergeQueuePush(params.event, params.payload);
         }
 
         // Verify if the event is one of the supported events
@@ -102,6 +111,9 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
             case 'issue_comment':
             case 'pull_request_review_comment':
                 await this.handleComment(params);
+                break;
+            case 'push':
+                await this.carryReviewCheckToMergeQueueUseCase.execute(params);
                 break;
             default:
                 this.logger.warn({
