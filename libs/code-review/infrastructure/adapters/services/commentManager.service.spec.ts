@@ -1441,10 +1441,23 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
                     r?.suggestionContent === undefined,
             );
             expect(hasPhantom).toBe(false);
+            // Nothing left to cluster: 'a' stays a plain suggestion.
             const parent = result.find((r: any) => r.id === 'a');
-            expect(
-                parent?.clusteringInformation?.relatedSuggestionsIds,
-            ).toEqual([]);
+            expect(parent?.clusteringInformation).toBeUndefined();
+        });
+
+        it('a cluster without a problemDescription is ignored, its members kept unclustered', async () => {
+            runSpy.mockResolvedValue({
+                codeSuggestions: [{ id: 'a', sameSuggestionsId: ['b'] }],
+            });
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                input3(),
+            );
+            expect(result.every((r: any) => !r.clusteringInformation)).toBe(
+                true,
+            );
         });
 
         it('a cluster whose parent id is unknown is ignored, its members kept unclustered', async () => {

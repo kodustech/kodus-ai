@@ -446,7 +446,7 @@ describe('ReferenceDetectorService.detectReferencesWithStatus', () => {
     it('a single reference sent without the array is a reliable answer', async () => {
         run.mockResolvedValue('{"filePath":"docs/api.md"}');
         expect(await svc.detectReferencesWithStatus(params as any)).toEqual({
-            references: [{ filePath: 'docs/api.md' }],
+            references: [{ filePath: 'docs/api.md', fileName: 'docs/api.md' }],
             reliable: true,
         });
     });
@@ -462,7 +462,7 @@ describe('ReferenceDetectorService.detectReferencesWithStatus', () => {
     it('detectReferences keeps returning just the references', async () => {
         run.mockResolvedValue('[{"filePath":"docs/api.md"}]');
         expect(await svc.detectReferences(params as any)).toEqual([
-            { filePath: 'docs/api.md' },
+            { filePath: 'docs/api.md', fileName: 'docs/api.md' },
         ]);
     });
 });

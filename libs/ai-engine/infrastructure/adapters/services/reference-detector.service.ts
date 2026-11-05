@@ -119,12 +119,20 @@ function parseReferenceReply(
     } else {
         return null;
     }
-    return (items as unknown[]).filter(
-        (item): item is IDetectedReference =>
+    // Consumers read `fileName`; a reference that named its file only under
+    // `filePath` carries it over.
+    return (items as unknown[])
+        .map((item) =>
             isObject(item) &&
-            (typeof item.fileName === 'string' ||
-                typeof item.filePath === 'string'),
-    );
+            typeof item.fileName !== 'string' &&
+            typeof item.filePath === 'string'
+                ? { ...item, fileName: item.filePath }
+                : item,
+        )
+        .filter(
+            (item): item is IDetectedReference =>
+                isObject(item) && typeof item.fileName === 'string',
+        );
 }
 
 function isControlMarker(value: unknown): boolean {

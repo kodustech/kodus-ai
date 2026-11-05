@@ -2496,11 +2496,21 @@ ${reviewOptions}
                 (id) => known.has(id) && id !== cluster.id,
             );
             droppedIds += related.length - sameSuggestionsId.length;
+            // The parent's body becomes the problemDescription plus the list
+            // of places; without both there is nothing to merge.
+            if (
+                sameSuggestionsId.length === 0 ||
+                typeof cluster.problemDescription !== 'string' ||
+                !cluster.problemDescription.trim()
+            ) {
+                droppedClusters++;
+                continue;
+            }
             valid.push({ ...cluster, sameSuggestionsId });
         }
         if (droppedClusters > 0 || droppedIds > 0) {
             this.logger.warn({
-                message: `${LLM_ENVELOPE_TAG} clustering reply referenced unknown suggestions; ignored them`,
+                message: `${LLM_ENVELOPE_TAG} clustering reply had clusters that cannot be applied (unknown suggestions, no related ids or no problem description); ignored them`,
                 context: CommentManagerService.name,
                 metadata: {
                     organizationAndTeamData,
