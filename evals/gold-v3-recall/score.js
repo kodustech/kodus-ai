@@ -87,41 +87,46 @@ function loadDump(dir) {
 const pct = (n, d) => (d ? n / d : null);
 const fmt = (v) => (v === null || v === undefined ? 'n/a' : `${(v * 100).toFixed(1)}%`);
 
-function scoreLine(comments, answers, issues) {
-    const matchedIssues = new Set();
-    let tp = 0;
+// The gold v3's official ruler (kodus-eval-runs tools/score.py, the 27/10
+// round's placar): a valid TP is a golden TP, not a nit, confirmed or
+// discontinued upstream (not pending, not one that never reached the original).
+const NOT_VALID_UPSTREAM = new Set(['pendente', 'nao_entrou_no_original']);
+function validIssues(goldItems, upstream) {
+    return new Set(
+        goldItems
+            .filter((r) => r.class === 'TP' && !r.subclass && !NOT_VALID_UPSTREAM.has(upstream[r.issueId]))
+            .map((r) => r.issueId),
+    );
+}
+
+// A line of one case: each valid TP counts once, however many comments name
+// it; every other comment (a repeat, a nit, a pending TP, "new") is a FP.
+function scoreLine(comments, answers, valid) {
+    const found = new Set();
     const byOrigin = {};
     for (const c of comments) {
         const a = answers.get(c.id);
-        const hit = a && a.match !== 'new';
-        if (hit) {
-            tp += 1;
-            matchedIssues.add(a.match);
-        }
+        const hit = !!a && valid.has(a.match);
+        const first = hit && !found.has(a.match);
+        if (hit) found.add(a.match);
         if (c.origin) {
-            const o = (byOrigin[c.origin] = byOrigin[c.origin] || { comments: 0, tp: 0, issues: new Set() });
+            const o = (byOrigin[c.origin] = byOrigin[c.origin] || { comments: 0, issues: new Set() });
             o.comments += 1;
-            if (hit) {
-                o.tp += 1;
-                o.issues.add(a.match);
-            }
+            if (hit) o.issues.add(a.match);
         }
     }
-    const nonNit = issues.filter((i) => !i.nit).map((i) => i.issueId);
     return {
         comments: comments.length,
-        tp,
-        fp: comments.length - tp,
-        issues: issues.length,
-        matchedIssues: [...matchedIssues],
-        issuesNonNit: nonNit.length,
-        matchedNonNit: nonNit.filter((id) => matchedIssues.has(id)).length,
-        byOrigin: Object.fromEntries(Object.entries(byOrigin).map(([k, v]) => [k, { comments: v.comments, tp: v.tp, issues: [...v.issues] }])),
+        tp: found.size,
+        fp: comments.length - found.size,
+        valid: valid.size,
+        found: [...found],
+        byOrigin: Object.fromEntries(Object.entries(byOrigin).map(([k, v]) => [k, { comments: v.comments, issues: [...v.issues] }])),
     };
 }
 
 function pool(rows, line) {
-    const t = { comments: 0, tp: 0, issues: 0, matched: 0, issuesNonNit: 0, matchedNonNit: 0, cases: 0 };
+    const t = { comments: 0, tp: 0, valid: 0, cases: 0 };
     const origins = {};
     for (const r of rows) {
         const s = r.lines?.[line];
@@ -129,24 +134,17 @@ function pool(rows, line) {
         t.cases += 1;
         t.comments += s.comments;
         t.tp += s.tp;
-        t.issues += s.issues;
-        t.matched += s.matchedIssues.length;
-        t.issuesNonNit += s.issuesNonNit;
-        t.matchedNonNit += s.matchedNonNit;
+        t.valid += s.valid;
         for (const [o, v] of Object.entries(s.byOrigin || {})) {
-            const p = (origins[o] = origins[o] || { comments: 0, tp: 0, issues: 0 });
+            const p = (origins[o] = origins[o] || { comments: 0, issues: 0 });
             p.comments += v.comments;
-            p.tp += v.tp;
             p.issues += v.issues.length;
         }
     }
-    return {
-        ...t,
-        recall: pct(t.matched, t.issues),
-        recallNonNit: pct(t.matchedNonNit, t.issuesNonNit),
-        precision: pct(t.tp, t.comments),
-        byOrigin: origins,
-    };
+    const recall = pct(t.tp, t.valid);
+    const precision = pct(t.tp, t.comments);
+    const f = (b) => (recall && precision ? ((1 + b * b) * precision * recall) / (b * b * precision + recall) : 0);
+    return { ...t, fp: t.comments - t.tp, recall, precision, f1: f(1), f2: f(2), byOrigin: origins };
 }
 
 async function main() {
@@ -154,6 +152,9 @@ async function main() {
     const gold = JSON.parse(fs.readFileSync(path.join(GOLD, 'golden.json'), 'utf8')).prs;
     const judgeIssues = JSON.parse(fs.readFileSync(path.join(GOLD, 'judge-issues.json'), 'utf8')).cases;
     const repos = JSON.parse(fs.readFileSync(path.join(GOLD, 'repos.json'), 'utf8'));
+    const upstream = Object.fromEntries(
+        Object.values(JSON.parse(fs.readFileSync(path.join(GOLD, 'upstream-verification.json'), 'utf8')).prs).flatMap((p) => Object.entries(p.tps).map(([id, v]) => [id, v.status])),
+    );
     if (!args.dryRun && !judgeKey()) {
         console.error(`not measured: no key for the judge ${JUDGE_MODEL} (API_ANTHROPIC_API_KEY)`);
         process.exit(2);
@@ -218,10 +219,11 @@ async function main() {
                 }
             }
         }
-        const scored = Object.fromEntries(Object.entries(lines).map(([line, list]) => [line, scoreLine(list, answers, issues)]));
+        const valid = validIssues(gold[caseId], upstream);
+        const scored = Object.fromEntries(Object.entries(lines).map(([line, list]) => [line, scoreLine(list, answers, valid)]));
         rows.push({ caseId, status: args.dryRun ? 'dry-run' : 'scored', stages, comments: comments.length, lines: scored });
         const last = scored.shipped || scored.verify || scored.finder;
-        console.log(`${args.dryRun ? 'DRY   ' : 'SCORED'} ${caseId} comments=${comments.length} recall=${last.matchedIssues.length}/${last.issues}`);
+        console.log(`${args.dryRun ? 'DRY   ' : 'SCORED'} ${caseId} comments=${comments.length} valid TPs found=${last.tp}/${last.valid}`);
     };
 
     let cursor = 0;
@@ -250,18 +252,18 @@ async function main() {
     const md = [
         `# gold v3 · ${path.basename(path.resolve(args.dump))}`,
         '',
-        `Judge ${JUDGE_MODEL} (effort ${JUDGE_EFFORT}). TP = matched a golden issue; every other comment is FP. Cases scored: ${rows.length - unscored}/${rows.length}.`,
+        `Judge ${JUDGE_MODEL} (effort ${JUDGE_EFFORT}). TP = a valid gold v3 TP (not a nit, confirmed or discontinued upstream), counted once; every other comment is FP. Cases scored: ${rows.length - unscored}/${rows.length}.`,
         '',
-        '| line | comments | TP | FP | precision | recall (all) | recall (non-nit) |',
-        '|---|---:|---:|---:|---:|---:|---:|',
+        '| line | comments | TP | FP | recall | precision | F1 | F2 |',
+        '|---|---:|---:|---:|---:|---:|---:|---:|',
         ...lineNames.map((l) => {
             const m = metrics[l];
-            return `| ${l} | ${m.comments} | ${m.tp} | ${m.comments - m.tp} | ${fmt(m.precision)} | ${m.matched}/${m.issues} = ${fmt(m.recall)} | ${m.matchedNonNit}/${m.issuesNonNit} = ${fmt(m.recallNonNit)} |`;
+            return `| ${l} | ${m.comments} | ${m.tp} | ${m.fp} | ${m.tp}/${m.valid} = ${fmt(m.recall)} | ${fmt(m.precision)} | ${fmt(m.f1)} | ${fmt(m.f2)} |`;
         }),
         '',
         metrics.finder ? '**Finder candidates by pass** (an issue found by two passes counts in each)' : '',
         '',
-        ...(metrics.finder ? ['| pass | comments | TP | issues found |', '|---|---:|---:|---:|', ...Object.entries(metrics.finder.byOrigin).map(([o, v]) => `| ${o} | ${v.comments} | ${v.tp} | ${v.issues} |`)] : []),
+        ...(metrics.finder ? ['| pass | comments | valid TPs found |', '|---|---:|---:|', ...Object.entries(metrics.finder.byOrigin).map(([o, v]) => `| ${o} | ${v.comments} | ${v.issues} |`)] : []),
         '',
         `Judge use: ${usage.calls} calls, ${usage.input} in / ${usage.output} out tokens, cache read ${usage.cacheRead}.`,
     ].join('\n');
@@ -282,4 +284,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { linesOf, scoreLine, pool };
+module.exports = { linesOf, scoreLine, pool, validIssues };

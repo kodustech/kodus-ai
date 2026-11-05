@@ -1,4 +1,4 @@
-// The gold-v3 judge: Claude Opus matches one pull request's review comments to
+// The gold-v3 judge: Claude (Haiku 5.5 by default, GOLD_JUDGE_MODEL to change) matches one pull request's review comments to
 // its golden issues (judge-rule.md), reading the code at the PR's head when it
 // needs to. One conversation per pull request; the answer comes through the
 // submit_matches tool.
@@ -7,8 +7,10 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const Anthropic = require('@anthropic-ai/sdk');
 
-const JUDGE_MODEL = 'claude-opus-5-5';
-const JUDGE_EFFORT = 'high';
+// Haiku 5.5 by default: it agreed with Opus 5.5 on 249 of 252 comments of two
+// earlier runs, at about a thirtieth of the cost (README.md, "The judge").
+const JUDGE_MODEL = process.env.GOLD_JUDGE_MODEL || 'claude-haiku-5-5';
+const JUDGE_EFFORT = process.env.GOLD_JUDGE_EFFORT || 'high';
 const RULE = fs.readFileSync(path.join(__dirname, 'judge-rule.md'), 'utf8');
 const MAX_TURNS = 30;
 const MAX_READ_LINES = 400;
@@ -106,7 +108,7 @@ function repoTools(repoDir, head) {
  * Returns { answers: Map id → { match, reason }, usage, ms, turns }.
  * Throws when the judge does not answer every comment (the case is not measured).
  */
-async function judgeCase({ caseId, prTitle, repoDir, head, issues, comments, client = new Anthropic({ apiKey: judgeKey() }) }) {
+async function judgeCase({ caseId, prTitle, repoDir, head, issues, comments, model = JUDGE_MODEL, effort = JUDGE_EFFORT, client = new Anthropic({ apiKey: judgeKey() }) }) {
     const tools = repoTools(repoDir, head);
     const issueIds = new Set(issues.map((i) => i.issueId));
     const payload = {
@@ -120,10 +122,10 @@ async function judgeCase({ caseId, prTitle, repoDir, head, issues, comments, cli
 
     for (let turn = 1; turn <= MAX_TURNS; turn += 1) {
         const response = await client.messages.create({
-            model: JUDGE_MODEL,
+            model,
             max_tokens: 16000,
             thinking: { type: 'adaptive' },
-            output_config: { effort: JUDGE_EFFORT },
+            output_config: { effort },
             system: RULE,
             tools: TOOLS,
             messages,

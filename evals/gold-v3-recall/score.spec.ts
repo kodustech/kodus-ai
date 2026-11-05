@@ -1,5 +1,5 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { linesOf, scoreLine, pool } = require('./score');
+const { linesOf, scoreLine, pool, validIssues } = require('./score');
 
 const item = (file: string, text: string) => ({ relevantFile: file, relevantLinesStart: 1, relevantLinesEnd: 2, label: 'bug', suggestionContent: text });
 const dump = (stages: string) => ({
@@ -36,18 +36,27 @@ describe('evals/gold-v3-recall/score.js', () => {
         expect(() => linesOf(old)).toThrow(/re-run/);
     });
 
-    it('counts a matched comment as TP and everything else as FP', () => {
-        const issues = [{ issueId: 'x#1', nit: false }, { issueId: 'x#2', nit: true }];
-        const comments = [{ id: 'C1', origin: 'generalist' }, { id: 'C2', origin: 'synthesis-rescue' }, { id: 'C3', origin: 'generalist' }];
+    it('counts each valid TP once; a repeat, a nit or a pending TP is a FP', () => {
+        const upstream = { 'x#1': 'confirmado', 'x#2': 'confirmado', 'x#3': 'pendente' };
+        const gold = [
+            { issueId: 'x#1', class: 'TP', subclass: null },
+            { issueId: 'x#2', class: 'TP', subclass: 'nit' },
+            { issueId: 'x#3', class: 'TP', subclass: null },
+        ];
+        const valid = validIssues(gold, upstream);
+        expect([...valid]).toEqual(['x#1']);
+        const comments = [{ id: 'C1', origin: 'generalist' }, { id: 'C2', origin: 'synthesis-rescue' }, { id: 'C3', origin: 'generalist' }, { id: 'C4' }, { id: 'C5' }];
         const answers = new Map([
             ['C1', { match: 'x#1' }],
             ['C2', { match: 'new' }],
             ['C3', { match: 'x#1' }],
+            ['C4', { match: 'x#2' }],
+            ['C5', { match: 'x#3' }],
         ]);
-        const s = scoreLine(comments, answers, issues);
-        expect([s.tp, s.fp, s.matchedIssues, s.matchedNonNit, s.issuesNonNit]).toEqual([2, 1, ['x#1'], 1, 1]);
+        const s = scoreLine(comments, answers, valid);
+        expect([s.tp, s.fp, s.found, s.valid]).toEqual([1, 4, ['x#1'], 1]);
         const p = pool([{ lines: { finder: s } }], 'finder');
-        expect([p.recall, p.precision]).toEqual([0.5, 2 / 3]);
-        expect(p.byOrigin.generalist).toEqual({ comments: 2, tp: 2, issues: 1 });
+        expect([p.recall, p.precision]).toEqual([1, 0.2]);
+        expect(p.byOrigin.generalist).toEqual({ comments: 2, issues: 1 });
     });
 });
