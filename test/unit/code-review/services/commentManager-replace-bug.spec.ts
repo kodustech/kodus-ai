@@ -63,7 +63,10 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
     beforeEach(async () => {
         mockObservabilityService = {
             runAiSdkLLMInSpan: jest.fn().mockImplementation(async () => {
-                return { text: LLM_SUMMARY };
+                return {
+                    text: LLM_SUMMARY,
+                    output: { description: LLM_SUMMARY },
+                };
             }),
         };
         // LLM.run reads observability through the port, not DI — register the mock
