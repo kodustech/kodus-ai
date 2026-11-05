@@ -1,3 +1,12 @@
+import { isHeavyReview } from '@libs/code-review/domain/review-mode';
+import {
+    HEAVY_MODE_PLAN_REQUIRED,
+    isHeavyModePlanAllowed,
+} from '@libs/ee/heavy-mode/heavy-mode-plan';
+import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
 import { Injectable, Inject } from '@nestjs/common';
 import { IdGenerator } from '@libs/core/utils/id-generator';
 import { createLogger } from '@libs/core/log/logger';
@@ -49,7 +58,10 @@ import {
     ICodeBaseConfigService,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
-import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    FileChange,
+    ReviewMode,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 interface GitContext {
     remote?: string;
@@ -114,6 +126,8 @@ export class ExecuteCliReviewUseCase implements IUseCase {
         private readonly pipelineObserver: CodeReviewPipelineObserver,
         @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
         private readonly codeBaseConfigService: ICodeBaseConfigService,
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService: ILicenseService,
     ) {}
 
     async execute(params: ExecuteCliReviewInput): Promise<CliReviewResponse> {
@@ -207,6 +221,43 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 ? { ...codeReviewConfig, reviewMode: 'fast' as const }
                 : codeReviewConfig;
 
+            // Heavy mode: the M3 lenses run next to the generalist. The flag
+            // asked for, else the review mode in settings; a --fast review
+            // runs fast only. A trial review never runs heavy, and heavy runs
+            // on Teams and Enterprise only: elsewhere the review runs Balanced
+            // and says why.
+            const heavyAsked =
+                !isTrialMode &&
+                isHeavyReview(
+                    input.config?.heavy
+                        ? 'heavy'
+                        : input.config?.balanced
+                          ? 'balanced'
+                          : undefined,
+                    effectiveConfig?.reviewMode,
+                );
+            const heavy =
+                heavyAsked &&
+                (await isHeavyModePlanAllowed(
+                    this.licenseService,
+                    organizationAndTeamData,
+                    ExecuteCliReviewUseCase.name,
+                ));
+            const notices =
+                heavyAsked && !heavy ? [HEAVY_MODE_PLAN_REQUIRED] : undefined;
+            if (notices) {
+                this.logger.log({
+                    message:
+                        'Heavy mode asked on a plan that is not Teams/Enterprise — the CLI review runs Balanced',
+                    context: ExecuteCliReviewUseCase.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
+                        teamId: organizationAndTeamData.teamId,
+                        correlationId,
+                    },
+                });
+            }
+
             const resolvedPlatform = await this.resolveCliPlatform(
                 organizationAndTeamData,
                 gitContext,
@@ -227,6 +278,7 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 // CLI equivalent of `@kody review focus on X` — same sanitize +
                 // cap as the PR-comment path. Steers the finder when set.
                 reviewDirective: normalizeReviewDirective(input.config?.focus),
+                heavy,
                 validSuggestions: [],
                 discardedSuggestions: [],
                 preparedFileContexts: [],
@@ -308,7 +360,6 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                           },
                       }
                     : undefined,
-
             };
 
             // 5. Execute pipeline
@@ -362,7 +413,15 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 },
             });
 
-            return result.cliResponse;
+            return notices
+                ? {
+                      ...result.cliResponse,
+                      notices: [
+                          ...(result.cliResponse.notices ?? []),
+                          ...notices,
+                      ],
+                  }
+                : result.cliResponse;
         } catch (error) {
             // Update execution as failed
             if (execution) {
@@ -388,26 +447,34 @@ export class ExecuteCliReviewUseCase implements IUseCase {
     }
 
     /**
-     * Whether coding-agent instructions are on for this CLI review, and the
-     * branch to read them from. Resolved as a PR review resolves them: the
-     * stored levels, the repository's kodus-config.yml and the directory the
-     * changed files fall in. A CLI review has no pull request, so the branch
-     * is the repository's default branch, asked of the git host. When the
-     * lookup fails the repository's stored setting stands and `baseRef` is
+     * The settings a CLI review takes from the repository it runs on: whether
+     * coding-agent instructions are on, the branch to read them from, and the
+     * review mode. Resolved as a PR review resolves them: the stored levels,
+     * the repository's kodus-config.yml and the directory the changed files
+     * fall in. A CLI review has no pull request, so the branch is the
+     * repository's default branch, asked of the git host. When the lookup
+     * fails the repository's stored settings stand and `baseRef` is
      * `undefined` (instructions skipped, with the stage's log).
      */
-    private async resolveRepoInstructions(
+    private async resolveRepoScopedSettings(
         organizationAndTeamData: OrganizationAndTeamData,
         repository: { id: string; name?: string | null },
         parameter: CodeReviewParameter,
         changedFiles: FileChange[],
-    ): Promise<{ enabled: boolean; baseRef?: string }> {
+    ): Promise<{
+        enabled: boolean;
+        baseRef?: string;
+        reviewMode?: ReviewMode;
+    }> {
         const stored = resolveKodyLearningSettings(
             parameter,
             repository.id,
         ).repoInstructionsEnabled;
+        const storedReviewMode: ReviewMode | undefined =
+            parameter?.repositories?.find((repo) => repo.id === repository.id)
+                ?.configs?.reviewMode ?? parameter?.configs?.reviewMode;
         if (!repository.id || repository.id === 'global') {
-            return { enabled: stored };
+            return { enabled: stored, reviewMode: storedReviewMode };
         }
         const metadata = {
             organizationAndTeamData,
@@ -430,9 +497,12 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 metadata,
             });
         }
-        if (!defaultBranch) return { enabled: stored };
+        if (!defaultBranch) {
+            return { enabled: stored, reviewMode: storedReviewMode };
+        }
 
         let enabled = stored;
+        let reviewMode = storedReviewMode;
         try {
             const merged =
                 await this.codeBaseConfigService.getMergedCodeReviewConfigs(
@@ -443,16 +513,21 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                     changedFiles,
                 );
             enabled = merged?.repoInstructionsEnabled === true;
+            reviewMode = merged?.reviewMode ?? storedReviewMode;
         } catch (error) {
             this.logger.warn({
                 message:
-                    "Could not merge kodus-config.yml and directory settings for coding-agent instructions in the CLI review; using the repository's stored setting",
+                    "Could not merge kodus-config.yml and directory settings for the CLI review; using the repository's stored settings",
                 context: ExecuteCliReviewUseCase.name,
                 error,
-                metadata: { ...metadata, stored },
+                metadata: { ...metadata, stored, storedReviewMode },
             });
         }
-        return { enabled, baseRef: enabled ? defaultBranch : undefined };
+        return {
+            enabled,
+            baseRef: enabled ? defaultBranch : undefined,
+            reviewMode,
+        };
     }
 
     /**
@@ -585,7 +660,7 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 });
             }
 
-            const instructions = await this.resolveRepoInstructions(
+            const repoScoped = await this.resolveRepoScopedSettings(
                 organizationAndTeamData,
                 { id: repositoryId, name: repositoryName },
                 paramObj.configValue,
@@ -596,18 +671,22 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 config: {
                     ...normalizedConfig,
                     languageResultPrompt:
-                        typeof (normalizedConfig as any).languageResultPrompt === 'string'
+                        typeof (normalizedConfig as any)
+                            .languageResultPrompt === 'string'
                             ? (normalizedConfig as any).languageResultPrompt
                             : 'en-US',
                     kodyRules: standardRules,
                     kodyMemoryRules: memoryRules,
-                    // Resolved as PR reviews resolve it; the rest of this
+                    // Resolved as PR reviews resolve them; the rest of this
                     // config is global only.
-                    repoInstructionsEnabled: instructions.enabled,
+                    repoInstructionsEnabled: repoScoped.enabled,
+                    reviewMode:
+                        repoScoped.reviewMode ??
+                        (normalizedConfig as any).reviewMode,
                 } as any as CodeReviewConfig,
                 repositoryId,
                 repositoryName,
-                instructionsBaseRef: instructions.baseRef,
+                instructionsBaseRef: repoScoped.baseRef,
             };
         } catch (error) {
             this.logger.warn({

@@ -94,6 +94,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
                     context.repository,
                     context.pullRequest,
                     baseCommit,
+                    context.lastExecution?.reviewedBaseBranch,
                 );
         }
 

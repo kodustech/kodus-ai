@@ -143,6 +143,15 @@ const WEEKLY_EVALS = [
         sets: { controlled: ['--set=controlled'], full: ['--set=full'] },
         verdict: 'finder',
     },
+    // Heavy mode (evals/heavy-recall): weekly only, never nightly, a heavy
+    // review per PR. Its floors live in evals/heavy-recall/targets.json.
+    {
+        id: 'heavy-recall',
+        stage: 'heavy',
+        run: ['evals/heavy-recall/run.js', '--concurrency=6'],
+        sets: { controlled: ['--set=controlled'], full: ['--set=light'] },
+        verdict: 'finder',
+    },
     {
         id: 'kody-rules',
         stage: 'kody-rules',

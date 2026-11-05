@@ -13,9 +13,11 @@
 // Each finding is labelled with the known bug it matches (known-bugs.js), read
 // by the recall judge with the nightly's prompt.
 //
-//   node evals/funnel/snapshot.js --model=<id> [--cases=<id,id>] [--concurrency=N]
+//   node evals/funnel/snapshot.js --model=<id> [--heavy] [--cases=<id,id>] [--concurrency=N]
 //
-// Writes evals/funnel/snapshot/<model>.json. Spends one review per PR plus a
+// Writes evals/funnel/snapshot/<model>.json; with --heavy, the review runs as
+// `@kody review --heavy` does (the lenses next to the generalist) and writes
+// <model>-heavy.json, which a stage reads with --snapshot=<model>-heavy. Spends one review per PR plus a
 // judge call per distinct finding and known bug until the first match. Run by
 // hand, then commit: each stage measures on this input, not on a fresh review,
 // so a stage's number moves only when the stage does. What a step derives from
@@ -36,11 +38,16 @@ const args = Object.fromEntries(
 );
 const MODEL = args.model;
 if (!MODEL) {
-    console.error('usage: node evals/funnel/snapshot.js --model=<id> [--cases=<id,id>] [--concurrency=N]');
+    console.error('usage: node evals/funnel/snapshot.js --model=<id> [--heavy] [--cases=<id,id>] [--concurrency=N]');
     process.exit(2);
 }
 
 process.env.RECALL_MODEL = MODEL;
+const HEAVY = Boolean(args.heavy);
+// The flag alone decides the mode: an exported RECALL_HEAVY never turns a light
+// snapshot heavy.
+process.env.RECALL_HEAVY = HEAVY ? '1' : '';
+const NAME = `${MODEL.replace(/[^\w.@-]+/g, '-')}${HEAVY ? '-heavy' : ''}`;
 const { internals } = require(path.join(ROOT, 'evals/investigation/agent-provider'));
 const { reviewPullRequest } = require(path.join(ROOT, 'evals/shared/review-stage'));
 const LIGHT_CASES = require(path.join(ROOT, 'evals/investigation/recall-tests')).CASE_SETS.light;
@@ -125,7 +132,7 @@ async function main() {
     const route = internals.resolveRoute({ provider: 'tier0', model: MODEL });
     // Each PR is kept as it finishes, so a run that fails on one PR is resumed
     // instead of repeated: rerun the same command and only the missing PRs run.
-    const partial = path.join(__dirname, 'snapshot', `.partial-${MODEL.replace(/[^\w.@-]+/g, '-')}`);
+    const partial = path.join(__dirname, 'snapshot', `.partial-${NAME}`);
     fs.mkdirSync(partial, { recursive: true });
     const cases = new Array(caseIds.length);
     const failed = [];
@@ -158,9 +165,10 @@ async function main() {
         console.error(`not written: ${failed.length} of ${caseIds.length} PRs failed (see above); a snapshot must hold every PR. The others are kept: rerun to resume.`);
         return 2;
     }
-    const out = path.join(__dirname, 'snapshot', `${MODEL.replace(/[^\w.@-]+/g, '-')}.json`);
+    const out = path.join(__dirname, 'snapshot', `${NAME}.json`);
     const snapshot = {
         model: MODEL,
+        heavy: HEAVY,
         route: route.route,
         judge: JUDGE_MODEL,
         builtAt: new Date().toISOString().slice(0, 10),

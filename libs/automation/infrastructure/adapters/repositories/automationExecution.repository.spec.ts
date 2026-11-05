@@ -202,10 +202,16 @@ describe('AutomationExecutionRepository.findEligiblePullRequestRefsForApprovalBy
         expect(queryBuilder.setParameters).toHaveBeenCalledWith(
             expect.objectContaining({
                 teamAutomationId: 'team-automation-1',
-                successStatus: AutomationStatus.SUCCESS,
+                reviewStatuses: [
+                    AutomationStatus.SUCCESS,
+                    AutomationStatus.PARTIAL_ERROR,
+                ],
                 inProgressStatus: AutomationStatus.IN_PROGRESS,
                 allowNoCommentKinds: ['approve', 'hold', 'out-of-scope'],
             }),
+        );
+        expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+            'success.status IN (:...reviewStatuses)',
         );
     });
 });

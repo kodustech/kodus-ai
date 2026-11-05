@@ -66,6 +66,7 @@ const TASK_FALLBACK = '';
 // A `tu.route` outside this set (stale tier string, garbage) is NOT trusted.
 export const READ_ROUTING_TASKS = [
     'codeReview',
+    'codeReviewHeavy',
     'kodyRulesReview',
     'ruleGeneration',
     'businessValidation',

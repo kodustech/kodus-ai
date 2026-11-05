@@ -8,19 +8,41 @@ import {
     KNOWLEDGE_LIMIT_LABELS,
     knowledgeChoices,
     knowledgeItemFromPath,
+    knowledgeKey,
     knowledgeTargetKey,
+    mentionedButNotFollowed,
+    repositoryKey,
+    sameKnowledge,
     setAgentKnowledge,
     skillFolderName,
 } from "@services/custom-agents/drafts";
+import { useResolveCustomAgent } from "@services/custom-agents/hooks";
 import type {
     CustomAgentResolveReport,
+    KnowledgeCandidate,
     KnowledgeItem,
     KnowledgeItemReport,
+    KnowledgeSource,
 } from "@services/custom-agents/types";
-import { BookOpenIcon, PlusIcon, SparklesIcon, XIcon } from "lucide-react";
+import {
+    BookMarkedIcon,
+    BookOpenIcon,
+    LockIcon,
+    PlusIcon,
+    SparklesIcon,
+    XIcon,
+} from "lucide-react";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "src/core/components/ui/command";
 import { cn } from "src/core/utils/components";
 
-import { Chip, Field } from "./field";
+import { Chip, Choice, Field } from "./field";
 
 export const KnowledgeStatusChips = ({
     report,
@@ -88,58 +110,547 @@ export const KnowledgeIssues = ({
     );
 };
 
+/** Where a skill or doc of another repository comes from, on its item. */
+export const KnowledgeSourceChip = ({
+    item,
+    branch,
+}: {
+    item: Pick<KnowledgeItem, "repository" | "ref">;
+    /** The branch it was checked on, when the report says. */
+    branch?: string;
+}) => {
+    if (!item.repository) return null;
+    const at = item.ref ? `${item.ref} (pinned)` : (branch ?? "default branch");
+    return (
+        <Chip>
+            <BookMarkedIcon aria-hidden className="mr-1 size-3 shrink-0" />
+            {item.repository} · {at}
+        </Chip>
+    );
+};
+
+/** The source tab for the reviewed repository. */
+const THIS_REPOSITORY = "";
+/** The tab that opens the list of every connected repository. */
+const OTHER_REPOSITORY = "__other__";
+/** Linked repositories shown as their own tab; the rest are under "Other". */
+const MAX_SOURCE_TABS = 3;
+
+/**
+ * What can be added from one source: the reviewed repository (what the
+ * page-level check already listed) or another repository, listed on demand
+ * at its branch or tag. Candidates of another repository carry it.
+ */
+export const useKnowledgeSourceListing = (params: {
+    teamId?: string;
+    repositoryId?: string;
+    source: KnowledgeSource;
+    /** The page-level check, which lists the reviewed repository. */
+    report?: CustomAgentResolveReport;
+    /** That check failed: this repository's list is not coming. */
+    reportFailed?: boolean;
+    enabled: boolean;
+    /** The "Other repository…" picker is open: list every repository. */
+    listConnected?: boolean;
+}) => {
+    const connected = useResolveCustomAgent({
+        teamId: params.teamId,
+        repositoryId: params.repositoryId,
+        knowledge: [],
+        listConnected: true,
+        enabled: params.enabled && params.listConnected === true,
+    });
+    const remote = useResolveCustomAgent({
+        teamId: params.teamId,
+        repositoryId: params.repositoryId,
+        knowledge: [],
+        discover: true,
+        source: params.source,
+        enabled: params.enabled && !!params.source.repository,
+    });
+    const local =
+        params.report?.knowledge.status === "ok"
+            ? params.report.knowledge
+            : null;
+    const remoteLoading = remote.isLoading || remote.isFetching;
+    // Rows of the previous source never show under the new one: they would
+    // be saved with the new repository and read as not found.
+    const listing = params.source.repository
+        ? remote.data?.knowledge.status === "ok" &&
+          !remoteLoading &&
+          remote.data.knowledge.discoveredIn?.repository?.toLowerCase() ===
+              params.source.repository.toLowerCase()
+            ? remote.data.knowledge
+            : null
+        : local;
+    const candidates: KnowledgeCandidate[] = (listing?.candidates ?? []).map(
+        (candidate) =>
+            params.source.repository
+                ? {
+                      ...candidate,
+                      repository: params.source.repository,
+                      ...(params.source.ref && { ref: params.source.ref }),
+                  }
+                : candidate,
+    );
+    const connectedKnowledge =
+        connected.data?.knowledge.status === "ok"
+            ? connected.data.knowledge
+            : null;
+    return {
+        candidates,
+        discoveredIn: listing?.discoveredIn,
+        connectedRepositories: connectedKnowledge?.connectedRepositories,
+        // A request that failed, or a check that could not run, lists
+        // nothing: say so instead of loading forever.
+        connectedListingFailed:
+            connected.isError ||
+            (!!connected.data && !connectedKnowledge) ||
+            connectedKnowledge?.listingFailed === true,
+        reviewedVisibility:
+            listing?.repositoryVisibility ??
+            connectedKnowledge?.repositoryVisibility,
+        // This repository is listed by the page's check: loading only until
+        // it answers, whatever it answered.
+        loading: params.source.repository
+            ? remoteLoading
+            : !params.report && !params.reportFailed,
+        // A request that failed is not an empty repository: say so. While
+        // the picked repository loads, the previous answer is a placeholder
+        // and names another repository: say nothing until this one answers.
+        unavailable: !params.source.repository
+            ? params.report?.knowledge.status === "unavailable"
+                ? params.report.knowledge.reason
+                : !params.report && params.reportFailed
+                  ? "Could not read this repository. Try again."
+                  : undefined
+            : remoteLoading
+              ? undefined
+              : remote.data?.knowledge.status === "unavailable"
+                ? remote.data.knowledge.reason
+                : remote.isError
+                  ? `Could not read ${params.source.repository}. Try again.`
+                  : undefined,
+    };
+};
+
+/** The branch or tag a repository is pinned to: the last item's that sets
+ *  one, as a review reads it (`resolveKnowledgeRepositories`). */
+const pinnedRef = (knowledge: KnowledgeItem[], repository: string) =>
+    [...knowledge]
+        .reverse()
+        .find(
+            (item) =>
+                repositoryKey(item) === repository.toLowerCase() && item.ref,
+        )?.ref;
+
+/**
+ * Where skills and docs are added from: this repository, a linked one, or
+ * any other repository connected on the same integration; for another
+ * repository, the branch or tag it is read at. A pull request never changes
+ * that ref, so the rules a PR is judged by stay the team's.
+ */
+export const KnowledgeSourceBar = ({
+    source,
+    onSourceChange,
+    linkedRepositories,
+    connectedRepositories,
+    connectedListingFailed,
+    knowledge,
+    discoveredIn,
+    reviewedVisibility,
+    canEdit,
+    onRefChange,
+    onPickingChange,
+}: {
+    source: KnowledgeSource;
+    onSourceChange: (source: KnowledgeSource) => void;
+    linkedRepositories: string[];
+    /** Every other repository connected to Kodus; unset while unknown. */
+    connectedRepositories?: string[];
+    /** The connected repositories could not be listed. */
+    connectedListingFailed?: boolean;
+    knowledge: KnowledgeItem[];
+    discoveredIn?: NonNullable<
+        Extract<
+            CustomAgentResolveReport["knowledge"],
+            { status: "ok" }
+        >["discoveredIn"]
+    >;
+    reviewedVisibility?: "public" | "private";
+    canEdit: boolean;
+    /** A new ref for every item of the current repository. */
+    onRefChange: (ref: string | undefined) => void;
+    /** The picker of every connected repository opened or closed. */
+    onPickingChange?: (picking: boolean) => void;
+}) => {
+    const [picking, setPickingState] = useState(false);
+    const setPicking = (next: boolean) => {
+        setPickingState(next);
+        onPickingChange?.(next);
+    };
+    const [editingRef, setEditingRef] = useState(false);
+    const [refDraft, setRefDraft] = useState("");
+    // Linked repositories first, then any other repository already in use.
+    const inUse = knowledge
+        .map((item) => item.repository)
+        .filter((name): name is string => !!name);
+    const selected = source.repository?.toLowerCase();
+    const first = [
+        ...new Map(
+            [...linkedRepositories, ...inUse].map((name) => [
+                name.toLowerCase(),
+                name,
+            ]),
+        ).values(),
+    ].slice(0, MAX_SOURCE_TABS);
+    // The selected repository always keeps its tab, after the others when
+    // it is past the cap.
+    const tabs =
+        source.repository &&
+        !first.some((name) => name.toLowerCase() === selected)
+            ? [...first, source.repository]
+            : first;
+    const refOf = (repository: string) => pinnedRef(knowledge, repository);
+    const open = (repository?: string) => {
+        setPicking(false);
+        setEditingRef(false);
+        const ref = repository ? refOf(repository) : undefined;
+        onSourceChange(repository ? { repository, ...(ref && { ref }) } : {});
+    };
+
+    return (
+        <div className="flex flex-col gap-2">
+            <span className="text-text-primary text-xs font-medium">From</span>
+            <Choice
+                size="sm"
+                label="Add skills and docs from"
+                value={
+                    picking
+                        ? OTHER_REPOSITORY
+                        : (source.repository ?? THIS_REPOSITORY)
+                }
+                onChange={(value) => {
+                    if (value !== OTHER_REPOSITORY)
+                        return open(value || undefined);
+                    setPicking(true);
+                }}
+                options={[
+                    { value: THIS_REPOSITORY, label: "This repository" },
+                    ...tabs.map((name) => ({
+                        value: name,
+                        label: name.split("/").pop() ?? name,
+                    })),
+                    { value: OTHER_REPOSITORY, label: "Other repository…" },
+                ]}
+            />
+            {picking && (
+                <OtherRepositoryPicker
+                    options={connectedRepositories}
+                    failed={connectedListingFailed}
+                    onSelect={(name) => open(name)}
+                    onCancel={() => setPicking(false)}
+                />
+            )}
+            {source.repository && (
+                <div className="flex flex-col gap-1">
+                    {editingRef ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="min-w-[10rem] flex-1">
+                                <Input
+                                    size="md"
+                                    aria-label={`Branch or tag of ${source.repository}`}
+                                    placeholder="Branch or tag, e.g. v3"
+                                    value={refDraft}
+                                    disabled={!canEdit}
+                                    onChange={(e) =>
+                                        setRefDraft(e.target.value)
+                                    }
+                                    onKeyDown={(e) => {
+                                        if (e.key !== "Enter") return;
+                                        e.preventDefault();
+                                        onRefChange(
+                                            refDraft.trim() || undefined,
+                                        );
+                                        setEditingRef(false);
+                                    }}
+                                />
+                            </div>
+                            <Button
+                                size="sm"
+                                variant="helper"
+                                disabled={!canEdit}
+                                onClick={() => {
+                                    onRefChange(refDraft.trim() || undefined);
+                                    setEditingRef(false);
+                                }}>
+                                Use
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="cancel"
+                                onClick={() => setEditingRef(false)}>
+                                Cancel
+                            </Button>
+                        </div>
+                    ) : (
+                        <p className="text-text-tertiary text-xs">
+                            {source.ref ? (
+                                <>
+                                    Reading{" "}
+                                    <span className="text-text-secondary font-medium">
+                                        {source.ref}
+                                    </span>
+                                    .{" "}
+                                    <button
+                                        type="button"
+                                        disabled={!canEdit}
+                                        className="text-primary-light hover:underline disabled:opacity-60"
+                                        onClick={() => onRefChange(undefined)}>
+                                        Use the default branch
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    Reading{" "}
+                                    <span className="text-text-secondary font-medium">
+                                        {discoveredIn?.branch ||
+                                            "the default branch"}
+                                    </span>
+                                    , its default branch.{" "}
+                                    <button
+                                        type="button"
+                                        disabled={!canEdit}
+                                        className="text-primary-light hover:underline disabled:opacity-60"
+                                        onClick={() => {
+                                            setRefDraft("");
+                                            setEditingRef(true);
+                                        }}>
+                                        Use a branch or tag instead
+                                    </button>
+                                </>
+                            )}{" "}
+                            · a pull request never changes it.
+                        </p>
+                    )}
+                    {discoveredIn?.available === false &&
+                        discoveredIn.reason && (
+                            <p className="text-danger text-xs">
+                                {discoveredIn.reason}
+                            </p>
+                        )}
+                    {discoveredIn?.visibility === "private" &&
+                        reviewedVisibility === "public" && (
+                            <p className="text-text-tertiary flex items-center gap-1 text-xs">
+                                <LockIcon
+                                    aria-hidden
+                                    className="size-3 shrink-0"
+                                />
+                                Private repository: on this public
+                                repository&apos;s pull requests, comments name
+                                the rule&apos;s file without quoting it.
+                            </p>
+                        )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+/** Every repository the integration reaches, to pick one not linked yet. */
+const OtherRepositoryPicker = ({
+    options,
+    failed,
+    onSelect,
+    onCancel,
+}: {
+    options?: string[];
+    failed?: boolean;
+    onSelect: (fullName: string) => void;
+    onCancel: () => void;
+}) => {
+    return (
+        <div className="border-card-lv3 flex flex-col overflow-hidden rounded-lg border">
+            <Command className="rounded-none border-0">
+                <CommandInput placeholder="Search connected repositories…" />
+                <CommandList className="max-h-56 overflow-y-auto">
+                    <CommandEmpty>
+                        {failed
+                            ? "Could not list your repositories. Try again later."
+                            : options
+                              ? "No connected repository found."
+                              : "Loading repositories…"}
+                    </CommandEmpty>
+                    <CommandGroup>
+                        {(options ?? []).map((name) => (
+                            <CommandItem
+                                key={name}
+                                value={name}
+                                onSelect={() => onSelect(name)}
+                                className="cursor-pointer justify-start gap-2 py-2">
+                                <BookMarkedIcon className="text-text-secondary size-3.5 shrink-0" />
+                                <span className="truncate text-sm">{name}</span>
+                            </CommandItem>
+                        ))}
+                    </CommandGroup>
+                </CommandList>
+            </Command>
+            <Button
+                size="xs"
+                variant="cancel"
+                className="m-2 w-fit"
+                onClick={onCancel}>
+                Cancel
+            </Button>
+        </div>
+    );
+};
+
 /**
  * The skills and docs one agent follows: only what it follows, each with a
- * way to stop, and a picker to add what the branch offers or a path typed
- * by hand. Skills open on demand; docs load whole.
+ * way to stop, and a picker to add what a repository offers or a path typed
+ * by hand. Skills open on demand; docs load whole. A skill or doc can come
+ * from this repository or another connected one (a team's rules repository).
  */
 export const AgentKnowledgeField = ({
     agentId,
     knowledge,
     report,
+    reportFailed,
     canEdit,
     onChange,
+    teamId,
+    repositoryId,
+    instructions,
+    readKnowledge,
 }: {
     agentId: string;
     knowledge: KnowledgeItem[];
+    /** What a review here reads: this level's list merged over the levels
+     *  it inherits. A repository's pinned ref comes from it, as the review
+     *  takes it; this level's own list when unset. */
+    readKnowledge?: KnowledgeItem[];
     report?: CustomAgentResolveReport;
+    /** The page's check failed. */
+    reportFailed?: boolean;
     canEdit: boolean;
     onChange: (next: KnowledgeItem[]) => void;
+    teamId?: string;
+    repositoryId?: string;
+    /** The agent's instructions, to notice a repository they name that it
+     *  follows nothing from. */
+    instructions?: string;
 }) => {
     const [adding, setAdding] = useState(false);
+    const [source, setSource] = useState<KnowledgeSource>({});
+    const [pickerOpen, setPickerOpen] = useState(false);
     const resolved =
         report?.knowledge.status === "ok" ? report.knowledge : null;
     const unavailable =
         report?.knowledge.status === "unavailable"
             ? report.knowledge.reason
             : null;
-    const candidates = resolved?.candidates ?? [];
-    const reportOf = (item: Pick<KnowledgeItem, "path" | "kind">) =>
-        resolved?.items.find(
-            (entry) => entry.path === item.path && entry.kind === item.kind,
-        );
-    const candidateOf = (item: Pick<KnowledgeItem, "path" | "kind">) =>
-        candidates.find(
-            (entry) => entry.path === item.path && entry.kind === item.kind,
-        );
+    const listing = useKnowledgeSourceListing({
+        teamId,
+        repositoryId,
+        source,
+        report,
+        reportFailed,
+        enabled: adding,
+        listConnected: pickerOpen,
+    });
+    const candidates = listing.candidates;
+    const reportOf = (
+        item: Pick<KnowledgeItem, "path" | "kind" | "repository">,
+    ) => resolved?.items.find((entry) => sameKnowledge(entry, item));
+    const candidateOf = (
+        item: Pick<KnowledgeItem, "path" | "kind" | "repository">,
+    ) => candidates.find((entry) => sameKnowledge(entry, item));
     const named = [...(resolved?.items ?? []), ...candidates];
     const { skills, docs } = followedBy(knowledge, agentId, named);
+    const fromSource = (choice: { repository?: string }) =>
+        repositoryKey(choice) === repositoryKey(source);
+    const followsFromSource = [...skills, ...docs].some(fromSource);
     const available = knowledgeChoices(knowledge, candidates, agentId).filter(
-        (choice) => !choice.linked,
+        (choice) => !choice.linked && fromSource(choice),
     );
     const budget = resolved?.budgets.find(
         (entry) => entry.target === knowledgeTargetKey({ agentId }),
     );
-    const follow = (item: Pick<KnowledgeItem, "path" | "kind">, on: boolean) =>
-        onChange(setAgentKnowledge(knowledge, item, agentId, on));
-    const descriptionOf = (item: Pick<KnowledgeItem, "path" | "kind">) =>
-        reportOf(item)?.description ?? candidateOf(item)?.description;
+    const follow = (
+        item: Pick<KnowledgeItem, "path" | "kind" | "repository" | "ref">,
+        on: boolean,
+    ) => onChange(setAgentKnowledge(knowledge, item, agentId, on));
+    const descriptionOf = (
+        item: Pick<KnowledgeItem, "path" | "kind" | "repository">,
+    ) => reportOf(item)?.description ?? candidateOf(item)?.description;
+    const linkedRepositories = resolved?.linkedRepositories ?? [];
+    const mentioned = instructions
+        ? mentionedButNotFollowed(
+              instructions,
+              linkedRepositories,
+              knowledge,
+              agentId,
+          )
+        : [];
+    const browse = (repository: string) => {
+        const ref = pinnedRef(readKnowledge ?? knowledge, repository);
+        setSource({ repository, ...(ref && { ref }) });
+        setAdding(true);
+    };
+    // One ref per repository: changing it moves every item of that
+    // repository, the ones this level inherits too (at a directory), written
+    // here where the review reads them: this level's own list cannot pin an
+    // item it does not hold.
+    const changeRef = (ref: string | undefined) => {
+        if (!source.repository) return;
+        const repository = source.repository.toLowerCase();
+        setSource({ repository: source.repository, ...(ref && { ref }) });
+        const withRef = ({ ref: _old, ...rest }: KnowledgeItem) => ({
+            ...rest,
+            ...(ref && { ref }),
+        });
+        const inherited = (readKnowledge ?? []).filter(
+            (item) =>
+                repositoryKey(item) === repository &&
+                !knowledge.some((own) => sameKnowledge(own, item)),
+        );
+        onChange([
+            ...knowledge.map((item) =>
+                repositoryKey(item) === repository ? withRef(item) : item,
+            ),
+            ...inherited.map(withRef),
+        ]);
+    };
+    const sourceLabel = source.repository ?? "the branch";
 
     return (
         <div className="flex flex-col gap-3">
             {unavailable && (
                 <p className="text-text-secondary text-xs">{unavailable}</p>
             )}
+            {canEdit &&
+                mentioned.map((repository) => (
+                    <div
+                        key={repository}
+                        role="note"
+                        className="border-primary-light/40 bg-primary-light/5 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                        <span className="text-text-secondary text-xs">
+                            The instructions mention{" "}
+                            <span className="text-text-primary font-medium">
+                                {repository}
+                            </span>
+                            , but this agent follows nothing from it. Findings
+                            can only cite the rules it follows.
+                        </span>
+                        <Button
+                            size="xs"
+                            variant="helper"
+                            onClick={() => browse(repository)}>
+                            Browse its rules
+                        </Button>
+                    </div>
+                ))}
             {skills.length === 0 && docs.length === 0 ? (
                 <p className="text-text-secondary text-xs">
                     Not following any skill or doc yet.
@@ -148,7 +659,7 @@ export const AgentKnowledgeField = ({
                 <ul className="flex flex-col gap-1.5">
                     {skills.map((skill) => (
                         <li
-                            key={`skill:${skill.path}`}
+                            key={knowledgeKey(skill)}
                             className="bg-card-lv2 flex items-start gap-2 rounded-lg px-3 py-2">
                             <SparklesIcon
                                 aria-hidden
@@ -167,6 +678,10 @@ export const AgentKnowledgeField = ({
                                     {skill.path}
                                 </span>
                                 <span className="flex flex-wrap gap-1 empty:hidden">
+                                    <KnowledgeSourceChip
+                                        item={skill}
+                                        branch={reportOf(skill)?.branch}
+                                    />
                                     <KnowledgeStatusChips
                                         report={reportOf(skill)}
                                     />
@@ -182,7 +697,7 @@ export const AgentKnowledgeField = ({
                     ))}
                     {docs.map((doc) => (
                         <li
-                            key={`doc:${doc.path}`}
+                            key={knowledgeKey(doc)}
                             className="flex items-center gap-2 px-3 py-1">
                             <BookOpenIcon
                                 aria-hidden
@@ -192,13 +707,25 @@ export const AgentKnowledgeField = ({
                                 <span className="text-text-primary truncate font-mono text-xs">
                                     {doc.path}
                                 </span>
+                                {doc.repository && (
+                                    <span className="flex flex-wrap gap-1">
+                                        <KnowledgeSourceChip
+                                            item={doc}
+                                            branch={reportOf(doc)?.branch}
+                                        />
+                                    </span>
+                                )}
                                 <KnowledgeIssues report={reportOf(doc)} />
                             </span>
                             <span className="flex shrink-0 flex-wrap gap-1">
                                 <KnowledgeStatusChips report={reportOf(doc)} />
                             </span>
                             <StopFollowing
-                                name={doc.path}
+                                name={
+                                    doc.repository
+                                        ? `${doc.repository}:${doc.path}`
+                                        : doc.path
+                                }
                                 disabled={!canEdit}
                                 onClick={() => follow(doc, false)}
                             />
@@ -224,85 +751,120 @@ export const AgentKnowledgeField = ({
                 />
             ) : adding ? (
                 <div className="border-card-lv3/60 flex flex-col gap-3 border-t pt-3">
-                    {!resolved ? (
-                        <p className="text-text-secondary text-xs">
-                            Reading the branch…
-                        </p>
-                    ) : available.length === 0 ? (
-                        <p className="text-text-secondary text-xs">
-                            Nothing else found on the branch. Add one by path.
-                        </p>
-                    ) : (
-                        <ul className="flex flex-col gap-1">
-                            {available.map((choice) => {
-                                const name =
-                                    choice.kind === "skill"
-                                        ? (reportOf(choice)?.name ??
-                                          choice.name ??
-                                          skillFolderName(choice.path))
-                                        : choice.path;
-                                const description = descriptionOf(choice);
-                                return (
-                                    <li key={`${choice.kind}:${choice.path}`}>
-                                        <button
-                                            type="button"
-                                            aria-label={`Follow ${name}`}
-                                            disabled={!canEdit}
-                                            onClick={() => follow(choice, true)}
-                                            className="hover:bg-card-lv2 flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left disabled:opacity-60">
-                                            {choice.kind === "skill" ? (
-                                                <SparklesIcon
-                                                    aria-hidden
-                                                    className="text-text-tertiary mt-0.5 size-4 shrink-0"
-                                                />
-                                            ) : (
-                                                <BookOpenIcon
-                                                    aria-hidden
-                                                    className="text-text-tertiary mt-0.5 size-4 shrink-0"
-                                                />
-                                            )}
-                                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                                <span
-                                                    className={cn(
-                                                        "text-text-primary text-xs font-medium",
-                                                        choice.kind === "doc" &&
-                                                            "font-mono",
-                                                    )}>
-                                                    {name}
-                                                </span>
-                                                {description && (
-                                                    <span className="text-text-secondary text-xs">
-                                                        {description}
-                                                    </span>
-                                                )}
-                                                {choice.kodyRuleSource && (
-                                                    <span className="text-warning text-xs">
-                                                        Also a Kody Rules source
-                                                    </span>
-                                                )}
-                                            </span>
-                                            <PlusIcon
-                                                aria-hidden
-                                                className="text-text-secondary mt-0.5 size-4 shrink-0"
-                                            />
-                                        </button>
-                                    </li>
-                                );
-                            })}
-                        </ul>
-                    )}
-                    <AddByPath
-                        agentId={agentId}
-                        disabled={!canEdit}
-                        onAdd={(item) => follow(item, true)}
+                    <KnowledgeSourceBar
+                        source={source}
+                        onSourceChange={setSource}
+                        linkedRepositories={linkedRepositories}
+                        connectedRepositories={listing.connectedRepositories}
+                        knowledge={readKnowledge ?? knowledge}
+                        discoveredIn={listing.discoveredIn}
+                        reviewedVisibility={listing.reviewedVisibility}
+                        canEdit={canEdit}
+                        onRefChange={changeRef}
+                        onPickingChange={setPickerOpen}
+                        connectedListingFailed={listing.connectedListingFailed}
                     />
-                    <Button
-                        size="xs"
-                        variant="helper"
-                        className="w-fit"
-                        onClick={() => setAdding(false)}>
-                        Done
-                    </Button>
+                    {!pickerOpen && (
+                        <>
+                            {listing.unavailable ? (
+                                <p className="text-danger text-xs">
+                                    {listing.unavailable}
+                                </p>
+                            ) : listing.loading ? (
+                                <p className="text-text-secondary text-xs">
+                                    Reading{" "}
+                                    {source.repository
+                                        ? source.repository
+                                        : "the branch"}
+                                    …
+                                </p>
+                            ) : listing.discoveredIn?.available ===
+                              false ? null : available.length === 0 ? (
+                                <p className="text-text-secondary text-xs">
+                                    {source.repository
+                                        ? `${followsFromSource ? "Nothing else" : "No skills or docs"} found in ${source.repository}. Add one by path.`
+                                        : `${followsFromSource ? "Nothing else" : "No skills or docs"} found on the branch. Add one by path.`}
+                                </p>
+                            ) : (
+                                <ul className="flex flex-col gap-1">
+                                    {available.map((choice) => {
+                                        const name =
+                                            choice.kind === "skill"
+                                                ? (reportOf(choice)?.name ??
+                                                  choice.name ??
+                                                  skillFolderName(choice.path))
+                                                : choice.path;
+                                        const description =
+                                            descriptionOf(choice);
+                                        return (
+                                            <li key={knowledgeKey(choice)}>
+                                                <button
+                                                    type="button"
+                                                    aria-label={`Follow ${name}`}
+                                                    disabled={!canEdit}
+                                                    onClick={() =>
+                                                        follow(choice, true)
+                                                    }
+                                                    className="hover:bg-card-lv2 flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left disabled:opacity-60">
+                                                    {choice.kind === "skill" ? (
+                                                        <SparklesIcon
+                                                            aria-hidden
+                                                            className="text-text-tertiary mt-0.5 size-4 shrink-0"
+                                                        />
+                                                    ) : (
+                                                        <BookOpenIcon
+                                                            aria-hidden
+                                                            className="text-text-tertiary mt-0.5 size-4 shrink-0"
+                                                        />
+                                                    )}
+                                                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                                        <span
+                                                            className={cn(
+                                                                "text-text-primary text-xs font-medium",
+                                                                choice.kind ===
+                                                                    "doc" &&
+                                                                    "font-mono",
+                                                            )}>
+                                                            {name}
+                                                        </span>
+                                                        {description && (
+                                                            <span className="text-text-secondary text-xs">
+                                                                {description}
+                                                            </span>
+                                                        )}
+                                                        {choice.kodyRuleSource && (
+                                                            <span className="text-warning text-xs">
+                                                                Also a Kody
+                                                                Rules source
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                    <PlusIcon
+                                                        aria-hidden
+                                                        className="text-text-secondary mt-0.5 size-4 shrink-0"
+                                                    />
+                                                </button>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            )}
+                            <AddByPath
+                                agentId={agentId}
+                                disabled={!canEdit}
+                                source={source}
+                                sourceLabel={sourceLabel}
+                                onAdd={(item) => follow(item, true)}
+                            />
+                            <Button
+                                size="xs"
+                                variant="helper"
+                                className="w-fit"
+                                onClick={() => setAdding(false)}>
+                                Done
+                            </Button>
+                        </>
+                    )}
                 </div>
             ) : (
                 canEdit && (
@@ -340,18 +902,32 @@ const StopFollowing = ({
     </Button>
 );
 
-/** A path typed by hand; its kind comes from the path itself. */
+/** A path typed by hand; its kind comes from the path itself, and it lives
+ *  in the repository the picker is on. */
 const AddByPath = ({
     agentId,
     disabled,
     onAdd,
+    source,
+    sourceLabel,
 }: {
     agentId: string;
     disabled: boolean;
-    onAdd: (item: Pick<KnowledgeItem, "path" | "kind">) => void;
+    onAdd: (
+        item: Pick<KnowledgeItem, "path" | "kind" | "repository" | "ref">,
+    ) => void;
+    source?: KnowledgeSource;
+    sourceLabel?: string;
 }) => {
     const [path, setPath] = useState("");
-    const item = knowledgeItemFromPath(path);
+    const parsed = knowledgeItemFromPath(path);
+    const item = parsed
+        ? {
+              ...parsed,
+              ...(source?.repository && { repository: source.repository }),
+              ...(source?.repository && source.ref && { ref: source.ref }),
+          }
+        : null;
     const add = () => {
         if (!item) return;
         onAdd(item);
@@ -364,8 +940,10 @@ const AddByPath = ({
             htmlFor={id}
             hint={
                 item
-                    ? `Adds the ${item.kind} ${item.path}`
-                    : "A doc file (e.g. docs/payments.md), or a skill folder with a SKILL.md, on the target branch."
+                    ? `Adds the ${item.kind} ${item.repository ? `${item.repository}:` : ""}${item.path}`
+                    : source?.repository
+                      ? `A doc file, or a skill folder with a SKILL.md, in ${sourceLabel}.`
+                      : "A doc file (e.g. docs/payments.md), or a skill folder with a SKILL.md, on the target branch."
             }>
             <div className="flex flex-wrap items-center gap-2">
                 <div className="min-w-[12rem] flex-1">

@@ -98,6 +98,7 @@ export function validateByokConfigRefs(config: unknown): ByokRefValidationResult
  *  the user, so it must read in product terms, not raw config paths. */
 const TASK_LABEL: Record<LlmTask, string> = {
     codeReview: 'the Code Review model',
+    codeReviewHeavy: 'the Heavy Code Review model',
     kodyRulesReview: 'the Kody Rules review model',
     ruleGeneration: 'the Kody Rules generation model',
     businessValidation: 'the Business Rules validation model',

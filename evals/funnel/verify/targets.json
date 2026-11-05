@@ -9,7 +9,8 @@
         "Deliberate break, 2026-10-17 (local, deepseek, controlled): the verifier dropping every candidate (LlmVerifier.verify keep:false): 0.031, 0 of 30 known bugs and 1 of 2 controls kept, GATE FAILED, exit 1.",
         "The relabeled dataset (#2114) changes the known bugs: a new snapshot and two runs per set recalibrate these floors in the same PR.",
         "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 32/32 and 31/32, mean 0.984. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93.",
-        "deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93."
+        "deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93.",
+        "heavy-controlled (snapshot/deepseek-v4-flash@fireworks-heavy.json, a heavy review of the controlled PRs: the lenses' findings reach this step too), deepseek-v4-flash@fireworks: calibrated 2026-11-02 from 2 local runs on 6f80f8aa9: 31/34 and 32/34, mean 0.926. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 34, rounded down: 0.83. On demand (--snapshot=deepseek-v4-flash@fireworks-heavy); runs: kodustech/kodus-eval-runs, runs/2026-11-02_heavy-funnel."
     ],
     "sets": {
         "controlled": {
@@ -29,6 +30,14 @@
                 "kimi-k2.7-code@openrouter": {
                     "floor": 0.93,
                     "observed": 0.984
+                }
+            }
+        },
+        "heavy-controlled": {
+            "models": {
+                "deepseek-v4-flash@fireworks": {
+                    "floor": 0.83,
+                    "observed": 0.926
                 }
             }
         }

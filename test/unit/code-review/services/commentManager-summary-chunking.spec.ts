@@ -407,6 +407,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
         title: 'Test PR',
         head: { ref: 'feature-branch', repo: { fullName: 'org/repo' } },
         base: { ref: 'main' },
+        body: 'Existing PR description',
     };
 
     const defaultSummaryConfig = {
@@ -432,29 +433,40 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
         llmCallCount = 0;
 
         mockObservabilityService = {
-            runAiSdkLLMInSpan: jest.fn().mockImplementation(async ({ runName }) => {
-                llmCallCount++;
-                if (runName.includes('consolidation')) {
-                    return { text: 'Consolidated summary of all changes.' };
-                }
-                if (runName.includes('chunk')) {
-                    const chunkNum = runName.match(/chunk_(\d+)/)?.[1] || '?';
+            runAiSdkLLMInSpan: jest
+                .fn()
+                .mockImplementation(async ({ runName }) => {
+                    llmCallCount++;
+                    if (runName.includes('consolidation')) {
+                        return {
+                            text: 'Consolidated summary of all changes.',
+                            output: {
+                                description:
+                                    'Consolidated summary of all changes.',
+                            },
+                        };
+                    }
+                    if (runName.includes('chunk')) {
+                        const chunkNum =
+                            runName.match(/chunk_(\d+)/)?.[1] || '?';
+                        return {
+                            text: `Partial summary for chunk ${chunkNum}.`,
+                            output: {
+                                description: `Partial summary for chunk ${chunkNum}.`,
+                            },
+                        };
+                    }
                     return {
-                        text: `Partial summary for chunk ${chunkNum}.`,
+                        text: 'Full PR summary generated.',
+                        output: { description: 'Full PR summary generated.' },
                     };
-                }
-                return { text: 'Full PR summary generated.' };
-            }),
+                }),
         };
         // LLM.run reads observability through the port, not DI — register the mock
         // so every summary call is intercepted (no live model call).
         setLlmObservability(mockObservabilityService as any);
 
-        mockCodeManagementService = {
-            getPullRequestByNumber: jest.fn().mockResolvedValue({
-                body: 'Existing PR description',
-            }),
-        };
+        mockCodeManagementService = {};
 
         mockPermissionValidationService = {
             validateBasicLicense: jest
@@ -509,10 +521,14 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
             expect(result).toContain('Full PR summary generated.');
             expect(llmCallCount).toBe(1);
             const prompt = promptSpy.mock.calls[0][0] as any;
-            expect(prompt.userPrompt).toContain('generate a precise description');
-            expect(prompt.userPrompt).toContain(defaultSummaryConfig.customInstructions);
+            expect(prompt.userPrompt).toContain(
+                'generate a precise description',
+            );
+            expect(prompt.userPrompt).toContain(
+                defaultSummaryConfig.customInstructions,
+            );
             expect(prompt.userPrompt).toContain('<changedFilesContext>');
-            expect(prompt.systemPrompt).toContain('not questions');
+            expect(prompt.systemPrompt).toContain('no questions');
         });
     });
 
@@ -568,14 +584,20 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
             expect(runNames).toContain('generateSummaryPR_chunk_2');
             expect(runNames).toContain('generateSummaryPR_consolidation');
             for (const [prompt] of promptSpy.mock.calls as any) {
-                expect(prompt.userPrompt).toContain('generate a precise description');
-                expect(prompt.userPrompt).toContain(defaultSummaryConfig.customInstructions);
-                expect(prompt.systemPrompt).toContain('not questions');
+                expect(prompt.userPrompt).toContain(
+                    'generate a precise description',
+                );
+                expect(prompt.userPrompt).toContain(
+                    defaultSummaryConfig.customInstructions,
+                );
+                expect(prompt.systemPrompt).toContain('no questions');
             }
             const consolidation = (promptSpy.mock.calls as any).find(
                 ([prompt]: any) => prompt.runName.endsWith('_consolidation'),
             )[0];
-            expect(consolidation.userPrompt).toContain('Merge them into a single');
+            expect(consolidation.userPrompt).toContain(
+                'Merge them into a single',
+            );
             expect(consolidation.userPrompt).toContain('<partialSummary');
         });
     });
@@ -620,15 +642,27 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                     if (runName.includes('consolidation')) {
                         return {
                             text: 'Consolidated from partial summaries.',
+                            output: {
+                                description:
+                                    'Consolidated from partial summaries.',
+                            },
                         };
                     }
                     if (runName === 'generateSummaryPR_chunk_2') {
                         return { text: null }; // empty chunk
                     }
                     if (runName.includes('chunk')) {
-                        return { text: 'Partial summary for chunk.' };
+                        return {
+                            text: 'Partial summary for chunk.',
+                            output: {
+                                description: 'Partial summary for chunk.',
+                            },
+                        };
                     }
-                    return { text: 'Full summary.' };
+                    return {
+                        text: 'Full summary.',
+                        output: { description: 'Full summary.' },
+                    };
                 },
             );
 

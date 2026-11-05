@@ -105,6 +105,8 @@ BYOK 是**提供商优先**的:您连接一次提供商,把想要的模型添加
 
   <Step title="按 agent">
     不同的 Kody 任务(代码审查、Kody Rules、聊天、摘要等等)可以各自运行不同的模型 — 用更贵的模型做深度审查,用更便宜的模型做摘要。无法执行某个任务的模型会在那一行被禁用并带有提示,从而在您保存之前就阻止它。
+
+    **Code Review** 每种审查模式各有一个模型:**Model for Balanced** 运行 balanced 审查,**Model for Heavy** 运行 [heavy 审查](/zh/how_to_use/code_review/review_directive#heavy-mode)。在您选择之前,两者都使用默认值。审查模式本身在 **Code review → General → Review mode** 中设置。
   </Step>
 </Steps>
 

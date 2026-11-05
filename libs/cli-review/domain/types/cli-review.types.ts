@@ -26,6 +26,9 @@ export interface CliReviewResponse {
     issues: CliReviewIssue[];
     filesAnalyzed: number;
     duration: number;
+    /** What the team should know about how the review ran (e.g. heavy asked
+     *  on a plan that runs Balanced). */
+    notices?: string[];
 }
 
 export interface TrialCliReviewResponse extends CliReviewResponse {
@@ -64,6 +67,10 @@ export interface CliReviewConfig {
      * before it reaches the prompt.
      */
     focus?: string;
+    /** `--heavy` / `--balanced`: the review mode asked for, over the one set
+     *  in settings. `--heavy` wins when both are passed. */
+    heavy?: boolean;
+    balanced?: boolean;
     files?: CliFileInput[];
 }
 

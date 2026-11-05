@@ -1,4 +1,11 @@
-import { IsISO8601, IsNumber, IsOptional, IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
+import {
+    IsIn,
+    IsISO8601,
+    IsNumber,
+    IsOptional,
+    IsString,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class TokenUsageQueryDto {
@@ -38,9 +45,30 @@ export class TokenUsageQueryDto {
     })
     repositoryId?: string;
 
+    // Same leniency the controller had (' TRUE ' is accepted); an empty value
+    // counts as omitted.
+    @Transform(({ value }) =>
+        typeof value === 'string'
+            ? value.trim().toLowerCase() || undefined
+            : value,
+    )
+    @IsOptional()
+    @IsIn(['true', 'false'], {
+        message: "byok must be a 'true' or 'false' string",
+    })
+    @ApiPropertyOptional({
+        enum: ['true', 'false'],
+        description:
+            "'true' for the BYOK bucket, 'false' for the managed one. Omitted: the bucket the organization's plan and LLM setup use, as on the Token Usage page.",
+    })
+    byok?: 'true' | 'false';
+
+    @IsOptional()
     @IsString()
-    @ApiProperty()
-    byok: string;
+    @ApiPropertyOptional({
+        description: 'Team used to read the license when byok is omitted.',
+    })
+    teamId?: string;
 }
 
 export class TokenPricingQueryDto {

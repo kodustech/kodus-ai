@@ -24,6 +24,11 @@ import {
 // own matrix in finder.agent.spec.ts and findings-schema.spec.ts; this file
 // keeps the verifier verdict seam and the end-to-end adapter path.
 import { extractVerdict } from '@libs/code-review/infrastructure/agents/core/verifier.agent';
+import {
+    HEAVY_LENSES,
+    HEAVY_LENS_SELF_CONTAINED_SYSTEM_PROMPT,
+    HEAVY_LENS_SYSTEM_PROMPT,
+} from '@libs/ee/heavy-mode/heavy-lenses';
 
 const mockResolve = resolveModelConfig as jest.Mock;
 
@@ -223,12 +228,62 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
 
         const normal = makeModel();
         await runAgentLoopViaCore(
-            makeInput(normal.model, { reviewMode: 'normal' }),
+            makeInput(normal.model, { reviewMode: 'balanced' }),
             secrets,
         );
 
         // normal mode adds at least the synthesis-rescue pass -> more calls.
         expect(normal.calls.count).toBeGreaterThan(fast.calls.count);
+    });
+
+    it('runs the lenses of the categories on only in heavy mode, with or without a sandbox', async () => {
+        const lensRuns = (heavy: boolean, sandbox = true) => {
+            const roles: string[] = [];
+            const lensSystem = sandbox
+                ? HEAVY_LENS_SYSTEM_PROMPT
+                : HEAVY_LENS_SELF_CONTAINED_SYSTEM_PROMPT;
+            const doGenerate = (async (opts: any) => {
+                const text = JSON.stringify(opts?.prompt ?? '');
+                const role = /ONE assignment on this pull request: ([^.]+)\./.exec(
+                    text,
+                );
+                if (role && text.includes(lensSystem)) {
+                    roles.push(role[1]);
+                }
+                const verifier = !role && text.includes('verdict');
+                return {
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: 't',
+                            toolName: verifier ? 'submitVerdict' : 'submitResult',
+                            input: JSON.stringify(
+                                verifier
+                                    ? { keep: true, rationale: 'ok' }
+                                    : { reasoning: 'none', suggestions: [] },
+                            ),
+                        },
+                    ],
+                    finishReason: 'tool-calls',
+                    usage: { inputTokens: 5, outputTokens: 5 },
+                    warnings: [],
+                };
+            }) as any;
+            return runAgentLoopViaCore(
+                makeInput(new MockLanguageModelV3({ doGenerate }), {
+                    heavy,
+                    allowedLabels: ['security'],
+                }),
+                sandbox ? secrets : { ...secrets, remoteCommands: undefined },
+            ).then(() => roles.sort());
+        };
+        const security = HEAVY_LENSES.filter((l) => l.label === 'security')
+            .map((l) => l.assignment)
+            .sort();
+
+        expect(await lensRuns(false)).toEqual([]);
+        expect(await lensRuns(true)).toEqual(security);
+        expect(await lensRuns(true, false)).toEqual(security);
     });
 
     it('reports coverage from the ledger mutated during the run', async () => {
@@ -978,13 +1033,13 @@ describe('runAgentLoopViaCore — model policy and threaded review context', () 
         it('keeps a review without a sandbox off the heavy passes', async () => {
             const plain = makeModel();
             await runAgentLoopViaCore(
-                makeInput(plain.model, { reviewMode: 'normal' }),
+                makeInput(plain.model, { reviewMode: 'balanced' }),
                 { ...secrets, remoteCommands: undefined },
             );
             const listed = makeModel();
             await runAgentLoopViaCore(
                 makeInput(listed.model, {
-                    reviewMode: 'normal',
+                    reviewMode: 'balanced',
                     repoInstructions,
                     listsRepoInstructions: true,
                 }),

@@ -15,7 +15,7 @@ import {
     FileChange,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
-    classifyLLMError,
+    extractHttpStatus,
     getClassification,
     llmErrorLogLevel,
 } from '@libs/llm/error-classifier';
@@ -31,6 +31,12 @@ import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pip
 import { formatLinkedReposSummaryLine } from '@libs/ee/linked-repositories';
 import { PostTracePrCommentUseCase } from '@libs/cli-review/application/use-cases/post-trace-pr-comment.use-case';
 import { resolveBusinessLogicSettings } from '@libs/agents/business-validation/settings';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { retryWithBackoff } from '@libs/common/utils/polling';
+import {
+    is429Error,
+    isTransientFetchError,
+} from '@libs/core/infrastructure/http/rate-limit-retry';
 
 /**
  * `metadata.reason` tag on the `PipelineError` pushed below when
@@ -43,6 +49,25 @@ import { resolveBusinessLogicSettings } from '@libs/agents/business-validation/s
  * is trustworthy. #1844.
  */
 export const SUMMARY_GENERATION_FAILED_REASON = 'summary_generation_failed';
+
+/** The steps of the PR summary: read the PR and its changes, ask the model, write it to the PR. */
+type SummaryStep = 'collect' | 'generate' | 'publish';
+
+const SUMMARY_STEP_FAILURE: Record<SummaryStep, string> = {
+    collect: 'Failed to read the pull request for the summary',
+    generate: 'Failed to generate summary',
+    publish: 'Failed to publish summary to the pull request',
+};
+
+/** A 429, a 5xx or a dropped connection: the same read may succeed a moment later. */
+function isTransientCodeHostError(error: unknown): boolean {
+    const status = extractHttpStatus(error);
+    return (
+        is429Error(error) ||
+        (status !== undefined && status >= 500) ||
+        isTransientFetchError(error)
+    );
+}
 
 @Injectable()
 export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -60,6 +85,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
         private readonly pullRequestManagerService: IPullRequestManagerService,
         private readonly postTracePrCommentUseCase: PostTracePrCommentUseCase,
+        private readonly codeManagementService: CodeManagementService,
     ) {
         super();
     }
@@ -234,6 +260,12 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         }
 
         if (shouldGenerateOrUpdateSummary) {
+            // Which step of the summary failed. Only the model call may be
+            // read as an LLM failure: the steps around it talk to the git
+            // platform, and a 403 from it (no write access to the PR) is not
+            // "the API key is invalid" (see describe-pipeline-error.ts).
+            let summaryStep: SummaryStep = 'collect';
+
             try {
                 this.logger.log({
                     message: `Generating summary for PR#${pullRequest.number}`,
@@ -273,9 +305,32 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     }));
                 }
 
+                // The description may have changed since the webhook, and the
+                // summary keeps or replaces it. Read here, not inside the model
+                // call, so a code-host failure is reported as one.
+                const currentPR = await retryWithBackoff(
+                    () =>
+                        this.codeManagementService.getPullRequestByNumber({
+                            organizationAndTeamData,
+                            repository,
+                            prNumber: pullRequest.number,
+                        }),
+                    {
+                        maxAttempts: 3,
+                        shouldRetry: isTransientCodeHostError,
+                    },
+                );
+
+                summaryStep = 'generate';
+
                 const summaryPR =
                     await this.commentManagerService.generateSummaryPR(
-                        pullRequest,
+                        {
+                            ...pullRequest,
+                            // Some code hosts answer a failed read with null; the
+                            // webhook's description beats replacing it with none.
+                            body: currentPR ? currentPR.body : pullRequest.body,
+                        },
                         repository,
                         changedFiles,
                         organizationAndTeamData,
@@ -294,6 +349,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                         ).taskIdPattern,
                     );
 
+                summaryStep = 'publish';
+
                 await this.commentManagerService.updateSummarizationInPR(
                     organizationAndTeamData,
                     pullRequest.number,
@@ -301,12 +358,26 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     summaryPR,
                 );
             } catch (error) {
-                // Terminal BYOK (suspended key / no credit) → warn: user's
-                // provider config, not a Kodus fault. Real fault stays error.
-                this.logger[llmErrorLogLevel(error)]({
-                    message: `Failed to generate summary for PR#${pullRequest.number}`,
+                // Terminal BYOK (suspended key / no credit) on the model call →
+                // warn: user's provider config, not a Kodus fault. A git
+                // platform failure (collect/publish) stays error.
+                const level =
+                    summaryStep === 'generate'
+                        ? llmErrorLogLevel(error)
+                        : 'error';
+                this.logger[level]({
+                    message: `${SUMMARY_STEP_FAILURE[summaryStep]} for PR#${pullRequest.number}`,
                     context: this.stageName,
                     error,
+                    metadata: {
+                        organizationAndTeamData,
+                        prNumber: pullRequest.number,
+                        repository: {
+                            id: repository.id,
+                            name: repository.name,
+                        },
+                        summaryStep,
+                    },
                 });
 
                 const summaryError =
@@ -326,7 +397,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     error: summaryError,
                     severity: 'partial',
                     metadata: {
-                        message: 'Failed to generate summary',
+                        message: SUMMARY_STEP_FAILURE[summaryStep],
                         reason: SUMMARY_GENERATION_FAILED_REASON,
                     },
                 };
@@ -335,12 +406,12 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 // 404") instead of the generic "unexpected error" fallback.
                 // Only fills the slot when no agent failure already claimed it
                 // — a core-agent failure is the more important thing to report.
-                const classification =
-                    getClassification(summaryError) ??
-                    classifyLLMError(
-                        summaryError,
-                        resolvedProvider(context, summaryError),
-                    );
+                // Only a classification attached where it was thrown counts:
+                // generateSummaryPR attaches one to every failed model call, so
+                // an error without one (the PR read, the write) is the git
+                // platform's, the slot stays empty and the run reports the
+                // platform's own message.
+                const classification = getClassification(summaryError);
 
                 // The pipeline context is Immer-frozen once an earlier stage
                 // (e.g. agent-review) ran updateContext, so a direct
@@ -356,7 +427,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     }
                     draft.errors.push(pipelineError);
 
-                    if (!draft.lastReviewError) {
+                    if (classification && !draft.lastReviewError) {
                         draft.lastReviewError = {
                             category: classification.category,
                             provider:

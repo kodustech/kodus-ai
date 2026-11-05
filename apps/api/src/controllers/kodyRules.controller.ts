@@ -63,6 +63,7 @@ import {
     Inject,
     Post,
     Query,
+    ForbiddenException,
     UnauthorizedException,
     UseGuards,
 } from '@nestjs/common';
@@ -146,10 +147,10 @@ export class KodyRulesController {
     ) {}
 
     /**
-     * Type-level policies above only say "may touch Kody Rules". A member
-     * limited to some repositories must also be refused the others, so every
-     * handler that takes an optional repository checks it here. `global` is
-     * the org-level scope every member already reads.
+     * Type-level policies only say "may touch Kody Rules". A single
+     * `repositoryId` is checked by KodyRulesTenantGuard; a list of them is
+     * checked here. `global` is the org-level scope every member already
+     * reads.
      */
     private async ensureRepositoryAccess(
         action: Action,
@@ -519,6 +520,12 @@ export class KodyRulesController {
                 resource: ResourceType.KodyRules,
             });
             if (scope !== null) {
+                // An empty list would read as "every repository" below.
+                if (scope.length === 0) {
+                    throw new ForbiddenException(
+                        'No repository in your scope to generate rules for',
+                    );
+                }
                 body = { ...body, repositoriesIds: scope };
             }
         }
@@ -627,8 +634,6 @@ export class KodyRulesController {
         @Query('repositoryId')
         repositoryId?: string,
     ) {
-        await this.ensureRepositoryAccess(Action.Read, [repositoryId]);
-
         return this.checkSyncStatusUseCase.execute(teamId, repositoryId);
     }
 
@@ -666,10 +671,9 @@ export class KodyRulesController {
     @Post('/sync-ide-rules')
     @UseGuards(PolicyGuard, KodyRulesTenantGuard)
     @CheckPolicies(
-        checkRepoPermissions({
+        checkPermissions({
             action: Action.Create,
             resource: ResourceType.KodyRules,
-            repo: { key: { body: 'repositoryId' } },
         }),
     )
     @ApiOperation({
@@ -692,10 +696,9 @@ export class KodyRulesController {
     @Post('/fast-sync-ide-rules')
     @UseGuards(PolicyGuard, KodyRulesTenantGuard)
     @CheckPolicies(
-        checkRepoPermissions({
+        checkPermissions({
             action: Action.Create,
             resource: ResourceType.KodyRules,
-            repo: { key: { body: 'repositoryId' } },
         }),
     )
     @ApiOperation({
@@ -890,10 +893,9 @@ export class KodyRulesController {
     @Post('/resync-ide-rules')
     @UseGuards(PolicyGuard, KodyRulesTenantGuard)
     @CheckPolicies(
-        checkRepoPermissions({
+        checkPermissions({
             action: Action.Create,
             resource: ResourceType.KodyRules,
-            repo: { key: { body: 'repositoryId' } },
         }),
     )
     @ApiOperation({
@@ -937,8 +939,6 @@ export class KodyRulesController {
             throw new Error('Organization ID not found');
         }
 
-        await this.ensureRepositoryAccess(Action.Update, [body.repositoryId]);
-
         const teamId = (this.request.user as any).team?.uuid;
 
         return this.manageImportedKodyRulesUseCase.execute({
@@ -976,8 +976,6 @@ export class KodyRulesController {
         if (!organizationId) {
             throw new Error('Organization ID not found');
         }
-
-        await this.ensureRepositoryAccess(Action.Read, [repositoryId]);
 
         return this.manageImportedKodyRulesUseCase.count({
             organizationAndTeamData: { organizationId, teamId },

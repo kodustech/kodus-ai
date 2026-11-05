@@ -22,7 +22,10 @@
  *    pre-filter — verify alone decides keep/drop.
  */
 import { isClaudeModel } from '@libs/code-review/infrastructure/agents/core/finder-model-profile';
-import { withClaudeOneProblem, withClaudeWritingPolicy } from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
+import {
+    withClaudeOneProblem,
+    withClaudeWritingPolicy,
+} from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 
@@ -46,6 +49,7 @@ import {
     summarizeFunnel,
 } from '@libs/code-review/infrastructure/agents/core/review-finding';
 import { inspectFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
+import { buildHeavyLensRun } from '@libs/ee/heavy-mode/heavy-lens-passes';
 import { createLogger } from '@libs/core/log/logger';
 import {
     type AgentLoopInput,
@@ -60,6 +64,7 @@ import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import { buildAgentAnomalies } from '@libs/code-review/infrastructure/agents/core/agent-anomalies';
 import {
     AstGrepOutputLog,
+    guideSourcesFor,
     makeTargetBranchGuideLister,
     makeTargetBranchGuideReader,
     recordAstGrepOutputs,
@@ -118,13 +123,22 @@ export function finderRunEnvironment(
     // Second pass for convention findings (custom agents): needs the guides
     // as they are on the target branch, so only with a sandbox that can run
     // git. Without one, convention findings fall back to HV2 like any other.
-    const readGuide =
+    const guideSources =
         input.conventionGuides !== undefined
-            ? makeTargetBranchGuideReader(
-                  secrets.remoteCommands,
-                  input.baseBranch,
+            ? guideSourcesFor(
+                  input.conventionGuides,
+                  input.conventionGuideReader,
+                  makeTargetBranchGuideReader(
+                      secrets.remoteCommands,
+                      input.baseBranch,
+                  ),
+                  makeTargetBranchGuideLister(
+                      secrets.remoteCommands,
+                      input.baseBranch,
+                  ),
               )
             : undefined;
+    const readGuide = guideSources?.readGuide;
     // What ast-grep matched in this review: a convention finding it backs
     // needs no model check.
     const astGrepLog = readGuide ? new AstGrepOutputLog() : undefined;
@@ -223,6 +237,7 @@ export function finderRunEnvironment(
         fallbackModelId,
         finderRunner,
         readGuide,
+        listGuideDir: guideSources?.listGuideDir,
         astGrepLog,
         // What verify runs with (verifyFindings), as runFinderWithVerify gets it.
         verifyParams: {
@@ -280,6 +295,7 @@ export async function runAgentLoopViaCore(
         fallbackModelId,
         finderRunner,
         readGuide,
+        listGuideDir,
         astGrepLog,
         verifyParams,
     } = finderRunEnvironment(input, secrets);
@@ -322,6 +338,21 @@ export async function runAgentLoopViaCore(
     const finderPrompt = claudeWording
         ? withClaudeOneProblem(input.userPrompt)
         : input.userPrompt;
+
+    // Heavy mode: the M3 lenses of the categories the team has on.
+    const heavyLenses = input.heavy
+        ? buildHeavyLensRun({
+              input,
+              claudeWording,
+              isSelfContained,
+              modelId: specModelId,
+              fallbackModelId,
+              tools,
+              contextWindowTokens,
+              overheadTokens,
+              providerOptions,
+          })
+        : undefined;
 
     // Standard agent run context: runId + a signal that aborts on the parent job
     // signal OR after the hard per-agent timeout. Shared with conversation +
@@ -380,13 +411,11 @@ export async function runAgentLoopViaCore(
             skipSynthesisRescue,
             teamSystemTools: input.teamSystemTools,
             laneFocus: input.laneFocus,
+            ...(heavyLenses && { heavyLenses }),
             ...(readGuide && {
                 conventionCheck: {
                     readGuide,
-                    listGuideDir: makeTargetBranchGuideLister(
-                        secrets.remoteCommands,
-                        input.baseBranch,
-                    ),
+                    listGuideDir,
                     guideFiles: input.conventionGuides,
                     teamInstructions: input.teamInstructions,
                     astGrepLog,

@@ -126,6 +126,8 @@ async function main() {
     const server = await startFakeLlmServer();
     const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-wiring-'));
     const finderOut = path.join(scratch, 'finder-recall-eval-fake.json');
+    const heavyOut = path.join(scratch, 'heavy-recall-eval-fake.json');
+    const heavyDump = path.join(scratch, 'heavy-dump');
     const managedOut = path.join(scratch, 'finder-recall-managed.json');
     const traceDir = path.join(scratch, 'trace');
     const reviewCasesFile = path.join(scratch, 'review-cases.json');
@@ -328,6 +330,33 @@ async function main() {
             check: () => {
                 const findings =
                     readJson(finderOut)?.rows?.[0]?.metadata?.findings;
+                return findings >= 1
+                    ? null
+                    : `expected the scripted finding to reach scoring, got findings=${findings}`;
+            },
+        },
+        // The same review in heavy mode (evals/heavy-recall): the lenses must run
+        // next to the generalist and the scripted finding still reach scoring.
+        {
+            name: 'heavy-recall',
+            model: true,
+            result: 'finder',
+            env: { RECALL_DUMP: heavyDump },
+            args: [
+                'evals/heavy-recall/run.js',
+                '--model=eval-fake',
+                `--cases=${FINDER_CASE}`,
+                '--concurrency=1',
+                `--output=${heavyOut}`,
+            ],
+            check: () => {
+                const findings =
+                    readJson(heavyOut)?.rows?.[0]?.metadata?.findings;
+                const dump = readJson(path.join(heavyDump, `${FINDER_CASE}.raw.txt`));
+                const lenses = (dump?.finderPasses || [])
+                    .flatMap((run) => run.passes || [])
+                    .filter((p) => String(p.label).startsWith('lens-')).length;
+                if (!lenses) return 'expected the heavy review to run its lenses, got none';
                 return findings >= 1
                     ? null
                     : `expected the scripted finding to reach scoring, got findings=${findings}`;

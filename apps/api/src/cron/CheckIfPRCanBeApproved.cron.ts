@@ -472,7 +472,10 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                         const execution =
                                             await this.automationExecutionService.findLatestExecutionByFilters(
                                                 {
-                                                    status: AutomationStatus.SUCCESS,
+                                                    status: [
+                                                        AutomationStatus.SUCCESS,
+                                                        AutomationStatus.PARTIAL_ERROR,
+                                                    ],
                                                     teamAutomation: {
                                                         uuid: teamAutomation.uuid,
                                                     },
@@ -855,11 +858,22 @@ export class CheckIfPRCanBeApprovedCronProvider {
         }
         const lastExecution =
             await this.automationExecutionService.findLatestExecutionByFilters({
-                status: AutomationStatus.SUCCESS,
+                status: [
+                    AutomationStatus.SUCCESS,
+                    AutomationStatus.PARTIAL_ERROR,
+                ],
                 teamAutomation: { uuid: teamAutomationId },
                 pullRequestNumber: prNumber,
                 repositoryId: repository?.id,
             });
+        // Read partial executions so a failed rerun cannot expose an older
+        // successful judgment. Partial reviews cannot issue a new approval.
+        if (
+            lastExecution?.status === AutomationStatus.PARTIAL_ERROR &&
+            !policyActive
+        ) {
+            return false;
+        }
         const lastAnalyzedCommitSha = this.getLastAnalyzedCommitSha(
             lastExecution?.dataExecution?.lastAnalyzedCommit,
         );
@@ -935,6 +949,55 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         {
                             kind: 'hold',
                             reason: 'The target branch commit could not be verified for the directory policy.',
+                        },
+                    );
+                    return false;
+                }
+                if (lastExecution.status === AutomationStatus.PARTIAL_ERROR) {
+                    // The approval can succeed before publishing its explanation
+                    // fails. Repair that comment only after verifying the host;
+                    // a saved decision alone must never replay a partial review.
+                    if (reviewedDecision?.kind === 'approve') {
+                        const hostStatus = await runWithBoundedTimeout(
+                            this.codeManagementService.getReviewStatusByPullRequest(
+                                codeManagementRequestData,
+                            ),
+                            FINAL_PROVIDER_TIMEOUT_MS,
+                            'approval provider-status lookup',
+                        ).catch((error) => {
+                            this.logger.warn({
+                                message:
+                                    'Could not verify approval for partial review reconciliation',
+                                context:
+                                    CheckIfPRCanBeApprovedCronProvider.name,
+                                error,
+                                metadata: {
+                                    organizationAndTeamData,
+                                    repositoryId: repository?.id,
+                                    prNumber,
+                                },
+                            });
+                            return null;
+                        });
+                        if (hostStatus == null) return false;
+                        if (hostStatus === PullRequestReviewState.APPROVED) {
+                            await this.postConditionalApprovalReason(
+                                codeManagementRequestData,
+                                platformType,
+                                reviewedDecision,
+                            );
+                            return false;
+                        }
+                    }
+                    await this.postConditionalApprovalReason(
+                        codeManagementRequestData,
+                        platformType,
+                        {
+                            kind: 'hold',
+                            reason:
+                                reviewedDecision?.kind === 'hold'
+                                    ? reviewedDecision.reason
+                                    : 'The latest review did not complete successfully. A new successful review is required before automatic approval.',
                         },
                     );
                     return false;

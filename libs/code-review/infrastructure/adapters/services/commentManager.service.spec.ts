@@ -42,7 +42,10 @@ jest.mock('@libs/llm/llm-call', () => ({
             if (prompt) {
                 capturedPrompts.push({ prompt, role: 'user' });
             }
-            return { text: NEW_SUMMARY_TEXT };
+            return {
+                text: NEW_SUMMARY_TEXT,
+                output: { description: NEW_SUMMARY_TEXT },
+            };
         },
     ),
     // The summary now runs through runTextReviewCall, which arms a real 10-min
@@ -54,6 +57,7 @@ jest.mock('@libs/core/log/langfuse', () => ({
     toAiSdkTelemetryArgs: (cfg: any) => ({ telemetry: cfg }),
 }));
 
+import { JSONParseError, NoObjectGeneratedError } from 'ai';
 import { getClassification } from '@libs/llm/error-classifier';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 import { LLM } from '@libs/llm/llm';
@@ -66,7 +70,7 @@ import {
 
 describe('CommentManagerService.generateSummaryPR', () => {
     let service: CommentManagerService;
-    let codeManagementService: { getPullRequestByNumber: jest.Mock };
+    let codeManagementService: Record<string, never>;
     let observabilityService: {
         runLLMInSpan: jest.Mock;
         runAiSdkLLMInSpan: jest.Mock;
@@ -108,11 +112,14 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 if (prompt) {
                     capturedPrompts.push({ prompt, role: 'user' });
                 }
-                return { text: NEW_SUMMARY_TEXT };
+                return {
+                    text: NEW_SUMMARY_TEXT,
+                    output: { description: NEW_SUMMARY_TEXT },
+                };
             },
         );
 
-        codeManagementService = { getPullRequestByNumber: jest.fn() };
+        codeManagementService = {};
 
         observabilityService = {
             runLLMInSpan: jest.fn(async ({ exec }) => {
@@ -140,6 +147,83 @@ describe('CommentManagerService.generateSummaryPR', () => {
         );
     });
 
+    describe('reasoning returned as the answer (#2407)', () => {
+        it('publishes only the description when reasoning precedes the reply', async () => {
+            // A host that ends the reasoning channel at a `</think>` the model
+            // quotes returns the rest of the reasoning ahead of the answer.
+            const leaked =
+                'inside it.\n\nWait, the second one is ambiguous. Draft:\n## Summary\nfirst try\n\nLet me tighten wording.';
+            const reply = `${leaked}\n${JSON.stringify({ description: '## Summary\nThe real description.' })}`;
+            (tracedGenerateText as jest.Mock).mockImplementationOnce(
+                async () => {
+                    throw new NoObjectGeneratedError({
+                        message: 'No object generated',
+                        cause: new JSONParseError({
+                            text: reply,
+                            cause: new Error('Unexpected token'),
+                        }),
+                        text: reply,
+                        response: {} as any,
+                        usage: {} as any,
+                        finishReason: 'stop',
+                    });
+                },
+            );
+
+            const result = await service.generateSummaryPR(
+                { ...stubPR, body: '' },
+                stubRepository,
+                [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                stubOrg,
+                'en-US',
+                summaryConfig,
+                false,
+                false,
+                undefined,
+                PlatformType.GITHUB,
+            );
+
+            expect(result).toContain('The real description.');
+            expect(result).not.toContain('inside it.');
+            expect(result).not.toContain('Draft:');
+            expect(result).not.toContain('first try');
+        });
+
+        it('retries instead of publishing a placeholder description', async () => {
+            const callsBefore = (tracedGenerateText as jest.Mock).mock.calls
+                .length;
+            (tracedGenerateText as jest.Mock)
+                .mockImplementationOnce(async () => ({
+                    text: '{ "description": "..." }',
+                    output: { description: '...' },
+                }))
+                .mockImplementationOnce(async () => ({
+                    text: '',
+                    output: { description: '## Summary\nSecond attempt.' },
+                }));
+
+            const result = await service.generateSummaryPR(
+                { ...stubPR, body: '' },
+                stubRepository,
+                [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                stubOrg,
+                'en-US',
+                summaryConfig,
+                false,
+                false,
+                undefined,
+                PlatformType.GITHUB,
+            );
+
+            expect(
+                (tracedGenerateText as jest.Mock).mock.calls.length -
+                    callsBefore,
+            ).toBe(2);
+            expect(result).toContain('Second attempt.');
+            expect(result).not.toMatch(/start -->\s*\.\.\.\s*</);
+        });
+    });
+
     describe('Bug A — re-run dedup of <!-- kody-pr-summary --> block (issue #1019)', () => {
         const startMarker = '<!-- kody-pr-summary:start -->';
         const endMarker = '<!-- kody-pr-summary:end -->';
@@ -152,12 +236,9 @@ describe('CommentManagerService.generateSummaryPR', () => {
             // original text by the `\n\n---\n\n` separator we emit.
             const userText = 'User-authored description text';
             const previousBlock = `${startMarker}\nOLD SUMMARY CONTENT\n${endMarker}`;
-            codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                body: `${userText}\n\n---\n\n${previousBlock}`,
-            });
 
             const result = await service.generateSummaryPR(
-                stubPR,
+                { ...stubPR, body: `${userText}\n\n---\n\n${previousBlock}` },
                 stubRepository,
                 [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                 stubOrg,
@@ -186,14 +267,14 @@ describe('CommentManagerService.generateSummaryPR', () => {
             // legacy data from before the fix). The new code should still
             // collapse to a single block.
             const userText = 'Original text';
-            codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                body:
-                    `${userText}\n\n---\n\n${startMarker}\nFirst run\n${endMarker}` +
-                    `\n\n---\n\n${startMarker}\nSecond run\n${endMarker}`,
-            });
 
             const result = await service.generateSummaryPR(
-                stubPR,
+                {
+                    ...stubPR,
+                    body:
+                        `${userText}\n\n---\n\n${startMarker}\nFirst run\n${endMarker}` +
+                        `\n\n---\n\n${startMarker}\nSecond run\n${endMarker}`,
+                },
                 stubRepository,
                 [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                 stubOrg,
@@ -214,12 +295,9 @@ describe('CommentManagerService.generateSummaryPR', () => {
 
         it('appends a fresh block to a clean body (first-ever run, no stripping needed)', async () => {
             const userText = 'I wrote this PR description';
-            codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                body: userText,
-            });
 
             const result = await service.generateSummaryPR(
-                stubPR,
+                { ...stubPR, body: userText },
                 stubRepository,
                 [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                 stubOrg,
@@ -241,12 +319,12 @@ describe('CommentManagerService.generateSummaryPR', () => {
             // No `\n\n---\n\n` between user text and the block — older
             // version of Kody appended directly. The fix should still
             // strip the standalone block via the second regex.
-            codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                body: `${userText}${startMarker}\nlegacy\n${endMarker}`,
-            });
 
             const result = await service.generateSummaryPR(
-                stubPR,
+                {
+                    ...stubPR,
+                    body: `${userText}${startMarker}\nlegacy\n${endMarker}`,
+                },
                 stubRepository,
                 [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                 stubOrg,
@@ -265,15 +343,9 @@ describe('CommentManagerService.generateSummaryPR', () => {
     });
 
     describe('Bug E — Length Constraint hint in the LLM prompt (Azure-only)', () => {
-        beforeEach(() => {
-            codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                body: 'irrelevant for prompt-shape tests',
-            });
-        });
-
         it('includes the Length Constraint block when platformType is AZURE_REPOS', async () => {
             await service.generateSummaryPR(
-                stubPR,
+                { ...stubPR, body: 'irrelevant for prompt-shape tests' },
                 stubRepository,
                 [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                 stubOrg,
@@ -300,7 +372,7 @@ describe('CommentManagerService.generateSummaryPR', () => {
 
         it('omits the Length Constraint block when platformType is GITHUB', async () => {
             await service.generateSummaryPR(
-                stubPR,
+                { ...stubPR, body: 'irrelevant for prompt-shape tests' },
                 stubRepository,
                 [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                 stubOrg,
@@ -322,7 +394,7 @@ describe('CommentManagerService.generateSummaryPR', () => {
 
         it('omits the Length Constraint block when platformType is undefined', async () => {
             await service.generateSummaryPR(
-                stubPR,
+                { ...stubPR, body: 'irrelevant for prompt-shape tests' },
                 stubRepository,
                 [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                 stubOrg,
@@ -355,14 +427,11 @@ describe('CommentManagerService.generateSummaryPR', () => {
         );
 
         it('throws after exhausting its retries when the LLM call keeps failing', async () => {
-            codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                body: '',
-            });
             (tracedGenerateText as jest.Mock).mockRejectedValue(providerError);
 
             await expect(
                 service.generateSummaryPR(
-                    stubPR,
+                    { ...stubPR, body: '' },
                     stubRepository,
                     [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                     stubOrg,
@@ -373,14 +442,11 @@ describe('CommentManagerService.generateSummaryPR', () => {
         });
 
         it('classifies the thrown error so the PR comment can name the cause', async () => {
-            codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                body: '',
-            });
             (tracedGenerateText as jest.Mock).mockRejectedValue(providerError);
 
             const thrown = await service
                 .generateSummaryPR(
-                    stubPR,
+                    { ...stubPR, body: '' },
                     stubRepository,
                     [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                     stubOrg,
@@ -390,6 +456,30 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 .catch((e) => e);
 
             expect(getClassification(thrown)).toBeDefined();
+        });
+
+        it('classifies a frozen model error through a wrapper that keeps it as the cause', async () => {
+            const frozen = Object.freeze(
+                Object.assign(new Error('Unauthorized'), {
+                    name: 'AI_APICallError',
+                    statusCode: 401,
+                }),
+            );
+            (tracedGenerateText as jest.Mock).mockRejectedValue(frozen);
+
+            const thrown = await service
+                .generateSummaryPR(
+                    { ...stubPR, body: '' },
+                    stubRepository,
+                    [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                )
+                .catch((e) => e);
+
+            expect(getClassification(thrown)?.category).toBe('AUTH_INVALID');
+            expect(thrown.cause).toBe(frozen);
         });
 
         // Production 2026-09-28: a gateway with a smaller window than the model
@@ -407,21 +497,21 @@ describe('CommentManagerService.generateSummaryPR', () => {
             }));
 
             it('retries split into chunks and consolidates', async () => {
-                codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                    body: '',
-                });
                 (tracedGenerateText as jest.Mock)
                     .mockRejectedValueOnce(overflow)
                     .mockImplementation(
                         async ({ prompt }: { prompt?: string }) => {
                             if (prompt)
                                 capturedPrompts.push({ prompt, role: 'user' });
-                            return { text: NEW_SUMMARY_TEXT };
+                            return {
+                                text: NEW_SUMMARY_TEXT,
+                                output: { description: NEW_SUMMARY_TEXT },
+                            };
                         },
                     );
 
                 const result = await service.generateSummaryPR(
-                    stubPR,
+                    { ...stubPR, body: '' },
                     stubRepository,
                     bigFiles,
                     stubOrg,
@@ -443,21 +533,21 @@ describe('CommentManagerService.generateSummaryPR', () => {
             });
 
             it('does not split on an error that is not an overflow', async () => {
-                codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                    body: '',
-                });
                 (tracedGenerateText as jest.Mock)
                     .mockRejectedValueOnce(new Error('Service Unavailable'))
                     .mockImplementation(
                         async ({ prompt }: { prompt?: string }) => {
                             if (prompt)
                                 capturedPrompts.push({ prompt, role: 'user' });
-                            return { text: NEW_SUMMARY_TEXT };
+                            return {
+                                text: NEW_SUMMARY_TEXT,
+                                output: { description: NEW_SUMMARY_TEXT },
+                            };
                         },
                     );
 
                 await service.generateSummaryPR(
-                    stubPR,
+                    { ...stubPR, body: '' },
                     stubRepository,
                     bigFiles,
                     stubOrg,

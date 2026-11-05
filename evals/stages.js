@@ -198,6 +198,42 @@ const STAGES = [
         },
     },
     {
+        id: 'heavy',
+        name: 'Heavy mode',
+        short: 'Lenses next to the finder',
+        group: 'The agents, side by side',
+        does: 'When a review is asked with --heavy, nine lenses run next to the finder, each looking for one kind of defect only (at most 3 steps and 4 findings each); their findings take the lens\'s label and go through the same verify and every step after it.',
+        pipeline: ['AgentReviewStage'],
+        tests: [
+            {
+                kind: 'unit',
+                name: 'The lenses, their prompt, and the finder running them next to the generalist',
+                specs: [
+                    'libs/ee/heavy-mode/heavy-lenses.spec.ts',
+                    'libs/ee/heavy-mode/heavy-lens-passes.spec.ts',
+                    'libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.spec.ts',
+                    'libs/code-review/infrastructure/agents/providers/base-code-review-agent.provider.spec.ts',
+                    'libs/common/utils/codeManagement/codeCommentMarkers.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: "A scripted model's heavy review of a PR runs the lenses and reaches scoring",
+                wiring: ['heavy-recall'],
+            },
+        ],
+        eval: {
+            path: 'evals/heavy-recall',
+            metric: 'of known bugs found',
+            sets: {
+                controlled: '15 real PRs whose bugs we know, three per repository, reviewed in heavy mode',
+                full: 'the 30 real PRs of the light set, reviewed in heavy mode',
+            },
+            nightly: 'finder-recall',
+            caveat: "Weekly and on demand, never nightly: every case is a full heavy review. A real bug outside the dataset's list counts against precision, not for recall.",
+        },
+    },
+    {
         id: 'memories',
         name: 'Following memories',
         short: "Follows the team's memories",

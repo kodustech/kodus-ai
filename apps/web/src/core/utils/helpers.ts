@@ -188,6 +188,7 @@ export const codeReviewConfigRemovePropertiesNotInType = (
     const expectedKeys: LiteralUnion<keyof CodeReviewGlobalConfig>[] = [
         "automatedReviewActive",
         "showStatusFeedback",
+        "reviewMode",
         "reviewCadence",
         "baseBranches",
         "ignoredTitleKeywords",

@@ -18,12 +18,14 @@ import {
     type LLMConfigStatus,
 } from "@services/organizationParameters/fetch";
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
-import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
 import {
     ChevronsUpDownIcon,
     Layers3Icon,
     SlidersHorizontalIcon,
 } from "lucide-react";
+import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
+import { isHeavyModePlan } from "src/features/ee/heavy-mode/plan";
+import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
 import { formatModelLabel } from "../../_data/model-label";
 import type { BYOKConfig, BYOKRouting, LlmTask } from "../../_types";
@@ -152,6 +154,7 @@ export const RoutingTab = ({
     const [showFallback, setShowFallback] = useState<boolean>(
         !!routing.fallbackModelId,
     );
+    const heavyPlanAllowed = isHeavyModePlan(useSubscriptionContext().license);
     const [taskOverrides, setTaskOverrides] = useState<
         Partial<Record<LlmTask, string>>
     >(routing.taskOverrides ?? {});
@@ -203,7 +206,6 @@ export const RoutingTab = ({
                     "Save the routing you changed, or reset it, before leaving this tab.",
             }),
     });
-
 
     const labelFor = (id?: string) =>
         pool.find((m) => m.id === id)?.label ?? id;
@@ -500,6 +502,7 @@ export const RoutingTab = ({
                         </span>
                     </div>
                     <TaskOverrideGrid
+                        heavyPlanAllowed={heavyPlanAllowed}
                         models={pool}
                         defaultModelId={defaultModelId}
                         taskOverrides={taskOverrides}

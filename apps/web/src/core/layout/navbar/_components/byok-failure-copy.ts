@@ -57,6 +57,11 @@ export function byokFailureCopy(
                 title: `${provider} can't serve the configured model`,
                 body: `${provider} rejected the configured model — check the model id and whether the account has access to it. ${tail}`,
             };
+        case "REQUEST_REJECTED":
+            return {
+                title: `${provider} is refusing requests for the configured model`,
+                body: `${provider} refused the requests as sent for this model, often a parameter it does not accept on that endpoint. Its answer is in the details below. ${tail}`,
+            };
         default:
             return {
                 title: `Reviews on your ${provider} model are failing`,

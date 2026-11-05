@@ -108,6 +108,12 @@ describe('kodus mcp — the org stack the conversation eval runs', () => {
         expect((await call(other.mcp, 'KODUS_FIND_MEMORIES', org(2))).count).toBe(0);
     }, 30_000);
 
+    it('lists no Kody issues as an empty list, not an error', async () => {
+        const { mcp } = await connect(org(1));
+
+        expect(await call(mcp, 'KODUS_LIST_KODY_ISSUES', { organizationId: org(1).organizationId })).toMatchObject({ success: true, count: 0, data: [] });
+    }, 30_000);
+
     it("counts a change to the org's existing rule as a write, and the rule it had as none", async () => {
         expect(kodus.writtenBy(org(3).organizationId).count).toBe(0);
 

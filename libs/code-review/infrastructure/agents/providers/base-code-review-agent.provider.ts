@@ -56,7 +56,7 @@ import {
     type AgentModelParams,
     type ResolvedAgentModel,
 } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
-import type { NormalizedModel } from '@libs/llm/byok-config';
+import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
 import { providerErrorFromResult } from '@libs/code-review/infrastructure/agents/collaborators/provider-error';
 import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import { runChunkedReview } from '@libs/code-review/infrastructure/agents/collaborators/batch-runner';
@@ -150,6 +150,12 @@ export abstract class BaseCodeReviewAgentProvider {
         return false;
     }
 
+    /** Whether heavy mode runs the M3 lenses next to this agent. Only the
+     *  generalist: its findings are the ones the lenses complement. */
+    protected runsHeavyLenses(): boolean {
+        return false;
+    }
+
     protected getAllowedSuggestionLabels(
         _input: ReviewAgentInput,
     ): ReviewFindingLabel[] {
@@ -174,12 +180,19 @@ export abstract class BaseCodeReviewAgentProvider {
     /**
      * The run's model and, when the agent checks its findings on a model of
      * its own, the check slot (#2172). The built-in agents route `codeReview`
-     * and verify on the same model.
+     * — `codeReviewHeavy` for the agent that runs the lenses in a heavy
+     * review — and verify on the same model.
      */
     protected async resolveModels(
         input: ReviewAgentInput,
     ): Promise<ResolvedAgentModel & { checkByokConfig?: NormalizedModel }> {
-        return resolveReviewAgentModel(input, this.permissionValidationService);
+        return resolveReviewAgentModel(
+            input,
+            this.permissionValidationService,
+            this.runsHeavyLenses() && input.heavy
+                ? LLM_TASK.codeReviewHeavy
+                : LLM_TASK.codeReview,
+        );
     }
 
     /**
@@ -750,11 +763,25 @@ export abstract class BaseCodeReviewAgentProvider {
                     ),
                     allowedLabels: this.getAllowedSuggestionLabels(input),
                     conventionGuides: this.getConventionGuides(input),
+                    conventionGuideReader: input.knowledgeReader,
                     teamInstructions: this.getTeamInstructions(),
                     laneFocus: this.getLaneFocus(input),
                     ...(agentTools.teamSystemTools?.length && {
                         teamSystemTools: agentTools.teamSystemTools,
                     }),
+                    // Heavy mode (`--heavy`) — forwarded explicitly: loopParams is
+                    // built field-by-field, so without this line the lenses never run.
+                    heavy: this.runsHeavyLenses() && input.heavy,
+                    // A chunked review runs the lenses per batch: tell them so.
+                    ...(this.runsHeavyLenses() &&
+                        input.heavy &&
+                        input.batchIndex &&
+                        (input.batchTotal ?? 0) > 1 && {
+                            lensBatch: {
+                                index: input.batchIndex,
+                                total: input.batchTotal,
+                            },
+                        }),
                     outlineFirst: input.outlineFirst,
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,

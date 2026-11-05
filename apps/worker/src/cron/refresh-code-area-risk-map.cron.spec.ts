@@ -117,12 +117,18 @@ it('filters unsupported providers before choosing repository pages', async () =>
 // complete ones are refreshed stalest first.
 describe('refresh order and batch budget', () => {
     const build = (
-        repositories: Array<{ id: string; name: string }>,
+        repositories: Array<{
+            id: string;
+            name: string;
+            configs?: Record<string, boolean>;
+            directories?: Array<{ configs: Record<string, boolean> }>;
+        }>,
         statuses: Record<string, unknown>,
         batches: Record<
             string,
             Array<{ complete: boolean; processed: number; failed: boolean }>
         >,
+        configs: Record<string, boolean> = {},
     ) => {
         const refresh = {
             readStatus: jest.fn(async (_org: string, repositoryId: string) => {
@@ -152,6 +158,7 @@ describe('refresh order and batch budget', () => {
             {
                 findOne: jest.fn().mockResolvedValue({
                     configValue: {
+                        configs,
                         repositories: repositories.map((r) => ({
                             ...r,
                             isSelected: true,
@@ -174,6 +181,75 @@ describe('refresh order and batch budget', () => {
             refresh.refreshOneBatch.mock.calls.map(([p]) => p.repository.id);
         return { cron, refresh, order };
     };
+
+    it('prioritizes effective risk approval across saved global, repository and directory scopes', async () => {
+        const { cron, order } = build(
+            [
+                {
+                    id: 'a-parent-off',
+                    name: 'a',
+                    configs: { pullRequestApprovalActive: false },
+                },
+                {
+                    id: 'b-risk-off',
+                    name: 'b',
+                    configs: { approvalRiskActive: false },
+                },
+                {
+                    id: 'c-directory',
+                    name: 'c',
+                    configs: { approvalRiskActive: false },
+                    directories: [{ configs: { approvalRiskActive: true } }],
+                },
+                { id: 'd-inherited', name: 'd' },
+                {
+                    id: 'e-repository',
+                    name: 'e',
+                    configs: { approvalRiskActive: true },
+                },
+            ],
+            {
+                'a-parent-off': { complete: false },
+                'd-inherited': { complete: true },
+            },
+            {},
+            { pullRequestApprovalActive: true, approvalRiskActive: true },
+        );
+        await cron.handleCron();
+        expect(order()).toEqual([
+            'c-directory',
+            'e-repository',
+            'd-inherited',
+            'a-parent-off',
+            'b-risk-off',
+        ]);
+    });
+
+    it('keeps the 40-batch cap when risk approval takes priority over an unfinished scan', async () => {
+        const { cron, order } = build(
+            [
+                { id: 'ordinary', name: 'ordinary' },
+                {
+                    id: 'risk',
+                    name: 'risk',
+                    configs: {
+                        pullRequestApprovalActive: true,
+                        approvalRiskActive: true,
+                    },
+                },
+            ],
+            { ordinary: { complete: false } },
+            {
+                risk: Array.from({ length: 41 }, () => ({
+                    complete: false,
+                    processed: 10,
+                    failed: false,
+                })),
+            },
+        );
+        await cron.handleCron();
+        expect(order()).toEqual(Array(40).fill('risk'));
+    });
 
     it('scans incomplete, then unscanned, then the stalest complete repository', async () => {
         const { cron, order } = build(

@@ -20,6 +20,13 @@ describe("byokFailureCopy", () => {
         expect(`${title} ${body}`).not.toMatch(/free/i);
     });
 
+    it("names a refused request without blaming the key or billing (#1687)", () => {
+        const { title, body } = byokFailureCopy("OpenAI", "REQUEST_REJECTED");
+        expect(`${title} ${body}`).not.toMatch(billing);
+        expect(`${title} ${body}`).not.toMatch(/\bkey\b/i);
+        expect(title).toMatch(/refusing requests/i);
+    });
+
     it("does not guess a cause when the error was not classified", () => {
         for (const category of [undefined, "UNKNOWN", "TRANSIENT"]) {
             const { title, body } = byokFailureCopy("OpenRouter", category);

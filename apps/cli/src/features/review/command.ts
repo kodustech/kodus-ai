@@ -1,4 +1,4 @@
-import { Command, Option } from 'commander';
+import { Command } from 'commander';
 import ora, { type Ora } from 'ora';
 import chalk from 'chalk';
 import fs from 'fs/promises';
@@ -12,7 +12,7 @@ import {
     checkTrialStatus,
 } from '../../utils/rate-limit.js';
 import { exitWithCode } from '../../utils/cli-exit.js';
-import { cliDebug, cliError, cliInfo, cliWarn } from '../../utils/logger.js';
+import { cliDebug, cliError, cliInfo } from '../../utils/logger.js';
 import { createCommandContext } from '../../utils/command-context.js';
 import {
     buildAgentErrorEnvelope,
@@ -32,7 +32,9 @@ import { buildNoChangesMessages } from './no-changes.js';
 import { validateReviewOptions } from './options.js';
 import {
     formatFailOnExitMessage,
+    formatHeavyTrialNotice,
     formatTrialCompletionMessage,
+    withHeavyTrialNotice,
     isHunkPlatformSupported,
     shouldFailReview,
     shouldUseHunkViewer,
@@ -54,8 +56,8 @@ type ReviewCommandOptions = {
     rulesOnly?: boolean;
     fast?: boolean;
     focus?: string;
-    /** Removed; accepted and ignored with a warning. */
     heavy?: boolean;
+    balanced?: boolean;
     interactive?: boolean;
     fix?: boolean;
     promptOnly?: boolean;
@@ -112,9 +114,14 @@ Examples:
             '--focus <text>',
             'Steer the review at a specific area, e.g. --focus "the auth and session logic"',
         )
-        // Heavy mode was removed. The flag stays, hidden, so a script that
-        // still passes it runs a normal review instead of failing.
-        .addOption(new Option('--heavy').hideHelp())
+        .option(
+            '--heavy',
+            'Heavy mode: specialist reviewers run next to the main review for higher recall (more tokens), whatever review mode is set',
+        )
+        .option(
+            '--balanced',
+            'Balanced mode: the main review alone, on a repository set to Heavy',
+        )
         .option(
             '-i, --interactive',
             'Interactive mode: navigate and apply fixes',
@@ -159,12 +166,6 @@ async function reviewAction(
 
     try {
         validateReviewOptions(options);
-
-        if (options.heavy) {
-            cliWarn(
-                '--heavy was removed and has no effect; running a normal review.',
-            );
-        }
 
         assertStructuredOutputForFields({
             fields: options.fields,
@@ -238,6 +239,8 @@ async function reviewAction(
                         commit: options.commit,
                         branch: options.branch,
                         focus: options.focus,
+                        heavy: options.heavy,
+                        balanced: options.balanced,
                         quiet: globalOpts.quiet,
                         onProgress: (status) => {
                             if (globalOpts.quiet || ctx.isAgent) {
@@ -258,6 +261,9 @@ async function reviewAction(
                     spinner.succeed(
                         chalk.green(`Review complete!${modeLabel}`),
                     );
+                }
+                for (const notice of result.notices ?? []) {
+                    warnNotice(notice, spinner, ctx, globalOpts);
                 }
             } catch (error) {
                 // If the configured credentials are invalid (revoked team key,
@@ -283,6 +289,7 @@ async function reviewAction(
                     ctx,
                     globalOpts,
                     githubPat: resolveTrialGithubPat(options),
+                    heavy: options.heavy,
                 });
 
                 if (!fallbackResult) {
@@ -338,6 +345,8 @@ async function reviewAction(
                 globalOpts.verbose,
             );
 
+            warnHeavyInTrial(options.heavy, spinner, ctx, globalOpts);
+
             if (!globalOpts.quiet && !ctx.isAgent) {
                 spinner.text = chalk.cyan('Analyzing code (trial mode)...');
             }
@@ -349,7 +358,7 @@ async function reviewAction(
             const trialResult = await reviewService.trialAnalyze(diff, {
                 githubPat: resolveTrialGithubPat(options),
             });
-            result = trialResult;
+            result = withHeavyTrialNotice(trialResult, options.heavy);
             if (!globalOpts.quiet && !ctx.isAgent) {
                 spinner.succeed(
                     chalk.green(formatTrialCompletionMessage(trialResult)),
@@ -577,18 +586,56 @@ async function reviewAction(
     }
 }
 
+function warnHeavyInTrial(
+    heavy: boolean | undefined,
+    spinner: Ora,
+    ctx: ReturnType<typeof createCommandContext>,
+    globalOpts: GlobalOptions,
+): void {
+    const notice = formatHeavyTrialNotice(heavy);
+    if (!notice) {
+        return;
+    }
+    warnNotice(notice, spinner, ctx, globalOpts);
+    // The trial review goes on under the spinner.
+    if (!ctx.isAgent && !globalOpts.quiet) {
+        spinner.start();
+    }
+}
+
+function warnNotice(
+    notice: string,
+    spinner: Ora,
+    ctx: ReturnType<typeof createCommandContext>,
+    globalOpts: GlobalOptions,
+): void {
+    // An agent reads the notice in the result; a spinner line would corrupt
+    // its JSON.
+    if (ctx.isAgent) {
+        return;
+    }
+    // --quiet keeps stdout clean, so the notice goes to stderr.
+    if (globalOpts.quiet) {
+        cliError(chalk.yellow(notice));
+        return;
+    }
+    spinner.warn(chalk.yellow(notice));
+}
+
 async function runTrialFallback({
     diff,
     spinner,
     ctx,
     globalOpts,
     githubPat,
+    heavy,
 }: {
     diff: string;
     spinner: Ora;
     ctx: ReturnType<typeof createCommandContext>;
     globalOpts: GlobalOptions;
     githubPat?: string;
+    heavy?: boolean;
 }): Promise<TrialReviewResult | null> {
     if (!globalOpts.quiet && !ctx.isAgent) {
         spinner.start(chalk.cyan('Checking trial limit...'));
@@ -600,6 +647,8 @@ async function runTrialFallback({
         showTrialLimitPrompt(trialStatus);
         return null;
     }
+
+    warnHeavyInTrial(heavy, spinner, ctx, globalOpts);
 
     if (!globalOpts.quiet && !ctx.isAgent) {
         spinner.text = chalk.cyan('Analyzing code (trial mode)...');
@@ -615,7 +664,7 @@ async function runTrialFallback({
         spinner.succeed(chalk.green(formatTrialCompletionMessage(trialResult)));
     }
 
-    return trialResult;
+    return withHeavyTrialNotice(trialResult, heavy);
 }
 
 async function handleNoChanges(

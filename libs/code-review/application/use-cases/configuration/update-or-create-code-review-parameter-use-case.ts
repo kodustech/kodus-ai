@@ -55,6 +55,7 @@ import {
     CustomAgentConfig,
     customAgentSlugClashMessage,
     knowledgeLinkProblems,
+    knowledgeSourceProblems,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     CodeReviewParameter,
@@ -114,6 +115,10 @@ import {
 } from '@libs/ee/license/interfaces/license.interface';
 import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
 import { isCustomAgentsPlanAllowed } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import {
+    HEAVY_MODE_SAVE_PLAN_REQUIRED,
+    isHeavyModePlanAllowed,
+} from '@libs/ee/heavy-mode/heavy-mode-plan';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
@@ -223,6 +228,15 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 configValue,
             );
 
+            // Heavy mode is Teams/Enterprise only: on another plan a save
+            // asking for it is refused, and a kodus-config.yml sync leaves the
+            // review mode as it was so the file's other settings still save.
+            await this.leaveHeavyOutIfPlanNotAllowed(
+                organizationAndTeamData,
+                configValue,
+                body.actor?.source,
+            );
+
             if (!body.skipAuthorization) {
                 await this.authorizationService.ensure({
                     user: body.requestUser,
@@ -282,6 +296,13 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     if (problems.length > 0) {
                         throw new BadRequestException(problems.join('; '));
                     }
+                }
+            }
+
+            if (Array.isArray(configValue?.knowledge)) {
+                const problems = knowledgeSourceProblems(configValue.knowledge);
+                if (problems.length > 0) {
+                    throw new BadRequestException(problems.join('; '));
                 }
             }
 
@@ -741,6 +762,52 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         });
     }
 
+    private async leaveHeavyOutIfPlanNotAllowed(
+        organizationAndTeamData: OrganizationAndTeamData,
+        configValue:
+            CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
+        source: string | undefined,
+    ): Promise<void> {
+        if (configValue?.reviewMode !== 'heavy') {
+            return;
+        }
+        if (
+            await isHeavyModePlanAllowed(
+                this.licenseService,
+                organizationAndTeamData,
+                UpdateOrCreateCodeReviewParameterUseCase.name,
+            )
+        ) {
+            return;
+        }
+
+        if (source !== 'sync') {
+            this.logger.log({
+                message:
+                    'Refused a save asking for heavy review mode — plan is not Teams/Enterprise',
+                context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    source,
+                },
+            });
+            // 400, like the other refused saves: the web shows its reason.
+            throw new BadRequestException(HEAVY_MODE_SAVE_PLAN_REQUIRED);
+        }
+
+        delete configValue.reviewMode;
+        this.logger.log({
+            message:
+                'Left heavy review mode out of the sync — plan is not Teams/Enterprise',
+            context: UpdateOrCreateCodeReviewParameterUseCase.name,
+            metadata: {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+            },
+        });
+    }
+
     private async keepCustomAgentsIfPlanNotAllowed(
         organizationAndTeamData: OrganizationAndTeamData,
         configValue:
@@ -1074,7 +1141,9 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             const before = resolveBefore(id);
             const after = resolveAfter(id);
 
-            if (before.repoInstructionsEnabled !== after.repoInstructionsEnabled) {
+            if (
+                before.repoInstructionsEnabled !== after.repoInstructionsEnabled
+            ) {
                 this.logger.log({
                     message: `Coding-agent instructions in review turned ${after.repoInstructionsEnabled ? 'on' : 'off'} for repository`,
                     context: UpdateOrCreateCodeReviewParameterUseCase.name,

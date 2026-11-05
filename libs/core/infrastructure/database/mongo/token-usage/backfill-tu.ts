@@ -45,6 +45,7 @@ export const BACKFILL_SUGGESTION_RUN_NAMES = [
 // Guards `tu.route`: a value outside this set is not trusted (→ area de-para).
 export const BACKFILL_ROUTING_TASKS = [
     'codeReview',
+    'codeReviewHeavy',
     'kodyRulesReview',
     'ruleGeneration',
     'businessValidation',

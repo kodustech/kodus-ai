@@ -168,7 +168,8 @@ export async function getCloudflareAccessHeaders(): Promise<
 }
 
 interface ApiErrorPayload {
-    message?: string;
+    // Nest's ValidationPipe answers a 400 with one message per failed field.
+    message?: string | string[];
     code?: string;
     details?: {
         limit?: number;
@@ -240,12 +241,17 @@ function normalizeApiErrorMessage(
     }
 
     const fallbackMessage = getDefaultApiErrorMessage(statusCode, endpoint);
-    if (!errorData.message || typeof errorData.message !== 'string') {
+    const message = Array.isArray(errorData.message)
+        ? errorData.message
+              .filter((item): item is string => typeof item === 'string')
+              .join('; ')
+        : errorData.message;
+    if (!message || typeof message !== 'string') {
         return fallbackMessage;
     }
 
     const endpointPath = endpoint.split('?')[0] || endpoint;
-    const trimmed = errorData.message.trim();
+    const trimmed = message.trim();
     const hasNonAscii = /[^\p{ASCII}]/u.test(trimmed);
 
     if (
@@ -279,10 +285,19 @@ function normalizeApiErrorMessage(
     return trimmed;
 }
 
+/**
+ * `allowEmptyResponse`: the endpoint answers a success with no body (e.g.
+ * POST /pull-request-messages), so an empty 2xx resolves to undefined. Off by
+ * default: an empty body where data is expected stays an error instead of a
+ * value typed T that is really undefined.
+ */
+export type ApiRequestOptions = RequestInit & { allowEmptyResponse?: boolean };
+
 export async function request<T>(
     endpoint: string,
-    options: RequestInit = {},
+    requestOptions: ApiRequestOptions = {},
 ): Promise<T> {
+    const { allowEmptyResponse = false, ...options } = requestOptions;
     const baseUrl = await resolveApiBaseUrl();
     const url = `${baseUrl}${endpoint}`;
     let deviceIdentity: { deviceId: string; deviceToken?: string } | undefined;
@@ -393,6 +408,12 @@ export async function request<T>(
 
     if (!isJson) {
         const text = await response.text();
+        // A handler that returns nothing answers 2xx with an empty body. For
+        // an endpoint declared that way it is a success; treating it as an
+        // invalid response also made requestWithRetry repeat the write.
+        if (allowEmptyResponse && text.trim() === '') {
+            return undefined as T;
+        }
         const preview = text.substring(0, 100);
         cliError(
             `[API] Expected JSON but received ${contentType || 'unknown content-type'}`,
@@ -535,7 +556,7 @@ const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 
 export async function requestWithRetry<T>(
     endpoint: string,
-    options: RequestInit = {},
+    options: ApiRequestOptions = {},
 ): Promise<T> {
     let lastError: unknown;
 

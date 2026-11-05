@@ -27,6 +27,21 @@ export enum LlmErrorCategory {
     MODEL_ACCESS_DENIED = 'MODEL_ACCESS_DENIED',
     CONTEXT_OVERFLOW = 'CONTEXT_OVERFLOW',
     TRANSIENT = 'TRANSIENT',
+    /**
+     * A 400/422 that no other category explains: the provider refused the
+     * request as built for this model (a parameter it does not accept on that
+     * endpoint, a field it does not know). The cause can be the configuration
+     * or the request we built, so its message blames neither and quotes the
+     * provider. Like UNKNOWN, it is never cascaded to a fallback model.
+     */
+    REQUEST_REJECTED = 'REQUEST_REJECTED',
+    /**
+     * The self-hosted env model cannot be built (`API_LLM_PROVIDER` set but not
+     * runnable). Attached at the throw site only, so the reason reaches the PR
+     * comment whole instead of being cut like an unclassified message. Never
+     * cascaded to a fallback model.
+     */
+    CONFIG_INVALID = 'CONFIG_INVALID',
     UNKNOWN = 'UNKNOWN',
 }
 
@@ -99,6 +114,10 @@ export function classifyLLMError(
     err: unknown,
     provider?: string,
 ): ClassifiedErrorInfo {
+    // Classified where it was thrown (e.g. CONFIG_INVALID): that knows more
+    // than any status or wording match below.
+    const attached = getClassification(err);
+    if (attached) return attached;
     // `err.message` is typed string but at runtime can be null (malformed
     // Error-like objects) — guard so the `rawMessage.toLowerCase()` fallback
     // never throws "Cannot read properties of null (reading 'toLowerCase')".
@@ -118,6 +137,15 @@ export function classifyLLMError(
     if (category === LlmErrorCategory.UNKNOWN) {
         category = matchByMessage(lower);
     }
+    // Last, so a 400 that says "context length", "invalid api key" or "quota"
+    // keeps the category its wording names.
+    if (
+        category === LlmErrorCategory.UNKNOWN &&
+        (httpStatus === 400 || httpStatus === 422)
+    ) {
+        category = LlmErrorCategory.REQUEST_REJECTED;
+    }
+    const providerMessage = extractProviderMessage(err);
 
     return {
         category,
@@ -132,8 +160,11 @@ export function classifyLLMError(
         friendlyMessage:
             category === LlmErrorCategory.CONTEXT_OVERFLOW
                 ? buildContextOverflowMessage(err, provider)
-                : buildFriendlyMessage(category, provider, lower),
-        providerMessage: extractProviderMessage(err),
+                : category === LlmErrorCategory.REQUEST_REJECTED &&
+                    providerMessage
+                  ? `The provider${provider ? ` (${provider})` : ''} refused the request for this model: ${providerMessage}`
+                  : buildFriendlyMessage(category, provider, lower),
+        providerMessage,
         ...(category === LlmErrorCategory.MODEL_NOT_FOUND &&
         isRoutingRefusal(lower)
             ? { routingRefusal: true }
@@ -220,7 +251,8 @@ export function isTerminalCategory(category: LlmErrorCategory): boolean {
         category === LlmErrorCategory.AUTH_INVALID ||
         category === LlmErrorCategory.QUOTA_EXCEEDED ||
         category === LlmErrorCategory.MODEL_NOT_FOUND ||
-        category === LlmErrorCategory.MODEL_ACCESS_DENIED
+        category === LlmErrorCategory.MODEL_ACCESS_DENIED ||
+        category === LlmErrorCategory.CONFIG_INVALID
     );
 }
 
@@ -430,6 +462,10 @@ function matchByMessage(lower: string): LlmErrorCategory {
     if (
         lower.includes('invalid_api_key') ||
         lower.includes('invalid api key') ||
+        // Google answers a wrong or expired key with HTTP 400, not 401.
+        lower.includes('api_key_invalid') ||
+        lower.includes('api key not valid') ||
+        lower.includes('api key expired') ||
         lower.includes('incorrect api key') ||
         lower.includes('unauthorized') ||
         lower.includes('authentication failed') ||
@@ -559,6 +595,8 @@ function buildFriendlyMessage(
             return `The PR exceeded the maximum context size accepted by the model${providerLabel}.`;
         case LlmErrorCategory.TRANSIENT:
             return `Transient error reaching the provider${providerLabel}. Try again.`;
+        case LlmErrorCategory.REQUEST_REJECTED:
+            return `The provider${providerLabel} refused the request for this model.`;
         default:
             return `Unexpected error while running the code review${providerLabel}.`;
     }

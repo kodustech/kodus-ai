@@ -10,11 +10,18 @@
  */
 
 import { servedByOpenAi } from './providers/openai/endpoint';
+import {
+    endpointSuffixWarning,
+    resolveDeclaredEnvProvider,
+} from './env-declared-provider';
+import { repairBaseUrl } from './base-url-hygiene';
+import type { ReasoningEffort } from './reasoning-options';
 
 export type EnvLLMProviderId =
     | 'openai'
     | 'openai_compatible'
     | 'anthropic'
+    | 'anthropic_compatible'
     | 'google_gemini'
     | 'google_vertex';
 
@@ -35,6 +42,17 @@ export interface EnvLLMDescriptor {
      * them guessing why every prompt ignores its hard-coded temperature.
      */
     temperatureOverride?: number;
+    /**
+     * `declared` when the provider came from `API_LLM_PROVIDER` (runnable or
+     * not). Absent means it was guessed from the model name.
+     */
+    providerSource?: 'declared';
+    /** Why a declared config cannot run. Names env vars, never values. */
+    invalidReason?: string;
+    /** A generic and a legacy var that disagree, and which one won. */
+    warnings?: string[];
+    /** `API_LLM_REASONING_EFFORT`, when declared. */
+    reasoningEffort?: ReasoningEffort;
 }
 
 const CLAUDE_MODEL_PATTERN = /^claude[-_]/i;
@@ -86,6 +104,15 @@ export function describeEnvLLMConfig(
     env: NodeJS.ProcessEnv = process.env,
 ): EnvLLMDescriptor {
     const envMode = env.API_LLM_PROVIDER_MODEL ?? 'auto';
+    const declared = resolveDeclaredEnvProvider(env);
+    if (declared.kind === 'invalid') {
+        return {
+            configured: false,
+            model: envMode,
+            providerSource: 'declared',
+            invalidReason: declared.reason,
+        };
+    }
     if (envMode === 'auto') {
         return { configured: false };
     }
@@ -110,10 +137,51 @@ export function describeEnvLLMConfig(
         ? temperatureOverrideParsed
         : undefined;
 
-    const baseDescriptor = (descriptor: EnvLLMDescriptor): EnvLLMDescriptor =>
-        temperatureOverride !== undefined
-            ? { ...descriptor, temperatureOverride }
-            : descriptor;
+    const baseDescriptor = (descriptor: EnvLLMDescriptor): EnvLLMDescriptor => {
+        let out = descriptor;
+        // The inferred path dials API_OPENAI_FORCE_BASE_URL without the endpoint
+        // its SDK appends (managed-slot.ts); show that URL, and say why.
+        if (
+            descriptor.providerSource !== 'declared' &&
+            openaiBaseURL &&
+            descriptor.baseUrl === openaiBaseURL
+        ) {
+            const used = repairBaseUrl(openaiBaseURL);
+            if (used !== openaiBaseURL) {
+                out = {
+                    ...out,
+                    baseUrl: used,
+                    warnings: [
+                        endpointSuffixWarning(
+                            'API_OPENAI_FORCE_BASE_URL',
+                            used,
+                        ),
+                    ],
+                };
+            }
+        }
+        return temperatureOverride !== undefined
+            ? { ...out, temperatureOverride }
+            : out;
+    };
+
+    if (declared.kind === 'declared') {
+        const { config, warnings } = declared;
+        return baseDescriptor({
+            configured: true,
+            model: config.model,
+            providerId: config.provider,
+            providerSource: 'declared',
+            ...(config.baseURL ? { baseUrl: config.baseURL } : {}),
+            ...(config.vertexLocation
+                ? { vertexLocation: config.vertexLocation }
+                : {}),
+            ...(config.reasoningEffort
+                ? { reasoningEffort: config.reasoningEffort }
+                : {}),
+            ...(warnings.length ? { warnings } : {}),
+        });
+    }
 
     if (isGemini && !viaProxy) {
         if (googleAiStudioKey) {

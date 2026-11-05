@@ -72,6 +72,8 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
                 noteId: lastExecution?.dataExecution?.noteId,
                 threadId: lastExecution?.dataExecution?.threadId,
                 lastAnalyzedCommit: lastAnalyzedCommit,
+                reviewedBaseBranch:
+                    lastExecution?.dataExecution?.reviewedBaseBranch,
             };
 
             this.logger.log({
@@ -87,6 +89,7 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
             forceFullRerun = await this.shouldForceFullRerun(
                 context,
                 lastExecution.uuid,
+                !!lastExecution.dataExecution?.heavy,
             );
         } else {
             this.logger.log({
@@ -434,7 +437,26 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
     private async shouldForceFullRerun(
         context: CodeReviewPipelineContext,
         lastExecutionId: string,
+        lastRanHeavy: boolean,
     ): Promise<boolean> {
+        // `--heavy` / `--balanced` asking for a mode the last review did not
+        // run in reviews the whole PR: only the commits since that review
+        // would be left, usually none.
+        const requested = context.requestedReviewMode;
+        if (requested && (requested === 'heavy') !== lastRanHeavy) {
+            this.logger.log({
+                message: `Forcing full re-review for PR#${context.pullRequest.number}: ${requested} review asked after a ${lastRanHeavy ? 'heavy' : 'balanced'} one`,
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    repository: context.repository.name,
+                    pullRequestNumber: context.pullRequest.number,
+                    lastExecutionId,
+                },
+            });
+            return true;
+        }
+
         // `@kody review --force` (origin = 'command-force') always forces a
         // full re-review regardless of the previous execution's status. This
         // is the whole point of the flag — let customers re-run a successful

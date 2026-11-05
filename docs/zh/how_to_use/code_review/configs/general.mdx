@@ -40,6 +40,7 @@ version: 2.0
 
 # general
 automatedReviewActive: true
+reviewMode: balanced # balanced | heavy
 showStatusFeedback: true
 kodusConfigFileOverridesWebPreferences: false
 reviewCadence:
@@ -157,6 +158,20 @@ Kody 可以在 PR 打开时自动审查,或仅在您评论 `@kody start-review` 
     仅在您评论 `@kody start-review` 时运行后续审查。
   </Tab>
 </Tabs>
+
+### 审查模式
+
+Kody 审查 PR 的深度(`reviewMode`):
+
+- **Balanced**(默认):标准审查。
+- **Heavy**:九个专项审查者与主审查并行运行,以更多的模型调用换取更高的召回率。参见 [Heavy mode](/zh/how_to_use/code_review/review_directive#heavy-mode)。
+
+该模式适用于每一次审查:自动审查、`@kody review` 和 `kodus review`。单次审查可以用 `--heavy` 或
+`--balanced` 请求另一种模式。与本页的其他设置一样,它可以全局设置,也可以按代码库或按目录设置。
+
+在这两个选项下方,**Review models** 以只读方式显示每种模式运行的模型。它们来自 **AI providers → Routing**
+(点击 **View organization routing** 进行修改),除非代码库或目录设置了自己的模型,此时该模型会同时运行
+两种模式。只连接了一个模型时,该部分只会说明这一点;没有自有模型(由 Kodus 管理)时,该部分会被隐藏。
 
 ### PR 工作流
 

@@ -25,7 +25,7 @@
  *
  *   node evals/pr-summary/run.js [--model=<id>] [--gate] [--output=<file>]
  *                                [--behaviour=replace|concatenate|complement|none]
- *                                [--dataset=cases] [--limit=N]
+ *                                [--dataset=cases] [--limit=N] [--dump=<dir>]
  *
  * EXIT CODES (suite contract): 0 = pass, 1 = gate-fail, 2 = infra
  *   (missing key / model-construction crash / all-cases-errored network).
@@ -149,11 +149,11 @@ const { fitPRDescription } = require('../../libs/code-review/utils/fit-pr-descri
 const REPOSITORY = { name: 'sample', id: 'repo-id' };
 
 // ── The real CommentManagerService. On the summary path it reads only the code
-//    host (PR body in, description out) and the org's permission service; the
-//    other injected services are not reached there, so none is supplied. The
-//    code host is the eval's: it returns the case's PR body and records what
-//    the GitHub adapter would post (github.service.ts runs fitPRDescription on
-//    it first). ──────────────────────────────────────────────────────────────
+//    host (description out) and the org's permission service; the other
+//    injected services are not reached there, so none is supplied. The code
+//    host is the eval's, shared with the stage, which reads the PR body from
+//    it: it returns the case's PR body and records what the GitHub adapter
+//    would post (github.service.ts runs fitPRDescription on it first). ───────
 function buildService(existingBody, postedRef, storedConfig) {
     const codeManagementService = {
         getPullRequestByNumber: async () => ({ body: existingBody }),
@@ -195,7 +195,7 @@ function buildService(existingBody, postedRef, storedConfig) {
         generated.description = await realGenerate(...a);
         return generated.description;
     };
-    return service;
+    return { service, codeManagementService };
 }
 let generated = { calls: 0, description: null, isCommitRun: null };
 
@@ -210,6 +210,17 @@ const blockContent = (s) => {
     const m = s && s.match(/<!-- kody-pr-summary:start -->([\s\S]*?)<!-- kody-pr-summary:end -->/);
     return m ? m[1].trim() : '';
 };
+
+// What the model's deliberation looks like when it reaches the answer: the
+// phrases it published in #2407 and in the baseline runs, or a first line that
+// continues a sentence (the reasoning was cut mid-sentence where the tag was).
+const REASONING_RE = /\b(Hmm\b|Wait,|Draft:|Let me (write|tighten|check|analy[sz]e|think)|I'll (structure|produce|write)|The instructions? says?|Now (write|for)\b|Return only the description|Need (to )?(write|be|mention|avoid)|We (should|can) (include|mention|structure)|Let's (draft|write|craft|produce))/i;
+function leakedReasoning(content) {
+    const first = (content.split('\n').find((l) => l.trim()) || '').trim();
+    if (/^[a-z`.,;:)\]]/.test(first)) return `starts mid-sentence: "${first.slice(0, 40)}"`;
+    const m = content.match(REASONING_RE);
+    return m ? `found "${m[0]}"` : null;
+}
 
 // A review comment as the pipeline carries it (CommentResult): the finding and
 // whether it reached the PR.
@@ -252,7 +263,11 @@ async function runCase(c) {
 
     const posted = { calls: 0, body: null };
     generated = { calls: 0, description: null, isCommitRun: null };
-    const service = buildService(c.existingBody || '', posted, storedConfigOf(c));
+    const { service, codeManagementService } = buildService(
+        c.existingBody || '',
+        posted,
+        storedConfigOf(c),
+    );
     lastPromptSeen = null;
     lastModelError = null;
     modelCalls = [];
@@ -263,7 +278,12 @@ async function runCase(c) {
     const pullRequestManagerService = {
         getChangedFilesMetadata: async () => c.changedFiles,
     };
-    const stage = new UpdateCommentsAndGenerateSummaryStage(service, pullRequestManagerService, undefined);
+    const stage = new UpdateCommentsAndGenerateSummaryStage(
+        service,
+        pullRequestManagerService,
+        undefined,
+        codeManagementService,
+    );
     const after = await stage.executeStage(
         frozenContext({
             lastExecution: isCommitRun ? { id: 'previous-review' } : undefined,
@@ -289,6 +309,11 @@ async function runCase(c) {
     const stageError = (after?.errors || []).find((e) => e?.stage === stage.stageName);
     if (stageError && !lastModelError) lastModelError = stageError.error;
     const finalDescription = generated.description;
+
+    if (args.dump && finalDescription) {
+        fs.mkdirSync(String(args.dump), { recursive: true });
+        fs.writeFileSync(path.join(String(args.dump), `${c.caseId}.md`), finalDescription);
+    }
 
     const exp = c.expect || {};
     const checks = [];
@@ -365,6 +390,14 @@ async function runCase(c) {
     if (exp.blockAccumulates) {
         check('CONCATENATE (new commit) keeps the prior summary content', content.includes(exp.blockAccumulates));
         check('CONCATENATE (new commit) appends the new summary to the block', content !== exp.blockAccumulates);
+    }
+
+    // The model's deliberation never reaches the PR. A host that ends the
+    // reasoning channel on a `</think>` the model quotes returns the rest of the
+    // reasoning as the answer (#2407); these are the phrases it published then.
+    if (exp.noReasoning) {
+        const leaked = leakedReasoning(content);
+        check(`no model reasoning in the summary${leaked ? ` (${leaked})` : ''}`, !leaked);
     }
 
     // 4) COMPLEMENT must feed the existing description into the model prompt

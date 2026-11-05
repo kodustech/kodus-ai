@@ -84,12 +84,12 @@ const MAX_RUNS = 10;
 // the comparison reads: per PR, its known bugs shipped (hits of total) and the
 // findings that match none (fpFindings), the cases evals/stage-signals.js
 // reads for the panel.
-function finderResult(raw) {
+function finderResult(raw, id = 'finder-recall') {
     if (!raw || !Array.isArray(raw.rows) || !raw.rows.length) return null;
     // eslint-disable-next-line global-require
     const { finderCases } = require('./stage-signals');
     return {
-        eval: 'finder-recall',
+        eval: id,
         metric: { name: 'of known bugs shipped', value: raw.metrics?.recall_mean ?? null },
         cases: finderCases(raw.rows),
         metrics: raw.metrics || {},
@@ -170,6 +170,22 @@ const STEP_EVALS = {
             // bugs, so what it ships must stay right too. Not worse beyond its
             // interval. A real bug the dataset does not list counts against it.
             derived: [{ id: 'finder-precision', label: 'Comments that were known bugs', question: 'Of the comments the review shipped, how many match a known bug?', hits: (c) => c.hits, total: (c) => (Number.isInteger(c.fpFindings) ? c.hits + c.fpFindings : NaN) }],
+        },
+        guards: [],
+    },
+    heavy: {
+        // On demand only, never a PR's check: every case is a full heavy review
+        // (the generalist and nine lenses), about twice a normal review.
+        smoke: [],
+        primary: {
+            id: 'heavy-recall',
+            label: 'Known bugs shipped in heavy mode',
+            run: ['evals/heavy-recall/run.js', '--concurrency=6'],
+            question: 'Of the known bugs in a PR, how many does a heavy review ship?',
+            read: (raw) => finderResult(raw, 'heavy-recall'),
+            // The lenses add comments, so what a heavy review ships must stay
+            // right too: not worse beyond its interval.
+            derived: [{ id: 'heavy-precision', label: 'Comments that were known bugs', question: 'Of the comments a heavy review shipped, how many match a known bug?', hits: (c) => c.hits, total: (c) => (Number.isInteger(c.fpFindings) ? c.hits + c.fpFindings : NaN) }],
         },
         guards: [],
     },

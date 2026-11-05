@@ -158,4 +158,51 @@ describe('PermissionValidationService — Kodus credits gate', () => {
             expect(res.byokConfig?.provider).toBe('kodus');
         });
     });
+
+    describe('a slot routed after the prerequisites (the Heavy model)', () => {
+        const kodusSlot = {
+            provider: 'kodus',
+            model: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
+        } as any;
+
+        it('blocks on a non-positive balance', async () => {
+            const svc = makeService({ creditBalanceUsd: 0 });
+            const res = await svc.gateKodusCreditsForSlot(kodusSlot, orgTeam);
+            expect(res?.errorType).toBe(ValidationErrorType.CREDITS_EXHAUSTED);
+        });
+
+        it('passes on a positive or unknown balance', async () => {
+            expect(
+                await makeService({ creditBalanceUsd: 4 }).gateKodusCreditsForSlot(
+                    kodusSlot,
+                    orgTeam,
+                ),
+            ).toBeNull();
+            expect(
+                await makeService({}).gateKodusCreditsForSlot(kodusSlot, orgTeam),
+            ).toBeNull();
+        });
+
+        it('does not read billing for an org key', async () => {
+            const svc = makeService({ creditBalanceUsd: 0 });
+            const res = await svc.gateKodusCreditsForSlot(
+                { provider: 'openai', model: 'gpt-4o' } as any,
+                orgTeam,
+            );
+            expect(res).toBeNull();
+            expect(
+                (svc as any).licenseService.validateOrganizationLicense,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('lets the review run when billing cannot be read', async () => {
+            const svc = makeService({});
+            (svc as any).licenseService.validateOrganizationLicense.mockRejectedValue(
+                new Error('billing down'),
+            );
+            expect(
+                await svc.gateKodusCreditsForSlot(kodusSlot, orgTeam),
+            ).toBeNull();
+        });
+    });
 });

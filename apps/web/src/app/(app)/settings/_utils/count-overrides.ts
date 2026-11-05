@@ -10,6 +10,7 @@ const CODE_REVIEW_ROUTE_OVERRIDE_PATH_PREFIXES: Record<string, string[]> = {
         "baseBranches",
         "ignoredTitleKeywords",
         "automatedReviewActive",
+        "reviewMode",
         "showStatusFeedback",
         "reviewCadence",
         "pullRequestApprovalActive",

@@ -16,6 +16,7 @@ import { UsersService } from '../infrastructure/adapters/services/users.service'
 import { GetUserUseCase } from '../application/use-cases/user';
 import { CheckUserWithEmailUserUseCase } from '../application/use-cases/user/check-user-email.use-case';
 import { DeleteUserUseCase } from '../application/use-cases/user/delete.use-case';
+import { GetInvitationTokenUseCase } from '../application/use-cases/user/get-invitation-token.use-case';
 import { InviteDataUserUseCase } from '../application/use-cases/user/invite-data.use-case';
 
 @Module({
@@ -28,6 +29,7 @@ import { InviteDataUserUseCase } from '../application/use-cases/user/invite-data
         DeleteUserUseCase,
         CheckUserWithEmailUserUseCase,
         InviteDataUserUseCase,
+        GetInvitationTokenUseCase,
         GetUserUseCase,
         {
             provide: USER_REPOSITORY_TOKEN,
@@ -49,6 +51,7 @@ import { InviteDataUserUseCase } from '../application/use-cases/user/invite-data
         DeleteUserUseCase,
         CheckUserWithEmailUserUseCase,
         InviteDataUserUseCase,
+        GetInvitationTokenUseCase,
         GetUserUseCase,
     ],
 })

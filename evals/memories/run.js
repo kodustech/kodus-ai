@@ -55,7 +55,7 @@ function caseVars(c) {
         prTitle: c.prTitle,
         prBody: c.prBody,
         repositoryFullName: 'eval/memories',
-        reviewMode: 'normal',
+        reviewMode: 'balanced',
         repoBase,
         repoFiles,
         memoryRules: args['no-memories'] ? [] : c.memories,

@@ -253,6 +253,26 @@ describe('CodeManagementBaseBranchReader', () => {
         );
     });
 
+    it('reads a file a provider returns without the data wrapper (Forgejo)', async () => {
+        const reader = new CodeManagementBaseBranchReader(
+            {
+                getRepositoryContentFile: jest.fn().mockResolvedValue({
+                    path: 'docs/a.md',
+                    type: 'file',
+                    content: 'FLAT',
+                    encoding: 'utf-8',
+                }),
+                getRepositoryAllFiles: jest.fn(),
+            },
+            { organizationAndTeamData, repository, baseBranch: 'develop' },
+        );
+
+        expect(await reader.readFile('docs/a.md')).toEqual({
+            status: 'ok',
+            content: 'FLAT',
+        });
+    });
+
     it('refuses traversal and symlinks, and treats errors as missing', async () => {
         const getRepositoryContentFile = jest
             .fn()

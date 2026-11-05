@@ -149,6 +149,7 @@ describe('review failure propagation (agent → summary → approve → check)',
                 .fn()
                 .mockResolvedValue(PullRequestReviewState.PENDING),
             requestChangesPullRequest: jest.fn().mockResolvedValue(undefined),
+            getPullRequestByNumber: jest.fn().mockResolvedValue({}),
         };
 
         checksService = {

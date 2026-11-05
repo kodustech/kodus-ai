@@ -258,7 +258,7 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
         const call = (deps: Deps, args: any): Promise<boolean> =>
             (buildProvider(deps) as any).shouldApprovePR(args);
 
-        it('queries the latest SUCCESS execution with the exact filter', async () => {
+        it('queries the latest successful or partial execution with the exact filter', async () => {
             const deps = buildDeps();
             await call(deps, {
                 organizationAndTeamData: ORG_DATA,
@@ -268,7 +268,10 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
             expect(
                 deps.automationExecutionService.findLatestExecutionByFilters,
             ).toHaveBeenCalledWith({
-                status: AutomationStatus.SUCCESS,
+                status: [
+                    AutomationStatus.SUCCESS,
+                    AutomationStatus.PARTIAL_ERROR,
+                ],
                 teamAutomation: { uuid: 'ta-1' },
                 pullRequestNumber: 7,
                 repositoryId: 'repo-1',

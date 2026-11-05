@@ -35,6 +35,9 @@ on:
         types: [opened, synchronize, reopened, labeled]
         paths:
             - "libs/**"
+            - "apps/api/src/cron/CheckIfPRCanBeApproved*"
+            - "apps/api/src/cron/__tests__/CheckIfPRCanBeApproved*"
+            - "apps/worker/src/cron/refresh-code-area-risk-map*"
             - "evals/**"
             - "test/fixtures/**"
             - "package.json"
@@ -118,6 +121,50 @@ jobs:
                   EOF
             - name: Run wiring smoke
               run: node evals/wiring-smoke.js --eval-files-dir=eval-files
+
+            - name: Check approval and history paths
+              id: approval-evidence
+              env:
+                  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+                  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+              run: |
+                  if [ -z "$BASE_SHA" ] || ! git diff --quiet "$BASE_SHA...$HEAD_SHA" -- \
+                    libs/code-review/domain/approval/ \
+                    libs/code-review/infrastructure/approval/ \
+                    'libs/code-review/pipeline/stages/*approval*' \
+                    'libs/code-review/pipeline/stages/finish-process-review*' \
+                    'apps/api/src/cron/CheckIfPRCanBeApproved*' \
+                    'apps/api/src/cron/__tests__/CheckIfPRCanBeApproved*' \
+                    'libs/automation/infrastructure/adapters/repositories/automationExecution.repository*' \
+                    libs/platformData/domain/code-area-risk/ \
+                    'libs/platformData/infrastructure/adapters/services/refresh-code-area-risk-map*' \
+                    'apps/worker/src/cron/refresh-code-area-risk-map*' \
+                    evals/approval-risk/ evals/area-risk-map/ \
+                    .github/workflows/code-review-evals-pr.yml; then
+                    echo "needed=true" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Approval and history regression evidence
+              if: steps.approval-evidence.outputs.needed == 'true'
+              env:
+                  API_NODE_ENV: test
+              run: |
+                  mkdir -p eval-results
+                  pnpm exec jest --runInBand --json --outputFile=eval-results/approval-risk-regressions.json --runTestsByPath \
+                    libs/code-review/domain/approval/assess-approval-risk.spec.ts \
+                    libs/code-review/pipeline/stages/decide-pr-approval.stage.spec.ts \
+                    apps/api/src/cron/__tests__/CheckIfPRCanBeApproved.cron.spec.ts
+                  node evals/area-risk-map/run.js --set=holdout-2026 --output=eval-results/area-risk-holdout.json
+
+            - name: Upload approval and history evidence
+              if: always() && steps.approval-evidence.outputs.needed == 'true'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: approval-and-history-regressions
+                  path: |
+                      eval-results/approval-risk-regressions.json
+                      eval-results/area-risk-holdout.json
+                  retention-days: 30
 
             # The steps whose production files this PR changed: the experiments to run.
             - name: Steps this PR changes
