@@ -42,7 +42,10 @@ jest.mock('@libs/llm/llm-call', () => ({
             if (prompt) {
                 capturedPrompts.push({ prompt, role: 'user' });
             }
-            return { text: NEW_SUMMARY_TEXT };
+            return {
+                text: NEW_SUMMARY_TEXT,
+                output: { description: NEW_SUMMARY_TEXT },
+            };
         },
     ),
     // The summary now runs through runTextReviewCall, which arms a real 10-min
@@ -54,6 +57,7 @@ jest.mock('@libs/core/log/langfuse', () => ({
     toAiSdkTelemetryArgs: (cfg: any) => ({ telemetry: cfg }),
 }));
 
+import { JSONParseError, NoObjectGeneratedError } from 'ai';
 import { getClassification } from '@libs/llm/error-classifier';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 import { LLM } from '@libs/llm/llm';
@@ -108,7 +112,10 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 if (prompt) {
                     capturedPrompts.push({ prompt, role: 'user' });
                 }
-                return { text: NEW_SUMMARY_TEXT };
+                return {
+                    text: NEW_SUMMARY_TEXT,
+                    output: { description: NEW_SUMMARY_TEXT },
+                };
             },
         );
 
@@ -138,6 +145,83 @@ describe('CommentManagerService.generateSummaryPR', () => {
             codeManagementService as any,
             {} as any,
         );
+    });
+
+    describe('reasoning returned as the answer (#2407)', () => {
+        it('publishes only the description when reasoning precedes the reply', async () => {
+            // A host that ends the reasoning channel at a `</think>` the model
+            // quotes returns the rest of the reasoning ahead of the answer.
+            const leaked =
+                'inside it.\n\nWait, the second one is ambiguous. Draft:\n## Summary\nfirst try\n\nLet me tighten wording.';
+            const reply = `${leaked}\n${JSON.stringify({ description: '## Summary\nThe real description.' })}`;
+            (tracedGenerateText as jest.Mock).mockImplementationOnce(
+                async () => {
+                    throw new NoObjectGeneratedError({
+                        message: 'No object generated',
+                        cause: new JSONParseError({
+                            text: reply,
+                            cause: new Error('Unexpected token'),
+                        }),
+                        text: reply,
+                        response: {} as any,
+                        usage: {} as any,
+                        finishReason: 'stop',
+                    });
+                },
+            );
+
+            const result = await service.generateSummaryPR(
+                { ...stubPR, body: '' },
+                stubRepository,
+                [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                stubOrg,
+                'en-US',
+                summaryConfig,
+                false,
+                false,
+                undefined,
+                PlatformType.GITHUB,
+            );
+
+            expect(result).toContain('The real description.');
+            expect(result).not.toContain('inside it.');
+            expect(result).not.toContain('Draft:');
+            expect(result).not.toContain('first try');
+        });
+
+        it('retries instead of publishing a placeholder description', async () => {
+            const callsBefore = (tracedGenerateText as jest.Mock).mock.calls
+                .length;
+            (tracedGenerateText as jest.Mock)
+                .mockImplementationOnce(async () => ({
+                    text: '{ "description": "..." }',
+                    output: { description: '...' },
+                }))
+                .mockImplementationOnce(async () => ({
+                    text: '',
+                    output: { description: '## Summary\nSecond attempt.' },
+                }));
+
+            const result = await service.generateSummaryPR(
+                { ...stubPR, body: '' },
+                stubRepository,
+                [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                stubOrg,
+                'en-US',
+                summaryConfig,
+                false,
+                false,
+                undefined,
+                PlatformType.GITHUB,
+            );
+
+            expect(
+                (tracedGenerateText as jest.Mock).mock.calls.length -
+                    callsBefore,
+            ).toBe(2);
+            expect(result).toContain('Second attempt.');
+            expect(result).not.toMatch(/start -->\s*\.\.\.\s*</);
+        });
     });
 
     describe('Bug A — re-run dedup of <!-- kody-pr-summary --> block (issue #1019)', () => {
@@ -419,7 +503,10 @@ describe('CommentManagerService.generateSummaryPR', () => {
                         async ({ prompt }: { prompt?: string }) => {
                             if (prompt)
                                 capturedPrompts.push({ prompt, role: 'user' });
-                            return { text: NEW_SUMMARY_TEXT };
+                            return {
+                                text: NEW_SUMMARY_TEXT,
+                                output: { description: NEW_SUMMARY_TEXT },
+                            };
                         },
                     );
 
@@ -452,7 +539,10 @@ describe('CommentManagerService.generateSummaryPR', () => {
                         async ({ prompt }: { prompt?: string }) => {
                             if (prompt)
                                 capturedPrompts.push({ prompt, role: 'user' });
-                            return { text: NEW_SUMMARY_TEXT };
+                            return {
+                                text: NEW_SUMMARY_TEXT,
+                                output: { description: NEW_SUMMARY_TEXT },
+                            };
                         },
                     );
 

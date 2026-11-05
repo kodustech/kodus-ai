@@ -70,7 +70,10 @@ describe('CommentManagerService – task references survive a replaced descripti
         const observability = {
             runAiSdkLLMInSpan: jest
                 .fn()
-                .mockImplementation(async () => ({ text: LLM_SUMMARY })),
+                .mockImplementation(async () => ({
+                    text: LLM_SUMMARY,
+                    output: { description: LLM_SUMMARY },
+                })),
         };
         setLlmObservability(observability as any);
 
