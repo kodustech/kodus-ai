@@ -1201,13 +1201,23 @@ export const mentionedFilesNotFollowed = (
         // A path that starts with a linked repository's full name names it.
         // One that starts with its bare name is ambiguous ("rules/api.md"
         // may be the reviewed repository's own folder): nothing is offered.
+        // The longest known prefix: a GitLab subgroup or an Azure project
+        // makes a full name of more than two segments.
         const segments = lower.split("/");
-        const owner = byFullName.get(segments.slice(0, 2).join("/"));
+        let owner: string | undefined;
+        let prefixLength = 0;
+        for (let n = segments.length - 1; n >= 2 && !owner; n--) {
+            owner = byFullName.get(segments.slice(0, n).join("/"));
+            prefixLength = owner ? n : 0;
+        }
         if (!owner && segments.length > 1 && bareNames.has(segments[0])) {
             continue;
         }
         const prefixed = owner
-            ? { repository: owner, rest: cited.split("/").slice(2).join("/") }
+            ? {
+                  repository: owner,
+                  rest: cited.split("/").slice(prefixLength).join("/"),
+              }
             : null;
         const before = prefixed
             ? undefined

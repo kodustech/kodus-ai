@@ -295,6 +295,20 @@ describe("mentionedFilesNotFollowed", () => {
         ]);
     });
 
+    it("places a file under a full name of more than two segments (GitLab subgroup, Azure project)", () => {
+        const nested = "greenhouse/irrigation/rules";
+        expect(
+            mentionedFilesNotFollowed(
+                `Read ${nested}/stack/node/valves.mdc first.`,
+                [nested, RULES],
+                [],
+                "valves",
+            ),
+        ).toEqual([
+            { path: "stack/node/valves.mdc", kind: "doc", repository: nested },
+        ]);
+    });
+
     it("guesses nothing: a repository that is not linked, a code file, a URL", () => {
         expect(
             mentionedFilesNotFollowed(
