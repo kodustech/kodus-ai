@@ -1,6 +1,7 @@
 import { convertToUnifiedDiffWithLineNumbers } from '@libs/common/utils/patch';
 import {
     judgeKodyRulesSharded,
+    buildShardViolationsWireSchema,
     shardViolationsSchema,
     shardViolationsWireSchema,
     RunJudge,
@@ -137,6 +138,22 @@ describe('shardViolationsSchema — model JSON parsing', () => {
             expect(r.value.violations.map((v: any) => v.ruleId)).toEqual([
                 'r-1',
                 'r-2',
+            ]);
+        });
+
+        it('reports a recovery and a rejection to the caller, nothing for a canonical reply', () => {
+            const events: any[] = [];
+            const schema = buildShardViolationsWireSchema((e) => events.push(e));
+            const check = (v: unknown) => (schema as any).validate(v);
+
+            check({ violations: [violation] });
+            expect(events).toEqual([]);
+
+            check({ result: { violations: [violation] } });
+            check({ error: 'rate limited', code: 429 });
+            expect(events).toEqual([
+                { kind: 'recovered', reason: 'unwrapped-result' },
+                { kind: 'rejected', keys: ['error', 'code'] },
             ]);
         });
 

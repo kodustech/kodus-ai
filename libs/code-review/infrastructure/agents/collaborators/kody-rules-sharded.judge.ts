@@ -22,8 +22,6 @@
 import { jsonSchema, type Schema } from 'ai';
 import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import { z } from 'zod';
-import { createLogger } from '@libs/core/log/logger';
-import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
 import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 import { recoverRuleUuid } from './finding-mapper';
 import {
@@ -173,16 +171,23 @@ export const shardViolationsSchema = z.object({
         .default([]),
 });
 
-const shardLogger = createLogger('KodyRulesShardedJudge');
+/** What the shard validate step did to an off-shape reply. */
+export type ShardReplyReshape =
+    | { kind: 'recovered'; reason: string }
+    | { kind: 'rejected'; keys: string[] };
 
 /**
  * The lenient schema reads any object without `violations` as a clean shard,
  * so a wrapped, renamed or `{error}` reply lost its violations without a trace.
  * Recover the known shapes; return undefined for an object that still carries
  * no `violations`, so the executor re-asks and the shard counts as errored.
- * `{}` stays a clean shard.
+ * `{}` stays a clean shard. What happened goes to `onReshape`: the validate
+ * step has no org or PR to log with, its caller does.
  */
-function reshapeShardReply(value: unknown): unknown {
+function reshapeShardReply(
+    value: unknown,
+    onReshape?: (event: ShardReplyReshape) => void,
+): unknown {
     let reason: string | undefined;
     // An array written as an object keyed by index ({"0":v,"1":v}): read every
     // entry, not just "0", which normalizeEnvelope would unwrap alone.
@@ -208,20 +213,15 @@ function reshapeShardReply(value: unknown): unknown {
             v = { violations: [obj] };
             reason = 'lifted-single-violation';
         } else if (!('violations' in obj) && Object.keys(obj).length > 0) {
-            shardLogger.warn({
-                message: `${LLM_ENVELOPE_TAG} kody-rules shard reply has no violations key; rejecting it so the shard is re-asked or counted as errored`,
-                context: 'KodyRulesShardedJudge',
-                metadata: { keys: Object.keys(obj).slice(0, 10) },
+            onReshape?.({
+                kind: 'rejected',
+                keys: Object.keys(obj).slice(0, 10),
             });
             return undefined;
         }
     }
     if (reason) {
-        shardLogger.warn({
-            message: `${LLM_ENVELOPE_TAG} recovered off-schema kody-rules shard reply (${reason})`,
-            context: 'KodyRulesShardedJudge',
-            metadata: { reason },
-        });
+        onReshape?.({ kind: 'recovered', reason });
     }
     return v;
 }
@@ -237,31 +237,35 @@ function reshapeShardReply(value: unknown): unknown {
  * (every key required, nullable via anyOf) and keep the lenient zod parse
  * as the validate step.
  */
-export const shardViolationsWireSchema: Schema<
-    z.infer<typeof shardViolationsSchema>
-> = jsonSchema(
-    z.toJSONSchema(shardViolationsSchema, {
-        target: 'draft-7',
-        io: 'output',
-    }) as any,
-    {
-        validate: (value) => {
-            const shaped = reshapeShardReply(value);
-            if (shaped === undefined) {
-                return {
-                    success: false,
-                    error: new Error(
-                        'shard reply has no violations key (off-schema)',
-                    ),
-                };
-            }
-            const r = shardViolationsSchema.safeParse(shaped);
-            return r.success
-                ? { success: true, value: r.data }
-                : { success: false, error: r.error };
+export function buildShardViolationsWireSchema(
+    onReshape?: (event: ShardReplyReshape) => void,
+): Schema<z.infer<typeof shardViolationsSchema>> {
+    return jsonSchema(
+        z.toJSONSchema(shardViolationsSchema, {
+            target: 'draft-7',
+            io: 'output',
+        }) as any,
+        {
+            validate: (value) => {
+                const shaped = reshapeShardReply(value, onReshape);
+                if (shaped === undefined) {
+                    return {
+                        success: false,
+                        error: new Error(
+                            'shard reply has no violations key (off-schema)',
+                        ),
+                    };
+                }
+                const r = shardViolationsSchema.safeParse(shaped);
+                return r.success
+                    ? { success: true, value: r.data }
+                    : { success: false, error: r.error };
+            },
         },
-    },
-);
+    );
+}
+
+export const shardViolationsWireSchema = buildShardViolationsWireSchema();
 
 /**
  * A violation exactly as the model emits it (pre-resolution): the rule is a
