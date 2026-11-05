@@ -8,6 +8,9 @@ import { LangfuseVercelAiSdkIntegration } from '@langfuse/vercel-ai-sdk';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import type { AttributeValue } from '@opentelemetry/api';
 import { registerTelemetry, type TelemetryOptions } from 'ai';
+import { createLogger } from '@libs/core/log/logger';
+
+const langfuseLogger = createLogger('Langfuse');
 
 let spanProcessor: LangfuseSpanProcessor | null = null;
 let ownTracerProvider: NodeTracerProvider | null = null;
@@ -229,7 +232,16 @@ export function withLangfuseObservation<T>(
     );
     return startActiveObservation(name, (observation) => {
         if (Object.keys(tags).length > 0) {
-            observation.update({ metadata: tags });
+            try {
+                observation.update({ metadata: tags });
+            } catch (error) {
+                // Observability never breaks the call it observes.
+                langfuseLogger.warn({
+                    message: `Langfuse observation update failed for ${name}; the call runs without its metadata`,
+                    error,
+                    context: 'Langfuse',
+                });
+            }
         }
         return fn(getActiveTraceId());
     });
