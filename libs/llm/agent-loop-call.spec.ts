@@ -55,6 +55,7 @@ import { resolveModelConfig } from '@libs/llm/model-invocation';
 import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
 import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { agentModelIdentity } from '@libs/llm/model-identity';
+import { readAiSdkUsageFromError } from '@libs/llm/ai-sdk-usage';
 import {
     setLlmObservability,
     getLlmObservability,
@@ -341,6 +342,68 @@ describe('row19 tool-call repair delegation (repairToolCall → repairInvalidToo
 // Observability span wrapping + span attributes (return-shape invariant across
 // BOTH layers: with a port and without one).
 // ─────────────────────────────────────────────────────────────────────────────
+describe('a loop that fails after some steps finished (#2389)', () => {
+    const stepEvent = (usage: any) => ({ usage, toolCalls: [] });
+
+    it('hands the finished steps’ usage to the span on an abort', async () => {
+        const inner = jest.fn();
+        mockGenerate.mockImplementationOnce(async (args: any) => {
+            await args.onStepFinish(
+                stepEvent({
+                    inputTokens: 100,
+                    outputTokens: 10,
+                    totalTokens: 110,
+                    inputTokenDetails: { cacheReadTokens: 40 },
+                    outputTokenDetails: { reasoningTokens: 3 },
+                }),
+            );
+            await args.onStepFinish(
+                stepEvent({
+                    inputTokens: 200,
+                    outputTokens: 20,
+                    totalTokens: 220,
+                }),
+            );
+            const abort = new Error('This operation was aborted');
+            abort.name = 'AbortError';
+            throw abort;
+        });
+        const err: any = await runAgentLoopCall({
+            ...baseParams(),
+            loop: { ...baseParams().loop, onStepFinish: inner },
+        }).catch((e) => e);
+        expect(err.name).toBe('AbortError');
+        expect(inner).toHaveBeenCalledTimes(2);
+        expect(readAiSdkUsageFromError(err)?.usage).toEqual({
+            inputTokens: 300,
+            outputTokens: 30,
+            totalTokens: 330,
+            reasoningTokens: 3,
+            cacheReadTokens: 40,
+            cacheWriteTokens: undefined,
+        });
+    });
+
+    it('keeps the usage an error already carries', async () => {
+        mockGenerate.mockImplementationOnce(async (args: any) => {
+            await args.onStepFinish(
+                stepEvent({ inputTokens: 5, outputTokens: 5, totalTokens: 10 }),
+            );
+            throw Object.assign(new Error('no object'), {
+                usage: { inputTokens: 7, outputTokens: 1, totalTokens: 8 },
+            });
+        });
+        const err: any = await runAgentLoopCall(baseParams()).catch((e) => e);
+        expect(readAiSdkUsageFromError(err)?.usage.totalTokens).toBe(8);
+    });
+
+    it('adds nothing when no step finished', async () => {
+        mockGenerate.mockRejectedValueOnce(new Error('boom'));
+        const err: any = await runAgentLoopCall(baseParams()).catch((e) => e);
+        expect(readAiSdkUsageFromError(err)).toBeUndefined();
+    });
+});
+
 describe('observability span — present vs absent port', () => {
     it('a thrown error propagates THROUGH the observability span too (span does not swallow)', async () => {
         mockGenerate.mockRejectedValueOnce(new Error('boom'));

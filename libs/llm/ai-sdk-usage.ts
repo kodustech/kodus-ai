@@ -100,3 +100,76 @@ export function readAiSdkUsage(usage: AiSdkUsageInput): AiSdkUsage {
             usage?.cacheCreationInputTokens,
     };
 }
+
+const USAGE_KEYS: (keyof AiSdkUsage)[] = [
+    'inputTokens',
+    'outputTokens',
+    'totalTokens',
+    'reasoningTokens',
+    'cacheReadTokens',
+    'cacheWriteTokens',
+];
+
+/**
+ * Running total of the usage of the steps an agent loop finished. The loop's
+ * span records the usage `generateText` returns, and a loop that throws after
+ * some steps (an abort, the hard timeout) returns none, so the steps the
+ * provider already answered and billed would reach no cost span (#2389).
+ */
+export function createStepUsageTally(): {
+    add(usage: AiSdkUsageInput): void;
+    /** The total in the SDK's own shape, or undefined when no step reported. */
+    total(): AiSdkUsageInput;
+} {
+    const sum: AiSdkUsage = {};
+    let counted = false;
+    return {
+        add(usage) {
+            if (!usage) return;
+            const step = readAiSdkUsage(usage);
+            for (const key of USAGE_KEYS) {
+                const value = step[key];
+                if (typeof value === 'number' && Number.isFinite(value)) {
+                    sum[key] = (sum[key] ?? 0) + value;
+                    counted = true;
+                }
+            }
+        },
+        total() {
+            if (!counted) return undefined;
+            return {
+                inputTokens: sum.inputTokens,
+                outputTokens: sum.outputTokens,
+                totalTokens: sum.totalTokens,
+                inputTokenDetails: {
+                    cacheReadTokens: sum.cacheReadTokens,
+                    cacheWriteTokens: sum.cacheWriteTokens,
+                },
+                outputTokenDetails: { reasoningTokens: sum.reasoningTokens },
+            };
+        },
+    };
+}
+
+/**
+ * The error, carrying `usage` for {@link readAiSdkUsageFromError} when it has
+ * none of its own. An error that already carries the provider's usage keeps it.
+ */
+export function withUsageOnError(
+    err: unknown,
+    usage: AiSdkUsageInput,
+): unknown {
+    if (!usage || !err || typeof err !== 'object') return err;
+    if (readAiSdkUsageFromError(err)) return err;
+    try {
+        Object.defineProperty(err, 'usage', {
+            value: usage,
+            configurable: true,
+            writable: true,
+            enumerable: false,
+        });
+    } catch {
+        // A frozen error keeps its shape; the span records no usage, as before.
+    }
+    return err;
+}

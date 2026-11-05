@@ -37,6 +37,10 @@ import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
 import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { getLlmObservability } from '@libs/llm/llm-observability';
 import {
+    createStepUsageTally,
+    withUsageOnError,
+} from '@libs/llm/ai-sdk-usage';
+import {
     hardTimeout,
     timeoutSignal,
     AGENT_TIMEOUT_MS,
@@ -228,7 +232,20 @@ export async function runAgentLoopCall(
               })
             : exec();
 
+    // The steps the provider already answered, so a loop that throws after them
+    // (an abort, the hard timeout) still hands their usage to the span (#2389).
+    const finishedSteps = createStepUsageTally();
+    const onStepFinish = (event: any) => {
+        finishedSteps.add(event?.usage);
+        return loop.onStepFinish?.(event);
+    };
+
     const exec = () =>
+        generateLoop().catch((err: unknown) => {
+            throw withUsageOnError(err, finishedSteps.total());
+        });
+
+    const generateLoop = () =>
         generateText({
             model: inv.model as any,
             maxRetries: AGENT_STEP_MAX_RETRIES,
@@ -264,7 +281,7 @@ export async function runAgentLoopCall(
             // hard step ceiling the harness always wants.
             stopWhen: [...((loop.stopWhen as any[]) ?? []), stepCountIs(loop.maxSteps)],
             ...(loop.prepareStep ? { prepareStep: loop.prepareStep as any } : {}),
-            ...(loop.onStepFinish ? { onStepFinish: loop.onStepFinish as any } : {}),
+            onStepFinish,
             ...(telemetryMetadata
                 ? toAiSdkTelemetryArgs(
                       buildLangfuseTelemetry(runName, telemetryMetadata),
