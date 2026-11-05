@@ -1,5 +1,6 @@
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { LLM } from '@libs/llm/llm';
+import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
 import { Inject, Injectable } from '@nestjs/common';
 import {
     formatApprovalReasonComment,
@@ -2438,6 +2439,19 @@ ${reviewOptions}
                     prNumber,
                     result,
                 );
+
+            const clusters = repeteadSuggetionsClustered?.codeSuggestions;
+            if (!Array.isArray(clusters) || clusters.length === 0) {
+                return codeSuggestions;
+            }
+            return await this.processSuggestions(codeSuggestions, {
+                codeSuggestions: this.sanitizeClusters(
+                    codeSuggestions,
+                    clusters,
+                    organizationAndTeamData,
+                    prNumber,
+                ),
+            });
         } catch (error) {
             this.logger.error({
                 message:
@@ -2453,18 +2467,51 @@ ${reviewOptions}
 
             return codeSuggestions;
         }
+    }
 
-        if (
-            !repeteadSuggetionsClustered.codeSuggestions ||
-            repeteadSuggetionsClustered.codeSuggestions.length === 0
-        ) {
-            return codeSuggestions;
-        } else {
-            return await this.processSuggestions(
-                codeSuggestions,
-                repeteadSuggetionsClustered,
+    /**
+     * Keep only what the clustering can apply: a cluster whose parent is one
+     * of the suggestions, with related ids that are too. `sameSuggestionsId`
+     * is optional in the schema, so a cluster may arrive without it.
+     */
+    private sanitizeClusters(
+        codeSuggestions: any[],
+        clusters: ClusteredSuggestion[],
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+    ): ClusteredSuggestion[] {
+        const known = new Set(codeSuggestions.map((s) => s?.id));
+        let droppedClusters = 0;
+        let droppedIds = 0;
+        const valid: ClusteredSuggestion[] = [];
+        for (const cluster of clusters) {
+            if (!cluster || !known.has(cluster.id)) {
+                droppedClusters++;
+                continue;
+            }
+            const related = Array.isArray(cluster.sameSuggestionsId)
+                ? cluster.sameSuggestionsId
+                : [];
+            const sameSuggestionsId = related.filter(
+                (id) => known.has(id) && id !== cluster.id,
             );
+            droppedIds += related.length - sameSuggestionsId.length;
+            valid.push({ ...cluster, sameSuggestionsId });
         }
+        if (droppedClusters > 0 || droppedIds > 0) {
+            this.logger.warn({
+                message: `${LLM_ENVELOPE_TAG} clustering reply referenced unknown suggestions; ignored them`,
+                context: CommentManagerService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    prNumber,
+                    clusters: clusters.length,
+                    droppedClusters,
+                    droppedIds,
+                },
+            });
+        }
+        return valid;
     }
 
     private async enrichSuggestions(

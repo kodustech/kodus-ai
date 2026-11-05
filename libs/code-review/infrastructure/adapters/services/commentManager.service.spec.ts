@@ -1276,22 +1276,18 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         // array. processResponse does `.map` on the object → throws → returns
         // null → `null.codeSuggestions` throws PAST the boundary. CORRECT =
         // fail-safe (return input, never throw).
-        it.failing(
-            '[3] codeSuggestions as a single object → fail-safe returns input (throws past boundary today)',
-            async () => {
-                runSpy.mockResolvedValue({
-                    codeSuggestions: { id: 'a', sameSuggestionsId: ['b'] },
-                });
-                const original = input3();
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        original,
-                    );
-                expect(result).toEqual(original);
-            },
-        );
+        it('[3] codeSuggestions as a single object → fail-safe returns input', async () => {
+            runSpy.mockResolvedValue({
+                codeSuggestions: { id: 'a', sameSuggestionsId: ['b'] },
+            });
+            const original = input3();
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
+            expect(result).toEqual(original);
+        });
 
         // Row 4 — wrapper key {result: D}. Data hidden under `result` → silent drop.
         it.failing(
@@ -1311,42 +1307,37 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         // Row 7 — the whole D as a JSON string. `clustered` is a string; it gets
         // re-JSON.stringify'd (double-encoded), parses back to a string (not an
         // object) → null → throws past the boundary. CORRECT = fail-safe.
-        it.failing(
-            '[7] stringified-JSON payload → fail-safe returns input (throws past boundary today)',
-            async () => {
-                runSpy.mockResolvedValue(
-                    JSON.stringify(cleanClusterAB()) as any,
-                );
-                const original = input3();
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        original,
-                    );
-                expect(result).toEqual(original);
-            },
-        );
+        it('[7] stringified-JSON payload → fail-safe returns input', async () => {
+            runSpy.mockResolvedValue(JSON.stringify(cleanClusterAB()) as any);
+            const original = input3();
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
+            expect(result).toEqual(original);
+        });
 
         // Row 12 — partial cluster object (missing sameSuggestionsId). Passes
         // the array predicate, then extractAllClusteredIds does `.map` on
         // undefined → throws PAST the boundary. CORRECT = fail-safe/tolerate.
-        it.failing(
-            '[12] cluster missing sameSuggestionsId → does not throw past boundary (crashes today)',
-            async () => {
-                runSpy.mockResolvedValue({
-                    codeSuggestions: [{ id: 'a' }],
-                });
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        input3(),
-                    );
-                // At minimum: return a well-formed array, never throw.
-                expect(Array.isArray(result)).toBe(true);
-            },
-        );
+        it('[12] cluster missing sameSuggestionsId → does not throw past boundary', async () => {
+            runSpy.mockResolvedValue({
+                codeSuggestions: [{ id: 'a' }],
+            });
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                input3(),
+            );
+            // No related ids: every input suggestion survives.
+            expect(Array.isArray(result)).toBe(true);
+            expect(result.map((r: any) => r.id).sort()).toEqual(
+                input3()
+                    .map((s: any) => s.id)
+                    .sort(),
+            );
+        });
 
         // Row 13 — extra unknown keys alongside the right ones: must tolerate.
         it('[13] extra unknown keys → tolerated, clustering still applied', async () => {
@@ -1426,35 +1417,54 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         // input. Prod emits a contentless phantom suggestion (only
         // clusteringInformation, no id/file/content) → a garbled comment (#1786).
         // CORRECT = drop the unknown reference, never emit a contentless entry.
-        it.failing(
-            '[25] dangling sameSuggestionsId (unknown id) → no contentless phantom suggestion (garbles today)',
-            async () => {
-                runSpy.mockResolvedValue({
-                    codeSuggestions: [
-                        {
-                            id: 'a',
-                            sameSuggestionsId: ['ghost-does-not-exist'],
-                            problemDescription: 'dup',
-                            actionStatement: 'fix',
-                        },
-                    ],
-                });
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        input3(),
-                    );
-                // No emitted suggestion should be a contentless shell.
-                const hasPhantom = result.some(
-                    (r) =>
-                        r?.clusteringInformation &&
-                        r?.id === undefined &&
-                        r?.suggestionContent === undefined,
-                );
-                expect(hasPhantom).toBe(false);
-            },
-        );
+        it('[25] dangling sameSuggestionsId (unknown id) → no contentless phantom suggestion', async () => {
+            runSpy.mockResolvedValue({
+                codeSuggestions: [
+                    {
+                        id: 'a',
+                        sameSuggestionsId: ['ghost-does-not-exist'],
+                        problemDescription: 'dup',
+                        actionStatement: 'fix',
+                    },
+                ],
+            });
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                input3(),
+            );
+            // No emitted suggestion should be a contentless shell.
+            const hasPhantom = result.some(
+                (r) =>
+                    r?.clusteringInformation &&
+                    r?.id === undefined &&
+                    r?.suggestionContent === undefined,
+            );
+            expect(hasPhantom).toBe(false);
+            const parent = result.find((r: any) => r.id === 'a');
+            expect(
+                parent?.clusteringInformation?.relatedSuggestionsIds,
+            ).toEqual([]);
+        });
+
+        it('a cluster whose parent id is unknown is ignored, its members kept unclustered', async () => {
+            runSpy.mockResolvedValue({
+                codeSuggestions: [{ id: 'ghost', sameSuggestionsId: ['a'] }],
+            });
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                input3(),
+            );
+            expect(result.map((r: any) => r.id).sort()).toEqual(
+                input3()
+                    .map((s: any) => s.id)
+                    .sort(),
+            );
+            expect(result.every((r: any) => !r.clusteringInformation)).toBe(
+                true,
+            );
+        });
     });
 
     // ── C. Unparseable / transport (fail-safe layer) ────────────────────────
