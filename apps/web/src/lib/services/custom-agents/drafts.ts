@@ -1242,9 +1242,15 @@ export const mentionedFilesNotFollowed = (
     // nothing. The bare word is not a place: "use the repository pattern",
     // "keep the repository tidy" and "in the repository" (this one) are not.
     const sentencesPlacingInARepository = new Set(
-        [...text.matchAll(REPOSITORY_PLACE)].map((place) =>
-            sentenceIndex(ends, place.index ?? 0),
-        ),
+        [...text.matchAll(REPOSITORY_PLACE)]
+            .map((place) => [
+                sentenceIndex(ends, place.index ?? 0),
+                sentenceIndex(ends, (place.index ?? 0) + place[0].length - 1),
+            ])
+            // A phrase that crosses a sentence end ("…the rules. Our
+            // repository…") places nothing.
+            .filter(([first, last]) => first === last)
+            .map(([sentence]) => sentence),
     );
     const offered = new Set<string>();
     const found: MentionedFile[] = [];

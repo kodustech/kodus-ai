@@ -381,6 +381,17 @@ describe("mentionedFilesNotFollowed", () => {
         ).toEqual([]);
     });
 
+    it("takes no place phrase that crosses a sentence end", () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Read docs/conventions.md in full. Pump repository notes follow.",
+                [],
+                [],
+                "valves",
+            ),
+        ).toEqual([{ path: "docs/conventions.md", kind: "doc" }]);
+    });
+
     it("reads a code-quoted or longer place phrase", () => {
         for (const place of [
             "in the `pump-rules` repository",
