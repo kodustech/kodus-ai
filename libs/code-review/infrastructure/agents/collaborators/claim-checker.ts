@@ -205,12 +205,12 @@ const JSX_PRAGMAS = new Set(['React', 'h']);
 const MAX_IMPORT_LINES = 50;
 
 /**
- * A string literal (group 1), or a comment: a line comment, a block comment
+ * A string literal (group 1; an escape may be a line continuation), or a comment: a line comment, a block comment
  * (to the end of the text when it never closes), or `#` after whitespace or a
  * line start (group 2 keeps that whitespace).
  */
 const STRING_OR_COMMENT =
-    /("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|(?![\s\S]))|(^|\s)#[^\n]*/gm;
+    /("(?:\\[\s\S]|[^"\\\n])*"|'(?:\\[\s\S]|[^'\\\n])*'|`(?:\\[\s\S]|[^`\\])*`)|\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|(?![\s\S]))|(^|\s)#[^\n]*/gm;
 
 /**
  * A statement read two ways. `prose` drops comments and keeps strings: a
