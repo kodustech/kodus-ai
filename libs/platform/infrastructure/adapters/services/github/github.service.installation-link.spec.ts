@@ -81,7 +81,8 @@ describe('GitHub installation linking', () => {
         svc.findOneByOrganizationId = jest
             .fn()
             .mockResolvedValue({ installationStatus: 'SUCCESS' });
-        return { svc, appAuth, paginate };
+        svc.logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+        return { svc, appAuth, paginate, appOctokit };
     };
 
     const link = (svc: any, over: Record<string, unknown> = {}) =>
@@ -153,6 +154,14 @@ describe('GitHub installation linking', () => {
         expect(svc.handleIntegration).not.toHaveBeenCalled();
     });
 
+    it('links when GitHub lists a null entry among the user installations', async () => {
+        const { svc, paginate } = setup({});
+        paginate.mockResolvedValue([null, { id: 4242 }]);
+        await expect(link(svc)).resolves.toEqual(
+            expect.objectContaining({ success: true }),
+        );
+    });
+
     it('refuses when GitHub rejects the code', async () => {
         const { svc } = setup({ codeAccepted: false });
         await expect(link(svc)).rejects.toThrow(
@@ -174,6 +183,101 @@ describe('GitHub installation linking', () => {
         await expect(link(svc)).resolves.toEqual(
             expect.objectContaining({ success: true }),
         );
+    });
+
+    describe('logs', () => {
+        const logged = (fn: jest.Mock) =>
+            JSON.stringify(fn.mock.calls.map(([entry]) => entry));
+
+        it('logs where an unexpected error stopped the link, with the original error', async () => {
+            const { svc, appOctokit } = setup({});
+            const original = new TypeError(
+                "Cannot read properties of null (reading 'id')",
+            );
+            appOctokit.rest.apps.getInstallation.mockRejectedValue(original);
+
+            const thrown = await link(svc).catch((e) => e);
+
+            expect(thrown).toBeInstanceOf(BadRequestException);
+            expect(thrown.message).toBe(original.message);
+            expect(thrown.cause).toBe(original);
+            expect(svc.logger.error).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'GitHub App installation link failed',
+                    error: original,
+                    metadata: expect.objectContaining({
+                        step: 'get-installation',
+                        installationId: INSTALLATION,
+                        userId: USER,
+                    }),
+                }),
+            );
+        });
+
+        it.each([
+            [
+                'a user who cannot see the installation',
+                { userInstallations: [1] },
+                'list-user-installations',
+            ],
+            [
+                'a code GitHub rejects',
+                { codeAccepted: false },
+                'exchange-user-code',
+            ],
+        ])(
+            'logs a refusal for %s as a warning with its step',
+            async (_, opts, step) => {
+                const { svc } = setup(opts);
+                await expect(link(svc)).rejects.toBeInstanceOf(
+                    BadRequestException,
+                );
+                expect(svc.logger.error).not.toHaveBeenCalled();
+                expect(svc.logger.warn).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        message: 'GitHub App installation link refused',
+                        metadata: expect.objectContaining({
+                            step: expect.any(String),
+                            reason: expect.any(String),
+                        }),
+                    }),
+                );
+                expect(svc.logger.warn.mock.calls[0][0].metadata.step).toBe(
+                    step,
+                );
+            },
+        );
+
+        it('never logs GitHub authorization code or state', async () => {
+            const { svc, appOctokit } = setup({});
+            appOctokit.rest.apps.getInstallation.mockRejectedValue(
+                new Error('boom'),
+            );
+            const githubState = state();
+            await link(svc, { githubState }).catch(() => undefined);
+            await link(svc, { githubState: state({ userId: 'user-2' }) }).catch(
+                () => undefined,
+            );
+            const all = logged(svc.logger.error) + logged(svc.logger.warn);
+            expect(all).not.toContain('gh-code');
+            expect(all).not.toContain(githubState);
+        });
+
+        it('logs a successful link with whether it created the integration', async () => {
+            const { svc } = setup({});
+            await link(svc);
+            expect(svc.logger.log).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'GitHub App installation linked',
+                    metadata: expect.objectContaining({
+                        step: 'update-installation-status',
+                        targetType: 'Organization',
+                        hasAccount: true,
+                        created: true,
+                    }),
+                }),
+            );
+        });
     });
 
     describe('getInstallationAuthorizationUrl', () => {
