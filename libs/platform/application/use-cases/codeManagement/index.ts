@@ -1,5 +1,6 @@
 import { AutoRevokeRemovedLicenseSeatsUseCase } from './auto-revoke-removed-license-seats.use-case';
 import { BackfillAstGraphBuildUseCase } from './backfill-ast-graph-build.use-case';
+import { CarryReviewCheckToMergeQueueUseCase } from './carry-review-check-to-merge-queue.use-case';
 import { ChatWithKodyFromGitUseCase } from './chatWithKodyFromGit.use-case';
 import { CreateIntegrationUseCase } from './create-integration.use-case';
 import { CreatePRCodeReviewUseCase } from './create-prs-code-review.use-case';
@@ -23,6 +24,7 @@ import { TriggerBusinessValidationUseCase } from './trigger-business-validation.
 import { UpdateAutoLicenseAllowedUsersUseCase } from './update-auto-license-allowed-users.use-case';
 
 export default [
+    CarryReviewCheckToMergeQueueUseCase,
     GetCodeManagementMemberListUseCase,
     CreateIntegrationUseCase,
     CreateRepositoriesUseCase,

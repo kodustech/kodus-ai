@@ -2990,6 +2990,13 @@ export class GithubService
         return this.instanceOctokit(organizationAndTeamData);
     }
 
+    /** Id of the GitHub App this deployment authenticates as, if set. */
+    public getGithubAppId(): number | undefined {
+        const raw = this.configService.get<string>('API_GITHUB_APP_ID')?.trim();
+        const appId = raw ? Number(raw) : NaN;
+        return Number.isInteger(appId) && appId > 0 ? appId : undefined;
+    }
+
     async getCheckEvidence(
         params: GetCheckEvidenceParams,
     ): Promise<CheckEvidence[]> {

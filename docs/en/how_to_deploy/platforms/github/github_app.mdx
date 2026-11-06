@@ -76,6 +76,8 @@ Contents write access is only needed for features that commit repository files; 
 
 Subscribe to **Pull request**, **Pull request review comment**, **Issue comment**, and **Push**. The current webhook handler accepts these four event types; other events may return 200 while being ignored.
 
+The **Push** subscription also lets Kody report its check on the commits a GitHub merge queue tests, so `Kody Code Review` can stay a required check with a merge queue. No extra permission or event is needed.
+
 ## Step 4: Collect Credentials and Add to .env
 
 <img src="https://kodus.io/wp-content/uploads/2026/01/gthubapp-env.gif" alt="GitHub App Webhook" />

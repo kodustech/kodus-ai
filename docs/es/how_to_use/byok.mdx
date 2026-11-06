@@ -55,7 +55,7 @@ BYOK es **primero el proveedor**: conectas un proveedor una vez, le agregas los 
     - Si Kodus puede listar los modelos del proveedor, obtienes un menú desplegable.
     - De lo contrario (endpoints personalizados, auto-alojados, o cuando las claves de la plataforma no están configuradas), escribe el ID exacto del modelo.
 
-    Los endpoints personalizados (OpenAI-compatible / Anthropic-compatible) también piden primero una **Base URL**.
+    Los endpoints personalizados (OpenAI-compatible / Anthropic-compatible) también piden primero una **Base URL**. **OpenAI** muestra una **Base URL** opcional para tu propio proxy o gateway; déjala vacía para llamar a OpenAI directamente.
   </Step>
 
   <Step title="Ajustar configuración avanzada (opcional)">
@@ -177,6 +177,15 @@ Moonshot y Z.ai ofrecen cada uno un plan de suscripción en un **endpoint distin
     1. Visita [OpenAI API Keys](https://platform.openai.com/api-keys)
     2. Crea una nueva clave para Kodus
     3. Agrega información de facturación
+
+    **A través de tu propio gateway:** si tu tráfico de OpenAI pasa por un gateway con el protocolo de OpenAI que sirve la Responses API, coloca su dirección en la **Base URL** opcional y usa la clave que el gateway espera. Con los ids de modelo de OpenAI, las revisiones funcionan como con una clave directa de OpenAI: la Responses API, salida estructurada estricta y tu nivel de razonamiento.
+
+    - Incluye la versión de la API, como en `https://your-gateway.example.com/v1`. Kodus llama a `<Base URL>/responses` y lista los modelos desde `<Base URL>/models`.
+    - Si el gateway solo sirve chat completions, conéctalo como **OpenAI-compatible**.
+    - La URL debe usar `https://` y resolver a una dirección pública, porque Kodus envía tu clave allí. Los gateways en la red privada de una instalación self-hosted aún no son compatibles ([#2381](https://github.com/kodustech/kodus-ai/issues/2381)).
+    - Las solicitudes se envían con `store: false`, así que ni el gateway ni OpenAI deben conservarlas.
+    - Usa los ids de modelo de OpenAI (por ejemplo `gpt-5.4`). Un modelo que el gateway renombra no se reconoce como modelo de razonamiento, así que su nivel de razonamiento no se envía ([#2382](https://github.com/kodustech/kodus-ai/issues/2382)).
+    - No compatibles aquí: gateways que necesitan sus propios headers además de la clave (Portkey, Cloudflare AI Gateway), y Azure OpenAI, que tiene su propio proveedor **Azure OpenAI**.
   </Tab>
 
   <Tab title="Google Gemini">
