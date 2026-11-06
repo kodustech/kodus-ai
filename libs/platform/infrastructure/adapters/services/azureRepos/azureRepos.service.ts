@@ -138,9 +138,6 @@ let azureWebhookPassSeq = 0;
 const azureWebhookPassInFlight = new Set<string>();
 const azureWebhookPassRerunRequested = new Set<string>();
 
-/** How long a targeted webhook setup waits for a running full pass. */
-const AZURE_WEBHOOK_PASS_WAIT_MS = 120_000;
-
 @IntegrationServiceDecorator(PlatformType.AZURE_REPOS, 'codeManagement')
 export class AzureReposService implements Omit<
     ICodeManagementService,
@@ -2674,7 +2671,27 @@ export class AzureReposService implements Omit<
         }
 
         const passKey = `${organizationAndTeamData?.organizationId}:${organizationAndTeamData?.teamId}`;
-        await this.waitForWebhookPassSlot(passKey);
+
+        if (!(await this.waitForWebhookPassSlot(passKey))) {
+            // Running beside the full pass would build from the same stale
+            // snapshot, and freeing the slot afterwards would drop its claim.
+            this.logger.warn({
+                message:
+                    'Azure DevOps webhook setup deferred: a full pass still holds the slot',
+                context: AzureReposService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryCount: repositories.length,
+                },
+            });
+            return failWebhookSetupForAll(
+                repositories,
+                new Error(
+                    'Another webhook setup was running for this team; it is retried on the next sync',
+                ),
+                labels,
+            );
+        }
         azureWebhookPassInFlight.add(passKey);
 
         try {
@@ -2771,11 +2788,24 @@ export class AzureReposService implements Omit<
         }
     }
 
-    private async waitForWebhookPassSlot(passKey: string): Promise<void> {
-        const deadline = Date.now() + AZURE_WEBHOOK_PASS_WAIT_MS;
-        while (azureWebhookPassInFlight.has(passKey) && Date.now() < deadline) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
+    /** How long a targeted webhook setup waits for a running full pass. */
+    static WEBHOOK_PASS_WAIT_MS = 120_000;
+
+    /** True once the slot is free; false when the wait ran out. */
+    private async waitForWebhookPassSlot(passKey: string): Promise<boolean> {
+        const deadline = Date.now() + AzureReposService.WEBHOOK_PASS_WAIT_MS;
+        while (azureWebhookPassInFlight.has(passKey)) {
+            if (Date.now() >= deadline) {
+                return false;
+            }
+            await new Promise((resolve) =>
+                setTimeout(
+                    resolve,
+                    Math.min(500, AzureReposService.WEBHOOK_PASS_WAIT_MS),
+                ),
+            );
         }
+        return true;
     }
 
     async createWebhook(
