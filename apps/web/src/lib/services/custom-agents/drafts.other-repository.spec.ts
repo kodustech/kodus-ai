@@ -609,5 +609,54 @@ describe("mentionedFilesNotFollowed", () => {
                 `${OTHER_RULES}:docs/c.md`,
             ]);
         });
+
+        it("offers nothing for a file placed in two repositories joined by and/or", () => {
+            for (const text of [
+                "Read docs/a.md from irrigation-rules or pump-rules.",
+                "Read docs/a.md from irrigation-rules and/or pump-rules.",
+                "Read docs/a.md (irrigation-rules or pump-rules).",
+                "Read docs/a.md in the irrigation-rules or pump-rules repository.",
+                "In the irrigation-rules or pump-rules repository, read docs/a.md.",
+                `Read docs/a.md in ${RULES} and ${OTHER_RULES}.`,
+                "Read docs/a.md and docs/b.md from irrigation-rules and pump-rules.",
+                "Use irrigation-rules and pump-rules.\n\nRead docs/a.md.",
+            ]) {
+                expect(placed(text, [RULES, OTHER_RULES])).toEqual([]);
+            }
+            // Each file with its own repository is no choice.
+            expect(
+                placed(
+                    "Read docs/a.md from irrigation-rules and docs/b.md from pump-rules.",
+                    [RULES, OTHER_RULES],
+                ),
+            ).toEqual([`${RULES}:docs/a.md`, `${OTHER_RULES}:docs/b.md`]);
+        });
+
+        it("reads a Portuguese list as it reads an English one", () => {
+            expect(
+                placed(
+                    `No repositório ${RULES}, leia docs/a.md e docs/b.md no repositório ${OTHER_RULES}.`,
+                    [RULES, OTHER_RULES],
+                ),
+            ).toEqual([`${OTHER_RULES}:docs/b.md`]);
+            expect(
+                placed(
+                    `Leia docs/a.md ou docs/b.md no repositório ${OTHER_RULES}.`,
+                    [RULES, OTHER_RULES],
+                ),
+            ).toEqual([`${OTHER_RULES}:docs/a.md`, `${OTHER_RULES}:docs/b.md`]);
+        });
+
+        it("does not offer a file again where only a fallback places it", () => {
+            expect(
+                placed(
+                    "Read docs/a.md. docs/a.md lives in the pump-rules repository.",
+                    [OTHER_RULES],
+                ),
+            ).toEqual([`${OTHER_RULES}:docs/a.md`]);
+            expect(
+                placed("Read docs/a.md. docs/a.md lives in acme/rules.", []),
+            ).toEqual([]);
+        });
     });
 });

@@ -1159,6 +1159,11 @@ const NOT_A_RULE_FILE =
  *  is about something else ("use the repository pattern"). */
 const SENTENCE_END = /[.;!?](?=\s|$)|\r?\n[ \t]*\r?\n/g;
 
+/** What joins two repositories into a choice: "a or b", "a, and b",
+ *  "a and/or b", "a e b". */
+const REPOSITORIES_JOINED =
+    /^[\s\x60'"]*,?\s*(?:and\/or|e\/ou|and|or|&|e|ou)\s+(?:the\s+)?[\x60'"]?$/;
+
 /** The sentence a position falls in, as an index over `ends`. */
 const sentenceIndex = (ends: number[], position: number) => {
     let low = 0;
@@ -1223,14 +1228,33 @@ export const mentionedFilesNotFollowed = (
                     "g",
                 ),
             ].flatMap((pattern) =>
-                [...text.matchAll(pattern)].map((match) => ({
-                    repository,
-                    at: (match.index ?? 0) + match[1].length,
-                })),
+                [...text.matchAll(pattern)].map((match) => {
+                    const at = (match.index ?? 0) + match[1].length;
+                    return {
+                        repository,
+                        at,
+                        end: at + match[0].length - match[1].length,
+                        ambiguous: false,
+                    };
+                }),
             ),
         )
         .filter((mention) => !insideAFile(mention.at))
         .sort((a, b) => a.at - b.at);
+    // Two repositories joined ("irrigation-rules or pump-rules", "in
+    // acme/a and acme/b") name a choice, not the place of a file: neither
+    // one places it.
+    for (const [index, mention] of mentions.entries()) {
+        const next = mentions[index + 1];
+        if (
+            next &&
+            next.repository !== mention.repository &&
+            REPOSITORIES_JOINED.test(text.slice(mention.end, next.at))
+        ) {
+            mention.ambiguous = true;
+            next.ambiguous = true;
+        }
+    }
     const byFullName = new Map(
         names.map(({ repository, full }) => [full, repository]),
     );
@@ -1271,7 +1295,9 @@ export const mentionedFilesNotFollowed = (
         }
         const named = mentions[firstMentionFrom(start)];
         const repository =
-            named && named.at < end ? named.repository : undefined;
+            named && named.at < end && !named.ambiguous
+                ? named.repository
+                : undefined;
         return [{ at: start, repository }];
     });
     // Places and linked mentions by sentence, built once for every file.
@@ -1313,7 +1339,8 @@ export const mentionedFilesNotFollowed = (
     // of a list, what the list's last file is attached to ("docs/a.md and
     // docs/b.md in irrigation-rules" places both). Read from the last file
     // back, so a list of any length inherits.
-    const LIST_SEPARATOR = /^[\s\x60'"),]*(?:,|\band\b|\bor\b|&)?[\s\x60'"(]*$/;
+    const LIST_SEPARATOR =
+        /^[\s\x60'"),]*(?:,|\b(?:and|or|e|ou)\b|&)?[\s\x60'"(]*$/;
     const attached: Array<{ repository?: string } | undefined> = [];
     const inherited: boolean[] = [];
     // Places that right follow a file belong to it, not to its sentence.
@@ -1328,13 +1355,13 @@ export const mentionedFilesNotFollowed = (
             PLACE_RIGHT_AFTER,
         );
         if (place) placesOfAFile.add(place);
+        const mention = rightAfter(
+            mentionsBySentence.get(sentence) ?? [],
+            end,
+            MENTION_RIGHT_AFTER,
+        );
         const directly =
-            place ??
-            rightAfter(
-                mentionsBySentence.get(sentence) ?? [],
-                end,
-                MENTION_RIGHT_AFTER,
-            );
+            place ?? (mention?.ambiguous ? { repository: undefined } : mention);
         const fromList =
             !directly &&
             next &&
@@ -1345,8 +1372,15 @@ export const mentionedFilesNotFollowed = (
         attached[k] = directly ?? fromList;
         inherited[k] = !!fromList;
     }
-    const offered = new Set<string>();
-    const found: MentionedFile[] = [];
+    // Where each file was placed. One placed by its own text (a prefix, what
+    // it is attached to, its sentence) is "said"; one placed only by an
+    // earlier sentence or as the reviewed repository's is a fallback.
+    const placed: Array<{
+        file: MentionedFile;
+        path: string;
+        fallback: boolean;
+    }> = [];
+    const said = new Set<string>();
     for (const [index, { cited, at }] of files.entries()) {
         const lower = cited.toLowerCase();
         // A path that starts with a linked repository's full name names it.
@@ -1374,7 +1408,13 @@ export const mentionedFilesNotFollowed = (
         const placesHere = placesBySentence.get(sentence) ?? [];
         const mentionsHere = mentionsBySentence.get(sentence) ?? [];
         const own = attached[index];
-        let repository: string | undefined;
+        if (NOT_A_RULE_FILE.test(cited.split("/").pop() ?? "")) continue;
+        const item = knowledgeItemFromPath(prefixed ? prefixed.rest : cited);
+        if (!item) continue;
+        // `null`: the text places the file where it cannot be followed from
+        // (a repository that is not linked, or two candidates): no offer.
+        let repository: string | null | undefined;
+        let fallback = false;
         if (prefixed) {
             repository = prefixed.repository;
         } else if (own) {
@@ -1383,39 +1423,46 @@ export const mentionedFilesNotFollowed = (
             // sentence names another place of its own ("In the pump-rules
             // repository, see docs/a.md and docs/b.md in irrigation-rules")
             // has two: nothing is offered rather than a guess.
-            if (
+            const twoPlaces =
                 inherited[index] &&
                 placesHere.some(
                     (place) =>
                         !placesOfAFile.has(place) &&
                         place.repository !== own.repository,
-                )
-            ) {
-                continue;
-            }
-            repository = own.repository;
-            if (!repository) continue;
+                );
+            repository = twoPlaces ? null : (own.repository ?? null);
         } else if (placesHere.length) {
             // The sentence says where its files live: there, or nowhere.
-            repository = nearest(placesHere, at).repository;
-            if (!repository) continue;
+            repository = nearest(placesHere, at).repository ?? null;
         } else if (mentionsHere.length) {
             // "read x.mdc, kept in irrigation-rules". A sentence naming two
             // linked repositories with neither attached to the file does not
             // say which one holds it: nothing is offered rather than a guess.
             const named = new Set(mentionsHere.map((m) => m.repository));
-            if (named.size > 1) continue;
-            repository = mentionsHere[0].repository;
+            repository = named.size > 1 ? null : mentionsHere[0].repository;
         } else {
-            repository = mentions[firstMentionFrom(at) - 1]?.repository;
+            // Its own text says nothing: the repository named last before
+            // it, else the reviewed repository.
+            const before = mentions[firstMentionFrom(at) - 1];
+            repository = before?.ambiguous ? null : before?.repository;
+            fallback = true;
         }
-        if (NOT_A_RULE_FILE.test(cited.split("/").pop() ?? "")) continue;
-        const item = knowledgeItemFromPath(prefixed ? prefixed.rest : cited);
-        if (!item) continue;
-        const file: MentionedFile = {
-            ...item,
-            ...(repository && { repository }),
-        };
+        const path = item.path.toLowerCase();
+        if (!fallback) said.add(path);
+        if (repository === null) continue;
+        placed.push({
+            file: { ...item, ...(repository && { repository }) },
+            path,
+            fallback,
+        });
+    }
+    // A file its own text places somewhere, even a repository that is not
+    // linked ("Read docs/a.md. docs/a.md lives in the pump-rules
+    // repository"), is not offered again where only a fallback places it.
+    const offered = new Set<string>();
+    const found: MentionedFile[] = [];
+    for (const { file, path, fallback } of placed) {
+        if (fallback && said.has(path)) continue;
         const key = knowledgeKey(file);
         if (followed.has(key) || offered.has(key)) continue;
         offered.add(key);
