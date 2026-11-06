@@ -138,8 +138,8 @@ export function buildHeavyLensPasses(
 /**
  * The experiment's agents (gap-agents.ts), with the lens prompt, their own
  * tools on top of the finder's, and the larger step budget. They need the
- * repository, so none runs self-contained; the code-execution agent runs only
- * where the sandbox can run a program.
+ * repository, so none runs self-contained; the code-execution and fuzz agents
+ * run only where the sandbox can run a program.
  */
 function buildGapAgentPasses(env: HeavyLensEnvironment, lensDiff: string): HeavyLensPass[] {
     const { input } = env;
@@ -149,7 +149,7 @@ function buildGapAgentPasses(env: HeavyLensEnvironment, lensDiff: string): Heavy
     const maxSteps = gapAgentMaxSteps(changed.size);
     const allowed = input.allowedLabels;
     return GAP_AGENTS.filter((a) => !allowed || allowed.includes(a.label))
-        .filter((a) => a.tools !== 'exec' || env.sandboxCanRun)
+        .filter((a) => (a.tools !== 'exec' && a.tools !== 'fuzz') || env.sandboxCanRun)
         .map((agent) => {
             const own =
                 agent.tools === 'readers'

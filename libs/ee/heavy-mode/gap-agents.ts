@@ -38,8 +38,18 @@ const CODE_EXEC = `- Logic that fails when it is actually run. METHOD:
   3. Report a defect only when a run shows the code returning a wrong result, accepting what it must reject, or failing on an input it must handle; put the input and the observed output in the text.
   Write TypeScript as plain JavaScript. If the logic cannot be isolated from the project without guessing, skip it.`;
 
+const FUZZ = `- Logic that breaks on inputs nobody thought of. METHOD:
+  1. Pick the changed functions whose result depends on their input values: parsing and formatting, regex, slicing, arithmetic, dates, units, rounding, sorting, normalisation, validation, encoding, a small algorithm or state machine.
+  2. Copy each into a standalone program with minimal stubs for the project's imports. When the PR changed an existing function, also rebuild its previous version from the diff's removed lines.
+  3. Fuzz it with runSnippet: fast-check in javascript (require('fast-check'), fc.assert(fc.property(...), { numRuns: 300 })) or Hypothesis in python (@given, @settings(max_examples=300)). Generate the whole domain the callers can pass: empty, huge, negative, unicode, whitespace, separators, nested and duplicate values. Check one oracle per property:
+     a. it must not throw, hang or return undefined/NaN on an input its callers can pass;
+     b. where the PR did not mean to change the behaviour, the new version must return what the previous version returned;
+     c. a property the function promises: format then parse gives the input back, applying it twice changes nothing, the output keeps the length, order or range it should.
+  4. A failing property is shrunk to a minimal input. Before reporting, read the callers (getCallers, grep) and drop failures on inputs the callers can never pass and differences the PR intends.
+  Report the minimal failing input, the output and what was expected, anchored to the changed line. Write TypeScript as plain JavaScript. Skip logic that cannot be isolated without guessing.`;
+
 /** The experiment's agents, as lenses: same prompt shape, own focus. */
-export const GAP_AGENTS: Array<HeavyLens & { tools: 'readers' | 'siblings' | 'exec' }> = [
+export const GAP_AGENTS: Array<HeavyLens & { tools: 'readers' | 'siblings' | 'exec' | 'fuzz' }> = [
     {
         id: 'who-reads',
         label: 'bug',
@@ -69,6 +79,16 @@ export const GAP_AGENTS: Array<HeavyLens & { tools: 'readers' | 'siblings' | 'ex
         tools: 'exec',
         reasoningExample:
             "The new regex at retry.ts:12 classifies 5xx errors. Ran it with runSnippet on 'model gpt-503-preview not found': it matched as TRANSIENT. A permanent error becomes retryable. Reported with the input and the output.",
+    },
+    {
+        id: 'fuzz',
+        label: 'bug',
+        assignment: 'changed logic that a property-based fuzzer breaks on inputs its callers can pass',
+        items: [],
+        extraItems: [FUZZ],
+        tools: 'fuzz',
+        reasoningExample:
+            "slugify() changed at slug.ts:20. Fuzzed new vs old with fast-check over fc.string(): for 'a\\u0301' the new version returns 'a-' where the old returned 'a'. getCallers shows titles from user input reach it. Reported with the minimal input and both outputs.",
     },
 ];
 
@@ -212,6 +232,9 @@ export function buildFindSiblingsTool(remote: RemoteCommands): AgentTool {
     };
 }
 
+/** fast-check and Hypothesis on the benchmark exec template (e2b-sandbox/template.ts). */
+export const FUZZ_LIB_DIR = '/opt/kodus-fuzz';
+
 const RUNNERS: Record<string, { ext: string; cmd: (file: string) => string }> = {
     javascript: { ext: 'js', cmd: (f) => `node ${f}` },
     python: { ext: 'py', cmd: (f) => `python3 ${f}` },
@@ -225,7 +248,7 @@ export function buildRunSnippetTool(remote: RemoteCommands): AgentTool {
     return {
         name: 'runSnippet',
         description:
-            'Run a short standalone program and return its output (stdout, stderr, exit code). Languages: javascript (write TypeScript as plain JavaScript), python, ruby, go, java. No project dependencies are installed: copy the logic under test into the program with minimal stubs. 30 s limit, no network.',
+            'Run a short standalone program and return its output (stdout, stderr, exit code). Languages: javascript (write TypeScript as plain JavaScript), python, ruby, go, java. No project dependencies are installed: copy the logic under test into the program with minimal stubs. 30 s limit. fast-check (javascript) and Hypothesis (python) are installed.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -245,7 +268,7 @@ export function buildRunSnippetTool(remote: RemoteCommands): AgentTool {
             const b64 = Buffer.from(code, 'utf8').toString('base64');
             const res = await run(
                 remote,
-                `mkdir -p ${dirName} && cd ${dirName} && echo ${shellQuote(b64)} | base64 -d > ${file} && env -i PATH=/usr/local/bin:/usr/bin:/bin:/usr/lib/go/bin HOME=${dirName} GOCACHE=${dirName}/.gocache GOFLAGS=-mod=mod timeout 30 ${runner.cmd(file)} 2>&1; echo "__EXIT=$?"`,
+                `mkdir -p ${dirName} && cd ${dirName} && echo ${shellQuote(b64)} | base64 -d > ${file} && env -i PATH=/usr/local/bin:/usr/bin:/bin:/usr/lib/go/bin NODE_PATH=${FUZZ_LIB_DIR}/node_modules PYTHONPATH=${FUZZ_LIB_DIR}/py HOME=${dirName} GOCACHE=${dirName}/.gocache GOFLAGS=-mod=mod timeout 30 ${runner.cmd(file)} 2>&1; echo "__EXIT=$?"`,
             );
             const out = res.stdout || res.stderr || '';
             const exit = /__EXIT=(\d+)/.exec(out)?.[1] ?? String(res.exitCode);

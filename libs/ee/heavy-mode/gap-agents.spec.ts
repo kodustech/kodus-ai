@@ -43,6 +43,7 @@ describe('gap agents (exp/finder-gap-tools)', () => {
         const out = (await tool.execute({ language: 'python', code: "print('a' in 'abc')" }, {} as never)).output as string;
         expect(seen).toContain(Buffer.from("print('a' in 'abc')").toString('base64'));
         expect(seen).toContain('timeout 30 python3');
+        expect(seen).toContain('PYTHONPATH=/opt/kodus-fuzz/py');
         expect(out).toMatch(/^exit code 0\nTrue/);
         expect((await tool.execute({ language: 'cobol', code: 'x' }, {} as never)).isError).toBe(true);
     });
@@ -66,7 +67,8 @@ describe('gap agents (exp/finder-gap-tools)', () => {
         expect(labels({}).filter((l) => GAP_AGENTS.some((a) => l === `lens-${a.id}`))).toEqual([]);
         expect(labels({ remoteCommands: r })).toEqual(expect.arrayContaining(['lens-who-reads', 'lens-siblings']));
         expect(labels({ remoteCommands: r })).not.toContain('lens-code-exec');
-        expect(labels({ remoteCommands: r, sandboxCanRun: true })).toContain('lens-code-exec');
-        expect(labels({ remoteCommands: r, sandboxCanRun: true })).toHaveLength(12);
+        expect(labels({ remoteCommands: r })).not.toContain('lens-fuzz');
+        expect(labels({ remoteCommands: r, sandboxCanRun: true })).toEqual(expect.arrayContaining(['lens-code-exec', 'lens-fuzz']));
+        expect(labels({ remoteCommands: r, sandboxCanRun: true })).toHaveLength(13);
     });
 });

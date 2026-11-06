@@ -77,9 +77,20 @@ export const kodusBenchmarkTemplate = Template()
  * Benchmark template for the code-execution experiment: the benchmark
  * sandbox plus the runtimes of the benchmark's repositories (node and python
  * come with the base image; ruby, go and java added), so an agent can run a
- * snippet of the changed code. Built under its own alias, never production.
+ * snippet of the changed code, and fast-check / Hypothesis for the fuzz
+ * agent. Built under its own alias, never production.
  */
+// Property-based fuzzers for the fuzz agent, in a fixed prefix the runner
+// points NODE_PATH / PYTHONPATH at (gap-agents.ts FUZZ_LIB_DIR).
+const fastCheckVersion = '3.23.2';
+const hypothesisVersion = '6.112.0';
+
 export const kodusBenchmarkExecTemplate = Template()
     .fromBaseImage()
     .aptInstall(['ca-certificates', 'git', 'ripgrep', 'unzip', 'ruby', 'golang-go', 'default-jdk-headless'])
-    .runCmd([...installSecurityTools]);
+    .runCmd([
+        ...installSecurityTools,
+        'sudo mkdir -p /opt/kodus-fuzz/py',
+        `sudo npm install --prefix /opt/kodus-fuzz fast-check@${fastCheckVersion}`,
+        `sudo python3 -m pip install --target /opt/kodus-fuzz/py hypothesis==${hypothesisVersion}`,
+    ]);
