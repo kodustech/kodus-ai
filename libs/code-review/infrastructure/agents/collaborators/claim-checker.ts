@@ -224,7 +224,9 @@ const RUST_FILE = /\.rs$/;
 
 /** Whether a line of `file` is an import statement in that file's language. */
 function isImportLine(text: string, file: string): boolean {
-    if (USING_FILE.test(file) && USING_IMPORT.test(text)) return true;
+    if (USING_FILE.test(file) && USING_IMPORT.test(readStatement(text).code)) {
+        return true;
+    }
     if (ELIXIR_FILE.test(file) && /^\s*alias\s+[\p{L}_]/u.test(text)) {
         return true;
     }
@@ -336,25 +338,53 @@ function readStatement(text: string): { prose: string; code: string } {
     return { prose, code };
 }
 
-/** Open minus closed braces and parentheses in the code. */
-function depthOf(code: string): number {
-    return (
-        (code.match(/[{(]/g) ?? []).length - (code.match(/[})]/g) ?? []).length
-    );
-}
-
 /**
  * The statement starting at `lines[start]`: that line, plus the lines until
  * its braces or parentheses close (a multi-line `import {` or `from x import (`),
- * counted outside strings and comments, a comment spanning lines included.
+ * or up to a `;` at depth zero, read in one pass outside strings and comments.
+ * `import { a } from './a'; export function g() {` ends at its `;`: the
+ * function after it is not part of the import.
  */
 function statementAt(lines: string[], start: number): string {
-    const window = lines.slice(start, start + MAX_IMPORT_LINES);
-    const end = window.findIndex(
-        (_line, k) =>
-            depthOf(readStatement(window.slice(0, k + 1).join('\n')).code) <= 0,
-    );
-    return window.slice(0, end === -1 ? window.length : end + 1).join('\n');
+    const text = lines.slice(start, start + MAX_IMPORT_LINES).join('\n');
+    let depth = 0;
+    let quote = '';
+    let comment = '';
+    let escaped = false;
+    let previous = '\n';
+    for (const [i, c] of [...text].entries()) {
+        const next = text[i + 1] ?? '';
+        if (comment === 'line') {
+            if (c === '\n') {
+                comment = '';
+                if (depth <= 0) return text.slice(0, i);
+            }
+        } else if (comment === 'block') {
+            if (previous === '*' && c === '/') comment = '';
+        } else if (quote) {
+            if (escaped) escaped = false;
+            else if (c === '\\') escaped = true;
+            else if (c === quote) quote = '';
+        } else if (c === '"' || c === "'" || c === '`') {
+            quote = c;
+        } else if (c === '/' && next === '/') {
+            comment = 'line';
+        } else if (c === '/' && next === '*') {
+            comment = 'block';
+        } else if (c === '#' && /\s/.test(previous)) {
+            comment = 'line';
+        } else if (c === '{' || c === '(') {
+            depth++;
+        } else if (c === '}' || c === ')') {
+            depth--;
+        } else if (c === ';' && depth <= 0) {
+            return text.slice(0, i + 1);
+        } else if (c === '\n' && depth <= 0) {
+            return text.slice(0, i);
+        }
+        previous = c;
+    }
+    return text;
 }
 
 /**
@@ -376,9 +406,6 @@ function importStatementOf(
     symbol: string,
 ): ImportStatement | undefined {
     const file = normalizePath(violation.relevantFile ?? '');
-    if (file === '__init__.py' || file.endsWith('/__init__.py')) {
-        return undefined;
-    }
     const own = matches
         .filter((m) => m.file === file && !isElsewhere(m, violation))
         .map((m) => m.text);
@@ -525,6 +552,8 @@ function boundNames(
 function bringsNamespace(statement: string, file: string): boolean {
     const { code } = readStatement(statement);
     if (NAMESPACE_IMPORT.test(code)) return true;
+    // C#'s `global using` imports for every file of the project.
+    if (/^\s*global\s+using\b/.test(code)) return true;
     if (RUST_FILE.test(file) && /\bas\s+_(?![\p{L}\p{N}_$])/u.test(code)) {
         return true;
     }
@@ -551,10 +580,10 @@ interface RepoImport {
     end: number;
 }
 
-/** The widest finding range read for its import; a model can claim 1..999999. */
-const MAX_FINDING_SPAN = 2000;
+/** The last line a read asks for: a model can claim 1..Infinity. */
+const MAX_READ_LINE = 1_000_000_000;
 
-/** A finding's lines, with an end that is finite and within reach. */
+/** A finding's lines; an end of `Infinity` runs to the end of the file. */
 function linesOf(
     violation: ShardViolation,
 ): { start: number; end: number } | undefined {
@@ -562,9 +591,11 @@ function linesOf(
     if (typeof start !== 'number' || !Number.isFinite(start)) return undefined;
     const raw = violation.relevantLinesEnd ?? start;
     const end =
-        Number.isFinite(raw) && raw >= start
-            ? Math.min(raw, start + MAX_FINDING_SPAN)
-            : start;
+        raw === Infinity
+            ? MAX_READ_LINE
+            : Number.isFinite(raw) && raw >= start
+              ? raw
+              : start;
     return { start, end };
 }
 
@@ -593,7 +624,10 @@ async function readImports(
           )
         : 1;
     const to = spans.length
-        ? Math.max(...spans.map((r) => r.end)) + IMPORT_SEARCH_RADIUS
+        ? Math.min(
+              MAX_READ_LINE,
+              Math.max(...spans.map((r) => r.end)) + IMPORT_SEARCH_RADIUS,
+          )
         : IMPORT_SEARCH_HEAD;
     let text: string;
     try {
@@ -636,6 +670,40 @@ function nearestImport(
     return imports.reduce<RepoImport | undefined>(
         (best, r) => (!best || distance(r) < distance(best) ? r : best),
         undefined,
+    );
+}
+
+/**
+ * Files whose imports are always used by their name, so a file that never
+ * names a bound name does not use the import: JS and TS (not Vue, Svelte or
+ * Astro templates), Java, PHP, Python, Go and C#.
+ */
+const SAME_FILE_RULE_FILE = /\.(?:[cm]?[jt]sx?|java|php|pyi?|go|cs)$/;
+
+/**
+ * Whether another file imports `symbol` from this Python module, or reaches it
+ * through the module (`api.connect`): the module re-exports it.
+ */
+function reexported(
+    file: string,
+    symbol: string,
+    matches: GrepMatch[],
+): boolean {
+    const module =
+        file
+            .replace(/\.pyi?$/, '')
+            .split('/')
+            .pop() ?? '';
+    if (!module) return false;
+    const viaModule = new RegExp(
+        `(^|[^\\p{L}\\p{N}_$])${escapeRegex(module)}\\s*\\.\\s*${escapeRegex(symbol)}([^\\p{L}\\p{N}_$]|$)`,
+        'u',
+    );
+    return matches.some(
+        (m) =>
+            m.file !== file &&
+            ((isImportLine(m.text, m.file) && hasIdentifier(m.text, module)) ||
+                viaModule.test(m.text)),
     );
 }
 
@@ -722,6 +790,17 @@ async function judgeImport(
         .join(', ');
     const used = `claimed "${symbol}" is unused, but this file uses it${bound} at ${where}`;
     if (uses.length) return used;
+    // In other languages an import can be used without its name ever
+    // appearing in the file (a Rust trait, Kotlin's `by` delegates, Scala
+    // implicits, a Vue template's `<foo-bar>`, a header's `using`): a use of
+    // a bound name refutes the claim, but no use proves nothing, so the
+    // claim keeps main's any-file rule.
+    if (!SAME_FILE_RULE_FILE.test(file)) return undefined;
+    // A Python module can import a name for others to import from it
+    // (`from pkg.api import connect` in another file): it re-exports it.
+    if (PYTHON_FILE.test(file) && reexported(file, symbol, matches)) {
+        return undefined;
+    }
     // The claim names the binding (or the name it renames): nothing in the
     // file uses it. Otherwise the claim is about a module path segment or a
     // Python `from` path, and is judged as main does, by a use in any file.
@@ -1071,6 +1150,10 @@ export async function checkClaims(
                 key: claim.kind === 'none' ? '' : claimKeyOf(claim),
             };
         });
+        const byKey = new Map<string, ShardViolation[]>();
+        for (const c of claims) {
+            byKey.set(c.key, [...(byKey.get(c.key) ?? []), c.violation]);
+        }
         for (const { claim, key: claimKey } of claims) {
             if (claim.kind === 'none') {
                 continue;
@@ -1084,15 +1167,15 @@ export async function checkClaims(
                 claimKey,
                 claim,
                 span,
-                owners: claims
-                    .filter((c) => c.key === claimKey)
-                    .map((c) => c.violation),
+                owners: byKey.get(claimKey) ?? [],
                 group,
                 // An unused claim is refuted by a use anywhere but the
                 // findings that make or restate it: a sibling about something
                 // else, or the lines between siblings, can hold the only use.
                 // A duplicate claim keeps the group's span, which a call of
                 // the new function inside it must not count as the helper.
+                // Siblings making a claim on the same symbol under another key
+                // (with a path, or another kind) state it too.
                 ranges:
                     claim.kind === 'unused'
                         ? rangesOf(
@@ -1100,6 +1183,9 @@ export async function checkClaims(
                                   .filter(
                                       (c) =>
                                           c.key === claimKey ||
+                                          (c.claim.kind !== 'none' &&
+                                              c.claim.symbol ===
+                                                  claim.symbol) ||
                                           (c.claim.kind === 'none' &&
                                               saysAbout(c.violation, claim)),
                                   )

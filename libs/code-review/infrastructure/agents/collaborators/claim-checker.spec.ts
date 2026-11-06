@@ -61,8 +61,9 @@ const fakeLookup = (
                     if (m && m[1] === path) lines[Number(m[2]) - 1] = m[3];
                 }
             }
+            const last = Math.min(end, Math.max(lines.length, start));
             return Array.from(
-                { length: Math.max(0, end - start + 1) },
+                { length: Math.max(0, last - start + 1) },
                 (_, k) => lines[start - 1 + k] ?? '',
             ).join('\n');
         },
@@ -847,12 +848,13 @@ describe('checkClaims — an unused import, in every language the rules review',
             reason: 'src/A.scala:5',
         },
         {
-            lang: 'Scala rename, unused',
+            lang: 'Scala rename, unused (any-file rule)',
             file: 'src/A.scala',
             line: 'import com.acme.{Money => Cash}',
             symbol: 'Money',
             elsewhere: 'src/Money.scala:1:case class Money(v: Int)',
-            verdict: 'publish',
+            verdict: 'drop',
+            reason: 'src/Money.scala:1',
         },
         {
             lang: 'Rust, one name of a group',
@@ -937,12 +939,13 @@ describe('checkClaims — an unused import, in every language the rules review',
             verdict: 'unverifiable',
         },
         {
-            lang: 'Lua',
+            lang: 'Lua (any-file rule)',
             file: 'lib/a.lua',
             line: 'local json = require("json")',
             symbol: 'json',
             elsewhere: 'lib/b.lua:1:local json = require("json")',
-            verdict: 'publish',
+            verdict: 'drop',
+            reason: 'lib/b.lua:1',
         },
         {
             lang: 'Elixir alias with as:, used',
@@ -961,12 +964,13 @@ describe('checkClaims — an unused import, in every language the rules review',
             verdict: 'unverifiable',
         },
         {
-            lang: 'Haskell explicit list',
+            lang: 'Haskell explicit list (any-file rule)',
             file: 'src/A.hs',
             line: 'import Data.Map (fromList)',
             symbol: 'fromList',
             elsewhere: 'src/B.hs:2:import Data.Map (fromList)',
-            verdict: 'publish',
+            verdict: 'drop',
+            reason: 'src/B.hs:2',
         },
         {
             lang: 'Haskell whole module',
@@ -1870,6 +1874,228 @@ describe('checkClaims — an unused import is judged by its own finding, not the
             (d) => d.violation.claimSymbol === 'debounce',
         );
         expect(dropped?.reason).toContain('src/a.js:40');
+    });
+});
+
+describe('checkClaims — an import used without its name (review round 6)', () => {
+    type Case = {
+        name: string;
+        file: string;
+        line: number;
+        symbol: string;
+        files: Record<string, string>;
+        end?: number;
+        expect: 'drop' | 'keep' | 'unverifiable';
+    };
+    // Every case is a file as the repository has it, searched the way rg does.
+    const lookupFor = (files: Record<string, string>) =>
+        fakeLookup({
+            files,
+            exists: (path) => path in files,
+            grep: (pattern) =>
+                Object.entries(files)
+                    .flatMap(([path, text]) =>
+                        text
+                            .split('\n')
+                            .map((l, i) => ({ path, l, n: i + 1 }))
+                            .filter(({ l }) => new RegExp(pattern).test(l))
+                            .map(({ path, l, n }) => `${path}:${n}:${l}`),
+                    )
+                    .join('\n'),
+        });
+    const CASES: Case[] = [
+        {
+            name: 'a Rust trait used only through its methods',
+            file: 'src/main.rs',
+            line: 1,
+            symbol: 'Rng',
+            files: {
+                'src/main.rs':
+                    'use rand::Rng;\n\nfn main() {\n    let n = rand::thread_rng().gen_range(0..10);\n}',
+                'src/dice.rs': 'use rand::Rng;',
+            },
+            expect: 'drop',
+        },
+        {
+            name: "Kotlin's getValue used by a by delegate",
+            file: 'app/Screen.kt',
+            line: 1,
+            symbol: 'getValue',
+            files: {
+                'app/Screen.kt':
+                    'import androidx.compose.runtime.getValue\n\nval s by mutableStateOf(1)',
+                'app/Other.kt': 'import androidx.compose.runtime.getValue',
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'a Scala implicit',
+            file: 'src/A.scala',
+            line: 1,
+            symbol: 'global',
+            files: {
+                'src/A.scala':
+                    'import scala.concurrent.ExecutionContext.Implicits.global\n\nval f = Future(1)',
+                'src/B.scala':
+                    'import scala.concurrent.ExecutionContext.Implicits.global',
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'a Vue component used in its template',
+            file: 'src/App.vue',
+            line: 2,
+            symbol: 'FooBar',
+            files: {
+                'src/App.vue':
+                    "<script setup>\nimport FooBar from './FooBar.vue'\n</script>\n<template><foo-bar /></template>",
+                'src/Other.vue':
+                    "<script setup>\nimport FooBar from './FooBar.vue'\n</script>",
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'a Python module that re-exports a name',
+            file: 'pkg/api.py',
+            line: 1,
+            symbol: 'connect',
+            files: {
+                'pkg/api.py': 'from pkg._impl import connect',
+                'pkg/_impl.py': 'def connect():\n    pass',
+                'app/main.py': 'from pkg.api import connect',
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'a Python module reached as api.connect',
+            file: 'pkg/api.py',
+            line: 1,
+            symbol: 'connect',
+            files: {
+                'pkg/api.py': 'from pkg._impl import connect',
+                'pkg/_impl.py': 'def connect():\n    pass',
+                'app/main.py': 'from pkg import api\napi.connect()',
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'a Python import nobody re-exports, unused',
+            file: 'pkg/job.py',
+            line: 1,
+            symbol: 'connect',
+            files: {
+                'pkg/job.py':
+                    'from pkg._impl import connect\n\ndef run():\n    pass',
+                'pkg/_impl.py': 'def connect():\n    pass',
+            },
+            expect: 'keep',
+        },
+        {
+            name: 'a function written after the import on its line',
+            file: 'src/a.ts',
+            line: 1,
+            symbol: 'foo',
+            files: {
+                'src/a.ts':
+                    "import { foo } from './foo'; export function g() {\n  return foo(1);\n}",
+                'src/foo.ts': 'export function foo(n) {}',
+            },
+            expect: 'drop',
+        },
+        {
+            name: "C#'s global using",
+            file: 'src/GlobalUsings.cs',
+            line: 1,
+            symbol: 'JsonConvert',
+            files: {
+                'src/GlobalUsings.cs':
+                    'global using JsonConvert = Newtonsoft.Json.JsonConvert;',
+            },
+            expect: 'unverifiable',
+        },
+        {
+            name: 'a C# using alias with a trailing comment, used inside a wide finding',
+            file: 'src/A.cs',
+            line: 1,
+            end: 10,
+            symbol: 'Json',
+            files: {
+                'src/A.cs':
+                    'using Json = Newtonsoft.Json.JsonConvert; // serializer\n\nclass A {\n    string S(object x) => Json.SerializeObject(x);\n}',
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'an import far below a finding claiming 1..999999',
+            file: 'src/big.js',
+            line: 1,
+            end: 999999,
+            symbol: 'debounce',
+            files: {
+                'src/big.js':
+                    '\n'.repeat(2499) +
+                    "import { debounce } from './timing';\n" +
+                    '\n'.repeat(99) +
+                    'debounce(save);',
+                'src/timing.js': 'export function debounce() {}',
+            },
+            expect: 'drop',
+        },
+    ];
+
+    it.each(CASES)('$name: $expect', async (c: Case) => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: c.file,
+                    relevantLinesStart: c.line,
+                    relevantLinesEnd: c.end ?? c.line,
+                    claimKind: 'unused',
+                    claimSymbol: c.symbol,
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupFor(c.files),
+        });
+        if (c.expect === 'keep') {
+            expect(res.kept).toHaveLength(1);
+            return;
+        }
+        expect(res.kept).toEqual([]);
+        if (c.expect === 'unverifiable') {
+            expect(res.dropped[0].reason).toContain('unverifiable');
+        }
+    });
+
+    it('keeps two true findings on one symbol that differ only by a claim path', async () => {
+        const files = {
+            'src/a.ts':
+                'function foo() {\n  return 1;\n}\n' +
+                '\n'.repeat(36) +
+                '// foo is dead code\nexport const x = 1;',
+        };
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 3,
+                    claimKind: 'unused',
+                    claimSymbol: 'foo',
+                }),
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 40,
+                    relevantLinesEnd: 40,
+                    claimKind: 'unused',
+                    claimSymbol: 'foo',
+                    claimPath: 'src/a.ts',
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupFor(files),
+        });
+        expect(res.kept).toHaveLength(2);
     });
 });
 
