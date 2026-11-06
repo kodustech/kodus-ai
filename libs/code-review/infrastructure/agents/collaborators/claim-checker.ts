@@ -359,9 +359,6 @@ function statementAt(lines: string[], start: number): string {
  */
 interface ImportStatement {
     text: string;
-    /** The statement's first line within the cited code; absent when it was
-     *  read from the repository's own line. */
-    citedLine?: number;
 }
 
 function importStatementOf(
@@ -382,9 +379,7 @@ function importStatementOf(
             .filter((line) => isImportLine(line, file))
             .map((text) => ({ text })),
         ...cited.flatMap((line, i) =>
-            isImportLine(line, file)
-                ? [{ text: statementAt(cited, i), citedLine: i }]
-                : [],
+            isImportLine(line, file) ? [{ text: statementAt(cited, i) }] : [],
         ),
     ];
     return statements.find((statement) =>
@@ -514,52 +509,113 @@ function bringsNamespace(statement: string, file: string): boolean {
     return false;
 }
 
+/** Lines read around a finding to find the import it is on. */
+const IMPORT_SEARCH_RADIUS = 60;
+/** Lines read from the top of a file when the finding names no lines. */
+const IMPORT_SEARCH_HEAD = 400;
+
+/** An import statement as the repository has it, with its lines. */
+interface RepoImport {
+    text: string;
+    start: number;
+    end: number;
+}
+
 /**
- * A grep hit on the import's own lines, for a statement read across several
- * lines from the code the finding cites: the finding may sit on `import {`
- * while the name is on a member line below it, which is not a use. The cited
- * code starts at the finding's first line, so the statement's lines are known
- * exactly; a hit counts only at its own place in them with its own text. A
- * `createUser,` shorthand property a few lines below the import is a use.
+ * The import statement naming `symbol` in the repository's own text of the
+ * file, near the finding: the one over the finding's lines, else the closest.
+ * Read from the file, not from the code the model cites, so its lines are the
+ * file's: a reformatted citation or a finding one line off cannot move them.
  */
-function isStatementLine(
-    match: GrepMatch,
+async function locateImport(
+    lookup: ClaimCheckInput['lookup'],
+    file: string,
     violation: ShardViolation,
-    statement: ImportStatement,
-): boolean {
-    if (statement.citedLine === undefined) return false;
+    symbol: string,
+): Promise<RepoImport | undefined> {
+    // A package's `__init__.py` re-exports what it imports: its users are
+    // the files importing the package, so it keeps the any-file rule.
+    if (file === '__init__.py' || file.endsWith('/__init__.py')) {
+        return undefined;
+    }
+    const start = violation.relevantLinesStart;
+    const end = violation.relevantLinesEnd ?? start;
+    const from =
+        start === undefined ? 1 : Math.max(1, start - IMPORT_SEARCH_RADIUS);
+    const to =
+        start === undefined || end === undefined
+            ? IMPORT_SEARCH_HEAD
+            : end + IMPORT_SEARCH_RADIUS;
+    let text: string;
+    try {
+        text = (await lookup.read(file, from, to)) ?? '';
+    } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        throw new UnverifiableClaimError(`could not read ${file}: ${detail}`);
+    }
+    if (text.startsWith('Error:')) {
+        throw new UnverifiableClaimError(`could not read ${file}: ${text}`);
+    }
+    const lines = text.split('\n');
+    const imports = lines.flatMap((line, i): RepoImport[] => {
+        if (!isImportLine(line, file)) return [];
+        const statement = statementAt(lines, i);
+        if (!hasIdentifier(readStatement(statement).prose, symbol)) return [];
+        const first = from + i;
+        return [
+            {
+                text: statement,
+                start: first,
+                end: first + statement.split('\n').length - 1,
+            },
+        ];
+    });
+    const distance = (r: RepoImport): number => {
+        if (start === undefined || end === undefined) return r.start;
+        if (r.end < start) return start - r.end;
+        if (r.start > end) return r.start - end;
+        return 0;
+    };
+    return imports.reduce<RepoImport | undefined>(
+        (best, r) => (!best || distance(r) < distance(best) ? r : best),
+        undefined,
+    );
+}
+
+/** Whether the import's lines meet the finding's. */
+function overlaps(real: RepoImport, violation: ShardViolation): boolean {
     const start = violation.relevantLinesStart;
     if (start === undefined) return false;
-    const lines = statement.text.split('\n');
-    if (lines.length < 2) return false;
-    const k = match.line - (start + statement.citedLine);
-    return k >= 0 && k < lines.length && lines[k].trim() === match.text.trim();
+    const end = violation.relevantLinesEnd ?? start;
+    return real.start <= end && real.end >= start;
 }
 
 /**
  * The verdict on an unused claim about an import (#1724 QA): only a use in the
  * file that imports it refutes it. Every local import also occurs where it is
  * defined, and other files may import and use the same name: neither makes
- * this import used. Undefined when the statement does not bind the claimed
- * name (it is only in the module path, `import f "fmt"`): judge it as main.
+ * this import used. Undefined when the claim is not about a name the import
+ * binds (a module path, `import f "fmt"`): judge it as main.
  */
 async function judgeImport(
-    statement: ImportStatement,
+    real: RepoImport,
+    file: string,
     symbol: string,
-    violation: ShardViolation,
     matches: GrepMatch[],
     lookup: ClaimCheckInput['lookup'],
 ): Promise<string | null | undefined> {
-    const shown = statement.text.trim().replace(/\s+/g, ' ');
-    // A PR-level finding names no file, so there is no importing file to
-    // search: the claim cannot be checked either way.
-    if (!violation.relevantFile) {
+    const shown = real.text.trim().replace(/\s+/g, ' ');
+    const onImport = (m: GrepMatch) =>
+        m.file === file && m.line >= real.start && m.line <= real.end;
+    // The import names the symbol, so a search that reached the file finds
+    // it there. None means the search did not cover the file (a hidden or
+    // ignored path), and its silence is no evidence of "unused".
+    if (!matches.some(onImport)) {
         throw new UnverifiableClaimError(
-            `"${shown}" names no file, so a search cannot tell whether the file that imports it uses it`,
+            `the search did not reach ${file}, so it cannot tell whether "${shown}" is used`,
         );
     }
-    const file = normalizePath(violation.relevantFile);
-    if (bringsNamespace(statement.text, file)) {
+    if (bringsNamespace(real.text, file)) {
         throw new UnverifiableClaimError(
             `"${shown}" brings a module's members in without naming them, so a search cannot tell whether it is used`,
         );
@@ -569,7 +625,7 @@ async function judgeImport(
             `"${symbol}" may be used by every JSX element in ${file} without its name, so a search cannot tell whether it is used`,
         );
     }
-    const { bound: names, renamed } = boundNames(statement.text, symbol, file);
+    const { bound: names, renamed } = boundNames(real.text, symbol, file);
     if (names.length === 0) return undefined;
     if (names.length > MAX_BOUND_NAMES) {
         throw new UnverifiableClaimError(
@@ -589,32 +645,13 @@ async function judgeImport(
               ),
           ]
         : matches;
-    const statementLines = statement.text
-        .split('\n')
-        .map(lineKey)
-        .filter(Boolean);
-    // The import's opening line, wherever the grep finds it: the finding's
-    // lines can be off by one, and a duplicate import is not a use either.
-    const importLine = statementLines[0];
+    // Anywhere in the file but the import's own lines. Any other line counts,
+    // an import-looking one too (`using var`, Kotlin's `require(…)`, a trait
+    // `use`): code in some languages, and taking one for an import would
+    // publish an import the file uses. On another import line the string is a
+    // module path (`'./Button.css'`), so only its code counts.
     const uses = hits.filter((m) => {
-        if (m.file !== file) return false;
-        const inFinding = !isElsewhere(m, violation);
-        // The import itself is not a use: a multi-line import's member lines
-        // by place, and inside the finding a line whose text is one of the
-        // import's (or a hit the provider gave without text). Any other line
-        // counts, an import-looking one too: `using var`, Kotlin's
-        // `require(…)`, a trait `use` are code in some languages, and taking
-        // one for an import would publish an import the file uses.
-        if (isStatementLine(m, violation, statement)) return false;
-        if (
-            inFinding &&
-            (!m.text || statementLines.includes(lineKey(m.text)))
-        ) {
-            return false;
-        }
-        if (m.text && lineKey(m.text) === importLine) return false;
-        // On another import line the string is a module path: `'./Button.css'`
-        // names no binding. Its code still counts (`using var`, `require(…)`).
+        if (m.file !== file || onImport(m)) return false;
         const text =
             m.text && isImportLine(m.text, file)
                 ? readStatement(m.text).code
@@ -636,14 +673,6 @@ async function judgeImport(
     return names.includes(symbol) || renamed.includes(symbol)
         ? null
         : undefined;
-}
-
-/** A line compared to the import's: trimmed, without a trailing `,` or `;`. */
-function lineKey(line: string): string {
-    return line
-        .trim()
-        .replace(/[,;]+$/, '')
-        .trim();
 }
 
 /** A path as a literal ripgrep glob. */
@@ -740,28 +769,42 @@ async function refute(
 
     if (claim.kind === 'unused') {
         // An import is judged by the finding that makes the claim and sits on
-        // the import, not by the group's span: a sibling of the same rule
-        // elsewhere in the file would make every use between them "inside
-        // the finding".
-        // The claim's own findings first, then a sibling that sits on the
-        // import without declaring the claim itself.
-        let found:
-            { own: ShardViolation; statement: ImportStatement } | undefined;
+        // it, not by the group's span: a sibling of the same rule elsewhere
+        // in the file would make every use between them "inside the
+        // finding". Whether a finding is about an import is read from the
+        // repository: an import naming the symbol over the finding's lines,
+        // or one the finding cites. A sibling that sits on the import without
+        // declaring the claim anchors it only by its citation.
+        let found: { file: string; real: RepoImport } | undefined;
         for (const own of [
             ...owners,
             ...group.filter((v) => !owners.includes(v)),
         ]) {
-            const statement = importStatementOf(own, matches, claim.symbol!);
-            if (statement) {
-                found = { own, statement };
+            const isOwner = owners.includes(own);
+            const cited = importStatementOf(own, matches, claim.symbol!);
+            if (!own.relevantFile) {
+                // A PR-level finding names no file, so there is no importing
+                // file to search: the claim cannot be checked either way.
+                if (cited) {
+                    throw new UnverifiableClaimError(
+                        `"${cited.text.trim().replace(/\s+/g, ' ')}" names no file, so a search cannot tell whether the file that imports it uses it`,
+                    );
+                }
+                continue;
+            }
+            if (!cited && !isOwner) continue;
+            const file = normalizePath(own.relevantFile);
+            const real = await locateImport(lookup, file, own, claim.symbol!);
+            if (real && (cited || overlaps(real, own))) {
+                found = { file, real };
                 break;
             }
         }
         if (found) {
             const verdict = await judgeImport(
-                found.statement,
+                found.real,
+                found.file,
                 claim.symbol!,
-                found.own,
                 matches,
                 lookup,
             );
@@ -839,6 +882,20 @@ const groupKeyOf = (violation: ShardViolation): string =>
  * symbol (delimited, so `slug` does not match `slugify`). When the claim named
  * no target at all there is nothing to match on, and the sibling is kept.
  */
+/**
+ * Whether an undeclared sibling's prose (its summary or suggestion) names the
+ * claim's symbol: it repeats the assertion. Its code is not read, unlike
+ * `restates`: a sibling about something else on a line that calls the symbol
+ * holds a use, not a repetition.
+ */
+function saysAbout(violation: ShardViolation, claim: Claim): boolean {
+    if (!claim.symbol) return false;
+    return hasIdentifier(
+        `${violation.oneSentenceSummary ?? ''} ${violation.suggestionContent ?? ''}`,
+        claim.symbol,
+    );
+}
+
 function restates(violation: ShardViolation, claim: Claim): boolean {
     const text = `${violation.oneSentenceSummary ?? ''} ${violation.suggestionContent ?? ''} ${violation.existingCode ?? ''}`;
     if (!text.trim()) return false;
@@ -892,7 +949,7 @@ function spanOf(group: ShardViolation[]): ShardViolation {
  * Undefined unless every sibling carries its lines, so the span still decides.
  */
 function rangesOf(group: ShardViolation[]): LineRanges | undefined {
-    if (group.length < 2) return undefined;
+    if (group.length === 0) return undefined;
     const ranges = group.flatMap((v): LineRanges => {
         const start = v.relevantLinesStart;
         return typeof start === 'number'
@@ -944,7 +1001,6 @@ export async function checkClaims(
     }> = [];
     for (const [groupKey, group] of groups) {
         const span = spanOf(group);
-        const ranges = rangesOf(group);
         const seen = new Set<string>();
         const claims = group.map((violation) => {
             const claim = readClaim(violation);
@@ -971,7 +1027,24 @@ export async function checkClaims(
                     .filter((c) => c.key === claimKey)
                     .map((c) => c.violation),
                 group,
-                ranges,
+                // An unused claim is refuted by a use anywhere but the
+                // findings that make or restate it: a sibling about something
+                // else, or the lines between siblings, can hold the only use.
+                // A duplicate claim keeps the group's span, which a call of
+                // the new function inside it must not count as the helper.
+                ranges:
+                    claim.kind === 'unused'
+                        ? rangesOf(
+                              claims
+                                  .filter(
+                                      (c) =>
+                                          c.key === claimKey ||
+                                          (c.claim.kind === 'none' &&
+                                              saysAbout(c.violation, claim)),
+                                  )
+                                  .map((c) => c.violation),
+                          )
+                        : undefined,
             });
         }
     }

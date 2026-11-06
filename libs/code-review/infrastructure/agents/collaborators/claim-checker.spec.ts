@@ -29,6 +29,9 @@ interface FakeLookupOptions {
     unavailableReason?: string;
     grep?: (pattern: string) => Promise<string> | string;
     exists?: (path: string) => Promise<boolean> | boolean;
+    /** Each file's text. Without it, a file is the lines the grep fixture
+     *  gives for it (`path:line:text`), every other line blank. */
+    files?: Record<string, string>;
 }
 
 const fakeLookup = (
@@ -50,8 +53,18 @@ const fakeLookup = (
             if (!opts.grep) return 'No matches found.';
             return opts.grep(pattern);
         },
-        async read() {
-            throw new Error('not used');
+        async read(path: string, start: number, end: number) {
+            const lines = opts.files?.[path]?.split('\n') ?? [];
+            if (!opts.files?.[path] && opts.grep) {
+                for (const raw of String(await opts.grep('')).split('\n')) {
+                    const m = /^(.+?):(\d+):(.*)$/.exec(raw);
+                    if (m && m[1] === path) lines[Number(m[2]) - 1] = m[3];
+                }
+            }
+            return Array.from(
+                { length: Math.max(0, end - start + 1) },
+                (_, k) => lines[start - 1 + k] ?? '',
+            ).join('\n');
         },
         async exists(path: string) {
             if (!opts.exists) return false;
@@ -266,6 +279,10 @@ describe('checkClaims — an unused import is about the file that imports it (#1
         const lookup = fakeLookup({
             grep: () =>
                 'helpers/report.js:3:  debounce,\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+            files: {
+                'helpers/report.js':
+                    'import {\n  formatDate,\n  debounce,\n} from "./timing.js";\n\nexport const x = formatDate(1);',
+            },
         });
         const res = await checkClaims({
             violations: [
@@ -309,6 +326,11 @@ describe('checkClaims — an unused import is about the file that imports it (#1
     it('does not count the import own member line below the finding as a use', async () => {
         const lookup = fakeLookup({
             grep: () => 'helpers/report.js:11:  debounce,',
+            files: {
+                'helpers/report.js':
+                    '\n'.repeat(9) +
+                    'import {\n  debounce,\n} from "./timing.js";',
+            },
         });
         const res = await checkClaims({
             violations: [
@@ -491,6 +513,10 @@ describe('checkClaims — an unused import is about the file that imports it (#1
         const lookup = fakeLookup({
             grep: () =>
                 'helpers/report.js:3:  debounce,\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+            files: {
+                'helpers/report.js':
+                    'import { // see } below\n  formatDate,\n  debounce,\n} from "./timing.js" with { type: "js" };',
+            },
         });
         const res = await checkClaims({
             violations: [
@@ -591,6 +617,10 @@ describe('checkClaims — an unused import is about the file that imports it (#1
         const lookup = fakeLookup({
             grep: () =>
                 'helpers/report.js:4:  debounce,\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+            files: {
+                'helpers/report.js':
+                    'import { /* formerly:\n  } */\n  formatDate,\n  debounce,\n} from "./timing.js";',
+            },
         });
         const res = await checkClaims({
             violations: [
@@ -610,7 +640,11 @@ describe('checkClaims — an unused import is about the file that imports it (#1
     it('reads a string continued across lines as a string, not as the binding', async () => {
         const lookup = fakeLookup({
             grep: () =>
-                'helpers/timing.js:1:export function debounce(fn, ms) {',
+                'helpers/report.js:2:import { debounce } from "./a{\\\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+            files: {
+                'helpers/report.js':
+                    '\nimport { debounce } from "./a{\\\ndebounce as w.js";',
+            },
         });
         const res = await checkClaims({
             violations: [
@@ -629,6 +663,10 @@ describe('checkClaims — an unused import is about the file that imports it (#1
         const lookup = fakeLookup({
             grep: () =>
                 'helpers/report.js:3:  debounce,\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+            files: {
+                'helpers/report.js':
+                    'import {\n  formatDate,\n  debounce,\n} from "./timing.js";',
+            },
         });
         const res = await checkClaims({
             violations: [
@@ -1431,6 +1469,9 @@ describe('checkClaims — an unused import is judged by its own finding, not the
             lookup: fakeLookup({
                 grep: () =>
                     'src/a.js:3:\nsrc/timing.js:1:export function debounce() {}',
+                files: {
+                    'src/a.js': '\n\nimport { debounce } from "./timing";',
+                },
             }),
         });
         expect(res.kept).toHaveLength(1);
@@ -1449,10 +1490,13 @@ describe('checkClaims — an unused import is judged by its own finding, not the
                 }),
             ],
             changedFiles: [],
-            lookup: lookupOf([
-                'src/a.js:5:  Foo,',
-                'src/x.js:1:export class Foo {}',
-            ]),
+            lookup: fakeLookup({
+                grep: () => 'src/a.js:5:  Foo,\nsrc/x.js:1:export class Foo {}',
+                files: {
+                    'src/a.js':
+                        "\n\nimport {\n  Bar,\n  Foo,\n} from './x';\nconsole.log(Bar);",
+                },
+            }),
         });
         expect(res.kept).toHaveLength(1);
     });
@@ -1510,6 +1554,137 @@ describe('checkClaims — an unused import is judged by its own finding, not the
             ]),
         });
         expect(res.kept).toHaveLength(1);
+    });
+
+    it('does not publish a fabricated duplicate because the new function is called inside the group', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/text.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 3,
+                    claimKind: 'duplicate',
+                    claimSymbol: 'slugify',
+                }),
+                violation({
+                    relevantFile: 'src/text.ts',
+                    relevantLinesStart: 8,
+                    relevantLinesEnd: 8,
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupOf([
+                'src/text.ts:1:export function slugify(s) {',
+                "src/text.ts:5:const a = slugify('a');",
+            ]),
+        });
+        expect(
+            res.dropped.some((d) => d.violation.claimSymbol === 'slugify'),
+        ).toBe(true);
+    });
+
+    it('counts a PHP global trait used in the class, though its text equals the import', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'app/M.php',
+                    relevantLinesStart: 2,
+                    relevantLinesEnd: 2,
+                    claimKind: 'unused',
+                    claimSymbol: 'HasFactory',
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: () =>
+                    'app/M.php:2:use HasFactory;\napp/M.php:5:    use HasFactory;',
+                files: {
+                    'app/M.php':
+                        '<?php\nuse HasFactory;\n\nclass M {\n    use HasFactory;\n}',
+                },
+            }),
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('app/M.php:5');
+    });
+
+    it('counts a shorthand use inside a wide finding, though its text equals a member line', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/api.js',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 7,
+                    claimKind: 'unused',
+                    claimSymbol: 'createUser',
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: () =>
+                    'src/api.js:2:  createUser,\nsrc/api.js:6:  createUser,',
+                files: {
+                    'src/api.js':
+                        "import {\n  createUser,\n} from './users';\n\nexport const api = {\n  createUser,\n};",
+                },
+            }),
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('src/api.js:6');
+    });
+
+    it('counts a use on the line of a sibling about something else', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/c.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'computeTotal',
+                }),
+                violation({
+                    relevantFile: 'src/c.ts',
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    suggestionContent: 'Name the 1.07 tax rate',
+                    existingCode: 'const t = computeTotal(2) * 1.07;',
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupOf([
+                'src/c.ts:1:function computeTotal(n) {',
+                'src/c.ts:3:const t = computeTotal(2) * 1.07;',
+            ]),
+        });
+        const dropped = res.dropped.find(
+            (d) => d.violation.claimSymbol === 'computeTotal',
+        );
+        expect(dropped?.reason).toContain('src/c.ts:3');
+    });
+
+    it('does not publish when the search did not reach the importing file', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: '.storybook/main.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'bar',
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: () => 'src/foo.ts:1:export const bar = 1;',
+                files: {
+                    '.storybook/main.ts':
+                        "import { bar } from '../src/foo';\nexport default bar;",
+                },
+            }),
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('unverifiable');
     });
 
     it('judges the claim by the sibling that sits on the import', async () => {
