@@ -675,13 +675,14 @@ describe("mentionedFilesNotFollowed", () => {
                     `${RULES}:${second}`,
                 ]);
             }
-            // A list that goes on after the choice is still a choice.
-            expect(
-                placed(
-                    "Read docs/a.md from pump-rules or irrigation-rules, and docs/b.md too.",
-                    [RULES, OTHER_RULES],
-                ),
-            ).toEqual([]);
+            // A choice the sentence goes on from is still a choice: the
+            // file after it is not the second repository's own.
+            for (const text of [
+                "Read docs/a.md from pump-rules or irrigation-rules, then docs/b.md.",
+                "Read docs/a.md in pump-rules or in irrigation-rules, then docs/b.md.",
+            ]) {
+                expect(placed(text, [RULES, OTHER_RULES])).toEqual([]);
+            }
         });
 
         it("reads a Portuguese list as it reads an English one", () => {
