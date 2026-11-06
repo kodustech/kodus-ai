@@ -773,12 +773,25 @@ describe("mentionedFilesNotFollowed", () => {
                     "acme/rules:docs/conventions.md",
                 ]);
             }
+            // An unlinked one places nowhere; a linked one in the same
+            // sentence still places its own file.
             expect(
                 placed(
-                    "Read docs/conventions.md in the same repo as other/policies.",
+                    "Read docs/conventions.md in the same repo as acme/rules and docs/valves.md in the same repo as other/policies.",
                     ["acme/rules"],
                 ),
-            ).toEqual([]);
+            ).toEqual(["acme/rules:docs/conventions.md"]);
+        });
+
+        it("keeps a comparison that names no repository as the reviewed one", () => {
+            for (const text of [
+                "Use acme/rules. Read docs/conventions.md in the same repo as before.",
+                "Use acme/rules. Leia docs/conventions.md no mesmo repositório que usamos.",
+            ]) {
+                expect(placed(text, ["acme/rules"])).toEqual([
+                    "(reviewed):docs/conventions.md",
+                ]);
+            }
         });
 
         it("reads a Portuguese list as it reads an English one", () => {

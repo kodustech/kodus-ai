@@ -1197,6 +1197,10 @@ const LOCAL_PLACE = new RegExp(
 /** What turns a local place into a comparison: "the same repo as …". */
 const COMPARED_TO = /^\s+(?:as|like|que)\s+(?:(?:the|o|a)\s+)?[\x60'"]?/;
 
+/** An owner/name (or its URL) at the very start of a text. */
+const UNLINKED_NAMED =
+    /^(?:https?:\/\/[\w.-]+\/)?[\w-][\w.-]*\/[\w.-]*[\w-](?![\w/-])(?!\.[\w-])/;
+
 /** An owner/name the instructions write that is not a linked repository
  *  (a URL to it too): it can be the other side of a choice ("in acme/rules
  *  or other/policies"). A deeper path (an issue link) is not one. */
@@ -1425,17 +1429,27 @@ export const mentionedFilesNotFollowed = (
             const named = mentions[firstMentionFrom(end)];
             if (named && /^[\s\x60'"]*$/.test(text.slice(end, named.at)))
                 return [];
+            // A comparison counts only when it names a repository: "as
+            // acme/rules" (linked, or its URL) places there, "as
+            // other/policies" (not linked) nowhere. "The same repo as
+            // before" names none: still the reviewed one.
             const compared = COMPARED_TO.exec(text.slice(end));
             if (compared) {
-                const repository =
+                const after = end + compared[0].length;
+                if (
                     named &&
-                    !named.ambiguous &&
                     /^(?:https?:\/\/[\w.-]+\/)?$/.test(
-                        text.slice(end + compared[0].length, named.at),
+                        text.slice(after, named.at),
                     )
-                        ? named.repository
-                        : undefined;
-                return [{ at: start, end, repository }];
+                ) {
+                    const repository = named.ambiguous
+                        ? undefined
+                        : named.repository;
+                    return [{ at: start, end, repository }];
+                }
+                if (UNLINKED_NAMED.test(text.slice(after))) {
+                    return [{ at: start, end }];
+                }
             }
             return [{ at: start, end, local: true }];
         },
