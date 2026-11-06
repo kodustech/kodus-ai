@@ -118,36 +118,29 @@ export class GithubChecksService implements IChecksAdapter {
     async findMergeQueueEntryHeadSha(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { owner: string; name: string };
-        baseBranch: string;
         prNumber: number;
     }): Promise<string | null> {
-        const { organizationAndTeamData, repository, baseBranch, prNumber } =
-            params;
+        const { organizationAndTeamData, repository, prNumber } = params;
 
         const octokit = await this.gitHubService.getAuthenticatedOctokit(
             organizationAndTeamData,
         );
 
+        // The PR's own entry, so the lookup does not depend on queue depth.
         const response = await octokit.graphql<{
             repository?: {
-                mergeQueue?: {
-                    entries?: {
-                        nodes?: Array<{
-                            pullRequest?: { number?: number } | null;
-                            headCommit?: { oid?: string } | null;
-                        } | null>;
-                    };
+                pullRequest?: {
+                    mergeQueueEntry?: {
+                        headCommit?: { oid?: string } | null;
+                    } | null;
                 } | null;
             };
         }>(
-            `query ($owner: String!, $name: String!, $branch: String!) {
+            `query ($owner: String!, $name: String!, $number: Int!) {
                 repository(owner: $owner, name: $name) {
-                    mergeQueue(branch: $branch) {
-                        entries(first: 100) {
-                            nodes {
-                                pullRequest { number }
-                                headCommit { oid }
-                            }
+                    pullRequest(number: $number) {
+                        mergeQueueEntry {
+                            headCommit { oid }
                         }
                     }
                 }
@@ -155,15 +148,14 @@ export class GithubChecksService implements IChecksAdapter {
             {
                 owner: repository.owner,
                 name: repository.name,
-                branch: baseBranch,
+                number: prNumber,
             },
         );
 
-        const entry = response?.repository?.mergeQueue?.entries?.nodes?.find(
-            (node) => node?.pullRequest?.number === prNumber,
+        return (
+            response?.repository?.pullRequest?.mergeQueueEntry?.headCommit
+                ?.oid ?? null
         );
-
-        return entry?.headCommit?.oid ?? null;
     }
 
     async createCompletedCheckRun(params: {

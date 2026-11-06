@@ -53,7 +53,7 @@ export class CarryReviewCheckToMergeQueueUseCase {
             return { carried: false, reason: 'not_merge_queue_push' };
         }
 
-        const { prNumber, baseBranch } = parseMergeQueueRef(payload.ref);
+        const { prNumber } = parseMergeQueueRef(payload.ref);
         const queueSha: string = payload.after;
         const repositoryId = String(payload.repository?.id);
         const repositoryName: string = payload.repository?.name;
@@ -111,7 +111,6 @@ export class CarryReviewCheckToMergeQueueUseCase {
                 await this.githubChecksService.findMergeQueueEntryHeadSha({
                     organizationAndTeamData,
                     repository,
-                    baseBranch,
                     prNumber,
                 });
             metadata.queueEntrySha = queueEntrySha;

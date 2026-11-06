@@ -386,26 +386,14 @@ describe('GithubChecksService', () => {
         const params = {
             organizationAndTeamData: mockOrganizationAndTeamData,
             repository: mockRepository,
-            baseBranch: 'main',
             prNumber: 7,
         };
 
-        it("returns the commit GitHub's merge queue built for the PR", async () => {
+        it("returns the commit of the PR's own merge queue entry, however deep the queue", async () => {
             mockOctokit.graphql.mockResolvedValue({
                 repository: {
-                    mergeQueue: {
-                        entries: {
-                            nodes: [
-                                {
-                                    pullRequest: { number: 6 },
-                                    headCommit: { oid: 'other' },
-                                },
-                                {
-                                    pullRequest: { number: 7 },
-                                    headCommit: { oid: 'queue-sha' },
-                                },
-                            ],
-                        },
+                    pullRequest: {
+                        mergeQueueEntry: { headCommit: { oid: 'queue-sha' } },
                     },
                 },
             });
@@ -414,17 +402,21 @@ describe('GithubChecksService', () => {
                 service.findMergeQueueEntryHeadSha(params),
             ).resolves.toBe('queue-sha');
             expect(mockOctokit.graphql).toHaveBeenCalledWith(
-                expect.stringContaining('mergeQueue(branch: $branch)'),
-                { owner: 'kodus-ai', name: 'kodus', branch: 'main' },
+                expect.stringContaining('mergeQueueEntry'),
+                { owner: 'kodus-ai', name: 'kodus', number: 7 },
+            );
+            expect(mockOctokit.graphql).toHaveBeenCalledWith(
+                expect.not.stringContaining('entries('),
+                expect.anything(),
             );
         });
 
         it.each([
-            ['the PR has no queue entry', { entries: { nodes: [] } }],
-            ['the branch has no merge queue', null],
-        ])('returns null when %s', async (_label, mergeQueue) => {
+            ['the PR is not queued', { mergeQueueEntry: null }],
+            ['the PR does not exist', null],
+        ])('returns null when %s', async (_label, pullRequest) => {
             mockOctokit.graphql.mockResolvedValue({
-                repository: { mergeQueue },
+                repository: { pullRequest },
             });
 
             await expect(

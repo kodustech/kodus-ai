@@ -123,7 +123,6 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
         expect(checks.findMergeQueueEntryHeadSha).toHaveBeenCalledWith({
             organizationAndTeamData,
             repository: { owner: 'acme', name: 'service' },
-            baseBranch: 'main',
             prNumber: 7,
         });
     });
