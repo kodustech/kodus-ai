@@ -39,10 +39,10 @@ function registerTs() {
 function countTokens() {
     registerTs();
     const { setLlmObservability } = require(path.join(__dirname, '../../libs/llm/llm-observability.ts'));
-    const { readAiSdkUsage, readAiSdkUsageFromError } = require(path.join(__dirname, '../../libs/llm/ai-sdk-usage.ts'));
+    const { readAiSdkUsage, failedCallUsage } = require(path.join(__dirname, '../../libs/llm/ai-sdk-usage.ts'));
     watchEfforts();
     setLlmObservability({
-        runAiSdkLLMInSpan: async ({ exec, runName, spanName }) => {
+        runAiSdkLLMInSpan: async ({ exec, runName, spanName, usageOnError }) => {
             const startedAt = Date.now();
             let result;
             try {
@@ -51,9 +51,10 @@ function countTokens() {
                 failedCalls().push(error);
                 callScope.getStore()?.push(error);
                 // A call the provider answered and the parse then rejected was
-                // still billed, as production records it; one that never got an
-                // answer (timeout, refusal) carries no usage and is not counted.
-                const billed = readAiSdkUsageFromError(error);
+                // still billed, as production records it; so were the steps an
+                // agent loop finished before it threw (#2389). One that never got
+                // an answer (timeout, refusal) carries no usage and is not counted.
+                const billed = failedCallUsage(error, usageOnError?.());
                 if (billed) addCall(billed.usage, Date.now() - startedAt);
                 throw error;
             }
@@ -110,13 +111,13 @@ function watchEfforts() {
 // The running total of what the model calls cost, shared with agent-run usage
 // spans an eval may also count. Every field sums or concatenates, so two runs
 // pool (evals/shared/nightly-verdict.js):
-//   in, out, cacheRead, cacheWrite  tokens, read like billing (libs/llm/ai-sdk-usage.ts);
-//                                   `in` includes the cached ones
+//   in, out, cacheRead, cacheWrite, reasoning  tokens, read like billing (libs/llm/ai-sdk-usage.ts);
+//                                   `in` includes the cached ones, `out` the reasoning ones
 //   calls, ms                       the calls the provider answered, and their time
 //   callMs                          each of those calls' time, for percentiles
 //   efforts                         per task, the reasoning effort its requests carried
 function tokensUsed() {
-    global.__EVAL_TOK = global.__EVAL_TOK || { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, calls: 0, ms: 0, callMs: [], efforts: {} };
+    global.__EVAL_TOK = global.__EVAL_TOK || { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, calls: 0, ms: 0, callMs: [], efforts: {} };
     return global.__EVAL_TOK;
 }
 
@@ -127,7 +128,7 @@ function tokensUsed() {
 // verify judges candidates in parallel). Measuring changes nothing the step does.
 function stageOf(caseUse, name) {
     caseUse.byStage = caseUse.byStage || {};
-    caseUse.byStage[name] = caseUse.byStage[name] || { runs: 0, ms: 0, spanMs: 0, firstStart: null, lastEnd: null, calls: 0, in: 0, out: 0, cacheRead: 0, cacheWrite: 0, callMs: 0 };
+    caseUse.byStage[name] = caseUse.byStage[name] || { runs: 0, ms: 0, spanMs: 0, firstStart: null, lastEnd: null, calls: 0, in: 0, out: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, callMs: 0 };
     return caseUse.byStage[name];
 }
 function inStage(name, fn) {
@@ -162,17 +163,20 @@ function addCall(usage, ms) {
     if (c) {
         c.in += usage?.inputTokens ?? 0; c.out += usage?.outputTokens ?? 0;
         c.cacheRead += usage?.cacheReadTokens ?? 0; c.cacheWrite += usage?.cacheWriteTokens ?? 0;
+        c.reasoning += usage?.reasoningTokens ?? 0;
         c.calls += 1; const t = taskScope.getStore() || 'unnamed'; c.byTask[t] = (c.byTask[t] || 0) + 1;
         const st = stageOf(c, stageScope.getStore() || 'sem-etapa');
         st.calls += 1; st.callMs += Math.round(ms);
         st.in += usage?.inputTokens ?? 0; st.out += usage?.outputTokens ?? 0;
         st.cacheRead += usage?.cacheReadTokens ?? 0; st.cacheWrite += usage?.cacheWriteTokens ?? 0;
+        st.reasoning += usage?.reasoningTokens ?? 0;
     }
     const tok = tokensUsed();
     tok.in += usage?.inputTokens ?? 0;
     tok.out += usage?.outputTokens ?? 0;
     tok.cacheRead += usage?.cacheReadTokens ?? 0;
     tok.cacheWrite += usage?.cacheWriteTokens ?? 0;
+    tok.reasoning = (tok.reasoning ?? 0) + (usage?.reasoningTokens ?? 0);
     tok.calls += 1;
     tok.ms += Math.round(ms);
     tok.callMs.push(Math.round(ms));

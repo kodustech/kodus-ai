@@ -414,7 +414,7 @@ async function main() {
         try {
             // eslint-disable-next-line no-await-in-loop
             global.__EVAL_CASE_ALS = global.__EVAL_CASE_ALS || new (require('async_hooks').AsyncLocalStorage)();
-            caseUse = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, calls: 0, byTask: {}, rescueRequests: 0 };
+            caseUse = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, calls: 0, byTask: {}, rescueRequests: 0 };
             const t0 = Date.now();
             apiResult = await global.__EVAL_CASE_ALS.run(caseUse, () => provider.callApi(prompt, { vars: test.vars }, {}));
             caseUse.wallMs = Date.now() - t0;

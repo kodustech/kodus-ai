@@ -208,7 +208,9 @@ function observeFinderPasses() {
             if (!store?.finder) return real.runFinderWithVerify(params, input, ctx);
             const agentName = params.agentName ?? 'finder';
             const run = { loop: currentLoop.getStore()?.key || null, agentName, passes: [], verify: [], candidates: null };
-            let lastPass = null;
+            // Heavy mode's lenses run at once, so the pass a prose recovery belongs to
+            // is found by the reasoning it recovers, not by which pass ended last.
+            const awaitingRecovery = [];
             const runner = new Proxy(params.runner, {
                 get(target, prop, receiver) {
                     if (prop !== 'run') return Reflect.get(target, prop, receiver);
@@ -223,7 +225,7 @@ function observeFinderPasses() {
                         // The same extraction production runs on this state, without the
                         // prose recovery (that one calls a model; recorded below when it runs).
                         const extracted = await real.extractFindingsWithRecovery(state, undefined, params.telemetryMetadata);
-                        lastPass = {
+                        const pass = {
                             label,
                             functionId: fid,
                             startedAt,
@@ -234,13 +236,15 @@ function observeFinderPasses() {
                             findings: clone(extracted.suggestions),
                             recovered: null,
                         };
-                        run.passes.push(lastPass);
+                        run.passes.push(pass);
+                        if (!extracted.suggestions?.length) awaitingRecovery.push({ pass, reasoning: extracted.reasoning });
                         return state;
                     };
                 },
             });
             const recoverProse = params.recoverProse && (async (reasoning) => {
-                const pass = lastPass;
+                const i = awaitingRecovery.findIndex((w) => w.reasoning === reasoning);
+                const pass = i >= 0 ? awaitingRecovery.splice(i, 1)[0].pass : null;
                 const out = await inStage(`finder.${pass?.label || 'sem-passada'}`, () => params.recoverProse(reasoning));
                 if (pass) pass.recovered = clone(out);
                 return out;
