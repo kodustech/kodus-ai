@@ -36,6 +36,8 @@ import {
     SANDBOX_INVALIDATE_ROUTING_KEY,
     SandboxInvalidatePayload,
 } from '@libs/sandbox/domain/events/sandbox-invalidate.event';
+import { SyncAllRepositoriesUseCase } from '@libs/platform/application/use-cases/codeManagement/sync-all-repositories.use-case';
+import { isNewRepositoryEvent } from './new-repository-event';
 
 /**
  * Handler for GitHub webhook events.
@@ -56,6 +58,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         @Inject(OUTBOX_MESSAGE_REPOSITORY_TOKEN)
         private readonly outboxRepository: IOutboxMessageRepository,
         private readonly carryReviewCheckToMergeQueueUseCase: CarryReviewCheckToMergeQueueUseCase,
+        private readonly syncAllRepositoriesUseCase: SyncAllRepositoriesUseCase,
         @Optional()
         private readonly enqueueAstGraphUpdateOnMergedUseCase?: EnqueueAstGraphUpdateOnMergedUseCase,
     ) {}
@@ -64,6 +67,10 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         // Verify if the event is from GitHub
         if (params.platformType !== PlatformType.GITHUB) {
             return false;
+        }
+
+        if (isNewRepositoryEvent(params.event, params.payload)) {
+            return true;
         }
 
         // Pushes are only handled for merge queue branches, to report
@@ -103,6 +110,16 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
 
     public async execute(params: IWebhookEventParams): Promise<void> {
         const { event } = params;
+
+        if (isNewRepositoryEvent(event, params.payload)) {
+            const installationId = params.payload?.installation?.id;
+            if (installationId) {
+                await this.syncAllRepositoriesUseCase.syncInstallation(
+                    String(installationId),
+                );
+            }
+            return;
+        }
 
         switch (event) {
             case 'pull_request':
