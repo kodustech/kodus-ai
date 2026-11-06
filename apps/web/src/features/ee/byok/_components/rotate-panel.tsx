@@ -31,7 +31,7 @@ import { SuccessClaim } from "./success-claim";
  * inputs as the add/manual flow (`ByokCredentialsInput` → the provider's OWN
  * fields, driven by CREDENTIAL_FORMS: a single key for key-based providers, the
  * aws* form for Bedrock, service-account for Vertex; `ByokBaseURLInput` shows only
- * where the provider needs a base URL). So editing a provider shows the fields it
+ * where the provider accepts a base URL). So editing a provider shows the fields it
  * actually authenticates with — not a generic "API key" + "Base URL".
  *
  * Header-less by design: the routed provider editor (`/byok/provider`) supplies

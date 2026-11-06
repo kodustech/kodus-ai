@@ -17,6 +17,8 @@ export interface ProviderInfo {
     supported: boolean;
     requiresApiKey: boolean;
     requiresBaseUrl: boolean;
+    /** The connect form may collect an optional base URL (proxy / gateway). */
+    acceptsBaseUrl: boolean;
     /**
      * Whether the model list can be auto-fetched (show a dropdown) vs. typed by
      * hand. True for a static catalog or an HTTP listing with a resolvable base
@@ -54,6 +56,7 @@ export class ProviderService {
                 supported: true,
                 requiresApiKey: d.requiresApiKey,
                 requiresBaseUrl: d.requiresBaseUrl,
+                acceptsBaseUrl: d.acceptsBaseUrl,
                 autoListModels: d.autoListModels,
                 listsModelsLive: d.listsModelsLive,
                 doc: d.doc,

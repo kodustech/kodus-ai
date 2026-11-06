@@ -118,7 +118,11 @@ export const anthropicModule: ProviderModule = {
         }
         return createAnthropic({
             apiKey: cfg.apiKey,
-            ...(cfg.baseURL ? { baseURL: cfg.baseURL } : {}),
+            // A gateway URL (Cloudflare AI Gateway, Helicone…) is pasted with or
+            // without `/v1`; the SDK appends `/messages`, so normalize it here too.
+            ...(cfg.baseURL?.trim()
+                ? { baseURL: `${anthropicCompatibleRootURL(cfg.baseURL)}/v1` }
+                : {}),
             ...(opts?.fetch ? { fetch: opts.fetch } : {}),
             ...(isOpenCodeGoBaseUrl(cfg.baseURL)
                 ? { headers: { 'x-opencode-session': openCodeSessionId(cfg) } }

@@ -108,6 +108,12 @@ describe('ProviderService — registry-driven', () => {
             expect(c.autoListModels).toBe(false);
         });
 
+        it('Anthropic: native id accepts an optional gateway base URL (#1828)', () => {
+            const a = byId('anthropic');
+            expect(a.requiresBaseUrl).toBe(false);
+            expect(a.acceptsBaseUrl).toBe(true);
+        });
+
         it('Azure: native id, but its required per-resource endpoint field forces requiresBaseUrl', () => {
             const a = byId('azure');
             expect(a.requiresApiKey).toBe(true);

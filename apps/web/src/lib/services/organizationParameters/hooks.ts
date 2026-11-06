@@ -20,6 +20,8 @@ export function useSuspenseGetLLMProviders() {
             name: string;
             requiresApiKey: boolean;
             requiresBaseUrl: boolean;
+            /** Provider accepts an optional base URL (proxy / gateway). */
+            acceptsBaseUrl: boolean;
             autoListModels: boolean;
             /** Provider lists models via a live `/models` call (needs the key). */
             listsModelsLive: boolean;

@@ -222,3 +222,19 @@ describe('openaiModule x-opencode-session header (issue #1880)', () => {
     });
 });
 
+
+describe('openaiModule promptCaching claim (#1828)', () => {
+    it('claims implicit caching for OpenAI-protocol upstreams', () => {
+        expect(openaiModule.capabilities('gpt-5').promptCaching).toBe(true);
+        expect(openaiModule.capabilities('kimi-k2.7-code').promptCaching).toBe(
+            true,
+        );
+    });
+
+    it('does not claim it for a Claude id behind an OpenAI-compatible shim (needs an explicit cache_control marker this transport never sends)', () => {
+        expect(
+            openaiModule.capabilities('anthropic/claude-sonnet-5')
+                .promptCaching,
+        ).toBe(false);
+    });
+});

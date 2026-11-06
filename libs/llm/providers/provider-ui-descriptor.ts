@@ -15,6 +15,9 @@ export interface ProviderUiDescriptor {
     /** The user must supply a base URL (a custom endpoint), so it can't be
      *  defaulted for them. */
     requiresBaseUrl: boolean;
+    /** The connect form may collect a base URL (a proxy / gateway in front of
+     *  the provider). Always true when `requiresBaseUrl` is. */
+    acceptsBaseUrl: boolean;
     /** The provider's models can be enumerated (dropdown) vs. typed by hand. */
     autoListModels: boolean;
     /** The provider enumerates its models through a LIVE `/models` HTTP call
@@ -79,18 +82,25 @@ export function describeProviderId(
             (f) => f.key === key && f.required === true,
         );
     const requiresApiKey = requiresField('apiKey');
+    // Custom endpoints ALWAYS need the user's base URL; native providers only
+    // when their listing requires one with no default to fall back on, OR when
+    // the module declares a required `baseURL` field (e.g. Azure's per-resource
+    // endpoint — not derivable from the listing, so the module states it).
+    const requiresBaseUrl =
+        custom ||
+        listingRequiresUserBaseUrl(listing) ||
+        requiresField('baseURL');
     return {
         id,
         label: labelForId(module, id),
         requiresApiKey,
-        // Custom endpoints ALWAYS need the user's base URL; native providers only
-        // when their listing requires one with no default to fall back on, OR when
-        // the module declares a required `baseURL` field (e.g. Azure's per-resource
-        // endpoint — not derivable from the listing, so the module states it).
-        requiresBaseUrl:
-            custom ||
-            listingRequiresUserBaseUrl(listing) ||
-            requiresField('baseURL'),
+        requiresBaseUrl,
+        // A native provider whose build honors a `baseURL` field can sit behind a
+        // gateway (Cloudflare AI Gateway, Helicone, Portkey) and keep its native
+        // transport — prompt caching, thinking control (issue #1828).
+        acceptsBaseUrl:
+            requiresBaseUrl ||
+            (module.uiFields ?? []).some((f) => f.key === 'baseURL'),
         // Custom endpoints can't be pre-listed (endpoint unknown until entered).
         // A brand with a `manual` listing and no live `/models` call (e.g. Z.ai/GLM
         // over the Anthropic protocol) is NOT auto-listable — the user types the
