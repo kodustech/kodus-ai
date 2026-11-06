@@ -168,4 +168,4 @@ async function judgeCase({ caseId, prTitle, repoDir, head, issues, comments, mod
     throw new Error(`judge gave no answer in ${MAX_TURNS} turns`);
 }
 
-module.exports = { judgeCase, judgeKey, JUDGE_MODEL, JUDGE_EFFORT, RULE };
+module.exports = { judgeCase, judgeKey, repoTools, TOOLS, JUDGE_MODEL, JUDGE_EFFORT, RULE };

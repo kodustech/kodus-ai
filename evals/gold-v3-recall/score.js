@@ -23,7 +23,7 @@ const GOLD = path.join(ROOT, 'evals/dedup/gold-v3');
 const BENCH_ROOT = process.env.BENCH_REPOS_ROOT || path.join(process.env.HOME || '', 'projects/benchmark');
 
 function parseArgs(argv) {
-    const out = { dump: '', out: '', concurrency: 4, dryRun: false };
+    const out = { dump: '', out: '', concurrency: 4, dryRun: false, compareOrigins: [] };
     for (const arg of argv.slice(2)) {
         const m = arg.match(/^--([^=]+)(?:=(.*))?$/);
         if (!m) continue;
@@ -31,8 +31,9 @@ function parseArgs(argv) {
         else if (m[1] === 'out') out.out = m[2];
         else if (m[1] === 'concurrency') out.concurrency = Number(m[2]) || 4;
         else if (m[1] === 'dry-run') out.dryRun = true;
+        else if (m[1] === 'compare-origins') out.compareOrigins = String(m[2] || '').split(',').map((s) => s.trim()).filter(Boolean);
         else {
-            console.error(`unknown flag --${m[1]}. Known: --dump --out --concurrency --dry-run`);
+            console.error(`unknown flag --${m[1]}. Known: --dump --out --concurrency --dry-run --compare-origins`);
             process.exit(2);
         }
     }
@@ -221,7 +222,20 @@ async function main() {
         }
         const valid = validIssues(gold[caseId], upstream);
         const scored = Object.fromEntries(Object.entries(lines).map(([line, list]) => [line, scoreLine(list, answers, valid)]));
-        rows.push({ caseId, status: args.dryRun ? 'dry-run' : 'scored', stages, comments: comments.length, lines: scored });
+        // --compare-origins: the same run read without some passes (`base`),
+        // and with each of them added back, from the same judgments. Only the
+        // finder and verify lines carry each comment's pass.
+        const variants = {};
+        if (args.compareOrigins.length) {
+            const keep = (allowed) => (c) => !args.compareOrigins.includes(c.origin) || allowed.includes(c.origin);
+            const sets = { base: [], ...Object.fromEntries(args.compareOrigins.map((o) => [`base+${o}`, [o]])), 'base+all': args.compareOrigins };
+            for (const [name, allowed] of Object.entries(sets)) {
+                variants[name] = Object.fromEntries(
+                    ['finder', 'verify'].filter((l) => lines[l]).map((l) => [l, scoreLine(lines[l].filter(keep(allowed)), answers, valid)]),
+                );
+            }
+        }
+        rows.push({ caseId, status: args.dryRun ? 'dry-run' : 'scored', stages, comments: comments.length, lines: scored, variants });
         const last = scored.shipped || scored.verify || scored.finder;
         console.log(`${args.dryRun ? 'DRY   ' : 'SCORED'} ${caseId} comments=${comments.length} valid TPs found=${last.tp}/${last.valid}`);
     };
@@ -235,6 +249,22 @@ async function main() {
 
     const lineNames = ['finder', 'verify', 'shipped'].filter((l) => rows.some((r) => r.lines?.[l]));
     const metrics = Object.fromEntries(lineNames.map((l) => [l, pool(rows.filter((r) => r.status === 'scored'), l)]));
+    const scoredRows = rows.filter((r) => r.status === 'scored');
+    const variantMetrics = {};
+    for (const name of Object.keys(scoredRows[0]?.variants || {})) {
+        variantMetrics[name] = {};
+        for (const l of ['finder', 'verify']) {
+            const vr = scoredRows.map((r) => ({ lines: { [l]: r.variants[name]?.[l] } })).filter((r) => r.lines[l]);
+            if (!vr.length) continue;
+            const m = pool(vr, l);
+            // Valid TPs this variant finds that `base` does not, summed over cases.
+            m.uniqueVsBase = name === 'base' ? 0 : scoredRows.reduce((n, r) => {
+                const b = new Set(r.variants.base?.[l]?.found || []);
+                return n + (r.variants[name]?.[l]?.found || []).filter((id) => !b.has(id)).length;
+            }, 0);
+            variantMetrics[name][l] = m;
+        }
+    }
     const result = {
         eval: 'gold-v3-recall',
         dump: path.resolve(args.dump),
@@ -245,6 +275,7 @@ async function main() {
         unscored,
         usage,
         metrics,
+        variants: variantMetrics,
         rows,
     };
     fs.writeFileSync(path.join(args.out, 'result.json'), JSON.stringify(result, null, 1));
@@ -265,6 +296,16 @@ async function main() {
         '',
         ...(metrics.finder ? ['| pass | comments | valid TPs found |', '|---|---:|---:|', ...Object.entries(metrics.finder.byOrigin).map(([o, v]) => `| ${o} | ${v.comments} | ${v.issues} |`)] : []),
         '',
+        ...(Object.keys(variantMetrics).length
+            ? [
+                  '**By passes** (`base` = the run without ' + args.compareOrigins.join(', ') + '; each line adds passes back)',
+                  '',
+                  '| variant | finder R | finder P | verify R | verify P | new TPs vs base (finder / verify) |',
+                  '|---|---:|---:|---:|---:|---:|',
+                  ...Object.entries(variantMetrics).map(([n, v]) => `| ${n} | ${v.finder ? `${v.finder.tp}/${v.finder.valid} = ${fmt(v.finder.recall)}` : '-'} | ${v.finder ? fmt(v.finder.precision) : '-'} | ${v.verify ? `${v.verify.tp}/${v.verify.valid} = ${fmt(v.verify.recall)}` : '-'} | ${v.verify ? fmt(v.verify.precision) : '-'} | ${v.finder?.uniqueVsBase ?? '-'} / ${v.verify?.uniqueVsBase ?? '-'} |`),
+                  '',
+              ]
+            : []),
         `Judge use: ${usage.calls} calls, ${usage.input} in / ${usage.output} out tokens, cache read ${usage.cacheRead}.`,
     ].join('\n');
     fs.writeFileSync(path.join(args.out, 'summary.md'), md);
