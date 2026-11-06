@@ -145,6 +145,7 @@ describe('runAgentLoopCall — a stalled provider must not hang the caller', () 
         // and its reason (a shared signal must not carry one call's limiter
         // mark to another, #2389).
         const sent: AbortSignal = mockGenerate.mock.calls[0][0].abortSignal;
+        expect(sent).not.toBe(controller.signal);
         expect(sent.aborted).toBe(false);
         const reason = new Error('caller stopped');
         controller.abort(reason);

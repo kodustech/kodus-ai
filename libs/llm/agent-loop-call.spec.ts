@@ -326,6 +326,8 @@ describe('row19 tool-call repair delegation (repairToolCall → repairInvalidToo
             logContext: expect.any(Object),
         });
         expect(recovered).toEqual({ toolName: 't1', input: '{"fixed":1}' });
+        // The repair shares the loop's own call signal, not the caller's.
+        expect(mockRepair.mock.calls[0][0].abortSignal).not.toBe(signal);
     });
 
     it('propagates the repair fail-soft result (null = SDK default "let the step fail")', async () => {
