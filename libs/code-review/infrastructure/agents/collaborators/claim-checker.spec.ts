@@ -1097,12 +1097,13 @@ describe('checkClaims — an unused import, in every language the rules review',
             verdict: 'publish',
         },
         {
-            lang: 'only a comment names it',
+            lang: 'only a comment names it: counts, never publishes a used import',
             file: 'src/a.js',
             line: 'import { debounce } from "./timing";',
             symbol: 'debounce',
             uses: ['src/a.js:30:// TODO: drop debounce once the API is fast'],
-            verdict: 'publish',
+            verdict: 'drop',
+            reason: 'src/a.js:30',
         },
         {
             lang: 'lodash as _, unused',
@@ -1129,6 +1130,69 @@ describe('checkClaims — an unused import, in every language the rules review',
             uses: ['src/A.cs:9:    var s = Json.SerializeObject(x);'],
             verdict: 'drop',
             reason: 'src/A.cs:9',
+        },
+        {
+            lang: 'Rust, used only as an attribute',
+            file: 'src/a.rs',
+            line: 'use async_trait::async_trait;',
+            symbol: 'async_trait',
+            uses: ['src/a.rs:5:#[async_trait]'],
+            verdict: 'drop',
+            reason: 'src/a.rs:5',
+        },
+        {
+            lang: 'PHP, used only in an attribute',
+            file: 'src/Entity/User.php',
+            line: 'use Doctrine\\ORM\\Mapping as ORM;',
+            symbol: 'ORM',
+            uses: ['src/Entity/User.php:9:    #[ORM\\Column]'],
+            verdict: 'drop',
+            reason: 'src/Entity/User.php:9',
+        },
+        {
+            lang: 'TypeScript, used only in a private field',
+            file: 'src/a.ts',
+            line: 'import { HttpClient } from "./http";',
+            symbol: 'HttpClient',
+            uses: ['src/a.ts:6:  #client = new HttpClient();'],
+            verdict: 'drop',
+            reason: 'src/a.ts:6',
+        },
+        {
+            lang: 'Python, used after a floor division',
+            file: 'app/a.py',
+            line: 'from decimal import Decimal',
+            symbol: 'Decimal',
+            uses: ['app/a.py:8:half = total // Decimal(2)'],
+            verdict: 'drop',
+            reason: 'app/a.py:8',
+        },
+        {
+            lang: 'C preprocessor line uses it',
+            file: 'src/a.cpp',
+            line: 'using logging::Logger;',
+            symbol: 'Logger',
+            uses: ['src/a.cpp:4:#define LOG(x) Logger::log(x)'],
+            verdict: 'drop',
+            reason: 'src/a.cpp:4',
+        },
+        {
+            lang: 'JS, used on an import.meta line',
+            file: 'src/a.js',
+            line: 'import { resolve } from "./paths";',
+            symbol: 'resolve',
+            uses: ['src/a.js:8:import.meta.env.DEV && resolve(dir);'],
+            verdict: 'drop',
+            reason: 'src/a.js:8',
+        },
+        {
+            lang: 'JS, used on a dynamic import line',
+            file: 'src/a.js',
+            line: 'import { loader } from "./load";',
+            symbol: 'loader',
+            uses: ["src/a.js:9:import('./page').then(loader);"],
+            verdict: 'drop',
+            reason: 'src/a.js:9',
         },
     ];
 
@@ -1173,6 +1237,81 @@ describe('checkClaims — an unused import, in every language the rules review',
 });
 
 describe('checkClaims — an unused import is judged by its own finding, not the group', () => {
+    it('counts a use inside a wide finding range, which is not the import', async () => {
+        const lines = [
+            'src/a.js:3:import { debounce } from "./timing";',
+            'src/a.js:20:  const save = debounce(write, 300);',
+            'src/timing.js:1:export function debounce() {}',
+        ];
+        const lookup = fakeLookup({
+            grep: (pattern) =>
+                lines
+                    .filter((l) =>
+                        new RegExp(pattern).test(
+                            l.split(':').slice(2).join(':'),
+                        ),
+                    )
+                    .join('\n'),
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.js',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 40,
+                    claimKind: 'unused',
+                    claimSymbol: 'debounce',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('src/a.js:20');
+    });
+
+    it('judges the claim by the sibling that sits on the import', async () => {
+        const lines = [
+            "src/a.ts:3:import { Foo } from './foo';",
+            'src/foo.ts:1:export class Foo {}',
+        ];
+        const lookup = fakeLookup({
+            grep: (pattern) =>
+                lines
+                    .filter((l) =>
+                        new RegExp(pattern).test(
+                            l.split(':').slice(2).join(':'),
+                        ),
+                    )
+                    .join('\n'),
+        });
+        const base = {
+            relevantFile: 'src/a.ts',
+            claimKind: 'unused' as const,
+            claimSymbol: 'Foo',
+        };
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    ...base,
+                    relevantLinesStart: 120,
+                    relevantLinesEnd: 122,
+                    existingCode: 'function render() {\n  return 1;\n}',
+                }),
+                violation({
+                    ...base,
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    existingCode: "import { Foo } from './foo';",
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.dropped).toEqual([]);
+        expect(res.kept).toHaveLength(2);
+    });
+
     it('drops a used import although a sibling of the same rule sits further down (regression)', async () => {
         const lines = [
             'src/a.js:3:import { debounce } from "./timing";',

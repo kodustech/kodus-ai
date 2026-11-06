@@ -186,11 +186,12 @@ function isElsewhere(match: GrepMatch, violation: ShardViolation): boolean {
  * one: its users are the files that import it, so it keeps the any-file rule.
  */
 const IMPORT_LINE =
-    /^\s*(?:import\b|from\s+\S+\s+import\b|(?:const|let|var|local)\s+[^=]+=\s*require\s*\(|require(?:_relative)?\b|use\s+[\p{L}_\\:{]|alias\s+[\p{L}_]|@(?:import|use|forward)\b)/u;
+    /^\s*(?:import\b(?![.(])|from\s+\S+\s+import\b|(?:const|let|var|local)\s+[^=]+=\s*require\s*\(|require(?:_relative)?\b|use\s+[\p{L}_\\:{]|alias\s+[\p{L}_]|@(?:import|use|forward)\b)/u;
 
 /** `using` imports only in C# and C++; elsewhere (TS 5.2) it declares a resource. */
 const USING_IMPORT = /^\s*using\s+[\p{L}_]/u;
-const USING_FILE = /\.(?:cs|cpp|cc|cxx|c\+\+|hpp|hh|hxx|h)$/;
+const USING_FILE =
+    /\.(?:cs|cpp|cc|cxx|c\+\+|cppm|ixx|mpp|hpp|hh|hxx|h|ipp|inl|tpp|tcc)$/;
 /** `open` imports only in OCaml and F#; elsewhere (Kotlin, Swift) it is a modifier. */
 const OPEN_IMPORT = /^\s*open\s+[\p{L}_]/u;
 const OPEN_FILE = /\.(?:ml|mli|fs|fsi|fsx)$/;
@@ -553,13 +554,25 @@ async function judgeImport(
               ),
           ]
         : matches;
+    const statementLines = statement.text
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
     const uses = hits.filter(
         (m) =>
+            // Anywhere in the file but the import itself: its own line is an
+            // import line, and a multi-line import's member lines are matched
+            // by place, or inside the finding by their text. The finding's
+            // range as such is not excluded: a model citing lines 1-40 for an
+            // import on line 3 would hide a real use on line 20.
             m.file === file &&
-            isElsewhere(m, violation) &&
             !isImportLine(m.text, file) &&
             !isStatementLine(m, violation, statement) &&
-            usesName(m.text, names),
+            !(
+                !isElsewhere(m, violation) &&
+                statementLines.includes(m.text.trim())
+            ) &&
+            names.some((name) => namesSymbol(m.text, name)),
     );
     const bound =
         names.includes(symbol) && others.length === 0
@@ -579,16 +592,12 @@ async function judgeImport(
 }
 
 /**
- * Whether a grep hit's line uses one of `names` outside its comments. A hit the
- * provider answered without text still counts, as `namesSymbol` does.
+ * The symbol as a whole identifier in the line, not a part of a longer one.
+ * The line is read raw: a mention in a comment counts, since `#` and `//`
+ * open a comment in some languages and code in others (`#[attr]`, `#field`,
+ * Python's `//`). That can keep a true unused import from publishing, never
+ * publish one the file uses.
  */
-function usesName(text: string, names: string[]): boolean {
-    if (!text) return true;
-    const prose = readStatement(text).prose;
-    return names.some((name) => hasIdentifier(prose, name));
-}
-
-/** The symbol as a whole identifier in the line, not a part of a longer one. */
 function namesSymbol(text: string, symbol: string): boolean {
     if (!text) return true; // no text to read: count it, as before
     return hasIdentifier(text, symbol);
@@ -625,7 +634,7 @@ async function refute(
     claim: Claim,
     violation: ShardViolation,
     input: ClaimCheckInput,
-    own: ShardViolation = violation,
+    owners: ShardViolation[] = [violation],
 ): Promise<string | null> {
     const { lookup, changedFiles } = input;
 
@@ -668,15 +677,21 @@ async function refute(
     const elsewhere = matches.filter((m) => isElsewhere(m, violation));
 
     if (claim.kind === 'unused') {
-        // An import is judged by the finding that makes the claim, not by the
-        // group's span: a sibling of the same rule elsewhere in the file
-        // would make every use between them "inside the finding".
-        const statement = importStatementOf(own, matches, claim.symbol!);
-        if (statement !== undefined) {
-            const verdict = await judgeImport(
-                statement,
-                claim.symbol!,
+        // An import is judged by the finding that makes the claim and sits on
+        // the import, not by the group's span: a sibling of the same rule
+        // elsewhere in the file would make every use between them "inside
+        // the finding".
+        const found = owners
+            .map((own) => ({
                 own,
+                statement: importStatementOf(own, matches, claim.symbol!),
+            }))
+            .find((o) => o.statement !== undefined);
+        if (found) {
+            const verdict = await judgeImport(
+                found.statement!,
+                claim.symbol!,
+                found.own,
                 matches,
                 lookup,
             );
@@ -837,7 +852,7 @@ export async function checkClaims(
         claimKey: string;
         claim: Claim;
         span: ShardViolation;
-        own: ShardViolation;
+        owners: ShardViolation[];
     }> = [];
     for (const [groupKey, group] of groups) {
         const span = spanOf(group);
@@ -852,21 +867,29 @@ export async function checkClaims(
                 continue;
             }
             seen.add(claimKey);
-            jobs.push({ groupKey, claimKey, claim, span, own: violation });
+            jobs.push({
+                groupKey,
+                claimKey,
+                claim,
+                span,
+                owners: group.filter(
+                    (v) => claimKeyOf(readClaim(v)) === claimKey,
+                ),
+            });
         }
     }
 
     const verdicts = await mapLimit(
         jobs,
         concurrency,
-        async ({ claim, span, own }): Promise<string | null> => {
+        async ({ claim, span, owners }): Promise<string | null> => {
             if (!lookup.available) {
                 return `unverifiable: repository lookup unavailable (${lookup.unavailableReason})`;
             }
 
             try {
                 return await withTimeout(
-                    refute(claim, span, input, own),
+                    refute(claim, span, input, owners),
                     timeoutMs,
                 );
             } catch (err) {
