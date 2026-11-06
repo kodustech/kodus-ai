@@ -640,6 +640,8 @@ async function repositoryFor({ repo, prNumber, headRef, headSha, baseRef, baseSh
 // kill to a reaper the eval does not have).
 const E2B_BENCH_TEMPLATE = 'kodus-sandbox-bench-exec';
 const E2B_EVAL_STAGE = 'eval-recall';
+// Tags this run's sandboxes, so two runs side by side never kill each other's.
+const E2B_EVAL_RUN = `${process.pid}-${Date.now()}`;
 const liveE2B = new Map();
 async function checkoutE2B(repository) {
     const fs = require('fs');
@@ -661,7 +663,7 @@ async function checkoutE2B(repository) {
         baseBranch: repository.baseBranch,
         platform: 'github',
         checkoutSha: repository.headSha,
-        sandboxMetadata: { stage: E2B_EVAL_STAGE },
+        sandboxMetadata: { stage: E2B_EVAL_STAGE, evalRun: E2B_EVAL_RUN },
     });
     sandbox.baseBranch = repository.baseBranch;
     liveE2B.set(sandbox.sandboxId, sandbox);
@@ -677,9 +679,10 @@ async function checkoutE2B(repository) {
     return sandbox;
 }
 
-/** Kills every E2B sandbox this process created and every running or paused
- *  sandbox an eval run left behind (tagged eval-recall). */
-async function killEvalSandboxes() {
+/** Kills every E2B sandbox this run created. With `leftovers`, also the
+ *  paused sandboxes earlier eval runs left behind; a running one may belong to
+ *  another run going on now, so it is left alone. */
+async function killEvalSandboxes({ leftovers = false } = {}) {
     for (const sb of [...liveE2B.values()]) await sb.cleanup().catch(() => undefined);
     const key = process.env.API_E2B_KEY || (() => {
         try {
@@ -694,6 +697,8 @@ async function killEvalSandboxes() {
     const paginator = Sandbox.list({ apiKey: key, query: { metadata: { stage: E2B_EVAL_STAGE } } });
     while (paginator.hasNext) {
         for (const info of await paginator.nextItems()) {
+            const ours = info.metadata?.evalRun === E2B_EVAL_RUN;
+            if (!ours && !(leftovers && info.state === 'paused')) continue;
             await Sandbox.kill(info.sandboxId, { apiKey: key }).catch(() => undefined);
             killed += 1;
         }

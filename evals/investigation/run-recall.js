@@ -580,8 +580,8 @@ async function main() {
     // RECALL_SANDBOX=e2b: no sandbox outlives the run, whatever ends it.
     if (process.env.RECALL_SANDBOX === 'e2b') {
         const { killEvalSandboxes } = require('../shared/review-stage');
-        const stale = await killEvalSandboxes();
-        if (stale) console.log(`E2B: killed ${stale} sandbox(es) an earlier eval run left behind`);
+        const stale = await killEvalSandboxes({ leftovers: true });
+        if (stale) console.log(`E2B: killed ${stale} paused sandbox(es) earlier eval runs left behind`);
         for (const sig of ['SIGINT', 'SIGTERM']) {
             process.once(sig, () => {
                 killEvalSandboxes().finally(() => process.exit(130));
