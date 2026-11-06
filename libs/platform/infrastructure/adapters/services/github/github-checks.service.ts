@@ -62,6 +62,16 @@ export class GithubChecksService implements IChecksAdapter {
 
     constructor(private readonly gitHubService: GithubService) {}
 
+    /** False under PAT auth, which has no Checks API. */
+    async isChecksApiAvailable(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<boolean> {
+        const authDetails = await this.gitHubService.getGithubAuthDetails(
+            organizationAndTeamData,
+        );
+        return authDetails?.authMode !== AuthMode.TOKEN;
+    }
+
     /**
      * Newest completed run with this name posted by this deployment's App on
      * the commit. Returns null under PAT auth (no Checks API) or when none

@@ -21,7 +21,11 @@ export type CarryReviewCheckResult =
     | { carried: true; conclusion: string }
     | {
           carried: false;
-          reason: 'not_merge_queue_push' | 'no_context' | 'not_in_merge_queue';
+          reason:
+              | 'not_merge_queue_push'
+              | 'no_context'
+              | 'token_auth'
+              | 'not_in_merge_queue';
       }
     | {
           carried: false;
@@ -114,6 +118,16 @@ export class CarryReviewCheckToMergeQueueUseCase {
             metadata.organizationId = organizationAndTeamData.organizationId;
             metadata.teamId = organizationAndTeamData.teamId;
 
+            // A personal access token has no Checks API: nothing to read
+            // or post, so skip the queue lookup too.
+            if (
+                !(await this.githubChecksService.isChecksApiAvailable(
+                    organizationAndTeamData,
+                ))
+            ) {
+                return done({ carried: false, reason: 'token_auth' });
+            }
+
             const repository = { owner, name: repositoryName };
 
             const entry = await this.githubChecksService.findMergeQueueEntry({
@@ -204,7 +218,11 @@ export class CarryReviewCheckToMergeQueueUseCase {
             );
         }
     }
-    /** Best effort: the queue then waits for its timeout, as before. */
+
+    /**
+     * Best effort: on failure the queue waits for its timeout, as before.
+     * A rate limit is rethrown so the webhook job retries.
+     */
     private async postFailure(
         target: MergeQueueCheckTarget,
         prNumber: number,
@@ -220,6 +238,10 @@ export class CarryReviewCheckToMergeQueueUseCase {
                 });
             return checkRunId !== null;
         } catch (error) {
+            if (isRateLimitError(classifyGitHubError(error))) {
+                throw error;
+            }
+
             this.logger.warn({
                 message: 'Could not post the merge queue failure check',
                 context: CarryReviewCheckToMergeQueueUseCase.name,

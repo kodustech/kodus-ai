@@ -13,6 +13,7 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
         findLatestCompletedCheckRun: jest.Mock;
         createCompletedCheckRun: jest.Mock;
         findMergeQueueEntry: jest.Mock;
+        isChecksApiAvailable: jest.Mock;
     };
 
     const organizationAndTeamData = {
@@ -58,6 +59,7 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
             findMergeQueueEntry: jest
                 .fn()
                 .mockResolvedValue({ queueSha, headSha }),
+            isChecksApiAvailable: jest.fn().mockResolvedValue(true),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -243,6 +245,31 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
             reason: 'no_completed_run',
             failurePosted: false,
         });
+    });
+
+    it('rethrows a rate limit on the failure check, so the job retries instead of the queue timing out', async () => {
+        checks.findLatestCompletedCheckRun.mockResolvedValue(null);
+        checks.createCompletedCheckRun.mockRejectedValue(
+            new RateLimitError({ resetAt: new Date(Date.now() + 60_000) }),
+        );
+
+        await expect(useCase.execute(queuePush())).rejects.toBeInstanceOf(
+            RateLimitError,
+        );
+    });
+
+    it('stops before any GitHub call when the installation uses a personal access token, which has no Checks API', async () => {
+        checks.isChecksApiAvailable.mockResolvedValue(false);
+
+        await expect(useCase.execute(queuePush())).resolves.toEqual({
+            carried: false,
+            reason: 'token_auth',
+        });
+        expect(checks.isChecksApiAvailable).toHaveBeenCalledWith(
+            organizationAndTeamData,
+        );
+        expect(checks.findMergeQueueEntry).not.toHaveBeenCalled();
+        expect(checks.createCompletedCheckRun).not.toHaveBeenCalled();
     });
 
     it('posts nothing when the merge queue lookup fails, since the push is not verified', async () => {

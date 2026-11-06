@@ -437,6 +437,21 @@ describe('GithubChecksService', () => {
             ).rejects.toThrow('boom');
         });
     });
+    describe('isChecksApiAvailable', () => {
+        it.each([
+            [AuthMode.OAUTH, true],
+            [AuthMode.TOKEN, false],
+        ])('with %s auth returns %s', async (authMode, expected) => {
+            mockGithubService.getGithubAuthDetails.mockResolvedValue({
+                authMode,
+            } as any);
+
+            await expect(
+                service.isChecksApiAvailable(mockOrganizationAndTeamData),
+            ).resolves.toBe(expected);
+        });
+    });
+
     describe('findMergeQueueEntry', () => {
         const params = {
             organizationAndTeamData: mockOrganizationAndTeamData,
