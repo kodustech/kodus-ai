@@ -167,7 +167,7 @@ function resolveRoute(config) {
             if (!process.env.API_FIREWORKS_API_KEY) throw new Error(`no API key for the managed route — set one of ${spec.keyEnvs.join('/')}`);
             return { storedConfig: null, route: 'managed', modelId, reasoningEffort: null };
         }
-        const key = spec.keyEnvs.map((name) => process.env[name]).find(Boolean);
+        const key = spec.codexSubscription ? 'codex-subscription' : spec.keyEnvs.map((name) => process.env[name]).find(Boolean);
         if (!key) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/') || 'none known'}`);
         return {
             storedConfig: storedByokConfig({
