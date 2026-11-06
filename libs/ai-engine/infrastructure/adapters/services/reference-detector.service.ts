@@ -100,7 +100,11 @@ function parseReferenceReply(
     const unquoted = unquoteJsonString(raw);
     const last =
         typeof unquoted === 'string'
-            ? extractLastJsonObjectWith(unquoted, LIST_KEYS)
+            ? extractLastJsonObjectWith(
+                  unquoted,
+                  LIST_KEYS,
+                  (obj) => !isPromptExample(obj),
+              )
             : null;
     let value = normalizeEnvelope(last ?? unquoted, 'items', LIST_KEYS, opts);
     // A provider response body written out as the text: read its content.
@@ -153,6 +157,20 @@ function parseReferenceReply(
         if (real.length === 0) return null;
     }
     return real;
+}
+
+/** A list whose every entry is the prompt's example file. */
+function isPromptExample(obj: Record<string, unknown>): boolean {
+    const list = Object.values(obj).find(Array.isArray) as unknown[] | undefined;
+    return (
+        !!list?.length &&
+        list.every(
+            (item) =>
+                !!item &&
+                typeof item === 'object' &&
+                (item as { fileName?: unknown }).fileName === EXAMPLE_FILE_NAME,
+        )
+    );
 }
 
 function isControlMarker(value: unknown): boolean {

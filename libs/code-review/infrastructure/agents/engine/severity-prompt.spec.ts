@@ -87,6 +87,15 @@ describe('parseSeverityResponse', () => {
         expect(parseSeverityResponse(truncated).parseOk).toBe(false);
     });
 
+    it('keeps the answer when the reply restates the example after it', () => {
+        const reply = `{"classifications": [{"index": 0, "severity": "low", "reason": "cosmetic"}]}\nFormat was: {"classifications": [{"index": 0, "severity": "high", "reason": "brief reason"}]}`;
+
+        const { classifications, parseOk } = parseSeverityResponse(reply);
+
+        expect(parseOk).toBe(true);
+        expect([...classifications]).toEqual([[0, 'low']]);
+    });
+
     it('fails when no object carries classifications', () => {
         expect(parseSeverityResponse('index 0 is high').parseOk).toBe(false);
         expect(parseSeverityResponse('{"severity": "high"}').parseOk).toBe(false);

@@ -226,11 +226,14 @@ export function parseSeverityResponse(text: string): {
     // `</think>` the model quotes (Together, DeepSeek V4.1 Flash) returns the
     // rest of the reasoning ahead of the answer, and the braces it quotes made
     // that span unparseable: every suggestion fell to medium (#2409).
-    const parsed = extractLastJsonObjectWith(text, ['classifications']);
-    // Cut mid-thought, a model copies the prompt's example; and when the real
-    // answer is unreadable, the scan above falls back to the example the
-    // reasoning quoted. Either way it is not a rating.
-    if (!parsed || isResponseExample(parsed)) {
+    // The prompt's example is not a rating, wherever the reply quotes it: a
+    // model cut mid-thought copies it, and one may restate it after answering.
+    const parsed = extractLastJsonObjectWith(
+        text,
+        ['classifications'],
+        (obj) => !isResponseExample(obj),
+    );
+    if (!parsed) {
         return { classifications, parseOk: false };
     }
 

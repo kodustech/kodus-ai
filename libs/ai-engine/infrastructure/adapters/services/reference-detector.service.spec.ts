@@ -287,6 +287,17 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
                 );
                 expect(r).toEqual({ references: [], reliable: false });
             });
+
+            it('keeps the answer when the reply restates the example after it', async () => {
+                mockRun(`${answer}\nFormat was:\n${example}`);
+                const r = await svc.detectReferencesWithStatus(
+                    baseParams() as any,
+                );
+                expect(r.reliable).toBe(true);
+                expect(r.references.map((x) => x.fileName)).toEqual([
+                    'docs/tags.md',
+                ]);
+            });
         });
 
         // ── C. Unparseable / transport — the fail-safe layer (rows 28-34) ──

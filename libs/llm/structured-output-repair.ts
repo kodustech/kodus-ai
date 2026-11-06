@@ -205,10 +205,13 @@ export function extractJsonFromText(text: string): string | null {
  * parse fails. This walks to the end instead, so the answer wins over anything
  * quoted on the way there. Key matching is convention-insensitive
  * (`shouldKeep` ≡ `should_keep`) — the same rule {@link normalizeEnvelope} uses.
+ * A match `accept` rejects (the prompt's own example, restated after the
+ * answer) is skipped, so the answer before it still wins.
  */
 export function extractLastJsonObjectWith(
     text: string,
     keys: readonly string[],
+    accept: (obj: Record<string, unknown>) => boolean = () => true,
 ): Record<string, unknown> | null {
     if (typeof text !== 'string' || text.trim() === '' || keys.length === 0) {
         return null;
@@ -233,7 +236,7 @@ export function extractLastJsonObjectWith(
         if (!Object.keys(obj).some((k) => wanted.has(normalizeKeyName(k)))) {
             continue; // maybe a wrapper — let the scan reach the inner object.
         }
-        found = obj;
+        if (accept(obj)) found = obj;
         i += slice.length - 1; // don't re-match objects nested inside the hit.
     }
     return found;
