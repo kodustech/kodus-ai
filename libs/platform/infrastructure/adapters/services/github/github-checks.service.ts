@@ -64,9 +64,9 @@ export class GithubChecksService implements IChecksAdapter {
 
     /**
      * Newest completed run with this name posted by this deployment's App on
-     * the commit. Returns null under PAT auth (no Checks API), when the App
-     * id is unknown, or when none has completed; throws on GitHub errors so
-     * callers can tell "no run" from "could not read". Runs from another App
+     * the commit. Returns null under PAT auth (no Checks API) or when none
+     * has completed; throws on GitHub errors or an unknown App id so callers
+     * can tell "no run" from "could not read". Runs from another App
      * using the same name are ignored, and so are `stale` ones, which only
      * GitHub can set.
      */
@@ -82,9 +82,13 @@ export class GithubChecksService implements IChecksAdapter {
             return null;
         }
 
+        // Without it, runs from another App can't be told apart. Throw so
+        // this is not mistaken for "no finished review".
         const appId = this.gitHubService.getGithubAppId();
         if (!appId) {
-            return null;
+            throw new Error(
+                'API_GITHUB_APP_ID is not set; cannot tell Kody check runs from other Apps',
+            );
         }
 
         const octokit = await this.gitHubService.getAuthenticatedOctokit(

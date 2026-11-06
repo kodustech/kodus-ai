@@ -336,12 +336,12 @@ describe('GithubChecksService', () => {
             ).resolves.toEqual(expect.objectContaining({ id: 4 }));
         });
 
-        it("returns null without calling GitHub when this deployment's App id is unknown", async () => {
+        it("throws without calling GitHub when this deployment's App id is unknown, rather than reporting no run", async () => {
             mockGithubService.getGithubAppId.mockReturnValue(undefined);
 
             await expect(
                 service.findLatestCompletedCheckRun(params),
-            ).resolves.toBeNull();
+            ).rejects.toThrow('API_GITHUB_APP_ID');
             expect(mockOctokit.checks.listForRef).not.toHaveBeenCalled();
         });
 
@@ -481,7 +481,7 @@ describe('GithubChecksService', () => {
             ).resolves.toBeNull();
         });
 
-        it('turns a GraphQL rate limit into a RateLimitError at the reset time', async () => {
+        it('turns only a GraphQL rate limit into a RateLimitError at the reset time, and rethrows other errors unchanged', async () => {
             const reset = Math.floor(Date.now() / 1000) + 900;
             mockOctokit.graphql.mockRejectedValue(
                 Object.assign(new Error('API rate limit exceeded'), {
@@ -502,9 +502,7 @@ describe('GithubChecksService', () => {
 
             expect(isRateLimitError(error)).toBe(true);
             expect(error.resetAt.getTime()).toBe(reset * 1000);
-        });
 
-        it('rethrows other GraphQL errors unchanged', async () => {
             const original = Object.assign(new Error('Something went wrong'), {
                 name: 'GraphqlResponseError',
                 errors: [{ type: 'INTERNAL', message: 'x' }],
