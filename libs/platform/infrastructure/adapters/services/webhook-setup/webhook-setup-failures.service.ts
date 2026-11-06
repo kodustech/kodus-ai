@@ -80,11 +80,17 @@ export async function recordWebhookSetupOutcome(
 
         for (const id of result.notAttempted) {
             if (!failures[id]) {
-                failures[id] = {
-                    reason: PENDING_AFTER_RATE_LIMIT,
-                    kind: 'rate_limited',
-                    at: startedAt,
-                };
+                failures[id] = result.deferred
+                    ? {
+                          reason: result.deferred.reason,
+                          kind: 'deferred',
+                          at: startedAt,
+                      }
+                    : {
+                          reason: PENDING_AFTER_RATE_LIMIT,
+                          kind: 'rate_limited',
+                          at: startedAt,
+                      };
             }
         }
 

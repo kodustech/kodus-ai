@@ -1,4 +1,9 @@
-export type WebhookSetupFailureKind = 'permission' | 'rate_limited' | 'error';
+export type WebhookSetupFailureKind =
+    | 'permission'
+    | 'rate_limited'
+    | 'error'
+    /** Not attempted: the provider was never called this run. */
+    | 'deferred';
 
 export interface WebhookSetupFailure {
     reason: string;
@@ -16,6 +21,8 @@ export interface WebhookSetupResult {
     failed: Record<string, WebhookSetupFailure>;
     notAttempted: string[];
     rateLimited?: { retryAfterMs?: number };
+    /** The whole run was skipped before calling the provider; why. */
+    deferred?: { reason: string };
     /** The provider delivers events through an app-level hook (GitHub App). */
     managedByApp?: boolean;
 }

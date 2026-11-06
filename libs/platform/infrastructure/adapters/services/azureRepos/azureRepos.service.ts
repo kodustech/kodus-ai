@@ -2684,13 +2684,14 @@ export class AzureReposService implements Omit<
                     repositoryCount: repositories.length,
                 },
             });
-            return failWebhookSetupForAll(
-                repositories,
-                new Error(
-                    'Another webhook setup was running for this team; it is retried on the next sync',
-                ),
-                labels,
-            );
+            return {
+                configured: [],
+                failed: {},
+                notAttempted: repositories.map((repo) => String(repo.id)),
+                deferred: {
+                    reason: 'Waiting: another webhook setup was running for this team. It will be retried on the next sync.',
+                },
+            };
         }
         azureWebhookPassInFlight.add(passKey);
 

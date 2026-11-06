@@ -498,7 +498,9 @@ describe('AzureReposService webhook subscriptions (issue #1956)', () => {
                 });
 
                 expect(result.configured).toEqual([]);
-                expect(Object.keys(result.failed)).toEqual([REPO_B.id]);
+                expect(result.failed).toEqual({});
+                expect(result.notAttempted).toEqual([REPO_B.id]);
+                expect(result.deferred?.reason).toBeTruthy();
                 expect(helper.listSubscriptions).toHaveBeenCalledTimes(1);
 
                 // The full pass still owns the slot: a new save coalesces.

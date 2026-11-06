@@ -16,7 +16,7 @@ export type WebhookCreationFailure = {
     reason: string;
     at: string;
     /** Absent on records written before failures were classified. */
-    kind?: "permission" | "rate_limited" | "error";
+    kind?: "permission" | "rate_limited" | "error" | "deferred";
 };
 
 export const getWebhookCreationFailures = async (

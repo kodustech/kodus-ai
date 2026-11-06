@@ -123,6 +123,26 @@ describe('WebhookSetupFailuresService', () => {
         expect(record().failures['3'].kind).toBe('permission');
     });
 
+    it('records repositories deferred without calling the provider as deferred, with the given reason', async () => {
+        await service.recordOutcome({
+            organizationAndTeamData: orgTeam,
+            integrationId: 'int-1',
+            startedAt: '2026-02-01T00:00:00.000Z',
+            result: {
+                configured: [],
+                failed: {},
+                notAttempted: ['1'],
+                deferred: { reason: 'Another setup was running' },
+            },
+        });
+
+        expect(record().failures['1']).toEqual({
+            reason: 'Another setup was running',
+            kind: 'deferred',
+            at: '2026-02-01T00:00:00.000Z',
+        });
+    });
+
     it('drops entries of repositories that are no longer in the selection', async () => {
         stored[IntegrationConfigKey.WEBHOOK_CREATION_FAILURES] = {
             failures: { '9': { reason: 'gone', at: '2026-01-01T00:00:00.000Z' } },
