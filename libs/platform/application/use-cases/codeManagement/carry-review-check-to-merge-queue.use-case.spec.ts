@@ -1,7 +1,7 @@
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { KODY_CHECK_RUN_NAME } from '@libs/core/infrastructure/pipeline/services/pipeline-checks.service';
+import { RateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 import { WebhookContextService } from '@libs/platform/application/services/webhook-context.service';
-import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { GithubChecksService } from '@libs/platform/infrastructure/adapters/services/github/github-checks.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CarryReviewCheckToMergeQueueUseCase } from './carry-review-check-to-merge-queue.use-case';
@@ -9,11 +9,10 @@ import { CarryReviewCheckToMergeQueueUseCase } from './carry-review-check-to-mer
 describe('CarryReviewCheckToMergeQueueUseCase', () => {
     let useCase: CarryReviewCheckToMergeQueueUseCase;
     let webhookContextService: { getContext: jest.Mock };
-    let codeManagement: { getPullRequest: jest.Mock };
     let checks: {
         findLatestCompletedCheckRun: jest.Mock;
         createCompletedCheckRun: jest.Mock;
-        findMergeQueueEntryHeadSha: jest.Mock;
+        findMergeQueueEntry: jest.Mock;
     };
 
     const organizationAndTeamData = {
@@ -48,11 +47,6 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
                 teamAutomationId: 'ta-1',
             }),
         };
-        codeManagement = {
-            getPullRequest: jest
-                .fn()
-                .mockResolvedValue({ number: 7, head: { sha: headSha } }),
-        };
         checks = {
             findLatestCompletedCheckRun: jest.fn().mockResolvedValue({
                 id: 2,
@@ -61,7 +55,9 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
                 htmlUrl: 'https://github.com/acme/service/runs/2',
             }),
             createCompletedCheckRun: jest.fn().mockResolvedValue(77),
-            findMergeQueueEntryHeadSha: jest.fn().mockResolvedValue(queueSha),
+            findMergeQueueEntry: jest
+                .fn()
+                .mockResolvedValue({ queueSha, headSha }),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -71,7 +67,6 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
                     provide: WebhookContextService,
                     useValue: webhookContextService,
                 },
-                { provide: CodeManagementService, useValue: codeManagement },
                 { provide: GithubChecksService, useValue: checks },
             ],
         }).compile();
@@ -88,14 +83,6 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
         expect(webhookContextService.getContext).toHaveBeenCalledWith(
             PlatformType.GITHUB,
             '999',
-        );
-        expect(codeManagement.getPullRequest).toHaveBeenCalledWith(
-            {
-                organizationAndTeamData,
-                repository: { id: '999', name: 'service' },
-                prNumber: 7,
-            },
-            PlatformType.GITHUB,
         );
         expect(checks.findLatestCompletedCheckRun).toHaveBeenCalledWith({
             organizationAndTeamData,
@@ -117,10 +104,10 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
         });
     });
 
-    it("asks GitHub's merge queue which commit it built for the PR", async () => {
+    it("asks GitHub's merge queue which commit it built for the PR, and reads the PR head from the same lookup", async () => {
         await useCase.execute(queuePush());
 
-        expect(checks.findMergeQueueEntryHeadSha).toHaveBeenCalledWith({
+        expect(checks.findMergeQueueEntry).toHaveBeenCalledWith({
             organizationAndTeamData,
             repository: { owner: 'acme', name: 'service' },
             prNumber: 7,
@@ -129,11 +116,14 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
 
     it.each([
         ['the PR is not in the merge queue', null],
-        ['the queue built a different commit for the PR', 'f'.repeat(40)],
+        [
+            'the queue built a different commit for the PR',
+            { queueSha: 'f'.repeat(40), headSha },
+        ],
     ])(
         'posts nothing when %s, so a branch named like a queue branch gets no check',
-        async (_label, entrySha) => {
-            checks.findMergeQueueEntryHeadSha.mockResolvedValue(entrySha);
+        async (_label, entry) => {
+            checks.findMergeQueueEntry.mockResolvedValue(entry);
 
             await expect(useCase.execute(queuePush())).resolves.toEqual({
                 carried: false,
@@ -162,6 +152,17 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
         await expect(useCase.execute(queuePush())).rejects.toThrow(
             'API rate limit exceeded',
         );
+    });
+
+    it('rethrows a GraphQL rate limit from the merge queue lookup', async () => {
+        checks.findMergeQueueEntry.mockRejectedValue(
+            new RateLimitError({ resetAt: new Date(Date.now() + 60_000) }),
+        );
+
+        await expect(useCase.execute(queuePush())).rejects.toBeInstanceOf(
+            RateLimitError,
+        );
+        expect(checks.createCompletedCheckRun).not.toHaveBeenCalled();
     });
 
     it.each(['failure', 'neutral', 'skipped'])(
@@ -198,17 +199,7 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
             carried: false,
             reason: 'no_context',
         });
-        expect(codeManagement.getPullRequest).not.toHaveBeenCalled();
-        expect(checks.createCompletedCheckRun).not.toHaveBeenCalled();
-    });
-
-    it('posts nothing when the PR cannot be read', async () => {
-        codeManagement.getPullRequest.mockResolvedValue(null);
-
-        await expect(useCase.execute(queuePush())).resolves.toEqual({
-            carried: false,
-            reason: 'pr_lookup_failed',
-        });
+        expect(checks.findMergeQueueEntry).not.toHaveBeenCalled();
         expect(checks.createCompletedCheckRun).not.toHaveBeenCalled();
     });
 

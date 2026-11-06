@@ -5,7 +5,6 @@ import { KODY_CHECK_RUN_NAME } from '@libs/core/infrastructure/pipeline/services
 import { createLogger } from '@libs/core/log/logger';
 import { WebhookContextService } from '@libs/platform/application/services/webhook-context.service';
 import { IWebhookEventParams } from '@libs/platform/domain/platformIntegrations/interfaces/webhook-event-handler.interface';
-import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { GithubChecksService } from '@libs/platform/infrastructure/adapters/services/github/github-checks.service';
 import {
     isMergeQueuePush,
@@ -21,7 +20,6 @@ export type CarryReviewCheckResult =
               | 'not_merge_queue_push'
               | 'no_context'
               | 'not_in_merge_queue'
-              | 'pr_lookup_failed'
               | 'no_completed_run'
               | 'api_error';
       };
@@ -40,7 +38,6 @@ export class CarryReviewCheckToMergeQueueUseCase {
 
     constructor(
         private readonly webhookContextService: WebhookContextService,
-        private readonly codeManagement: CodeManagementService,
         private readonly githubChecksService: GithubChecksService,
     ) {}
 
@@ -107,29 +104,17 @@ export class CarryReviewCheckToMergeQueueUseCase {
 
             const repository = { owner, name: repositoryName };
 
-            const queueEntrySha =
-                await this.githubChecksService.findMergeQueueEntryHeadSha({
-                    organizationAndTeamData,
-                    repository,
-                    prNumber,
-                });
-            metadata.queueEntrySha = queueEntrySha;
-            if (queueEntrySha !== queueSha) {
+            const entry = await this.githubChecksService.findMergeQueueEntry({
+                organizationAndTeamData,
+                repository,
+                prNumber,
+            });
+            metadata.queueEntrySha = entry?.queueSha ?? null;
+            if (entry?.queueSha !== queueSha) {
                 return done({ carried: false, reason: 'not_in_merge_queue' });
             }
 
-            const pullRequest = await this.codeManagement.getPullRequest(
-                {
-                    organizationAndTeamData,
-                    repository: { id: repositoryId, name: repositoryName },
-                    prNumber,
-                },
-                PlatformType.GITHUB,
-            );
-            const headSha = pullRequest?.head?.sha;
-            if (!headSha) {
-                return done({ carried: false, reason: 'pr_lookup_failed' });
-            }
+            const { headSha } = entry;
             metadata.headSha = headSha;
 
             const run =
