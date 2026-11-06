@@ -1171,11 +1171,12 @@ const REPOSITORIES_JOINED =
 const FILE_THEN_REPOSITORY =
     /^[\s\x60'"),]*(?:(?:in|from|on|at|inside|under|no|na|do|da|em)\s+)?(?:(?:the|our|o|a)\s+)?[\x60'"(]?(?:https?:\/\/[\w.-]+\/)?$/;
 
-/** A list that goes on to more files ("a or b, and docs/c.md", "a or b,
- *  then docs/c.md"): a file after it is the list's, not a clause of the
- *  repository before it. */
+/** A list that goes on to more files: a file after it is the list's, not a
+ *  clause of the repository before it. A boundary word anywhere ("a or b,
+ *  then read docs/c.md", "and docs/c.md"), an adverb only right before the
+ *  file ("also docs/c.md"; "also read docs/c.md" is the clause's own verb). */
 const LIST_GOES_ON =
-    /(?:^|[\s,(])(?:and|or|e|ou|&|then|plus|also|too|as well as|depois|também|tambem)(?:$|[\s,)])/;
+    /(?:^|[\s,(])(?:and|or|e|ou|&|then|plus|depois)(?:$|[\s,)])|(?:^|[\s,(])(?:also|too|as well as|também|tambem)[\s,(\x60'"]*$/;
 
 /** A conjunction that opens a clause with its own place: "and in the",
  *  "or from", "e no". Without the preposition ("a or b") it is a choice. */

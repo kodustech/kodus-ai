@@ -685,6 +685,25 @@ describe("mentionedFilesNotFollowed", () => {
             }
         });
 
+        it("keeps a clause whose own verb carries an adverb", () => {
+            for (const text of [
+                "Follow docs/conventions.md in the pump-rules repository, and in the irrigation-rules repository also read docs/valves.md.",
+                `Leia docs/conventions.md no repositório ${OTHER_RULES}, e no repositório ${RULES} também leia docs/valves.md.`,
+            ]) {
+                expect(placed(text, [RULES, OTHER_RULES])).toEqual([
+                    `${OTHER_RULES}:docs/conventions.md`,
+                    `${RULES}:docs/valves.md`,
+                ]);
+            }
+            // Right before the file, the adverb goes on with the list.
+            expect(
+                placed(
+                    "Read docs/a.md in pump-rules or in irrigation-rules, also docs/b.md.",
+                    [RULES, OTHER_RULES],
+                ),
+            ).toEqual([]);
+        });
+
         it("reads a Portuguese list as it reads an English one", () => {
             expect(
                 placed(
