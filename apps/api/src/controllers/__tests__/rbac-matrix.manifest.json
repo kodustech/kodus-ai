@@ -671,6 +671,17 @@
     }
   },
   {
+    "key": "github.controller.ts#getInstallationAuthorization",
+    "httpMethod": "GET",
+    "urlPath": "/github/installation-authorization",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "github.controller.ts#getOrganizationName",
     "httpMethod": "GET",
     "urlPath": "/github/organization-name",
@@ -2042,6 +2053,17 @@
       "owner": "allow",
       "billing_manager": "allow",
       "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "user.controller.ts#getInvitationToken",
+    "httpMethod": "GET",
+    "urlPath": "/user/:targetUserId/invitation-token",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
       "contributor": "deny"
     }
   },

@@ -44,6 +44,7 @@ version: 2.0
 
 # general
 automatedReviewActive: true
+reviewMode: balanced # balanced | heavy
 showStatusFeedback: true
 kodusConfigFileOverridesWebPreferences: false
 reviewCadence:
@@ -163,6 +164,24 @@ Kody は PR が開かれたときに自動的にレビューするか、`@kody s
     `@kody start-review` とコメントした場合のみフォローアップレビューを実行します。
   </Tab>
 </Tabs>
+
+### レビューモード
+
+Kody がプルリクエストをどこまで深くレビューするか（`reviewMode`）：
+
+- **Balanced**（デフォルト）：標準のレビュー。
+- **Heavy**：9 つの専門レビュアーがメインレビューと並行して実行され、モデル呼び出しが増える代わりに
+  リコールが高まります。[Heavy mode](/ja/how_to_use/code_review/review_directive#heavy-mode) を参照してください。
+
+このモードはすべてのレビュー（自動レビュー、`@kody review`、`kodus review`）に適用されます。1 回の
+レビューだけ、`--heavy` または `--balanced` でもう一方のモードを指定できます。このページの他の設定と
+同様に、グローバル、リポジトリ単位、ディレクトリ単位で設定できます。
+
+2 つの選択肢の下にある **Review models** には、各モードが実行されるモデルが読み取り専用で表示されます。
+モデルは **AI providers → Routing** で決まります（変更するには **View organization routing** を開きます）。
+ただし、リポジトリまたはディレクトリが独自のモデルを設定している場合は、そのモデルが両方のモードで
+使われます。接続済みのモデルが 1 つだけの場合、このセクションはその旨を表示するだけです。独自の
+モデルがない場合（Kodus 管理）は表示されません。
 
 ### PR ワークフロー
 

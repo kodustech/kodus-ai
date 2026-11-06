@@ -84,6 +84,53 @@ it('holds a saved conditional policy when beta or paid access is unavailable', a
     expect(codeManagement.getPullRequest).not.toHaveBeenCalled();
 });
 
+it('preserves unknown risk and hold while recording an assessment failure as partial', async () => {
+    (LLM.run as jest.Mock).mockRejectedValueOnce(
+        new Error('Model unavailable'),
+    );
+    const result = await stage.execute(context({ approvalRiskActive: true }));
+    expect(result.approvalRisk).toMatchObject({
+        level: 'unknown',
+        reviewedHeadSha: 'head-1',
+    });
+    expect(result.approvalDecision?.kind).toBe('hold');
+    expect(result.errors).toEqual(
+        expect.arrayContaining([
+            expect.objectContaining({
+                stage: 'DecidePrApprovalStage',
+                severity: 'partial',
+                metadata: expect.objectContaining({
+                    reason: 'approval_risk_assessment_failed',
+                    errorName: 'Error',
+                }),
+            }),
+        ]),
+    );
+});
+
+it.each(['medium', 'high'])(
+    'treats a valid %s judgment as a successful assessment that holds approval',
+    async (level) => {
+        (LLM.run as jest.Mock).mockResolvedValueOnce({
+            level,
+            reason: 'A person should review this change.',
+        });
+        const result = await stage.execute(
+            context({ approvalRiskActive: true }),
+        );
+        expect(result.approvalDecision?.kind).toBe('hold');
+        expect(result.errors ?? []).toEqual([]);
+    },
+);
+
+it('keeps explicit parent-off authoritative even when risk is enabled', async () => {
+    const result = await stage.execute(
+        context({ pullRequestApprovalActive: false, approvalRiskActive: true }),
+    );
+    expect(result.approvalRisk).toBeUndefined();
+    expect(LLM.run).not.toHaveBeenCalled();
+});
+
 it('ignores inherited label restrictions on Bitbucket', async () => {
     const result = await stage.execute(
         context({ approvalLabels: ['ready'] }, PlatformType.BITBUCKET),

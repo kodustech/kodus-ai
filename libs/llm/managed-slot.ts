@@ -15,7 +15,14 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import { DEFAULT_MODEL } from './byok-defaults';
 import { vertexModelFromAdc } from './model-builders';
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from './opencode-go';
+import { repairBaseUrl } from './base-url-hygiene';
 import { servedByOpenAi } from './providers/openai/endpoint';
+import {
+    resolveDeclaredEnvProvider,
+    type DeclaredEnvModel,
+} from './env-declared-provider';
+import { attachClassification, LlmErrorCategory } from './error-classifier';
+import type { ReasoningEffort } from './reasoning-options';
 
 // Model-name protocol patterns, used by the self-hosted / trial default-model
 // resolution below (the BYOK provider builders moved to the provider modules
@@ -85,7 +92,7 @@ function isProxyBaseURL(baseURL: string | undefined): boolean {
  * falls through to the cloud/managed default. `name` is the telemetry label;
  * `kind` drives the SDK/auth branch.
  */
-export type EnvProviderResolution =
+export type EnvProviderResolution = (
     | { kind: 'gemini_studio'; name: 'google_ai_studio'; apiKey: string }
     | {
           kind: 'gemini_vertex';
@@ -100,6 +107,14 @@ export type EnvProviderResolution =
           baseURL?: string;
       }
     | {
+          // Declared only: an Anthropic-protocol upstream (Kimi, GLM,
+          // DeepSeek...) on its own endpoint, built like the BYOK slot.
+          kind: 'anthropic_compat';
+          name: 'anthropic_compatible';
+          apiKey: string;
+          baseURL: string;
+      }
+    | {
           kind: 'claude_vertex';
           name: 'google_vertex';
           apiKey: string;
@@ -112,6 +127,8 @@ export type EnvProviderResolution =
           kind: 'openai_native';
           name: 'openai';
           apiKey: string;
+          /** Only from a declared provider; inference never moves it. */
+          baseURL?: string;
       }
     | {
           kind: 'openai_compat';
@@ -128,7 +145,123 @@ export type EnvProviderResolution =
           project: string;
           vertexLocation?: string;
           isClaude: boolean;
-      };
+      }
+    | {
+          // API_LLM_PROVIDER was set but cannot run. Never falls back to
+          // inference or to the cloud default: guessing is the bug (#1687).
+          kind: 'invalid';
+          name: 'invalid';
+          reason: string;
+      }
+) & {
+    /** The operator stated the provider (API_LLM_PROVIDER). */
+    declared?: boolean;
+    /** The declared model id, trimmed. */
+    model?: string;
+    reasoningEffort?: ReasoningEffort;
+};
+
+/** A declared env provider, as the same resolution the inference produces. */
+function fromDeclared(config: DeclaredEnvModel): EnvProviderResolution {
+    const tags = {
+        declared: true,
+        model: config.model,
+        ...(config.reasoningEffort
+            ? { reasoningEffort: config.reasoningEffort }
+            : {}),
+    };
+    const isClaude = CLAUDE_MODEL_PATTERN.test(config.model);
+    const apiKey = config.apiKey ?? '';
+    switch (config.provider) {
+        case 'openai':
+            return {
+                kind: 'openai_native',
+                name: 'openai',
+                apiKey,
+                ...(config.baseURL ? { baseURL: config.baseURL } : {}),
+                ...tags,
+            };
+        case 'openai_compatible':
+            return {
+                kind: 'openai_compat',
+                name: 'openai_compatible',
+                apiKey,
+                baseURL: config.baseURL as string,
+                ...tags,
+            };
+        case 'anthropic':
+            return {
+                kind: 'claude_anthropic',
+                name: 'anthropic',
+                apiKey,
+                baseURL: config.baseURL,
+                ...tags,
+            };
+        case 'anthropic_compatible':
+            return {
+                kind: 'anthropic_compat',
+                name: 'anthropic_compatible',
+                apiKey,
+                baseURL: config.baseURL as string,
+                ...tags,
+            };
+        case 'google_gemini':
+            return {
+                kind: 'gemini_studio',
+                name: 'google_ai_studio',
+                apiKey,
+                ...tags,
+            };
+        case 'google_vertex':
+            if (!config.apiKey) {
+                return {
+                    kind: 'vertex_adc',
+                    name: 'google_vertex',
+                    project: config.adcProject as string,
+                    vertexLocation: config.vertexLocation,
+                    isClaude,
+                    ...tags,
+                };
+            }
+            return {
+                kind: isClaude ? 'claude_vertex' : 'gemini_vertex',
+                name: 'google_vertex',
+                apiKey,
+                vertexLocation: config.vertexLocation,
+                ...tags,
+            };
+    }
+}
+
+/**
+ * The declared env model (`API_LLM_PROVIDER` set and runnable) as the slot shape
+ * the provider modules answer for. Undefined when the provider is inferred: that
+ * path keeps the managed defaults it always had.
+ */
+export function declaredEnvModel():
+    | {
+          provider: BYOKProvider;
+          model: string;
+          reasoningEffort?: ReasoningEffort;
+      }
+    | undefined {
+    const env = resolveEnvProvider();
+    return env?.declared ? envManagedReasoningDescriptor(env) : undefined;
+}
+
+/**
+ * The error a review fails with when the declared env config cannot run. Its
+ * classification carries the reason, so the PR comment and the dashboard say
+ * which env var to fix instead of "Unexpected error".
+ */
+export function invalidEnvConfigError(reason: string): Error {
+    const message = `The server LLM configuration is invalid: ${reason}`;
+    return attachClassification(new Error(message), {
+        category: LlmErrorCategory.CONFIG_INVALID,
+        rawMessage: message,
+        friendlyMessage: message,
+    });
+}
 
 /** Resolve the Vertex project id for keyless (ADC) auth from the environment. */
 function vertexProjectFromEnv(): string | undefined {
@@ -141,6 +274,14 @@ function vertexProjectFromEnv(): string | undefined {
 }
 
 export function resolveEnvProvider(): EnvProviderResolution | null {
+    const declared = resolveDeclaredEnvProvider(process.env);
+    if (declared.kind === 'invalid') {
+        return { kind: 'invalid', name: 'invalid', reason: declared.reason };
+    }
+    if (declared.kind === 'declared') {
+        return fromDeclared(declared.config);
+    }
+
     const envMode = process.env.API_LLM_PROVIDER_MODEL ?? 'auto';
     if (envMode === 'auto') return null;
 
@@ -194,7 +335,7 @@ export function resolveEnvProvider(): EnvProviderResolution | null {
             kind: 'claude_anthropic',
             name: 'anthropic',
             apiKey: openaiKey,
-            baseURL: openaiBaseURL || undefined,
+            baseURL: repairBaseUrl(openaiBaseURL || undefined),
         };
     }
     if (isClaude && vertexKey && !viaProxy) {
@@ -235,7 +376,9 @@ export function resolveEnvProvider(): EnvProviderResolution | null {
             kind: 'openai_compat',
             name: 'openai_compatible',
             apiKey: openaiKey,
-            baseURL: openaiBaseURL || 'https://api.openai.com/v1',
+            baseURL: repairBaseUrl(
+                openaiBaseURL || 'https://api.openai.com/v1',
+            )!,
         };
     }
     return null;
@@ -245,13 +388,14 @@ export function resolveEnvProvider(): EnvProviderResolution | null {
  *  mapping `resolveManagedSlot`'s switch uses to pick the SDK/module, kept here as
  *  the reasoning-only projection (no model build, no key). */
 const ENV_KIND_TO_PROVIDER: Record<
-    EnvProviderResolution['kind'],
+    Exclude<EnvProviderResolution['kind'], 'invalid'>,
     BYOKProvider
 > = {
     gemini_studio: BYOKProvider.GOOGLE_GEMINI,
     gemini_vertex: BYOKProvider.GOOGLE_VERTEX,
     claude_vertex: BYOKProvider.GOOGLE_VERTEX,
     claude_anthropic: BYOKProvider.ANTHROPIC,
+    anthropic_compat: BYOKProvider.ANTHROPIC_COMPATIBLE,
     openai_native: BYOKProvider.OPENAI,
     openai_compat: BYOKProvider.OPENAI_COMPATIBLE,
     vertex_adc: BYOKProvider.GOOGLE_VERTEX,
@@ -266,14 +410,23 @@ const ENV_KIND_TO_PROVIDER: Record<
  * model would — the "uniform env + BYOK" the one funnel promises. `undefined` on
  * cloud (`API_LLM_PROVIDER_MODEL` unset/auto) → the caller's own default decides.
  */
-export function envManagedReasoningDescriptor():
-    | { provider: BYOKProvider; model: string }
+export function envManagedReasoningDescriptor(env = resolveEnvProvider()):
+    | {
+          provider: BYOKProvider;
+          model: string;
+          reasoningEffort?: ReasoningEffort;
+      }
     | undefined {
-    const env = resolveEnvProvider();
-    if (!env) return undefined;
-    const model = process.env.API_LLM_PROVIDER_MODEL;
+    if (!env || env.kind === 'invalid') return undefined;
+    const model = env.model ?? process.env.API_LLM_PROVIDER_MODEL;
     if (!model) return undefined;
-    return { provider: ENV_KIND_TO_PROVIDER[env.kind], model };
+    return {
+        provider: ENV_KIND_TO_PROVIDER[env.kind],
+        model,
+        ...(env.reasoningEffort
+            ? { reasoningEffort: env.reasoningEffort }
+            : {}),
+    };
 }
 
 /**
@@ -338,7 +491,8 @@ export function resolveManagedSlot(
     // Fireworks/managed default below.
     const env = resolveEnvProvider();
     if (env) {
-        const envMode = process.env.API_LLM_PROVIDER_MODEL as string;
+        const envMode =
+            env.model ?? (process.env.API_LLM_PROVIDER_MODEL as string);
         switch (env.kind) {
             case 'gemini_studio':
                 return managedSlot(
@@ -361,15 +515,28 @@ export function resolveManagedSlot(
                     BYOKProvider.ANTHROPIC,
                     env.apiKey,
                     envMode,
-                    {
-                        baseURL: env.baseURL,
-                    },
+                    { baseURL: env.baseURL },
+                );
+            case 'anthropic_compat':
+                // The anthropic module's compatible build: /v1 normalization,
+                // the unsigned-thinking repair, the brand reasoning rules.
+                return managedSlot(
+                    BYOKProvider.ANTHROPIC_COMPATIBLE,
+                    env.apiKey,
+                    envMode,
+                    { baseURL: env.baseURL },
                 );
             case 'openai_native':
-                // The openai module's native build: no baseURL, so the SDK's own
-                // api.openai.com/v1 default, and /v1/responses.
-                return managedSlot(BYOKProvider.OPENAI, env.apiKey, envMode);
-            case 'openai_compat':
+                // The openai module's native build: the SDK's own
+                // api.openai.com/v1 default (or a declared baseURL), and
+                // /v1/responses.
+                return managedSlot(
+                    BYOKProvider.OPENAI,
+                    env.apiKey,
+                    envMode,
+                    env.baseURL ? { baseURL: env.baseURL } : undefined,
+                );
+            case 'openai_compat': {
                 // INLINE EXCEPTION (self-hosted OpenAI-compatible): name
                 // 'self-hosted', default baseURL api.openai.com, raw
                 // structuredOutputs opt-in — the openai_compatible provider
@@ -379,26 +546,28 @@ export function resolveManagedSlot(
                 // pointed at OpenCode Go (issue #1880) needs the same
                 // x-opencode-session header attached here — the provider
                 // module's build() never runs on this inline path.
+                const baseURL = env.baseURL;
                 return {
                     kind: 'inline',
                     model: createOpenAICompatible({
                         name: 'self-hosted',
                         apiKey: env.apiKey,
-                        baseURL: env.baseURL,
+                        baseURL,
                         supportsStructuredOutputs:
                             options.structuredOutputs === true,
-                        ...(isOpenCodeGoBaseUrl(env.baseURL)
+                        ...(isOpenCodeGoBaseUrl(baseURL)
                             ? {
                                   headers: {
                                       'x-opencode-session': openCodeSessionId({
                                           model: envMode,
-                                          baseURL: env.baseURL,
+                                          baseURL,
                                       }),
                                   },
                               }
                             : {}),
                     })(envMode),
                 };
+            }
             case 'vertex_adc': {
                 // INLINE EXCEPTION (keyless Vertex via ambient ADC): there is no
                 // apiKey — the google_vertex module's build() requires a decrypted
@@ -414,8 +583,15 @@ export function resolveManagedSlot(
                 if (adcModel) {
                     return { kind: 'inline', model: adcModel };
                 }
+                if (env.declared) {
+                    throw invalidEnvConfigError(
+                        'API_LLM_PROVIDER=google_vertex could not build a model from Application Default Credentials.',
+                    );
+                }
                 break;
             }
+            case 'invalid':
+                throw invalidEnvConfigError(env.reason);
         }
     }
 
@@ -502,6 +678,14 @@ export function resolveManagedSlot(
 export function hasManagedModelKey(): boolean {
     const selfHosted =
         (process.env.API_LLM_PROVIDER_MODEL ?? 'auto') !== 'auto';
+    // A declared provider, runnable or not, is attempted: an invalid one fails
+    // with its reason instead of skipping the call in silence.
+    if (
+        selfHosted &&
+        resolveDeclaredEnvProvider(process.env).kind !== 'inferred'
+    ) {
+        return true;
+    }
     if (selfHosted) {
         const envModel = process.env.API_LLM_PROVIDER_MODEL ?? '';
         // Keyless Vertex (ADC): no literal key, but the ambient project makes a
@@ -550,7 +734,10 @@ export function getModelName(
     // so the telemetry name always matches the model actually used.
     const env = resolveEnvProvider();
     if (env) {
-        return `${env.name}:${process.env.API_LLM_PROVIDER_MODEL}`;
+        // An invalid config can come from `auto` with no model set.
+        return env.kind === 'invalid'
+            ? process.env.API_LLM_PROVIDER_MODEL?.trim() || 'auto'
+            : `${env.name}:${env.model ?? process.env.API_LLM_PROVIDER_MODEL}`;
     }
 
     return defaultModelOverride || DEFAULT_MODEL.model;

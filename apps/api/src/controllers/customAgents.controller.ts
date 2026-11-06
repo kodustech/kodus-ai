@@ -102,6 +102,8 @@ export class CustomAgentsController {
             agent: body.agent,
             knowledge: body.knowledge,
             discover: body.discover === true,
+            source: body.source,
+            listConnected: body.listConnected === true,
         });
     }
 

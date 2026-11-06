@@ -2,6 +2,7 @@ import type { RunState } from '../../domain/contracts/run-state.contract';
 import {
     buildVerifierAgentSpec,
     extractVerdict,
+    recoverVerdictObject,
     VERIFY_DONE_TOOL,
 } from './llm-verdict';
 
@@ -47,6 +48,46 @@ describe('extractVerdict (fail-open / refute-to-drop)', () => {
             stateWith([{ type: VERIFY_DONE_TOOL, payload: { keep: 'nope' } } as any]),
         );
         expect(v.keep).toBe(true);
+    });
+
+    it.each([
+        ['"false"', 'false', false],
+        ['"no"', 'no', false],
+        ['" False "', ' False ', false],
+        ['0', 0, false],
+        ['"true"', 'true', true],
+        ['"yes"', 'yes', true],
+        ['1', 1, true],
+    ])('recoverVerdictObject with coerceKeep reads keep=%s as a boolean', (_l, keep, expected) => {
+        const reasons: string[] = [];
+        const v = recoverVerdictObject({ keep }, (r) => reasons.push(r), {
+            coerceKeep: true,
+        });
+        expect(v?.keep).toBe(expected);
+        expect(reasons.join()).toContain('coerced-keep');
+    });
+
+    it('recoverVerdictObject coerces a wrapped string keep', () => {
+        expect(
+            recoverVerdictObject({ result: { keep: 'no' } }, undefined, {
+                coerceKeep: true,
+            })?.keep,
+        ).toBe(false);
+    });
+
+    it.each(['nope', 2, 'maybe'])('recoverVerdictObject leaves keep=%s unreadable', (keep) => {
+        expect(
+            recoverVerdictObject({ keep }, undefined, { coerceKeep: true }),
+        ).toBeNull();
+    });
+
+    it('without coerceKeep a string keep stays unreadable and fails open', () => {
+        expect(recoverVerdictObject({ keep: 'false' })).toBeNull();
+        const v = extractVerdict(
+            stateWith([{ type: VERIFY_DONE_TOOL, payload: { keep: 'false' } } as any]),
+        );
+        expect(v.keep).toBe(true);
+        expect(v.parseMode).toBe('default-keep');
     });
 
     it('uses the LAST verdict artifact when several are present', () => {

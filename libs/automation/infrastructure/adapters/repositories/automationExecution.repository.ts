@@ -974,7 +974,7 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                 )
                 .where('success.createdAt BETWEEN :startDate AND :endDate')
                 .andWhere('success.team_automation_id = :teamAutomationId')
-                .andWhere('success.status = :successStatus')
+                .andWhere('success.status IN (:...reviewStatuses)')
                 .andWhere(`${successRepositoryExpr} IS NOT NULL`)
                 .andWhere(`${successPullRequestExpr} IS NOT NULL`)
                 .andWhere(`NOT EXISTS (${inProgressSubquery})`)
@@ -984,7 +984,10 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                     startDate,
                     endDate,
                     teamAutomationId,
-                    successStatus: AutomationStatus.SUCCESS,
+                    reviewStatuses: [
+                        AutomationStatus.SUCCESS,
+                        AutomationStatus.PARTIAL_ERROR,
+                    ],
                     inProgressStatus: AutomationStatus.IN_PROGRESS,
                     allowNoCommentKinds: ['approve', 'hold', 'out-of-scope'],
                 })

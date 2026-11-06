@@ -61,6 +61,7 @@ import {
 } from '@libs/identity/domain/user/contracts/user.service.contract';
 
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
 
 const SKIPPED_NO_LICENSE_RATE_LIMIT_TTL_SECONDS = 24 * 60 * 60; // 24h
 
@@ -1019,16 +1020,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
     }
 
     private async creditsExhaustedMessage(): Promise<string> {
-        return (
-            '## Your Kodus credits are used up 💳\n\n' +
-            'This repository reviews with a model routed by Kodus, and your ' +
-            "organization's prepaid credit balance is at zero.\n\n" +
-            '**[Top up credits](https://app.kodus.io/byok#kodus)** ' +
-            'and re-run the review (or push a new commit) — or ' +
-            '[connect your own AI key](https://app.kodus.io/byok) to review ' +
-            'on your provider account instead.\n\n' +
-            '<!-- kody-codereview -->'
-        );
+        return KODUS_CREDITS_EXHAUSTED_COMMENT;
     }
 
     private async licenseUnavailableMessage(): Promise<string> {

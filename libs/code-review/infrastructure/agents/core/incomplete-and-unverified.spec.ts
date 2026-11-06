@@ -357,6 +357,164 @@ describe('#2171 — finder run that ends without a submitted result', () => {
         // Says it never submitted, so a custom agent can read it as stopped.
         expect(out.submittedResult).toBe(false);
     });
+
+    // QA PR kodus-e2e/tiny-url-app#677: the finder wrote its whole result as a
+    // fenced JSON answer instead of calling submitResult, and the review was
+    // recorded as stopped without a result.
+    const finalText = (text: string) => ({
+        content: [{ type: 'text', text }],
+        finishReason: { unified: 'stop', raw: 'stop' },
+        usage,
+        warnings: [],
+    });
+
+    it('a whole result written as the final answer is a submitted result', async () => {
+        useModel(async () =>
+            finalText(
+                'The only change is a markdown note.\n\n```json\n' +
+                    JSON.stringify({
+                        reasoning: 'No findings to report.',
+                        suggestions: [],
+                    }) +
+                    '\n```',
+            ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBeUndefined();
+        expect(out.submittedResult).toBe(true);
+    });
+
+    it('findings written as the final answer are a submitted result', async () => {
+        useModel(async (opts) =>
+            isVerifierCall(opts)
+                ? toolCall(
+                      'submitVerdict',
+                      { keep: true, rationale: 'ok' },
+                      SAFE,
+                  )
+                : finalText('```json\n' + JSON.stringify(findings) + '\n```'),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.submittedResult).toBe(true);
+        expect(
+            out.findings.suggestions.map((s: any) => s.relevantFile),
+        ).toEqual(['a.ts', 'b.ts']);
+    });
+
+    it('a text result that lost its findings to the schema is not a submitted result', async () => {
+        useModel(async () =>
+            finalText(
+                '```json\n' +
+                    JSON.stringify({
+                        reasoning: 'one finding',
+                        // No suggestionContent / existingCode / improvedCode:
+                        // the schema drops the item.
+                        suggestions: [{ relevantFile: 'a.ts' }],
+                    }) +
+                    '\n```',
+            ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.findings.suggestions).toEqual([]);
+        expect(out.submittedResult).toBe(false);
+    });
+
+    it('a cut turn stays truncated even when its text holds a whole result', async () => {
+        useModel(async () => ({
+            content: [
+                {
+                    type: 'text',
+                    text:
+                        '```json\n' +
+                        JSON.stringify({
+                            reasoning: 'draft',
+                            suggestions: [],
+                        }) +
+                        '\n```',
+                },
+                {
+                    type: 'tool-call',
+                    toolCallId: 'read-cut',
+                    toolName: 'readFile',
+                    input: JSON.stringify({ path: 'a.ts' }),
+                },
+            ],
+            finishReason: { unified: 'length', raw: 'max_tokens' },
+            usage,
+            warnings: [],
+        }));
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBe('truncated');
+    });
+
+    it('a text-only final answer the provider cut is not a submitted result', async () => {
+        // No tool call, so nothing is skipped: only the turn's finish reason
+        // says the answer was cut after a JSON block that parses whole.
+        useModel(async () => ({
+            content: [
+                {
+                    type: 'text',
+                    text:
+                        '```json\n' +
+                        JSON.stringify({
+                            reasoning: 'draft',
+                            suggestions: [],
+                        }) +
+                        '\n```\nNext I will check b.ts for',
+                },
+            ],
+            finishReason: { unified: 'length', raw: 'max_tokens' },
+            usage,
+            warnings: [],
+        }));
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.submittedResult).toBe(false);
+    });
+
+    it('JSON from an earlier step is not the result when the final answer is prose', async () => {
+        let call = 0;
+        useModel(async () =>
+            call++ === 0
+                ? {
+                      content: [
+                          {
+                              type: 'text',
+                              text:
+                                  '```json\n' +
+                                  JSON.stringify({
+                                      reasoning: 'draft',
+                                      suggestions: [],
+                                  }) +
+                                  '\n```',
+                          },
+                          {
+                              type: 'tool-call',
+                              toolCallId: 'read-1',
+                              toolName: 'readFile',
+                              input: JSON.stringify({ path: 'a.ts' }),
+                          },
+                      ],
+                      finishReason: SAFE,
+                      usage,
+                      warnings: [],
+                  }
+                : finalText('Still checking how a.ts is used.'),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.submittedResult).toBe(false);
+    });
 });
 
 describe('#2171 — verify call that fails', () => {

@@ -5,6 +5,12 @@ import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/servic
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import { createSubmoduleProbe } from '@libs/code-review/infrastructure/agents/engine/uninitialized-submodules';
+import { isLineNumber } from '@libs/sandbox/infrastructure/providers/read-within-root';
+import {
+    isSecretFilePath,
+    secretFileRefusal,
+    withoutSecretFileLines,
+} from '@libs/code-review/infrastructure/agents/engine/secret-files';
 import {
     findProjectLevelTypeScriptErrors,
     hasLocatedTypeScriptDiagnostic,
@@ -81,6 +87,26 @@ function mkTool(
         inputSchema: jsonSchema(schema),
         execute: exec,
     };
+}
+
+/**
+ * A tool argument as a line number: absent is 0, a numeric string is read,
+ * and with `clampNegative` a negative integer becomes 1. Anything else is
+ * null (refused).
+ */
+function toLineNumber(
+    value: unknown,
+    { clampNegative = false }: { clampNegative?: boolean } = {},
+): number | null {
+    if (value === undefined || value === null || value === '') return 0;
+    const n =
+        typeof value === 'string' && /^\s*-?\d+\s*$/.test(value)
+            ? Number(value)
+            : value;
+    if (clampNegative && Number.isSafeInteger(n) && (n as number) < 0) {
+        return 1;
+    }
+    return isLineNumber(n) ? n : null;
 }
 
 function addLineNumbers(content: string, baseLineNumber: number): string {
@@ -399,10 +425,12 @@ export function buildAgentTools(
                         if (exitCode >= 2) {
                             return `Error searching linked repo ${linked.repository} for "${pattern}"`;
                         }
-                        if (exitCode === 1 || !stdout.trim()) {
+                        // Secret files leave before the cap, so their matches
+                        // never use up the result limit.
+                        const raw = withoutSecretFileLines(stdout).trim();
+                        if (exitCode === 1 || !raw) {
                             return `No matches found in linked repo ${linked.repository}.`;
                         }
-                        const raw = stdout.trim();
                         // Tag paths so the agent knows which repo they came from.
                         const tagged = raw
                             .split('\n')
@@ -475,15 +503,17 @@ export function buildAgentTools(
                         if (exitCode >= 2) {
                             throw new Error('rg error');
                         }
+                        // Secret files leave before the cap, so their matches
+                        // never use up the result limit.
+                        const raw = withoutSecretFileLines(stdout).trim();
                         // exit code 1 = no matches (not an error)
-                        if (exitCode === 1 || !stdout.trim()) {
+                        if (exitCode === 1 || !raw) {
                             return withSubmoduleNote(
                                 'No matches found.',
                                 searchPath,
                             );
                         }
                         if (exitCode === 0) {
-                            const raw = stdout.trim();
                             if (namesOnly) {
                                 return raw
                                     .split('\n')
@@ -526,6 +556,7 @@ export function buildAgentTools(
                         searchPath,
                     );
                 }
+                result = withoutSecretFileLines(result);
                 if (namesOnly) {
                     // The note has to come BEFORE the file-name mapping, and
                     // on the SAME predicate the note itself uses. An empty
@@ -603,8 +634,19 @@ export function buildAgentTools(
                 // Tolerate models sending file/filePath instead of path
                 let filePath: string =
                     args.path || args.filePath || args.file || '';
-                const startLine = args.startLine || args.start_line || 0;
-                const endLine = args.endLine || args.end_line || 0;
+                // The schema is not enforced at runtime: a model may send a
+                // numeric string, or anything else. Only line numbers reach
+                // the sandbox, which builds a sed address from them.
+                // `startLine=grepLine-20` near the top of a file is below 1:
+                // it means "from the first line".
+                const startLine = toLineNumber(
+                    args.startLine ?? args.start_line,
+                    { clampNegative: true },
+                );
+                const endLine = toLineNumber(args.endLine ?? args.end_line);
+                if (startLine === null || endLine === null) {
+                    return 'Error: startLine and endLine must be non-negative integers (line numbers).';
+                }
                 // Strip leading slash — paths are relative to repo root
                 filePath = filePath.replace(/^\/+/, '');
                 if (!filePath) {
@@ -614,23 +656,19 @@ export function buildAgentTools(
                 const linked = await resolveLinkedRoot(args.repo);
                 if (!linked.ok) return `Error: ${linked.error}`;
 
-                // Linked-repo hop: cat/sed under the cloned root via exec.
+                // Linked-repo hop: the provider's own read, rooted at the
+                // clone, refuses a symlink and a path that leaves it, exactly
+                // as it does for the PR's repository.
                 if (linked.rootPath) {
-                    if (!remoteCommands.exec) {
-                        return 'Error: sandbox exec unavailable for linked-repo read';
-                    }
                     const target = safeLinkedPath(linked.rootPath, filePath);
                     if (!target.ok) return `Error: ${target.error}`;
                     try {
-                        const cmd =
-                            startLine === 0 && endLine === 0
-                                ? `cat ${shSingleQuote(target.abs)}`
-                                : `sed -n '${startLine < 1 ? 1 : startLine},${endLine}p' ${shSingleQuote(target.abs)}`;
-                        const { stdout, stderr, exitCode } =
-                            await remoteCommands.exec(cmd);
-                        if (!stdout && (stderr || exitCode !== 0)) {
-                            return `Error reading ${filePath} from linked repo ${linked.repository}: ${(stderr || `exit ${exitCode}`).trim()}`;
-                        }
+                        const stdout = await remoteCommands.read(
+                            filePath,
+                            startLine,
+                            endLine,
+                            linked.rootPath,
+                        );
                         if (!stdout) {
                             return startLine > 0
                                 ? `readFile: no content in [${linked.repository}] ${filePath} for the requested range`
@@ -1712,10 +1750,52 @@ fi
         );
     }
 
+    guardSecretFiles(tools);
+
     logger.log({
         message: `[AGENT-TOOLS] registered=${Object.keys(tools).join(',')} gitHubToken=${gitHubToken ? 'yes' : 'no'}`,
         context: 'agent-tools.factory',
     });
 
     return tools;
+}
+
+/**
+ * No tool returns the content of a secret file the repository committed
+ * (secret-files.ts): it would reach the model provider and the trace. The
+ * readers refuse the path, and search output drops the file's lines, on
+ * every route a tool takes (linked repositories, sandbox rg, the provider's
+ * grep).
+ */
+function guardSecretFiles(tools: Record<string, any>): void {
+    for (const name of ['readFile', 'readReference']) {
+        const tool = tools[name];
+        if (!tool) continue;
+        const execute = tool.execute;
+        tool.execute = async (args: any) => {
+            const filePath = String(
+                args?.path || args?.filePath || args?.file || '',
+            );
+            return isSecretFilePath(filePath)
+                ? secretFileRefusal(filePath)
+                : execute(args);
+        };
+    }
+    for (const name of ['grep', 'getCallers']) {
+        const tool = tools[name];
+        if (!tool) continue;
+        const execute = tool.execute;
+        tool.execute = async (args: any) => {
+            // Every alias grep reads its path from: a search scoped to one
+            // file prints its lines without the file name.
+            const searchPath = String(
+                args?.path || args?.directory || args?.dir || '',
+            );
+            if (isSecretFilePath(searchPath)) {
+                return secretFileRefusal(searchPath);
+            }
+            const out = await execute(args);
+            return typeof out === 'string' ? withoutSecretFileLines(out) : out;
+        };
+    }
 }

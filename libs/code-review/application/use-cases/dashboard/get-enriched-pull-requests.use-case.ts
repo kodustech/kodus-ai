@@ -694,6 +694,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             title: pullRequest.title,
                             status: pullRequest.status,
                             merged: pullRequest.merged,
+                            heavy: pullRequest.heavy,
                             url: pullRequest.url,
                             baseBranchRef: pullRequest.baseBranchRef,
                             headBranchRef: pullRequest.headBranchRef,

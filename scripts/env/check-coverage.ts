@@ -107,6 +107,9 @@ function grepStrongUsages(): Set<string> {
         // Local scratch space (gitignored): may hold clones of other repos or
         // old checkouts of this one, with env names this branch never reads.
         '--exclude-dir=.tmp',
+        // Local planning notes and generated graphs (gitignored): they quote env
+        // names from other branches and docs, not code this branch reads.
+        '--exclude-dir=.planning',
         // Nested git worktrees (Claude Code / manual `git worktree`) hold
         // checkouts of OTHER branches — older code using since-renamed env
         // names (e.g. API_OPENROUTER_KEY → API_OPEN_ROUTER_API_KEY,

@@ -34,10 +34,11 @@ const ROOT = path.join(__dirname, '..');
 // the rest. Every WEEKLY_EVALS id is in one part (evals/weekly.spec.ts).
 const PARTS = [
     { part: 'finder', evals: ['finder-recall'] },
+    { part: 'heavy', evals: ['heavy-recall'] },
     { part: 'kody-rules', evals: ['kody-rules', 'repo-instructions'] },
-    { part: 'funnel', evals: ['funnel-verify', 'funnel-dedup', 'funnel-severity'] },
+    { part: 'funnel', evals: ['funnel-verify', 'funnel-dedup', 'funnel-severity', 'severity-levels', 'suggestion-enrichment'] },
     { part: 'conversation', evals: ['conversation', 'thread-rule', 'thread-rule-offers', 'thread-memory', 'thread-memory-offers', 'reply-addressing'] },
-    { part: 'review', evals: ['review-rounds', 'format', 'memories', 'business-logic', 'custom-agents'], tests: true },
+    { part: 'review', evals: ['review-rounds', 'format', 'memories', 'business-logic', 'custom-agents', 'prose-recovery'], tests: true },
 ];
 
 // The matrix: every tier-0 model on the controlled set.

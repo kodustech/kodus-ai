@@ -79,6 +79,14 @@ const BOUNDARIES = [
         note: 'off-schema output recovered by normalizeEnvelope; a failed call posts the findings it had to judge (#2097)',
     },
     {
+        phase: 'enrich-content',
+        files: [
+            'libs/code-review/infrastructure/agents/engine/enrich-content.ts',
+        ],
+        requires: ['schema'],
+        note: "the finding's title, fixStatus and improvedCode in one call (#1821)",
+    },
+    {
         phase: 'kody-rules-shard',
         files: [
             'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts',
@@ -189,7 +197,7 @@ const BOUNDARIES = [
             'libs/ai-engine/infrastructure/adapters/services/reference-detector.service.ts',
         ],
         accepted: true,
-        note: 'uses a PARALLEL extractor (extractJsonFromResponse) with its OWN 42-row contract (aggressive bracket-slice + fail-safe) — tested, not a silent-loss gap; consolidating onto extractJsonFromText is a semantics migration, not a swap',
+        note: 'text call; parsed with normalizeEnvelope (bare/fenced/prose/wrapped array, a lone reference), objects only — an unparseable reply is unreliable and not cached',
     },
 ];
 

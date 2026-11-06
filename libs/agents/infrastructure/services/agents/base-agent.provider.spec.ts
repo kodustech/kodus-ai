@@ -117,7 +117,9 @@ describe('BaseAgentProvider — request assembly (matrix D: input variants)', ()
         const { provider } = makeProvider(resolve);
         await provider.runFetch(ORG, undefined, 'id-only-model');
         const [, , options] = resolve.mock.calls[0];
-        expect(options).toEqual({ ctx: { override: { modelId: 'id-only-model' } } });
+        expect(options).toEqual({
+            ctx: { override: { modelId: 'id-only-model', byId: true } },
+        });
     });
 
     it('[row 36 · single override — name only] builds ctx.override.modelId from the legacy NAME when no id is present', async () => {

@@ -51,9 +51,12 @@ describe('CommentManagerService – task references survive a replaced descripti
         base: { ref: 'main' },
     };
 
+    // The description the stage read from the code host just before the call.
+    let currentBody: string;
+
     const generate = (summaryConfig: Record<string, unknown>) =>
         service.generateSummaryPR(
-            pullRequest,
+            { ...pullRequest, body: currentBody },
             repository,
             [makeFile('a.ts')],
             organizationAndTeamData as any,
@@ -67,11 +70,14 @@ describe('CommentManagerService – task references survive a replaced descripti
         const observability = {
             runAiSdkLLMInSpan: jest
                 .fn()
-                .mockImplementation(async () => ({ text: LLM_SUMMARY })),
+                .mockImplementation(async () => ({
+                    text: LLM_SUMMARY,
+                    output: { description: LLM_SUMMARY },
+                })),
         };
         setLlmObservability(observability as any);
 
-        mockCodeManagementService = { getPullRequestByNumber: jest.fn() };
+        mockCodeManagementService = {};
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -100,9 +106,7 @@ describe('CommentManagerService – task references survive a replaced descripti
     });
 
     it('keeps the closing keyword when the description is replaced', async () => {
-        mockCodeManagementService.getPullRequestByNumber.mockResolvedValue({
-            body: 'Closes #993\n\nAdds a per-second rate limiter.',
-        });
+        currentBody = 'Closes #993\n\nAdds a per-second rate limiter.';
 
         const result = await generate({
             generatePRSummary: true,
@@ -117,9 +121,7 @@ describe('CommentManagerService – task references survive a replaced descripti
     });
 
     it("keeps an id in the team's own format when the description is replaced", async () => {
-        mockCodeManagementService.getPullRequestByNumber.mockResolvedValue({
-            body: 'Story T1234\n\nSome prose.',
-        });
+        currentBody = 'Story T1234\n\nSome prose.';
         const summaryConfig = {
             generatePRSummary: true,
             behaviourForExistingDescription: 'replace',
@@ -127,7 +129,7 @@ describe('CommentManagerService – task references survive a replaced descripti
         };
 
         const withPattern = await service.generateSummaryPR(
-            pullRequest,
+            { ...pullRequest, body: currentBody },
             repository,
             [makeFile('a.ts')],
             organizationAndTeamData as any,
@@ -148,9 +150,7 @@ describe('CommentManagerService – task references survive a replaced descripti
     });
 
     it('keeps a jira-style key when the description is replaced', async () => {
-        mockCodeManagementService.getPullRequestByNumber.mockResolvedValue({
-            body: 'Implements PROJ-42\n\nSome prose.',
-        });
+        currentBody = 'Implements PROJ-42\n\nSome prose.';
 
         const result = await generate({
             generatePRSummary: true,
@@ -168,9 +168,7 @@ describe('CommentManagerService – task references survive a replaced descripti
             'Implements https://dev.azure.com/acme/web/_workitems/edit/12',
         ],
     ])('keeps %s when the description is replaced', async (_kind, line) => {
-        mockCodeManagementService.getPullRequestByNumber.mockResolvedValue({
-            body: `${line}\n\nSome prose.`,
-        });
+        currentBody = `${line}\n\nSome prose.`;
 
         const result = await generate({
             generatePRSummary: true,
@@ -183,9 +181,7 @@ describe('CommentManagerService – task references survive a replaced descripti
     });
 
     it('replaces a description that carries no reference, as before', async () => {
-        mockCodeManagementService.getPullRequestByNumber.mockResolvedValue({
-            body: 'Just some prose with no task link.',
-        });
+        currentBody = 'Just some prose with no task link.';
 
         const result = await generate({
             generatePRSummary: true,
@@ -198,9 +194,7 @@ describe('CommentManagerService – task references survive a replaced descripti
     });
 
     it('does not duplicate the reference when the description is concatenated', async () => {
-        mockCodeManagementService.getPullRequestByNumber.mockResolvedValue({
-            body: 'Closes #993\n\nAdds a per-second rate limiter.',
-        });
+        currentBody = 'Closes #993\n\nAdds a per-second rate limiter.';
 
         const result = await generate({
             generatePRSummary: true,

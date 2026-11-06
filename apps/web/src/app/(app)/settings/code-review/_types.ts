@@ -94,6 +94,7 @@ export type CodeReviewGlobalConfig = {
     reviewOptions: CodeReviewOptions;
     ignoredTitleKeywords: string[];
     automatedReviewActive: boolean;
+    reviewMode?: "balanced" | "heavy";
     showStatusFeedback: boolean;
     reviewCadence?: ReviewCadence;
     summary: CodeReviewSummary;

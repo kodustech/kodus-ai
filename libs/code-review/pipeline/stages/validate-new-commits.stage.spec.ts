@@ -110,6 +110,24 @@ describe('ValidateNewCommitsStage', () => {
         await expect(stage.execute(context)).rejects.toThrow('boom');
     });
 
+    it('carries the base branch of the last review in lastExecution', async () => {
+        mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            {
+                dataExecution: {
+                    lastAnalyzedCommit: 'sha-1',
+                    reviewedBaseBranch: 'develop',
+                },
+            },
+        );
+        mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+            [{ sha: 'sha-1' }, { sha: 'sha-2', parents: [{ sha: 'sha-1' }] }],
+        );
+
+        const result = await stage.execute(context);
+
+        expect(result.lastExecution?.reviewedBaseBranch).toBe('develop');
+    });
+
     it('should skip if no NEW commits are found (using PipelineReasons)', async () => {
         // Mock last execution exists
         mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
@@ -214,6 +232,39 @@ describe('ValidateNewCommitsStage', () => {
         expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
         expect(result.pipelineMetadata?.forceFullRerun).toBe(true);
     });
+
+    it.each([
+        ['heavy', false, true],
+        ['balanced', true, true],
+        ['heavy', true, false],
+        ['balanced', false, false],
+    ] as const)(
+        'reviews the whole PR when --%s asks for another mode than the last review (last heavy: %s)',
+        async (requested, lastHeavy, full) => {
+            context.origin = 'command';
+            context.requestedReviewMode = requested;
+
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                {
+                    uuid: 'exec-1',
+                    dataExecution: {
+                        lastAnalyzedCommit: 'sha-1',
+                        heavy: lastHeavy,
+                    },
+                },
+            );
+            mockAutomationExecutionService.hasStageWithStatus.mockResolvedValue(
+                false,
+            );
+            mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                [{ sha: 'sha-1' }],
+            );
+
+            const result = await stage.execute(context);
+
+            expect(!!result.pipelineMetadata?.forceFullRerun).toBe(full);
+        },
+    );
 
     // #1721, QA MR !68: lastExecution is the last SUCCESS, so a partial
     // review's status note was never edited and each later review posted one.
@@ -458,11 +509,15 @@ describe('ValidateNewCommitsStage', () => {
                     [{ sha: 'NEW_HEAD_SHA', parents: [{ sha: 'BASE_SHA' }] }],
                 );
             };
-            const interdiff = (files: unknown[]) => ({
+            const interdiff = (
+                files: unknown[],
+                revertedFiles: string[] = [],
+            ) => ({
                 files,
                 unchangedFiles: ['src/same.ts'],
                 partialFiles: files.length ? ['src/edited.ts'] : [],
                 uncomparedFiles: files.length ? ['package-lock.json'] : [],
+                revertedFiles,
                 hunksKept: files.length,
                 hunksDropped: 3,
             });
@@ -510,6 +565,32 @@ describe('ValidateNewCommitsStage', () => {
                         uncomparedFiles: 1,
                         hunksKept: 1,
                         hunksDropped: 3,
+                    },
+                });
+            });
+
+            it('reviews the whole PR when the push removed a reviewed change (#2319)', async () => {
+                orphan();
+                // The guard the last review saw is gone, and every remaining
+                // change was already reviewed: the interdiff alone would skip
+                // this push as if nothing had changed.
+                mockPullRequestManagerService.getRebaseInterdiff.mockResolvedValue(
+                    interdiff([], ['src/pay.ts']),
+                );
+
+                const result = await stage.execute(context);
+
+                expect(result.statusInfo?.status).not.toBe(
+                    AutomationStatus.SKIPPED,
+                );
+                expect(result.pipelineMetadata?.forceFullRerun).toBe(true);
+                expect(result.rebaseInterdiffFiles).toBeUndefined();
+                expect(result.orphanedBaseCommit).toEqual({
+                    previousSha: 'OLD_ORPHAN_SHA',
+                    currentHeadSha: 'head-sha',
+                    totalCommits: 1,
+                    interdiff: {
+                        fallback: 'interdiff_cannot_represent_removals',
                     },
                 });
             });

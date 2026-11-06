@@ -144,12 +144,17 @@ function stripReasoning(text: string): string {
     const s = text;
     let kept = '';
     let pos = 0;
+    // `<thinking>` is the same block under the other name models use.
+    const openTag = /<(think|thinking)>/g;
     for (;;) {
-        const open = s.indexOf('<think>', pos);
-        if (open < 0) break;
+        openTag.lastIndex = pos;
+        const m = openTag.exec(s);
+        if (!m) break;
+        const open = m.index;
         const gap = s.slice(pos, open);
         if (/[{[]/.test(gap)) break;
-        const close = s.indexOf('</think>', open);
+        const closeTag = `</${m[1]}>`;
+        const close = s.indexOf(closeTag, open);
         if (close < 0) {
             // A block that never closes and is the first thing in the response
             // carries no answer at all. Anywhere else, including right after a
@@ -158,7 +163,7 @@ function stripReasoning(text: string): string {
             break;
         }
         kept += gap;
-        pos = close + '</think>'.length;
+        pos = close + closeTag.length;
     }
     return (kept + s.slice(pos)).trim();
 }

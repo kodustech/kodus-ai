@@ -818,7 +818,8 @@ export class SuggestionService implements ISuggestionService {
                     },
                 });
 
-                return this.prioritizeSuggestionsWithKodyRulesControl(
+                // Awaited so a failure reaches the legacy fallback below.
+                return await this.prioritizeSuggestionsWithKodyRulesControl(
                     organizationAndTeamData,
                     suggestionControl,
                     prNumber,
@@ -1453,14 +1454,15 @@ export class SuggestionService implements ISuggestionService {
 
             return { sortedPrioritizedSuggestions, allDiscardedSuggestions };
         } catch (error) {
-            this.logger.log({
-                message: `Error when trying to sort and prioritize suggestions for PR#${pullRequest.number}`,
+            // Reaching here skips the severity and quantity limits for the PR.
+            this.logger.error({
+                message: `Error when trying to sort and prioritize suggestions for PR#${pullRequest.number}; posting them without severity/quantity limits`,
                 error: error,
                 context: SuggestionService.name,
                 metadata: {
                     organizationAndTeamData,
-                    pullRequest,
-                    validSuggestionsToAnalyze,
+                    prNumber: pullRequest.number,
+                    suggestionsCount: validSuggestionsToAnalyze?.length ?? 0,
                 },
             });
 

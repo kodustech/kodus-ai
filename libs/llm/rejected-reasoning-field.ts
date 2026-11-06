@@ -116,7 +116,7 @@ function sentBody(
  */
 export function rejectedReasoning(
     err: unknown,
-): { field: ReasoningField; off: boolean } | undefined {
+): { field: ReasoningField; off: boolean; refusedType?: string } | undefined {
     const status = extractHttpStatus(err);
     if (status !== 400 && status !== 422) return undefined;
     const body = sentBody(err);
@@ -128,7 +128,11 @@ export function rejectedReasoning(
         const field = named ?? (m[1].toLowerCase() as ReasoningField);
         // Defined, not merely present: the SDK keeps `reasoning_effort:
         // undefined` in the recorded values, and JSON leaves it off the wire.
-        return body[field] !== undefined ? { field, off } : undefined;
+        // A refusal that asks for the off value is the exception: the model
+        // reasons by default, so a body without the effort gets the same 400,
+        // and the upstream names the value to send (#2350).
+        if (body[field] === undefined && !off) return undefined;
+        return { field, off, refusedType: thinkingType(body[field]) };
     }
     return undefined;
 }
@@ -169,14 +173,17 @@ export function withoutReasoningField<
 }
 
 /**
- * The call params with `field` set to off, or undefined when no provider option
- * carries it or it is already off. Only the effort has an off value ('none').
+ * The call params with `field` set to off, or undefined when nothing changes.
+ * Only the effort has an off value ('none'). When no provider option carries
+ * the effort (Thinking Off sends none), it is added under `namespace`, the
+ * options key the slot's adapter reads; without one there is nowhere to put it.
  */
 export function withReasoningOff<
     P extends { providerOptions?: Record<string, unknown> },
->(params: P, field: ReasoningField): P | undefined {
-    const options = params?.providerOptions;
-    if (!options || field !== 'reasoning_effort') return undefined;
+>(params: P, field: ReasoningField, namespace?: string): P | undefined {
+    if (field !== 'reasoning_effort') return undefined;
+    const options = params?.providerOptions ?? {};
+    let carried = false;
     let changed = false;
     const next: Record<string, unknown> = {};
     for (const [ns, value] of Object.entries(options)) {
@@ -186,12 +193,29 @@ export function withReasoningOff<
         }
         const kept = { ...(value as Record<string, unknown>) };
         for (const key of OPTION_KEYS[field]) {
-            if (key in kept && kept[key] !== 'none') {
-                kept[key] = 'none';
-                changed = true;
+            if (key in kept && kept[key] !== undefined) {
+                // Only the adapter's own key reaches the wire: an effort left
+                // under another provider's namespace is not carried (#2350).
+                if (!namespace || ns === namespace) carried = true;
+                if (kept[key] !== 'none') {
+                    kept[key] = 'none';
+                    changed = true;
+                }
             }
         }
         next[ns] = kept;
+    }
+    if (!carried && namespace) {
+        const existing = next[namespace];
+        next[namespace] = {
+            ...(existing &&
+            typeof existing === 'object' &&
+            !Array.isArray(existing)
+                ? (existing as Record<string, unknown>)
+                : {}),
+            reasoningEffort: 'none',
+        };
+        changed = true;
     }
     return changed ? { ...params, providerOptions: next } : undefined;
 }
@@ -200,8 +224,25 @@ export const REFUSAL_MEMORY_MS = 10 * 60 * 1000;
 
 const refusals = new Map<
     string,
-    Map<ReasoningField, { until: number; off: boolean }>
+    Map<ReasoningField, { until: number; off: boolean; refusedType?: string }>
 >();
+
+/** The `type` of a `thinking` value (`enabled`, `disabled`), else undefined. */
+function thinkingType(value: unknown): string | undefined {
+    const type = (value as { type?: unknown } | null)?.type;
+    return typeof type === 'string' ? type : undefined;
+}
+
+/** The `type` of the `thinking` the call carries in any provider option. */
+function sentThinkingType(params: {
+    providerOptions?: Record<string, unknown>;
+}): string | undefined {
+    for (const value of Object.values(params?.providerOptions ?? {})) {
+        const t = thinkingType((value as Record<string, unknown>)?.thinking);
+        if (t) return t;
+    }
+    return undefined;
+}
 
 function slotKey(slot: NormalizedModel | undefined, organizationId?: string) {
     if (!slot) return undefined;
@@ -219,6 +260,7 @@ export function rememberRefusal(
     field: ReasoningField,
     now = Date.now(),
     off = false,
+    refusedType?: string,
 ): void {
     const key = slotKey(slot, organizationId);
     if (!key) return;
@@ -232,8 +274,11 @@ export function rememberRefusal(
     }
     const fields =
         refusals.get(key) ??
-        new Map<ReasoningField, { until: number; off: boolean }>();
-    fields.set(field, { until: now + REFUSAL_MEMORY_MS, off });
+        new Map<
+            ReasoningField,
+            { until: number; off: boolean; refusedType?: string }
+        >();
+    fields.set(field, { until: now + REFUSAL_MEMORY_MS, off, refusedType });
     refusals.set(key, fields);
 }
 
@@ -249,6 +294,7 @@ export function withoutRefusedFields<
     slot: NormalizedModel | undefined,
     organizationId: string | undefined,
     now = Date.now(),
+    namespace?: string,
 ): P {
     const key = slotKey(slot, organizationId);
     const fields = key ? refusals.get(key) : undefined;
@@ -256,15 +302,26 @@ export function withoutRefusedFields<
     const carriesTools =
         Array.isArray(params?.tools) && params.tools.length > 0;
     let out = params;
-    for (const [field, { until, off }] of fields) {
+    for (const [field, { until, off, refusedType }] of fields) {
         if (until <= now) {
             fields.delete(field);
             continue;
         }
         if (off && !carriesTools) continue;
+        // A refusal of one `thinking` value is not a refusal of another: Together
+        // refuses `{type:'enabled'}` without a budget and accepts
+        // `{type:'disabled'}`, and dropping the disable turns reasoning on
+        // (#2267). Only the type that was refused is dropped.
+        if (
+            field === 'thinking' &&
+            refusedType &&
+            sentThinkingType(out) !== refusedType
+        ) {
+            continue;
+        }
         out =
             (off
-                ? withReasoningOff(out, field)
+                ? withReasoningOff(out, field, namespace)
                 : withoutReasoningField(out, field)) ?? out;
     }
     if (fields.size === 0) refusals.delete(key!);

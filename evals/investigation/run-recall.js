@@ -28,6 +28,7 @@ const KNOWN_FLAGS = new Set([
     'gate',
     'no-judge',
     'team-config',
+    'targets',
 ]);
 
 function parseArgs(argv) {
@@ -48,6 +49,7 @@ function parseArgs(argv) {
         noJudge: process.env.RECALL_NO_JUDGE === '1',
         gate: process.env.RECALL_GATE === '1',
         teamConfig: '',
+        targets: '',
     };
 
     for (let i = 2; i < argv.length; i += 1) {
@@ -103,6 +105,9 @@ function parseArgs(argv) {
             out.gate = true;
         } else if (key === 'team-config') {
             out.teamConfig = value || '';
+            if (consumesNext) i += 1;
+        } else if (key === 'targets') {
+            out.targets = value || '';
             if (consumesNext) i += 1;
         }
     }
@@ -195,23 +200,20 @@ function runMetaOf(args) {
         // The team config saved over each case's (--team-config), by its hash.
         teamConfig: args.team ? args.team.hash : null,
         model: {
-            // id publico = modelo real; sufixo (@sub, @nvidia) e so roteamento
-            id:
-                (TIER0[args.model] &&
-                    (TIER0[args.model].codexModel ||
-                        TIER0[args.model].doModel)) ||
-                args.model,
+            // id publico = modelo real; sufixo (@nvidia) e so roteamento
+            id: (TIER0[args.model] && TIER0[args.model].doModel) || args.model,
             provider:
                 (TIER0[args.model] && TIER0[args.model].provider) || 'unknown',
             // How the finder reached it (model-route.js resolveRoute): a BYOK
             // config, or none for `kodus-managed`.
-            // A subscription model never runs (main exits 2 before it).
             accessPath: TIER0[args.model] && TIER0[args.model].managed ? 'managed' : 'byok',
         },
         // Production's tools over the repository at the PR's head.
         executionMode: 'live',
-        // heavy = passadas de resample ativadas. Eixo de regime: não comparar
-        // entrada heavy com entrada normal sem rotular.
+        // RECALL_SANDBOX=none: no sandbox, so no tools (self-contained).
+        sandbox: process.env.RECALL_SANDBOX === 'none' ? 'none' : 'alive',
+        // heavy = generalist plus the M3 lenses. A regime axis: never compare a
+        // heavy entry with a normal one unlabelled.
         heavy: process.env.RECALL_HEAVY === '1',
         // RECALL_REASONING_EFFORT reaches the finder as the BYOK model's
         // reasoningEffort (agent-provider.js resolveRoute), which production
@@ -276,16 +278,6 @@ async function main() {
             console.error(`finder-recall on ${args.model}: not measured: ${error instanceof Error ? error.message : String(error)}`);
             process.exit(2);
         }
-    }
-
-    // A subscription model has no production route: the finder would run
-    // another model under its name (agent-provider.js resolveRoute).
-    if (TIER0[args.model]?.provider === 'codex_subscription') {
-        console.error(
-            `not measured: ${args.model} runs on a ChatGPT subscription, which production has no route for ` +
-                '(libs/llm/codex-subscription-model.ts is used only by evals). Run its API model instead.',
-        );
-        process.exit(2);
     }
 
     // --no-judge: run the finder and SAVE its findings, score nothing. The finder
@@ -417,10 +409,15 @@ async function main() {
         const caseId = test.vars?.caseId || test.description || 'unknown-case';
         const prompt = JSON.stringify(test.vars || {});
         let apiResult;
+        let caseUse = null;
 
         try {
             // eslint-disable-next-line no-await-in-loop
-            apiResult = await provider.callApi(prompt, { vars: test.vars }, {});
+            global.__EVAL_CASE_ALS = global.__EVAL_CASE_ALS || new (require('async_hooks').AsyncLocalStorage)();
+            caseUse = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, calls: 0, byTask: {}, rescueRequests: 0 };
+            const t0 = Date.now();
+            apiResult = await global.__EVAL_CASE_ALS.run(caseUse, () => provider.callApi(prompt, { vars: test.vars }, {}));
+            caseUse.wallMs = Date.now() - t0;
         } catch (error) {
             infraFailures += 1;
             const row = {
@@ -467,6 +464,11 @@ async function main() {
                 apiResult.output,
                 apiResult.tokenUsage,
             );
+            saved.baselineUse = caseUse;
+            if (process.env.RECALL_DUMP) {
+                fs.mkdirSync(process.env.RECALL_DUMP, { recursive: true });
+                fs.writeFileSync(path.join(process.env.RECALL_DUMP, `${caseId}.raw.txt`), typeof apiResult.output === 'string' ? apiResult.output : JSON.stringify(apiResult.output));
+            }
             submissionResults.push(saved);
             writeJson(checkpointPath, {
                 benchmarkVersion: `${args.all ? 'all50' : args.cases ? 'custom' : args.set}-v1`,
@@ -617,6 +619,9 @@ async function main() {
         // Which coding-agent instructions the cases carried (recall-tests.js);
         // null = none, the nightly default.
         repoInstructions: process.env.RECALL_REPO_INSTRUCTIONS || null,
+        // The floors file the run was gated with (--targets), null for the
+        // default: confirm-gate.js re-gates against the same one.
+        targets: args.targets || null,
         metrics: {
             recall_mean: avg(rows.map((row) => row.metadata?.recall)),
             precision_mean: avg(rows.map((row) => row.metadata?.precision)),
@@ -630,7 +635,7 @@ async function main() {
 
     const setName = args.all ? 'all' : args.cases ? 'custom' : args.set;
     const gate = args.gate
-        ? evaluateGate(summary, rows, args.model, setName)
+        ? evaluateGate(summary, rows, args.model, setName, args.targets || undefined)
         : { status: 'off' };
     summary.gate = gate;
 

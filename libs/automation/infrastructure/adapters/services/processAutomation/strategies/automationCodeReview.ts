@@ -132,6 +132,7 @@ export class AutomationCodeReviewService implements Omit<
             action,
             triggerCommentId,
             reviewDirective,
+            requestedReviewMode,
             onlyCustomAgent,
             userGitId,
             signal,
@@ -331,6 +332,7 @@ export class AutomationCodeReviewService implements Omit<
                     correlationId,
                     signal, // parentSignal — forwarded to pipeline context
                     reviewDirective, // @kody review <directive> steering text
+                    requestedReviewMode, // @kody review --heavy / --balanced, over the mode in settings
                     onlyCustomAgent, // @kody -v <slug> — that custom agent only
                 );
 
@@ -893,6 +895,9 @@ export class AutomationCodeReviewService implements Omit<
                 automaticReviewStatus: result.automaticReviewStatus,
                 approvalDecision: result.approvalDecision,
                 approvalRisk: result.approvalRisk,
+                // The mode it ran in: `--heavy` / `--balanced` asking for the
+                // other one re-reviews the whole PR.
+                heavy: !!result.heavy,
             });
         }
 

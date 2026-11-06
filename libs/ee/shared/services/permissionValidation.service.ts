@@ -159,6 +159,51 @@ export class PermissionValidationService {
     }
 
     /**
+     * The prepaid-credit gate for a slot routed after the prerequisites ran:
+     * a heavy review runs on `codeReviewHeavy`, which can be routed by Kodus
+     * while `codeReview`, the slot the prerequisites gated, is not. Same rules
+     * as that gate, and a failed billing read lets the review run.
+     */
+    async gateKodusCreditsForSlot(
+        slot: NormalizedModel | undefined,
+        organizationAndTeamData: OrganizationAndTeamData,
+        contextName?: string,
+    ): Promise<ValidationResult | null> {
+        if (
+            this.isDevelopment ||
+            !this.isCloud ||
+            !slot ||
+            !isPlatformFundedProvider(slot.provider)
+        ) {
+            return null;
+        }
+        try {
+            const validation =
+                await this.licenseService.validateOrganizationLicense(
+                    organizationAndTeamData,
+                );
+            if (!validation) {
+                return null;
+            }
+            return this.gateKodusCredits(
+                slot,
+                validation,
+                organizationAndTeamData,
+                contextName,
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not read the Kodus credit balance; the review runs',
+                context: contextName || PermissionValidationService.name,
+                error,
+                metadata: { organizationAndTeamData, model: slot.model },
+            });
+            return null;
+        }
+    }
+
+    /**
      * Identifies the plan type robustly
      */
     private identifyPlanType(planType: string | undefined): PlanType | null {

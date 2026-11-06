@@ -133,6 +133,21 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
         );
     });
 
+    it('records on the PR whether the review ran in heavy mode', async () => {
+        // The context is Immer-frozen, so the stage must copy the PR to stamp
+        // the flag, never assign to it.
+        await stage.execute(baseContext({ heavy: true } as any));
+        await stage.execute(baseContext());
+
+        const saved =
+            mockPullRequestService.aggregateAndSaveDataStructure.mock.calls.map(
+                (c) => c[0],
+            );
+        expect(saved[0].heavy).toBe(true);
+        // A normal review clears the badge a heavy one left.
+        expect(saved[1].heavy).toBe(false);
+    });
+
     it('records the reviewed head as analyzed, not whichever commit sorts last (#2037)', async () => {
         // Rebased commits share one committer date, so a date-sorted list can
         // end on the oldest commit. Bitbucket's head sha is 12 characters.

@@ -20,6 +20,7 @@ export interface ApprovalRiskAssessment {
     reason: string;
     reviewedHeadSha: string;
     areaMapVersion?: string;
+    failure?: { category: string; errorName: string; httpStatus?: number };
 }
 
 export interface ApprovalDecision {

@@ -37,6 +37,11 @@ import {
     shouldReviewBranches,
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
 import { routeCodeReviewModel } from './route-code-review-model';
+import { isHeavyReview } from '@libs/code-review/domain/review-mode';
+import {
+    HEAVY_MODE_PLAN_REQUIRED,
+    isHeavyModePlanAllowed,
+} from '@libs/ee/heavy-mode/heavy-mode-plan';
 import { unknownCustomAgentReply } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import {
     CUSTOM_AGENTS_PLAN_REQUIRED,
@@ -46,6 +51,9 @@ import {
     ILicenseService,
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
+import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
 
 @Injectable()
 export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -61,8 +69,10 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private organizationParametersService: IOrganizationParametersService,
         private codeManagementService: CodeManagementService,
+        private readonly permissionValidationService: PermissionValidationService,
         // Optional so specs that do not care about the plan still compile;
-        // without it no custom agent runs (fail-closed for the paid feature).
+        // without it no custom agent and no heavy review runs (fail-closed
+        // for the paid features).
         @Optional()
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService?: ILicenseService,
@@ -106,7 +116,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 ))
             ) {
                 if (context.onlyCustomAgent) {
-                    await this.replyToCustomAgentCommand(
+                    await this.replyToReviewCommand(
                         context,
                         `\`@kody -v ${context.onlyCustomAgent}\` did not run. ${CUSTOM_AGENTS_PLAN_REQUIRED}`,
                     );
@@ -144,7 +154,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     context.onlyCustomAgent,
                 );
                 if (reply) {
-                    await this.replyToCustomAgentCommand(context, reply);
+                    await this.replyToReviewCommand(context, reply);
                     return this.updateContext(context, (draft) => {
                         draft.statusInfo = {
                             status: AutomationStatus.SKIPPED,
@@ -161,15 +171,25 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     context.organizationAndTeamData,
                 );
 
-            // The codeReview task's routed slot, or none → the env/managed
-            // default resolves downstream, matching a missing config.
+            // The mode the command asked for, else the one in settings. Heavy
+            // runs on Teams and Enterprise only; elsewhere the review runs
+            // Balanced, and a command that asked for heavy is told why.
+            const heavy =
+                isHeavyReview(
+                    context.requestedReviewMode,
+                    context.codeReviewConfig?.reviewMode,
+                ) && (await this.heavyModeAllowed(context));
+
+            // The review's routed slot, or none → the env/managed default
+            // resolves downstream, matching a missing config.
             const routed = routeCodeReviewModel(
                 byokConfig?.configValue,
                 context.codeReviewConfig,
+                heavy,
             );
             if (routed.blocked) {
                 this.logger.warn({
-                    message: `BYOK routing BLOCKED for codeReview — falling back to env/managed default: ${routed.reason}`,
+                    message: `BYOK routing BLOCKED for ${heavy ? 'codeReviewHeavy' : 'codeReview'} — falling back to env/managed default: ${routed.reason}`,
                     context: this.stageName,
                     metadata: {
                         prNumber: context?.pullRequest?.number,
@@ -180,11 +200,35 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 });
             }
 
+            if (
+                await this.routedKodusCreditsExhausted(
+                    context,
+                    byokConfig?.configValue,
+                    routed.resolvedModelSlot,
+                    heavy,
+                )
+            ) {
+                return this.updateContext(context, (draft) => {
+                    draft.statusInfo = {
+                        status: AutomationStatus.SKIPPED,
+                        message: StageMessageHelper.skippedWithReason(
+                            PipelineReasons.PREREQUISITES.CREDITS_EXHAUSTED,
+                        ),
+                    };
+                    if (!draft.pipelineMetadata) {
+                        draft.pipelineMetadata = {};
+                    }
+                    draft.pipelineMetadata.notificationHandled = true;
+                });
+            }
+
             context = this.updateContext(context, (draft) => {
+                draft.heavy = heavy;
                 // Materialize the routed model into the resolved slot the pipeline
                 // threads downstream (the handle stages read their limit/telemetry
                 // metadata off).
-                draft.codeReviewConfig.resolvedModelSlot = routed.resolvedModelSlot;
+                draft.codeReviewConfig.resolvedModelSlot =
+                    routed.resolvedModelSlot;
                 draft.codeReviewConfig.byokConfig = routed.resolvedModelSlot;
             });
 
@@ -243,6 +287,64 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 };
             });
         }
+    }
+
+    /**
+     * The prerequisites gated the credits of the organization's `codeReview`
+     * model, before the review mode and the repository's model override were
+     * known. When the model this review runs on (the Heavy one, or a
+     * repository override) is routed by Kodus and that one is not, nothing
+     * checked the balance yet; when both are, it already was. Posts the same
+     * comment the prerequisites post.
+     */
+    private async routedKodusCreditsExhausted(
+        context: CodeReviewPipelineContext,
+        storedConfig: unknown,
+        routedSlot: CodeReviewConfig['resolvedModelSlot'],
+        heavy: boolean,
+    ): Promise<boolean> {
+        if (!isPlatformFundedProvider(routedSlot?.provider)) {
+            return false;
+        }
+        const gatedSlot = routeCodeReviewModel(
+            storedConfig,
+            {},
+            false,
+        ).resolvedModelSlot;
+        if (isPlatformFundedProvider(gatedSlot?.provider)) {
+            return false;
+        }
+        const gate =
+            await this.permissionValidationService.gateKodusCreditsForSlot(
+                routedSlot,
+                context.organizationAndTeamData,
+                this.stageName,
+            );
+        if (!gate) {
+            return false;
+        }
+
+        this.logger.warn({
+            message:
+                'Kodus credits exhausted for the model this review runs on — review skipped',
+            context: this.stageName,
+            metadata: {
+                organizationAndTeamData: context.organizationAndTeamData,
+                prNumber: context.pullRequest?.number,
+                repositoryId: context.repository?.id,
+                heavy,
+                model: routedSlot?.model,
+            },
+        });
+        if (context.pipelineMetadata?.showStatusFeedback !== false) {
+            await this.codeManagementService.createIssueComment({
+                organizationAndTeamData: context.organizationAndTeamData,
+                repository: context.repository,
+                prNumber: context.pullRequest?.number,
+                body: KODUS_CREDITS_EXHAUSTED_COMMENT,
+            });
+        }
+        return true;
     }
 
     private async evaluateReviewCadence(
@@ -531,7 +633,37 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         }
     }
 
-    private async replyToCustomAgentCommand(
+    private async heavyModeAllowed(
+        context: CodeReviewPipelineContext,
+    ): Promise<boolean> {
+        if (
+            await isHeavyModePlanAllowed(
+                this.licenseService,
+                context.organizationAndTeamData,
+                this.stageName,
+            )
+        ) {
+            return true;
+        }
+        const askedByCommand = context.requestedReviewMode === 'heavy';
+        this.logger.log({
+            message:
+                'Heavy mode asked on a plan that is not Teams/Enterprise — the review runs Balanced',
+            context: this.stageName,
+            metadata: {
+                organizationAndTeamData: context.organizationAndTeamData,
+                prNumber: context.pullRequest?.number,
+                repositoryId: context.repository?.id,
+                askedByCommand,
+            },
+        });
+        if (askedByCommand) {
+            await this.replyToReviewCommand(context, HEAVY_MODE_PLAN_REQUIRED);
+        }
+        return false;
+    }
+
+    private async replyToReviewCommand(
         context: CodeReviewPipelineContext,
         body: string,
     ): Promise<void> {
@@ -544,7 +676,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             });
         } catch (error) {
             this.logger.error({
-                message: `Failed to reply to @kody -v on PR #${context.pullRequest?.number}`,
+                message: `Failed to reply to the review command on PR #${context.pullRequest?.number}`,
                 context: ValidateConfigStage.name,
                 error,
                 metadata: {
@@ -677,7 +809,6 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         platformType: PlatformType,
         organizationAndTeamData: OrganizationAndTeamData,
     ): IStageValidationResult {
-
         // A missing/corrupt list means we have no scope to enforce, so we let the
         // review through. An empty list is a real configuration: it narrows the
         // scope to the repository default branch, which mergeBaseBranches injects

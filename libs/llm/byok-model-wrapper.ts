@@ -37,8 +37,21 @@ import {
     withoutRefusedFields,
     withReasoningOff,
 } from '@libs/llm/rejected-reasoning-field';
+import { REGISTRY } from '@libs/llm/providers/kernel/registry';
 
 const logger = createLogger('ByokModelWrapper');
+
+/** The provider-options key the slot's adapter reads, so an effort the call
+ *  never carried can be added there when the upstream asks for it. */
+function optionsNamespace(
+    slot: NormalizedModel | undefined,
+): string | undefined {
+    if (!slot?.provider || !REGISTRY.has(slot.provider)) return undefined;
+    return REGISTRY.get(slot.provider).providerOptionsNamespace?.(
+        slot.provider,
+        slot.model,
+    );
+}
 
 /**
  * PRE-call token estimate for the tpm reservoir. Serializes the wire prompt the
@@ -111,11 +124,14 @@ export function wrapByokModel(
             specificationVersion: 'v3',
             wrapGenerate: async ({ doGenerate, params, model: inner }: any) => {
                 const slot = opts.byokConfig;
+                const namespace = optionsNamespace(slot);
                 const generate = async () => {
                     const sent = withoutRefusedFields(
                         params,
                         slot,
                         opts.organizationId,
+                        Date.now(),
+                        namespace,
                     );
                     const call = (p: any) =>
                         p === params ? doGenerate() : inner.doGenerate(p);
@@ -133,20 +149,25 @@ export function wrapByokModel(
                             const retry =
                                 refusal && retries < MAX_REFUSAL_RETRIES
                                     ? refusal.off
-                                        ? withReasoningOff(attempt, refusal.field)
+                                        ? withReasoningOff(
+                                              attempt,
+                                              refusal.field,
+                                              namespace,
+                                          )
                                         : withoutReasoningField(
                                               attempt,
                                               refusal.field,
                                           )
                                     : undefined;
                             if (!refusal || !retry) throw err;
-                            const { field, off } = refusal;
+                            const { field, off, refusedType } = refusal;
                             rememberRefusal(
                                 slot,
                                 opts.organizationId,
                                 field,
                                 Date.now(),
                                 off,
+                                refusedType,
                             );
                             logger.warn({
                                 message: off
@@ -173,10 +194,7 @@ export function wrapByokModel(
                         // and report — never let the reporter mask the LLM error.
                         let classified: ClassifiedErrorInfo | undefined;
                         if (err && typeof err === 'object') {
-                            classified = classifyLLMError(
-                                err,
-                                opts.provider,
-                            );
+                            classified = classifyLLMError(err, opts.provider);
                             attachClassification(err, classified);
 
                             // Arm the slot's cooldown ONLY on a classified

@@ -9,6 +9,7 @@ import {
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { CACHE_PREFIX_BOUNDARY } from '@libs/llm/prompt-cache-boundary';
+import { ONE_PROBLEM_RULE } from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
 
 const generalist: PromptAgentMeta = {
     identity: {
@@ -138,7 +139,7 @@ describe('custom agent — lane focus', () => {
             'Missing defensive measures (CSRF, rate limiting, input validation)',
         );
         expect(user).toContain('<Diffs>');
-        expect(user).toContain('Assign a confidence score (1-10)');
+        expect(user).toContain(`- ${ONE_PROBLEM_RULE}`);
     });
 
     it('scopes the compact prompt too, and keeps its instructions there', () => {
@@ -153,6 +154,44 @@ describe('custom agent — lane focus', () => {
         expect(buildUserPrompt(compact, e2e)).not.toContain(
             'Reporting threshold (high-recall)',
         );
+    });
+});
+
+describe('custom agent — no sandbox', () => {
+    // A review with no sandbox runs every agent without the repository. The
+    // agent keeps its own lane there instead of the generalist's checklist.
+    const noSandbox = input({ remoteCommands: undefined });
+
+    it('keeps its lane and its instructions in the system prompt', () => {
+        const system = buildSystemPrompt(noSandbox, e2e);
+
+        expect(system).toContain('<CodeReviewAgent mode="self-contained">');
+        expect(system).toContain('Report only findings within your focus');
+        expect(system).toContain(
+            'Every new booking screen needs an end-to-end test',
+        );
+        expect(system).toContain('cannot read the repository');
+        // Its team systems and guides do not need the sandbox: the prompt
+        // must not forbid evidence from them.
+        expect(system).toContain("the team's systems and your guides");
+        expect(system).not.toContain('available only where');
+        expect(system).not.toContain('Your first action must be a tool call');
+        expect(system).not.toContain(
+            'Is there a null/undefined dereference on a path the diff introduces?',
+        );
+    });
+
+    it('scopes the task and the reporting rules of its user prompt', () => {
+        const user = buildUserPrompt(noSandbox, e2e);
+
+        expect(user).toContain('<ReviewTask mode="self-contained">');
+        expect(user).toContain('the issues your focus covers');
+        expect(user).toContain('Report only findings within your focus.');
+        expect(user).not.toContain(
+            'DO report: null/undefined dereferences with no guard',
+        );
+        expect(user).toContain('<Diffs>');
+        expect(user).toContain('Assign a confidence score (1-10)');
     });
 });
 

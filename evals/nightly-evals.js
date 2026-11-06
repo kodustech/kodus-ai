@@ -76,6 +76,25 @@ const NIGHTLY_EVALS = [
         files: [`evals/funnel/${stage}/targets.json`, 'evals/funnel/known-bugs.js'],
     })),
     {
+        id: 'suggestion-enrichment',
+        stage: 'enrichment',
+        run: ['evals/suggestion-enrichment/run.js'],
+        sets: { controlled: [], full: null },
+        files: [
+            'evals/suggestion-enrichment/targets.json',
+            'evals/suggestion-enrichment/judge.js',
+            'evals/suggestion-enrichment/dataset/head-files.json',
+            'evals/enrichment/dataset/items.json',
+        ],
+    },
+    {
+        id: 'severity-levels',
+        stage: 'severity-levels',
+        run: ['evals/severity-levels/run.js'],
+        sets: { controlled: [], full: null },
+        files: ['evals/severity-levels/targets.json', 'evals/severity-levels/catalog.js', 'evals/severity/dataset/items.json'],
+    },
+    {
         id: 'business-logic',
         stage: 'business-logic',
         run: ['evals/business-logic/run.js'],
@@ -97,6 +116,13 @@ const NIGHTLY_EVALS = [
         files: ['evals/memories/targets.json'],
     },
     {
+        id: 'prose-recovery',
+        stage: 'prose-recovery',
+        run: ['evals/prose-recovery/run.js'],
+        sets: { controlled: [], full: null },
+        files: ['evals/prose-recovery/targets.json', 'evals/prose-recovery/cases.json'],
+    },
+    {
         id: 'custom-agents',
         stage: 'custom-agents',
         run: ['evals/custom-agents/run.js'],
@@ -115,6 +141,15 @@ const WEEKLY_EVALS = [
         stage: 'finder',
         run: ['evals/investigation/run-recall.js', '--concurrency=6'],
         sets: { controlled: ['--set=controlled'], full: ['--set=full'] },
+        verdict: 'finder',
+    },
+    // Heavy mode (evals/heavy-recall): weekly only, never nightly, a heavy
+    // review per PR. Its floors live in evals/heavy-recall/targets.json.
+    {
+        id: 'heavy-recall',
+        stage: 'heavy',
+        run: ['evals/heavy-recall/run.js', '--concurrency=6'],
+        sets: { controlled: ['--set=controlled'], full: ['--set=light'] },
         verdict: 'finder',
     },
     {

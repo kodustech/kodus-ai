@@ -1,0 +1,140 @@
+{
+ "__doc": [
+  "Floors per model for suggestion-enrichment, as ratios of the cases each metric covers (README.md). fix: the 100 fixable findings, a fix that ships and the judge passes. noCode: the 50 others, no code shipped. title: all 150, a title that names the problem (judge) and has the format the prompt asks for (one line, 80 characters or fewer, no trailing period).",
+  "checks: every check of every finding, its code and its title (300): the headline the nightly alerts on.",
+  "Judge: gpt-5.6-luna (JUDGE_MODEL) with Astra's references, reasoning effort low. The floors hold under that judge only; a run with another judge reports ungated.",
+  "Calibrated 2026-10-28 on fae1d3139, two runs per model on the BYOK route, scored on the fix the step writes, before the publication gate (README.md; the gate's defect is #2295). floor = min(mean - 2 binomial SE, (n - 2) / n) over the cases each metric covers, rounded down. deepseek-v4-flash@fireworks: fix 73/100 and 70/100, noCode 36/50 and 34/50, title 141/150 and 146/150; gpt-6-sol: fix 80/100 and 81/100, noCode 39/50 and 38/50, title 146/150 and 146/150; claude-sonnet-5-5: fix 67/100 and 64/100, noCode 38/50 and 37/50, title 111/150 and 115/150.",
+  "The floors of 2026-10-22 came from the research runs (evals/enrichment) on other routes and ids (gpt-6.1-sol@sub, claude-*@sdk, deepseek-v4.1-flash@together) under an Opus judge, and are removed.",
+  "kimi-k2.7-code@openrouter: no floor since 2026-10-28 (dropped from calibration: too slow through OpenRouter to measure); the weekly reports it ungated."
+ ],
+ "sets": {
+  "controlled": {
+   "models": {
+    "deepseek-v4-flash@fireworks": {
+     "judge": "gpt-5.6-luna",
+     "measured": "two runs, BYOK route, 2026-10-28 on fae1d3139",
+     "checks": {
+      "floor": 0.79,
+      "observed": 0.833
+     },
+     "fix": {
+      "floor": 0.62,
+      "observed": 0.715
+     },
+     "noCode": {
+      "floor": 0.57,
+      "observed": 0.7
+     },
+     "title": {
+      "floor": 0.92,
+      "observed": 0.957
+     }
+    },
+    "gpt-6-sol": {
+     "judge": "gpt-5.6-luna",
+     "measured": "two runs, BYOK route, 2026-10-28 on fae1d3139",
+     "checks": {
+      "floor": 0.84,
+      "observed": 0.883
+     },
+     "fix": {
+      "floor": 0.72,
+      "observed": 0.805
+     },
+     "noCode": {
+      "floor": 0.65,
+      "observed": 0.77
+     },
+     "title": {
+      "floor": 0.94,
+      "observed": 0.973
+     }
+    },
+    "claude-sonnet-5-5": {
+     "judge": "gpt-5.6-luna",
+     "measured": "two runs, BYOK route, 2026-10-28 on fae1d3139",
+     "checks": {
+      "floor": 0.66,
+      "observed": 0.72
+     },
+     "fix": {
+      "floor": 0.55,
+      "observed": 0.655
+     },
+     "noCode": {
+      "floor": 0.62,
+      "observed": 0.75
+     },
+     "title": {
+      "floor": 0.68,
+      "observed": 0.753
+     }
+    }
+   }
+  },
+  "full": {
+   "models": {
+    "deepseek-v4-flash@fireworks": {
+     "judge": "gpt-5.6-luna",
+     "measured": "two runs, BYOK route, 2026-10-28 on fae1d3139",
+     "checks": {
+      "floor": 0.79,
+      "observed": 0.833
+     },
+     "fix": {
+      "floor": 0.62,
+      "observed": 0.715
+     },
+     "noCode": {
+      "floor": 0.57,
+      "observed": 0.7
+     },
+     "title": {
+      "floor": 0.92,
+      "observed": 0.957
+     }
+    },
+    "gpt-6-sol": {
+     "judge": "gpt-5.6-luna",
+     "measured": "two runs, BYOK route, 2026-10-28 on fae1d3139",
+     "checks": {
+      "floor": 0.84,
+      "observed": 0.883
+     },
+     "fix": {
+      "floor": 0.72,
+      "observed": 0.805
+     },
+     "noCode": {
+      "floor": 0.65,
+      "observed": 0.77
+     },
+     "title": {
+      "floor": 0.94,
+      "observed": 0.973
+     }
+    },
+    "claude-sonnet-5-5": {
+     "judge": "gpt-5.6-luna",
+     "measured": "two runs, BYOK route, 2026-10-28 on fae1d3139",
+     "checks": {
+      "floor": 0.66,
+      "observed": 0.72
+     },
+     "fix": {
+      "floor": 0.55,
+      "observed": 0.655
+     },
+     "noCode": {
+      "floor": 0.62,
+      "observed": 0.75
+     },
+     "title": {
+      "floor": 0.68,
+      "observed": 0.753
+     }
+    }
+   }
+  }
+ }
+}

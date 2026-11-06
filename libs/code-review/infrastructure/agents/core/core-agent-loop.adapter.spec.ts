@@ -24,6 +24,11 @@ import {
 // own matrix in finder.agent.spec.ts and findings-schema.spec.ts; this file
 // keeps the verifier verdict seam and the end-to-end adapter path.
 import { extractVerdict } from '@libs/code-review/infrastructure/agents/core/verifier.agent';
+import {
+    HEAVY_LENSES,
+    HEAVY_LENS_SELF_CONTAINED_SYSTEM_PROMPT,
+    HEAVY_LENS_SYSTEM_PROMPT,
+} from '@libs/ee/heavy-mode/heavy-lenses';
 
 const mockResolve = resolveModelConfig as jest.Mock;
 
@@ -185,6 +190,19 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
         expect(out.verification?.beforeCount).toBe(2);
         expect(out.verification?.afterCount).toBe(1);
         expect(out.verification?.droppedByVerifier).toBe(1);
+        expect(typeof out.verification?.verifyMs).toBe('number');
+
+        // A dropped finding keeps its text in the trace so it can be judged
+        // later; a kept one travels on as a finding and carries none.
+        const decisions = out.verification?.decisions ?? [];
+        const drop = decisions.find((d) => d.action === 'drop');
+        expect(drop?.relevantFile).toBe('b.ts');
+        expect(drop?.droppedFinding).toMatchObject({
+            suggestionContent: expect.any(String),
+        });
+        expect(
+            decisions.find((d) => d.action === 'keep')?.droppedFinding,
+        ).toBeUndefined();
 
         // mapping basics (usage is summed fu+vu+ru; exact token counts depend on
         // real model usage — the mock doesn't propagate it, so assert the shape)
@@ -210,12 +228,62 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
 
         const normal = makeModel();
         await runAgentLoopViaCore(
-            makeInput(normal.model, { reviewMode: 'normal' }),
+            makeInput(normal.model, { reviewMode: 'balanced' }),
             secrets,
         );
 
         // normal mode adds at least the synthesis-rescue pass -> more calls.
         expect(normal.calls.count).toBeGreaterThan(fast.calls.count);
+    });
+
+    it('runs the lenses of the categories on only in heavy mode, with or without a sandbox', async () => {
+        const lensRuns = (heavy: boolean, sandbox = true) => {
+            const roles: string[] = [];
+            const lensSystem = sandbox
+                ? HEAVY_LENS_SYSTEM_PROMPT
+                : HEAVY_LENS_SELF_CONTAINED_SYSTEM_PROMPT;
+            const doGenerate = (async (opts: any) => {
+                const text = JSON.stringify(opts?.prompt ?? '');
+                const role = /ONE assignment on this pull request: ([^.]+)\./.exec(
+                    text,
+                );
+                if (role && text.includes(lensSystem)) {
+                    roles.push(role[1]);
+                }
+                const verifier = !role && text.includes('verdict');
+                return {
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: 't',
+                            toolName: verifier ? 'submitVerdict' : 'submitResult',
+                            input: JSON.stringify(
+                                verifier
+                                    ? { keep: true, rationale: 'ok' }
+                                    : { reasoning: 'none', suggestions: [] },
+                            ),
+                        },
+                    ],
+                    finishReason: 'tool-calls',
+                    usage: { inputTokens: 5, outputTokens: 5 },
+                    warnings: [],
+                };
+            }) as any;
+            return runAgentLoopViaCore(
+                makeInput(new MockLanguageModelV3({ doGenerate }), {
+                    heavy,
+                    allowedLabels: ['security'],
+                }),
+                sandbox ? secrets : { ...secrets, remoteCommands: undefined },
+            ).then(() => roles.sort());
+        };
+        const security = HEAVY_LENSES.filter((l) => l.label === 'security')
+            .map((l) => l.assignment)
+            .sort();
+
+        expect(await lensRuns(false)).toEqual([]);
+        expect(await lensRuns(true)).toEqual(security);
+        expect(await lensRuns(true, false)).toEqual(security);
     });
 
     it('reports coverage from the ledger mutated during the run', async () => {
@@ -417,7 +485,7 @@ describe('contract matrix — B. semantic-but-wrong', () => {
     // KEPT (verifier.agent.ts:143) — the #1786 class for the verify gate.
 
     // Row 21 — boolean as string ("false").
-    it.failing(
+    it(
         'row 21 — keep:"false" (string) must drop, not silently default to keep',
         () => {
             const v = extractVerdict(
@@ -965,13 +1033,13 @@ describe('runAgentLoopViaCore — model policy and threaded review context', () 
         it('keeps a review without a sandbox off the heavy passes', async () => {
             const plain = makeModel();
             await runAgentLoopViaCore(
-                makeInput(plain.model, { reviewMode: 'normal' }),
+                makeInput(plain.model, { reviewMode: 'balanced' }),
                 { ...secrets, remoteCommands: undefined },
             );
             const listed = makeModel();
             await runAgentLoopViaCore(
                 makeInput(listed.model, {
-                    reviewMode: 'normal',
+                    reviewMode: 'balanced',
                     repoInstructions,
                     listsRepoInstructions: true,
                 }),
@@ -1172,6 +1240,46 @@ describe('finderRunEnvironment — instruction citations', () => {
                 secrets,
             ).verifyParams.checksInstructionCitations,
         ).toBe(false);
+    });
+});
+
+describe('finderRunEnvironment — overhead', () => {
+    it("counts Claude's writing policy in the fixed overhead", () => {
+        const model = new MockLanguageModelV3({});
+        // A category prompt sentence the Claude writing policy rewrites.
+        const systemPrompt =
+            'Each finding must be technical, direct, and verifiable. Structure every suggestionContent as:';
+        const env = (over: Record<string, unknown>) =>
+            finderRunEnvironment(
+                makeInput(model, { systemPrompt, ...over }),
+                secrets,
+            );
+        const other = env({ byokProvider: 'openai' });
+        const claude = env({ byokProvider: 'anthropic' });
+        expect(claude.finderSystemPrompt.length).toBeGreaterThan(
+            other.finderSystemPrompt.length,
+        );
+        expect(claude.overheadTokens).toBeGreaterThan(other.overheadTokens);
+    });
+
+    it('follows the primary model, not a Claude fallback', () => {
+        const model = new MockLanguageModelV3({});
+        const systemPrompt =
+            'Each finding must be technical, direct, and verifiable. Structure every suggestionContent as:';
+        const withSlot = (byokConfig: Record<string, unknown>) =>
+            finderRunEnvironment(makeInput(model, { systemPrompt }), {
+                ...secrets,
+                byokConfig,
+            }).finderSystemPrompt;
+        expect(
+            withSlot({
+                model: 'gpt-6.1-sol',
+                fallback: { model: 'claude-sonnet-5-5' },
+            }),
+        ).toBe(systemPrompt);
+        expect(withSlot({ model: 'claude-sonnet-5-5' })).not.toBe(
+            systemPrompt,
+        );
     });
 });
 

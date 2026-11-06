@@ -251,8 +251,8 @@ export interface ReviewRuleConfig {
      * instructions to the reviewer.
      */
     repoInstructions?: RepoInstructionsContext;
-    /** Review mode: 'fast' skips heavy passes (verify, coverage recovery, synthesis rescue) and caps agent steps; 'normal' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
-    reviewMode?: 'fast' | 'normal' | 'deep';
+    /** Review mode: 'fast' skips the synthesis rescue and caps agent steps, and still verifies; 'balanced' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
+    reviewMode?: 'fast' | 'balanced' | 'deep';
 }
 
 /** Model selection for the run. */
@@ -306,6 +306,10 @@ export interface FitConfig {
      *  passes. Used by very-narrow agents (rule checks in fast mode,
      *  self-contained CLI flow). */
     skipHeavyPasses?: boolean;
+    /** Heavy mode: the M3 lenses run next to the generalist, and their
+     *  findings join its before verify (opt-in per review via CLI `--heavy`
+     *  or PR `@kody review --heavy`). */
+    heavy?: boolean;
     /** When true, run recovery + second-chance but skip ONLY the
      *  synthesis-rescue pass. The rescue pass re-words the same finding
      *  with different language, which is fine for open-ended bug review
@@ -450,12 +454,19 @@ export interface AgentLoopInput {
      *  files must be covered; warm/optional count toward the 70% total
      *  floor. When absent, coverage stays flat (legacy 100%-all-files). */
     fileTiers?: Map<string, CoverageTier>;
-    /** Review mode: 'fast' skips heavy passes and caps steps; 'normal' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
-    reviewMode?: 'fast' | 'normal' | 'deep';
+    /** Review mode: 'fast' skips the synthesis rescue and caps steps, and still verifies; 'balanced' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
+    reviewMode?: 'fast' | 'balanced' | 'deep';
     /** Model context window in tokens. Used to trigger context compression when the message history grows too large. */
     contextWindowTokens?: number;
     /** When true, skip recovery/rescue/second-chance passes. Used by rule-checking agents that don't benefit from open-ended exploration. */
     skipHeavyPasses?: boolean;
+    /** Heavy mode: the M3 lenses run next to the generalist, and their
+     *  findings join its before verify (opt-in per review via CLI `--heavy`
+     *  or PR `@kody review --heavy`). */
+    heavy?: boolean;
+    /** Heavy mode on a chunked review: the batch this run covers, so the
+     *  lenses are not told one batch is the whole pull request. */
+    lensBatch?: { index: number; total: number };
     /** Gated A/B knob (default off): wrap readFile so a range-less read of a
      *  large file returns a symbol outline + expand hint instead of dumping the
      *  head — fewer model tokens. Off = current behavior. */
@@ -490,6 +501,10 @@ export interface AgentLoopInput {
      *  take the quote check (target branch, via the sandbox) and the
      *  convention verifier instead of HV2. Unset for every other agent. */
     conventionGuides?: string[];
+    /** Custom agents only: the knowledge reader, which also reads the
+     *  guides of other repositories (`owner/repo:path`) for the quote check,
+     *  and the reviewed repository's guides when there is no sandbox. */
+    conventionGuideReader?: BaseBranchReader;
     /** Custom agents only: the team's instructions, the text a rule cited
      *  from `TeamInstructions` is quote-checked against. */
     teamInstructions?: string;
@@ -659,6 +674,16 @@ export interface AgentLoopOutput {
     coverage: CoverageSummary;
     verification?: VerificationTraceSummary | null;
     anomalies: AgentAnomalySummary;
+    /** New findings each finder pass contributed (base, synthesis-rescue).
+     *  Attribution the merged total hides: a pass costing a full run and
+     *  adding nothing looks identical otherwise. */
+    recallPasses?: Array<{
+        label: string;
+        added: number;
+        steps: number;
+        toolCalls: number;
+        fullFileReads: number;
+    }>;
     /** Fidelity warnings emitted during the loop (small context window
      *  forced compact prompt, dropped callGraph, etc). Always present;
      *  empty array when no adaptive strategy fired. */
@@ -690,6 +715,19 @@ export interface VerificationDecisionTrace {
     confidence?: 'high' | 'medium' | 'low';
     verifierEvidence: ToolEvidenceSummary;
     rawTextPreview?: string;
+    /** Only on `drop`: what the finding said, so a dropped finding can be
+     *  judged afterwards. The kept ones travel on as findings; a dropped one
+     *  otherwise leaves only its file behind, and whether the verifier threw
+     *  away real defects cannot be measured. */
+    droppedFinding?: {
+        oneSentenceSummary?: string;
+        suggestionContent?: string;
+        relevantLinesStart?: number;
+        relevantLinesEnd?: number;
+        label?: string;
+        severity?: string;
+        producedBy?: string;
+    };
 }
 
 export interface VerificationTraceSummary {
@@ -703,6 +741,8 @@ export interface VerificationTraceSummary {
     /** @deprecated Always 0 — evidence gate now forces verification instead of dropping. Kept for backwards compatibility. */
     droppedByEvidenceFilter: number;
     sentToEvidenceGate?: number;
+    /** Wall-clock of the verify sub-step, in ms. */
+    verifyMs?: number;
     decisions: VerificationDecisionTrace[];
 }
 

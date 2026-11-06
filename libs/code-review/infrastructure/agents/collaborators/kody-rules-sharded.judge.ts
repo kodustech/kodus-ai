@@ -22,6 +22,7 @@
 import { jsonSchema, type Schema } from 'ai';
 import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import { z } from 'zod';
+import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 import { recoverRuleUuid } from './finding-mapper';
 import {
     extensionScopeAppliesToFile,
@@ -170,6 +171,61 @@ export const shardViolationsSchema = z.object({
         .default([]),
 });
 
+/** What the shard validate step did to an off-shape reply. */
+export type ShardReplyReshape =
+    | { kind: 'recovered'; reason: string }
+    | { kind: 'rejected'; keys: string[] };
+
+/**
+ * The lenient schema reads any object without `violations` as a clean shard,
+ * so a wrapped, renamed or `{error}` reply lost its violations without a trace.
+ * Recover the known shapes; return undefined for an object that still carries
+ * no `violations`, so the executor re-asks and the shard counts as errored.
+ * `{}` stays a clean shard. What happened goes to `onReshape`: the validate
+ * step has no org or PR to log with, its caller does.
+ */
+function reshapeShardReply(
+    value: unknown,
+    onReshape?: (event: ShardReplyReshape) => void,
+): unknown {
+    let reason: string | undefined;
+    // An array written as an object keyed by index ({"0":v,"1":v}): read every
+    // entry, not just "0", which normalizeEnvelope would unwrap alone.
+    if (
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        Object.keys(value).length > 1 &&
+        Object.keys(value).every((k) => /^\d+$/.test(k))
+    ) {
+        value = Object.values(value);
+        reason = 'lifted-index-keyed-object';
+    }
+    let v = normalizeEnvelope(value, 'violations', ['issues', 'findings'], {
+        liftEmptyArray: true,
+        onRecover: (r) => {
+            reason = r;
+        },
+    });
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const obj = v as Record<string, unknown>;
+        if (!('violations' in obj) && 'ruleId' in obj) {
+            v = { violations: [obj] };
+            reason = 'lifted-single-violation';
+        } else if (!('violations' in obj) && Object.keys(obj).length > 0) {
+            onReshape?.({
+                kind: 'rejected',
+                keys: Object.keys(obj).slice(0, 10),
+            });
+            return undefined;
+        }
+    }
+    if (reason) {
+        onReshape?.({ kind: 'recovered', reason });
+    }
+    return v;
+}
+
 /**
  * WIRE schema for the shard call — what the provider actually sends as
  * `response_format`. This CANNOT be the zod object above passed directly:
@@ -181,22 +237,35 @@ export const shardViolationsSchema = z.object({
  * (every key required, nullable via anyOf) and keep the lenient zod parse
  * as the validate step.
  */
-export const shardViolationsWireSchema: Schema<
-    z.infer<typeof shardViolationsSchema>
-> = jsonSchema(
-    z.toJSONSchema(shardViolationsSchema, {
-        target: 'draft-7',
-        io: 'output',
-    }) as any,
-    {
-        validate: (value) => {
-            const r = shardViolationsSchema.safeParse(value);
-            return r.success
-                ? { success: true, value: r.data }
-                : { success: false, error: r.error };
+export function buildShardViolationsWireSchema(
+    onReshape?: (event: ShardReplyReshape) => void,
+): Schema<z.infer<typeof shardViolationsSchema>> {
+    return jsonSchema(
+        z.toJSONSchema(shardViolationsSchema, {
+            target: 'draft-7',
+            io: 'output',
+        }) as any,
+        {
+            validate: (value) => {
+                const shaped = reshapeShardReply(value, onReshape);
+                if (shaped === undefined) {
+                    return {
+                        success: false,
+                        error: new Error(
+                            'shard reply has no violations key (off-schema)',
+                        ),
+                    };
+                }
+                const r = shardViolationsSchema.safeParse(shaped);
+                return r.success
+                    ? { success: true, value: r.data }
+                    : { success: false, error: r.error };
+            },
         },
-    },
-);
+    );
+}
+
+export const shardViolationsWireSchema = buildShardViolationsWireSchema();
 
 /**
  * A violation exactly as the model emits it (pre-resolution): the rule is a
@@ -376,10 +445,7 @@ export const SHARD_PR_SYSTEM_PROMPT = `You evaluate PULL-REQUEST-level team rule
 function ruleBlock(rules: Array<Partial<IKodyRule>>): string {
     return rules
         .map((r, i) => {
-            const parts = [
-                `[${i + 1}] ${r.title}`,
-                `  description: ${r.rule}`,
-            ];
+            const parts = [`[${i + 1}] ${r.title}`, `  description: ${r.rule}`];
             if (r.examples?.length) {
                 parts.push(`  examples:`);
                 for (const ex of r.examples) {
@@ -438,7 +504,8 @@ function candidateLines(
     rules.forEach((r, i) => {
         if (!r.uuid) return;
         const lines = detectorHits.get(r.uuid)?.get(file.filename);
-        if (lines?.length) entries.push(`- rule [${i + 1}] -> line(s) ${lines.join(', ')}`);
+        if (lines?.length)
+            entries.push(`- rule [${i + 1}] -> line(s) ${lines.join(', ')}`);
     });
     if (!entries.length) return [];
     return [
@@ -823,7 +890,9 @@ function rulesForFile(
         // existed inside the detector plan. Cheapest clause, so it runs first
         // after the author's glob; the author's `path` still outranks it, since
         // `path` is stated and this is inferred.
-        if (!extensionScopeAppliesToFile(file.filename, r.fileScope?.extensions))
+        if (
+            !extensionScopeAppliesToFile(file.filename, r.fileScope?.extensions)
+        )
             return false;
         // A rule whose declared context need could not be retrieved for this
         // file is not judged here. Sits before the detector clause so it holds
@@ -1047,9 +1116,13 @@ export function inlineLoadedReferences(
 export function findUnresolvedReferenceRules(
     rules: Array<Partial<IKodyRule>>,
     referencesMap: Map<string, LoadedRuleReference[]> | undefined,
+    /** Rules whose reference names no file: nothing was expected, so an
+     *  empty result is not a failure. */
+    withoutFileReferences?: ReadonlySet<string>,
 ): Array<Partial<IKodyRule>> {
     return rules.filter((r) => {
         if (!r.contextReferenceId) return false;
+        if (r.uuid && withoutFileReferences?.has(r.uuid)) return false;
         const refs = r.uuid ? referencesMap?.get(r.uuid) : undefined;
         return !refs || refs.every((ref) => !ref?.content?.trim());
     });
@@ -1235,9 +1308,7 @@ export async function judgeKodyRulesSharded(
     // name instead of reading as "not in the current catalog".
     const ruleTitleByUuid = new Map(
         rules
-            .filter((r): r is Partial<IKodyRule> & { uuid: string } =>
-                !!r.uuid,
-            )
+            .filter((r): r is Partial<IKodyRule> & { uuid: string } => !!r.uuid)
             .map((r) => [r.uuid, r.title ?? r.uuid] as const),
     );
 

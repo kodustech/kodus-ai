@@ -71,6 +71,7 @@ export class RepositorySkillDetectionService {
         private readonly codeManagementService: CodeManagementService,
     ) {}
 
+    /** Throws when the repository cannot be listed. */
     async detect(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string };
@@ -118,7 +119,9 @@ export class RepositorySkillDetectionService {
                     repositoryId: params.repository?.id,
                 },
             });
-            return [];
+            // The caller says the files could not be listed, not that the
+            // repository has no skills.
+            throw error;
         }
     }
 }

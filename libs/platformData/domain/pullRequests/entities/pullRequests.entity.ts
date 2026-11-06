@@ -16,6 +16,7 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
     private readonly _title: string;
     private readonly _status: string;
     private readonly _merged: boolean;
+    private readonly _heavy?: boolean;
     private readonly _number: number;
     private readonly _url: string;
     private readonly _baseBranchRef: string;
@@ -54,6 +55,7 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
         this._title = pullRequest.title;
         this._status = pullRequest.status;
         this._merged = pullRequest.merged;
+        this._heavy = pullRequest.heavy;
         this._number = pullRequest.number;
         this._url = pullRequest.url;
         this._baseBranchRef = pullRequest.baseBranchRef;
@@ -89,6 +91,7 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
             title: this._title,
             status: this._status,
             merged: this._merged,
+            heavy: this._heavy,
             number: this._number,
             url: this._url,
             baseBranchRef: this._baseBranchRef,
@@ -124,6 +127,7 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
             title: this._title,
             status: this._status,
             merged: this._merged,
+            heavy: this._heavy,
             number: this._number,
             url: this._url,
             baseBranchRef: this._baseBranchRef,
@@ -175,6 +179,10 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
 
     get merged(): boolean {
         return this._merged;
+    }
+
+    get heavy(): boolean | undefined {
+        return this._heavy;
     }
 
     get number(): number {

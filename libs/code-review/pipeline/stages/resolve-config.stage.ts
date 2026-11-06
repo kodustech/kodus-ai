@@ -1,3 +1,7 @@
+import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
+import { StageMessageHelper } from '@libs/core/infrastructure/pipeline/utils/stage-message.helper';
+import { PipelineReasons } from '@libs/core/infrastructure/pipeline/constants/pipeline-reasons.const';
+import { PullRequestChangesUnreadableError } from '@libs/code-review/domain/errors/pull-request-changes-unreadable.error';
 import { Inject, Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
@@ -72,6 +76,7 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                     context.repository,
                     context.pullRequest,
                     baseCommit,
+                    context.lastExecution?.reviewedBaseBranch,
                 ));
 
             if (!preliminaryFiles || preliminaryFiles.length === 0) {
@@ -113,6 +118,54 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                 draft.preliminaryFiles = preliminaryFiles;
             });
         } catch (error) {
+            // Not a configuration problem. Set here: a thrown error would be
+            // overwritten by the next stage's own skip.
+            if (error instanceof PullRequestChangesUnreadableError) {
+                this.logger.warn({
+                    message: error.message,
+                    context: this.stageName,
+                    metadata: {
+                        organizationId:
+                            context?.organizationAndTeamData?.organizationId,
+                        prNumber: context?.pullRequest?.number,
+                        repositoryId: context?.repository?.id,
+                        reason: 'changes_unreadable',
+                    },
+                });
+                return this.updateContext(context, (draft) => {
+                    draft.statusInfo = {
+                        status: AutomationStatus.SKIPPED,
+                        message: StageMessageHelper.skippedWithReason(
+                            PipelineReasons.FILES.UNREADABLE,
+                            error.message,
+                        ),
+                    };
+                });
+            }
+            // A rate-limited diff read is not a config problem either; mapped
+            // as ValidateNewCommitsStage maps it.
+            if (is429Error(error)) {
+                this.logger.warn({
+                    message: `Skipping code review for PR#${context?.pullRequest?.number} — provider rate-limited the diff fetch (HTTP 429)`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationId:
+                            context?.organizationAndTeamData?.organizationId,
+                        prNumber: context?.pullRequest?.number,
+                        repositoryId: context?.repository?.id,
+                        reason: 'provider_rate_limited',
+                    },
+                });
+                return this.updateContext(context, (draft) => {
+                    draft.statusInfo = {
+                        status: AutomationStatus.SKIPPED,
+                        message: StageMessageHelper.skippedWithReason(
+                            PipelineReasons.COMMITS.PROVIDER_RATE_LIMITED,
+                            'Provider rate-limited the diff fetch (HTTP 429)',
+                        ),
+                    };
+                });
+            }
             this.logger.error({
                 message: `Error in ResolveConfigStage for PR#${context?.pullRequest?.number}`,
                 error,

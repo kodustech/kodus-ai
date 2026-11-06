@@ -227,6 +227,18 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         return this.updateContext(context, (draft) => {
             draft.approvalRisk = risk;
             draft.approvalDecision = decision;
+            if (risk?.level === 'unknown') {
+                draft.errors ??= [];
+                draft.errors.push({
+                    stage: this.stageName,
+                    severity: 'partial',
+                    error: new Error(risk.reason),
+                    metadata: {
+                        reason: 'approval_risk_assessment_failed',
+                        ...risk.failure,
+                    },
+                });
+            }
         });
     }
 }

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
 import { Badge } from "@components/ui/badge";
 import { Page } from "@components/ui/page";
 import type {
@@ -13,7 +12,6 @@ import type { ByokModelCost } from "@services/usage/byok-cost";
 import {
     ExternalLinkIcon,
     GitBranchIcon,
-    InfoIcon,
     PackageIcon,
     WalletIcon,
 } from "lucide-react";
@@ -31,99 +29,11 @@ import {
 import { isPlatformFundedProvider } from "../_data/platform-funded";
 import type { BYOKConfig } from "../_types";
 import { groupModelsByProvider, hasVisibleModels } from "../_utils";
+import { EnvConfigNotice } from "./env-config-notice";
 import { ModelOverridesBanner } from "./model-overrides-banner";
 import { SpendLimitSection } from "./spend-limit-section";
 import { ModelsTab } from "./tabs/models-tab";
 import { RoutingTab } from "./tabs/routing-tab";
-
-const providerLabel = (providerId?: string) => {
-    switch (providerId) {
-        case "kodus":
-            return "Kodus";
-        case "openai":
-            return "OpenAI";
-        case "openai_compatible":
-            return "OpenAI-compatible";
-        case "anthropic_compatible":
-            return "Anthropic-compatible";
-        case "anthropic":
-            return "Anthropic";
-        case "google_gemini":
-            return "Google AI Studio (Gemini)";
-        case "google_vertex":
-            return "Google Vertex AI";
-        default:
-            return providerId ?? "Unknown";
-    }
-};
-
-const EnvDataValue = ({ children }: { children: React.ReactNode }) => (
-    <code className="bg-card-lv2 rounded px-1.5 py-0.5 font-mono text-xs break-all">
-        {children}
-    </code>
-);
-
-const EnvConfigNotice = ({ env }: { env: LLMConfigStatus["env"] }) => {
-    if (!env.configured) return null;
-
-    return (
-        <Alert variant="info">
-            <InfoIcon />
-            <AlertTitle className="text-balance">
-                Kodus is currently using an LLM configured via environment
-                variables.
-            </AlertTitle>
-            <AlertDescription className="flex flex-col gap-3">
-                <dl className="grid grid-cols-[max-content_1fr] items-center gap-x-3 gap-y-1.5">
-                    {env.model && (
-                        <>
-                            <dt className="text-text-secondary">Model</dt>
-                            <dd>
-                                <EnvDataValue>{env.model}</EnvDataValue>
-                            </dd>
-                        </>
-                    )}
-
-                    <dt className="text-text-secondary">Provider</dt>
-                    <dd className="text-text-primary">
-                        {providerLabel(env.providerId)}
-                    </dd>
-
-                    {env.baseUrl && (
-                        <>
-                            <dt className="text-text-secondary">Endpoint</dt>
-                            <dd>
-                                <EnvDataValue>{env.baseUrl}</EnvDataValue>
-                            </dd>
-                        </>
-                    )}
-
-                    {env.vertexLocation && (
-                        <>
-                            <dt className="text-text-secondary">
-                                Vertex location
-                            </dt>
-                            <dd>
-                                <EnvDataValue>
-                                    {env.vertexLocation}
-                                </EnvDataValue>
-                            </dd>
-                        </>
-                    )}
-                </dl>
-
-                <p className="text-pretty">
-                    The API key is not shown for security. Connecting a model
-                    below and saving will{" "}
-                    <strong className="text-text-primary font-semibold">
-                        override
-                    </strong>{" "}
-                    this env-based configuration.
-                </p>
-            </AlertDescription>
-        </Alert>
-    );
-};
 
 export const ByokPageClient = ({
     config,
@@ -158,8 +68,13 @@ export const ByokPageClient = ({
         (group) => group.models.length > 0,
     ).length;
 
-    // Nag about an env-based LLM only when no BYOK model is configured at all.
-    const showEnvNotice = !!llmConfigStatus?.env.configured && firstRun;
+    // Nag about an env-based LLM only when no BYOK model is configured at all —
+    // including one that is declared but cannot run, which nothing else shows.
+    const showEnvNotice =
+        !!(
+            llmConfigStatus?.env.configured ||
+            llmConfigStatus?.env.invalidReason
+        ) && firstRun;
 
     // A Kodus-routed model makes the prepaid balance load-bearing: the page
     // header says so, and the wallet lives on the Kodus provider card.

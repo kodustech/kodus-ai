@@ -285,11 +285,14 @@ export class SafeguardPipelineService {
                         // reuse the PR's own review lease (that sandbox may be
                         // the stale one being replaced).
                         const renewPrKey = `${organizationAndTeamData?.organizationId}:safeguard-renew:${prNumber}:${randomUUID()}`;
+                        // This job already holds the PR's slot: the renewal
+                        // replaces its sandbox and must not queue behind it
                         const acquired = await this.leaseManager.acquire(
                             renewPrKey,
                             'safeguard-renewal',
                             SAFEGUARD_RENEWAL_LEASE_TTL_MS,
                             freshCloneParams,
+                            { replacesOwnSandbox: true },
                         );
                         newSandbox = acquired.sandbox;
                         currentRemoteCommands = newSandbox.remoteCommands;
@@ -675,8 +678,18 @@ Evidence field in ${params.languageResultPrompt}.`;
             });
 
             return { keep: result.verdict, evidence: result.evidence };
-        } catch {
+        } catch (error) {
             // Parse/LLM failure — keep suggestion (safe default)
+            this.logger.warn({
+                message: `${LLM_ERROR_TAG} safeguard prompt-only verification failed for PR#${params.prNumber}; keeping the suggestion`,
+                error,
+                context: SafeguardPipelineService.name,
+                metadata: {
+                    organizationAndTeamData: params.organizationAndTeamData,
+                    prNumber: params.prNumber,
+                    suggestionId: suggestion.id,
+                },
+            });
             return {
                 keep: true,
                 evidence: 'prompt-only parse failed, keeping as safe default',

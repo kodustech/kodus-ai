@@ -45,6 +45,7 @@ version: 2.0
 
 # general
 automatedReviewActive: true
+reviewMode: balanced # balanced | heavy
 showStatusFeedback: true
 kodusConfigFileOverridesWebPreferences: false
 reviewCadence:
@@ -164,6 +165,23 @@ commits:
     Only run follow-up reviews when you comment `@kody start-review`.
   </Tab>
 </Tabs>
+
+### Review mode
+
+How deep Kody reviews pull requests (`reviewMode`):
+
+- **Balanced** (default): the standard review.
+- **Heavy**: nine specialist reviewers run next to the main one, for higher recall at the cost of
+  more model calls. See [Heavy mode](/en/how_to_use/code_review/review_directive#heavy-mode).
+
+The mode applies to every review: automatic ones, `@kody review` and `kodus review`. A single
+review can ask for the other mode with `--heavy` or `--balanced`. Like the other settings on this
+page, it can be set globally, per repository or per directory.
+
+Under the two options, **Review models** shows the model each mode runs on, read-only. They come
+from **AI providers → Routing** (follow **View organization routing** to change them), unless the
+repository or directory sets its own model, which then runs both modes. With a single connected
+model the section only says so; with no models of your own (Kodus-managed) it is hidden.
 
 ### PR Workflow
 

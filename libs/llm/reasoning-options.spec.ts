@@ -394,7 +394,9 @@ describe('buildReasoningProviderOptions', () => {
         it('DeepSeek takes the toggle AND an effort, on its own scale', () => {
             // api-docs.deepseek.com: both are sent together, and the scale is
             // low/high/max — "medium" is not an accepted value there, so our
-            // top effort maps to `max`.
+            // top effort maps to `max`. The toggle carries the effort's budget:
+            // Together requires it, Fireworks bounds reasoning by it, and
+            // api.deepseek.com ignores it and honors the effort (#2267).
             expect(
                 buildReasoningProviderOptions(
                     BYOKProvider.OPENAI_COMPATIBLE,
@@ -403,10 +405,22 @@ describe('buildReasoningProviderOptions', () => {
                 ),
             ).toEqual({
                 openaiCompatible: {
-                    thinking: { type: 'enabled' },
+                    thinking: { type: 'enabled', budget_tokens: 40_000 },
                     reasoningEffort: 'max',
                 },
             });
+            for (const [effort, budget] of [
+                ['low', 5_000],
+                ['medium', 15_000],
+            ] as const) {
+                expect(
+                    buildReasoningProviderOptions(
+                        BYOKProvider.OPENAI_COMPATIBLE,
+                        effort,
+                        'deepseek-v4-flash',
+                    ).openaiCompatible.thinking,
+                ).toEqual({ type: 'enabled', budget_tokens: budget });
+            }
         });
 
         it('Kimi takes the toggle ALONE — Moonshot rejects the pair', () => {

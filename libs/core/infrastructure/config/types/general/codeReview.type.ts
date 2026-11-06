@@ -147,6 +147,26 @@ export type AIAnalysisResultPrLevel = {
     codeSuggestions: ISuggestionByPR[];
 };
 
+/** The enrichment's answer on a suggestion's fix (enrich-content.ts). */
+export const FIX_STATUSES = [
+    'local',
+    'needs-wider-change',
+    'insufficient-context',
+    'no-code-fix',
+] as const;
+export type FixStatus = (typeof FIX_STATUSES)[number];
+
+/** Set by the publish gate when it wipes a `local` fix it found unusable;
+ *  never offered to the model. */
+export const REJECTED_FIX_STATUS = 'rejected-fix';
+
+/** What a stored suggestion may carry: the model's answers plus the gate's. */
+export const STORED_FIX_STATUSES = [
+    ...FIX_STATUSES,
+    REJECTED_FIX_STATUS,
+] as const;
+export type StoredFixStatus = (typeof STORED_FIX_STATUSES)[number];
+
 export type CodeSuggestion = {
     id?: string;
     relevantFile: string;
@@ -155,6 +175,8 @@ export type CodeSuggestion = {
     existingCode?: string;
     improvedCode: string;
     oneSentenceSummary?: string;
+    /** The enrichment's answer on the fix; anything but `local` leaves `improvedCode` empty on purpose. */
+    fixStatus?: StoredFixStatus;
     /** The finder's whole explanation, labels stripped; `suggestionContent` is the short body shown to people. */
     fullExplanation?: string;
     relevantLinesStart?: number;
@@ -563,10 +585,35 @@ export const customAgentsSchema = z
         }
     });
 
+/**
+ * `owner/repo` (GitLab subgroups and Azure projects add segments) of the
+ * repository a skill or doc lives in, when it is not the reviewed one. No
+ * `:`, which separates it from the path in a qualified path.
+ */
+export const KNOWLEDGE_REPOSITORY_PATTERN =
+    // Control, format and default-ignorable characters by class (C0, C1,
+    // bidi overrides, zero-width, tag characters, variation selectors), so
+    // an invisible one cannot disguise `owner/repo:path`.
+    /^(?![-\s])(?!.*\s$)[^:\\/\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]+(?:\/[^:\\/\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]+)+$/u;
+
+/** A branch or tag name a skill or doc of another repository is read at. */
+export const KNOWLEDGE_REF_PATTERN = /^(?!-)[A-Za-z0-9._\-/@+]{1,200}$/;
+
 export const knowledgeItemSchema = z.object({
-    /** Path in the repository, read from the PR's target branch. */
+    /** Path in its repository. In the reviewed repository it is read from
+     *  the PR's target branch; in another one, at `ref` or that
+     *  repository's default branch. Never at a ref the PR controls. */
     path: z.string().min(1),
     kind: z.enum(['skill', 'doc']),
+    /** Another repository connected on the reviewed repository's
+     *  integration (`owner/repo`); unset for the reviewed repository. */
+    repository: z
+        .string()
+        .max(200)
+        .regex(KNOWLEDGE_REPOSITORY_PATTERN)
+        .optional(),
+    /** Branch or tag of `repository`; unset reads its default branch. */
+    ref: z.string().regex(KNOWLEDGE_REF_PATTERN).optional(),
     linkedTo: z.array(
         z.union([
             z.literal(KNOWLEDGE_MAIN_REVIEW_TARGET),
@@ -574,6 +621,42 @@ export const knowledgeItemSchema = z.object({
         ]),
     ),
 });
+
+/**
+ * How a skill or doc is named everywhere after it is read: its path in the
+ * reviewed repository, or `owner/repo:path` in another one. The prompt shows
+ * it, the agent cites it, and the quote gate reads it back by it.
+ */
+export function knowledgeSourcePath(item: {
+    path: string;
+    repository?: string;
+}): string {
+    return item.repository ? `${item.repository}:${item.path}` : item.path;
+}
+
+/** `owner/repo:path` split back into its repository and path; null for a
+ *  path in the reviewed repository. */
+export function parseKnowledgeSourcePath(
+    qualified: string,
+): { repository: string; path: string } | null {
+    const at = (qualified ?? '').indexOf(':');
+    if (at <= 0) return null;
+    const repository = qualified.slice(0, at);
+    const path = qualified.slice(at + 1);
+    if (!path || !KNOWLEDGE_REPOSITORY_PATTERN.test(repository)) return null;
+    return { repository, path };
+}
+
+/** One skill or doc is the same entry when its repository, path and kind
+ *  match; the same path in two repositories is two entries. */
+export function knowledgeItemKey(item: {
+    path: string;
+    kind: string;
+    repository?: string;
+}): string {
+    const repository: unknown = item.repository;
+    return `${item.kind}|${typeof repository === 'string' ? repository.toLowerCase() : ''}|${item.path}`;
+}
 
 /** The first value that appears twice, if any. */
 export function firstDuplicate<T>(values: readonly T[]): T | undefined {
@@ -610,6 +693,96 @@ export function knowledgeLinkProblems(
                 );
             }
         }
+    }
+    return problems;
+}
+
+/**
+ * A stored skill or doc names its source with text only. A config written by
+ * hand or as code can carry a `repository` or `ref` of another type, which no
+ * repository is named by: such an item cannot be read.
+ */
+export function hasTextSource(item: {
+    repository?: unknown;
+    ref?: unknown;
+}): boolean {
+    const text = (value: unknown) =>
+        value === undefined || value === null || typeof value === 'string';
+    return text(item.repository) && text(item.ref);
+}
+
+/** The item is linked to the main review (the built-in agents). */
+export function linksMainReview(item: {
+    linkedTo?: readonly unknown[];
+}): boolean {
+    return (item.linkedTo ?? []).includes(KNOWLEDGE_MAIN_REVIEW_TARGET);
+}
+
+/**
+ * Skills and docs that name their source wrongly: a `ref` without a
+ * `repository` (the reviewed repository is always read on the PR's target
+ * branch), two refs for one repository, the same entry twice, or a guide of
+ * another repository linked to the main review. Guides of another repository
+ * are for custom agents only: the main review has no quote gate to check a
+ * rule it cites, and reaches team guides through coding-agent instructions.
+ */
+export function knowledgeSourceProblems(
+    knowledge:
+        | ReadonlyArray<{
+              path?: string;
+              kind?: string;
+              repository?: string;
+              ref?: string;
+              linkedTo?: readonly unknown[];
+          }>
+        | undefined,
+): string[] {
+    const problems: string[] = [];
+    const seen = new Set<string>();
+    // One ref per repository: a review reads each repository at one branch,
+    // and a citation names the repository, not the ref.
+    const refs = new Map<string, { name: string; ref: string }>();
+    for (const item of knowledge ?? []) {
+        if (!item?.path || !item.kind) continue;
+        if (!hasTextSource(item)) {
+            problems.push(
+                `${item.path} names its repository or ref with something other than text; use owner/repo and a branch or tag name`,
+            );
+            continue;
+        }
+        if (item.repository) {
+            const key = item.repository.toLowerCase();
+            const ref = item.ref ?? '';
+            const first = refs.get(key);
+            if (!first) {
+                refs.set(key, { name: item.repository, ref });
+            } else if (first.ref !== ref) {
+                problems.push(
+                    `${item.repository} is read at both "${first.ref || 'its default branch'}" and "${ref || 'its default branch'}"; use one branch or tag per repository`,
+                );
+            }
+        }
+        if (item.ref && !item.repository) {
+            problems.push(
+                `${item.path} sets a ref but no repository; the reviewed repository is read on the pull request's target branch`,
+            );
+        }
+        if (item.repository && linksMainReview(item)) {
+            problems.push(
+                `${knowledgeSourcePath({ path: item.path, repository: item.repository })} is a guide of another repository, which only custom agents follow; unlink it from the main review`,
+            );
+        }
+        const key = knowledgeItemKey({
+            path: item.path,
+            kind: item.kind,
+            repository: item.repository,
+        });
+        if (seen.has(key)) {
+            problems.push(
+                `${knowledgeSourcePath({ path: item.path, repository: item.repository })} is listed twice`,
+            );
+        }
+        seen.add(key);
     }
     return problems;
 }
@@ -690,9 +863,20 @@ export type BusinessLogicConfig = {
     requireTask?: boolean;
 };
 
+/**
+ * How deep a review goes. `balanced` (the default) runs the generalist;
+ * `heavy` adds the M3 lenses and routes the `codeReviewHeavy` model. Both are
+ * set in General settings. `fast` is only set by the CLI's `--fast`, and
+ * `deep` by nothing today (#2367).
+ */
+export type ReviewMode = 'fast' | 'balanced' | 'heavy' | 'deep';
+
+/** The review modes a team can pick in settings or in kodus-config.yml. */
+export const SELECTABLE_REVIEW_MODES = ['balanced', 'heavy'] as const;
+
 export type CodeReviewConfig = {
     ignorePaths: string[];
-    reviewMode?: 'fast' | 'normal' | 'deep';
+    reviewMode?: ReviewMode;
     reviewOptions: ReviewOptions;
 
     /** How the PR is checked against the task it references (Business Logic). */

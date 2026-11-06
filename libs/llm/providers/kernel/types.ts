@@ -90,7 +90,8 @@ export interface ProviderBuildOptions {
  * budget/level/adaptive stays INTERNAL to each `module.reasoning()` (01-04);
  * 'none' always means reasoning disabled regardless of the native type.
  */
-export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high';
+export const REASONING_EFFORTS = ['none', 'low', 'medium', 'high'] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
 /** Per-provider reasoning → AI-SDK providerOptions. Shape is provider-specific,
  *  so it stays loose here; 01-04 owns each mapping. */
@@ -357,4 +358,26 @@ export interface ProviderModule {
      *  serve several ids, e.g. openai + openai_compatible, whose listing differs).
      *  Returns null when the id is unknown to this module. */
     modelListing?(providerId: string): ModelListing | null;
+    /** The self-hosted env vars for this provider when `API_LLM_PROVIDER` names
+     *  it, per requested id. Returns null when the id cannot be declared there. */
+    selfHostedEnv?(providerId: string): SelfHostedEnvVars | null;
+}
+
+/** Where a provider's settings come from on the self-hosted env path. The generic
+ *  `API_LLM_API_KEY` / `API_LLM_BASE_URL` win; these are read when they are empty. */
+export interface SelfHostedEnvVars {
+    /** Provider-named key vars, read in order. */
+    apiKeyVars: readonly string[];
+    /** Whether `API_LLM_BASE_URL` moves the endpoint. Absent: it cannot. */
+    baseURL?: {
+        /** Provider-named var read when `API_LLM_BASE_URL` is empty. */
+        legacyVar?: string;
+        /** The endpoint when nothing sets one, for a transport that needs it spelled out. */
+        default?: string;
+        /** No endpoint of its own: the config cannot run without one. */
+        required?: boolean;
+        /** The provider's own host. A legacy var pointing elsewhere is warned
+         *  about: the native API is called on it. */
+        nativeHost?: string;
+    };
 }

@@ -76,9 +76,19 @@ describe('GeneralistAgentProvider — finding label policy', () => {
         expect(resolve(null)).toBe('bug');
     });
 
-    it('falls back inside the requested categories when the label is outside them', () => {
+    it('keeps a label outside the requested categories; the stage discards it, never moves it (#1821)', () => {
         const narrow = { requestedCategories: ['security', 'performance'] };
-        expect(resolve('bug', narrow)).toBe('security');
+        expect(resolve('bug', narrow)).toBe('bug');
         expect(resolve('performance', narrow)).toBe('performance');
+    });
+});
+
+describe('GeneralistAgentProvider — a run without a submitted result', () => {
+    // Whether the finder submitted a result (a tool call or a whole final
+    // answer) only matters to an agent that reads a missing one as stopped
+    // early: custom agents. The generalist's prose answers stay with prose
+    // recovery, so an org with no custom agent sees no change (#2172 AC #16).
+    it('is not read as stopped early', () => {
+        expect((provider as any).readsMissingResultAsIncomplete()).toBe(false);
     });
 });

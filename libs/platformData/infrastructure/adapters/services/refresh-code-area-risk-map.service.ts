@@ -597,11 +597,29 @@ export class RefreshCodeAreaRiskMapService {
                                           ? encoded
                                           : null;
                                 if (content === null) return;
-                                const result = analyzeCodeStructure(
-                                    path,
-                                    content,
-                                );
-                                if (result) results.set(path, result);
+                                try {
+                                    const result = analyzeCodeStructure(
+                                        path,
+                                        content,
+                                    );
+                                    if (result) results.set(path, result);
+                                } catch (error) {
+                                    // Optional analysis must not discard history
+                                    // or prevent its resumable cursor being saved.
+                                    this.logger.warn({
+                                        message:
+                                            'Could not analyze file for structure sampling',
+                                        context:
+                                            RefreshCodeAreaRiskMapService.name,
+                                        error,
+                                        metadata: {
+                                            organizationId:
+                                                organizationAndTeamData.organizationId,
+                                            repositoryId: repository.id,
+                                            path,
+                                        },
+                                    });
+                                }
                             }),
                     );
                 }
