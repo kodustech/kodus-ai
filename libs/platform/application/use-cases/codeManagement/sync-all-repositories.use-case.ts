@@ -187,6 +187,10 @@ export class SyncAllRepositoriesUseCase {
             configKey: IntegrationConfigKey.REPOSITORY_SELECTION,
         });
 
+        // `find` loads the organization with the integration, not the team.
+        const organizationOf = (row: (typeof rows)[number]) =>
+            row.integration?.organization?.uuid ?? row.team?.organization?.uuid;
+
         return (rows ?? [])
             .filter(
                 (row) =>
@@ -194,11 +198,11 @@ export class SyncAllRepositoriesUseCase {
                         'all' &&
                     row.team?.status === STATUS.ACTIVE &&
                     row.integration?.status !== false &&
-                    row.team?.organization?.uuid,
+                    organizationOf(row),
             )
             .map((row) => ({
                 organizationAndTeamData: {
-                    organizationId: row.team.organization.uuid,
+                    organizationId: organizationOf(row),
                     teamId: row.team.uuid,
                 },
                 integrationId: row.integration?.uuid,

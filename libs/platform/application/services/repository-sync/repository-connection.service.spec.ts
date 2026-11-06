@@ -55,9 +55,12 @@ describe('RepositoryConnectionService', () => {
             ],
         });
 
+        // The active integration's row: a team that switched providers keeps
+        // the old integration's rows until they are deleted.
         expect(integrationConfigService.findOne).toHaveBeenCalledWith({
             team: { uuid: 'team-1' },
             configKey: IntegrationConfigKey.REPOSITORIES,
+            integration: { status: true },
         });
         expect(repositoryService.findOrCreate).toHaveBeenCalledWith(
             expect.objectContaining({

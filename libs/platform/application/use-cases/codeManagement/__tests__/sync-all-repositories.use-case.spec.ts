@@ -65,15 +65,17 @@ const setup = (
                 uuid: `cfg-${team.orgTeam.teamId}`,
                 configKey,
                 configValue: store.get(key(team.orgTeam.teamId, configKey)),
+                // The relations `find` loads: the organization comes with the
+                // integration, the team comes bare.
                 team: {
                     uuid: team.orgTeam.teamId,
                     status: STATUS.ACTIVE,
-                    organization: { uuid: team.orgTeam.organizationId },
                 },
                 integration: {
                     uuid: `int-${team.orgTeam.teamId}`,
                     platform: 'GITLAB',
                     status: true,
+                    organization: { uuid: team.orgTeam.organizationId },
                 },
             })),
         ),
@@ -483,15 +485,12 @@ describe('SyncAllRepositoriesUseCase', () => {
                     [TEAMS.a, TEAMS.b].map((orgTeam) => ({
                         configKey,
                         configValue: t.store.get(key(orgTeam.teamId, configKey)),
-                        team: {
-                            uuid: orgTeam.teamId,
-                            status: STATUS.ACTIVE,
-                            organization: { uuid: orgTeam.organizationId },
-                        },
+                        team: { uuid: orgTeam.teamId, status: STATUS.ACTIVE },
                         integration: {
                             uuid: `int-${orgTeam.teamId}`,
                             platform: 'GITHUB',
                             status: true,
+                            organization: { uuid: orgTeam.organizationId },
                         },
                     })),
             );

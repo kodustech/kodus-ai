@@ -97,6 +97,7 @@ export class RepositoryConnectionService {
         const repositoriesConfig = await this.integrationConfigService.findOne({
             team: { uuid: organizationAndTeamData.teamId },
             configKey: IntegrationConfigKey.REPOSITORIES,
+            integration: { status: true },
         });
 
         if (!repositoriesConfig?.uuid) {
