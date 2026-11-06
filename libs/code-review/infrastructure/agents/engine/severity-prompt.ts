@@ -127,9 +127,12 @@ export function hasCustomSeverityFlags(
     });
 }
 
+const RESPONSE_EXAMPLE =
+    '{"classifications": [{"index": 0, "severity": "high", "reason": "brief reason"}]}';
+
 const RESPONSE_FORMAT = `Respond with ONLY a JSON object:
 \`\`\`json
-{"classifications": [{"index": 0, "severity": "high", "reason": "brief reason"}]}
+${RESPONSE_EXAMPLE}
 \`\`\``;
 
 /**
@@ -200,7 +203,7 @@ ${suggestionsText}
 
 Respond with ONLY a JSON object:
 \`\`\`json
-{"classifications": [{"index": 0, "severity": "high", "reason": "brief reason"}]}
+${RESPONSE_EXAMPLE}
 \`\`\``;
 }
 
@@ -224,7 +227,10 @@ export function parseSeverityResponse(text: string): {
     // rest of the reasoning ahead of the answer, and the braces it quotes made
     // that span unparseable: every suggestion fell to medium (#2409).
     const parsed = extractLastJsonObjectWith(text, ['classifications']);
-    if (!parsed) {
+    // Cut mid-thought, a model copies the prompt's example; and when the real
+    // answer is unreadable, the scan above falls back to the example the
+    // reasoning quoted. Either way it is not a rating.
+    if (!parsed || isResponseExample(parsed)) {
         return { classifications, parseOk: false };
     }
 
@@ -237,4 +243,8 @@ export function parseSeverityResponse(text: string): {
         }
     }
     return { classifications, parseOk: classifications.size > 0 };
+}
+
+function isResponseExample(parsed: Record<string, unknown>): boolean {
+    return JSON.stringify(parsed) === JSON.stringify(JSON.parse(RESPONSE_EXAMPLE));
 }

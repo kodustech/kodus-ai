@@ -77,6 +77,16 @@ describe('parseSeverityResponse', () => {
         ]);
     });
 
+    it('does not take the prompt example for the answer', () => {
+        const example =
+            '{"classifications": [{"index": 0, "severity": "high", "reason": "brief reason"}]}';
+        // Copied as the answer by a model cut mid-thought.
+        expect(parseSeverityResponse(example).parseOk).toBe(false);
+        // Quoted in the reasoning, with the real answer cut off after it.
+        const truncated = `Format: ${example}\nIndex 0 high.\n{"classifications": [{"index": 0, "severity": "low", "rea`;
+        expect(parseSeverityResponse(truncated).parseOk).toBe(false);
+    });
+
     it('fails when no object carries classifications', () => {
         expect(parseSeverityResponse('index 0 is high').parseOk).toBe(false);
         expect(parseSeverityResponse('{"severity": "high"}').parseOk).toBe(false);
