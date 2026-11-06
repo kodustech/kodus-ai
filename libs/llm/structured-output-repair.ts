@@ -154,14 +154,19 @@ export function extractJsonFromText(text: string): string | null {
     // an answer that quotes the tag, or is followed by another block, survives.
     // One left-to-right pass, so the cost grows with the length of the text and
     // not with its length times the number of blocks.
+    // `<thinking>` is the same block under the other name models use.
     let kept = '';
     let pos = 0;
+    const openTag = /<(think|thinking)>/g;
     for (;;) {
-        const open = s.indexOf('<think>', pos);
-        if (open < 0) break;
+        openTag.lastIndex = pos;
+        const m = openTag.exec(s);
+        if (!m) break;
+        const open = m.index;
         const gap = s.slice(pos, open);
         if (/[{[]/.test(gap)) break;
-        const close = s.indexOf('</think>', open);
+        const closeTag = `</${m[1]}>`;
+        const close = s.indexOf(closeTag, open);
         if (close < 0) {
             // A block that never closes and is the first thing in the response
             // carries no answer at all. Anywhere else, including right after a
@@ -170,7 +175,7 @@ export function extractJsonFromText(text: string): string | null {
             break;
         }
         kept += gap;
-        pos = close + '</think>'.length;
+        pos = close + closeTag.length;
     }
     s = (kept + s.slice(pos)).trim();
 

@@ -39,8 +39,8 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
      *
      * The ONE LLM.run site (reference-detector.service.ts:159) is a TEXT call —
      * it passes NO `schema`, so the model returns a raw string and the boundary
-     * parses it with `extractJsonFromResponse` (prompt-parser.utils.ts), which
-     * only accepts a top-level JSON ARRAY. The declared return is always
+     * parses it with `parseReferenceReply` (normalizeEnvelope: a bare, fenced,
+     * prose-wrapped or wrapped array, or one reference without the array). The declared return is always
      * `IDetectedReference[]`. These tests pin request assembly (exact args /
      * system / user / byokConfig threading), envelope parsing across the
      * output-shape zoo, the fail-safe layer, input variants, and the
@@ -152,12 +152,9 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
                 expect(out).toEqual([{ fileName: 'a.ts' }, { fileName: 'b.ts' }]);
             });
 
-            // row 3 — single OBJECT where D expects an ARRAY. extractJsonFromResponse
-            // returns null for a non-array, so the boundary DROPS a recoverable
-            // reference and ships [] with no signal (#1786 silent-drop class).
-            // Source: reference-detector.service.ts:176.
-            it.failing(
-                'row 3 — single object should be recovered as a 1-element array (SILENT DROP today)',
+            // row 3 — single OBJECT where D expects an ARRAY: lifted to [obj].
+            it(
+                'row 3 — single object should be recovered as a 1-element array',
                 async () => {
                     mockRun(JSON.stringify({ fileName: 'src/a.ts' }));
                     const out = await svc.detectReferences(baseParams() as any);
@@ -188,8 +185,8 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
             // (service:179-184), so a marker under `FileName` LEAKS through as a
             // file — the exact "@kody-sync as a file" class the service header
             // warns about. Source: reference-detector.service.ts:179-184.
-            it.failing(
-                'row 11 — control marker under a case-variant key must still be filtered (LEAKS today)',
+            it(
+                'row 11 — control marker under a case-variant key must still be filtered',
                 async () => {
                     mockRun(JSON.stringify([{ FileName: '@kody-sync' }]));
                     const out = await svc.detectReferences(baseParams() as any);
@@ -197,13 +194,10 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
                 },
             );
 
-            // row 19 — provider envelope leak {choices:[{message:{content}}]}.
-            // The bracket-slice grabs the `choices` array, so the boundary ships
-            // the RAW message object as if it were a reference (never extracts
-            // the inner content). Source: reference-detector.service.ts:175-196
-            // + prompt-parser.utils.ts bracket-slice.
-            it.failing(
-                'row 19 — provider envelope must NOT leak as a reference (recover inner payload) (LEAKS today)',
+            // row 19 — provider envelope {choices:[{message:{content}}]} written
+            // as the reply: its content is read, never shipped as a reference.
+            it(
+                'row 19 — provider envelope must NOT leak as a reference (recover inner payload)',
                 async () => {
                     mockRun(
                         JSON.stringify({
@@ -223,6 +217,40 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
             );
         });
 
+        describe('#2304 — the reply is parsed, not bracket-sliced', () => {
+            it('a single object holding an array field is one reference, not its inner array', async () => {
+                mockRun(JSON.stringify({ fileName: 'a.ts', lines: [1, 2] }));
+                const out = await svc.detectReferences(baseParams() as any);
+                expect(out).toEqual([{ fileName: 'a.ts', lines: [1, 2] }]);
+            });
+
+            it('recovers an array behind a trailing comma', async () => {
+                mockRun('[{"fileName":"a.ts"},]');
+                const out = await svc.detectReferences(baseParams() as any);
+                expect(out).toEqual([{ fileName: 'a.ts' }]);
+            });
+
+            it('recovers an array wrapped in prose', async () => {
+                mockRun('Here are the references: [{"fileName":"a.ts"}]. Done.');
+                const out = await svc.detectReferences(baseParams() as any);
+                expect(out).toEqual([{ fileName: 'a.ts' }]);
+            });
+
+            it('drops array items that are not references', async () => {
+                mockRun('[{"fileName":"a.ts"}, "b.ts", 3, null, {"path":"c.ts"}]');
+                const out = await svc.detectReferences(baseParams() as any);
+                expect(out).toEqual([{ fileName: 'a.ts' }]);
+            });
+
+            it('marks an unparseable reply unreliable so it is not cached', async () => {
+                mockRun('I cannot help with that request.');
+                const r = await svc.detectReferencesWithStatus(
+                    baseParams() as any,
+                );
+                expect(r).toEqual({ references: [], reliable: false });
+            });
+        });
+
         // ── C. Unparseable / transport — the fail-safe layer (rows 28-34) ──
         describe('C. unparseable / transport', () => {
             // Every reply with no recoverable array — empty, primitive, an
@@ -239,7 +267,6 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
                     '0',
                     '"ok"',
                     '[{"fileName":"a.ts"',
-                    '[{"fileName":"a.ts"},]',
                     "[{'fileName':'a.ts'}]",
                     JSON.stringify({ error: 'model unavailable' }),
                     { error: 'model unavailable' },
@@ -409,11 +436,19 @@ describe('ReferenceDetectorService.detectReferencesWithStatus', () => {
         });
     });
 
-    it('a reply that is not a JSON array is not a reliable answer', async () => {
-        run.mockResolvedValue('{"filePath":"docs/api.md"}');
+    it('a reply with no reference list is not a reliable answer', async () => {
+        run.mockResolvedValue('{"note":"nothing to see"}');
         expect(
             (await svc.detectReferencesWithStatus(params as any)).reliable,
         ).toBe(false);
+    });
+
+    it('a single reference sent without the array is a reliable answer', async () => {
+        run.mockResolvedValue('{"filePath":"docs/api.md"}');
+        expect(await svc.detectReferencesWithStatus(params as any)).toEqual({
+            references: [{ filePath: 'docs/api.md', fileName: 'docs/api.md' }],
+            reliable: true,
+        });
     });
 
     it('an empty JSON array is a reliable "no references"', async () => {
@@ -427,7 +462,7 @@ describe('ReferenceDetectorService.detectReferencesWithStatus', () => {
     it('detectReferences keeps returning just the references', async () => {
         run.mockResolvedValue('[{"filePath":"docs/api.md"}]');
         expect(await svc.detectReferences(params as any)).toEqual([
-            { filePath: 'docs/api.md' },
+            { filePath: 'docs/api.md', fileName: 'docs/api.md' },
         ]);
     });
 });

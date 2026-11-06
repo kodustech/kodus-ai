@@ -295,7 +295,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
         // lands inside the thinking prose → JSON.parse fails → data dropped.
         // KNOWN DEGRADATION: correct behaviour is to recover the real array.
         // Source: libs/code-review/infrastructure/agents/engine/format-prompt.ts:80
-        it.failing(
+        it(
             'row20: KNOWN DEGRADATION — should recover the trailing array despite a thinking-leak with stray brackets',
             async () => {
                 mockRun.mockResolvedValue(
@@ -317,6 +317,24 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
     // === B. SEMANTIC-BUT-WRONG (valid JSON, wrong value encoding) ==========
     // Rows 21-24 (boolean/enum encodings) are N/A: D has no boolean/enum field.
     describe('B. semantic-but-wrong value encodings', () => {
+        it('reads an integer-string index ("0") and keeps the polish', async () => {
+            mockRun.mockResolvedValue(
+                '[{"index":"0","suggestionContent":"real"}]',
+            );
+            const result = await formatSuggestionContent([suggestion]);
+            expect([...result.entries()]).toEqual([
+                [0, { suggestionContent: 'real', improvedCode: '' }],
+            ]);
+        });
+
+        it('accepts a single item sent without the array', async () => {
+            mockRun.mockResolvedValue('{"index":0,"suggestionContent":"real"}');
+            const result = await formatSuggestionContent([suggestion]);
+            expect([...result.entries()]).toEqual([
+                [0, { suggestionContent: 'real', improvedCode: '' }],
+            ]);
+        });
+
         // Row 25 — dangling / out-of-range index reference.
         it('row25: an out-of-range index does not corrupt the valid entry', async () => {
             mockRun.mockResolvedValue(

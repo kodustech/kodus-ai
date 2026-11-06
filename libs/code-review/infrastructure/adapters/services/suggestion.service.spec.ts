@@ -255,3 +255,55 @@ describe('SuggestionService — transformCommentResultsToPrLevelSuggestions', ()
         expect(saved.customAgent).toEqual(agent);
     });
 });
+
+describe('SuggestionService — prioritizeSuggestions fallback', () => {
+    it('falls back to the legacy prioritization when the Kody Rules path rejects', async () => {
+        const s = svc();
+        s.logger = { log: jest.fn(), error: jest.fn(), warn: jest.fn() };
+        const legacyResult = {
+            prioritizedSuggestions: [{ id: 'a' }],
+            discardedSuggestionsBySeverityOrQuantity: [],
+        };
+        s.prioritizeSuggestionsWithKodyRulesControl = jest
+            .fn()
+            .mockRejectedValue(new Error('kody rules control failed'));
+        s.prioritizeSuggestionsLegacy = jest.fn().mockResolvedValue(legacyResult);
+
+        const result = await s.prioritizeSuggestions(
+            { organizationId: 'o', teamId: 't' },
+            {},
+            1,
+            [{ id: 'a', label: 'kody_rules' }],
+        );
+
+        expect(result).toBe(legacyResult);
+        expect(s.prioritizeSuggestionsLegacy).toHaveBeenCalledTimes(1);
+        expect(s.logger.error).toHaveBeenCalled();
+    });
+});
+
+describe('SuggestionService — sortAndPrioritizeSuggestions failure', () => {
+    it('logs an error with counts, not the suggestions, and returns them unfiltered', async () => {
+        const s = svc();
+        s.logger = { log: jest.fn(), error: jest.fn(), warn: jest.fn() };
+        s.prioritizeSuggestions = jest
+            .fn()
+            .mockRejectedValue(new Error('clustering failed'));
+        const valid = [{ id: 'a', suggestionContent: 'secret code' }];
+
+        const result = await s.sortAndPrioritizeSuggestions(
+            { organizationId: 'o', teamId: 't' },
+            { suggestionControl: {} },
+            { number: 7 },
+            valid,
+            [],
+        );
+
+        expect(result.sortedPrioritizedSuggestions).toBe(valid);
+        expect(s.logger.log).not.toHaveBeenCalled();
+        expect(s.logger.error).toHaveBeenCalledTimes(1);
+        const entry = s.logger.error.mock.calls[0][0];
+        expect(entry.metadata.suggestionsCount).toBe(1);
+        expect(JSON.stringify(entry.metadata)).not.toContain('secret code');
+    });
+});

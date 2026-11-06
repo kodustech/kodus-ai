@@ -75,12 +75,10 @@ update its entry. The accepted, non-gating entries and their status:
   all-medium (no dropped findings). Wiring it onto the shared
   `extractJsonFromText` is a nice-to-have, and needs its own RED→GREEN (no
   dedicated spec today).
-- **reference-detector** — uses a parallel `extractJsonFromResponse` that carries
-  its OWN tested 42-row contract (aggressive bracket-slice + fail-safe on
-  malformed). It is NOT a silent-loss gap. A swap to `extractJsonFromText`
-  regresses 5 of its contract rows (the shared extractor is deliberately more
-  conservative), so consolidating is a semantics migration + test update, not a
-  drop-in — left as-is.
+- **reference-detector** — text call, parsed with the shared `normalizeEnvelope`
+  (a bare, fenced, prose-wrapped or wrapped array, or one reference without the
+  array); only items naming a file are kept, and an unparseable reply is
+  marked unreliable so it is not cached.
 - **format-suggestion-content** — text call, output used as prose; no shape
   concern.
 

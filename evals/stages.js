@@ -315,7 +315,6 @@ const STAGES = [
                     'libs/code-review/infrastructure/agents/core/findings-schema.spec.ts',
                     'libs/code-review/infrastructure/agents/core/finder.agent.findings-parse.spec.ts',
                     'libs/llm/structured-output-repair.spec.ts',
-                    'test/unit/common/prompt-parser-extract-json.spec.ts',
                 ],
             },
             {
