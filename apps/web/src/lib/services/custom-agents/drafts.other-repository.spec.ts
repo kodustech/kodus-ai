@@ -652,6 +652,38 @@ describe("mentionedFilesNotFollowed", () => {
             ).toEqual([`${OTHER_RULES}:docs/a.md`]);
         });
 
+        it("places one file in each of two clauses that each name their own repository", () => {
+            for (const [text, first, second] of [
+                [
+                    "Follow docs/conventions.md in the pump-rules repository, and in the irrigation-rules repository read docs/valves.md.",
+                    "docs/conventions.md",
+                    "docs/valves.md",
+                ],
+                [
+                    "Read docs/a.md in the pump-rules repository, or in the irrigation-rules repository, read docs/b.md.",
+                    "docs/a.md",
+                    "docs/b.md",
+                ],
+                [
+                    `Leia docs/a.md no repositório ${OTHER_RULES}, e no repositório ${RULES} leia docs/b.md.`,
+                    "docs/a.md",
+                    "docs/b.md",
+                ],
+            ]) {
+                expect(placed(text, [RULES, OTHER_RULES])).toEqual([
+                    `${OTHER_RULES}:${first}`,
+                    `${RULES}:${second}`,
+                ]);
+            }
+            // A list that goes on after the choice is still a choice.
+            expect(
+                placed(
+                    "Read docs/a.md from pump-rules or irrigation-rules, and docs/b.md too.",
+                    [RULES, OTHER_RULES],
+                ),
+            ).toEqual([]);
+        });
+
         it("reads a Portuguese list as it reads an English one", () => {
             expect(
                 placed(

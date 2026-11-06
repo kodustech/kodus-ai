@@ -1165,6 +1165,16 @@ const SENTENCE_END = /[.;!?](?=\s|$)|\r?\n[ \t]*\r?\n/g;
 const REPOSITORIES_JOINED =
     /^[\s\x60'"(]*(?:,\s*(?:(?:and\/or|e\/ou|and|or|&|e|ou)\s+)?|(?:and\/or|e\/ou|and|or|&|e|ou)\s+)(?:(?:in|from|on|at|inside|under|no|na|do|da|em)\s+)?(?:(?:the|o|a)\s+)?[\x60'"]?$/;
 
+/** What lies between a file and the repository right after it, nouns
+ *  dropped: "docs/a.md in the a repository", "docs/a.md (a)", "docs/a.md
+ *  from https://github.com/acme/a". */
+const FILE_THEN_REPOSITORY =
+    /^[\s\x60'"),]*(?:(?:in|from|on|at|inside|under|no|na|do|da|em)\s+)?(?:(?:the|our|o|a)\s+)?[\x60'"(]?(?:https?:\/\/[\w.-]+\/)?$/;
+
+/** A list that goes on to more files ("a or b, and docs/c.md"): a file after
+ *  it is the list's, not a clause of the repository before it. */
+const LIST_GOES_ON = /(?:^|[\s,(])(?:and|or|e|ou|&)(?:$|[\s,)])/;
+
 /** The noun a place phrase puts after or before a name ("repository"). */
 const REPOSITORY_NOUN =
     /\b(?:repositories|repository|repos|repo|reposit[óo]rios?)\b/g;
@@ -1246,22 +1256,6 @@ export const mentionedFilesNotFollowed = (
         )
         .filter((mention) => !insideAFile(mention.at))
         .sort((a, b) => a.at - b.at);
-    // Two repositories joined ("irrigation-rules or pump-rules", "in
-    // acme/a and acme/b", "in the a repository or the b repository") name a
-    // choice, not the place of a file: neither one places it.
-    for (const [index, mention] of mentions.entries()) {
-        const next = mentions[index + 1];
-        if (
-            next &&
-            next.repository !== mention.repository &&
-            REPOSITORIES_JOINED.test(
-                text.slice(mention.end, next.at).replace(REPOSITORY_NOUN, ""),
-            )
-        ) {
-            mention.ambiguous = true;
-            next.ambiguous = true;
-        }
-    }
     const byFullName = new Map(
         names.map(({ repository, full }) => [full, repository]),
     );
@@ -1286,6 +1280,48 @@ export const mentionedFilesNotFollowed = (
         }
         return low;
     };
+    // Two repositories joined ("irrigation-rules or pump-rules", "in
+    // acme/a and acme/b", "in the a repository or the b repository") name a
+    // choice, not the place of a file: neither one places it. Unless each
+    // closes a clause with a file of its own: "docs/a.md in the pump-rules
+    // repository, and in the irrigation-rules repository read docs/b.md"
+    // places one file in each.
+    const closesAFile = (mention: { at: number }) =>
+        files.some(
+            (file) =>
+                file.end <= mention.at &&
+                sentenceOf(file.at) === sentenceOf(mention.at) &&
+                FILE_THEN_REPOSITORY.test(
+                    text
+                        .slice(file.end, mention.at)
+                        .replace(REPOSITORY_NOUN, ""),
+                ),
+        );
+    const opensAFile = (mention: { at: number; end: number }) => {
+        const file = files.find((candidate) => candidate.at >= mention.end);
+        return (
+            !!file &&
+            sentenceOf(file.at) === sentenceOf(mention.at) &&
+            !mentions.some(
+                (other) => other.at > mention.end && other.at < file.at,
+            ) &&
+            !LIST_GOES_ON.test(text.slice(mention.end, file.at))
+        );
+    };
+    for (const [index, mention] of mentions.entries()) {
+        const next = mentions[index + 1];
+        if (
+            next &&
+            next.repository !== mention.repository &&
+            REPOSITORIES_JOINED.test(
+                text.slice(mention.end, next.at).replace(REPOSITORY_NOUN, ""),
+            ) &&
+            !(closesAFile(mention) && opensAFile(next))
+        ) {
+            mention.ambiguous = true;
+            next.ambiguous = true;
+        }
+    }
     // Every place phrase, with the linked repository it names if any. A
     // phrase over a file's own path is the file, not a place ("the rules in
     // docs/rules.md"). One that crosses a sentence end places nothing ("in
