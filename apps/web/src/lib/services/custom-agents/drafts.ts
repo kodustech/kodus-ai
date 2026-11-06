@@ -1183,6 +1183,23 @@ const LIST_GOES_ON =
 const CLAUSE_OPENER =
     /(?:and|or|e|ou|&)\s+(?:in|from|on|at|inside|under|no|na|do|da|em)\s/;
 
+/** A place that names the reviewed repository itself: "in this
+ *  repository", "in the same repo", "neste repositório". */
+const LOCAL_PLACE = new RegExp(
+    [
+        String.raw`\b(?:in|from|on|at|inside|under)\s+(?:this|the)\s+(?:(?:same|current|reviewed|present)\s+)?(?:repo|repository)\b(?!\s+[\x60'"]?[\w.-]+\/)`,
+        String.raw`\b(?:neste|nesse|deste|desse|n[oa]\s+(?:mesmo|pr[óo]prio)|d[oa]\s+(?:mesmo|pr[óo]prio))\s+reposit[óo]rio\b`,
+        String.raw`\b(?:no|do)\s+reposit[óo]rio\s+(?:atual|revisado)\b`,
+    ].join("|"),
+    "gi",
+);
+
+/** An owner/name the instructions write that is not a linked repository
+ *  (a URL to it too): it can be the other side of a choice ("in acme/rules
+ *  or other/policies"). A deeper path (an issue link) is not one. */
+const OWNER_NAME =
+    /(?:^|[^\w./:-])((?:https?:\/\/[\w.-]+\/)?[\w-][\w.-]*\/[\w.-]*[\w-])(?![\w/-])(?!\.[\w-])/g;
+
 /** The noun a place phrase puts after or before a name ("repository"). */
 const REPOSITORY_NOUN =
     /\b(?:repositories|repository|repos|repo|reposit[óo]rios?)\b/g;
@@ -1238,16 +1255,17 @@ export const mentionedFilesNotFollowed = (
     });
     // A full name may follow a `/` (a URL); a bare name may not: in
     // "other/irrigation-rules" it is another owner's repository, not an
-    // alias of the linked `greenhouse/irrigation-rules`.
+    // alias of the linked `greenhouse/irrigation-rules`. A dot ends a name
+    // only at the end of a sentence: "acme/rules.v2" is another repository.
     const mentions = names
         .flatMap(({ repository, full, name }) =>
             [
                 new RegExp(
-                    `(^|[^a-z0-9_.-])${escapeRegExp(full)}(?=$|[^a-z0-9_-])`,
+                    `(^|[^a-z0-9_.-])${escapeRegExp(full)}(?=$|[^a-z0-9_.-]|\\.(?![a-z0-9_-]))`,
                     "g",
                 ),
                 new RegExp(
-                    `(^|[^a-z0-9_./-])${escapeRegExp(name)}(?=$|[^a-z0-9_/-])`,
+                    `(^|[^a-z0-9_./-])${escapeRegExp(name)}(?=$|[^a-z0-9_./-]|\\.(?![a-z0-9_-]))`,
                     "g",
                 ),
             ].flatMap((pattern) =>
@@ -1288,6 +1306,38 @@ export const mentionedFilesNotFollowed = (
         }
         return low;
     };
+    // Two linked repositories with the same short name ("rules" for
+    // acme/rules and other/rules) are both named at once: neither is.
+    for (const [index, mention] of mentions.entries()) {
+        const next = mentions[index + 1];
+        if (
+            next &&
+            next.at === mention.at &&
+            next.repository !== mention.repository
+        ) {
+            mention.ambiguous = true;
+            next.ambiguous = true;
+        }
+    }
+    // The other names a choice can offer: an owner/name that is not linked.
+    // Both lists are in text order and mentions do not overlap: one cursor.
+    let overlapping = 0;
+    const unlinked = [...text.matchAll(OWNER_NAME)].flatMap((match) => {
+        const at = (match.index ?? 0) + match[0].length - match[1].length;
+        const end = at + match[1].length;
+        if (/^(?:and\/or|e\/ou)$/.test(match[1]) || insideAFile(at)) return [];
+        while (
+            overlapping < mentions.length &&
+            mentions[overlapping].end <= at
+        ) {
+            overlapping++;
+        }
+        if (mentions[overlapping] && mentions[overlapping].at < end) return [];
+        return [
+            { repository: `unlinked:${match[1]}`, at, end, ambiguous: false },
+        ];
+    });
+    const candidates = [...mentions, ...unlinked].sort((a, b) => a.at - b.at);
     // Two repositories joined ("irrigation-rules or pump-rules", "in
     // acme/a and acme/b", "in the a repository or the b repository") name a
     // choice, not the place of a file: neither one places it. Unless the
@@ -1295,10 +1345,10 @@ export const mentionedFilesNotFollowed = (
     // file the first one places and a file it places itself: "docs/a.md in
     // the pump-rules repository, and in the irrigation-rules repository read
     // docs/b.md" places one file in each.
-    // `files` and `mentions` are both in text order: one cursor each way.
+    // `files` and `candidates` are both in text order: one cursor each way.
     const closesAFile: boolean[] = [];
     let before = 0;
-    for (const [index, mention] of mentions.entries()) {
+    for (const [index, mention] of candidates.entries()) {
         while (before < files.length && files[before].end <= mention.at) {
             before++;
         }
@@ -1312,20 +1362,20 @@ export const mentionedFilesNotFollowed = (
     }
     const opensAFile: boolean[] = [];
     let after = 0;
-    for (const [index, mention] of mentions.entries()) {
+    for (const [index, mention] of candidates.entries()) {
         while (after < files.length && files[after].at < mention.end) {
             after++;
         }
         const file = files[after];
-        const nextMention = mentions[index + 1];
+        const nextMention = candidates[index + 1];
         opensAFile[index] =
             !!file &&
             sentenceOf(file.at) === sentenceOf(mention.at) &&
             !(nextMention && nextMention.at < file.at) &&
             !LIST_GOES_ON.test(text.slice(mention.end, file.at));
     }
-    for (const [index, mention] of mentions.entries()) {
-        const next = mentions[index + 1];
+    for (const [index, mention] of candidates.entries()) {
+        const next = candidates[index + 1];
         if (!next || next.repository === mention.repository) continue;
         const between = text
             .slice(mention.end, next.at)
@@ -1344,22 +1394,46 @@ export const mentionedFilesNotFollowed = (
     // docs/rules.md"). One that crosses a sentence end places nothing ("in
     // full. Pump repository notes follow."), unless its own sentence already
     // names an owner/name place ("in acme/rules. Repository notes follow.").
-    const places = [...text.matchAll(REPOSITORY_PLACE)].flatMap((place) => {
+    // A place naming the reviewed repository itself ("in this repository")
+    // is a place too: it wins over a repository named earlier. Not when a
+    // linked name follows it ("in the repository irrigation-rules").
+    const localPlaces = [...text.matchAll(LOCAL_PLACE)].flatMap((place) => {
         const start = place.index ?? 0;
-        let end = start + place[0].length;
-        if (files.some((file) => file.at < end && file.end > start)) return [];
-        const sentence = sentenceOf(start);
-        if (sentenceOf(end - 1) !== sentence) {
-            if (!text.slice(start, ends[sentence]).includes("/")) return [];
-            end = ends[sentence];
-        }
-        const named = mentions[firstMentionFrom(start)];
-        const repository =
-            named && named.at < end && !named.ambiguous
-                ? named.repository
-                : undefined;
-        return [{ at: start, repository }];
+        const end = start + place[0].length;
+        const named = mentions[firstMentionFrom(end)];
+        if (named && /^[\s\x60'"]*$/.test(text.slice(end, named.at))) return [];
+        return [{ at: start, end, local: true as const }];
     });
+    // Local places are in text order like the place phrases: one cursor.
+    let localCursor = 0;
+    const places: Array<{ at: number; repository?: string; local?: true }> = [
+        ...localPlaces.map(({ at, local }) => ({ at, local })),
+        ...[...text.matchAll(REPOSITORY_PLACE)].flatMap((place) => {
+            const start = place.index ?? 0;
+            let end = start + place[0].length;
+            if (files.some((file) => file.at < end && file.end > start))
+                return [];
+            while (
+                localCursor < localPlaces.length &&
+                localPlaces[localCursor].end <= start
+            ) {
+                localCursor++;
+            }
+            const localHere = localPlaces[localCursor];
+            if (localHere && localHere.at < end) return [];
+            const sentence = sentenceOf(start);
+            if (sentenceOf(end - 1) !== sentence) {
+                if (!text.slice(start, ends[sentence]).includes("/")) return [];
+                end = ends[sentence];
+            }
+            const named = mentions[firstMentionFrom(start)];
+            const repository =
+                named && named.at < end && !named.ambiguous
+                    ? named.repository
+                    : undefined;
+            return [{ at: start, repository }];
+        }),
+    ].sort((a, b) => a.at - b.at);
     // Places and linked mentions by sentence, built once for every file.
     const bySentence = <T extends { at: number }>(items: T[]) => {
         const map = new Map<number, T[]>();
@@ -1401,10 +1475,15 @@ export const mentionedFilesNotFollowed = (
     // back, so a list of any length inherits.
     const LIST_SEPARATOR =
         /^[\s\x60'"),]*(?:,|\b(?:and|or|e|ou)\b|&)?[\s\x60'"(]*$/;
-    const attached: Array<{ repository?: string } | undefined> = [];
+    const attached: Array<{ repository?: string; local?: true } | undefined> =
+        [];
     const inherited: boolean[] = [];
     // Places that right follow a file belong to it, not to its sentence.
-    const placesOfAFile = new Set<{ at: number }>();
+    const placesOfAFile = new Set<object>();
+    // Where a place or an attachment puts a file: the reviewed repository
+    // (`undefined`), a linked one, or nowhere it can be followed (`null`).
+    const where = (place: { repository?: string; local?: true }) =>
+        place.local ? undefined : (place.repository ?? null);
     for (let k = files.length - 1; k >= 0; k--) {
         const { at, end } = files[k];
         const sentence = sentenceOf(at);
@@ -1488,12 +1567,12 @@ export const mentionedFilesNotFollowed = (
                 placesHere.some(
                     (place) =>
                         !placesOfAFile.has(place) &&
-                        place.repository !== own.repository,
+                        where(place) !== where(own),
                 );
-            repository = twoPlaces ? null : (own.repository ?? null);
+            repository = twoPlaces ? null : where(own);
         } else if (placesHere.length) {
             // The sentence says where its files live: there, or nowhere.
-            repository = nearest(placesHere, at).repository ?? null;
+            repository = where(nearest(placesHere, at));
         } else if (mentionsHere.length) {
             // "read x.mdc, kept in irrigation-rules". A sentence naming two
             // linked repositories with neither attached to the file does not

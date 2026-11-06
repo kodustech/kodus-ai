@@ -697,6 +697,63 @@ describe("mentionedFilesNotFollowed", () => {
             }
         });
 
+        it("places a file in the reviewed repository its sentence names over a repository named earlier", () => {
+            for (const text of [
+                "Use acme/rules. Read docs/conventions.md in this repository.",
+                "Use acme/rules. In the same repository, read docs/conventions.md.",
+                "Use acme/rules. Leia docs/conventions.md neste repositório.",
+            ]) {
+                expect(placed(text, ["acme/rules"])).toEqual([
+                    "(reviewed):docs/conventions.md",
+                ]);
+            }
+            // A linked name right after it makes it a named place.
+            expect(
+                placed(
+                    "Read docs/conventions.md in the repository irrigation-rules.",
+                    [RULES],
+                ),
+            ).toEqual([`${RULES}:docs/conventions.md`]);
+        });
+
+        it("does not cut a repository name at a dot inside it", () => {
+            for (const text of [
+                "Read docs/conventions.md in acme/rules.v2.",
+                "Read docs/conventions.md from https://github.com/acme/rules.v2.",
+            ]) {
+                expect(placed(text, ["acme/rules"])).toEqual([]);
+            }
+            expect(
+                placed("Read docs/conventions.md in acme/rules.", [
+                    "acme/rules",
+                ]),
+            ).toEqual(["acme/rules:docs/conventions.md"]);
+        });
+
+        it("offers nothing when two linked repositories share the short name the sentence uses", () => {
+            for (const repositories of [
+                ["acme/rules", "other/rules"],
+                ["other/rules", "acme/rules"],
+            ]) {
+                expect(
+                    placed(
+                        "Read docs/conventions.md in the rules repository.",
+                        repositories,
+                    ),
+                ).toEqual([]);
+            }
+        });
+
+        it("offers nothing for a choice whose other side is not linked", () => {
+            for (const text of [
+                "Read docs/conventions.md in acme/rules or other/policies.",
+                "Read docs/conventions.md in other/policies or acme/rules.",
+                "Read docs/conventions.md from https://github.com/acme/rules or https://github.com/other/policies.",
+            ]) {
+                expect(placed(text, ["acme/rules"])).toEqual([]);
+            }
+        });
+
         it("reads a Portuguese list as it reads an English one", () => {
             expect(
                 placed(
