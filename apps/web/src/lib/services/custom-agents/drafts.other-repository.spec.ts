@@ -518,18 +518,25 @@ describe("mentionedFilesNotFollowed", () => {
                     [],
                 ),
             ).toEqual([]);
+            // A link to an issue is not a repository the file lives in.
+            expect(
+                placed(
+                    "As discussed in https://github.com/acme/app/issues/12, read docs/pumps.md.",
+                    [],
+                ),
+            ).toEqual(["(reviewed):docs/pumps.md"]);
         });
 
-        it("places a file by a linked owner/name or its URL", () => {
+        it("places a file by a linked owner/name or its URL over a repository named earlier", () => {
             expect(
-                placed(`Read docs/pumps.md in ${OTHER_RULES}.`, [
-                    RULES,
-                    OTHER_RULES,
-                ]),
+                placed(
+                    `Read irrigation-rules first. Read docs/pumps.md in ${OTHER_RULES}.`,
+                    [RULES, OTHER_RULES],
+                ),
             ).toEqual([`${OTHER_RULES}:docs/pumps.md`]);
             expect(
                 placed(
-                    `Read docs/pumps.md from https://github.com/${OTHER_RULES}.`,
+                    `Read irrigation-rules first. Read docs/pumps.md from https://github.com/${OTHER_RULES}.`,
                     [RULES, OTHER_RULES],
                 ),
             ).toEqual([`${OTHER_RULES}:docs/pumps.md`]);
@@ -571,28 +578,17 @@ describe("mentionedFilesNotFollowed", () => {
             ).toEqual([`${RULES}:docs/a.md`]);
         });
 
-        it("still places a file by the one linked repository its sentence names", () => {
-            expect(
-                placed("Use docs/a.md, irrigation-rules style.", [RULES]),
-            ).toEqual([`${RULES}:docs/a.md`]);
-        });
-
-        it("still places a file by a linked repository named in an earlier sentence", () => {
+        it("places every file of a list by what its last file is attached to", () => {
             expect(
                 placed(
-                    "Our rules live in irrigation-rules. Read docs/pumps.md.",
-                    [RULES],
+                    "For pump-rules work, read docs/a.md, docs/b.md and docs/c.md in irrigation-rules.",
+                    [RULES, OTHER_RULES],
                 ),
-            ).toEqual([`${RULES}:docs/pumps.md`]);
-        });
-
-        it("does not take a link to an issue or a deep folder as a repository", () => {
-            expect(
-                placed(
-                    "As discussed in https://github.com/acme/app/issues/12, read docs/pumps.md.",
-                    [],
-                ),
-            ).toEqual(["(reviewed):docs/pumps.md"]);
+            ).toEqual([
+                `${RULES}:docs/a.md`,
+                `${RULES}:docs/b.md`,
+                `${RULES}:docs/c.md`,
+            ]);
         });
     });
 });

@@ -1309,9 +1309,36 @@ export const mentionedFilesNotFollowed = (
     const nearest = <T extends { at: number }>(candidates: T[], at: number) =>
         candidates.filter((candidate) => candidate.at < at).pop() ??
         candidates[0];
+    // What each file is attached to: what right follows it, or, for an item
+    // of a list, what the list's last file is attached to ("docs/a.md and
+    // docs/b.md in irrigation-rules" places both). Read from the last file
+    // back, so a list of any length inherits.
+    const LIST_SEPARATOR = /^[\s\x60'"),]*(?:,|\band\b|\bor\b|&)?[\s\x60'"(]*$/;
+    const attached: Array<{ repository?: string } | undefined> = [];
+    for (let k = files.length - 1; k >= 0; k--) {
+        const { at, end } = files[k];
+        const sentence = sentenceOf(at);
+        const next = files[k + 1];
+        attached[k] =
+            rightAfter(
+                placesBySentence.get(sentence) ?? [],
+                end,
+                PLACE_RIGHT_AFTER,
+            ) ??
+            rightAfter(
+                mentionsBySentence.get(sentence) ?? [],
+                end,
+                MENTION_RIGHT_AFTER,
+            ) ??
+            (next &&
+            sentenceOf(next.at) === sentence &&
+            LIST_SEPARATOR.test(text.slice(end, next.at))
+                ? attached[k + 1]
+                : undefined);
+    }
     const offered = new Set<string>();
     const found: MentionedFile[] = [];
-    for (const { cited, at, end } of files) {
+    for (const [index, { cited, at }] of files.entries()) {
         const lower = cited.toLowerCase();
         // A path that starts with a linked repository's full name names it.
         // One that starts with its bare name is ambiguous ("rules/api.md"
@@ -1337,14 +1364,12 @@ export const mentionedFilesNotFollowed = (
         const sentence = sentenceOf(at);
         const placesHere = placesBySentence.get(sentence) ?? [];
         const mentionsHere = mentionsBySentence.get(sentence) ?? [];
-        const own =
-            rightAfter(placesHere, end, PLACE_RIGHT_AFTER) ??
-            rightAfter(mentionsHere, end, MENTION_RIGHT_AFTER);
+        const own = attached[index];
         let repository: string | undefined;
         if (prefixed) {
             repository = prefixed.repository;
         } else if (own) {
-            // What right follows the file says where it lives: there, or
+            // What the file is attached to says where it lives: there, or
             // nowhere when it names no linked repository.
             repository = own.repository;
             if (!repository) continue;
