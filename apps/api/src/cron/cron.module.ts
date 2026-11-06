@@ -33,6 +33,7 @@ import { PruneLicenseSeatsCronProvider } from './pruneLicenseSeats.cron';
 import { SpendLimitAlertCronProvider } from './spendLimitAlert.cron';
 import { SSOTestSessionCleanupCronProvider } from './ssoTestSessionCleanup.cron';
 import { StaleReviewWatchdogCronProvider } from './staleReviewWatchdog.cron';
+import { SyncAllRepositoriesCronProvider } from './syncAllRepositories.cron';
 import { SSOModule } from '@libs/ee/sso/sso.module';
 import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
@@ -80,6 +81,7 @@ import { OrganizationModule } from '@libs/organization/modules/organization.modu
         SpendLimitAlertCronProvider,
         KodusCreditsSweepCronProvider,
         StaleReviewWatchdogCronProvider,
+        SyncAllRepositoriesCronProvider,
         DistributedLockService,
         // Checks adapters for the stale review watchdog (same registration
         // pattern as code-review-pipeline.module — the factory is not

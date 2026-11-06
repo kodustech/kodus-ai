@@ -539,6 +539,17 @@
     }
   },
   {
+    "key": "codeManagement.controller.ts#getRepositorySelection",
+    "httpMethod": "GET",
+    "urlPath": "/code-management/repository-selection",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "codeManagement.controller.ts#getRepositoryTreeByDirectory",
     "httpMethod": "GET",
     "urlPath": "/code-management/get-repository-tree-by-directory",
@@ -594,6 +605,17 @@
     }
   },
   {
+    "key": "codeManagement.controller.ts#previewRepositorySelection",
+    "httpMethod": "GET",
+    "urlPath": "/code-management/repository-selection/preview",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "codeManagement.controller.ts#refreshOrganizationMembers",
     "httpMethod": "POST",
     "urlPath": "/code-management/organization-members/refresh",
@@ -611,6 +633,17 @@
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "codeManagement.controller.ts#setRepositorySelection",
+    "httpMethod": "PUT",
+    "urlPath": "/code-management/repository-selection",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
       "repo_admin": "deny",
       "contributor": "deny"
     }

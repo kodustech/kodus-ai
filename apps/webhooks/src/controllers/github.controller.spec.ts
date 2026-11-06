@@ -65,3 +65,53 @@ describe('GithubController push filtering', () => {
         expect(enqueue).not.toHaveBeenCalled();
     });
 });
+
+describe('GithubController repository events', () => {
+    let enqueue: jest.Mock;
+    let controller: GithubController;
+
+    const send = async (event: string, payload: Record<string, unknown>) => {
+        const res: any = {};
+        res.status = jest.fn().mockReturnValue(res);
+        res.send = jest.fn().mockReturnValue(res);
+        controller.handleWebhook(
+            { headers: { 'x-github-event': event }, body: payload } as any,
+            res,
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+        return res;
+    };
+
+    beforeEach(() => {
+        enqueue = jest.fn().mockResolvedValue(undefined);
+        controller = new GithubController({ execute: enqueue } as any);
+    });
+
+    it.each([
+        ['installation_repositories', 'added'],
+        ['repository', 'created'],
+    ])(
+        'enqueues %s/%s, so a new repository is picked up right away',
+        async (event, action) => {
+            const payload = { action, installation: { id: 42 } };
+
+            await send(event, payload);
+
+            expect(enqueue).toHaveBeenCalledWith({
+                platformType: PlatformType.GITHUB,
+                event,
+                payload,
+            });
+        },
+    );
+
+    it.each([
+        ['installation_repositories', 'removed'],
+        ['repository', 'archived'],
+        ['repository', 'edited'],
+    ])('ignores %s/%s', async (event, action) => {
+        await send(event, { action, installation: { id: 42 } });
+
+        expect(enqueue).not.toHaveBeenCalled();
+    });
+});
