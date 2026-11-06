@@ -615,3 +615,28 @@ describe('custom agent output format', () => {
         expect(prompt).not.toContain('Assign a confidence score');
     });
 });
+
+describe('PRContext truncation', () => {
+    const prContext = (prBody: string) =>
+        /<PRContext>([\s\S]*)<\/PRContext>/.exec(
+            buildUserPrompt(baseInput({ prTitle: 't', prBody }), meta),
+        )![1];
+    const LONE_SURROGATE =
+        /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+
+    it('does not split an emoji that straddles the 500-character limit', () => {
+        // The emoji's high surrogate is unit 499, its low surrogate unit 500.
+        const context = prContext('x'.repeat(499) + '\u{1F527} more text');
+        expect(LONE_SURROGATE.test(context)).toBe(false);
+        expect(context).toBe('Title: t\n' + 'x'.repeat(499));
+    });
+
+    it('keeps an emoji that ends exactly at the limit', () => {
+        const context = prContext('x'.repeat(498) + '\u{1F527} more text');
+        expect(context).toBe('Title: t\n' + 'x'.repeat(498) + '\u{1F527}');
+    });
+
+    it('keeps a short body unchanged', () => {
+        expect(prContext('short \u{1F527}')).toBe('Title: t\nshort \u{1F527}');
+    });
+});
