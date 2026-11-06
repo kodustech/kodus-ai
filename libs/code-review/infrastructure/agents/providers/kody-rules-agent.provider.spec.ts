@@ -1147,9 +1147,44 @@ describe('KodyRulesAgentProvider — LLM.run request assembly (runJudge)', () =>
         mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
         await invoke(runJudge);
         const call = mockRunStructuredReviewCall.mock.calls[0][0];
-        // Same reference — the provider must pass shardViolationsWireSchema, not
-        // re-derive a zod schema (which would reintroduce the OpenAI-strict 400).
-        expect(call.schema).toBe(shardViolationsWireSchema);
+        // The provider must pass the wire schema, not re-derive a zod schema
+        // (which would reintroduce the OpenAI-strict 400).
+        expect(call.schema.jsonSchema).toEqual(
+            (shardViolationsWireSchema as any).jsonSchema,
+        );
+    });
+
+    it('logs an off-shape shard reply once, with the org, PR and file it came from', async () => {
+        const provider = makeBoundaryProvider();
+        const warn = jest.spyOn((provider as any).shardLogger, 'warn');
+        let runJudge: CapturedRunJudge | undefined;
+        mockJudge.mockImplementationOnce(async (args: any) => {
+            runJudge = args.runJudge;
+            return { violations: [], shardsRun: 1, shardsErrored: 0 };
+        });
+        await provider.execute(boundaryInput() as any);
+        mockRunStructuredReviewCall.mockImplementationOnce(async (params: any) => {
+            // What the executor does with a wrapped reply, then a re-ask.
+            params.schema.validate({ answer: 'none' });
+            return params.schema.validate({ result: { violations: [] } }).value;
+        });
+        warn.mockClear();
+
+        await invoke(runJudge!);
+
+        const entries = warn.mock.calls
+            .map((c: any[]) => c[0])
+            .filter((e: any) => /off-shape kody-rules shard reply/.test(e.message));
+        expect(entries).toHaveLength(1);
+        expect(entries[0].metadata).toMatchObject({
+            organizationAndTeamData: { organizationId: 'org-xyz', teamId: 'team-1' },
+            prNumber: 42,
+            file: 'src/a.ts',
+            reshapes: [
+                { kind: 'rejected', keys: ['answer'] },
+                { kind: 'recovered', reason: 'unwrapped-result' },
+            ],
+        });
     });
 
     it('threads system, user, runName, organizationId, and per-shard attrs verbatim', async () => {

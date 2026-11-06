@@ -618,7 +618,7 @@ describe('backfill A — output-shape zoo (off-schema returns)', () => {
 // ---- B. Semantic-but-wrong -----------------------------------------------
 describe('backfill B — semantic-but-wrong value encodings', () => {
     // Row 21: boolean as string.
-    it.failing(
+    it(
         'row21: recovers keep:false from keep:"false" (boolean-as-string)',
         () => {
             expect(
@@ -629,7 +629,7 @@ describe('backfill B — semantic-but-wrong value encodings', () => {
     );
 
     // Row 22: boolean as yes/no.
-    it.failing(
+    it(
         'row22: recovers keep:false from keep:"no" (boolean-as-yes/no)',
         () => {
             expect(
@@ -639,7 +639,7 @@ describe('backfill B — semantic-but-wrong value encodings', () => {
     );
 
     // Row 23: boolean as number.
-    it.failing(
+    it(
         'row23: recovers keep:false from keep:0 (boolean-as-number)',
         () => {
             expect(

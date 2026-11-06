@@ -260,12 +260,14 @@ export function extractVerdict(
     for (let i = state.artifacts.length - 1; i >= 0; i--) {
         const artifact = state.artifacts[i];
         if (artifact.type !== VERIFY_DONE_TOOL) continue;
-        const fromTool = recoverVerdictObject(artifact.payload, onRecover);
+        const fromTool = recoverVerdictObject(artifact.payload, onRecover, {
+            coerceKeep: true,
+        });
         if (fromTool) {
             return { ...fromTool, toolCalls, parseMode: 'tool' };
         }
     }
-    const fromText = verdictFromText(state, onRecover);
+    const fromText = verdictFromText(state, onRecover, { coerceKeep: true });
     if (fromText) {
         logger.log({
             message: `verifier verdict recovered from text (keep=${fromText.keep})`,
@@ -294,6 +296,17 @@ export function extractVerdict(
             parseMode: 'verify-error',
         };
     }
+    logger.warn({
+        message: `${LLM_ENVELOPE_TAG} verifier completed without a readable verdict, finding kept by default`,
+        context: 'VerifierAgent',
+        metadata: {
+            parseMode: 'default-keep',
+            verdictArtifacts: state.artifacts.filter(
+                (a) => a.type === VERIFY_DONE_TOOL,
+            ).length,
+            ...telemetry,
+        },
+    });
     return {
         keep: true,
         rationale: 'no parseable verdict — kept by default',
