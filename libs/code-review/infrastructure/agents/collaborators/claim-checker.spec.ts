@@ -625,6 +625,25 @@ describe('checkClaims — an unused import is about the file that imports it (#1
         expect(res.kept).toHaveLength(1);
     });
 
+    it('reads a multi-line import the cited code cuts before it closes', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:3:  debounce,\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 3,
+                    existingCode: 'import {\n  formatDate,\n  debounce,',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
     it('still drops a non-import unused claim when another file uses the symbol', async () => {
         const lookup = fakeLookup({
             grep: () =>
