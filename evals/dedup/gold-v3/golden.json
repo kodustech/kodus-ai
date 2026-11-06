@@ -1303,6 +1303,34 @@
     "severity": "high",
     "category": "bug",
     "class_reviewed": "TP"
+   },
+   {
+    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#gap-N1",
+    "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+    "comment": "AdminPermissionsSchema.getResourceName handles only USERS, so for the new CLIENTS resource type the admin API returns a null/UUID display name instead of 'All clients' or the clientId.",
+    "commentOpus": "AdminPermissionsSchema.getResourceName handles only USERS, so for the new CLIENTS resource type the admin API returns a null/UUID display name instead of 'All clients' or the clientId.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "gap-agents-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "claude-sonnet-5.5@gap": [
+      "lens-siblings"
+     ],
+     "deepseek-v4.1-flash-thinking-medium@gap": [
+      "lens-siblings"
+     ]
+    },
+    "reason_opus": "AdminPermissionsSchema.java:93-94 adds CLIENTS to getOrCreateResource (resources named by client UUID, created without a display name at :104), but getResourceName (:304-326) still special-cases only USERS and falls back to resource.getDisplayName(); PolicyResourceService.java:218 uses it, so client FGAP resources show a null/UUID name.",
+    "reason_astra": "The new client resource path creates UUID-named resources without display names in server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:93-104, while getResourceName handles only USERS before returning resource.getDisplayName() at :310-325. services/src/main/java/org/keycloak/authorization/admin/PolicyResourceService.java:218 exports that null value, and js/apps/admin-ui/src/permissions-configuration/PermissionsConfigurationTab.tsx:308 renders it directly, producing blank resource labels—a user-visible bug introduced by client support.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
    }
   ],
   "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": [
@@ -3316,6 +3344,31 @@
     "class_reviewed": "FP nit",
     "severidadeAnterior": "medium",
     "severidadeRevisao": "This bypasses an explicit participation-capacity constraint. The high device-limit findings `#07` and `#11`, plus the already-agreed promotion of device-limit `#opa-02`, establish the corresponding treatment of configured admission caps."
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#gap-N1",
+    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+    "comment": "The PR creates a shared MultiEmail component in packages/ui but leaves the inline multiemail copy in form-builder Components.tsx, so two copies of the same widget exist.",
+    "commentOpus": "The PR creates a shared MultiEmail component in packages/ui but leaves the inline multiemail copy in form-builder Components.tsx, so two copies of the same widget exist.",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "agreed",
+    "severity": "low",
+    "category": "style",
+    "source": "gap-agents-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@gap": [
+      "lens-siblings"
+     ]
+    },
+    "reason_opus": "The PR adds packages/ui/form/MultiEmail.tsx while packages/features/form-builder/Components.tsx:231-313 keeps its own inline multiemail factory with `//TODO: Make it a ui component`. Duplication only; both copies work.",
+    "reason_astra": "The PR adds the email-list widget in packages/ui/form/MultiEmail.tsx:12, while packages/features/form-builder/Components.tsx:231 retains its inline implementation and TODO. This introduces substantial duplication, although the implementations differ in state updates; consolidating them is maintenance cleanup, with no demonstrated user-facing defect.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "nit",
+    "class_reviewed": "TP nit"
    }
   ],
   "add-html-sanitizer-for-translated-message-resources-keycloak": [
@@ -8576,6 +8629,31 @@
     "severity": "high",
     "category": "security",
     "class_reviewed": "TP"
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#gap-N1",
+    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "comment": "PostMover#copy recreates the first post via PostCreator without passing cook_method, so a moved raw_html (embedded/imported) first post is re-cooked through the markdown pipeline and its content changes.",
+    "commentOpus": "PostMover#copy recreates the first post via PostCreator without passing cook_method, so a moved raw_html (embedded/imported) first post is re-cooked through the markdown pipeline and its content changes.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "gap-agents-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "claude-sonnet-5.5@gap": [
+      "lens-siblings"
+     ]
+    },
+    "reason_opus": "The PR adds `post.cook_method = @opts[:cook_method]` (lib/post_creator.rb:216) and Post#cook returns raw for raw_html (app/models/post.rb:133), but PostMover#copy (app/models/post_mover.rb:56-62) calls PostCreator.create with only raw/topic_id/acting_user. Moving the first post of an embedded (raw_html) topic re-cooks its HTML through markdown.",
+    "reason_astra": "The new import path creates raw_html posts at app/models/topic_embed.rb:22, but PostMover copies first posts without preserving cook_method at app/models/post_mover.rb:51 and :57–62. The copy consequently uses regular cooking instead of the raw HTML bypass in app/models/post.rb:133–136, potentially changing the rendered content; this PR makes the previously unaffected copy path defective.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
    }
   ],
   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
@@ -9836,6 +9914,34 @@
     "severity": "medium",
     "category": "security",
     "class_reviewed": "FP nit"
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#gap-N1",
+    "caseId": "feat-2fa-backup-codes-cal-com",
+    "comment": "The hand-built `mockUser: User` fixture in inviteMemberUtils.test.ts lacks the new backupCodes field, so it no longer satisfies the Prisma User type and type-checking that file fails.",
+    "commentOpus": "The hand-built `mockUser: User` fixture in inviteMemberUtils.test.ts lacks the new backupCodes field, so it no longer satisfies the Prisma User type and type-checking that file fails.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": "test_gap",
+    "source": "gap-agents-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "claude-sonnet-5.5@gap": [
+      "lens-siblings"
+     ],
+     "deepseek-v4.1-flash-thinking-medium@gap": [
+      "lens-who-reads"
+     ]
+    },
+    "reason_opus": "packages/prisma/schema.prisma:205 adds `backupCodes String?`; packages/trpc/server/routers/viewer/teams/inviteMember/inviteMemberUtils.test.ts:65-101 declares `const mockUser: User = {...}` listing every field but backupCodes, and the file is inside the trpc tsconfig include (server). Type-checking fails with a missing-property error.",
+    "reason_astra": "packages/prisma/schema.prisma:205 adds backupCodes as a nullable scalar, making it a required string|null property on the generated User type. packages/trpc/server/routers/viewer/teams/inviteMember/inviteMemberUtils.test.ts:65 declares a User literal that omits this property through line 101, introducing a type-checking failure.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
    }
   ],
   "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
@@ -16071,6 +16177,31 @@
     "severity": "low",
     "category": "perf",
     "class_reviewed": "FP nit"
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#gap-N1",
+    "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+    "comment": "CalendarEvent.destinationCalendar became an array and evt is spread into webhook payloads, so payload.destinationCalendar changes from an object/null to an array and subscribers reading .externalId or .integration break.",
+    "commentOpus": "CalendarEvent.destinationCalendar became an array and evt is spread into webhook payloads, so payload.destinationCalendar changes from an object/null to an array and subscribers reading .externalId or .integration break.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": "api",
+    "source": "gap-agents-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@gap": [
+      "lens-who-reads"
+     ]
+    },
+    "reason_opus": "packages/types/Calendar.d.ts changes destinationCalendar to DestinationCalendar[]; confirm.handler.ts:174-179 builds arrays and :356 spreads evt into webhookData. The PR's own webhook.e2e.ts:249 changes the expected payload from null to [], confirming the outgoing webhook contract changed shape.",
+    "reason_astra": "The PR replaces the previous object/null with an array in confirm.handler.ts:175–179, which flows unchanged into webhookData at lines 356–364. packages/features/webhooks/lib/sendPayload.ts:122–126 serializes that data directly as payload, so existing subscribers accessing destinationCalendar.externalId or .integration lose those values, breaking the webhook contract.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
    }
   ],
   "fix-proper-handling-of-group-memberships-discourse-cursor": [
@@ -16747,6 +16878,31 @@
     "severity": "low",
     "category": "perf",
     "class_reviewed": "FP nit"
+   },
+   {
+    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#gap-N1",
+    "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+    "comment": "GroupsController#members now returns {members, meta} with pagination, but the public groups controller spec still expects a bare array and stays pending, so the new response contract is untested.",
+    "commentOpus": "GroupsController#members now returns {members, meta} with pagination, but the public groups controller spec still expects a bare array and stays pending, so the new response contract is untested.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "test_gap",
+    "source": "gap-agents-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@gap": [
+      "lens-siblings"
+     ]
+    },
+    "reason_opus": "groups_controller.rb:19-37 now renders {members, meta} with limit/offset for all groups, but spec/controllers/groups_controller_spec.rb:71-85 is still `pending` and parses the body as an array. The PR rewrote only the admin spec, so the new public members contract and pagination have no running test, and the stale spec fails if enabled.",
+    "reason_astra": "app/controllers/groups_controller.rb:28-35 introduces the {members, meta} response, but spec/controllers/groups_controller_spec.rb:78-84 still treats the parsed response as an array, making its assertions incompatible with this change. The example remains pending at line 72, leaving the new pagination contract unverified. The admin-spec comparison is inaccurate—it tests membership mutations, not this response format—but the public-spec gap is real.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
    }
   ],
   "fixing-re-authentication-with-passkeys-keycloak": [
@@ -17985,6 +18141,31 @@
     "severity": "high",
     "category": "api",
     "class_reviewed": "FP nit"
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#gap-N1",
+    "caseId": "implement-access-token-context-encoding-framework-keycloak",
+    "comment": "The legacy token-exchange path in AbstractTokenExchangeProvider never sets Constants.GRANT_TYPE on the client session context, so tokens it issues are encoded with grant shortcut 'na' instead of the token-exchange shortcut.",
+    "commentOpus": "The legacy token-exchange path in AbstractTokenExchangeProvider never sets Constants.GRANT_TYPE on the client session context, so tokens it issues are encoded with grant shortcut 'na' instead of the token-exchange shortcut.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "gap-agents-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "claude-sonnet-5.5@gap": [
+      "lens-siblings"
+     ]
+    },
+    "reason_opus": "The PR encodes the grant type into the token id from clientSessionCtx GRANT_TYPE, defaulting to \"na\" (DefaultTokenContextEncoderProvider.java:57-60), and sets it for standard exchange only (StandardTokenExchangeProvider.java:237). The legacy AbstractTokenExchangeProvider.exchangeClientToOIDCClient (AbstractTokenExchangeProvider.java:384-410) calls generateAccessToken without setting it, so V1 token-exchange tokens are encoded with 'na'.",
+    "reason_astra": "AbstractTokenExchangeProvider.java:399–410 creates the legacy exchange context and generates an access token without setting GRANT_TYPE. The newly added encoding in TokenManager.java:1052–1054 therefore uses the missing-grant fallback \"na\" in DefaultTokenContextEncoderProvider.java:57–60, instead of the \"te\" defined in TokenExchangeGrantTypeFactory.java:41–42. This PR introduces incorrect grant metadata for legacy exchange tokens despite leaving that exchange method unchanged.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
    }
   ],
   "implement-recovery-key-support-for-user-storage-providers-keycloak": [
@@ -19821,6 +20002,56 @@
     "severity": "high",
     "category": "bug",
     "class_reviewed": "TP"
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#gap-N1",
+    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
+    "comment": "The new Salesforce token refresh calls Salesforce's token endpoint directly instead of refreshOAuthTokens, so with credential sharing enabled it skips the sync endpoint and fails without local consumer keys.",
+    "commentOpus": "The new Salesforce token refresh calls Salesforce's token endpoint directly instead of refreshOAuthTokens, so with credential sharing enabled it skips the sync endpoint and fails without local consumer keys.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": "bug",
+    "source": "gap-agents-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@gap": [
+      "lens-siblings"
+     ]
+    },
+    "reason_opus": "salesforce/lib/CalendarService.ts:75-99 (added) calls fetch('https://login.salesforce.com/services/oauth2/token') directly instead of through refreshOAuthTokens (_utils/oauth/refreshOAuthTokens.ts:5), while parsing with the sync-aware parseRefreshTokenResponse. With credential sharing enabled the refresh bypasses the sync endpoint and uses the local consumer key/secret, so shared Salesforce credentials fail to refresh.",
+    "reason_astra": "The newly added refresh in packages/app-store/salesforce/lib/CalendarService.ts:75 calls Salesforce directly, bypassing the configured delegation implemented in packages/app-store/_utils/oauth/refreshOAuthTokens.ts:5-15. This leaves Salesforce outside the new credential-sync refresh flow. However, the missing-key explanation is inaccurate: .env.example:235 requires matching app secrets, and the guards at CalendarService.ts:68-71 already existed.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#gap-N2",
+    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
+    "comment": "Webex refresh is routed through refreshOAuthTokens but still validated with the strict webexRefreshedTokenSchema, so the minimal sync-endpoint response fails parsing and Webex refresh breaks for shared credentials.",
+    "commentOpus": "Webex refresh is routed through refreshOAuthTokens but still validated with the strict webexRefreshedTokenSchema, so the minimal sync-endpoint response fails parsing and Webex refresh breaks for shared credentials.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "high",
+    "category": "bug",
+    "source": "gap-agents-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@gap": [
+      "lens-siblings"
+     ]
+    },
+    "reason_opus": "webex/lib/VideoApiAdapter.ts:62-78 now routes through refreshOAuthTokens, but :88 still does webexRefreshedTokenSchema.safeParse(responseBody), a strict schema (:47-54: literal scope/token_type, required refresh_token and refresh_token_expires_in). The sync endpoint returns only access_token + expiry, so parsing fails, unlike zoomvideo:104 which uses parseRefreshTokenResponse.",
+    "reason_astra": "packages/app-store/webex/lib/VideoApiAdapter.ts:62-78 now delegates refresh through refreshOAuthTokens, whose documented response contains only an access token and expiry (_utils/oauth/refreshOAuthTokens.ts:7). Webex still requires scope, token_type, refresh_token, and refresh_token_expires_in at VideoApiAdapter.ts:49-55, so the unchanged parsing at lines 88-90 rejects that newly supported response.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
    }
   ],
   "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
@@ -21656,6 +21887,31 @@
     "severity": "low",
     "category": "doc_defect",
     "class_reviewed": "FP nit"
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#gap-N1",
+    "caseId": "replays-self-serve-bulk-delete-system-sentry",
+    "comment": "delete_replays_script_async in replays/tasks.py still does range(0, max_segment_id) without a None check, so replays with no ingested segments raise TypeError, the case the PR fixed only in _make_recording_filenames.",
+    "commentOpus": "delete_replays_script_async in replays/tasks.py still does range(0, max_segment_id) without a None check, so replays with no ingested segments raise TypeError, the case the PR fixed only in _make_recording_filenames.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "gap-agents-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@gap": [
+      "lens-siblings"
+     ]
+    },
+    "reason_opus": "The PR guards `max_segment_id is None` only in usecases/delete.py:87-90. replays/tasks.py:87-101 delete_replays_script_async does `range(0, max_segment_id)` with values from scripts/delete_replays.py:91-92,120 that select max(segment_id), which the PR itself acknowledges can be NULL, so that path raises TypeError.",
+    "reason_astra": "src/sentry/replays/scripts/delete_replays.py:120 selects max(segment_id), which passes unchanged through lines 145 and 92 to the unguarded range(0, max_segment_id) at src/sentry/replays/tasks.py:100; None therefore raises TypeError. The PR guards the equivalent case at src/sentry/replays/usecases/delete.py:89 but misses this sibling implementation, qualifying under the parallel-implementation ruling. Severity is medium because the failure affects script deletion for the no-segments edge case.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
    }
   ],
   "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": [
@@ -22734,6 +22990,34 @@
     "severity": "low",
     "category": "perf",
     "class_reviewed": "FP nit"
+   },
+   {
+    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#gap-N1",
+    "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+    "comment": "scheduleWhatsappReminders never increments retryCount on Twilio failure, so failing WhatsApp reminders are retried on every cron run and never reach the retryCount > 1 cleanup added for SMS.",
+    "commentOpus": "scheduleWhatsappReminders never increments retryCount on Twilio failure, so failing WhatsApp reminders are retried on every cron run and never reach the retryCount > 1 cleanup added for SMS.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "gap-agents-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "claude-sonnet-5.5@gap": [
+      "lens-siblings"
+     ],
+     "deepseek-v4.1-flash-thinking-medium@gap": [
+      "lens-siblings"
+     ]
+    },
+    "reason_opus": "The PR adds retryCount increments and the `retryCount > 1` delete only to scheduleSMSReminders.ts (:28-44, :178-198). The parallel scheduleWhatsappReminders.ts calls the same twilio.scheduleSMS (:90-98) with a log-only catch (:112-114) and never selects or increments retryCount, so failing WhatsApp reminders are retried every run.",
+    "reason_astra": "The PR adds failure counting in packages/features/ee/workflows/api/scheduleSMSReminders.ts:178–195, but the parallel WhatsApp handler leaves failures uncounted at packages/features/ee/workflows/api/scheduleWhatsappReminders.ts:100–113. Its query at lines 33–41 selects those unscheduled reminders again, while cleanup at lines 23–29 only removes expired reminders, confirming C1’s missing retry-limit handling. C2’s assertion that failures are never retried is incorrect; they are retried without the new cap.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
    }
   ],
   "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
@@ -24129,5 +24413,25 @@
   "gpt-6-astra"
  ],
  "regua": "TP = o problema existe no codigo do head e o PR o introduz ou mexe no codigo envolvido; FP = nao ha problema a reportar no PR",
- "regua_class_reviewed": "Medir pelo class_reviewed. TP = TP confirmado ou descontinuado no repositorio original; FP nit = TP pendente ou que nao entrou no original, TP nit e FP; FP hallucination = o fato alegado e falso. Cada TP conta uma vez: a segunda sugestao sobre o mesmo TP conta como FP nit."
+ "regua_class_reviewed": "Medir pelo class_reviewed. TP = TP confirmado ou descontinuado no repositorio original; FP nit = TP pendente ou que nao entrou no original, TP nit e FP; FP hallucination = o fato alegado e falso. Cada TP conta uma vez: a segunda sugestao sobre o mesmo TP conta como FP nit.",
+ "atualizacoes": [
+  {
+   "data": "2026-11-05",
+   "fonte": "kodus-eval-runs runs/2026-11-05_heavy-gap-agents/gold-update",
+   "novos": [
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor#gap-N1",
+    "implement-access-token-context-encoding-framework-keycloak#gap-N1",
+    "feat-2fa-backup-codes-cal-com#gap-N1",
+    "sms-workflow-reminder-retry-count-tracking-cal-com#gap-N1",
+    "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#gap-N1",
+    "add-guest-management-functionality-to-existing-bookings-cal-com#gap-N1",
+    "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#gap-N1",
+    "replays-self-serve-bulk-delete-system-sentry#gap-N1",
+    "oauth-credential-sync-and-app-integration-enhancements-cal-com#gap-N1",
+    "oauth-credential-sync-and-app-integration-enhancements-cal-com#gap-N2",
+    "fix-proper-handling-of-group-memberships-discourse-cursor#gap-N1"
+   ],
+   "regra": "Opus + Astra cegos, debate ate 3 rodadas, conferencia upstream"
+  }
+ ]
 }

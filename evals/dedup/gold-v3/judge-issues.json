@@ -496,6 +496,31 @@
      "earlierComments": [],
      "nit": false,
      "severity": "high"
+    },
+    {
+     "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#gap-N1",
+     "description": "AdminPermissionsSchema.getResourceName handles only USERS, so for the new CLIENTS resource type the admin API returns a null/UUID display name instead of 'All clients' or the clientId.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java",
+       "lines": [
+        93,
+        94
+       ],
+       "text": "The Clients resource type was added to `getOrCreateResource` but not to the sibling `getResourceName` (same file, ~line 310), which only handles USERS. For a Clients permission, PolicyResourceService.java:218 gets a null display name for per-client resources, whose name is the client's internal id. The \"all clients\" resource also gets no \"All clients\" label. Add a `CLIENTS` branch to `getResourceName`: return \"All clients\" for the type resource, otherwise look up the client by id and return its clientId."
+      },
+      {
+       "file": "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java",
+       "lines": [
+        93,
+        94
+       ],
+       "text": "The new CLIENTS resource type was wired into getOrCreateResource but not into the sibling per-resource-type switch in getResourceName (AdminPermissionsSchema.java:304-326), which still only special-cases USERS (\"All users\" / username). For a CLIENTS policy the method now falls through to resource.getDisplayName(); per-client resources are created with only a UUID name (line 104) and the type resource is named \"Clients\", so PolicyResourceService.getResources() (PolicyResourceService.java:218) returns a null/UUID displayName for client FGAP resources where users get a friendly name. Add the parallel branch: \"All clients\" for the type resource and the client's clientId otherwise."
+      }
+     ],
+     "nit": false,
+     "severity": "medium"
     }
    ]
   },
@@ -1239,6 +1264,23 @@
      "earlierComments": [],
      "nit": false,
      "severity": "high"
+    },
+    {
+     "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#gap-N1",
+     "description": "The PR creates a shared MultiEmail component in packages/ui but leaves the inline multiemail copy in form-builder Components.tsx, so two copies of the same widget exist.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "packages/ui/form/MultiEmail.tsx",
+       "lines": [
+        12,
+        16
+       ],
+       "text": "The PR extracts this helper into `packages/ui` (and registers it in `packages/ui/index.tsx:153`), but the pre-existing copy of the exact same helper was left behind in `packages/features/form-builder/Components.tsx:231-313` (its own `multiemail` factory, still carrying the now-stale comment \"TODO: Make it a ui component\"). The sibling was not updated to consume the new shared component, so the codebase now has two divergent copies of the same guest/email list widget — the duplicate will silently drift from the shared one. Point the form-builder factory at `@calcom/ui`'s `MultiEmail` (or remove the inline copy)."
+      }
+     ],
+     "nit": true,
+     "severity": "low"
     }
    ]
   },
@@ -3325,6 +3367,23 @@
      "earlierComments": [],
      "nit": false,
      "severity": "high"
+    },
+    {
+     "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#gap-N1",
+     "description": "PostMover#copy recreates the first post via PostCreator without passing cook_method, so a moved raw_html (embedded/imported) first post is re-cooked through the markdown pipeline and its content changes.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "lib/post_creator.rb",
+       "lines": [
+        216,
+        216
+       ],
+       "text": "`PostCreator` now supports a `:cook_method` option, but `PostMover#copy` (app/models/post_mover.rb:57-62) copies the first post with `PostCreator.create(raw: post.raw, ...)` and does not pass `cook_method: post.cook_method`. Moving the first post of an imported topic, which has cook_method raw_html, therefore re-cooks its HTML through markdown, so the copy's cooked content can differ from the original. Pass `cook_method: post.cook_method` in `PostMover#copy`."
+      }
+     ],
+     "nit": false,
+     "severity": "medium"
     }
    ]
   },
@@ -3808,6 +3867,31 @@
      "earlierComments": [],
      "nit": false,
      "severity": "medium"
+    },
+    {
+     "issueId": "feat-2fa-backup-codes-cal-com#gap-N1",
+     "description": "The hand-built `mockUser: User` fixture in inviteMemberUtils.test.ts lacks the new backupCodes field, so it no longer satisfies the Prisma User type and type-checking that file fails.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "packages/lib/test/builder.ts",
+       "lines": [
+        192,
+        192
+       ],
+       "text": "The new `backupCodes` column was added to the `buildUser` fixture here, but the sibling hand-built Prisma `User` fixture `mockUser: User` in packages/trpc/server/routers/viewer/teams/inviteMember/inviteMemberUtils.test.ts (lines 65-101) was not updated. It lacks `backupCodes: null`, so it no longer satisfies the `User` type and type-checking that file fails. Add `backupCodes: null` to that fixture."
+      },
+      {
+       "file": "packages/prisma/schema.prisma",
+       "lines": [
+        205,
+        205
+       ],
+       "text": "Adding the `backupCodes String?` column makes the generated Prisma model type require a `backupCodes: string | null` property on `User`. The PR updated the one fixture it noticed (`packages/lib/test/builder.ts:192`), but missed the other literal typed as that entity: `packages/trpc/server/routers/viewer/teams/inviteMember/inviteMemberUtils.test.ts:65` declares `const mockUser: User = { ... }` (with `User` imported from `@calcom/prisma/client`, which re-exports the generated client types) and enumerates every User field except the new one, so `tsc` now fails with \"Property 'backupCodes' is missing in type '{...}' but required in type 'User'\". Add `backupCodes: null,` to that fixture (the later `User` literals at lines 274/284/295 spread `mockUser`, so fixing line 65 fixes them)."
+      }
+     ],
+     "nit": false,
+     "severity": "high"
     }
    ]
   },
@@ -6209,6 +6293,23 @@
      "earlierComments": [],
      "nit": true,
      "severity": "low"
+    },
+    {
+     "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#gap-N1",
+     "description": "CalendarEvent.destinationCalendar became an array and evt is spread into webhook payloads, so payload.destinationCalendar changes from an object/null to an array and subscribers reading .externalId or .integration break.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "packages/trpc/server/routers/viewer/bookings/confirm.handler.ts",
+       "lines": [
+        174,
+        179
+       ],
+       "text": "`destinationCalendar` is now written as an array on the CalendarEvent (`[booking.destinationCalendar]` / `[user.destinationCalendar]` / `[]`). This evt is spread straight into the outgoing webhook payload (`const webhookData = { ...evt, ... }` at confirm.handler.ts:356, and the same pattern at handleNewBooking.ts:1754/2296), and `WebhookDataType = CalendarEvent & EventTypeInfo` (packages/features/webhooks/lib/sendPayload.ts:19). So `payload.destinationCalendar` changes shape from the DestinationCalendar object (or null) to an array — the PR records this by changing the BOOKING_REJECTED expectation from `null` to `[]` in apps/web/playwright/webhook.e2e.ts:249. Any webhook subscriber reading `payload.destinationCalendar.externalId` / `.integration` (the previously documented payload contract) now gets `undefined`, silently breaking calendar routing/automations; `destinationCalendar: []` also changes the value for bookings that previously had no destination calendar. Keep the payload exposing a single calendar (e.g. map `evt.destinationCalendar?.[0]`) or update the consumers/mirror of the payload contract."
+      }
+     ],
+     "nit": false,
+     "severity": "high"
     }
    ]
   },
@@ -6420,6 +6521,23 @@
      "earlierComments": [],
      "nit": true,
      "severity": "low"
+    },
+    {
+     "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#gap-N1",
+     "description": "GroupsController#members now returns {members, meta} with pagination, but the public groups controller spec still expects a bare array and stays pending, so the new response contract is untested.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "app/controllers/groups_controller.rb",
+       "lines": [
+        28,
+        35
+       ],
+       "text": "The parallel public controller spec was not updated with the new response contract. #members now renders `{members: ..., meta: {...}}` instead of a bare array, and the PR rewrote the sibling spec spec/controllers/admin/groups_controller_spec.rb for the new API — but spec/controllers/groups_controller_spec.rb:71-85 still asserts the old shape (`members = JSON.parse(response.body); members.map{ |m| m['username'] }`). Its pending test is even labelled \"Pending until we fix group truncation\", which this PR does; if un-pended it now fails because response.body parses to a Hash, not the array being mapped. Update that spec to the new {members, meta} format (and the new limit/offset behaviour) like the admin spec was."
+      }
+     ],
+     "nit": false,
+     "severity": "medium"
     }
    ]
   },
@@ -6905,6 +7023,23 @@
      "earlierComments": [],
      "nit": false,
      "severity": "high"
+    },
+    {
+     "issueId": "implement-access-token-context-encoding-framework-keycloak#gap-N1",
+     "description": "The legacy token-exchange path in AbstractTokenExchangeProvider never sets Constants.GRANT_TYPE on the client session context, so tokens it issues are encoded with grant shortcut 'na' instead of the token-exchange shortcut.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/StandardTokenExchangeProvider.java",
+       "lines": [
+        237,
+        237
+       ],
+       "text": "The GRANT_TYPE attribute is set here for standard token exchange only. The sibling AbstractTokenExchangeProvider.java (around lines 399-410, the legacy exchange path that calls generateAccessToken()) does not set it. Legacy token-exchange tokens therefore get shortcut \"na\" instead of \"te\". Set Constants.GRANT_TYPE to OAuth2Constants.TOKEN_EXCHANGE_GRANT_TYPE on clientSessionCtx before generateAccessToken() in that method."
+      }
+     ],
+     "nit": false,
+     "severity": "medium"
     }
    ]
   },
@@ -7659,6 +7794,40 @@
      "earlierComments": [],
      "nit": false,
      "severity": "high"
+    },
+    {
+     "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#gap-N1",
+     "description": "The new Salesforce token refresh calls Salesforce's token endpoint directly instead of refreshOAuthTokens, so with credential sharing enabled it skips the sync endpoint and fails without local consumer keys.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+       "lines": [
+        75,
+        99
+       ],
+       "text": "This newly added OAuth refresh bypasses refreshOAuthTokens, unlike every one of its 9 sibling refresh implementations (googlecalendar/lib/CalendarService.ts:86, office365calendar/lib/CalendarService.ts:246, office365video/lib/VideoApiAdapter.ts:61, webex/lib/VideoApiAdapter.ts:62, zoomvideo/lib/VideoApiAdapter.ts:79, hubspot/lib/CalendarService.ts:177, larkcalendar/lib/CalendarService.ts:67, zoho-bigin/lib/CalendarService.ts:85, zohocrm/lib/CalendarService.ts:204). When APP_CREDENTIAL_SHARING_ENABLED + CALCOM_CREDENTIAL_SYNC_ENDPOINT are set, the refresh must be delegated to the credential-sync endpoint; instead this code calls https://login.salesforce.com/services/oauth2/token directly with consumer_key/consumer_secret from getAppKeysFromSlug, which are not present on a shared-credential instance, so salesforce token refresh fails (HttpError \"Salesforce consumer key is missing\"). Wrap the fetch in refreshOAuthTokens(async () => await fetch(...), \"salesforce\", credential.userId)."
+      }
+     ],
+     "nit": false,
+     "severity": "high"
+    },
+    {
+     "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#gap-N2",
+     "description": "Webex refresh is routed through refreshOAuthTokens but still validated with the strict webexRefreshedTokenSchema, so the minimal sync-endpoint response fails parsing and Webex refresh breaks for shared credentials.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "packages/app-store/webex/lib/VideoApiAdapter.ts",
+       "lines": [
+        62,
+        78
+       ],
+       "text": "webex got the refreshOAuthTokens wrapper here but not the companion parseRefreshTokenResponse conversion that its copy-paste twin zoomvideo received (zoomvideo/lib/VideoApiAdapter.ts:104, and likewise googlecalendar/lib/CalendarService.ts:97 and office365calendar/lib/CalendarService.ts:263). Line 88 still runs `const parsedToken = webexRefreshedTokenSchema.safeParse(responseBody)` — the comment on line 87 is byte-identical to zoomvideo's, showing these are duplicated implementations. webexRefreshedTokenSchema is strict (literal scope/token_type, required refresh_token and refresh_token_expires_in), but the shared credential-sync endpoint returns only the access token plus a numeric expiry, so safeParse fails and the code rejects with \"Invalid refreshed tokens were returned\", breaking webex refresh for shared credentials. Replace line 88 with `const parsedToken = parseRefreshTokenResponse(responseBody, webexRefreshedTokenSchema);` (import parseRefreshTokenResponse from \"../../_utils/oauth/parseRefreshTokenResponse\")."
+      }
+     ],
+     "nit": false,
+     "severity": "high"
     }
    ]
   },
@@ -8312,6 +8481,23 @@
      "earlierComments": [],
      "nit": true,
      "severity": "low"
+    },
+    {
+     "issueId": "replays-self-serve-bulk-delete-system-sentry#gap-N1",
+     "description": "delete_replays_script_async in replays/tasks.py still does range(0, max_segment_id) without a None check, so replays with no ingested segments raise TypeError, the case the PR fixed only in _make_recording_filenames.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "src/sentry/replays/usecases/delete.py",
+       "lines": [
+        87,
+        90
+       ],
+       "text": "This null-segment guard (`if row[\"max_segment_id\"] is None: return []`) was added only to `_make_recording_filenames`. Its sibling implementation `delete_replays_script_async` in src/sentry/replays/tasks.py:87-101 builds the same segment list from the same nullable value — `range(0, max_segment_id)` at tasks.py:100 — and was not given the guard. `scripts/delete_replays.py:120` selects `max(segment_id)` (NULL when a replay had no segments ingested) and passes it straight through at scripts/delete_replays.py:91-92, so `delete_replays_script_async` will raise `TypeError: 'NoneType' object cannot be interpreted as an integer` for exactly the case this PR just fixed on the other copy. Apply the same None check (and widen the `max_segment_id: int` annotation) there."
+      }
+     ],
+     "nit": false,
+     "severity": "medium"
     }
    ]
   },
@@ -8712,6 +8898,31 @@
      "earlierComments": [],
      "nit": true,
      "severity": "low"
+    },
+    {
+     "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#gap-N1",
+     "description": "scheduleWhatsappReminders never increments retryCount on Twilio failure, so failing WhatsApp reminders are retried on every cron run and never reach the retryCount > 1 cleanup added for SMS.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+       "lines": [
+        178,
+        197
+       ],
+       "text": "The retryCount increment on failure and the cleanup of reminders with retryCount > 1 were added only to the SMS cron. The parallel packages/features/ee/workflows/api/scheduleWhatsappReminders.ts (lines 33-42 select, 100-114 try/catch, 23-30 deleteMany) uses the same twilio.scheduleSMS call and was not changed. Failing WHATSAPP reminders there are never counted and never deleted, so they are retried on every cron run until scheduledDate. Select retryCount, increment it in the else branch and the catch, and add the `retryCount > 1` delete clause to the WhatsApp handler as well."
+      },
+      {
+       "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+       "lines": [
+        178,
+        198
+       ],
+       "text": "The Twilio retry mechanism added here (retryCount increment on a falsy scheduleSMS result and in the catch) was not mirrored into the parallel WhatsApp handler packages/features/ee/workflows/api/scheduleWhatsappReminders.ts, which calls the same twilio.scheduleSMS provider (line 90) and has the same log-only catch (lines 112-114). WhatsApp reminders that fail to schedule are therefore never retried and never reach the retryCount > 1 purge condition, so the fix only protects SMS and leaves the WhatsApp cron (apps/web/pages/api/cron/workflows/scheduleWhatsappReminders.ts) permanently unable to recover from Twilio failures."
+      }
+     ],
+     "nit": false,
+     "severity": "medium"
     }
    ]
   },

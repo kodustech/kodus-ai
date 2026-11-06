@@ -4,13 +4,6 @@
  "rule": "classify-rule.md",
  "items": [
   {
-   "id": "feat-2fa-backup-codes-cal-com#01",
-   "class": "security",
-   "where": "in-diff",
-   "reason": "The new backup-code branch (lines 131-156) authenticates without any password check, and the password gate at line 121 is skipped whenever any totpCode is present, so a backup code plus a dummy totpCode yields a session without the account password, a two-factor-to-one-factor bypass.",
-   "caseId": "feat-2fa-backup-codes-cal-com"
-  },
-  {
    "id": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#03",
    "class": "other",
    "where": "in-diff",
@@ -30,41 +23,6 @@
    "where": "in-diff",
    "reason": "The public options type makes teamId optional, and the constructor's safeParse failure silently sets options to null, so a team-scope call without teamId returns NOTHING_CONDITION (empty results) instead of failing loudly.",
    "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com"
-  },
-  {
-   "id": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
-   "class": "state-concurrency",
-   "where": "in-diff",
-   "reason": "retryCount is written as a value read at the top of the run (reminder.retryCount + 1) rather than a Prisma atomic increment, so overlapping cron runs can lose increments; both the else branch and the catch branch have the same race.",
-   "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com"
-  },
-  {
-   "id": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The new `{ retryCount: { gt: 1 } }` OR branch in deleteMany has no `method: WorkflowMethods.SMS` condition, so the SMS-only cron also deletes email and WhatsApp reminders whose retryCount exceeds 1.",
-   "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com"
-  },
-  {
-   "id": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
-   "class": "error-handling",
-   "where": "in-diff",
-   "reason": "The retryCount prisma.workflowReminder.update in the catch block is not wrapped in try/catch, so if it rejects (e.g. the row was already deleted), the error escapes the for-loop and aborts processing of the remaining reminders.",
-   "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com"
-  },
-  {
-   "id": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
-   "class": "error-handling",
-   "where": "in-diff",
-   "reason": "The catch block increments retryCount for every exception, including transient outages, so repeated transient failures push pending reminders over the retryCount > 1 threshold and get them deleted.",
-   "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com"
-  },
-  {
-   "id": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
-   "class": "error-handling",
-   "where": "outside-diff",
-   "reason": "A lock on SMS sending makes scheduleSMS return undefined, which the new else branch counts as a failed attempt, so a non-error lock state is misclassified as a scheduling failure and reminders are deleted after two runs; the lock logic lives in twilioProvider, outside the diff.",
-   "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com"
   },
   {
    "id": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
@@ -93,272 +51,6 @@
    "where": "in-diff",
    "reason": "The host validation regex hard-codes the TLD as [a-z]{2,5}, a boundary error that rejects valid longer TLDs such as .technology.",
    "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor"
-  },
-  {
-   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The fallback predicate compares cal.externalId against externalCalendarId, which is already falsy in that branch, so it never matches and the destination calendar is dropped in updateEvent and deleteEvent.",
-   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
-  },
-  {
-   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The slug spread condition was inverted to IS_TEAM_BILLING_ENABLED ? {slug} : {}, so slug is set only when billing is on, which breaks the slug/requestedSlug pairing.",
-   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
-  },
-  {
-   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
-   "class": "sibling-not-updated",
-   "where": "outside-diff",
-   "reason": "Google's createEvent was changed to select the destination by credentialId, but the Office365 (and Lark) createEvent implementations behind the same Calendar interface still take only the event and always use the first destination, so CalendarManager's credential.id is ignored.",
-   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
-  },
-  {
-   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "mainHostDestinationCalendar is destructured from a possibly empty array and then dereferenced as .integration without optional chaining, so a Meet booking with no destination calendar throws instead of falling back to Cal Video.",
-   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
-  },
-  {
-   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "evt.destinationCalendar is set to null when neither the event type nor the organizer has one, so the optional-chained push silently drops all team destination calendars.",
-   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
-  },
-  {
-   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The credentialId mapping uses isCalendarType ? result.credentialId : undefined, which wrongly drops the credentialId for video results, so cancellation can no longer find the video credential to delete the meeting.",
-   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
-  },
-  {
-   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The recurring cancel-all branch picks the first calendar reference of each updated booking (find on _calendar type) instead of the reference matching the current host credential, so the same first host's event is deleted repeatedly and secondary hosts' events remain.",
-   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
-  },
-  {
-   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The recurring-series deletion sits inside a per-reference loop, so it reruns over all remaining bookings and credentials once per calendar reference, producing duplicate delete calls and errors.",
-   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
-  },
-  {
-   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "When no destination calendar matches the credentialId, selectedCalendar is undefined and the hangout-link events.patch call uses it directly without the fallback insert uses, so the patch fails and the Meet link is not added.",
-   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
-   "class": "error-handling",
-   "where": "in-diff",
-   "reason": "The webhook calls schema.parse, symmetricDecrypt and JSON.parse with no try/catch, so invalid bodies or keys surface as 500s instead of 400 responses.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
-   "class": "error-handling",
-   "where": "in-diff",
-   "reason": "When the refresh response omits refresh_token, the helper injects the literal string \"refresh_token\" as a fallback, which overwrites the valid stored token and breaks later refreshes instead of preserving it or rejecting the response.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The computed keys [z.string().toString()] evaluate to a fixed literal name rather than a wildcard, so the sync-mode schema requires a bogus numeric property and rejects every real token response.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
-   "class": "sibling-not-updated",
-   "where": "in-diff",
-   "reason": "The Office365 caller unwraps parseRefreshTokenResponse's SafeParse result via .data, but the Google Calendar caller stores the whole {success,data} wrapper as the credential key.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
-   "class": "performance",
-   "where": "in-diff",
-   "reason": "getClient now performs an OAuth refresh network call and a credential DB write on every construction, even when the access token is still valid, instead of refreshing on demand.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
-   "class": "other",
-   "where": "in-diff",
-   "reason": "The new Salesforce code calls prisma.credential.update but the file never imports prisma, so it fails type checking and throws a ReferenceError at runtime.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The refresh check compares response.statusText to \"OK\" instead of testing response.ok, so successful responses can be misclassified as failures and the refreshed token is not used.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "After refreshing, the jsforce.Connection is built from the stale credentialKey.access_token and instance_url instead of the newly refreshed values just persisted.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01",
-   "class": "edge-case-logic",
-   "where": "outside-diff",
-   "reason": "The webhook looks up appStoreMetadata by app.slug, but the registry is keyed by dirName (as _appRegistry.ts shows), so apps whose slug differs from their directory name return 404.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The host comparisons in embed_controller.rb (line 26) and topic_retriever.rb (line 15) compare hostnames case-sensitively, so a case variant of the configured host is wrongly rejected; this is a false-rejection boundary in the new logic and fails closed.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "poll_feed calls i.content.scrub without a nil check, so a feed item carrying only a description raises NoMethodError and aborts the rest of the import.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
-   "class": "security",
-   "where": "in-diff",
-   "reason": "TopicEmbed.import interpolates the feed-controlled url unescaped into an href and link text in raw HTML stored with raw_html cook method and rendered unsanitized, enabling stored XSS.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "On the update path embed.post may be nil after the post was deleted, and PostRevisor.new(nil) then fails on every later import of that URL because no nil guard exists.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
-   "class": "error-handling",
-   "where": "in-diff",
-   "reason": "import_remote does no network error handling around open(url).read and no nil check on the parsed content, so dead URLs or unparseable pages crash the import instead of failing gracefully.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "absolutize_urls only handles single leading slashes, so protocol-relative URLs are mangled into host-relative paths and path-relative links are left unresolved, instead of using URI resolution.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
-   "class": "performance",
-   "where": "in-diff",
-   "reason": "perform_retrieve synchronously polls and re-imports the whole feed for every uncached article, and the per-URL throttle does not coalesce these full-feed downloads, multiplying work per request.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
-   "class": "other",
-   "where": "in-diff",
-   "reason": "The 'requires feed_polling_url' and 'requires embed_by_username' specs leave feed_polling_enabled at its false default, so they short-circuit before the named guard and do not test it.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
-   "class": "other",
-   "where": "outside-diff",
-   "reason": "The new embed layout loads the embed stylesheet and embed.js, but config/application.rb (not in the PR) does not add them to config.assets.precompile, so they are missing in precompiled production builds.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
-   "class": "security",
-   "where": "in-diff",
-   "reason": "The retrieve throttle key in topic_retriever.rb is the full embed URL including query string, so an anonymous client can vary the query to bypass throttling and create unbounded topics.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04",
-   "class": "other",
-   "where": "in-diff",
-   "reason": "The 'requires feed_polling_enabled?' spec leaves the other prerequisites blank, so poll_feed is never reached and the test would pass even if the enabled check were removed.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimip-01",
-   "class": "security",
-   "where": "in-diff",
-   "reason": "import_remote fetches the URL with open-uri, which follows redirects, so the embeddable-host check on the initial URL can be bypassed to reach internal hosts (SSRF).",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The permission flag combines isTeamAdmin and isTeamOwner with && instead of ||, so team admins who are not owners are wrongly rejected with FORBIDDEN (lines 46-48 are in the diff).",
-   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
-  },
-  {
-   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
-   "class": "security",
-   "where": "in-diff",
-   "reason": "The blacklist entries are lowercased but the incoming guest is compared raw (line 77), so a case-variant of a blacklisted address bypasses BLACKLISTED_GUEST_EMAILS and gets added and emailed.",
-   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
-  },
-  {
-   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "uniqueGuests only filters against existing attendees and the blacklist and never deduplicates repeated addresses within the input, so createMany can insert duplicate attendee rows; the server schema also has no uniqueness check.",
-   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
-  },
-  {
-   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The handler passes the raw guests array to sendAddGuestsEmails instead of the filtered uniqueGuests it actually persisted, so existing attendees get the new-booking email instead of the add-guests email.",
-   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
-  },
-  {
-   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "EventManager is built with the requesting user's credentials (lines 158-163) instead of the booking organizer's, so the organizer's calendar event is not updated or the wrong account is targeted for references without credentialId.",
-   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
-  },
-  {
-   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#16",
-   "class": "sibling-not-updated",
-   "where": "outside-diff",
-   "reason": "The new sendAddGuestsEmails does not check the disableStandardEmails / disable-attendee-email metadata that the sibling booking email functions already honour, so the new path sends emails the other paths would suppress.",
-   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
-  },
-  {
-   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
-   "class": "consumer-outside-diff",
-   "where": "outside-diff",
-   "reason": "The handler's CalendarEvent omits iCalUID, and the ICS generator (generateIcsString, outside the diff) falls back to uid, so the add-guests .ics gets booking.uid and does not update the original invite.",
-   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
-  },
-  {
-   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#kimi-01",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "Uniqueness of guest emails is checked case-sensitively (the client Set-based refine and the server === attendee comparison), so case variants of the same address are accepted as distinct guests.",
-   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
   },
   {
    "id": "feature-localization-fallbacks-server-side-discourse-cursor#01",
@@ -585,76 +277,6 @@
    "caseId": "feature-automatically-downsize-large-images-discourse-cursor"
   },
   {
-   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "totalPages uses Math.floor(user_count / limit) + 1, which adds a phantom page when user_count is an exact multiple of limit; Math.ceil is needed, and the change is in the new controller's lines 11-14.",
-   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
-  },
-  {
-   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#04",
-   "class": "state-concurrency",
-   "where": "in-diff",
-   "reason": "findMembers applies every response unconditionally, so an earlier request that resolves last overwrites offset and members with a stale page; there is no request generation or serialization.",
-   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
-  },
-  {
-   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
-   "class": "consumer-outside-diff",
-   "where": "outside-diff",
-   "reason": "The endpoint's new default cap of 50 applies to non-automatic groups, but the public members route and template still assume all members are returned and have no pagination, so members beyond 50 become unreachable.",
-   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
-  },
-  {
-   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
-   "class": "sibling-not-updated",
-   "where": "in-diff",
-   "reason": "The update action persists alias_level but the create action saves only name and visible, so the create path (a parallel entry point) ignores the admin's selection.",
-   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
-  },
-  {
-   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
-   "class": "sibling-not-updated",
-   "where": "outside-diff",
-   "reason": "remove_member deletes via group.users.delete instead of the existing Group#remove path, which runs the GroupUser destroy callbacks and primary_group_id cleanup in models/group.rb, so the removed user can keep this group as primary.",
-   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
-  },
-  {
-   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "add_members pushes every username through Group#add without checking for existing membership, so re-adding a current member violates the unique group_users index and aborts midway.",
-   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
-  },
-  {
-   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
-   "class": "performance",
-   "where": "in-diff",
-   "reason": "The limit param is taken from the request with no upper bound, so a visitor can request an arbitrarily large page; a negative value also breaks the query.",
-   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
-  },
-  {
-   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#snloop-01",
-   "class": "error-handling",
-   "where": "in-diff",
-   "reason": "group.users.delete with a raw integer id raises RecordNotFound when the user is not a member, and the action does not handle it, so a concurrent or repeated removal fails with a 404/500.",
-   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
-  },
-  {
-   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#musep-01",
-   "class": "sibling-not-updated",
-   "where": "outside-diff",
-   "reason": "Deleting through group.users.delete skips the GroupUser callbacks that maintain the groups.user_count counter, whereas the existing Group#remove path would decrement it; this is the same bypass as the primary_group_id bug.",
-   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
-  },
-  {
-   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#muse13-01",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The same floor-plus-one page count makes Next move to offset equal to user_count on a full last page, showing an empty page.",
-   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
-  },
-  {
    "id": "notification-rule-processing-engine-grafana-codex#01",
    "class": "consumer-outside-diff",
    "where": "outside-diff",
@@ -697,62 +319,6 @@
    "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry"
   },
   {
-   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The removal-cleanup listener in registerListener is wrapped in a Profile.isFeatureEnabled(ADMIN_FINE_GRAINED_AUTHZ) check, a wrong condition that skips role/client/group permission cleanup when only V2 is enabled or V1 is off.",
-   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
-  },
-  {
-   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "V2 getClientsWithPermission iterates findByType(CLIENTS_RESOURCE_TYPE), which only returns the type-level 'Clients' resource, so it yields that name instead of client IDs. The V1 counterpart looks up per-client resources and returns IDs, and the caller in AvailableRoleMappingResource expects IDs.",
-   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
-  },
-  {
-   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "hasPermission(client, scope) passes the result of getResourceTypeResource straight to findByResource without a null check, though that method returns null for unsupported schemas or missing type resources.",
-   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
-  },
-  {
-   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "canView() checks only canViewClientDefault() and VIEW, omitting the global MANAGE grant that canView(client) and canView(ClientScopeModel) already honour, so admins with only global MANAGE take the unpaginated listing path.",
-   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
-  },
-  {
-   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
-   "class": "spec-mismatch",
-   "where": "in-diff",
-   "reason": "canView(client) returns true on the global all-clients VIEW grant before evaluating the client's own resource, which contradicts the specific-over-global override the PR applies for users and lets a client-specific denial be bypassed.",
-   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
-  },
-  {
-   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
-   "class": "other",
-   "where": "in-diff",
-   "reason": "The negative test wraps getDefaultClientScopes() in the same try as removeDefaultClientScope(), so the expected ForbiddenException may come from the read rather than the removal check, making the test pass without testing removal.",
-   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
-  },
-  {
-   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
-   "class": "consumer-outside-diff",
-   "where": "outside-diff",
-   "reason": "V2 canExchangeTo now throws UnsupportedOperationException, but AbstractTokenExchangeProvider (not in the diff) still calls clients().canExchangeTo for client-to-client exchange, so the request fails with a server error instead of a permission decision.",
-   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
-  },
-  {
-   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "hasPermission(client, scope) evaluates only the client's own resource when it exists and ignores the all-clients grant, so an admin with a global grant is denied on any client that has its own permission resource.",
-   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
-  },
-  {
    "id": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
    "class": "other",
    "where": "in-diff",
@@ -781,73 +347,549 @@
    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak"
   },
   {
+   "id": "feat-2fa-backup-codes-cal-com#01",
+   "class": "security",
+   "where": "in-diff",
+   "reason": "The new backup-code branch (lines 131-156, added by the PR) authenticates without any password check, and the pre-existing guard at line 121 skips password verification whenever a totpCode is present, so a valid backup code plus any dummy totpCode logs in without the account password.",
+   "caseId": "feat-2fa-backup-codes-cal-com"
+  },
+  {
+   "id": "feat-2fa-backup-codes-cal-com#gap-N1",
+   "class": "sibling-not-updated",
+   "where": "outside-diff",
+   "reason": "The PR added a backupCodes column and updated the buildUser fixture in builder.ts, but the parallel hand-built `mockUser: User` literal in inviteMemberUtils.test.ts (a file the PR did not touch) was not given the new field, so it no longer satisfies the generated User type.",
+   "caseId": "feat-2fa-backup-codes-cal-com"
+  },
+  {
+   "id": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+   "class": "state-concurrency",
+   "where": "in-diff",
+   "reason": "The retry write sets retryCount to reminder.retryCount + 1 from a snapshot read at the start of the run, so overlapping runs lose increments; an atomic Prisma increment is needed (lines 184 and 195 are in the diff).",
+   "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com"
+  },
+  {
+   "id": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The second OR branch of the deleteMany, { retryCount: { gt: 1 } }, has no method: WorkflowMethods.SMS filter, so it deletes EMAIL and WHATSAPP reminders as well.",
+   "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com"
+  },
+  {
+   "id": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "class": "error-handling",
+   "where": "in-diff",
+   "reason": "The new unguarded prisma.workflowReminder.update inside the catch block can reject (for example P2025 when the row was already deleted), which escapes the for loop and aborts the whole cron run.",
+   "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com"
+  },
+  {
+   "id": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
+   "class": "error-handling",
+   "where": "in-diff",
+   "reason": "Every exception, including transient Twilio, DB or rate-limit failures, increments retryCount, so a short outage pushes all pending reminders past the > 1 threshold and the cleanup deletes them.",
+   "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com"
+  },
+  {
+   "id": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+   "class": "error-handling",
+   "where": "outside-diff",
+   "reason": "twilioProvider.scheduleSMS returns undefined when the user or team is SMS-locked (twilioProvider.ts line 42), and the caller's else branch counts that as a failed attempt, so a lock is misclassified as a failure and reminders are deleted after two runs.",
+   "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com"
+  },
+  {
+   "id": "sms-workflow-reminder-retry-count-tracking-cal-com#gap-N1",
+   "class": "sibling-not-updated",
+   "where": "outside-diff",
+   "reason": "The parallel scheduleWhatsappReminders.ts calls the same twilio.scheduleSMS but was not given the retryCount increment or the retryCount > 1 cleanup, so failing WhatsApp reminders are retried forever.",
+   "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com"
+  },
+  {
+   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The permission flag combines isTeamAdmin and isTeamOwner with && instead of ||, so plain team admins are wrongly rejected with FORBIDDEN, all within the changed lines 46-48.",
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
+  },
+  {
+   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "class": "security",
+   "where": "in-diff",
+   "reason": "The blacklist is lowercased on the list side but the raw guest string is compared, so case variants bypass BLACKLISTED_GUEST_EMAILS and get added and emailed.",
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
+  },
+  {
+   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "uniqueGuests only filters against existing attendees and the blacklist and never deduplicates repeated emails within the request, so createMany inserts duplicate attendee rows.",
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
+  },
+  {
+   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The handler passes the raw input guests instead of the filtered uniqueGuests to sendAddGuestsEmails, so existing attendees are misclassified as new and get the wrong email.",
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
+  },
+  {
+   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "EventManager is built with the requesting user's credentials (ctx.user) rather than the booking organizer's, so the organizer's calendar event is updated through the wrong account or not at all.",
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
+  },
+  {
+   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#16",
+   "class": "sibling-not-updated",
+   "where": "outside-diff",
+   "reason": "Other email send paths in email-manager.ts gate on the disableStandardEmails helpers (lines 82-86), but sendAddGuestsEmails does not call them, so it ignores that setting.",
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
+  },
+  {
+   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
+   "class": "consumer-outside-diff",
+   "where": "outside-diff",
+   "reason": "The handler omits iCalUID from the CalendarEvent, and generateIcsString in packages/emails/lib reads event.iCalUID before falling back to uid, so the .ics UID does not match the original invite.",
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
+  },
+  {
+   "id": "add-guest-management-functionality-to-existing-bookings-cal-com#kimi-01",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The existing-attendee duplicate check at line 76 uses case-sensitive === comparison, so case variants of the same address are treated as distinct guests.",
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "Host equality is compared case-sensitively in ensure_embeddable and TopicRetriever#invalid_host?, so mixed-case hostnames are wrongly rejected; the fix is to downcase both sides of the comparison.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "PollFeed calls i.content.scrub without a nil check or description fallback, so a content-less RSS item raises NoMethodError and aborts the rest of the import.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "class": "security",
+   "where": "in-diff",
+   "reason": "The feed-controlled url is interpolated unescaped into an href/link in raw HTML that is stored with raw_html cook method and rendered unsanitized, enabling stored XSS; contents << also lacks nil handling.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "On the update path embed.post can be nil after the post is deleted, and PostRevisor.new(nil) then crashes on every later import of that URL; the nil case is not handled.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+   "class": "error-handling",
+   "where": "in-diff",
+   "reason": "import_remote does no network error handling around open(url).read and passes a possibly nil doc.content into import, so dead URLs or unparseable pages crash the import instead of failing gracefully.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "absolutize_urls strips leading slashes for any value starting with '/', so protocol-relative '//host/path' URLs become broken site-relative links and path-relative URLs are not resolved.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "class": "performance",
+   "where": "in-diff",
+   "reason": "Each uncached article retrieval synchronously re-polls the whole feed, and the throttle is per embed URL, so concurrent requests for different articles each repeat the full feed download and per-item imports.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "class": "other",
+   "where": "in-diff",
+   "reason": "The 'requires feed_polling_url' and 'requires embed_by_username' specs leave feed_polling_enabled false, so they short-circuit early and would pass even if the named guards were removed (a test that does not test).",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+   "class": "other",
+   "where": "outside-diff",
+   "reason": "The embed stylesheet and embed.js are added by the PR but not listed in config.assets.precompile in config/application.rb, so precompiled production assets will not include them.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+   "class": "security",
+   "where": "in-diff",
+   "reason": "The retrieve throttle key uses the full embed URL including query string, so an anonymous client can vary the query to bypass it and force unbounded topic creation.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04",
+   "class": "other",
+   "where": "in-diff",
+   "reason": "The 'requires feed_polling_enabled?' spec leaves the URL and username at blank defaults, so it passes without exercising the enabled check (a test that does not test the guard it names).",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimip-01",
+   "class": "security",
+   "where": "in-diff",
+   "reason": "import_remote fetches the URL with open-uri, which follows redirects, so the embeddable-host check on the initial URL can be bypassed to reach internal hosts (SSRF).",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#gap-N1",
+   "class": "sibling-not-updated",
+   "where": "outside-diff",
+   "reason": "PostCreator now accepts cook_method, but the parallel PostMover#copy path that recreates the first post does not pass cook_method, so raw_html posts are re-cooked through markdown when moved.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+   "class": "error-handling",
+   "where": "in-diff",
+   "reason": "The webhook calls schema.parse, symmetricDecrypt and JSON.parse without try/catch, so malformed bodies or keys throw and return 500 instead of a 400 response.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "When refresh_token is missing, parseRefreshTokenResponse substitutes the literal string 'refresh_token' (null/empty handling), which overwrites the valid stored token once merged.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The computed keys [z.string().toString()] produce literal property names like 'ZodString' rather than a wildcard, so the sync-mode schema rejects every real token response.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "class": "consumer-outside-diff",
+   "where": "in-diff",
+   "reason": "parseRefreshTokenResponse now returns a safeParse wrapper, but the Google caller stores it directly as the credential key, whereas Office365 correctly unwraps .data, so the persisted credential is the wrapper shape.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "class": "performance",
+   "where": "in-diff",
+   "reason": "getClient now always performs a blocking OAuth refresh and a credential DB write on every construction, even when the access token is still valid, instead of refreshing on demand or when expired.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+   "class": "other",
+   "where": "in-diff",
+   "reason": "The new Salesforce refresh code calls prisma.credential.update but salesforce/lib/CalendarService.ts never imports prisma, so it fails type checking and throws a ReferenceError at runtime.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The Salesforce refresh checks response.statusText !== 'OK' instead of response.ok, so a successful response can be misclassified as an error when statusText is empty.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+   "class": "state-concurrency",
+   "where": "in-diff",
+   "reason": "After refreshing, the jsforce.Connection is built from the stale credentialKey.access_token and instance_url rather than the newly refreshed values, so the connection uses outdated state.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01",
+   "class": "consumer-outside-diff",
+   "where": "outside-diff",
+   "reason": "The webhook looks up appStoreMetadata by app.slug, but that map (built from apps.metadata.generated in an untouched file) is keyed by dirName, so slugs that differ from the directory name return 404.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The fallback predicate in updateEvent/deleteEvent compares cal.externalId against externalCalendarId, which is already falsy in that branch, so it never matches and the destination calendar is lost.",
+   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
+  },
+  {
+   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The slug spread condition was inverted to IS_TEAM_BILLING_ENABLED ? {slug} : {}, so slug is set only when billing is enabled, which is the wrong boundary condition.",
+   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
+  },
+  {
+   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "class": "sibling-not-updated",
+   "where": "in-diff",
+   "reason": "The Calendar interface gained a credentialId argument and Google was updated, but the Office365 (and Lark) createEvent implementations kept the single-argument signature and always use the first destination calendar.",
+   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
+  },
+  {
+   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "mainHostDestinationCalendar is destructured from a possibly empty array and then dereferenced as .integration without optional chaining, throwing a TypeError when there is no destination calendar.",
+   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
+  },
+  {
+   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "evt.destinationCalendar can be null when neither the event type nor the organizer has one, so the optional push silently drops all team destination calendars and the other hosts get no events.",
+   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
+  },
+  {
+   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The ternary credentialId: isCalendarType ? result.credentialId : undefined wrongly discards credentialId for video results, so the video reference can no longer be matched on cancellation.",
+   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
+  },
+  {
+   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+   "class": "sibling-not-updated",
+   "where": "outside-diff",
+   "reason": "The recurring-series deletion branch (untouched lines) still deletes only the first calendar reference per booking for the organizer's credentials, and did not get the per-host reference matching that the non-recurring branch now uses.",
+   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
+  },
+  {
+   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "class": "state-concurrency",
+   "where": "in-diff",
+   "reason": "Looping the recurring-series deletion once per calendar reference repeats the same deletes, which are not idempotent and cause duplicate delete calls and errors.",
+   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
+  },
+  {
+   "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The hangout-link events.patch uses selectedCalendar, which is undefined when no destination matches the credentialId, instead of the \"primary\" fallback used by the insert call.",
+   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com"
+  },
+  {
+   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "totalPages uses Math.floor(user_count / limit) + 1, which overcounts by one when user_count is an exact multiple of limit, so the next button leads to an empty page; the fix is Math.ceil in the changed lines.",
+   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
+  },
+  {
+   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#04",
+   "class": "state-concurrency",
+   "where": "in-diff",
+   "reason": "findMembers fires overlapping requests and each response unconditionally sets offset and members, so a stale response arriving last reverts the list to an earlier page; there is no request generation or serialization.",
+   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
+  },
+  {
+   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "class": "consumer-outside-diff",
+   "where": "outside-diff",
+   "reason": "The members endpoint now defaults to 50 results, but the public group members route and template still assume the full member list and have no pagination, so larger groups are truncated for viewers.",
+   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
+  },
+  {
+   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+   "class": "sibling-not-updated",
+   "where": "outside-diff",
+   "reason": "The admin update action persists alias_level but the sibling create action only saves name and visible, so the alias level an admin selects on a new group is silently dropped.",
+   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
+  },
+  {
+   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+   "class": "sibling-not-updated",
+   "where": "in-diff",
+   "reason": "remove_member deletes via group.users.delete, bypassing the Group#remove destroy path whose destroy_deletions clears primary_group_id, so the removed user can keep this group as primary.",
+   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
+  },
+  {
+   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "add_members calls group.add for every username without checking existing membership, so re-adding an existing member violates the unique group_users index and fails partway through.",
+   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
+  },
+  {
+   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The limit param is converted with to_i and never bounded or checked for positivity, so huge limits are accepted and a negative limit causes a server error.",
+   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
+  },
+  {
+   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#snloop-01",
+   "class": "error-handling",
+   "where": "in-diff",
+   "reason": "group.users.delete with a raw id raises RecordNotFound when the user is not or is no longer a member, so the failure surfaces as a 404/500 instead of being handled.",
+   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
+  },
+  {
+   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#musep-01",
+   "class": "sibling-not-updated",
+   "where": "in-diff",
+   "reason": "group.users.delete bypasses GroupUser callbacks, so the user_count counter cache is never decremented, while the Group#remove path used elsewhere keeps it correct.",
+   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
+  },
+  {
+   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#muse13-01",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "Same off-by-one as the totalPages bug: when user_count is a multiple of limit, Next moves to offset equal to user_count and shows an empty page.",
+   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
+  },
+  {
+   "id": "fix-proper-handling-of-group-memberships-discourse-cursor#gap-N1",
+   "class": "sibling-not-updated",
+   "where": "outside-diff",
+   "reason": "The parallel public groups controller spec was not updated for the new {members, meta} response, so it still asserts a bare array and remains pending, leaving the new contract untested.",
+   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor"
+  },
+  {
+   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The removal-cleanup listener in AdminPermissions.registerListener is guarded by the V1 ADMIN_FINE_GRAINED_AUTHZ flag alone, so with only V2 enabled the cleanup never runs and permissions are orphaned.",
+   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
+  },
+  {
+   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "getClientsWithPermission only iterates the type-level 'Clients' resource and adds its name, so it never yields real client ids, even though per-client resources are created without a type and would need to be enumerated.",
+   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
+  },
+  {
+   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "hasPermission passes the result of getResourceTypeResource straight into findByResource without a null check, so a missing type resource gives an NPE instead of a denial.",
+   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
+  },
+  {
+   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "canView() checks only the global VIEW permission and omits the global MANAGE permission that canManage() accepts, so admins with only global MANAGE take the slow unpaginated listing path.",
+   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
+  },
+  {
+   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+   "class": "sibling-not-updated",
+   "where": "in-diff",
+   "reason": "canView(client) returns true on the global all-clients VIEW grant before checking the client-specific resource, which lacks the specific-over-global override that the user permissions implement.",
+   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
+  },
+  {
+   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
+   "class": "other",
+   "where": "in-diff",
+   "reason": "The negative test calls getDefaultClientScopes() inside the try block, so the expected ForbiddenException can come from that read and the test does not verify the removal's permission check.",
+   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
+  },
+  {
+   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
+   "class": "consumer-outside-diff",
+   "where": "outside-diff",
+   "reason": "ClientPermissionsV2.canExchangeTo throws UnsupportedOperationException, but AbstractTokenExchangeProvider (not in the PR) still calls clients().canExchangeTo for client-to-client exchange, which turns a permission decision into a server error.",
+   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
+  },
+  {
+   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "hasPermission uses the per-client resource whenever one exists and only falls back to the all-clients resource when it does not, so a global grant is ignored for clients that have their own permission resource.",
+   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
+  },
+  {
+   "id": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#gap-N1",
+   "class": "sibling-not-updated",
+   "where": "outside-diff",
+   "reason": "The CLIENTS type was added to getOrCreateResource but not to the sibling getResourceName switch, which still special-cases only USERS, so client resources get a UUID or null display name.",
+   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak"
+  },
+  {
    "id": "replays-self-serve-bulk-delete-system-sentry#01",
    "class": "edge-case-logic",
    "where": "in-diff",
-   "reason": "The mutual-exclusion validators use truthiness on initial_data.get(), so a zero value counts as absent and reports with both age=0 and timestamp=0 pass validation; key-presence checks are needed.",
+   "reason": "The mutual-exclusion validators use truthiness on initial_data.get(), so a zero-valued age or timestamp counts as absent and mixed age=0/timestamp pairs pass validation; the fix is key-presence checks in the changed validators.",
    "caseId": "replays-self-serve-bulk-delete-system-sentry"
   },
   {
    "id": "replays-self-serve-bulk-delete-system-sentry#02",
    "class": "security",
    "where": "in-diff",
-   "reason": "The new validation-failure warning logs the entire attacker-controlled raw report on an unauthenticated public endpoint, writing sensitive browser-report data into logs; only the type or redacted fields should be logged.",
+   "reason": "The new warning logs the entire unauthenticated, attacker-controlled raw_report, which can contain URLs, user agents and other sensitive values, so it should log only the type or redacted fields.",
    "caseId": "replays-self-serve-bulk-delete-system-sentry"
   },
   {
    "id": "replays-self-serve-bulk-delete-system-sentry#07",
    "class": "performance",
    "where": "in-diff",
-   "reason": "The Snuba replay lookup runs unconditionally even when enable_error_context=false, adding a needless query and a Snuba failure point to opt-out requests that do not need error IDs.",
+   "reason": "query_replay_instance and the Snuba round trip run unconditionally before the enable_error_context check, so opt-out requests pay for an unneeded query and can fail on Snuba availability.",
    "caseId": "replays-self-serve-bulk-delete-system-sentry"
   },
   {
    "id": "replays-self-serve-bulk-delete-system-sentry#12",
    "class": "spec-mismatch",
    "where": "in-diff",
-   "reason": "The feature-flagged branch renders TableWidgetVisualization with hardcoded empty columns and data, discarding result.data and result.meta, so the widget does not show the query results it is meant to show.",
+   "reason": "With the flag on, the widget renders TableWidgetVisualization with hardcoded empty columns and data, so it ignores the query results it was supposed to display.",
    "caseId": "replays-self-serve-bulk-delete-system-sentry"
   },
   {
    "id": "replays-self-serve-bulk-delete-system-sentry#13",
    "class": "edge-case-logic",
    "where": "in-diff",
-   "reason": "The renderer uses if (cell), so valid falsy ReactNode results like 0, '' or null fall back to default rendering instead of only undefined triggering fallback as documented.",
+   "reason": "The renderer uses if (cell), so falsy but valid ReactNode results such as 0, '' or null fall back to default rendering instead of honoring the documented undefined-only fallback contract.",
    "caseId": "replays-self-serve-bulk-delete-system-sentry"
   },
   {
    "id": "replays-self-serve-bulk-delete-system-sentry#19",
    "class": "state-concurrency",
    "where": "in-diff",
-   "reason": "The attribute-keys query key omits the organization identity while the query fetches an org-specific endpoint, so orgs with identical filters share a cache entry and can show another org's attribute names.",
+   "reason": "The query key omits the organization even though the query function fetches an org-specific endpoint, so orgs with identical filters share cache entries and can show another org's attribute names.",
    "caseId": "replays-self-serve-bulk-delete-system-sentry"
   },
   {
    "id": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
    "class": "edge-case-logic",
    "where": "in-diff",
-   "reason": "Error timestamps in seconds are compared against replay event timestamps in milliseconds in gen_request_data, so errors are not interleaved chronologically with breadcrumbs (unit mismatch).",
+   "reason": "gen_request_data compares error timestamps from nodestore in seconds against recording event timestamps in milliseconds, so errors are interleaved at the wrong positions in the breadcrumb stream.",
    "caseId": "replays-self-serve-bulk-delete-system-sentry"
   },
   {
    "id": "replays-self-serve-bulk-delete-system-sentry#opa-01",
    "class": "performance",
    "where": "in-diff",
-   "reason": "Every paginated breadcrumb-summary request re-queries the replay and fetches all its error events from nodestore with no cap, so latency and memory grow with the replay's error count on each page.",
+   "reason": "fetch_error_details loads every error event for the replay from nodestore with no cap, and it runs on each paginated request, so latency and memory grow with the replay's error count on every page.",
    "caseId": "replays-self-serve-bulk-delete-system-sentry"
   },
   {
    "id": "replays-self-serve-bulk-delete-system-sentry#opa-02",
    "class": "edge-case-logic",
    "where": "in-diff",
-   "reason": "HIDDEN_ATTRIBUTES filtering is only inside the search-query branch, so the early return for an empty search shows the hidden attributes in the default view.",
+   "reason": "The HIDDEN_ATTRIBUTES filter only runs inside the search-query branch, so the early return for an empty search leaves hidden attributes visible in the default view.",
    "caseId": "replays-self-serve-bulk-delete-system-sentry"
   },
   {
    "id": "replays-self-serve-bulk-delete-system-sentry#opa-03",
    "class": "other",
    "where": "in-diff",
-   "reason": "The test mocks delete_matched_rows and only asserts calls, so the max_segment_id None guard in _make_recording_filenames is never executed and the test would not catch its removal.",
+   "reason": "The test sets max_segment_id to None to cover the new guard but mocks delete_matched_rows, so the guard in _make_recording_filenames never runs and the test would pass without it.",
+   "caseId": "replays-self-serve-bulk-delete-system-sentry"
+  },
+  {
+   "id": "replays-self-serve-bulk-delete-system-sentry#gap-N1",
+   "class": "sibling-not-updated",
+   "where": "outside-diff",
+   "reason": "delete_replays_script_async in src/sentry/replays/tasks.py still calls range(0, max_segment_id) without the None guard that was added only to _make_recording_filenames in delete.py, so the null-segment case still raises TypeError on that path.",
    "caseId": "replays-self-serve-bulk-delete-system-sentry"
   }
  ]

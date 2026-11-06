@@ -292,6 +292,21 @@
      "diasNoAr": 44,
      "reason": "Commit 78aa8b486f ('User not visible when permission with different scope exists', closes #38369, in PR #38443 merged 2025-03-27) passed the resource type into ResourcePermission from ClientPermissionsV2.hasPermission and made FGAPPolicyEvaluator.evaluateResourceTypePolicies also evaluate the policies of the all-clients type resource when a per-client resource is evaluated. It added ClientResourceTypeEvaluationTest.testEvaluateAllResourcePermissionsForSpecificResourcePermission, which asserts that the all-clients grant still applies once a per-client permission exists. Today's main (fgap/FGAPPolicyEvaluator + FineGrainedAdminPermissionEvaluator) keeps this behaviour.",
      "astra": []
+    },
+    "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#gap-N1": {
+     "bug": "AdminPermissionsSchema.getResourceName handles only USERS, so for the new CLIENTS resource type the admin API returns a null/UUID display name instead of 'All clients' or the clientId.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2025-02-27",
+      "pr": 37606,
+      "commit": "77ef5ff795b1180fade11c27cf3756f88d6fd53a",
+      "url": "https://github.com/keycloak/keycloak/pull/37606"
+     },
+     "removidoEm": null,
+     "diasNoAr": 16,
+     "reason": "At the merge, getResourceName(session, policy, resource) special-cased only USERS and fell back to resource.getDisplayName(). PR #37606 (commit 77ef5ff795) rewrote it to delegate to a new getResourceName(session, resourceServer, resourceType, resourceName) with a switch whose CLIENTS case returns the client's clientId (or the type name 'Clients' for the all-clients resource). Today's main (fgap/AdminPermissionsSchema.java) keeps that CLIENTS case and PolicyResourceService still uses it for displayName.",
+     "astra": []
     }
    }
   },
@@ -1989,6 +2004,21 @@
        "veredito": "confirmado, fix = 5f20748 / PR #24304 (2023-11-09); 2020 da839e6 noted as partial mitigation."
       }
      ]
+    },
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor#gap-N1": {
+     "bug": "PostMover#copy recreates the first post via PostCreator without passing cook_method, so a moved raw_html (embedded/imported) first post is re-cooked through the markdown pipeline and its content changes.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2017-11-24",
+      "pr": 5360,
+      "commit": "b3094e9954e168f5bcd7634ef85ecae5897f01c9",
+      "url": "https://github.com/discourse/discourse/pull/5360"
+     },
+     "removidoEm": null,
+     "diasNoAr": 1424,
+     "reason": "At the benchmark head PostMover#copy called PostCreator.create with only raw/topic_id/acting_user. Blame of today's app/models/post_mover.rb shows `cook_method: post.cook_method` in create_first_post was added by commit b3094e9954 (PR #5360, 'FIX: incoming and outgoing emails got lost when post was moved'), whose diff adds cook_method, via_email and raw_email to the PostCreator options. Today the first-post copy preserves cook_method.",
+     "astra": []
     }
    }
   },
@@ -2154,6 +2184,27 @@
      "diasNoAr": 1144,
      "reason": "authorizeCredentials on main still matches with backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\")) over the decrypted codes; no constant-time comparison was introduced.",
      "astra": []
+    },
+    "feat-2fa-backup-codes-cal-com#gap-N1": {
+     "bug": "The hand-built `mockUser: User` fixture in inviteMemberUtils.test.ts lacks the new backupCodes field, so it no longer satisfies the Prisma User type and type-checking that file fails.",
+     "severity": "high",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2023-11-27",
+      "pr": 12442,
+      "commit": "2094d59856af24959e3b439074ac0e55bbc0dd58",
+      "url": "https://github.com/calcom/cal.diy/pull/12442"
+     },
+     "removidoEm": null,
+     "diasNoAr": 89,
+     "reason": "The squash a308075b still had `const mockUser: User = {...}` without backupCodes. The first later change to the test, commit 2094d59856 (PR #12442 'refactor: invite members handler'), retyped the fixture as `mockUser: Invitee`, where Invitee = Pick<User, ...> without backupCodes, so the missing-property type error is gone. No commit ever added backupCodes; the fix came through the refactor (the file was later removed in the 2026 Cal.diy refactor #28903).",
+     "astra": [
+      {
+       "pergunta": "The fixture type changed from User to Invitee (a Pick without backupCodes) in refactor #12442, which never targets backupCodes: confirmado or descontinuado?",
+       "resposta": "confirmado. #12442 fixed the typing failure by switching User to Invitee, removing the need for backupCodes, even as part of a refactor.",
+       "veredito": "confirmado: the mockUser fixture still exists and the change made it type-check (any way of fixing counts)."
+      }
+     ]
     }
    }
   },
@@ -3481,6 +3532,16 @@
      "diasNoAr": 1143,
      "reason": "In today's packages/features/bookings/lib/EventManager.ts (main), updateAllCalendarEvents still has the 'If we are merging two calendar events we should delete the old calendar event' block under `if (newBookingId)`, using booking.references.find((reference) => reference.type.includes(\"_calendar\")) and deleting only that one event. Only the credential lookup changed (CredentialRepository.findCredentialForCalendarServiceById, getCalendar(..., \"booking\")); the single-reference cleanup is unchanged, and rescheduleEvent still passes newBookingId into updateAllCalendarEvents.",
      "astra": []
+    },
+    "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#gap-N1": {
+     "bug": "CalendarEvent.destinationCalendar became an array and evt is spread into webhook payloads, so payload.destinationCalendar changes from an object/null to an array and subscribers reading .externalId or .integration break.",
+     "severity": "high",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 1162,
+     "reason": "Today's packages/types/Calendar.d.ts still declares `destinationCalendar?: DestinationCalendar[] | null`; confirm.handler.ts still builds `[booking.destinationCalendar]` arrays and spreads evt into webhookData; BookingWebhookFactory.getDestinationCalendar returns `[params.destinationCalendar]` or `[]` for the payload, and sendPayload serializes data unchanged. The webhook payload's destinationCalendar is still an array.",
+     "astra": []
     }
    }
   },
@@ -3666,6 +3727,21 @@
      "diasNoAr": 863,
      "reason": "The floor(user_count/limit)+1 totalPages formula survived in admin-group.js.es6 until 7bfabb029b (2016-12-13) moved the pagination verbatim into discourse/components/group-members-input.js.es6. Commit 9090c7b05b 'FIX: Admin groups editor was showing extra page when exactly 50 records' (2017-05-17, pushed directly, no PR) changed it to Math.ceil(userCount / limit), so at offset 50 of 100 members showingLast is true and Next no longer reaches an empty page.",
      "astra": []
+    },
+    "fix-proper-handling-of-group-memberships-discourse-cursor#gap-N1": {
+     "bug": "GroupsController#members now returns {members, meta} with pagination, but the public groups controller spec still expects a bare array and stays pending, so the new response contract is untested.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2016-12-08",
+      "pr": 4594,
+      "commit": "a2da2971affd63d637726873e2153439715f8626",
+      "url": "https://github.com/discourse/discourse/pull/4594"
+     },
+     "removidoEm": null,
+     "diasNoAr": 703,
+     "reason": "After the merge the 'ensures that membership can be paginated' example in spec/controllers/groups_controller_spec.rb stayed pending/skip (16156bdc1d changed pending to skip) and parsed the body as an array. Commit a2da2971af (PR #4594, 'FEATURE: Allow columns on group members page to be sortable') turned it into a running `it` and reads JSON.parse(response.body)[\"members\"], so the {members, meta} pagination contract became tested.",
+     "astra": []
     }
    }
   },
@@ -3842,6 +3918,16 @@
      "removidoEm": null,
      "diasNoAr": 598,
      "reason": "OAuth2GrantTypeFactory on main still declares `String getShortcut();` with no default (no commits to the file since merge), and postInit still calls gtf.getShortcut() on every registered grant factory.",
+     "astra": []
+    },
+    "implement-access-token-context-encoding-framework-keycloak#gap-N1": {
+     "bug": "The legacy token-exchange path in AbstractTokenExchangeProvider never sets Constants.GRANT_TYPE on the client session context, so tokens it issues are encoded with grant shortcut 'na' instead of the token-exchange shortcut.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 617,
+     "reason": "The legacy exchangeClientToOIDCClient now lives in tokenexchange/V1TokenExchangeProvider.java and still builds clientSessionCtx and calls tokenManager.responseBuilder(...).generateAccessToken() without setting Constants.GRANT_TYPE; only StandardTokenExchangeProvider sets it to TOKEN_EXCHANGE_GRANT_TYPE, and OAuth2GrantTypeBase.createTokenResponseBuilder (not used by V1) sets it for grants. DefaultTokenContextEncoderProvider still falls back to UNKNOWN ('na') when the attribute is null.",
      "astra": []
     }
    }
@@ -4201,6 +4287,26 @@
      "removidoEm": null,
      "diasNoAr": 8,
      "reason": "#11530 'fix: credential sync app lookup' changed the select to dirName and indexes appStoreMetadata[app.dirName]; today's route.ts keeps that lookup.",
+     "astra": []
+    },
+    "oauth-credential-sync-and-app-integration-enhancements-cal-com#gap-N1": {
+     "bug": "The new Salesforce token refresh calls Salesforce's token endpoint directly instead of refreshOAuthTokens, so with credential sharing enabled it skips the sync endpoint and fails without local consumer keys.",
+     "severity": "high",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 1143,
+     "reason": "The Salesforce refresh moved from salesforce/lib/CalendarService.ts to CrmService.ts (#14272, crmManager refactor; #11508 only wrapped it in try/catch), and today CrmService.ts still calls fetch('https://login.salesforce.com/services/oauth2/token') directly with parseRefreshTokenResponse, never going through refreshOAuthTokens. Credential-sync refresh is still bypassed for Salesforce.",
+     "astra": []
+    },
+    "oauth-credential-sync-and-app-integration-enhancements-cal-com#gap-N2": {
+     "bug": "Webex refresh is routed through refreshOAuthTokens but still validated with the strict webexRefreshedTokenSchema, so the minimal sync-endpoint response fails parsing and Webex refresh breaks for shared credentials.",
+     "severity": "high",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 1143,
+     "reason": "Today's webex/lib/VideoApiAdapter.ts still routes refresh through refreshOAuthTokens (whose sync branch returns the endpoint response that 'should only contain the access token and expiry date') and still validates with webexRefreshedTokenSchema requiring literal scope/token_type, refresh_token and refresh_token_expires_in, rejecting otherwise. Unchanged in the way that matters.",
      "astra": []
     }
    }
@@ -4621,6 +4727,21 @@
        "veredito": "confirmado"
       }
      ]
+    },
+    "replays-self-serve-bulk-delete-system-sentry#gap-N1": {
+     "bug": "delete_replays_script_async in replays/tasks.py still does range(0, max_segment_id) without a None check, so replays with no ingested segments raise TypeError, the case the PR fixed only in _make_recording_filenames.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2026-08-03",
+      "pr": 121086,
+      "commit": "e9053555c06ef5b113f787caaa2faf832a553acb",
+      "url": "https://github.com/getsentry/sentry/pull/121086"
+     },
+     "removidoEm": null,
+     "diasNoAr": 409,
+     "reason": "At the reference date delete_replays_script_async did range(0, max_segment_id) with max_segment_id: int and no None check. PR #121086 (commit e9053555c0, 'make delete_replays script mirror the bulk delete path') changed the signature to `max_segment_id: int | None`, added `if max_segment_id is None: return None` and iterates range(max_segment_id + 1). Today's master keeps the guard.",
+     "astra": []
     }
    }
   },
@@ -4835,6 +4956,21 @@
        "veredito": "descontinuado 2025-06-24"
       }
      ]
+    },
+    "sms-workflow-reminder-retry-count-tracking-cal-com#gap-N1": {
+     "bug": "scheduleWhatsappReminders never increments retryCount on Twilio failure, so failing WhatsApp reminders are retried on every cron run and never reach the retryCount > 1 cleanup added for SMS.",
+     "severity": "medium",
+     "status": "descontinuado",
+     "corrigidoEm": null,
+     "removidoEm": {
+      "data": "2026-04-15",
+      "pr": 28903,
+      "commit": "ab21c7f805a089fa3a11ffd61c4a9aecc349c16c",
+      "url": "https://github.com/calcom/cal.diy/pull/28903"
+     },
+     "diasNoAr": 702,
+     "reason": "scheduleWhatsappReminders.ts never got a retryCount increment: #22353 (2025-07-17) added a `retryCount: { lt: 3 }` filter to its query, but the catch stayed log-only and twilio.scheduleSMS throws uncaught, so the counter never moves and the cap is dead (last version before removal, 0a84ce5c73, same). PR #28903 'refactor: Cal.diy' then removed packages/features/ee (all workflow code) from the default branch, without targeting the bug.",
+     "astra": []
     }
    }
   },
