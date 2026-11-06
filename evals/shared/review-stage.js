@@ -155,6 +155,7 @@ function observeTheReview() {
 const FINDER_PATH = 'code-review/infrastructure/agents/core/finder.agent.ts';
 const VERIFY_PASS_PATH = 'agent-harness/infrastructure/orchestration/verification-pass.ts';
 const FORMATTER_PATH = 'code-review/infrastructure/agents/engine/format-and-shape-suggestions.ts';
+const HEAVY_PASSES_PATH = 'ee/heavy-mode/heavy-lens-passes.ts';
 const CONSUMERS = ['code-review/infrastructure/agents/core/core-agent-loop.adapter.ts', 'code-review/pipeline/stages/agent-review.stage.ts'];
 const finderRun = new AsyncLocalStorage();
 let finderObserved = false;
@@ -165,6 +166,7 @@ class StopAfterAgents extends Error {
         this.name = 'StopAfterAgents';
     }
 }
+const { heavyPassesFromEnv } = require('../investigation/preflight');
 // The review stages a run measures: the finder alone, the finder and its
 // verify, or every step production runs before posting.
 const REVIEW_STAGES = ['finder', 'verify', 'full'];
@@ -225,6 +227,41 @@ function observeFinderPasses() {
             return out;
         },
     }));
+
+    // RECALL_PASSES=lens-a,lens-b: heavy mode runs only these of its passes
+    // (the generalist always runs), to measure one new agent against a run
+    // that already has the others.
+    const onlyPasses = heavyPassesFromEnv();
+    if (onlyPasses) {
+        swapExports(HEAVY_PASSES_PATH, (real) => ({
+            buildHeavyLensRun: (env) => {
+                const passes = real.buildHeavyLensPasses(env).filter((p) => onlyPasses.includes(p.label));
+                for (const pass of passes) recordToolCalls(pass);
+                return passes.length ? (params, ctx) => real.runHeavyLensPasses(passes, params, ctx) : undefined;
+            },
+        }));
+    }
+
+    // The dump keeps no tool call of a heavy pass: under RECALL_DUMP each call
+    // of the experiment's own tools goes to <dump>/tool-calls/<case>.jsonl,
+    // to check what an agent actually ran.
+    function recordToolCalls(pass) {
+        const dir = process.env.RECALL_DUMP;
+        if (!dir) return;
+        for (const name of ['runSnippet', 'findReaders', 'findSiblings']) {
+            const tool = pass.spec.tools?.get?.(name);
+            if (!tool) continue;
+            const execute = tool.execute;
+            tool.execute = async (input, ctx) => {
+                const out = await execute.call(tool, input, ctx);
+                const fs = require('fs');
+                const caseId = global.__EVAL_CASE_ALS?.getStore()?.caseId || 'unknown-case';
+                fs.mkdirSync(path.join(dir, 'tool-calls'), { recursive: true });
+                fs.appendFileSync(path.join(dir, 'tool-calls', `${caseId}.jsonl`), JSON.stringify({ pass: pass.label, tool: name, at: Date.now(), input, output: String(out?.output ?? '').slice(0, 4000), isError: !!out?.isError }) + '\n');
+                return out;
+            };
+        }
+    }
 
     swapExports(FINDER_PATH, (real) => ({
         runFinderWithVerify: async (params, input, ctx) => {

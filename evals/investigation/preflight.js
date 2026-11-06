@@ -16,6 +16,12 @@ const GENERALIST = /generalist/i;
  * `profile`: finderProfileFor(model) (finder-model-profile.ts); `lensCount`: how
  * many M3 lenses the categories select (heavy-lenses.ts heavyLensesFor).
  */
+/** RECALL_PASSES as a list of heavy pass labels, or undefined for all. */
+function heavyPassesFromEnv(env = process.env) {
+    const list = (env.RECALL_PASSES || '').split(',').map((x) => x.trim()).filter(Boolean);
+    return list.length ? list : undefined;
+}
+
 function expectedRun({ env = process.env, model, profile, lensCount }) {
     const categories = env.RECALL_CATEGORIES
         ? env.RECALL_CATEGORIES.split(',').map((c) => c.trim()).filter(Boolean).sort()
@@ -116,4 +122,4 @@ function checkManifest(manifest, expected) {
     return { problems, warnings };
 }
 
-module.exports = { expectedRun, checkManifest, LEAN_FIELDS, ALL_CATEGORIES };
+module.exports = { heavyPassesFromEnv, expectedRun, checkManifest, LEAN_FIELDS, ALL_CATEGORIES };

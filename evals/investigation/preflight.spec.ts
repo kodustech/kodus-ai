@@ -77,3 +77,13 @@ describe('evals/investigation/preflight.js', () => {
         expect(checkManifest(manifest({}, { allowedLabels: ['bug', 'security'] }), two).problems).toEqual([]);
     });
 });
+
+describe('RECALL_PASSES', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { heavyPassesFromEnv } = require('./preflight');
+    it('names the heavy passes to run, or none for all', () => {
+        expect(heavyPassesFromEnv({ RECALL_PASSES: 'lens-fuzz, lens-siblings' })).toEqual(['lens-fuzz', 'lens-siblings']);
+        expect(heavyPassesFromEnv({})).toBeUndefined();
+        expect(heavyPassesFromEnv({ RECALL_PASSES: ' ' })).toBeUndefined();
+    });
+});

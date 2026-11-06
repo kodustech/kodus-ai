@@ -134,7 +134,7 @@ function writeJson(file, payload) {
 }
 
 const { evaluateGate } = require('./gate');
-const { expectedRun, checkManifest } = require('./preflight');
+const { expectedRun, checkManifest, heavyPassesFromEnv } = require('./preflight');
 
 // What the run asked for against the first case's manifest (preflight.js).
 // The model's production settings come from production's own tables.
@@ -151,10 +151,12 @@ function preflightVerdict(output, modelId) {
         model,
         profile: finderProfileFor(generalist?.modelName || model),
         // The M3 lenses plus the experiment's agents (gap-agents.ts): the
-        // code-execution one only where the sandbox runs programs (E2B).
+        // code-execution and fuzz ones only where the sandbox runs programs
+        // (E2B). RECALL_PASSES runs only the passes it names.
         lensCount:
+            heavyPassesFromEnv()?.length ??
             heavyLensesFor(generalist?.allowedLabels || undefined).length +
-            GAP_AGENTS.filter((a) => (generalist?.allowedLabels || ['bug']).includes(a.label)).filter((a) => a.tools !== 'exec' || process.env.RECALL_SANDBOX === 'e2b').length,
+                GAP_AGENTS.filter((a) => (generalist?.allowedLabels || ['bug']).includes(a.label)).filter((a) => !['exec', 'fuzz'].includes(a.tools) || process.env.RECALL_SANDBOX === 'e2b').length,
     });
     return checkManifest(parsed.manifest, expected);
 }
@@ -241,6 +243,7 @@ function runMetaOf(args) {
         heavy: process.env.RECALL_HEAVY === '1',
         // Where each review ended: finder (no verify), verify, or full.
         stages: process.env.RECALL_STAGES || 'full',
+        heavyPasses: heavyPassesFromEnv() || 'all',
         // RECALL_REASONING_EFFORT reaches the finder as the BYOK model's
         // reasoningEffort (agent-provider.js resolveRoute), which production
         // maps per provider; without it the BYOK slot sets none.
@@ -442,7 +445,7 @@ async function main() {
         try {
             // eslint-disable-next-line no-await-in-loop
             global.__EVAL_CASE_ALS = global.__EVAL_CASE_ALS || new (require('async_hooks').AsyncLocalStorage)();
-            caseUse = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, calls: 0, byTask: {}, rescueRequests: 0 };
+            caseUse = { caseId, in: 0, out: 0, cacheRead: 0, cacheWrite: 0, calls: 0, byTask: {}, rescueRequests: 0 };
             const t0 = Date.now();
             apiResult = await global.__EVAL_CASE_ALS.run(caseUse, () => provider.callApi(prompt, { vars: test.vars }, {}));
             caseUse.wallMs = Date.now() - t0;
