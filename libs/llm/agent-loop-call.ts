@@ -37,6 +37,11 @@ import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
 import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { getLlmObservability } from '@libs/llm/llm-observability';
 import {
+    createStepUsageTally,
+    type AiSdkUsageInput,
+} from '@libs/llm/ai-sdk-usage';
+import { abortedInFlightAttrs } from '@libs/llm/aborted-in-flight';
+import {
     hardTimeout,
     timeoutSignal,
     AGENT_TIMEOUT_MS,
@@ -172,7 +177,14 @@ export async function runAgentLoopCall(
     // structured-review-call). This gives the loop the same floor, and the 5s
     // grace inside `hardTimeout` is what orders them: abort first, race only if
     // the abort was ignored.
-    const signal = callerSignal ?? timeoutSignal(hardTimeoutMs);
+    //
+    // A caller's signal is wrapped in one of this call's own: heavy mode hands
+    // every lens the same signal, and the BYOK limiter marks the signal it
+    // dequeues on an abort (`wasAbortedBeforeSlot`). On a shared object one
+    // queued lens would hide the in-flight abort of every other lens (#2389).
+    const signal = callerSignal
+        ? AbortSignal.any([callerSignal])
+        : timeoutSignal(hardTimeoutMs);
     const temperature = params.temperature ?? inv.callOptions.temperature;
     const maxOutputTokens =
         inv.callOptions.maxOutputTokens ?? params.maxOutputTokens;
@@ -210,6 +222,8 @@ export async function runAgentLoopCall(
         exec: () => Promise<T>,
         traced: boolean,
         span: string = name,
+        usageOnError?: () => AiSdkUsageInput,
+        attrsOnError?: (err: unknown) => Record<string, unknown> | undefined,
     ): Promise<T> =>
         observability
             ? observability.runAiSdkLLMInSpan<any>({
@@ -225,8 +239,33 @@ export async function runAgentLoopCall(
                   traced,
                   attrs: spanAttrs,
                   exec,
+                  usageOnError,
+                  attrsOnError,
               })
             : exec();
+
+    // The steps the provider already answered, so a loop that throws after them
+    // (an abort) still reports their usage to its own span (#2389). Kept off the
+    // error: heavy mode aborts its lenses with the generalist's error object, and
+    // usage stored on it would be read again by every lens's span.
+    const finishedSteps = createStepUsageTally();
+    // The prompt of the step whose request is out and not answered yet, so an
+    // abort that lands on it is recorded as a known gap, never billed (#2389).
+    // Kept by reference and tokenized only if that abort happens.
+    let inFlightPrompt: { system: unknown; messages: unknown } | undefined;
+    const prepareStep = async (opts: any) => {
+        const directive: any = await loop.prepareStep?.(opts);
+        inFlightPrompt = {
+            system: directive?.system ?? systemArg,
+            messages: directive?.messages ?? opts?.messages,
+        };
+        return directive;
+    };
+    const onStepFinish = (event: any) => {
+        inFlightPrompt = undefined;
+        finishedSteps.add(event?.usage);
+        return loop.onStepFinish?.(event);
+    };
 
     const exec = () =>
         generateText({
@@ -263,8 +302,8 @@ export async function runAgentLoopCall(
             // Loop seams from the runner's policies — forwarded verbatim, plus the
             // hard step ceiling the harness always wants.
             stopWhen: [...((loop.stopWhen as any[]) ?? []), stepCountIs(loop.maxSteps)],
-            ...(loop.prepareStep ? { prepareStep: loop.prepareStep as any } : {}),
-            ...(loop.onStepFinish ? { onStepFinish: loop.onStepFinish as any } : {}),
+            prepareStep,
+            onStepFinish,
             ...(telemetryMetadata
                 ? toAiSdkTelemetryArgs(
                       buildLangfuseTelemetry(runName, telemetryMetadata),
@@ -276,7 +315,14 @@ export async function runAgentLoopCall(
     // (a bare unit test) runs directly, still gets the model/loop, just no span.
     // Traced under the same condition that turns the SDK telemetry on above. ──
     const run = () =>
-        usageSpan(runName, exec, !!telemetryMetadata, spanName ?? runName);
+        usageSpan(
+            runName,
+            exec,
+            !!telemetryMetadata,
+            spanName ?? runName,
+            finishedSteps.total,
+            () => abortedInFlightAttrs(signal, () => inFlightPrompt),
+        );
 
     // Belt over the AbortSignal suspenders. `signal` above is a REQUEST: several
     // OpenAI-compatible proxies accept the connection, ignore the abort and
