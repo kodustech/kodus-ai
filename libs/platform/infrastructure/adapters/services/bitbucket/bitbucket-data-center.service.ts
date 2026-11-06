@@ -2702,7 +2702,11 @@ export class BitbucketDataCenterService implements Omit<
                 repository.id || repository.name,
             );
 
-            if (!authDetails || !repoConfig) return null;
+            if (!authDetails || !repoConfig) {
+                throw new Error(
+                    `No Bitbucket Data Center credentials or repository config to update PR #${prNumber}`,
+                );
+            }
 
             const axiosClient = this.getAxiosInstance(authDetails);
             const prPath = `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/pull-requests/${prNumber}`;
@@ -2724,7 +2728,9 @@ export class BitbucketDataCenterService implements Omit<
                 context: BitbucketDataCenterService.name,
                 error,
             });
-            return null;
+            // The summary step reports a failed write only when it throws, as
+            // on GitHub and GitLab; returning null read as a success (#2380).
+            throw error;
         }
     }
 
