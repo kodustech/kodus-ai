@@ -1159,10 +1159,15 @@ const NOT_A_RULE_FILE =
  *  is about something else ("use the repository pattern"). */
 const SENTENCE_END = /[.;!?](?=\s|$)|\r?\n[ \t]*\r?\n/g;
 
-/** What joins two repositories into a choice: "a or b", "a, and b",
- *  "a and/or b", "a e b". */
+/** What joins two repositories into a choice: "a or b", "a, b", "a and/or
+ *  b", "a (or b)", "a e b", and with the nouns dropped (REPOSITORY_NOUN),
+ *  "the a repository or in the b repository". */
 const REPOSITORIES_JOINED =
-    /^[\s\x60'"]*,?\s*(?:and\/or|e\/ou|and|or|&|e|ou)\s+(?:the\s+)?[\x60'"]?$/;
+    /^[\s\x60'"(]*(?:,\s*(?:(?:and\/or|e\/ou|and|or|&|e|ou)\s+)?|(?:and\/or|e\/ou|and|or|&|e|ou)\s+)(?:(?:in|from|on|at|inside|under|no|na|do|da|em)\s+)?(?:(?:the|o|a)\s+)?[\x60'"]?$/;
+
+/** The noun a place phrase puts after or before a name ("repository"). */
+const REPOSITORY_NOUN =
+    /\b(?:repositories|repository|repos|repo|reposit[óo]rios?)\b/g;
 
 /** The sentence a position falls in, as an index over `ends`. */
 const sentenceIndex = (ends: number[], position: number) => {
@@ -1242,14 +1247,16 @@ export const mentionedFilesNotFollowed = (
         .filter((mention) => !insideAFile(mention.at))
         .sort((a, b) => a.at - b.at);
     // Two repositories joined ("irrigation-rules or pump-rules", "in
-    // acme/a and acme/b") name a choice, not the place of a file: neither
-    // one places it.
+    // acme/a and acme/b", "in the a repository or the b repository") name a
+    // choice, not the place of a file: neither one places it.
     for (const [index, mention] of mentions.entries()) {
         const next = mentions[index + 1];
         if (
             next &&
             next.repository !== mention.repository &&
-            REPOSITORIES_JOINED.test(text.slice(mention.end, next.at))
+            REPOSITORIES_JOINED.test(
+                text.slice(mention.end, next.at).replace(REPOSITORY_NOUN, ""),
+            )
         ) {
             mention.ambiguous = true;
             next.ambiguous = true;

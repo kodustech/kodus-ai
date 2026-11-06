@@ -632,6 +632,26 @@ describe("mentionedFilesNotFollowed", () => {
             ).toEqual([`${RULES}:docs/a.md`, `${OTHER_RULES}:docs/b.md`]);
         });
 
+        it("offers nothing for a choice of repositories written out in full", () => {
+            for (const text of [
+                "Read docs/a.md in the pump-rules repository or the irrigation-rules repository.",
+                "In the pump-rules repository or the irrigation-rules repository, read docs/a.md.",
+                `Read docs/a.md in ${OTHER_RULES} or in ${RULES}.`,
+                "Read docs/a.md from pump-rules (or irrigation-rules).",
+                "Read docs/a.md from pump-rules, irrigation-rules or another one.",
+                `Leia docs/a.md no repositório ${OTHER_RULES} ou no repositório ${RULES}.`,
+            ]) {
+                expect(placed(text, [RULES, OTHER_RULES])).toEqual([]);
+            }
+            // A repository named after the file's own place is no choice.
+            expect(
+                placed(
+                    "Read docs/a.md in the pump-rules repository, then compare it with irrigation-rules.",
+                    [RULES, OTHER_RULES],
+                ),
+            ).toEqual([`${OTHER_RULES}:docs/a.md`]);
+        });
+
         it("reads a Portuguese list as it reads an English one", () => {
             expect(
                 placed(
