@@ -513,7 +513,11 @@ export class SyncAllRepositoriesUseCase {
                 );
 
             const rateLimited = Boolean(result.rateLimited);
-            if (rateLimited) {
+            // A deferred batch (the provider's slot was busy) means the next
+            // batches would wait for the same slot: stop and leave them
+            // pending for the next sync.
+            const stop = rateLimited || Boolean(result.deferred);
+            if (stop) {
                 result = {
                     ...result,
                     notAttempted: [
@@ -535,8 +539,8 @@ export class SyncAllRepositoriesUseCase {
             }
 
             state.done = Math.min(offset + batch.length, repositories.length);
-            if (rateLimited) {
-                return true;
+            if (stop) {
+                return rateLimited;
             }
             await this.writeState(target, state);
         }

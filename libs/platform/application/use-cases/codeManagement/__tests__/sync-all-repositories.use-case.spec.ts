@@ -334,6 +334,29 @@ describe('SyncAllRepositoriesUseCase', () => {
         expect(t.state('team-b')).toMatchObject({ status: 'rate_limited' });
     });
 
+    it('stops at the first deferred webhook batch and leaves the rest pending, without waiting again per batch', async () => {
+        const listing = Array.from({ length: 60 }, (_, i) => repo(String(i)));
+        const t = setup({
+            listing,
+            webhookResult: (repos) => ({
+                configured: [],
+                failed: {},
+                notAttempted: repos.map((r: any) => String(r.id)),
+                deferred: { reason: 'Another setup was running' },
+            }),
+        });
+
+        await t.useCase.syncTeam(TEAMS.a, 'enable');
+
+        expect(t.codeManagementService.ensureRepositoryWebhooks).toHaveBeenCalledTimes(1);
+        const failures = (t.store.get(
+            key('team-a', IntegrationConfigKey.WEBHOOK_CREATION_FAILURES),
+        ) as any).failures;
+        expect(Object.keys(failures)).toHaveLength(60);
+        expect(failures['59'].kind).toBe('deferred');
+        expect(t.state('team-a').status).toBe('done');
+    });
+
     it('lists once for teams that share a credential', async () => {
         const t = setup({
             listing: [repo('1')],
