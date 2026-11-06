@@ -13,17 +13,26 @@
  * review use the same transport. The model, its reasoning options and its
  * structured-output plan all read the served provider, which is why the swap is
  * not made inside the model build alone.
+ *
+ * A saved model id the upstream retired (Fireworks' 404s, model-id.ts) is
+ * served as its replacement here for the same reason: built as GLM 5.3 but
+ * reasoned and tuned as GLM 5.2, a call would ask a model that always thinks
+ * to stop, and send it a temperature its traits pin to 1.
  */
 import type { NormalizedModel } from './byok-config';
 import { BYOKProvider } from './model-providers';
+import { canonicalUpstreamModelId } from './providers/kodus/model-id';
 import { servedByOpenAi } from './providers/openai/endpoint';
 
 export function asServedSlot<T extends NormalizedModel>(slot: T): T {
     const fallback = slot.fallback
         ? asServedSlot(slot.fallback)
         : slot.fallback;
+    const model = canonicalUpstreamModelId(slot.model);
     const withFallback =
-        fallback === slot.fallback ? slot : { ...slot, fallback };
+        fallback === slot.fallback && model === slot.model
+            ? slot
+            : { ...slot, fallback, model };
     if (
         withFallback.provider !== BYOKProvider.OPENAI_COMPATIBLE ||
         !servedByOpenAi(withFallback.model, withFallback.baseURL)
