@@ -46,7 +46,8 @@ const FUZZ = `- Logic that breaks on inputs nobody thought of. METHOD:
      b. where the PR did not mean to change the behaviour, the new version must return what the previous version returned;
      c. a property the function promises: format then parse gives the input back, applying it twice changes nothing, the output keeps the length, order or range it should.
   4. A failing property is shrunk to a minimal input. Before reporting, read the callers (getCallers, grep) and drop failures on inputs the callers can never pass and differences the PR intends.
-  Report the minimal failing input, the output and what was expected, anchored to the changed line. Write TypeScript as plain JavaScript. Skip logic that cannot be isolated without guessing.`;
+  Report the minimal failing input, the output and what was expected, anchored to the changed line. Write TypeScript as plain JavaScript. Skip logic that cannot be isolated without guessing.
+  Only a property that a fuzzer run failed counts: if no fast-check or Hypothesis run in this review failed, every finding you submit is discarded. Do not report from reading alone. When the PR has no logic you can isolate in javascript or python, submit no findings.`;
 
 /** The experiment's agents, as lenses: same prompt shape, own focus. */
 export const GAP_AGENTS: Array<HeavyLens & { tools: 'readers' | 'siblings' | 'exec' | 'fuzz' }> = [
@@ -243,7 +244,10 @@ const RUNNERS: Record<string, { ext: string; cmd: (file: string) => string }> = 
     java: { ext: 'java', cmd: (f) => `java ${f}` },
 };
 
-export function buildRunSnippetTool(remote: RemoteCommands): AgentTool {
+/** What fast-check (`fc.assert`) and Hypothesis print when a property fails. */
+export const FUZZER_FAILURE = /Property failed after|Falsifying example/;
+
+export function buildRunSnippetTool(remote: RemoteCommands, onOutput?: (output: string) => void): AgentTool {
     let n = 0;
     return {
         name: 'runSnippet',
@@ -273,6 +277,7 @@ export function buildRunSnippetTool(remote: RemoteCommands): AgentTool {
             const out = res.stdout || res.stderr || '';
             const exit = /__EXIT=(\d+)/.exec(out)?.[1] ?? String(res.exitCode);
             const body = out.replace(/__EXIT=\d+\s*$/, '').trimEnd();
+            onOutput?.(body);
             return ok(`exit code ${exit}${exit === '124' ? ' (timed out after 30 s)' : ''}\n${body.slice(0, 4000) || '(no output)'}`);
         },
     };

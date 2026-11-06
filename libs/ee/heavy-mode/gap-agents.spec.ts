@@ -1,11 +1,18 @@
 import {
+    FUZZER_FAILURE,
     GAP_AGENTS,
     buildFindReadersTool,
     buildRunSnippetTool,
     gapAgentMaxSteps,
     sandboxCanRun,
 } from './gap-agents';
-import { buildHeavyLensPasses } from './heavy-lens-passes';
+import { extractFindingsWithRecovery } from '@libs/code-review/infrastructure/agents/core/finder.agent';
+import { buildHeavyLensPasses, runHeavyLensPasses } from './heavy-lens-passes';
+
+jest.mock('@libs/code-review/infrastructure/agents/core/finder.agent', () => ({
+    ...jest.requireActual('@libs/code-review/infrastructure/agents/core/finder.agent'),
+    extractFindingsWithRecovery: jest.fn(),
+}));
 
 const remote = (exec: (cmd: string) => { stdout: string; stderr?: string; exitCode?: number }) => ({
     grep: async () => '',
@@ -70,5 +77,23 @@ describe('gap agents (exp/finder-gap-tools)', () => {
         expect(labels({ remoteCommands: r })).not.toContain('lens-fuzz');
         expect(labels({ remoteCommands: r, sandboxCanRun: true })).toEqual(expect.arrayContaining(['lens-code-exec', 'lens-fuzz']));
         expect(labels({ remoteCommands: r, sandboxCanRun: true })).toHaveLength(13);
+    });
+
+    it('tells a failing fuzzer run from any other output', () => {
+        expect(FUZZER_FAILURE.test('Error: Property failed after 3 tests\n{ seed: 1, counterexample: [""] }')).toBe(true);
+        expect(FUZZER_FAILURE.test('Falsifying example: t(s="")')).toBe(true);
+        expect(FUZZER_FAILURE.test("Error: Cannot find module 'zod'")).toBe(false);
+    });
+
+    it('discards the findings of a pass whose run they need did not happen', async () => {
+        const finding = { relevantFile: 'a.ts', relevantLinesStart: 1, relevantLinesEnd: 1, label: 'bug', suggestionContent: 'x' };
+        const pass = (keeps: boolean) => ({ label: 'lens-fuzz', findingLabel: 'bug', prompt: 'p', spec: {}, keepsFindings: () => keeps }) as never;
+        const params = {
+            runner: { run: async () => ({ steps: [], usage: {} }) },
+            recoverProse: undefined,
+        } as never;
+        (extractFindingsWithRecovery as jest.Mock).mockResolvedValue({ suggestions: [finding] });
+        expect((await runHeavyLensPasses([pass(false)], params, {} as never)).suggestions).toEqual([]);
+        expect((await runHeavyLensPasses([pass(true)], params, {} as never)).suggestions).toHaveLength(1);
     });
 });

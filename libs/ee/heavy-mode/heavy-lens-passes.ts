@@ -33,6 +33,7 @@ import {
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import {
+    FUZZER_FAILURE,
     GAP_AGENTS,
     GAP_AGENT_MAX_FINDINGS,
     GAP_AGENT_SYSTEM_PROMPT,
@@ -61,6 +62,9 @@ export interface HeavyLensPass {
     spec: AgentSpec;
     /** Findings kept from the lens, strongest first as its prompt asks. */
     maxFindings?: number;
+    /** Whether the pass's findings stand, asked once the pass ends (the fuzz
+     *  agent's stand only when a fuzzer run failed). */
+    keepsFindings?: () => boolean;
 }
 
 /** What the lenses need from the finder's run environment. */
@@ -151,14 +155,20 @@ function buildGapAgentPasses(env: HeavyLensEnvironment, lensDiff: string): Heavy
     return GAP_AGENTS.filter((a) => !allowed || allowed.includes(a.label))
         .filter((a) => (a.tools !== 'exec' && a.tools !== 'fuzz') || env.sandboxCanRun)
         .map((agent) => {
+            let fuzzerFailed = false;
             const own =
                 agent.tools === 'readers'
                     ? buildFindReadersTool(remote, changed)
                     : agent.tools === 'siblings'
                       ? buildFindSiblingsTool(remote)
-                      : buildRunSnippetTool(remote);
+                      : agent.tools === 'fuzz'
+                        ? buildRunSnippetTool(remote, (out) => {
+                              if (FUZZER_FAILURE.test(out)) fuzzerFailed = true;
+                          })
+                        : buildRunSnippetTool(remote);
             return {
                 label: `lens-${agent.id}`,
+                ...(agent.tools === 'fuzz' && { keepsFindings: () => fuzzerFailed }),
                 findingLabel: agent.label,
                 maxFindings: GAP_AGENT_MAX_FINDINGS,
                 prompt: buildHeavyLensPrompt(agent, lensDiff, env.claudeWording, false, input.lensBatch),
@@ -243,6 +253,20 @@ export async function runHeavyLensPasses(
                         kept: pass.maxFindings,
                     },
                 });
+            }
+            if (pass.keepsFindings && returned.length && !pass.keepsFindings()) {
+                finderLogger.warn({
+                    message: `Heavy lens ${pass.label} returned ${returned.length} findings without the run its findings need; discarded`,
+                    context: 'finder',
+                    metadata: {
+                        organizationId: params.telemetryMetadata?.organizationId,
+                        teamId: params.telemetryMetadata?.teamId,
+                        pullRequestId: params.telemetryMetadata?.pullRequestId,
+                        lens: pass.label,
+                        returned: returned.length,
+                    },
+                });
+                returned.length = 0;
             }
             const suggestions = returned
                 .slice(0, pass.maxFindings)
