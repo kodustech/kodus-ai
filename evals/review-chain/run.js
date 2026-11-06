@@ -197,7 +197,7 @@ const BOUNDARIES = [
             'libs/ai-engine/infrastructure/adapters/services/reference-detector.service.ts',
         ],
         accepted: true,
-        note: 'text call; parsed with normalizeEnvelope (bare/fenced/prose/wrapped array, a lone reference), objects only — an unparseable reply is unreliable and not cached',
+        note: 'text call; the last object carrying the list (extractLastJsonObjectWith) when there is one, else normalizeEnvelope (bare/fenced/prose/wrapped array, a lone reference), objects only; the prompt example is dropped — an unparseable reply is unreliable and not cached',
     },
 ];
 

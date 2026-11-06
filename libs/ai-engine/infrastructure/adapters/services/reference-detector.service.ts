@@ -19,7 +19,10 @@ import {
     prompt_kodyrules_detect_references_user,
 } from '@libs/common/utils/prompts/kodyRulesExternalReferences';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
-import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
+import {
+    extractLastJsonObjectWith,
+    normalizeEnvelope,
+} from '@libs/llm/structured-output-repair';
 import { getModelName, trialDefaultModel } from '@libs/llm/byok-to-vercel';
 import { LLM } from '@libs/llm/llm';
 
@@ -80,17 +83,26 @@ function unquoteJsonString(raw: unknown): unknown {
  * without the array. Only items naming a file are kept. Null when the reply
  * holds no list.
  */
+const LIST_KEYS = ['references', 'refs', 'files'];
+
+/** The file name both detector prompts use in their output example. */
+const EXAMPLE_FILE_NAME = 'file-name.ext';
+
 function parseReferenceReply(
     raw: unknown,
     onRecover: (reason: string) => void,
 ): IDetectedReference[] | null {
     const opts = { liftEmptyArray: true, onRecover };
-    let value = normalizeEnvelope(
-        unquoteJsonString(raw),
-        'items',
-        ['references', 'refs', 'files'],
-        opts,
-    );
+    // The LAST object carrying the list, when there is one. A host that ends
+    // the reasoning channel at a `</think>` the model quotes (Together,
+    // DeepSeek V4.1 Flash) returns the rest of the reasoning ahead of the
+    // answer, and what it quotes on the way made the reply unreadable (#2409).
+    const unquoted = unquoteJsonString(raw);
+    const last =
+        typeof unquoted === 'string'
+            ? extractLastJsonObjectWith(unquoted, LIST_KEYS)
+            : null;
+    let value = normalizeEnvelope(last ?? unquoted, 'items', LIST_KEYS, opts);
     // A provider response body written out as the text: read its content.
     const content = (
         value as { choices?: { message?: { content?: unknown } }[] }
@@ -100,7 +112,7 @@ function parseReferenceReply(
         value = normalizeEnvelope(
             unquoteJsonString(content),
             'items',
-            ['references', 'refs', 'files'],
+            LIST_KEYS,
             opts,
         );
     }
@@ -121,7 +133,7 @@ function parseReferenceReply(
     }
     // Consumers read `fileName`; a reference that named its file only under
     // `filePath` carries it over.
-    return (items as unknown[])
+    const refs = (items as unknown[])
         .map((item) =>
             isObject(item) &&
             typeof item.fileName !== 'string' &&
@@ -133,6 +145,14 @@ function parseReferenceReply(
             (item): item is IDetectedReference =>
                 isObject(item) && typeof item.fileName === 'string',
         );
+    // The prompt's own example, quoted in the reasoning or copied by a model
+    // cut mid-thought, names no file of the rule's.
+    const real = refs.filter((ref) => ref.fileName !== EXAMPLE_FILE_NAME);
+    if (real.length < refs.length) {
+        onRecover('dropped-prompt-example');
+        if (real.length === 0) return null;
+    }
+    return real;
 }
 
 function isControlMarker(value: unknown): boolean {
