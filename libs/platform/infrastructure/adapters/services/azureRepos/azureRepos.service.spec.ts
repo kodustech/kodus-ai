@@ -475,6 +475,28 @@ describe('AzureReposService.getFilesByPullRequestId — current behavior (charac
         );
     });
 
+    it("keeps a rename's previous_filename on the returned FileChange", async () => {
+        azureReposRequestHelper.getChanges.mockResolvedValue([
+            changeEntry('/.kody/rules/b.md', 'rename', '/.kody/rules/a.md'),
+            changeEntry('/src/foo.ts'),
+        ]);
+
+        const result = await service.getFilesByPullRequestId({
+            organizationAndTeamData: stubOrg as any,
+            repository: stubRepository,
+            prNumber: 42,
+        });
+
+        const byName = new Map(result!.map((f) => [f.filename, f]));
+        expect(byName.get('/.kody/rules/b.md')).toEqual(
+            expect.objectContaining({
+                status: 'renamed',
+                previous_filename: '/.kody/rules/a.md',
+            }),
+        );
+        expect(byName.get('/src/foo.ts')?.previous_filename).toBeUndefined();
+    });
+
     it('returns an empty array when the PR has no iterations', async () => {
         azureReposRequestHelper.getIterations.mockResolvedValue([]);
 
