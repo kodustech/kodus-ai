@@ -691,29 +691,56 @@ const SAME_FILE_RULE_FILE = /\.(?:[cm]?[jt]sx?|java|php|pyi?|go|cs)$/;
 
 /**
  * Whether another file imports `symbol` from this Python module, or reaches it
- * through the module (`api.connect`): the module re-exports it.
+ * through the module (`api.connect`): the module re-exports it. The module is
+ * matched by its path, not its basename: `from app.api import connect` or
+ * `client.api.connect(x)` is not about `tests/api.py`. Without the source
+ * root, an absolute path matches the end of the file's (`pkg.api`, `api`).
  */
 function reexported(
     file: string,
     symbol: string,
     matches: GrepMatch[],
 ): boolean {
-    const module =
-        file
-            .replace(/\.pyi?$/, '')
-            .split('/')
-            .pop() ?? '';
-    if (!module) return false;
+    const module = file
+        .replace(/\.pyi?$/, '')
+        .split('/')
+        .filter(Boolean);
+    if (!module.length) return false;
+    const fromImport = /^\s*from\s+(\.*[\p{L}\p{N}_.]*)\s+import\b/u;
     const viaModule = new RegExp(
-        `(^|[^\\p{L}\\p{N}_$])${escapeRegex(module)}\\s*\\.\\s*${escapeRegex(symbol)}([^\\p{L}\\p{N}_$]|$)`,
-        'u',
+        `(?<![\\p{L}\\p{N}_$.])((?:[\\p{L}_][\\p{L}\\p{N}_]*\\s*\\.\\s*)+)${escapeRegex(symbol)}(?![\\p{L}\\p{N}_$])`,
+        'gu',
     );
-    return matches.some(
-        (m) =>
-            m.file !== file &&
-            ((isImportLine(m.text, m.file) && hasIdentifier(m.text, module)) ||
-                viaModule.test(m.text)),
-    );
+    return matches.some((m) => {
+        if (m.file === file) return false;
+        const from = fromImport.exec(m.text);
+        if (from) return namesPythonModule(from[1], m.file, module);
+        return [...m.text.matchAll(viaModule)].some((use) =>
+            namesPythonModule(use[1].replace(/\s+/g, ''), '', module),
+        );
+    });
+}
+
+/**
+ * Whether a dotted reference (`pkg.api`, `.api`, `..pkg.api.`) names the
+ * module at `module` (its path segments): a relative one resolved from the
+ * importing file's directory, an absolute one by the end of the path.
+ */
+function namesPythonModule(
+    ref: string,
+    importer: string,
+    module: string[],
+): boolean {
+    const dots = /^\.*/.exec(ref)?.[0].length ?? 0;
+    const path = ref.slice(dots).split('.').filter(Boolean);
+    if (dots) {
+        const dir = importer.split('/').slice(0, -1);
+        if (dots - 1 > dir.length) return false;
+        const target = [...dir.slice(0, dir.length - (dots - 1)), ...path];
+        return target.join('/') === module.join('/');
+    }
+    if (!path.length || path.length > module.length) return false;
+    return module.slice(-path.length).join('/') === path.join('/');
 }
 
 /** Whether the import's lines meet the finding's. */

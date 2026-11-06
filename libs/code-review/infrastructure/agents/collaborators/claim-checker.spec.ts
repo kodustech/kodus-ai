@@ -1979,6 +1979,57 @@ describe('checkClaims — an import used without its name (review round 6)', () 
             expect: 'drop',
         },
         {
+            name: 'a Python module re-exported by a relative import',
+            file: 'app/api.py',
+            line: 1,
+            symbol: 'connect',
+            files: {
+                'app/api.py': 'from app._impl import connect',
+                'app/_impl.py': 'def connect():\n    pass',
+                'app/main.py': 'from .api import connect',
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'a Python module reached through its package path',
+            file: 'src/pkg/api.py',
+            line: 1,
+            symbol: 'connect',
+            files: {
+                'src/pkg/api.py': 'from pkg._impl import connect',
+                'src/pkg/_impl.py': 'def connect():\n    pass',
+                'app/main.py': 'import pkg.api\npkg.api.connect()',
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'a Python import of the name from another module with the same basename, unused',
+            file: 'tests/api.py',
+            line: 1,
+            symbol: 'connect',
+            files: {
+                'tests/api.py':
+                    'from pkg._impl import connect\n\ndef run():\n    pass',
+                'pkg/_impl.py': 'def connect():\n    pass',
+                'app/api.py': 'from pkg._impl import connect\nconnect()',
+                'app/main.py': 'from app.api import connect',
+            },
+            expect: 'keep',
+        },
+        {
+            name: 'a Python import reached by an attribute chain on another object, unused',
+            file: 'tests/api.py',
+            line: 1,
+            symbol: 'connect',
+            files: {
+                'tests/api.py':
+                    'from pkg._impl import connect\n\ndef run():\n    pass',
+                'pkg/_impl.py': 'def connect():\n    pass',
+                'app/main.py': 'client.api.connect(x)',
+            },
+            expect: 'keep',
+        },
+        {
             name: 'a Python import nobody re-exports, unused',
             file: 'pkg/job.py',
             line: 1,
