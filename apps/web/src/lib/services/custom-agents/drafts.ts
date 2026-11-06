@@ -1132,7 +1132,7 @@ export type MentionedFile = Pick<KnowledgeItem, "path" | "kind" | "repository">;
 /** A text file named in prose: `rules/x.mdc`, `CLAUDE.md`, never a URL or a
  *  code file (instructions name code to look at, not rules to follow). */
 const MENTIONED_FILE =
-    /(?:^|[\s`'"(\[<])((?:[\w.-]+\/)*[\w.-]+\.(?:mdc|mdx|md|markdown))(?=$|[\s`'".,;:!?)\]>])/gi;
+    /(?:^|[\s`'"([<])((?:[\w.-]+\/)*[\w.-]+\.(?:mdc|mdx|md|markdown))(?=$|[\s`'".,;:!?)\]>])/gi;
 
 /** A phrase that names where a file lives: a named repository after "in",
  *  "from"… ("in the pump-rules repository", "from our rules repo"), the
@@ -1244,6 +1244,17 @@ export const mentionedFilesNotFollowed = (
         (mark) => (mark.index ?? 0) + mark[0].length,
     );
     const sentenceOf = (position: number) => sentenceIndex(ends, position);
+    // `mentions` is sorted: the first one at or after a position, by halving.
+    const firstMentionFrom = (position: number) => {
+        let low = 0;
+        let high = mentions.length;
+        while (low < high) {
+            const mid = (low + high) >> 1;
+            if (mentions[mid].at < position) low = mid + 1;
+            else high = mid;
+        }
+        return low;
+    };
     // Every place phrase, with the linked repository it names if any. A
     // phrase over a file's own path is the file, not a place ("the rules in
     // docs/rules.md"). One that crosses a sentence end places nothing ("in
@@ -1258,24 +1269,44 @@ export const mentionedFilesNotFollowed = (
             if (!text.slice(start, ends[sentence]).includes("/")) return [];
             end = ends[sentence];
         }
-        const named = mentions.find(
-            (mention) => mention.at >= start && mention.at < end,
-        );
-        return [{ sentence, at: start, repository: named?.repository }];
+        const named = mentions[firstMentionFrom(start)];
+        const repository =
+            named && named.at < end ? named.repository : undefined;
+        return [{ at: start, repository }];
     });
-    // The one that belongs to a file in its sentence: the one right after it
-    // ("docs/b.md in the pump-rules repository"), else the last before it
-    // ("In the pump-rules repository, read docs/a.md"), else the first after.
-    const nearest = <T extends { at: number }>(
+    // Places and linked mentions by sentence, built once for every file.
+    const bySentence = <T extends { at: number }>(items: T[]) => {
+        const map = new Map<number, T[]>();
+        for (const item of items) {
+            const sentence = sentenceOf(item.at);
+            const group = map.get(sentence);
+            if (group) group.push(item);
+            else map.set(sentence, [item]);
+        }
+        return map;
+    };
+    const placesBySentence = bySentence(places);
+    const mentionsBySentence = bySentence(mentions);
+    // What follows a file and still belongs to it: "docs/b.md in the
+    // pump-rules repository" (a place starts with its preposition), "docs/b.md
+    // from irrigation-rules" (a mention after one).
+    const PLACE_RIGHT_AFTER = /^[\s\x60'"),]*$/;
+    const MENTION_RIGHT_AFTER =
+        /^[\s\x60'"),]*(?:in|from|on|at|inside|under)\s+(?:the\s+)?[\x60'"]?$/;
+    const rightAfter = <T extends { at: number }>(
         candidates: T[],
-        file: { at: number; end: number },
+        end: number,
+        between: RegExp,
     ) =>
         candidates.find(
             (candidate) =>
-                candidate.at >= file.end &&
-                /^[\s\x60'"),]*$/.test(text.slice(file.end, candidate.at)),
-        ) ??
-        candidates.filter((candidate) => candidate.at < file.at).pop() ??
+                candidate.at >= end &&
+                between.test(text.slice(end, candidate.at)),
+        );
+    // Otherwise the last one before the file in its sentence ("In the
+    // pump-rules repository, read docs/a.md"), else the first after it.
+    const nearest = <T extends { at: number }>(candidates: T[], at: number) =>
+        candidates.filter((candidate) => candidate.at < at).pop() ??
         candidates[0];
     const offered = new Set<string>();
     const found: MentionedFile[] = [];
@@ -1303,24 +1334,28 @@ export const mentionedFilesNotFollowed = (
               }
             : null;
         const sentence = sentenceOf(at);
-        const placesHere = places.filter((p) => p.sentence === sentence);
-        const mentionsHere = mentions.filter(
-            (mention) => sentenceOf(mention.at) === sentence,
-        );
+        const placesHere = placesBySentence.get(sentence) ?? [];
+        const mentionsHere = mentionsBySentence.get(sentence) ?? [];
+        const own =
+            rightAfter(placesHere, end, PLACE_RIGHT_AFTER) ??
+            rightAfter(mentionsHere, end, MENTION_RIGHT_AFTER);
         let repository: string | undefined;
         if (prefixed) {
             repository = prefixed.repository;
+        } else if (own) {
+            // What right follows the file says where it lives: there, or
+            // nowhere when it names no linked repository.
+            repository = own.repository;
+            if (!repository) continue;
         } else if (placesHere.length) {
-            // The sentence says where the file lives: there, or nowhere.
-            repository = nearest(placesHere, { at, end }).repository;
+            // The sentence says where its files live: there, or nowhere.
+            repository = nearest(placesHere, at).repository;
             if (!repository) continue;
         } else if (mentionsHere.length) {
-            // "read x.mdc in irrigation-rules"
-            repository = nearest(mentionsHere, { at, end }).repository;
+            // "read x.mdc, kept in irrigation-rules"
+            repository = nearest(mentionsHere, at).repository;
         } else {
-            repository = mentions
-                .filter((mention) => mention.at < at)
-                .pop()?.repository;
+            repository = mentions[firstMentionFrom(at) - 1]?.repository;
         }
         if (NOT_A_RULE_FILE.test(cited.split("/").pop() ?? "")) continue;
         const item = knowledgeItemFromPath(prefixed ? prefixed.rest : cited);

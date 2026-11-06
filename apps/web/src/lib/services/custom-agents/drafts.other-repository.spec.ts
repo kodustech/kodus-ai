@@ -544,6 +544,15 @@ describe("mentionedFilesNotFollowed", () => {
             ).toEqual([`${RULES}:docs/a.md`]);
         });
 
+        it("does not let an earlier file's place drop a later file placed right after it", () => {
+            expect(
+                placed(
+                    "Read docs/a.md in the pump-rules repository and docs/b.md from irrigation-rules.",
+                    [RULES],
+                ),
+            ).toEqual([`${RULES}:docs/b.md`]);
+        });
+
         it("still places a file by a linked repository named in an earlier sentence", () => {
             expect(
                 placed(
