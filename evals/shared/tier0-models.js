@@ -74,9 +74,8 @@ const TIER0 = {
     // Kimi K3 via Together (01/10): a Moonshot ficou sem saldo no meio da fase 1.
     'kimi-k3@together': { provider: 'openai_compatible', doModel: 'moonshotai/Kimi-K3', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
     'deepseek-v4.1-flash@together': { provider: 'openai_compatible', doModel: 'deepseek-ai/DeepSeek-V4.1-Flash', keyEnvs: ['BYOK_TOGETHER_API_KEY'], baseURL: 'https://api.together.xyz/v1' },
-    // K3 usa chave própria (KIMI_NEW) — crédito limitado, ver custo antes de
-    // disparar passada cheia: $3/$15 por milhão, ~3x o k2.7.
-    'kimi-k3': { provider: 'openai_compatible', keyEnvs: ['KIMI_NEW', 'BYOK_MOONSHOT_API_KEY', 'API_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
+    // $3/$15 por milhão, ~3x o k2.7.
+    'kimi-k3': { provider: 'openai_compatible', keyEnvs: ['API_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
     // Kimi k2.7-code served via NOVITA (openai_compatible transport) — the host
     // an org may pick instead of Moonshot-native. Different wrapping than the
     // Anthropic-protocol Moonshot endpoint, useful for the return-shape corpus.
@@ -140,6 +139,22 @@ const TIER0 = {
         keyEnvs: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY', 'BYOK_FIREWORKS_API_KEY'],
         baseURL: 'https://api.fireworks.ai/inference/v1',
     },
+
+    // codereviewbench.com, 2026-11: the routes the site's models run on, each on
+    // the provider its first published run used (DeepSeek and Kimi native).
+    // `deepseek-flash` is DeepSeek's id for the newest V4.1 Flash snapshot.
+    'deepseek-v4.1-flash': { provider: 'openai_compatible', doModel: 'deepseek-flash', keyEnvs: ['API_DEEPSEEK_API_KEY'], baseURL: 'https://api.deepseek.com' },
+    'kimi-k3.1-pro': { provider: 'openai_compatible', keyEnvs: ['API_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
+    'qwen3.8-max-0902': { provider: 'openai_compatible', keyEnvs: ['QWEN_API_KEY'], baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },
+    'glm-5.3@fireworks': { provider: 'openai_compatible', doModel: 'accounts/fireworks/models/glm-5p3', keyEnvs: ['API_FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
+    'glm-5.3-flash@fireworks': { provider: 'openai_compatible', doModel: 'accounts/fireworks/models/glm-5p3-flash', keyEnvs: ['API_FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
+    'minimax-m3@fireworks': { provider: 'openai_compatible', doModel: 'accounts/fireworks/models/minimax-m3', keyEnvs: ['API_FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
+    'gemini-3.8-flash': { provider: 'google', keyEnvs: ['API_GOOGLE_AI_API_KEY'] },
+    // GPT through the ChatGPT subscription: the native OpenAI provider pointed at
+    // evals/shared/codex-subscription-proxy.js, which must be running. The proxy
+    // authenticates with the Codex login, so the slot's key is a placeholder.
+    'gpt-6.1-sol@sub': { provider: 'openai', doModel: 'gpt-6.1-sol', codexSubscription: true, keyEnvs: [], baseURL: 'http://127.0.0.1:18765/v1' },
+    'gpt-6-luna@sub': { provider: 'openai', doModel: 'gpt-6-luna', codexSubscription: true, keyEnvs: [], baseURL: 'http://127.0.0.1:18765/v1' },
 
     // Scripted local model (evals/shared/fake-llm-server.js) for the wiring
     // smoke: an org's BYOK openai_compatible endpoint at 127.0.0.1.
