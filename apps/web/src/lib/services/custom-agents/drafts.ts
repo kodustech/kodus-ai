@@ -1197,9 +1197,17 @@ const LOCAL_PLACE = new RegExp(
 /** What turns a local place into a comparison: "the same repo as …". */
 const COMPARED_TO = /^\s+(?:as|like|que)\s+(?:(?:the|o|a)\s+)?[\x60'"]?/;
 
-/** An owner/name (or its URL) at the very start of a text. */
-const UNLINKED_NAMED =
-    /^(?:https?:\/\/[\w.-]+\/)?[\w-][\w.-]*\/[\w.-]*[\w-](?![\w/-])(?!\.[\w-])/;
+/** A repository named at the very start of a text, linked or not: an
+ *  owner/name or its URL, "the pump-rules repository", "repositório X".
+ *  "this repository" names the reviewed one, not another. */
+const NAMES_A_REPOSITORY = new RegExp(
+    [
+        String.raw`^(?:https?:\/\/[\w.-]+\/)?[\w-][\w.-]*\/[\w.-]*[\w-](?![\w/-])(?!\.[\w-])`,
+        String.raw`^(?!(?:this|the\s+same)\s+(?:repo|repository)\b)(?:(?:our|their|its)\s+)?(?:[\x60'"]?[\w./-]+[\x60'"]?\s+){1,4}(?:repo|repository)\b`,
+        String.raw`^reposit[óo]rio\s+[\x60'"]?[\w./-]+`,
+    ].join("|"),
+    "i",
+);
 
 /** An owner/name the instructions write that is not a linked repository
  *  (a URL to it too): it can be the other side of a choice ("in acme/rules
@@ -1431,8 +1439,9 @@ export const mentionedFilesNotFollowed = (
                 return [];
             // A comparison counts only when it names a repository: "as
             // acme/rules" (linked, or its URL) places there, "as
-            // other/policies" (not linked) nowhere. "The same repo as
-            // before" names none: still the reviewed one.
+            // other/policies" or "as the pump-rules repository" (not linked)
+            // nowhere. "The same repo as before" names none: still the
+            // reviewed one.
             const compared = COMPARED_TO.exec(text.slice(end));
             if (compared) {
                 const after = end + compared[0].length;
@@ -1447,7 +1456,7 @@ export const mentionedFilesNotFollowed = (
                         : named.repository;
                     return [{ at: start, end, repository }];
                 }
-                if (UNLINKED_NAMED.test(text.slice(after))) {
+                if (NAMES_A_REPOSITORY.test(text.slice(after))) {
                     return [{ at: start, end }];
                 }
             }

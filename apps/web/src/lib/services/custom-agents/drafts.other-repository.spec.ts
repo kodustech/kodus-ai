@@ -794,6 +794,22 @@ describe("mentionedFilesNotFollowed", () => {
             }
         });
 
+        it("offers nothing for a file compared to a repository named with its noun and not linked", () => {
+            expect(
+                placed(
+                    "Read docs/conventions.md in the same repo as the pump-rules repository.",
+                    [RULES],
+                ),
+            ).toEqual([]);
+            // "this repository" is the reviewed one.
+            expect(
+                placed(
+                    "Use irrigation-rules. Read docs/conventions.md in the same repo as this repository.",
+                    [RULES],
+                ),
+            ).toEqual(["(reviewed):docs/conventions.md"]);
+        });
+
         it("reads a Portuguese list as it reads an English one", () => {
             expect(
                 placed(
