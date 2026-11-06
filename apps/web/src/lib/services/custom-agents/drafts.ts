@@ -1459,8 +1459,20 @@ export const mentionedFilesNotFollowed = (
                 // Read within its own sentence: "as before. Follow every
                 // repository rule." names no repository.
                 const sentenceEnd = ends[sentenceOf(after)] ?? text.length;
-                if (NAMES_A_REPOSITORY.test(text.slice(after, sentenceEnd))) {
-                    return [{ at: start, end }];
+                const naming = NAMES_A_REPOSITORY.exec(
+                    text.slice(after, sentenceEnd),
+                );
+                if (naming) {
+                    // A linked repository inside it ("as our
+                    // irrigation-rules repository") is the one compared to.
+                    const inside = mentions[firstMentionFrom(after)];
+                    const repository =
+                        inside &&
+                        inside.at < after + naming[0].length &&
+                        !inside.ambiguous
+                            ? inside.repository
+                            : undefined;
+                    return [{ at: start, end, repository }];
                 }
             }
             return [{ at: start, end, local: true }];

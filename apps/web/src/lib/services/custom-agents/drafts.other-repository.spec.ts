@@ -820,6 +820,15 @@ describe("mentionedFilesNotFollowed", () => {
             }
         });
 
+        it("places a file compared to a linked repository named with its noun there", () => {
+            expect(
+                placed(
+                    "Read docs/conventions.md in the same repo as our irrigation-rules repository.",
+                    [RULES],
+                ),
+            ).toEqual([`${RULES}:docs/conventions.md`]);
+        });
+
         it("reads a Portuguese list as it reads an English one", () => {
             expect(
                 placed(
