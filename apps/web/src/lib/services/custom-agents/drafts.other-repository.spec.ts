@@ -6,11 +6,11 @@ import {
     knowledgeChoices,
     knowledgeKey,
     mentionedButNotFollowed,
-    mentionedFilesNotFollowed,
     prepareKnowledgeForSave,
     sameKnowledge,
     setAgentKnowledge,
 } from "./drafts";
+import { mentionedFilesNotFollowed } from "./mentioned-files";
 import type { KnowledgeItem } from "./types";
 
 const RULES = "greenhouse/irrigation-rules";

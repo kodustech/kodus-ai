@@ -11,14 +11,16 @@ import {
     knowledgeKey,
     knowledgeTargetKey,
     mentionedButNotFollowed,
-    mentionedFilesNotFollowed,
     repositoryKey,
     sameKnowledge,
     setAgentKnowledge,
     skillFolderName,
-    type MentionedFile,
 } from "@services/custom-agents/drafts";
 import { useResolveCustomAgent } from "@services/custom-agents/hooks";
+import {
+    mentionedFilesNotFollowed,
+    type MentionedFile,
+} from "@services/custom-agents/mentioned-files";
 import type {
     CustomAgentResolveReport,
     KnowledgeCandidate,
