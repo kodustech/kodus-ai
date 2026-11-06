@@ -61,12 +61,13 @@ const LOCAL_PLACE = new RegExp(
 const COMPARED_TO = /^\s+(?:as|like|que)\s+(?:(?:the|o|a)\s+)?[\x60'"]?/;
 
 /** A repository named at the very start of a text, linked or not: an
- *  owner/name or its URL, "the pump-rules repository", "repositório X".
- *  "this repository" names the reviewed one, not another. */
+ *  owner/name or its URL, "the pump-rules repository", "our team's rules
+ *  repository", "repositório X". "this repository" names the reviewed one,
+ *  not another. */
 const NAMES_A_REPOSITORY = new RegExp(
     [
         String.raw`^(?:https?:\/\/[\w.-]+\/)?[\w-][\w.-]*\/[\w.-]*[\w-](?![\w/-])(?!\.[\w-])`,
-        String.raw`^(?!(?:this|the\s+same)\s+(?:repo|repository)\b)(?:(?:our|their|its)\s+)?(?:[\x60'"]?[\w/-]+(?:[./][\w/-]+)*[\x60'"]?\s+){1,4}(?:repo|repository)\b`,
+        String.raw`^(?!(?:this|the\s+same)\s+(?:repo|repository)\b)(?:(?:our|their|its)\s+)?(?:[\x60'"]?[\w/-]+(?:[./][\w/-]+)*(?:'s)?[\x60'"]?\s+){1,4}(?:repo|repository)\b`,
         String.raw`^reposit[óo]rio\s+[\x60'"]?[\w./-]+`,
     ].join("|"),
     "i",
@@ -340,6 +341,31 @@ const findLocalPlaces = (
         const compared = COMPARED_TO.exec(text.slice(end));
         if (compared) {
             const after = end + compared[0].length;
+            // A phrase naming a repository, read within its own sentence ("as
+            // before. Follow every repository rule." names none). The one
+            // compared to is the name at its head: right before its noun
+            // ("our team's irrigation-rules repository" is irrigation-rules,
+            // not team), or the whole name ("acme/rules", its URL,
+            // "repositório acme/rules"). Not linked: nowhere.
+            const sentenceEnd = ends[sentenceOf(after)] ?? text.length;
+            const naming = NAMES_A_REPOSITORY.exec(
+                text.slice(after, sentenceEnd),
+            );
+            if (naming) {
+                const phraseEnd = after + naming[0].length;
+                const head = mentions[firstFrom(mentions, phraseEnd) - 1];
+                const repository =
+                    head &&
+                    head.at >= after &&
+                    !head.ambiguous &&
+                    /^[\s\x60'"]*(?:repo|repository)?$/.test(
+                        text.slice(head.end, phraseEnd),
+                    )
+                        ? head.repository
+                        : undefined;
+                return [{ at, end, repository }];
+            }
+            // A linked name right after the connector ("as irrigation-rules").
             if (
                 named &&
                 /^(?:https?:\/\/[\w.-]+\/)?$/.test(text.slice(after, named.at))
@@ -347,24 +373,6 @@ const findLocalPlaces = (
                 const repository = named.ambiguous
                     ? undefined
                     : named.repository;
-                return [{ at, end, repository }];
-            }
-            // Read within its own sentence: "as before. Follow every
-            // repository rule." names no repository.
-            const sentenceEnd = ends[sentenceOf(after)] ?? text.length;
-            const naming = NAMES_A_REPOSITORY.exec(
-                text.slice(after, sentenceEnd),
-            );
-            if (naming) {
-                // A linked repository inside it ("as our irrigation-rules
-                // repository") is the one compared to.
-                const inside = mentions[firstFrom(mentions, after)];
-                const repository =
-                    inside &&
-                    inside.at < after + naming[0].length &&
-                    !inside.ambiguous
-                        ? inside.repository
-                        : undefined;
                 return [{ at, end, repository }];
             }
         }

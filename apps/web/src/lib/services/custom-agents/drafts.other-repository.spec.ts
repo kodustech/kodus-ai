@@ -829,6 +829,23 @@ describe("mentionedFilesNotFollowed", () => {
             ).toEqual([`${RULES}:docs/conventions.md`]);
         });
 
+        it("places a compared file by the name right before the repository noun, not a possessor", () => {
+            for (const text of [
+                "Read docs/conventions.md in the same repo as our team's irrigation-rules repository.",
+                "Read docs/conventions.md in the same repo as the team irrigation-rules repository.",
+            ]) {
+                expect(placed(text, ["acme/team", RULES])).toEqual([
+                    `${RULES}:docs/conventions.md`,
+                ]);
+            }
+            expect(
+                placed(
+                    "Read docs/conventions.md in the same repo as our team's valve-rules repository.",
+                    ["acme/team"],
+                ),
+            ).toEqual([]);
+        });
+
         it("reads a Portuguese list as it reads an English one", () => {
             expect(
                 placed(
