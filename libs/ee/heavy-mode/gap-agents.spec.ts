@@ -82,6 +82,9 @@ describe('gap agents (exp/finder-gap-tools)', () => {
     it('tells a failing fuzzer run from any other output', () => {
         expect(FUZZER_FAILURE.test('Error: Property failed after 3 tests\n{ seed: 1, counterexample: [""] }')).toBe(true);
         expect(FUZZER_FAILURE.test('Falsifying example: t(s="")')).toBe(true);
+        expect(FUZZER_FAILURE.test('#2: failed on input 7343133144738243405')).toBe(true);
+        expect(FUZZER_FAILURE.test('Property [Main:small] failed with sample {0=1000}')).toBe(true);
+        expect(FUZZER_FAILURE.test("main.rb:3: 0 successful tests, failed on: (RuntimeError)")).toBe(true);
         expect(FUZZER_FAILURE.test("Error: Cannot find module 'zod'")).toBe(false);
     });
 

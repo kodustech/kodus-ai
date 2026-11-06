@@ -82,8 +82,20 @@ export const kodusBenchmarkTemplate = Template()
  */
 // Property-based fuzzers for the fuzz agent, in a fixed prefix the runner
 // points NODE_PATH / PYTHONPATH at (gap-agents.ts FUZZ_LIB_DIR).
+// Go uses the standard library's testing/quick; Java runs jqwik properties
+// through the JUnit console launcher; Ruby uses rantly.
 const fastCheckVersion = '3.23.2';
 const hypothesisVersion = '6.112.0';
+const jqwikVersion = '1.9.2';
+const junitConsoleVersion = '1.11.4';
+const rantlyVersion = '2.0.0';
+const maven = 'https://repo1.maven.org/maven2';
+const javaFuzzJars = [
+    `${maven}/net/jqwik/jqwik-api/${jqwikVersion}/jqwik-api-${jqwikVersion}.jar`,
+    `${maven}/net/jqwik/jqwik-engine/${jqwikVersion}/jqwik-engine-${jqwikVersion}.jar`,
+    `${maven}/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar`,
+    `${maven}/org/apiguardian/apiguardian-api/1.1.2/apiguardian-api-1.1.2.jar`,
+];
 
 export const kodusBenchmarkExecTemplate = Template()
     .fromBaseImage()
@@ -93,4 +105,8 @@ export const kodusBenchmarkExecTemplate = Template()
         'sudo mkdir -p /opt/kodus-fuzz/py',
         `sudo npm install --prefix /opt/kodus-fuzz fast-check@${fastCheckVersion}`,
         `sudo python3 -m pip install --target /opt/kodus-fuzz/py hypothesis==${hypothesisVersion}`,
+        'sudo mkdir -p /opt/kodus-fuzz/java',
+        ...javaFuzzJars.map((url) => `sudo wget -q -P /opt/kodus-fuzz/java ${url}`),
+        `sudo wget -q -O /opt/kodus-fuzz/junit-console.jar ${maven}/org/junit/platform/junit-platform-console-standalone/${junitConsoleVersion}/junit-platform-console-standalone-${junitConsoleVersion}.jar`,
+        `sudo gem install --no-document rantly -v ${rantlyVersion}`,
     ]);

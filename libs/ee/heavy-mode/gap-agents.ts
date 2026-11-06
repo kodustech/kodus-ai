@@ -41,13 +41,13 @@ const CODE_EXEC = `- Logic that fails when it is actually run. METHOD:
 const FUZZ = `- Logic that breaks on inputs nobody thought of. METHOD:
   1. Pick the changed functions whose result depends on their input values: parsing and formatting, regex, slicing, arithmetic, dates, units, rounding, sorting, normalisation, validation, encoding, a small algorithm or state machine.
   2. Copy each into a standalone program with minimal stubs for the project's imports. When the PR changed an existing function, also rebuild its previous version from the diff's removed lines.
-  3. Fuzz it with runSnippet: fast-check in javascript (require('fast-check'), fc.assert(fc.property(...), { numRuns: 300 })) or Hypothesis in python (@given, @settings(max_examples=300)). Generate the whole domain the callers can pass: empty, huge, negative, unicode, whitespace, separators, nested and duplicate values. Check one oracle per property:
+  3. Fuzz it with runSnippet, in the language of the code: javascript with fast-check (require('fast-check'); fc.assert(fc.property(...), { numRuns: 300 })), python with Hypothesis (@given, @settings(max_examples=300)), go with the standard library's testing/quick (fmt.Println(quick.Check(f, &quick.Config{MaxCount: 300}))), java with jqwik (a class Main whose @Property methods take @ForAll arguments; they run on their own), ruby with rantly (require 'rantly'; require 'rantly/property'; Rantly::Property.new(proc { ... }).check(300) { |x| raise "..." unless ... }). Generate the whole domain the callers can pass: empty, huge, negative, unicode, whitespace, separators, nested and duplicate values. Check one oracle per property:
      a. it must not throw, hang or return undefined/NaN on an input its callers can pass;
      b. where the PR did not mean to change the behaviour, the new version must return what the previous version returned;
      c. a property the function promises: format then parse gives the input back, applying it twice changes nothing, the output keeps the length, order or range it should.
   4. A failing property is shrunk to a minimal input. Before reporting, read the callers (getCallers, grep) and drop failures on inputs the callers can never pass and differences the PR intends.
-  Report the minimal failing input, the output and what was expected, anchored to the changed line. Write TypeScript as plain JavaScript. Skip logic that cannot be isolated without guessing.
-  Only a property that a fuzzer run failed counts: if no fast-check or Hypothesis run in this review failed, every finding you submit is discarded. Do not report from reading alone. When the PR has no logic you can isolate in javascript or python, submit no findings.`;
+  Report the minimal failing input, the output and what was expected, anchored to the changed line. Write TypeScript as plain JavaScript and Kotlin as Java. Skip logic that cannot be isolated without guessing.
+  Only a property that a fuzzer run failed counts: if no fuzzer run in this review failed, every finding you submit is discarded. Do not report from reading alone. When the PR has no logic you can isolate, submit no findings.`;
 
 /** The experiment's agents, as lenses: same prompt shape, own focus. */
 export const GAP_AGENTS: Array<HeavyLens & { tools: 'readers' | 'siblings' | 'exec' | 'fuzz' }> = [
@@ -233,7 +233,7 @@ export function buildFindSiblingsTool(remote: RemoteCommands): AgentTool {
     };
 }
 
-/** fast-check and Hypothesis on the benchmark exec template (e2b-sandbox/template.ts). */
+/** The fuzzers on the benchmark exec template (e2b-sandbox/template.ts). */
 export const FUZZ_LIB_DIR = '/opt/kodus-fuzz';
 
 const RUNNERS: Record<string, { ext: string; cmd: (file: string) => string }> = {
@@ -241,18 +241,24 @@ const RUNNERS: Record<string, { ext: string; cmd: (file: string) => string }> = 
     python: { ext: 'py', cmd: (f) => `python3 ${f}` },
     ruby: { ext: 'rb', cmd: (f) => `ruby ${f}` },
     go: { ext: 'go', cmd: (f) => `go run ${f}` },
-    java: { ext: 'java', cmd: (f) => `java ${f}` },
+    // A program with jqwik @Property methods runs through the JUnit console.
+    java: {
+        ext: 'java',
+        cmd: (f) =>
+            `sh -c 'if grep -q "@Property" ${f}; then CP=$(ls ${FUZZ_LIB_DIR}/java/*.jar | tr "\\n" ":"); javac -cp "$CP" -d . ${f} && java -jar ${FUZZ_LIB_DIR}/junit-console.jar execute -cp ".:$CP" --select-class Main --disable-banner --details=tree; else java ${f}; fi'`,
+    },
 };
 
-/** What fast-check (`fc.assert`) and Hypothesis print when a property fails. */
-export const FUZZER_FAILURE = /Property failed after|Falsifying example/;
+/** What each fuzzer prints when a property fails: fast-check, Hypothesis,
+ *  Go's testing/quick, jqwik, rantly. */
+export const FUZZER_FAILURE = /Property failed after|Falsifying example|#\d+: failed on input|Property \[[^\]]*\] failed with sample|successful tests?, failed on:/;
 
 export function buildRunSnippetTool(remote: RemoteCommands, onOutput?: (output: string) => void): AgentTool {
     let n = 0;
     return {
         name: 'runSnippet',
         description:
-            'Run a short standalone program and return its output (stdout, stderr, exit code). Languages: javascript (write TypeScript as plain JavaScript), python, ruby, go, java. No project dependencies are installed: copy the logic under test into the program with minimal stubs. 30 s limit. fast-check (javascript) and Hypothesis (python) are installed.',
+            'Run a short standalone program and return its output (stdout, stderr, exit code). Languages: javascript (write TypeScript as plain JavaScript), python, ruby, go, java. No project dependencies are installed: copy the logic under test into the program with minimal stubs. 30 s limit. Fuzzers: fast-check (javascript), Hypothesis (python), testing/quick (go), jqwik (java, @Property methods in class Main), rantly (ruby).',
         inputSchema: {
             type: 'object',
             properties: {
