@@ -105,3 +105,48 @@ export function githubUserAuthorizationUrl(
     url.searchParams.set('state', state);
     return url.toString();
 }
+
+/**
+ * The steps of linking an installation, in order. A failed link is rewrapped
+ * for the client, so the step is what tells the log where it stopped.
+ */
+export type InstallationLinkStep =
+    | 'check-env'
+    | 'open-state'
+    | 'exchange-user-code'
+    | 'list-user-installations'
+    | 'check-existing-links'
+    | 'mint-installation-token'
+    | 'get-installation'
+    | 'list-repositories'
+    | 'find-integration'
+    | 'create-integration'
+    | 'update-integration'
+    | 'update-installation-status';
+
+export type InstallationLinkProgress = {
+    step: InstallationLinkStep;
+    /** From GitHub's installation, once read: "Organization" or "User". */
+    targetType?: string;
+    hasAccount?: boolean;
+};
+
+/**
+ * What a link log carries. Never GitHub's authorization code or state: in the
+ * OAuth path `code` is logged only when it is an installation id.
+ */
+export function installationLinkLogMetadata(
+    params: any,
+    progress: InstallationLinkProgress,
+) {
+    return {
+        step: progress.step,
+        installationId: isInstallationId(params?.code)
+            ? params.code
+            : undefined,
+        organizationAndTeamData: params?.organizationAndTeamData,
+        userId: params?.userId,
+        targetType: progress.targetType,
+        hasAccount: progress.hasAccount,
+    };
+}
