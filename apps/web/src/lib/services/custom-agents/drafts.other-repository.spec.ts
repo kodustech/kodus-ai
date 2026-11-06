@@ -333,6 +333,19 @@ describe("mentionedFilesNotFollowed", () => {
         ).toEqual([{ path: "docs/conventions.md", kind: "doc" }]);
     });
 
+    it("keeps file placement aligned after uppercase dotted I", () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "In greenhouse/pump-rules, review İİ. docs/ValveRules.md in greenhouse/irrigation-rules.",
+                [OTHER_RULES, RULES],
+                [],
+                "valves",
+            ),
+        ).toEqual([
+            { path: "docs/ValveRules.md", kind: "doc", repository: RULES },
+        ]);
+    });
+
     it("places a file by a linked repository named after it in the same sentence", () => {
         expect(
             mentionedFilesNotFollowed(

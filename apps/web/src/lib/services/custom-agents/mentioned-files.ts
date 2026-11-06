@@ -157,7 +157,11 @@ const escapeRegExp = (value: string) =>
     value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const read = (instructions: string): Reading => {
-    const text = instructions.toLowerCase();
+    // Keep offsets aligned with the original file paths. Lowercasing U+0130
+    // (İ) expands it into two code units, so leave that character as written.
+    const text = instructions.replace(/[^\u0130]+/g, (part) =>
+        part.toLowerCase(),
+    );
     const files = [...instructions.matchAll(MENTIONED_FILE)].map((match) => {
         const at = (match.index ?? 0) + match[0].indexOf(match[1]);
         return { cited: match[1], at, end: at + match[1].length };
