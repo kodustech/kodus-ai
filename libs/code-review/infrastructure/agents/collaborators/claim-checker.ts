@@ -194,10 +194,11 @@ const IMPORT_LINE =
  * modules, C# `using X.Y;` and `using static`, C++ `using namespace` (not
  * `using std::cout;`, which binds `cout`, nor `using X = Y;`), OCaml/F# `open`,
  * and wildcards
- * (`*`, `._`, `::*`, `from x import *`, Go's `import . "x"`).
+ * (`*`, `._`, `::*`, `from x import *`, Go's `import . "x"`), and an import
+ * bound to no name (Rust's `use x::Trait as _;`, used only through methods).
  */
 const NAMESPACE_IMPORT =
-    /^\s*(?:@(?:import|use|forward)\b|using\s+(?:namespace\s+[\p{L}_][\p{L}\p{N}_.:]*|(?:static\s+)?(?:global::)?[\p{L}_][\p{L}\p{N}_.]*)\s*;|open\s)|(?:\.|::|\\)\s*[*_]\s*(?:[;,)}\]\n]|$)|\bimport\s+\*\s*(?:[;\n]|$)|^\s*(?:import\s+)?\.\s+""/mu;
+    /^\s*(?:@(?:import|use|forward)\b|using\s+(?:namespace\s+[\p{L}_][\p{L}\p{N}_.:]*|(?:static\s+)?(?:global::)?[\p{L}_][\p{L}\p{N}_.]*)\s*;|open\s)|(?:\.|::|\\)\s*[*_]\s*(?:[;,)}\]\n]|$)|\bimport\s+\*\s*(?:[;\n]|$)|^\s*(?:import\s+)?\.\s+""|\bas\s+_(?![\p{L}\p{N}_$])/mu;
 
 /**
  * Files whose `import`/`use` brings a whole module in: Elixir, Perl and Swift
@@ -502,10 +503,7 @@ async function judgeImport(
         );
     }
     const names = boundNames(statement.text, symbol, file);
-    // The claimed name is not one the item binds (a module path segment,
-    // Python's `from` path): the claim is not about this import's binding,
-    // so it is judged as main does, by a use in any file.
-    if (!names.includes(symbol)) return undefined;
+    if (names.length === 0) return undefined;
     if (names.length > MAX_BOUND_NAMES) {
         throw new UnverifiableClaimError(
             `"${shown}" binds more names than the check reads`,
@@ -528,12 +526,19 @@ async function judgeImport(
             !isStatementLine(m, violation, statement) &&
             names.some((name) => namesSymbol(m.text, name)),
     );
-    if (uses.length === 0) return null;
+    const bound =
+        names.includes(symbol) && others.length === 0
+            ? ''
+            : ` (bound as ${names.join(', ')})`;
     const where = [...new Set(uses.map((m) => `${m.file}:${m.line}`))]
         .slice(0, 3)
         .join(', ');
-    const bound = others.length ? ` (bound as ${names.join(', ')})` : '';
-    return `claimed "${symbol}" is unused, but this file uses it${bound} at ${where}`;
+    const used = `claimed "${symbol}" is unused, but this file uses it${bound} at ${where}`;
+    // The claimed name is not one the item binds (a module path segment,
+    // Python's `from` path): a use of what the item does bind still refutes
+    // it; otherwise it is judged as main does, by a use in any file.
+    if (!names.includes(symbol)) return uses.length ? used : undefined;
+    return uses.length ? used : null;
 }
 
 /** The symbol as a whole identifier in the line, not a part of a longer one. */
