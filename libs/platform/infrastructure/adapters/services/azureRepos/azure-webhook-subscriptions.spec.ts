@@ -436,6 +436,42 @@ describe('AzureReposService webhook subscriptions (issue #1956)', () => {
         });
     });
 
+    describe('a save that lands while the sync is setting up hooks', () => {
+        it('still runs its full pass once the targeted setup frees the slot', async () => {
+            withSelection([REPO_A, REPO_B]);
+
+            let releaseListing: (subs: AzureRepoSubscription[]) => void;
+            helper.listSubscriptions.mockImplementationOnce(
+                () =>
+                    new Promise((resolve) => {
+                        releaseListing = resolve;
+                    }),
+            );
+
+            const targeted = service.ensureRepositoryWebhooks({
+                organizationAndTeamData: orgTeam,
+                repositories: [REPO_A as any],
+            });
+            await waitFor(() => helper.listSubscriptions.mock.calls.length === 1);
+
+            // Coalesces into the slot the targeted setup holds.
+            await service.createWebhook(orgTeam);
+
+            helper.listSubscriptions.mockResolvedValue([]);
+            releaseListing!([]);
+            await targeted;
+
+            // The full pass covers the whole selection: REPO_B gets its hooks.
+            await waitFor(() =>
+                helper.createSubscriptionForProject.mock.calls.some(
+                    ([args]) =>
+                        args?.subscriptionPayload?.publisherInputs
+                            ?.repository === REPO_B.id,
+                ),
+            );
+        });
+    });
+
     // ── the caller fires this without awaiting it ─────────────────────────
     describe('never rejects, because createOrUpdateIntegrationConfig does not await it', () => {
         it('resolves when the subscription listing fails', async () => {

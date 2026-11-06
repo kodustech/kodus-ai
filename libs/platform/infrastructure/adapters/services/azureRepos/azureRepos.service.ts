@@ -2762,6 +2762,12 @@ export class AzureReposService implements Omit<
             return result;
         } finally {
             azureWebhookPassInFlight.delete(passKey);
+
+            // A save that arrived meanwhile coalesced into this slot; its
+            // full pass has to run now, or its selection never converges.
+            if (azureWebhookPassRerunRequested.delete(passKey)) {
+                void this.createWebhook(organizationAndTeamData);
+            }
         }
     }
 

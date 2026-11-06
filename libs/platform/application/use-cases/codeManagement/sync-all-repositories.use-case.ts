@@ -38,8 +38,6 @@ interface SyncTarget {
 
 type TeamOutcome = { rateLimited: boolean };
 
-const LOCK_TTL_MS = 30 * 60 * 1000;
-
 /**
  * Keeps the repository selection of every team in "review all repositories"
  * mode equal to what its credential can see, minus archived repositories
@@ -250,8 +248,11 @@ export class SyncAllRepositoriesUseCase {
         trigger: RepositorySyncTrigger,
     ): Promise<void> {
         const lockKey = `REPOSITORY_SYNC:${fingerprint}`;
+        // No TTL: its timer would release the lock while a long run is still
+        // going. The advisory lock dies with its Postgres session, so a
+        // crashed process cannot hold it.
         const lock = await this.distributedLockService
-            .acquire(lockKey, { ttl: LOCK_TTL_MS })
+            .acquire(lockKey)
             .catch((error) => {
                 this.logger.error({
                     message: 'Error acquiring the repository sync lock',
@@ -587,6 +588,8 @@ export class SyncAllRepositoriesUseCase {
             SyncAllRepositoriesUseCase.AST_BUILDS_PER_TEAM - inFlight,
         );
         const remaining = [...pending];
+        // Ids that could not be handled this run go back for the next one.
+        const retry: string[] = [];
         let enqueued = 0;
 
         while (enqueued < slots && remaining.length) {
@@ -598,17 +601,22 @@ export class SyncAllRepositoriesUseCase {
                         target.platform,
                         id,
                     );
+                if (!record) {
+                    retry.push(id);
+                    continue;
+                }
+                // False means the graph is ready or building: nothing owed.
                 if (
-                    record &&
-                    (await this.repositoryConnectionService.enqueueAstBuild({
+                    await this.repositoryConnectionService.enqueueAstBuild({
                         organizationAndTeamData: target.organizationAndTeamData,
                         record,
                         cloneUrl: repository?.http_url,
-                    }))
+                    })
                 ) {
                     enqueued += 1;
                 }
             } catch (error) {
+                retry.push(id);
                 this.logger.error({
                     message: 'Failed to enqueue an AST build from the sync',
                     context: SyncAllRepositoriesUseCase.name,
@@ -621,7 +629,7 @@ export class SyncAllRepositoriesUseCase {
             }
         }
 
-        state.pendingAstRepositoryIds = remaining;
+        state.pendingAstRepositoryIds = [...retry, ...remaining];
     }
 
     private async selectedIds(

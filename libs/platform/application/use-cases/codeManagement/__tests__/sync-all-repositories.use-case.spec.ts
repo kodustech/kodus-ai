@@ -437,6 +437,47 @@ describe('SyncAllRepositoriesUseCase', () => {
         expect(t.state('team-a').pendingAstRepositoryIds).toEqual([]);
     });
 
+    it('keeps a pending AST build whose record is missing or whose enqueue fails, for the next run', async () => {
+        const t = setup({
+            listing: [repo('1'), repo('2'), repo('3')],
+            teams: [
+                {
+                    orgTeam: TEAMS.a,
+                    mode: 'all',
+                    selected: [repo('1'), repo('2'), repo('3')],
+                    state: {
+                        status: 'done',
+                        startedAt: '2026-01-01',
+                        pendingAstRepositoryIds: ['1', '2', '3'],
+                    },
+                },
+            ],
+        });
+        t.repositoryConnectionService.findRepositoryRecord.mockImplementation(
+            async (_platform: string, id: string) =>
+                id === '1' ? null : { uuid: `rec-${id}` },
+        );
+        t.repositoryConnectionService.enqueueAstBuild.mockImplementation(
+            async ({ record }: { record: { uuid: string } }) => {
+                if (record.uuid === 'rec-2') throw new Error('queue down');
+                return true;
+            },
+        );
+
+        await t.useCase.syncTeam(TEAMS.a, 'cron');
+
+        expect(t.state('team-a').pendingAstRepositoryIds).toEqual(['1', '2']);
+    });
+
+    it('holds the credential lock for the whole run instead of letting a timer release it', async () => {
+        const t = setup({ listing: [repo('1')] });
+
+        await t.useCase.syncTeam(TEAMS.a, 'cron');
+
+        const [, options] = t.distributedLockService.acquire.mock.calls[0];
+        expect(options?.ttl).toBeUndefined();
+    });
+
     it('starts the history backfill for a bounded batch of new repositories per run', async () => {
         const listing = Array.from({ length: 30 }, (_, i) => repo(String(i)));
         const t = setup({ listing });
