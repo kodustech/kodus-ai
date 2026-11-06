@@ -6867,8 +6867,14 @@ This is an experimental feature that generates committable changes. Review the d
         repository: Partial<Repository>;
         prNumber: number;
         reason: string;
+        includeChangeRequests?: boolean;
     }): Promise<number> {
-        const { organizationAndTeamData, repository, prNumber } = params;
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            includeChangeRequests,
+        } = params;
         if (!repository?.name || !repository.id || !prNumber) {
             throw new Error(
                 'Repository and PR number are required to dismiss approval',
@@ -6892,9 +6898,14 @@ This is an experimental feature that generates committable changes. Review the d
             pull_number: prNumber,
             per_page: 100,
         });
+        // A clean review that holds approval would otherwise leave Kody's own
+        // earlier change request standing, since only an approval clears it.
+        const dismissibleStates = includeChangeRequests
+            ? ['APPROVED', 'CHANGES_REQUESTED']
+            : ['APPROVED'];
         const ownApprovals = reviews.filter(
             (review) =>
-                review.state === 'APPROVED' &&
+                dismissibleStates.includes(review.state) &&
                 review.user?.login === identity.viewer.login &&
                 review.user?.node_id === identity.viewer.id,
         );
@@ -6911,7 +6922,9 @@ This is an experimental feature that generates committable changes. Review the d
                         pull_number: prNumber,
                         review_id: reviewId,
                         message:
-                            'Kody held automatic approval after a new review.',
+                            review.state === 'CHANGES_REQUESTED'
+                                ? 'Kody found nothing left to change in a new review.'
+                                : 'Kody held automatic approval after a new review.',
                         request: { signal: controller.signal },
                     }),
                     timeoutMs,
