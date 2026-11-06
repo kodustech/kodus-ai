@@ -1,6 +1,7 @@
 import { convertToUnifiedDiffWithLineNumbers } from '@libs/common/utils/patch';
 import {
     judgeKodyRulesSharded,
+    buildShardViolationsWireSchema,
     shardViolationsSchema,
     shardViolationsWireSchema,
     RunJudge,
@@ -94,6 +95,72 @@ describe('shardViolationsSchema — model JSON parsing', () => {
         );
         // and the array itself is required at the top level
         expect(wire.required).toContain('violations');
+    });
+
+    describe('wire validate() on an off-schema shard reply', () => {
+        const violation = { ruleId: 'r-1', suggestionContent: 'x' };
+        const validate = (v: unknown) =>
+            (shardViolationsWireSchema as any).validate(v);
+
+        it.each([
+            ['{result:D}', { result: { violations: [violation] } }],
+            ['{data:D}', { data: { violations: [violation] } }],
+            ['{result:{result:D}}', { result: { result: { violations: [violation] } } }],
+            ['{content:D}', { content: { violations: [violation] } }],
+            ['{"0":D}', { '0': { violations: [violation] } }],
+            ['{Violations:[…]}', { Violations: [violation] }],
+            ['{issues:[…]}', { issues: [violation] }],
+            ['a single bare violation', violation],
+        ])('recovers the violation from %s', (_label, value) => {
+            const r = validate(value);
+            expect(r.success).toBe(true);
+            expect(r.value.violations).toHaveLength(1);
+            expect(r.value.violations[0].ruleId).toBe('r-1');
+        });
+
+        it.each([
+            ['an {error} object', { error: 'rate limited', code: 429 }],
+            [
+                'a provider envelope',
+                { choices: [{ message: { content: '{"violations":[]}' } }] },
+            ],
+            ['an unknown key', { answer: 'no violations found' }],
+        ])('rejects %s instead of reading it as a clean shard', (_l, value) => {
+            expect(validate(value).success).toBe(false);
+        });
+
+        it('keeps every violation of an index-keyed reply {"0":v,"1":v}', () => {
+            const r = validate({
+                '0': violation,
+                '1': { ...violation, ruleId: 'r-2' },
+            });
+            expect(r.success).toBe(true);
+            expect(r.value.violations.map((v: any) => v.ruleId)).toEqual([
+                'r-1',
+                'r-2',
+            ]);
+        });
+
+        it('reports a recovery and a rejection to the caller, nothing for a canonical reply', () => {
+            const events: any[] = [];
+            const schema = buildShardViolationsWireSchema((e) => events.push(e));
+            const check = (v: unknown) => (schema as any).validate(v);
+
+            check({ violations: [violation] });
+            expect(events).toEqual([]);
+
+            check({ result: { violations: [violation] } });
+            check({ error: 'rate limited', code: 429 });
+            expect(events).toEqual([
+                { kind: 'recovered', reason: 'unwrapped-result' },
+                { kind: 'rejected', keys: ['error', 'code'] },
+            ]);
+        });
+
+        it('still reads {} and {violations:[]} as a clean shard', () => {
+            expect(validate({}).value.violations).toEqual([]);
+            expect(validate({ violations: [] }).value.violations).toEqual([]);
+        });
     });
 
     it('wire schema validate() applies the lenient zod parse (missing keys → null)', () => {

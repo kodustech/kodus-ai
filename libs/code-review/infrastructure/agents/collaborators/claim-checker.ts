@@ -127,6 +127,8 @@ export function readClaim(violation: ShardViolation): Claim {
 interface GrepMatch {
     file: string;
     line: number;
+    /** The matched line's text ('' when the provider answered without it). */
+    text: string;
 }
 
 /**
@@ -143,8 +145,14 @@ function parseGrep(output: string): GrepMatch[] {
     }
     const matches: GrepMatch[] = [];
     for (const raw of text.split('\n')) {
-        const m = /^(.+?):(\d+):/.exec(raw.trim());
-        if (m) matches.push({ file: normalizePath(m[1]), line: Number(m[2]) });
+        const m = /^(.+?):(\d+):(.*)$/.exec(raw.trim());
+        if (m) {
+            matches.push({
+                file: normalizePath(m[1]),
+                line: Number(m[2]),
+                text: m[3],
+            });
+        }
     }
     return matches;
 }
@@ -166,6 +174,377 @@ function isElsewhere(match: GrepMatch, violation: ShardViolation): boolean {
     const end = violation.relevantLinesEnd ?? start;
     if (start === undefined || end === undefined) return true;
     return match.line < start || match.line > end;
+}
+
+/**
+ * A line that brings names in from another module, by the keyword that opens
+ * it in the languages the rules review: `import` (JS/TS, Java, Kotlin, Scala,
+ * Swift, Go, Dart, Haskell, Elixir), `from x import` (Python), `use` (Rust,
+ * PHP, Perl, Elixir), `using` (C#), `alias` (Elixir), `open` (OCaml, F#),
+ * `require`/`require_relative` and `x = require(` (Ruby, Lua, CommonJS), and
+ * stylesheet `@import`/`@use`/`@forward`. A re-export (`export … from`) is not
+ * one: its users are the files that import it, so it keeps the any-file rule.
+ */
+const IMPORT_LINE =
+    /^\s*(?:import\b|from\s+\S+\s+import\b|(?:const|let|var|local)\s+[^=]+=\s*require\s*\(|require(?:_relative)?\b|use\s+[\p{L}_\\:{]|using\s+[\p{L}_]|alias\s+[\p{L}_]|open\s+[\p{L}_]|@(?:import|use|forward)\b)/u;
+
+/**
+ * Imports that bring a module's members into scope without naming them: the
+ * file then uses the members, never the name a search looks for. Stylesheet
+ * modules, C# `using X.Y;` and `using static`, C++ `using namespace` (not
+ * `using std::cout;`, which binds `cout`, nor `using X = Y;`), OCaml/F# `open`,
+ * and wildcards
+ * (`*`, `._`, `::*`, `from x import *`, Go's `import . "x"`), and an import
+ * bound to no name (Rust's `use x::Trait as _;`, used only through methods).
+ */
+const NAMESPACE_IMPORT =
+    /^\s*(?:@(?:import|use|forward)\b|using\s+(?:namespace\s+[\p{L}_][\p{L}\p{N}_.:]*|(?:static\s+)?(?:global::)?[\p{L}_][\p{L}\p{N}_.]*)\s*;|open\s)|(?:\.|::|\\)\s*[*_]\s*(?:[;,)}\]\n]|$)|\bimport\s+\*\s*(?:[;\n]|$)|^\s*(?:import\s+)?\.\s+""|\bas\s+_(?![\p{L}\p{N}_$])/mu;
+
+/**
+ * Files whose `import`/`use` brings a whole module in: Elixir, Perl and Swift
+ * always, Haskell unless the import is `qualified` or lists its names without
+ * `hiding`.
+ */
+const NAMESPACE_IMPORT_FILE = /\.(?:ex|exs|pl|pm|swift)$/;
+const HASKELL_FILE = /\.l?hs$/;
+
+/** Keywords of import statements: never a name the statement binds. */
+const IMPORT_KEYWORDS = new Set([
+    'import',
+    'from',
+    'as',
+    'use',
+    'using',
+    'require',
+    'require_relative',
+    'alias',
+    'open',
+    'type',
+    'typeof',
+    'static',
+    'qualified',
+    'hiding',
+    'only',
+    'except',
+    'const',
+    'let',
+    'var',
+    'local',
+    'pub',
+    'crate',
+    'self',
+    'super',
+    'mod',
+    'export',
+    'default',
+    'show',
+    'hide',
+    'deferred',
+    'library',
+    'package',
+    'of',
+    'with',
+    'in',
+    'function',
+    'func',
+    'namespace',
+    'given',
+]);
+
+/** The most names one import item is checked by. */
+const MAX_BOUND_NAMES = 8;
+
+/**
+ * A JSX file's pragma: with the classic runtime every element compiles to a
+ * call on it, so the file uses it without ever writing its name. Plain `.js`
+ * files carry JSX too (Create React App, Preact).
+ */
+const JSX_FILE = /\.(?:jsx|tsx|js|mjs|cjs)$/;
+const JSX_PRAGMAS = new Set(['React', 'h']);
+
+/** The most lines one import statement is read across. */
+const MAX_IMPORT_LINES = 50;
+
+/**
+ * A string literal (group 1; an escape may be a line continuation), or a comment: a line comment, a block comment
+ * (to the end of the text when it never closes), or `#` after whitespace or a
+ * line start (group 2 keeps that whitespace).
+ */
+const STRING_OR_COMMENT =
+    /("(?:\\[\s\S]|[^"\\\n])*"|'(?:\\[\s\S]|[^'\\\n])*'|`(?:\\[\s\S]|[^`\\])*`)|\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|(?![\s\S]))|(^|\s)#[^\n]*/gm;
+
+/**
+ * A statement read two ways. `prose` drops comments and keeps strings: a
+ * stylesheet or Go import names its module in a string. `code` also drops
+ * strings: what is left is what the language binds, so a brace, `as` or name
+ * inside a string or a comment is not read as part of it.
+ */
+function readStatement(text: string): { prose: string; code: string } {
+    const prose = text.replace(
+        STRING_OR_COMMENT,
+        (_m, str?: string, lead?: string) => str ?? lead ?? '',
+    );
+    const code = text.replace(
+        STRING_OR_COMMENT,
+        (_m, str?: string, lead?: string) => (str ? '""' : (lead ?? '')),
+    );
+    return { prose, code };
+}
+
+/** Open minus closed braces and parentheses in the code. */
+function depthOf(code: string): number {
+    return (
+        (code.match(/[{(]/g) ?? []).length - (code.match(/[})]/g) ?? []).length
+    );
+}
+
+/**
+ * The statement starting at `lines[start]`: that line, plus the lines until
+ * its braces or parentheses close (a multi-line `import {` or `from x import (`),
+ * counted outside strings and comments, a comment spanning lines included.
+ */
+function statementAt(lines: string[], start: number): string {
+    const window = lines.slice(start, start + MAX_IMPORT_LINES);
+    const end = window.findIndex(
+        (_line, k) =>
+            depthOf(readStatement(window.slice(0, k + 1).join('\n')).code) <= 0,
+    );
+    return window.slice(0, end === -1 ? window.length : end + 1).join('\n');
+}
+
+/**
+ * The import statement an `unused` claim is about, if it is about one: read
+ * from the repository's own text of the finding's lines first, then from the
+ * code the finding cites (a name on its own line of a multi-line import).
+ * Only a statement that names the claimed symbol outside a comment counts: a
+ * finding about another symbol whose cited code happens to hold an import is
+ * not about it. A package's `__init__.py` re-exports what it imports, so its
+ * imports keep the any-file rule.
+ */
+interface ImportStatement {
+    text: string;
+    /** The statement's first line within the cited code; absent when it was
+     *  read from the repository's own line. */
+    citedLine?: number;
+}
+
+function importStatementOf(
+    violation: ShardViolation,
+    matches: GrepMatch[],
+    symbol: string,
+): ImportStatement | undefined {
+    const file = normalizePath(violation.relevantFile ?? '');
+    if (file === '__init__.py' || file.endsWith('/__init__.py')) {
+        return undefined;
+    }
+    const own = matches
+        .filter((m) => m.file === file && !isElsewhere(m, violation))
+        .map((m) => m.text);
+    const cited = (violation.existingCode ?? '').split('\n');
+    const statements: ImportStatement[] = [
+        ...own
+            .filter((line) => IMPORT_LINE.test(line))
+            .map((text) => ({ text })),
+        ...cited.flatMap((line, i) =>
+            IMPORT_LINE.test(line)
+                ? [{ text: statementAt(cited, i), citedLine: i }]
+                : [],
+        ),
+    ];
+    return statements.find((statement) =>
+        hasIdentifier(readStatement(statement.text).prose, symbol),
+    );
+}
+
+/** The identifier occurs in the text, not as a part of a longer one. */
+function hasIdentifier(text: string, symbol: string): boolean {
+    return new RegExp(
+        `(^|[^\\p{L}\\p{N}_$])${escapeRegex(symbol)}([^\\p{L}\\p{N}_$]|$)`,
+        'u',
+    ).test(text);
+}
+
+/** An identifier, a separator or a bracket of a statement's code. */
+const TOKEN = /[\p{L}_$][\p{L}\p{N}_$]*|::|=>|[{}()[\],\n:.\\]/gu;
+const IDENTIFIER = /^[\p{L}_$]/u;
+const OPENERS = new Set(['{', '(', '[']);
+const CLOSERS = new Set(['}', ')', ']']);
+
+/**
+ * The item of an import that holds `symbol`: the piece between commas (or
+ * lines, inside brackets) of the innermost bracket group around it, or the
+ * statement itself when it has none. An option written `key: value` (Elixir's
+ * `as: Name`) belongs to the item before it.
+ */
+function importItemOf(code: string, symbol: string): string[] | undefined {
+    const stack: string[][][] = [[[]]];
+    let found: string[] | undefined;
+    for (const token of code.match(TOKEN) ?? []) {
+        const group = stack[stack.length - 1];
+        const item = group[group.length - 1];
+        if (OPENERS.has(token)) {
+            stack.push([[]]);
+        } else if (CLOSERS.has(token)) {
+            if (stack.length > 1) stack.pop();
+        } else if (token === ',' || (token === '\n' && stack.length > 1)) {
+            group.push([]);
+        } else if (token === ':' && item.length === 1 && group.length > 1) {
+            group[group.length - 2].push(...item, token);
+            group.pop();
+        } else if (token !== '\n') {
+            item.push(token);
+            if (token === symbol && !found) found = item;
+        }
+    }
+    return found;
+}
+
+/** What joins the segments of a module path: `a.b`, `a::b`, `A\\B`. */
+const PATH_SEPARATORS = new Set(['.', '::', '\\']);
+const PYTHON_FILE = /\.pyi?$/;
+
+/**
+ * The names an import item may bind for `symbol`: every identifier in it but
+ * the import keywords, a Python `from` module path, and the leading segments
+ * of a module path. `x as y`, `B => C`, `a::b as c` and `import numpy as np`
+ * all name the alias the file uses. `import com.acme.Money;` and
+ * `use std::fmt::Display;` bind only the last segment: `com` and `std` occur
+ * in the file's own package line and in other paths, which are not uses.
+ * Python's `import os.path` binds `os`, so there the first segment is kept.
+ */
+function boundNames(statement: string, symbol: string, file: string): string[] {
+    const item = importItemOf(readStatement(statement).code, symbol) ?? [];
+    const python = PYTHON_FILE.test(file);
+    let inFromPath = false;
+    const names = item.filter((token, k) => {
+        if (token === 'from') inFromPath = true;
+        if (token === 'import') inFromPath = false;
+        if (
+            inFromPath ||
+            !IDENTIFIER.test(token) ||
+            IMPORT_KEYWORDS.has(token)
+        ) {
+            return false;
+        }
+        if (!PATH_SEPARATORS.has(item[k + 1] ?? '')) return true;
+        return python && !PATH_SEPARATORS.has(item[k - 1] ?? '');
+    });
+    return [...new Set(names)];
+}
+
+/** Whether the import brings a module's members in without naming them. */
+function bringsNamespace(statement: string, file: string): boolean {
+    const { code } = readStatement(statement);
+    if (NAMESPACE_IMPORT.test(code)) return true;
+    if (NAMESPACE_IMPORT_FILE.test(file))
+        return /^\s*(?:import|use)\b/.test(code);
+    if (HASKELL_FILE.test(file)) {
+        return (
+            !/\bqualified\b/.test(code) &&
+            (!code.includes('(') || /\bhiding\b/.test(code))
+        );
+    }
+    return false;
+}
+
+/**
+ * A grep hit on the import's own lines, for a statement read across several
+ * lines from the code the finding cites: the finding may sit on `import {`
+ * while the name is on a member line below it, which is not a use. The cited
+ * code starts at the finding's first line, so the statement's lines are known
+ * exactly; a hit counts only at its own place in them with its own text. A
+ * `createUser,` shorthand property a few lines below the import is a use.
+ */
+function isStatementLine(
+    match: GrepMatch,
+    violation: ShardViolation,
+    statement: ImportStatement,
+): boolean {
+    if (statement.citedLine === undefined) return false;
+    const start = violation.relevantLinesStart;
+    if (start === undefined) return false;
+    const lines = statement.text.split('\n');
+    if (lines.length < 2) return false;
+    const k = match.line - (start + statement.citedLine);
+    return k >= 0 && k < lines.length && lines[k].trim() === match.text.trim();
+}
+
+/**
+ * The verdict on an unused claim about an import (#1724 QA): only a use in the
+ * file that imports it refutes it. Every local import also occurs where it is
+ * defined, and other files may import and use the same name: neither makes
+ * this import used. Undefined when the statement does not bind the claimed
+ * name (it is only in the module path, `import f "fmt"`): judge it as main.
+ */
+async function judgeImport(
+    statement: ImportStatement,
+    symbol: string,
+    violation: ShardViolation,
+    matches: GrepMatch[],
+    lookup: ClaimCheckInput['lookup'],
+): Promise<string | null | undefined> {
+    const shown = statement.text.trim().replace(/\s+/g, ' ');
+    // A PR-level finding names no file, so there is no importing file to
+    // search: the claim cannot be checked either way.
+    if (!violation.relevantFile) {
+        throw new UnverifiableClaimError(
+            `"${shown}" names no file, so a search cannot tell whether the file that imports it uses it`,
+        );
+    }
+    const file = normalizePath(violation.relevantFile);
+    if (bringsNamespace(statement.text, file)) {
+        throw new UnverifiableClaimError(
+            `"${shown}" brings a module's members in without naming them, so a search cannot tell whether it is used`,
+        );
+    }
+    if (JSX_FILE.test(file) && JSX_PRAGMAS.has(symbol)) {
+        throw new UnverifiableClaimError(
+            `"${symbol}" may be used by every JSX element in ${file} without its name, so a search cannot tell whether it is used`,
+        );
+    }
+    const names = boundNames(statement.text, symbol, file);
+    if (names.length === 0) return undefined;
+    if (names.length > MAX_BOUND_NAMES) {
+        throw new UnverifiableClaimError(
+            `"${shown}" binds more names than the check reads`,
+        );
+    }
+    const others = names.filter((name) => name !== symbol);
+    const hits = others.length
+        ? [
+              ...matches,
+              ...parseGrep(
+                  await lookup.grep(others.map(escapeRegex).join('|')),
+              ),
+          ]
+        : matches;
+    const uses = hits.filter(
+        (m) =>
+            m.file === file &&
+            isElsewhere(m, violation) &&
+            !IMPORT_LINE.test(m.text) &&
+            !isStatementLine(m, violation, statement) &&
+            names.some((name) => namesSymbol(m.text, name)),
+    );
+    const bound =
+        names.includes(symbol) && others.length === 0
+            ? ''
+            : ` (bound as ${names.join(', ')})`;
+    const where = [...new Set(uses.map((m) => `${m.file}:${m.line}`))]
+        .slice(0, 3)
+        .join(', ');
+    const used = `claimed "${symbol}" is unused, but this file uses it${bound} at ${where}`;
+    // The claimed name is not one the item binds (a module path segment,
+    // Python's `from` path): a use of what the item does bind still refutes
+    // it; otherwise it is judged as main does, by a use in any file.
+    if (!names.includes(symbol)) return uses.length ? used : undefined;
+    return uses.length ? used : null;
+}
+
+/** The symbol as a whole identifier in the line, not a part of a longer one. */
+function namesSymbol(text: string, symbol: string): boolean {
+    if (!text) return true; // no text to read: count it, as before
+    return hasIdentifier(text, symbol);
 }
 
 async function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
@@ -241,6 +620,17 @@ async function refute(
     const elsewhere = matches.filter((m) => isElsewhere(m, violation));
 
     if (claim.kind === 'unused') {
+        const statement = importStatementOf(violation, matches, claim.symbol!);
+        if (statement !== undefined) {
+            const verdict = await judgeImport(
+                statement,
+                claim.symbol!,
+                violation,
+                matches,
+                lookup,
+            );
+            if (verdict !== undefined) return verdict;
+        }
         if (elsewhere.length === 0) return null;
         const where = elsewhere
             .slice(0, 3)
@@ -319,7 +709,11 @@ function restates(violation: ShardViolation, claim: Claim): boolean {
 
     if (claim.symbol) {
         const escaped = claim.symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        if (new RegExp(`(^|[^A-Za-z0-9_$])${escaped}([^A-Za-z0-9_$]|$)`).test(text)) {
+        if (
+            new RegExp(`(^|[^A-Za-z0-9_$])${escaped}([^A-Za-z0-9_$]|$)`).test(
+                text,
+            )
+        ) {
             return true;
         }
     }

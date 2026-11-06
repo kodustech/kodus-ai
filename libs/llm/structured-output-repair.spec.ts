@@ -215,6 +215,22 @@ describe('reasoning written before the answer', () => {
         expect(extractJsonFromText(`${reasoning}${answer}`)).toBe(answer);
     });
 
+    it('extracts the answer after a <thinking> block too', () => {
+        expect(
+            extractJsonFromText(
+                '<thinking>compare items [0] and [1]</thinking>\n' + answer,
+            ),
+        ).toBe(answer);
+    });
+
+    it('does not end a <thinking> block at a </think> inside it', () => {
+        expect(
+            extractJsonFromText(
+                `<thinking>the tag </think> is quoted [x]</thinking>${answer}`,
+            ),
+        ).toBe(answer);
+    });
+
     it('repairs it too, so a failed structured call is salvaged', () => {
         expect(repairJsonText(`${reasoning}\n\n${answer}`)).toBe(answer);
     });

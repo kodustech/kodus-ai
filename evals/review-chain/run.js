@@ -197,7 +197,7 @@ const BOUNDARIES = [
             'libs/ai-engine/infrastructure/adapters/services/reference-detector.service.ts',
         ],
         accepted: true,
-        note: 'uses a PARALLEL extractor (extractJsonFromResponse) with its OWN 42-row contract (aggressive bracket-slice + fail-safe) — tested, not a silent-loss gap; consolidating onto extractJsonFromText is a semantics migration, not a swap',
+        note: 'text call; parsed with normalizeEnvelope (bare/fenced/prose/wrapped array, a lone reference), objects only — an unparseable reply is unreliable and not cached',
     },
 ];
 

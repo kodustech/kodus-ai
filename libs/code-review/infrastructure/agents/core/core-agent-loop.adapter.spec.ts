@@ -485,7 +485,7 @@ describe('contract matrix — B. semantic-but-wrong', () => {
     // KEPT (verifier.agent.ts:143) — the #1786 class for the verify gate.
 
     // Row 21 — boolean as string ("false").
-    it.failing(
+    it(
         'row 21 — keep:"false" (string) must drop, not silently default to keep',
         () => {
             const v = extractVerdict(

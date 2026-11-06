@@ -10,12 +10,40 @@ jest.mock('@langfuse/tracing', () => ({
         propagated.params.push(params);
         return fn();
     },
+    getActiveTraceId: () => 'trace-1',
+    startActiveObservation: (_name: string, cb: (o: any) => unknown) =>
+        cb({
+            update: () => {
+                throw new Error('langfuse export failed');
+            },
+        }),
 }));
 
 import {
     pullRequestSessionId,
+    withLangfuseObservation,
     withLangfuseTrace,
 } from '@libs/core/log/langfuse';
+
+describe('withLangfuseObservation', () => {
+    const originalEnv = { ...process.env };
+    afterEach(() => {
+        process.env = { ...originalEnv };
+    });
+
+    it('runs fn once and returns its value when the observation update throws', async () => {
+        process.env.LANGFUSE_TRACING = 'true';
+        process.env.LANGFUSE_PUBLIC_KEY = 'pk-test';
+        process.env.LANGFUSE_SECRET_KEY = 'sk-test';
+        const fn = jest.fn().mockResolvedValue('ok');
+
+        await expect(
+            withLangfuseObservation('call', fn, { correlationId: 'c-1' }),
+        ).resolves.toBe('ok');
+        expect(fn).toHaveBeenCalledTimes(1);
+        expect(fn).toHaveBeenCalledWith('trace-1');
+    });
+});
 
 describe('pullRequestSessionId', () => {
     it('is byte-identical for every agent working the same PR', () => {

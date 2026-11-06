@@ -14,6 +14,7 @@ import {
     MAX_REFUSAL_RETRIES,
     REFUSAL_MEMORY_MS,
     rejectedReasoningField,
+    withReasoningOff,
 } from './rejected-reasoning-field';
 import './providers';
 
@@ -518,5 +519,81 @@ describe('an OpenAI reasoning model with tools', () => {
         expect(up.bodies[3].tools).toBeUndefined();
         expect(up.bodies[3].reasoning_effort).toBeDefined();
         expect(up.bodies[3].reasoning_effort).not.toBe('none');
+    });
+
+    // Thinking Off sends no effort at all, and the model still reasons by
+    // default, so the same refusal comes back for a body that never carried
+    // the field (#2350). The upstream names the value it wants: 'none'.
+    it('behind a proxy with Thinking Off is asked again with the effort set to none', async () => {
+        up = upstream({
+            respond: (body) =>
+                body?.reasoning_effort !== 'none' && body?.tools?.length
+                    ? TOOLS_WITH_EFFORT
+                    : undefined,
+        });
+        const off = {
+            provider: 'openai_compatible',
+            model: 'gpt-6.1-terra',
+            baseURL: 'https://res.cognitiveservices.azure.com/openai/v1',
+            reasoningEffort: 'none',
+        };
+        await withTool(off);
+        expect(up.bodies).toHaveLength(2);
+        expect(up.bodies[0].reasoning_effort).toBeUndefined();
+        expect(up.bodies[1].reasoning_effort).toBe('none');
+        expect(up.bodies[1].tools).toHaveLength(1);
+        // Remembered: the next call on the slot pays no 400.
+        await withTool(off);
+        expect(up.bodies).toHaveLength(3);
+        expect(up.bodies[2].reasoning_effort).toBe('none');
+        // A call without tools is left as configured: nothing is added.
+        await run(off);
+        expect(up.bodies).toHaveLength(4);
+        expect(up.bodies[3].reasoning_effort).toBeUndefined();
+    });
+
+    it('is not given an effort it never refused on a call without tools', async () => {
+        up = upstream({ respond: () => undefined });
+        await run({
+            provider: 'openai_compatible',
+            model: 'gpt-6.1-terra',
+            baseURL: 'https://litellm.example.com/v1',
+            reasoningEffort: 'none',
+        });
+        expect(up.bodies).toHaveLength(1);
+        expect(up.bodies[0].reasoning_effort).toBeUndefined();
+    });
+});
+
+describe('withReasoningOff', () => {
+    it('adds the effort under the adapter namespace when only another namespace carries one', () => {
+        const out = withReasoningOff(
+            { providerOptions: { openai: { reasoningEffort: 'low' } } },
+            'reasoning_effort',
+            'openaiCompatible',
+        );
+        expect(out?.providerOptions).toEqual({
+            openai: { reasoningEffort: 'none' },
+            openaiCompatible: { reasoningEffort: 'none' },
+        });
+    });
+
+    it('turns off the effort the adapter namespace already carries, adding nothing else', () => {
+        const out = withReasoningOff(
+            {
+                providerOptions: {
+                    openaiCompatible: { reasoningEffort: 'high' },
+                },
+            },
+            'reasoning_effort',
+            'openaiCompatible',
+        );
+        expect(out?.providerOptions).toEqual({
+            openaiCompatible: { reasoningEffort: 'none' },
+        });
+    });
+
+    it('changes nothing without a namespace when no option carries the effort', () => {
+        expect(withReasoningOff({}, 'reasoning_effort')).toBeUndefined();
     });
 });

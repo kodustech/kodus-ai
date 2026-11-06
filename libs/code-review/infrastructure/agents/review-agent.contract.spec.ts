@@ -157,9 +157,8 @@ describe('A. output-shape zoo', () => {
     });
 
     // Row 3 — Single object where an array is expected (suggestions is one object).
-    // Degradation: findings-schema.ts L63 requires Array.isArray(suggestions).
-    it.failing(
-        'row 3: suggestions as a single object → should wrap into an array (prod drops)',
+    it(
+        'row 3: suggestions as a single object → wraps it into an array',
         () => {
             const r = extractFindings(
                 makeState({

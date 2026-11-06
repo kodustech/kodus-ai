@@ -25,7 +25,7 @@
  *
  *   node evals/pr-summary/run.js [--model=<id>] [--gate] [--output=<file>]
  *                                [--behaviour=replace|concatenate|complement|none]
- *                                [--dataset=cases] [--limit=N]
+ *                                [--dataset=cases] [--limit=N] [--dump=<dir>]
  *
  * EXIT CODES (suite contract): 0 = pass, 1 = gate-fail, 2 = infra
  *   (missing key / model-construction crash / all-cases-errored network).
@@ -211,6 +211,17 @@ const blockContent = (s) => {
     return m ? m[1].trim() : '';
 };
 
+// What the model's deliberation looks like when it reaches the answer: the
+// phrases it published in #2407 and in the baseline runs, or a first line that
+// continues a sentence (the reasoning was cut mid-sentence where the tag was).
+const REASONING_RE = /\b(Hmm\b|Wait,|Draft:|Let me (write|tighten|check|analy[sz]e|think)|I'll (structure|produce|write)|The instructions? says?|Now (write|for)\b|Return only the description|Need (to )?(write|be|mention|avoid)|We (should|can) (include|mention|structure)|Let's (draft|write|craft|produce))/i;
+function leakedReasoning(content) {
+    const first = (content.split('\n').find((l) => l.trim()) || '').trim();
+    if (/^[a-z`.,;:)\]]/.test(first)) return `starts mid-sentence: "${first.slice(0, 40)}"`;
+    const m = content.match(REASONING_RE);
+    return m ? `found "${m[0]}"` : null;
+}
+
 // A review comment as the pipeline carries it (CommentResult): the finding and
 // whether it reached the PR.
 const commentResult = (f) => ({ comment: { suggestion: f }, deliveryStatus: f.deliveryStatus || 'sent' });
@@ -299,6 +310,11 @@ async function runCase(c) {
     if (stageError && !lastModelError) lastModelError = stageError.error;
     const finalDescription = generated.description;
 
+    if (args.dump && finalDescription) {
+        fs.mkdirSync(String(args.dump), { recursive: true });
+        fs.writeFileSync(path.join(String(args.dump), `${c.caseId}.md`), finalDescription);
+    }
+
     const exp = c.expect || {};
     const checks = [];
     // `quality`: a check on the model's prose, not on the contract (see the gate).
@@ -374,6 +390,14 @@ async function runCase(c) {
     if (exp.blockAccumulates) {
         check('CONCATENATE (new commit) keeps the prior summary content', content.includes(exp.blockAccumulates));
         check('CONCATENATE (new commit) appends the new summary to the block', content !== exp.blockAccumulates);
+    }
+
+    // The model's deliberation never reaches the PR. A host that ends the
+    // reasoning channel on a `</think>` the model quotes returns the rest of the
+    // reasoning as the answer (#2407); these are the phrases it published then.
+    if (exp.noReasoning) {
+        const leaked = leakedReasoning(content);
+        check(`no model reasoning in the summary${leaked ? ` (${leaked})` : ''}`, !leaked);
     }
 
     // 4) COMPLEMENT must feed the existing description into the model prompt
