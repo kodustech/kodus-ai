@@ -141,9 +141,15 @@ describe('runAgentLoopCall — a stalled provider must not hang the caller', () 
 
         await runAgentLoopCall({ ...params(), signal: controller.signal });
 
-        expect(mockGenerate.mock.calls[0][0].abortSignal).toBe(
-            controller.signal,
-        );
+        // Wrapped in the call's own signal, which follows the caller's abort
+        // and its reason (a shared signal must not carry one call's limiter
+        // mark to another, #2389).
+        const sent: AbortSignal = mockGenerate.mock.calls[0][0].abortSignal;
+        expect(sent.aborted).toBe(false);
+        const reason = new Error('caller stopped');
+        controller.abort(reason);
+        expect(sent.aborted).toBe(true);
+        expect(sent.reason).toBe(reason);
     });
 
 });

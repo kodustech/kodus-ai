@@ -56,6 +56,7 @@ import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
 import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { agentModelIdentity } from '@libs/llm/model-identity';
 import { readAiSdkUsage } from '@libs/llm/ai-sdk-usage';
+import { BYOKConcurrencyLimiter } from '@libs/llm/byok-limiter';
 import {
     setLlmObservability,
     getLlmObservability,
@@ -150,7 +151,10 @@ describe('row1 request assembly — the exact generateText invocation', () => {
         ]);
         expect(args.tools).toEqual({ t1: { description: 'd' } });
         expect(args.providerOptions).toEqual({ __po: 'slot' }); // slot-derived
-        expect(args.abortSignal).toBe(signal);
+        // The call's own signal, following the caller's (see the #2389 case
+        // on lenses that share one).
+        expect(args.abortSignal).toBeInstanceOf(AbortSignal);
+        expect(args.abortSignal).not.toBe(signal);
     });
 
     it('composes stopWhen = [...loop.stopWhen, stepCountIs(maxSteps)]', async () => {
@@ -313,7 +317,7 @@ describe('row19 tool-call repair delegation (repairToolCall → repairInvalidToo
 
         expect(mockRepair).toHaveBeenCalledWith({
             model: RESOLVED_MODEL, // re-issues against the resolved model, not a system one
-            abortSignal: signal,
+            abortSignal: genArgs().abortSignal, // the loop's own call signal
             toolCall,
             inputSchema,
             error,
@@ -428,6 +432,50 @@ describe('a loop that fails after some steps finished (#2389)', () => {
         expect(attrs?.abortedInFlightInputTokensEstimate).toBeGreaterThan(0);
         // The billed usage stays the finished steps only.
         expect(readAiSdkUsage(usageOnError()).totalTokens).toBe(55);
+    });
+
+    it('marks the lens in flight when another lens on the same signal was still queued', async () => {
+        // Heavy mode: every lens gets one signal, and the limiter holds back
+        // the lenses that find no free slot.
+        const limiter = new BYOKConcurrencyLimiter(1);
+        const shared = new AbortController();
+        let started!: () => void;
+        const inFlight = new Promise<void>((r) => (started = r));
+        const viaLimiter = (args: any, task: () => Promise<never>) =>
+            limiter.run('lens', task, args.abortSignal);
+        mockGenerate
+            .mockImplementationOnce(async (args: any) => {
+                await args.prepareStep({ stepNumber: 0, messages: [] });
+                return viaLimiter(
+                    args,
+                    () =>
+                        new Promise<never>((_, reject) => {
+                            started();
+                            args.abortSignal.addEventListener('abort', () =>
+                                reject(args.abortSignal.reason),
+                            );
+                        }),
+                );
+            })
+            .mockImplementationOnce(async (args: any) => {
+                await args.prepareStep({ stepNumber: 0, messages: [] });
+                return viaLimiter(args, async () => {
+                    throw new Error('never gets a slot');
+                });
+            });
+        const lens = () =>
+            runAgentLoopCall({ ...baseParams(), signal: shared.signal } as any)
+                .then(() => undefined)
+                .catch((e) => e);
+        const first = lens();
+        await inFlight;
+        const second = lens();
+        await new Promise((r) => setImmediate(r));
+        shared.abort(new Error('lenses stopped'));
+        const [errFirst, errSecond] = await Promise.all([first, second]);
+        const spans = spanPort.runAiSdkLLMInSpan.mock.calls;
+        expect(spans[0][0].attrsOnError(errFirst)?.abortedInFlight).toBe(true);
+        expect(spans[1][0].attrsOnError(errSecond)).toBeUndefined();
     });
 
     it('marks nothing when no request was out at the abort', async () => {

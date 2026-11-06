@@ -177,7 +177,14 @@ export async function runAgentLoopCall(
     // structured-review-call). This gives the loop the same floor, and the 5s
     // grace inside `hardTimeout` is what orders them: abort first, race only if
     // the abort was ignored.
-    const signal = callerSignal ?? timeoutSignal(hardTimeoutMs);
+    //
+    // A caller's signal is wrapped in one of this call's own: heavy mode hands
+    // every lens the same signal, and the BYOK limiter marks the signal it
+    // dequeues on an abort (`wasAbortedBeforeSlot`). On a shared object one
+    // queued lens would hide the in-flight abort of every other lens (#2389).
+    const signal = callerSignal
+        ? AbortSignal.any([callerSignal])
+        : timeoutSignal(hardTimeoutMs);
     const temperature = params.temperature ?? inv.callOptions.temperature;
     const maxOutputTokens =
         inv.callOptions.maxOutputTokens ?? params.maxOutputTokens;
