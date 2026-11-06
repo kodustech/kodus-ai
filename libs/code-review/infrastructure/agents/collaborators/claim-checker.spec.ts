@@ -2041,6 +2041,51 @@ describe('checkClaims — an import used without its name (review round 6)', () 
             },
             expect: 'drop',
         },
+        {
+            name: "Python's from __future__ import",
+            file: 'app/a.py',
+            line: 1,
+            symbol: 'annotations',
+            files: {
+                'app/a.py': 'from __future__ import annotations\n\nx: int = 1',
+            },
+            expect: 'unverifiable',
+        },
+        {
+            name: 'a Preact Fragment used only as <>',
+            file: 'src/A.tsx',
+            line: 1,
+            symbol: 'Fragment',
+            files: {
+                'src/A.tsx':
+                    "import { h, Fragment } from 'preact';\n\nexport const A = () => <>x</>;",
+            },
+            expect: 'unverifiable',
+        },
+        {
+            name: 'an emoji before the end of a multi-line import',
+            file: 'src/a.js',
+            line: 3,
+            symbol: 'Foo',
+            files: {
+                'src/a.js':
+                    "import {\n  a, // 🎉🎉🎉🎉\n  Foo,\n} from './x';\nconsole.log(a);",
+                'src/x.js': 'export class Foo {}',
+            },
+            expect: 'keep',
+        },
+        {
+            name: 'the import that binds the name, beside a stylesheet path naming it',
+            file: 'src/Card.tsx',
+            line: 2,
+            symbol: 'Foo',
+            files: {
+                'src/Card.tsx':
+                    "\nimport { Foo } from './foo';\nimport styles from './Foo.module.css';\nexport const c = styles;",
+                'src/foo.ts': 'export const Foo = 1;',
+            },
+            expect: 'keep',
+        },
     ];
 
     it.each(CASES)('$name: $expect', async (c: Case) => {
@@ -2065,6 +2110,43 @@ describe('checkClaims — an import used without its name (review round 6)', () 
         if (c.expect === 'unverifiable') {
             expect(res.dropped[0].reason).toContain('unverifiable');
         }
+    });
+
+    it('does not let a restating sibling without lines hide a use behind the span', async () => {
+        const files = {
+            'src/a.ts':
+                '\n\n\n\nfunction helper() {}\n' +
+                '\n'.repeat(114) +
+                'helper();\n' +
+                '\n'.repeat(179) +
+                'const z = 1;',
+        };
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 5,
+                    relevantLinesEnd: 5,
+                    claimKind: 'unused',
+                    claimSymbol: 'helper',
+                }),
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: undefined,
+                    relevantLinesEnd: undefined,
+                    claimKind: 'unused',
+                    claimSymbol: 'helper',
+                }),
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 300,
+                    relevantLinesEnd: 300,
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupFor(files),
+        });
+        expect(res.kept.filter((v) => v.claimSymbol === 'helper')).toEqual([]);
     });
 
     it('keeps two true findings on one symbol that differ only by a claim path', async () => {

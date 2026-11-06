@@ -307,7 +307,7 @@ const MAX_BOUND_NAMES = 8;
  * files carry JSX too (Create React App, Preact).
  */
 const JSX_FILE = /\.(?:jsx|tsx|js|mjs|cjs)$/;
-const JSX_PRAGMAS = new Set(['React', 'h']);
+const JSX_PRAGMAS = new Set(['React', 'h', 'Fragment', 'jsx']);
 
 /** The most lines one import statement is read across. */
 const MAX_IMPORT_LINES = 50;
@@ -352,7 +352,7 @@ function statementAt(lines: string[], start: number): string {
     let comment = '';
     let escaped = false;
     let previous = '\n';
-    for (const [i, c] of [...text].entries()) {
+    for (const [i, c] of text.split('').entries()) {
         const next = text[i + 1] ?? '';
         if (comment === 'line') {
             if (c === '\n') {
@@ -554,6 +554,8 @@ function bringsNamespace(statement: string, file: string): boolean {
     if (NAMESPACE_IMPORT.test(code)) return true;
     // C#'s `global using` imports for every file of the project.
     if (/^\s*global\s+using\b/.test(code)) return true;
+    // Python's `from __future__ import x` is a compiler directive.
+    if (/^\s*from\s+__future__\s+import\b/.test(code)) return true;
     if (RUST_FILE.test(file) && /\bas\s+_(?![\p{L}\p{N}_$])/u.test(code)) {
         return true;
     }
@@ -578,6 +580,8 @@ interface RepoImport {
     text: string;
     start: number;
     end: number;
+    /** The name is in its code, not only in a string such as its path. */
+    binds: boolean;
 }
 
 /** The last line a read asks for: a model can claim 1..Infinity. */
@@ -643,13 +647,15 @@ async function readImports(
     return lines.flatMap((line, i): RepoImport[] => {
         if (!isImportLine(line, file)) return [];
         const statement = statementAt(lines, i);
-        if (!hasIdentifier(readStatement(statement).prose, symbol)) return [];
+        const { prose, code } = readStatement(statement);
+        if (!hasIdentifier(prose, symbol)) return [];
         const first = from + i;
         return [
             {
                 text: statement,
                 start: first,
                 end: first + statement.split('\n').length - 1,
+                binds: hasIdentifier(code, symbol),
             },
         ];
     });
@@ -667,7 +673,10 @@ function nearestImport(
         if (r.start > lines.end) return r.start - lines.end;
         return 0;
     };
-    return imports.reduce<RepoImport | undefined>(
+    // One that binds the name wins over one that only names it in its path
+    // (`import styles from './Foo.module.css'` beside `import { Foo }`).
+    const binding = imports.filter((r) => r.binds);
+    return (binding.length ? binding : imports).reduce<RepoImport | undefined>(
         (best, r) => (!best || distance(r) < distance(best) ? r : best),
         undefined,
     );
@@ -1089,14 +1098,15 @@ function spanOf(group: ShardViolation[]): ShardViolation {
  * Undefined unless every sibling carries its lines, so the span still decides.
  */
 function rangesOf(group: ShardViolation[]): LineRanges | undefined {
-    if (group.length === 0) return undefined;
+    // A sibling without lines has none to exclude; it must not send the
+    // check back to the span, whose min..max can hide a use.
     const ranges = group.flatMap((v): LineRanges => {
         const start = v.relevantLinesStart;
         return typeof start === 'number'
             ? [[start, v.relevantLinesEnd ?? start]]
             : [];
     });
-    return ranges.length === group.length ? ranges : undefined;
+    return ranges.length ? ranges : undefined;
 }
 
 /**
