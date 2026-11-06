@@ -145,6 +145,7 @@ export class CarryReviewCheckToMergeQueueUseCase {
             if (!run) {
                 const failurePosted = await this.postFailure(
                     target,
+                    prNumber,
                     'No finished Kody review',
                     `PR #${prNumber}'s latest commit (\`${headSha.slice(0, 7)}\`) has no finished Kody review, so there is no result for this merge queue commit. Comment \`@kody start-review\` on the PR, wait for the review to finish, then add the PR to the queue again.`,
                 );
@@ -191,6 +192,7 @@ export class CarryReviewCheckToMergeQueueUseCase {
                 target && !carrying
                     ? await this.postFailure(
                           target,
+                          prNumber,
                           "Could not carry Kody's review",
                           `Kody could not read the result of its review of PR #${prNumber} from GitHub. Add the PR to the queue again; if this repeats, comment \`@kody start-review\` on the PR.`,
                       )
@@ -205,6 +207,7 @@ export class CarryReviewCheckToMergeQueueUseCase {
     /** Best effort: the queue then waits for its timeout, as before. */
     private async postFailure(
         target: MergeQueueCheckTarget,
+        prNumber: number,
         title: string,
         summary: string,
     ): Promise<boolean> {
@@ -222,7 +225,11 @@ export class CarryReviewCheckToMergeQueueUseCase {
                 context: CarryReviewCheckToMergeQueueUseCase.name,
                 error: error instanceof Error ? error : undefined,
                 metadata: {
+                    organizationId:
+                        target.organizationAndTeamData.organizationId,
+                    teamId: target.organizationAndTeamData.teamId,
                     repositoryName: target.repository.name,
+                    prNumber,
                     queueSha: target.headSha,
                 },
             });

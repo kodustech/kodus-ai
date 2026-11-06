@@ -152,8 +152,6 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
         await expect(useCase.execute(queuePush())).rejects.toThrow(
             'API rate limit exceeded',
         );
-        // No failure check: the job retries after the reset.
-        expect(checks.createCompletedCheckRun).toHaveBeenCalledTimes(1);
     });
 
     it('rethrows a GraphQL rate limit from the merge queue lookup', async () => {
@@ -207,7 +205,7 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
         });
     });
 
-    it('fails the queue commit at once when the review result cannot be read', async () => {
+    it('fails the queue commit at once when the review result cannot be read, but not on a rate limit, which is retried', async () => {
         checks.findLatestCompletedCheckRun.mockRejectedValue(new Error('boom'));
 
         await expect(useCase.execute(queuePush())).resolves.toEqual({
@@ -224,6 +222,16 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
                 }),
             }),
         );
+
+        checks.createCompletedCheckRun.mockClear();
+        checks.findLatestCompletedCheckRun.mockRejectedValue(
+            new RateLimitError({ resetAt: new Date(Date.now() + 60_000) }),
+        );
+
+        await expect(useCase.execute(queuePush())).rejects.toBeInstanceOf(
+            RateLimitError,
+        );
+        expect(checks.createCompletedCheckRun).not.toHaveBeenCalled();
     });
 
     it('reports when the failure check itself cannot be posted', async () => {
