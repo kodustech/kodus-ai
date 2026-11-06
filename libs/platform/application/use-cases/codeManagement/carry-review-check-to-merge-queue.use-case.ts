@@ -1,4 +1,6 @@
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { classifyGitHubError } from '@libs/core/workflow/domain/errors/classify-github-error';
+import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 import { KODY_CHECK_RUN_NAME } from '@libs/core/infrastructure/pipeline/services/pipeline-checks.service';
 import { createLogger } from '@libs/core/log/logger';
 import { WebhookContextService } from '@libs/platform/application/services/webhook-context.service';
@@ -18,6 +20,7 @@ export type CarryReviewCheckResult =
           reason:
               | 'not_merge_queue_push'
               | 'no_context'
+              | 'not_in_merge_queue'
               | 'pr_lookup_failed'
               | 'no_completed_run'
               | 'api_error';
@@ -50,7 +53,7 @@ export class CarryReviewCheckToMergeQueueUseCase {
             return { carried: false, reason: 'not_merge_queue_push' };
         }
 
-        const { prNumber } = parseMergeQueueRef(payload.ref);
+        const { prNumber, baseBranch } = parseMergeQueueRef(payload.ref);
         const queueSha: string = payload.after;
         const repositoryId = String(payload.repository?.id);
         const repositoryName: string = payload.repository?.name;
@@ -102,6 +105,20 @@ export class CarryReviewCheckToMergeQueueUseCase {
             metadata.organizationId = organizationAndTeamData.organizationId;
             metadata.teamId = organizationAndTeamData.teamId;
 
+            const repository = { owner, name: repositoryName };
+
+            const queueEntrySha =
+                await this.githubChecksService.findMergeQueueEntryHeadSha({
+                    organizationAndTeamData,
+                    repository,
+                    baseBranch,
+                    prNumber,
+                });
+            metadata.queueEntrySha = queueEntrySha;
+            if (queueEntrySha !== queueSha) {
+                return done({ carried: false, reason: 'not_in_merge_queue' });
+            }
+
             const pullRequest = await this.codeManagement.getPullRequest(
                 {
                     organizationAndTeamData,
@@ -115,8 +132,6 @@ export class CarryReviewCheckToMergeQueueUseCase {
                 return done({ carried: false, reason: 'pr_lookup_failed' });
             }
             metadata.headSha = headSha;
-
-            const repository = { owner, name: repositoryName };
 
             const run =
                 await this.githubChecksService.findLatestCompletedCheckRun({
@@ -147,7 +162,15 @@ export class CarryReviewCheckToMergeQueueUseCase {
 
             return done({ carried: true, conclusion: run.conclusion });
         } catch (error) {
-            return done({ carried: false, reason: 'api_error' }, error);
+            done({ carried: false, reason: 'api_error' }, error);
+
+            // A rate limit is retried by the webhook job after the reset;
+            // any other GitHub error would be marked permanent anyway.
+            if (isRateLimitError(classifyGitHubError(error))) {
+                throw error;
+            }
+
+            return { carried: false, reason: 'api_error' };
         }
     }
 }

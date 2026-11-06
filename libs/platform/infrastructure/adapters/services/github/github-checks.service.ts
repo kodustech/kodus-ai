@@ -109,6 +109,63 @@ export class GithubChecksService implements IChecksAdapter {
         };
     }
 
+    /**
+     * The commit GitHub's merge queue built for this PR, or null when the PR
+     * has no queue entry. Anyone with push access can create a branch named
+     * like a queue branch, so only the queue itself is trusted. Reading the
+     * queue needs no extra App permission. Throws on GitHub errors.
+     */
+    async findMergeQueueEntryHeadSha(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { owner: string; name: string };
+        baseBranch: string;
+        prNumber: number;
+    }): Promise<string | null> {
+        const { organizationAndTeamData, repository, baseBranch, prNumber } =
+            params;
+
+        const octokit = await this.gitHubService.getAuthenticatedOctokit(
+            organizationAndTeamData,
+        );
+
+        const response = await octokit.graphql<{
+            repository?: {
+                mergeQueue?: {
+                    entries?: {
+                        nodes?: Array<{
+                            pullRequest?: { number?: number } | null;
+                            headCommit?: { oid?: string } | null;
+                        } | null>;
+                    };
+                } | null;
+            };
+        }>(
+            `query ($owner: String!, $name: String!, $branch: String!) {
+                repository(owner: $owner, name: $name) {
+                    mergeQueue(branch: $branch) {
+                        entries(first: 100) {
+                            nodes {
+                                pullRequest { number }
+                                headCommit { oid }
+                            }
+                        }
+                    }
+                }
+            }`,
+            {
+                owner: repository.owner,
+                name: repository.name,
+                branch: baseBranch,
+            },
+        );
+
+        const entry = response?.repository?.mergeQueue?.entries?.nodes?.find(
+            (node) => node?.pullRequest?.number === prNumber,
+        );
+
+        return entry?.headCommit?.oid ?? null;
+    }
+
     async createCompletedCheckRun(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { owner: string; name: string };

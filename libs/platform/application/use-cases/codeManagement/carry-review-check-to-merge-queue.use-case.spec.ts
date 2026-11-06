@@ -13,6 +13,7 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
     let checks: {
         findLatestCompletedCheckRun: jest.Mock;
         createCompletedCheckRun: jest.Mock;
+        findMergeQueueEntryHeadSha: jest.Mock;
     };
 
     const organizationAndTeamData = {
@@ -60,6 +61,7 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
                 htmlUrl: 'https://github.com/acme/service/runs/2',
             }),
             createCompletedCheckRun: jest.fn().mockResolvedValue(77),
+            findMergeQueueEntryHeadSha: jest.fn().mockResolvedValue(queueSha),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -113,6 +115,54 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
                 summary: expect.stringContaining('PR #7'),
             },
         });
+    });
+
+    it("asks GitHub's merge queue which commit it built for the PR", async () => {
+        await useCase.execute(queuePush());
+
+        expect(checks.findMergeQueueEntryHeadSha).toHaveBeenCalledWith({
+            organizationAndTeamData,
+            repository: { owner: 'acme', name: 'service' },
+            baseBranch: 'main',
+            prNumber: 7,
+        });
+    });
+
+    it.each([
+        ['the PR is not in the merge queue', null],
+        ['the queue built a different commit for the PR', 'f'.repeat(40)],
+    ])(
+        'posts nothing when %s, so a branch named like a queue branch gets no check',
+        async (_label, entrySha) => {
+            checks.findMergeQueueEntryHeadSha.mockResolvedValue(entrySha);
+
+            await expect(useCase.execute(queuePush())).resolves.toEqual({
+                carried: false,
+                reason: 'not_in_merge_queue',
+            });
+            expect(checks.findLatestCompletedCheckRun).not.toHaveBeenCalled();
+            expect(checks.createCompletedCheckRun).not.toHaveBeenCalled();
+        },
+    );
+
+    it('rethrows a GitHub rate limit so the webhook job is retried after the reset', async () => {
+        checks.createCompletedCheckRun.mockRejectedValue(
+            Object.assign(new Error('API rate limit exceeded'), {
+                status: 403,
+                response: {
+                    headers: {
+                        'x-ratelimit-remaining': '0',
+                        'x-ratelimit-reset': String(
+                            Math.floor(Date.now() / 1000) + 600,
+                        ),
+                    },
+                },
+            }),
+        );
+
+        await expect(useCase.execute(queuePush())).rejects.toThrow(
+            'API rate limit exceeded',
+        );
     });
 
     it.each(['failure', 'neutral', 'skipped'])(

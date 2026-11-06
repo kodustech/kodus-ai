@@ -29,6 +29,7 @@ describe('GithubChecksService', () => {
                 update: jest.fn(),
                 listForRef: jest.fn(),
             },
+            graphql: jest.fn(),
         };
 
         mockGithubService = {
@@ -379,6 +380,56 @@ describe('GithubChecksService', () => {
                     output: { title: 't', summary: 's' },
                 }),
             ).rejects.toThrow('boom');
+        });
+    });
+    describe('findMergeQueueEntryHeadSha', () => {
+        const params = {
+            organizationAndTeamData: mockOrganizationAndTeamData,
+            repository: mockRepository,
+            baseBranch: 'main',
+            prNumber: 7,
+        };
+
+        it("returns the commit GitHub's merge queue built for the PR", async () => {
+            mockOctokit.graphql.mockResolvedValue({
+                repository: {
+                    mergeQueue: {
+                        entries: {
+                            nodes: [
+                                {
+                                    pullRequest: { number: 6 },
+                                    headCommit: { oid: 'other' },
+                                },
+                                {
+                                    pullRequest: { number: 7 },
+                                    headCommit: { oid: 'queue-sha' },
+                                },
+                            ],
+                        },
+                    },
+                },
+            });
+
+            await expect(
+                service.findMergeQueueEntryHeadSha(params),
+            ).resolves.toBe('queue-sha');
+            expect(mockOctokit.graphql).toHaveBeenCalledWith(
+                expect.stringContaining('mergeQueue(branch: $branch)'),
+                { owner: 'kodus-ai', name: 'kodus', branch: 'main' },
+            );
+        });
+
+        it.each([
+            ['the PR has no queue entry', { entries: { nodes: [] } }],
+            ['the branch has no merge queue', null],
+        ])('returns null when %s', async (_label, mergeQueue) => {
+            mockOctokit.graphql.mockResolvedValue({
+                repository: { mergeQueue },
+            });
+
+            await expect(
+                service.findMergeQueueEntryHeadSha(params),
+            ).resolves.toBeNull();
         });
     });
 });
