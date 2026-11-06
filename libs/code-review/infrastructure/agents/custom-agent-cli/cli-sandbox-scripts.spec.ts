@@ -116,10 +116,12 @@ const fenceStubs = (ip: string) => ({
     setsid: '"$@"',
 });
 
-// Outside the ephemeral range: 49152 on macOS, 32768 by default on Linux,
-// so no `listen(0)` and no outbound connection is ever handed this port.
+// Outside the ephemeral range (49152 on macOS, 32768 by default on Linux)
+// and below the Mongo port docker-compose.test.yml publishes on the host
+// (27017): no `listen(0)`, no outbound connection and no service the test
+// job starts can be handed a port the fence is about to use.
 const FENCE_PORT_MIN = 20_000;
-const FENCE_PORT_SPAN = 10_000;
+const FENCE_PORT_MAX = 27_000;
 
 /**
  * A port outside the ephemeral range that nothing is listening on, taken
@@ -151,8 +153,9 @@ const freePort = (): Promise<number> =>
             }
             const probe = net.createServer();
             probe.once('error', tryNext);
+            const span = FENCE_PORT_MAX - FENCE_PORT_MIN;
             probe.listen(
-                FENCE_PORT_MIN + Math.floor(Math.random() * FENCE_PORT_SPAN),
+                FENCE_PORT_MIN + Math.floor(Math.random() * span),
                 '127.0.0.1',
                 () => {
                     const { port } = probe.address() as net.AddressInfo;
