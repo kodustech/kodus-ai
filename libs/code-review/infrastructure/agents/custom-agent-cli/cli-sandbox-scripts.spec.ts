@@ -7,6 +7,7 @@ import {
     rmSync,
     writeFileSync,
 } from 'node:fs';
+import * as net from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -115,9 +116,41 @@ const fenceStubs = (ip: string) => ({
     setsid: '"$@"',
 });
 
+/**
+ * A port that is free right now, for one run of the fence tests.
+ *
+ * The identity's port is a hash of the agent, so every run of the suite
+ * computes the same one. A proxy left behind by an interrupted run still
+ * holds it, and the `finally` that would have killed it never runs when
+ * jest itself is killed: every later run then dies where the fence waits
+ * for the proxy (`listen EADDRINUSE` in the proxy's log, then
+ * `egress proxy did not start` and exit 4), and passes again the moment
+ * the leftover process is found and killed by hand (#2390).
+ *
+ * A port the kernel hands out is by definition one nothing is listening on,
+ * so a leftover on the identity's port cannot take this run down with it.
+ * The identity keeps its own port in production; only the suite, which has
+ * to survive what an earlier run left behind, picks another.
+ */
+const freePort = (): Promise<number> =>
+    new Promise((resolve, reject) => {
+        const probe = net.createServer();
+        probe.once('error', reject);
+        probe.listen(0, '127.0.0.1', () => {
+            const { port } = probe.address() as net.AddressInfo;
+            probe.close(() => resolve(port));
+        });
+    });
+
 describe('network fence script', () => {
     const identity = cliSandboxIdentity('agent-1', 'lintkit');
-    const port = identity.proxyPort;
+    // The fence is generated with the identity's port: see `freePort`.
+    let port = identity.proxyPort;
+
+    beforeAll(async () => {
+        identity.proxyPort = await freePort();
+        port = identity.proxyPort;
+    });
 
     it.each([
         '127.0.0.1',
