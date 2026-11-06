@@ -14,6 +14,18 @@ describe('formatModelLabel', () => {
         // Fireworks spells a version with p, after a k or a v too.
         ['glm-5p3-flash', 'GLM 5.3 Flash'],
         ['deepseek-v4p1-flash', 'Deepseek V4.1 Flash'],
+        // Anthropic spells a version with hyphens: the two numbers are one version.
+        ['claude-sonnet-4-6', 'Claude Sonnet 4.6'],
+        ['claude-opus-4-7', 'Claude Opus 4.7'],
+        ['claude-3-5-sonnet', 'Claude 3.5 Sonnet'],
+        ['claude-sonnet-4-5-20250929', 'Claude Sonnet 4.5 20250929'],
+        ['claude-opus-4-0613', 'Claude Opus 4'], // a trailing MMDD pin is still dropped
+        ['claude-opus-5', 'Claude Opus 5'],
+        // A -YYYY-MM-DD snapshot date is a pin: month and day must not fuse into a version.
+        ['gpt-4o-2024-08-06', 'GPT 4o'],
+        ['o3-mini-2025-01-31', 'O3 Mini'],
+        ['gpt-4o-mini-2024-07-18', 'GPT 4o Mini'],
+        ['gpt-4.1-2025-04-14', 'GPT 4.1'],
     ])('%s → %s', (id, expected) => {
         expect(formatModelLabel(id)).toBe(expected);
     });
