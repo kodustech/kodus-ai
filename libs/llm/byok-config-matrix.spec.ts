@@ -174,6 +174,21 @@ const CASES = [
         wire: { has: { temperature: 1 }, hasNot: ['max_tokens'] },
     },
     {
+        id: 'fireworks/glm-5p2 (retired) — served AND tuned as glm-5p3',
+        why: 'Fireworks 404s glm-5p2, so the saved id runs as glm-5p3. Building 5.3 while reasoning and tuning as 5.2 asked an always-thinking model to stop and sent it the stored temperature instead of the pinned 1',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'accounts/fireworks/models/glm-5p2',
+            baseURL: 'https://api.fireworks.ai/inference/v1',
+            reasoningEffort: 'none',
+            temperature: 0.2,
+        },
+        wire: {
+            has: { model: 'accounts/fireworks/models/glm-5p3', temperature: 1 },
+            notThinkingDisabled: true,
+        },
+    },
+    {
         id: 'gpt-5.x via a proxy — the OpenAI param, camelCase at the SDK boundary',
         why: 'A gpt-* id proxied over a custom endpoint speaks reasoning_effort; sending `thinking` was a no-op, so the user picked High and got no reasoning',
         slot: {
