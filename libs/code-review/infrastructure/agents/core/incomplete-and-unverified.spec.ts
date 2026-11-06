@@ -517,6 +517,95 @@ describe('#2171 — finder run that ends without a submitted result', () => {
     });
 });
 
+/**
+ * #2384 — a custom agent read as "ended without submitting a result" when it
+ * had. The shapes are the ones production runs showed (Kimi K2.7 Code, DeepSeek
+ * V4.1 Flash, GLM 5.3): the first pass submits only its reasoning, with no
+ * findings list, and the synthesis rescue then submits a whole, empty result.
+ * Reading only the first pass made the review partial and the agent's health
+ * "failing" for a run that finished with nothing to report.
+ */
+describe('#2384 — the result can come from the synthesis rescue', () => {
+    const NOTHING =
+        'Checked each changed unit against my focus; nothing applies.';
+    const isRescue = (opts: any) =>
+        JSON.stringify(opts?.prompt ?? '').includes('<CurrentFindings>');
+    const text = (body: string) => ({
+        content: [{ type: 'text', text: body }],
+        finishReason: { unified: 'stop', raw: 'stop' },
+        usage,
+        warnings: [],
+    });
+    const full = makeInput({ reviewMode: 'normal' });
+
+    it('counts a whole result the rescue submitted after a first pass with no findings list', async () => {
+        useModel(async (opts) =>
+            isRescue(opts)
+                ? toolCall(
+                      'submitResult',
+                      { reasoning: NOTHING, suggestions: [] },
+                      SAFE,
+                  )
+                : toolCall('submitResult', { reasoning: NOTHING }, SAFE),
+        );
+
+        const out = await runAgentLoopViaCore(full, secrets);
+
+        expect(out.incompleteReason).toBeUndefined();
+        expect(out.submittedResult).toBe(true);
+    });
+
+    it('counts a whole result the rescue wrote as its final answer', async () => {
+        useModel(async (opts) =>
+            isRescue(opts)
+                ? text(
+                      '```json\n' +
+                          JSON.stringify({
+                              reasoning: NOTHING,
+                              suggestions: [],
+                          }) +
+                          '\n```',
+                  )
+                : text(
+                      '```json\n' +
+                          JSON.stringify({ reasoning: NOTHING }) +
+                          '\n```',
+                  ),
+        );
+
+        const out = await runAgentLoopViaCore(full, secrets);
+
+        expect(out.incompleteReason).toBeUndefined();
+        expect(out.submittedResult).toBe(true);
+    });
+
+    it('still reads no result when no pass submitted a whole one', async () => {
+        useModel(async () =>
+            toolCall('submitResult', { reasoning: NOTHING }, SAFE),
+        );
+
+        const out = await runAgentLoopViaCore(full, secrets);
+
+        expect(out.submittedResult).toBe(false);
+    });
+
+    it('a first pass that ran out of steps stays incomplete, whatever the rescue submits', async () => {
+        useModel(async (opts) =>
+            isRescue(opts)
+                ? toolCall(
+                      'submitResult',
+                      { reasoning: NOTHING, suggestions: [] },
+                      SAFE,
+                  )
+                : toolCall('readFile', { path: 'a.ts' }, SAFE),
+        );
+
+        const out = await runAgentLoopViaCore(full, secrets);
+
+        expect(out.incompleteReason).toBe('budget-exhausted');
+    });
+});
+
 describe('#2171 — verify call that fails', () => {
     it('does not keep candidates whose verify run errored, and reports them apart', async () => {
         useModel(async (opts) => {

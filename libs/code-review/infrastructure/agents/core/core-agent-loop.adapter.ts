@@ -50,6 +50,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/core/review-finding';
 import { inspectFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import { buildHeavyLensRun } from '@libs/ee/heavy-mode/heavy-lens-passes';
+import type { RunState } from '@libs/agent-harness/domain/contracts/run-state.contract';
 import { createLogger } from '@libs/core/log/logger';
 import {
     type AgentLoopInput,
@@ -254,6 +255,46 @@ export function finderRunEnvironment(
             usageRunName: input.usageRunName,
         },
     };
+}
+
+/**
+ * Whether a run submitted its result whole through the result tool. The
+ * runner makes an artifact of every requested result call, executed or not,
+ * so a turn cut while writing submitResult leaves one holding raw,
+ * unparseable input, an object that is no findings result (`{}`), or items
+ * recovery had to drop: only a result that arrived whole counts. The last
+ * one is the one the review publishes (extractFindings reads the last).
+ */
+function submittedWholeByTool(state: RunState): boolean {
+    const published = [...state.artifacts]
+        .reverse()
+        .find((a) => a.type === FINDER_DONE_TOOL);
+    return !!published && isWholeResult(published.payload);
+}
+
+/**
+ * Whether a run delivered a whole result: through the result tool, or written
+ * as its final answer instead of calling the tool, held to the same test (one
+ * that lost items to the schema is not whole). A final answer the provider cut
+ * (length, content filter) is not a result, however much of it parses.
+ * Reads the outcome extractFindings stamped on the state.
+ */
+function submittedWholeResult(state: RunState): boolean {
+    if (submittedWholeByTool(state)) return true;
+    const stamped = state as RunState & {
+        __findingsOutcome?: string;
+        __textResult?: unknown;
+    };
+    const finalTurn = state.steps[state.steps.length - 1];
+    const finalTurnCut =
+        !!finalTurn?.finishReason &&
+        finalTurn.finishReason !== 'stop' &&
+        finalTurn.finishReason !== 'tool-calls';
+    return (
+        stamped.__findingsOutcome === 'text' &&
+        !finalTurnCut &&
+        isWholeResult(stamped.__textResult)
+    );
 }
 
 /**
@@ -559,31 +600,14 @@ export async function runAgentLoopViaCore(
     // looking: it ran out of steps, or the provider cut its turn so the tools
     // it asked for never ran (the runner records that as `tool.skipped`). A run
     // that answered in prose is not incomplete; prose recovery owns it (#2171).
-    // The runner makes an artifact of every requested result call, executed or
-    // not, so a turn cut while writing submitResult leaves one holding raw,
-    // unparseable input, an object that is no findings result (`{}`), or items
-    // recovery had to drop: only a result that arrived whole counts.
-    // The submitResult the review publishes: extractFindings reads the last.
-    const published = [...r.finderState.artifacts]
-        .reverse()
-        .find((a) => a.type === FINDER_DONE_TOOL);
-    const submittedByTool = !!published && isWholeResult(published.payload);
-    // A whole result the finder wrote as its final answer instead of calling
-    // the tool is a result too, held to the same test: one that lost items to
-    // the schema is not whole. A cut turn stays truncated either way, and a
-    // final answer the provider cut (length, content filter) is not a result,
-    // however much of it parses: it asked for no tool, so nothing was skipped.
-    const finderState = r.finderState as any;
-    const finalTurn = r.finderState.steps[r.finderState.steps.length - 1];
-    const finalTurnCut =
-        !!finalTurn?.finishReason &&
-        finalTurn.finishReason !== 'stop' &&
-        finalTurn.finishReason !== 'tool-calls';
-    const submitted =
-        submittedByTool ||
-        (finderState.__findingsOutcome === 'text' &&
-            !finalTurnCut &&
-            isWholeResult(finderState.__textResult));
+    // The result can come from any pass: a first pass whose result was
+    // unusable (no findings list, only its reasoning) followed by a synthesis
+    // rescue that submitted a whole one did deliver a result (#2384). Whether
+    // it stopped early is still the first pass's call (incompleteReason).
+    const submittedByTool = submittedWholeByTool(r.finderState);
+    const submitted = [r.finderState, ...(r.recallStates ?? [])].some(
+        submittedWholeResult,
+    );
     const incompleteReason: AgentLoopOutput['incompleteReason'] =
         r.finderState.status === 'budget-exhausted'
             ? 'budget-exhausted'
