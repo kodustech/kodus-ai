@@ -1,0 +1,80 @@
+---
+title: "Review every repository"
+description: "Have Kody review every repository your git integration can see, including repositories created later, without adding them one by one."
+---
+
+By default Kody reviews the repositories you pick under **Settings → Git**. With **Review every
+repository** turned on, Kody reviews every repository the connected credential can see, and picks
+up repositories created later on its own. It works the same on GitHub, GitLab, Bitbucket Cloud,
+Bitbucket Data Center, Azure DevOps and Forgejo, in Cloud and self-hosted.
+
+## Turn it on
+
+1. Open **Settings → Git**.
+2. Switch on **Review every repository**.
+3. Check the count: Kody lists how many repositories it will start reviewing, and how many it skips.
+4. Confirm.
+
+Only organization owners can turn it on or off.
+
+Kody sets up the repositories in the background, and the card shows the progress
+("320 of 487 set up"). Pull request reviews start on each repository as soon as its webhook
+is in place.
+
+<Note>
+  Reviews on these repositories use your credits (or your own model key with BYOK), and pull
+  request authors in them may take license seats, as on any reviewed repository.
+</Note>
+
+## What gets reviewed
+
+- **Every repository the credential can see.** On GitHub with the Kodus app, that is the
+  repositories the app is installed on. With a token, it is every repository the token's account
+  can access.
+- **Not archived repositories.** They are always skipped.
+- **Not forks and mirrors**, unless you tick **Also review forks and mirrors** when turning it on.
+
+## New repositories
+
+Kody checks for new repositories every 10 minutes and sets them up the same way as a repository
+you add by hand: webhook, settings, code graph and recent pull request history.
+
+- A pull request opened on a new repository **after** it was set up gets a review as usual.
+- A pull request opened **before** that (in the first minutes after the repository was created)
+  is reviewed on its next push, or right away with `@kody start-review`.
+- On GitHub with the Kodus app, a new repository is set up as soon as GitHub reports it. For
+  repositories created after the app was installed with access to all repositories, the app needs
+  the **Repository** webhook event (self-hosted: add it in your GitHub App settings).
+
+Self-hosted: the check interval is `API_CRON_SYNC_ALL_REPOSITORIES` (default every 10 minutes).
+
+## Leave a repository out
+
+Open the repository's code review settings and turn off **automated review**. Kody keeps it that
+way after every sync, and its pull request authors do not take license seats from automatic
+reviews. `@kody` commands still work on it.
+
+While **Review every repository** is on, repositories cannot be removed from **Settings → Git**:
+the next sync would add them back.
+
+## When a repository cannot be set up
+
+Kody needs permission to create a webhook on each repository. When the provider refuses, the
+repository is listed under **Settings → Git** with the reason, and Kody retries it on every sync.
+
+| Provider | What the credential needs |
+|---|---|
+| GitHub (token) | Read and write access to repository webhooks (`admin:repo_hook`, or **Webhooks: Read and write** on a fine-grained token) |
+| GitLab | **Maintainer** or **Owner** role on the project |
+| Bitbucket Cloud | Admin access to the repository and **Webhooks: Read and write** |
+| Bitbucket Data Center | **Repository admin** permission |
+| Azure DevOps | **Edit subscriptions** on the project (Project Administrators have it) |
+| Forgejo | Admin access to the repository and the `write:repository` scope |
+
+If the provider rate-limits Kody while it sets up many repositories, Kody stops and continues on
+the next sync, so a large first run can take a few cycles.
+
+## Turn it off
+
+Switch off **Review every repository**. The repositories reviewed today stay as they are; new
+repositories are no longer added.
