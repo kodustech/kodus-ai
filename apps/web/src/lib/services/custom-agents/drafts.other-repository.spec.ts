@@ -801,13 +801,23 @@ describe("mentionedFilesNotFollowed", () => {
                     [RULES],
                 ),
             ).toEqual([]);
-            // "this repository" is the reviewed one.
             expect(
                 placed(
-                    "Use irrigation-rules. Read docs/conventions.md in the same repo as this repository.",
+                    "Read docs/conventions.md in the same repository as the pump-rules repository.",
                     [RULES],
                 ),
-            ).toEqual(["(reviewed):docs/conventions.md"]);
+            ).toEqual([]);
+        });
+
+        it("reads a comparison within its own sentence", () => {
+            for (const text of [
+                "Read docs/conventions.md in the same repo as before. Follow every repository rule.",
+                "Read docs/conventions.md in the same repo as our guide. The repository rules apply.",
+            ]) {
+                expect(placed(text, [RULES])).toEqual([
+                    "(reviewed):docs/conventions.md",
+                ]);
+            }
         });
 
         it("reads a Portuguese list as it reads an English one", () => {

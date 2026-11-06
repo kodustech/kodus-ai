@@ -1203,7 +1203,7 @@ const COMPARED_TO = /^\s+(?:as|like|que)\s+(?:(?:the|o|a)\s+)?[\x60'"]?/;
 const NAMES_A_REPOSITORY = new RegExp(
     [
         String.raw`^(?:https?:\/\/[\w.-]+\/)?[\w-][\w.-]*\/[\w.-]*[\w-](?![\w/-])(?!\.[\w-])`,
-        String.raw`^(?!(?:this|the\s+same)\s+(?:repo|repository)\b)(?:(?:our|their|its)\s+)?(?:[\x60'"]?[\w./-]+[\x60'"]?\s+){1,4}(?:repo|repository)\b`,
+        String.raw`^(?!(?:this|the\s+same)\s+(?:repo|repository)\b)(?:(?:our|their|its)\s+)?(?:[\x60'"]?[\w/-]+(?:[./][\w/-]+)*[\x60'"]?\s+){1,4}(?:repo|repository)\b`,
         String.raw`^reposit[óo]rio\s+[\x60'"]?[\w./-]+`,
     ].join("|"),
     "i",
@@ -1456,7 +1456,10 @@ export const mentionedFilesNotFollowed = (
                         : named.repository;
                     return [{ at: start, end, repository }];
                 }
-                if (NAMES_A_REPOSITORY.test(text.slice(after))) {
+                // Read within its own sentence: "as before. Follow every
+                // repository rule." names no repository.
+                const sentenceEnd = ends[sentenceOf(after)] ?? text.length;
+                if (NAMES_A_REPOSITORY.test(text.slice(after, sentenceEnd))) {
                     return [{ at: start, end }];
                 }
             }
