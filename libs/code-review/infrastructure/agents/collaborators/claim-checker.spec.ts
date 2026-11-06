@@ -1687,6 +1687,105 @@ describe('checkClaims — an unused import is judged by its own finding, not the
         expect(res.dropped[0].reason).toContain('unverifiable');
     });
 
+    it('does not take a C# using declaration for the import', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/Repo.cs',
+                    relevantLinesStart: 5,
+                    relevantLinesEnd: 5,
+                    claimKind: 'unused',
+                    claimSymbol: 'Foo',
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: () =>
+                    'src/Repo.cs:5:        using var conn = new Foo(cs);\nsrc/Foo.cs:1:public class Foo {}',
+                files: {
+                    'src/Repo.cs':
+                        'using Acme;\n\nclass Repo {\n    void Run() {\n        using var conn = new Foo(cs);\n    }\n}',
+                },
+            }),
+        });
+        expect(res.kept).toEqual([]);
+    });
+
+    it('binds only the new name of a require destructuring rename', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.js',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'b',
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: (pattern) =>
+                    pattern === 'b'
+                        ? "src/a.js:1:const { x, a: b } = require('m');"
+                        : "src/a.js:1:const { x, a: b } = require('m');\nsrc/a.js:4:obj.a = x;",
+                files: {
+                    'src/a.js':
+                        "const { x, a: b } = require('m');\n\n\nobj.a = x;",
+                },
+            }),
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('reads a finding whose end is not a real line', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.js',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: Infinity,
+                    claimKind: 'unused',
+                    claimSymbol: 'debounce',
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: () =>
+                    'src/a.js:1:import { debounce } from "./timing";\nsrc/timing.js:1:export function debounce() {}',
+            }),
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('reads the file once for every finding of one claim', async () => {
+        const base = fakeLookup({
+            grep: () =>
+                'src/a.js:1:import { debounce } from "./timing";\nsrc/timing.js:1:export function debounce() {}',
+        });
+        let reads = 0;
+        const lookup = {
+            ...base,
+            read: async (path: string, start: number, end: number) => {
+                reads++;
+                return base.read(path, start, end);
+            },
+        };
+        await checkClaims({
+            violations: [1, 1, 1].map(() =>
+                violation({
+                    relevantFile: 'src/a.js',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'debounce',
+                }),
+            ),
+            changedFiles: [],
+            lookup,
+        });
+        expect(reads).toBe(1);
+    });
+
     it('judges the claim by the sibling that sits on the import', async () => {
         const lines = [
             "src/a.ts:3:import { Foo } from './foo';",

@@ -198,17 +198,23 @@ function isElsewhere(
  * it in the languages the rules review: `import` (JS/TS, Java, Kotlin, Scala,
  * Swift, Go, Dart, Haskell, Elixir), `from x import` (Python), `use` (Rust,
  * PHP, Perl, Elixir), `using` (C#), `alias` (Elixir), `open` (OCaml, F#),
- * `require`/`require_relative` and `x = require(` (Ruby, Lua, CommonJS), and
- * stylesheet `@import`/`@use`/`@forward`. A re-export (`export … from`) is not
+ * `x = require(` (Lua, CommonJS), and stylesheet `@import`/`@use`/`@forward`.
+ * A bare `require(…)` binds nothing and is code in Kotlin and Solidity, so it
+ * is not one. A re-export (`export … from`) is not
  * one: its users are the files that import it, so it keeps the any-file rule.
  */
 const IMPORT_LINE =
-    /^\s*(?:import\b(?![.(])|from\s+\S+\s+import\b|(?:const|let|var|local)\s+[^=]+=\s*require\s*\(|require(?:_relative)?\b|use\s+[\p{L}_\\:{]|alias\s+[\p{L}_]|@(?:import|use|forward)\b)/u;
+    /^\s*(?:import\b(?![.(])|from\s+\S+\s+import\b|(?:const|let|var|local)\s+[^=]+=\s*require\s*\(|use\s+[\p{L}_\\:{]|@(?:import|use|forward)\b)/u;
 
 /** `using` imports only in C# and C++; elsewhere (TS 5.2) it declares a resource. */
-const USING_IMPORT = /^\s*using\s+[\p{L}_]/u;
+const USING_IMPORT =
+    /^\s*(?:global\s+)?using\s+(?:static\s+|namespace\s+)?(?:[\p{L}_][\p{L}\p{N}_]*\s*=\s*)?(?:global::)?[\p{L}_][\p{L}\p{N}_.:<>, ]*;\s*$/u;
 const USING_FILE =
     /\.(?:cs|cpp|cc|cxx|c\+\+|cppm|ixx|mpp|hpp|hh|hxx|h|ipp|inl|tpp|tcc)$/;
+/** Elixir's `alias` imports; Ruby's `alias` renames a method. */
+const ELIXIR_FILE = /\.exs?$/;
+/** JS and TS, where `{ a: b }` in a `require` destructuring renames `a` to `b`. */
+const JS_FILE = /\.[cm]?[jt]sx?$/;
 /** `open` imports only in OCaml and F#; elsewhere (Kotlin, Swift) it is a modifier. */
 const OPEN_IMPORT = /^\s*open\s+[\p{L}_]/u;
 const OPEN_FILE = /\.(?:ml|mli|fs|fsi|fsx)$/;
@@ -219,6 +225,9 @@ const RUST_FILE = /\.rs$/;
 /** Whether a line of `file` is an import statement in that file's language. */
 function isImportLine(text: string, file: string): boolean {
     if (USING_FILE.test(file) && USING_IMPORT.test(text)) return true;
+    if (ELIXIR_FILE.test(file) && /^\s*alias\s+[\p{L}_]/u.test(text)) {
+        return true;
+    }
     if (OPEN_FILE.test(file) && OPEN_IMPORT.test(text)) return true;
     if (!IMPORT_LINE.test(text)) return false;
     return !(PHP_FILE.test(file) && /^\s+use\b/.test(text));
@@ -407,7 +416,12 @@ const CLOSERS = new Set(['}', ')', ']']);
  * statement itself when it has none. An option written `key: value` (Elixir's
  * `as: Name`) belongs to the item before it.
  */
-function importItemOf(code: string, symbol: string): string[] | undefined {
+function importItemOf(
+    code: string,
+    symbol: string,
+    file: string,
+): string[] | undefined {
+    const elixir = ELIXIR_FILE.test(file);
     const stack: string[][][] = [[[]]];
     let found: string[] | undefined;
     for (const token of code.match(TOKEN) ?? []) {
@@ -419,7 +433,12 @@ function importItemOf(code: string, symbol: string): string[] | undefined {
             if (stack.length > 1) stack.pop();
         } else if (token === ',' || (token === '\n' && stack.length > 1)) {
             group.push([]);
-        } else if (token === ':' && item.length === 1 && group.length > 1) {
+        } else if (
+            elixir &&
+            token === ':' &&
+            item.length === 1 &&
+            group.length > 1
+        ) {
             group[group.length - 2].push(...item, token);
             group.pop();
         } else if (token !== '\n') {
@@ -452,7 +471,8 @@ function boundNames(
     symbol: string,
     file: string,
 ): { bound: string[]; renamed: string[] } {
-    const item = importItemOf(readStatement(statement).code, symbol) ?? [];
+    const item =
+        importItemOf(readStatement(statement).code, symbol, file) ?? [];
     const named = (token: string) =>
         IDENTIFIER.test(token) && !IMPORT_KEYWORDS.has(token);
     // `using Json = A.B;`, `import x = require('y')`, `local json = require(…)`:
@@ -467,6 +487,16 @@ function boundNames(
         return {
             bound: alias ? [alias] : [],
             renamed: source && source !== alias ? [source] : [],
+        };
+    }
+    // `const { a: b } = require('m')`: `a` is renamed to `b`.
+    const colonAt = item.indexOf(':');
+    if (JS_FILE.test(file) && colonAt > 0 && item.length === colonAt + 2) {
+        const alias = named(item[colonAt + 1]) ? item[colonAt + 1] : undefined;
+        const source = named(item[colonAt - 1]) ? item[colonAt - 1] : undefined;
+        return {
+            bound: alias ? [alias] : [],
+            renamed: source ? [source] : [],
         };
     }
     const renameAt = item.findIndex((token) => RENAMES.has(token));
@@ -521,31 +551,50 @@ interface RepoImport {
     end: number;
 }
 
+/** The widest finding range read for its import; a model can claim 1..999999. */
+const MAX_FINDING_SPAN = 2000;
+
+/** A finding's lines, with an end that is finite and within reach. */
+function linesOf(
+    violation: ShardViolation,
+): { start: number; end: number } | undefined {
+    const start = violation.relevantLinesStart;
+    if (typeof start !== 'number' || !Number.isFinite(start)) return undefined;
+    const raw = violation.relevantLinesEnd ?? start;
+    const end =
+        Number.isFinite(raw) && raw >= start
+            ? Math.min(raw, start + MAX_FINDING_SPAN)
+            : start;
+    return { start, end };
+}
+
 /**
- * The import statement naming `symbol` in the repository's own text of the
- * file, near the finding: the one over the finding's lines, else the closest.
- * Read from the file, not from the code the model cites, so its lines are the
- * file's: a reformatted citation or a finding one line off cannot move them.
+ * The import statements naming `symbol` in the repository's own text of the
+ * file, around the findings, in one read: read from the file, not from the
+ * code the model cites, so their lines are the file's and a reformatted
+ * citation or a finding one line off cannot move them.
  */
-async function locateImport(
+async function readImports(
     lookup: ClaimCheckInput['lookup'],
     file: string,
-    violation: ShardViolation,
+    findings: ShardViolation[],
     symbol: string,
-): Promise<RepoImport | undefined> {
+): Promise<RepoImport[]> {
     // A package's `__init__.py` re-exports what it imports: its users are
     // the files importing the package, so it keeps the any-file rule.
-    if (file === '__init__.py' || file.endsWith('/__init__.py')) {
-        return undefined;
-    }
-    const start = violation.relevantLinesStart;
-    const end = violation.relevantLinesEnd ?? start;
-    const from =
-        start === undefined ? 1 : Math.max(1, start - IMPORT_SEARCH_RADIUS);
-    const to =
-        start === undefined || end === undefined
-            ? IMPORT_SEARCH_HEAD
-            : end + IMPORT_SEARCH_RADIUS;
+    if (file === '__init__.py' || file.endsWith('/__init__.py')) return [];
+    const spans = findings
+        .map(linesOf)
+        .filter((r): r is { start: number; end: number } => !!r);
+    const from = spans.length
+        ? Math.max(
+              1,
+              Math.min(...spans.map((r) => r.start)) - IMPORT_SEARCH_RADIUS,
+          )
+        : 1;
+    const to = spans.length
+        ? Math.max(...spans.map((r) => r.end)) + IMPORT_SEARCH_RADIUS
+        : IMPORT_SEARCH_HEAD;
     let text: string;
     try {
         text = (await lookup.read(file, from, to)) ?? '';
@@ -557,7 +606,7 @@ async function locateImport(
         throw new UnverifiableClaimError(`could not read ${file}: ${text}`);
     }
     const lines = text.split('\n');
-    const imports = lines.flatMap((line, i): RepoImport[] => {
+    return lines.flatMap((line, i): RepoImport[] => {
         if (!isImportLine(line, file)) return [];
         const statement = statementAt(lines, i);
         if (!hasIdentifier(readStatement(statement).prose, symbol)) return [];
@@ -570,10 +619,18 @@ async function locateImport(
             },
         ];
     });
+}
+
+/** Of the imports, the one over the finding's lines, else the closest. */
+function nearestImport(
+    imports: RepoImport[],
+    violation: ShardViolation,
+): RepoImport | undefined {
+    const lines = linesOf(violation);
     const distance = (r: RepoImport): number => {
-        if (start === undefined || end === undefined) return r.start;
-        if (r.end < start) return start - r.end;
-        if (r.start > end) return r.start - end;
+        if (!lines) return r.start;
+        if (r.end < lines.start) return lines.start - r.end;
+        if (r.start > lines.end) return r.start - lines.end;
         return 0;
     };
     return imports.reduce<RepoImport | undefined>(
@@ -584,10 +641,8 @@ async function locateImport(
 
 /** Whether the import's lines meet the finding's. */
 function overlaps(real: RepoImport, violation: ShardViolation): boolean {
-    const start = violation.relevantLinesStart;
-    if (start === undefined) return false;
-    const end = violation.relevantLinesEnd ?? start;
-    return real.start <= end && real.end >= start;
+    const lines = linesOf(violation);
+    return !!lines && real.start <= lines.end && real.end >= lines.start;
 }
 
 /**
@@ -776,28 +831,43 @@ async function refute(
         // or one the finding cites. A sibling that sits on the import without
         // declaring the claim anchors it only by its citation.
         let found: { file: string; real: RepoImport } | undefined;
-        for (const own of [
+        const candidates = [
             ...owners,
             ...group.filter((v) => !owners.includes(v)),
-        ]) {
-            const isOwner = owners.includes(own);
-            const cited = importStatementOf(own, matches, claim.symbol!);
-            if (!own.relevantFile) {
-                // A PR-level finding names no file, so there is no importing
-                // file to search: the claim cannot be checked either way.
-                if (cited) {
-                    throw new UnverifiableClaimError(
-                        `"${cited.text.trim().replace(/\s+/g, ' ')}" names no file, so a search cannot tell whether the file that imports it uses it`,
-                    );
-                }
-                continue;
+        ].map((own) => ({
+            own,
+            cited: importStatementOf(own, matches, claim.symbol!),
+        }));
+        for (const { own, cited } of candidates) {
+            // A PR-level finding names no file, so there is no importing file
+            // to search: the claim cannot be checked either way.
+            if (!own.relevantFile && cited) {
+                throw new UnverifiableClaimError(
+                    `"${cited.text.trim().replace(/\s+/g, ' ')}" names no file, so a search cannot tell whether the file that imports it uses it`,
+                );
             }
-            if (!cited && !isOwner) continue;
-            const file = normalizePath(own.relevantFile);
-            const real = await locateImport(lookup, file, own, claim.symbol!);
-            if (real && (cited || overlaps(real, own))) {
-                found = { file, real };
-                break;
+        }
+        // A finding can be on an import if it cites one, or if it is one of
+        // the claim's own findings and has lines to sit on.
+        const eligible = candidates.filter(
+            ({ own, cited }) =>
+                own.relevantFile &&
+                (cited || (owners.includes(own) && linesOf(own))),
+        );
+        if (eligible.length) {
+            const file = normalizePath(eligible[0].own.relevantFile!);
+            const imports = await readImports(
+                lookup,
+                file,
+                eligible.map((c) => c.own),
+                claim.symbol!,
+            );
+            for (const { own, cited } of eligible) {
+                const real = nearestImport(imports, own);
+                if (real && (cited || overlaps(real, own))) {
+                    found = { file, real };
+                    break;
+                }
             }
         }
         if (found) {
@@ -868,6 +938,20 @@ const groupKeyOf = (violation: ShardViolation): string =>
     ].join('::');
 
 /**
+ * Whether an undeclared sibling's prose (its summary or suggestion) names the
+ * claim's symbol: it repeats the assertion. Its code is not read, unlike
+ * `restates`: a sibling about something else on a line that calls the symbol
+ * holds a use, not a repetition.
+ */
+function saysAbout(violation: ShardViolation, claim: Claim): boolean {
+    if (!claim.symbol) return false;
+    return hasIdentifier(
+        `${violation.oneSentenceSummary ?? ''} ${violation.suggestionContent ?? ''}`,
+        claim.symbol,
+    );
+}
+
+/**
  * Does this finding restate the assertion that was refuted?
  *
  * The refuted claim names a target - a symbol, a path, or both. A sibling that
@@ -882,34 +966,11 @@ const groupKeyOf = (violation: ShardViolation): string =>
  * symbol (delimited, so `slug` does not match `slugify`). When the claim named
  * no target at all there is nothing to match on, and the sibling is kept.
  */
-/**
- * Whether an undeclared sibling's prose (its summary or suggestion) names the
- * claim's symbol: it repeats the assertion. Its code is not read, unlike
- * `restates`: a sibling about something else on a line that calls the symbol
- * holds a use, not a repetition.
- */
-function saysAbout(violation: ShardViolation, claim: Claim): boolean {
-    if (!claim.symbol) return false;
-    return hasIdentifier(
-        `${violation.oneSentenceSummary ?? ''} ${violation.suggestionContent ?? ''}`,
-        claim.symbol,
-    );
-}
-
 function restates(violation: ShardViolation, claim: Claim): boolean {
     const text = `${violation.oneSentenceSummary ?? ''} ${violation.suggestionContent ?? ''} ${violation.existingCode ?? ''}`;
     if (!text.trim()) return false;
 
-    if (claim.symbol) {
-        const escaped = claim.symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        if (
-            new RegExp(`(^|[^A-Za-z0-9_$])${escaped}([^A-Za-z0-9_$]|$)`).test(
-                text,
-            )
-        ) {
-            return true;
-        }
-    }
+    if (claim.symbol && hasIdentifier(text, claim.symbol)) return true;
     if (claim.path) {
         const normalized = normalizePath(claim.path);
         const base = normalized.split('/').filter(Boolean).pop() ?? '';
