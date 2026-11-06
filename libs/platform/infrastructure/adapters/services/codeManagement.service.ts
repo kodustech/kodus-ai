@@ -1744,6 +1744,7 @@ export class CodeManagementService implements ICodeManagementService {
         repository: Partial<Repository>;
         prNumber: number;
         reason: string;
+        includeChangeRequests?: boolean;
     }): Promise<number> {
         const type = await this.getTypeIntegration(
             params.organizationAndTeamData,
