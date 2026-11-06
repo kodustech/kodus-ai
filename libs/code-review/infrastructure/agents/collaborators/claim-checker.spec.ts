@@ -484,7 +484,7 @@ describe('checkClaims — an unused import is about the file that imports it (#1
         });
         expect(res.kept).toEqual([]);
         expect(res.dropped[0].reason).toContain('helpers/report.js:14');
-        expect(res.dropped[0].reason).toContain('bound as debounce, wait');
+        expect(res.dropped[0].reason).toContain('bound as wait');
     });
 
     it('reads a multi-line import to its real end when a comment holds a brace', async () => {
@@ -1046,6 +1046,90 @@ describe('checkClaims — an unused import, in every language the rules review',
             verdict: 'drop',
             reason: 'app/a.py:9',
         },
+        {
+            lang: 'PHP trait used in the class (regression)',
+            file: 'app/User.php',
+            line: 'use Illuminate\\Database\\Eloquent\\Factories\\HasFactory;',
+            symbol: 'HasFactory',
+            uses: ['app/User.php:12:    use HasFactory;'],
+            verdict: 'drop',
+            reason: 'app/User.php:12',
+        },
+        {
+            lang: 'Kotlin, used in an open class (regression)',
+            file: 'src/Repo.kt',
+            line: 'import com.acme.Debouncer',
+            symbol: 'Debouncer',
+            uses: ['src/Repo.kt:10:open class Repo(private val d: Debouncer)'],
+            verdict: 'drop',
+            reason: 'src/Repo.kt:10',
+        },
+        {
+            lang: 'TypeScript, used in a using declaration (regression)',
+            file: 'src/a.ts',
+            line: 'import { pool } from "./db";',
+            symbol: 'pool',
+            uses: ['src/a.ts:7:  using res = acquire(pool);'],
+            verdict: 'drop',
+            reason: 'src/a.ts:7',
+        },
+        {
+            lang: 'Swift, used in an open class',
+            file: 'App/A.swift',
+            line: 'import struct Kit.Money',
+            symbol: 'Money',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'rename source defined locally, alias unused',
+            file: 'src/a.js',
+            line: 'import { debounce as wait } from "./timing";',
+            symbol: 'wait',
+            uses: ['src/a.js:30:function debounce() {}'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'Python import os.path, param named path',
+            file: 'app/a.py',
+            line: 'import os.path',
+            symbol: 'os',
+            uses: ['app/a.py:12:def load(path):'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'only a comment names it',
+            file: 'src/a.js',
+            line: 'import { debounce } from "./timing";',
+            symbol: 'debounce',
+            uses: ['src/a.js:30:// TODO: drop debounce once the API is fast'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'lodash as _, unused',
+            file: 'src/a.js',
+            line: "import * as _ from 'lodash';",
+            symbol: '_',
+            elsewhere: "src/b.js:1:import * as _ from 'lodash';",
+            verdict: 'publish',
+        },
+        {
+            lang: 'lodash as _, used',
+            file: 'src/a.js',
+            line: "import * as _ from 'lodash';",
+            symbol: '_',
+            uses: ['src/a.js:4:const xs = _.map(ys, f);'],
+            verdict: 'drop',
+            reason: 'src/a.js:4',
+        },
+        {
+            lang: 'C# using alias, used',
+            file: 'src/A.cs',
+            line: 'using Json = Newtonsoft.Json.JsonConvert;',
+            symbol: 'Json',
+            uses: ['src/A.cs:9:    var s = Json.SerializeObject(x);'],
+            verdict: 'drop',
+            reason: 'src/A.cs:9',
+        },
     ];
 
     it.each(CASES)('$lang: $verdict', async (c: Case) => {
@@ -1085,6 +1169,52 @@ describe('checkClaims — an unused import, in every language the rules review',
         expect(res.dropped[0].reason).toContain(
             c.verdict === 'unverifiable' ? 'unverifiable' : c.reason!,
         );
+    });
+});
+
+describe('checkClaims — an unused import is judged by its own finding, not the group', () => {
+    it('drops a used import although a sibling of the same rule sits further down (regression)', async () => {
+        const lines = [
+            'src/a.js:3:import { debounce } from "./timing";',
+            'src/a.js:40:  debounce(save);',
+            'src/timing.js:1:export function debounce() {}',
+        ];
+        const lookup = fakeLookup({
+            grep: (pattern) =>
+                lines
+                    .filter((l) =>
+                        new RegExp(pattern).test(
+                            l.split(':').slice(2).join(':'),
+                        ),
+                    )
+                    .join('\n'),
+        });
+        const base = {
+            relevantFile: 'src/a.js',
+            claimKind: 'unused' as const,
+        };
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    ...base,
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    claimSymbol: 'debounce',
+                }),
+                violation({
+                    ...base,
+                    relevantLinesStart: 200,
+                    relevantLinesEnd: 200,
+                    claimSymbol: 'oldHelper',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        const dropped = res.dropped.find(
+            (d) => d.violation.claimSymbol === 'debounce',
+        );
+        expect(dropped?.reason).toContain('src/a.js:40');
     });
 });
 

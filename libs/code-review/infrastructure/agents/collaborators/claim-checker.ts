@@ -186,7 +186,25 @@ function isElsewhere(match: GrepMatch, violation: ShardViolation): boolean {
  * one: its users are the files that import it, so it keeps the any-file rule.
  */
 const IMPORT_LINE =
-    /^\s*(?:import\b|from\s+\S+\s+import\b|(?:const|let|var|local)\s+[^=]+=\s*require\s*\(|require(?:_relative)?\b|use\s+[\p{L}_\\:{]|using\s+[\p{L}_]|alias\s+[\p{L}_]|open\s+[\p{L}_]|@(?:import|use|forward)\b)/u;
+    /^\s*(?:import\b|from\s+\S+\s+import\b|(?:const|let|var|local)\s+[^=]+=\s*require\s*\(|require(?:_relative)?\b|use\s+[\p{L}_\\:{]|alias\s+[\p{L}_]|@(?:import|use|forward)\b)/u;
+
+/** `using` imports only in C# and C++; elsewhere (TS 5.2) it declares a resource. */
+const USING_IMPORT = /^\s*using\s+[\p{L}_]/u;
+const USING_FILE = /\.(?:cs|cpp|cc|cxx|c\+\+|hpp|hh|hxx|h)$/;
+/** `open` imports only in OCaml and F#; elsewhere (Kotlin, Swift) it is a modifier. */
+const OPEN_IMPORT = /^\s*open\s+[\p{L}_]/u;
+const OPEN_FILE = /\.(?:ml|mli|fs|fsi|fsx)$/;
+/** PHP's `use` imports at the top of a file; indented inside a class it uses a trait. */
+const PHP_FILE = /\.php$/;
+const RUST_FILE = /\.rs$/;
+
+/** Whether a line of `file` is an import statement in that file's language. */
+function isImportLine(text: string, file: string): boolean {
+    if (USING_FILE.test(file) && USING_IMPORT.test(text)) return true;
+    if (OPEN_FILE.test(file) && OPEN_IMPORT.test(text)) return true;
+    if (!IMPORT_LINE.test(text)) return false;
+    return !(PHP_FILE.test(file) && /^\s+use\b/.test(text));
+}
 
 /**
  * Imports that bring a module's members into scope without naming them: the
@@ -194,11 +212,11 @@ const IMPORT_LINE =
  * modules, C# `using X.Y;` and `using static`, C++ `using namespace` (not
  * `using std::cout;`, which binds `cout`, nor `using X = Y;`), OCaml/F# `open`,
  * and wildcards
- * (`*`, `._`, `::*`, `from x import *`, Go's `import . "x"`), and an import
- * bound to no name (Rust's `use x::Trait as _;`, used only through methods).
+ * (`*`, `._`, `::*`, `from x import *`, Go's `import . "x"`). Rust's
+ * `use x::Trait as _;` binds no name and is checked in `bringsNamespace`.
  */
 const NAMESPACE_IMPORT =
-    /^\s*(?:@(?:import|use|forward)\b|using\s+(?:namespace\s+[\p{L}_][\p{L}\p{N}_.:]*|(?:static\s+)?(?:global::)?[\p{L}_][\p{L}\p{N}_.]*)\s*;|open\s)|(?:\.|::|\\)\s*[*_]\s*(?:[;,)}\]\n]|$)|\bimport\s+\*\s*(?:[;\n]|$)|^\s*(?:import\s+)?\.\s+""|\bas\s+_(?![\p{L}\p{N}_$])/mu;
+    /^\s*(?:@(?:import|use|forward)\b|using\s+(?:namespace\s+[\p{L}_][\p{L}\p{N}_.:]*|(?:static\s+)?(?:global::)?[\p{L}_][\p{L}\p{N}_.]*)\s*;|open\s)|(?:\.|::|\\)\s*[*_]\s*(?:[;,)}\]\n]|$)|\bimport\s+\*\s*(?:[;\n]|$)|^\s*(?:import\s+)?\.\s+""/mu;
 
 /**
  * Files whose `import`/`use` brings a whole module in: Elixir, Perl and Swift
@@ -343,10 +361,10 @@ function importStatementOf(
     const cited = (violation.existingCode ?? '').split('\n');
     const statements: ImportStatement[] = [
         ...own
-            .filter((line) => IMPORT_LINE.test(line))
+            .filter((line) => isImportLine(line, file))
             .map((text) => ({ text })),
         ...cited.flatMap((line, i) =>
-            IMPORT_LINE.test(line)
+            isImportLine(line, file)
                 ? [{ text: statementAt(cited, i), citedLine: i }]
                 : [],
         ),
@@ -403,39 +421,56 @@ function importItemOf(code: string, symbol: string): string[] | undefined {
 const PATH_SEPARATORS = new Set(['.', '::', '\\']);
 const PYTHON_FILE = /\.pyi?$/;
 
+/** The keywords that rename an import: `x as y` (JS, Python, Kotlin, Rust, Elixir `as:`), `x => y` (Scala). */
+const RENAMES = new Set(['as', '=>']);
+
 /**
- * The names an import item may bind for `symbol`: every identifier in it but
- * the import keywords, a Python `from` module path, and the leading segments
- * of a module path. `x as y`, `B => C`, `a::b as c` and `import numpy as np`
- * all name the alias the file uses. `import com.acme.Money;` and
- * `use std::fmt::Display;` bind only the last segment: `com` and `std` occur
- * in the file's own package line and in other paths, which are not uses.
- * Python's `import os.path` binds `os`, so there the first segment is kept.
+ * The names an import item binds for `symbol`, and the names it renames.
+ * `x as y`, `B => C`, `a::b as c`, `import numpy as np` and Elixir's `as: C`
+ * bind only the alias: the source name is not in scope in the importing file,
+ * and the file may define its own. Without a rename, the item binds every
+ * identifier but the import keywords and a Python `from` module path, and of a
+ * module path only its last segment (`import com.acme.Money;` binds `Money`;
+ * `com` occurs in the file's own package line, which is not a use) or, in
+ * Python, its first (`import os.path` binds `os`).
  */
-function boundNames(statement: string, symbol: string, file: string): string[] {
+function boundNames(
+    statement: string,
+    symbol: string,
+    file: string,
+): { bound: string[]; renamed: string[] } {
     const item = importItemOf(readStatement(statement).code, symbol) ?? [];
+    const named = (token: string) =>
+        IDENTIFIER.test(token) && !IMPORT_KEYWORDS.has(token);
+    const renameAt = item.findIndex((token) => RENAMES.has(token));
+    if (renameAt !== -1) {
+        const alias = item.slice(renameAt + 1).find(named);
+        const source = item.slice(0, renameAt).filter(named).pop();
+        return {
+            bound: alias ? [alias] : [],
+            renamed: source ? [source] : [],
+        };
+    }
     const python = PYTHON_FILE.test(file);
     let inFromPath = false;
     const names = item.filter((token, k) => {
         if (token === 'from') inFromPath = true;
         if (token === 'import') inFromPath = false;
-        if (
-            inFromPath ||
-            !IDENTIFIER.test(token) ||
-            IMPORT_KEYWORDS.has(token)
-        ) {
-            return false;
-        }
-        if (!PATH_SEPARATORS.has(item[k + 1] ?? '')) return true;
-        return python && !PATH_SEPARATORS.has(item[k - 1] ?? '');
+        if (inFromPath || !named(token)) return false;
+        const before = PATH_SEPARATORS.has(item[k - 1] ?? '');
+        const after = PATH_SEPARATORS.has(item[k + 1] ?? '');
+        return python ? !before : !after;
     });
-    return [...new Set(names)];
+    return { bound: [...new Set(names)], renamed: [] };
 }
 
 /** Whether the import brings a module's members in without naming them. */
 function bringsNamespace(statement: string, file: string): boolean {
     const { code } = readStatement(statement);
     if (NAMESPACE_IMPORT.test(code)) return true;
+    if (RUST_FILE.test(file) && /\bas\s+_(?![\p{L}\p{N}_$])/u.test(code)) {
+        return true;
+    }
     if (NAMESPACE_IMPORT_FILE.test(file))
         return /^\s*(?:import|use)\b/.test(code);
     if (HASKELL_FILE.test(file)) {
@@ -502,7 +537,7 @@ async function judgeImport(
             `"${symbol}" may be used by every JSX element in ${file} without its name, so a search cannot tell whether it is used`,
         );
     }
-    const names = boundNames(statement.text, symbol, file);
+    const { bound: names, renamed } = boundNames(statement.text, symbol, file);
     if (names.length === 0) return undefined;
     if (names.length > MAX_BOUND_NAMES) {
         throw new UnverifiableClaimError(
@@ -522,9 +557,9 @@ async function judgeImport(
         (m) =>
             m.file === file &&
             isElsewhere(m, violation) &&
-            !IMPORT_LINE.test(m.text) &&
+            !isImportLine(m.text, file) &&
             !isStatementLine(m, violation, statement) &&
-            names.some((name) => namesSymbol(m.text, name)),
+            usesName(m.text, names),
     );
     const bound =
         names.includes(symbol) && others.length === 0
@@ -534,11 +569,23 @@ async function judgeImport(
         .slice(0, 3)
         .join(', ');
     const used = `claimed "${symbol}" is unused, but this file uses it${bound} at ${where}`;
-    // The claimed name is not one the item binds (a module path segment,
-    // Python's `from` path): a use of what the item does bind still refutes
-    // it; otherwise it is judged as main does, by a use in any file.
-    if (!names.includes(symbol)) return uses.length ? used : undefined;
-    return uses.length ? used : null;
+    if (uses.length) return used;
+    // The claim names the binding (or the name it renames): nothing in the
+    // file uses it. Otherwise the claim is about a module path segment or a
+    // Python `from` path, and is judged as main does, by a use in any file.
+    return names.includes(symbol) || renamed.includes(symbol)
+        ? null
+        : undefined;
+}
+
+/**
+ * Whether a grep hit's line uses one of `names` outside its comments. A hit the
+ * provider answered without text still counts, as `namesSymbol` does.
+ */
+function usesName(text: string, names: string[]): boolean {
+    if (!text) return true;
+    const prose = readStatement(text).prose;
+    return names.some((name) => hasIdentifier(prose, name));
 }
 
 /** The symbol as a whole identifier in the line, not a part of a longer one. */
@@ -578,6 +625,7 @@ async function refute(
     claim: Claim,
     violation: ShardViolation,
     input: ClaimCheckInput,
+    own: ShardViolation = violation,
 ): Promise<string | null> {
     const { lookup, changedFiles } = input;
 
@@ -620,12 +668,15 @@ async function refute(
     const elsewhere = matches.filter((m) => isElsewhere(m, violation));
 
     if (claim.kind === 'unused') {
-        const statement = importStatementOf(violation, matches, claim.symbol!);
+        // An import is judged by the finding that makes the claim, not by the
+        // group's span: a sibling of the same rule elsewhere in the file
+        // would make every use between them "inside the finding".
+        const statement = importStatementOf(own, matches, claim.symbol!);
         if (statement !== undefined) {
             const verdict = await judgeImport(
                 statement,
                 claim.symbol!,
-                violation,
+                own,
                 matches,
                 lookup,
             );
@@ -786,6 +837,7 @@ export async function checkClaims(
         claimKey: string;
         claim: Claim;
         span: ShardViolation;
+        own: ShardViolation;
     }> = [];
     for (const [groupKey, group] of groups) {
         const span = spanOf(group);
@@ -800,20 +852,23 @@ export async function checkClaims(
                 continue;
             }
             seen.add(claimKey);
-            jobs.push({ groupKey, claimKey, claim, span });
+            jobs.push({ groupKey, claimKey, claim, span, own: violation });
         }
     }
 
     const verdicts = await mapLimit(
         jobs,
         concurrency,
-        async ({ claim, span }): Promise<string | null> => {
+        async ({ claim, span, own }): Promise<string | null> => {
             if (!lookup.available) {
                 return `unverifiable: repository lookup unavailable (${lookup.unavailableReason})`;
             }
 
             try {
-                return await withTimeout(refute(claim, span, input), timeoutMs);
+                return await withTimeout(
+                    refute(claim, span, input, own),
+                    timeoutMs,
+                );
             } catch (err) {
                 // Includes RepoLookupUnavailableError: the lookup can go
                 // unavailable mid-review (its own probe disables it), and the
