@@ -553,6 +553,30 @@ describe("mentionedFilesNotFollowed", () => {
             ).toEqual([`${RULES}:docs/b.md`]);
         });
 
+        it("offers nothing when its sentence names two linked repositories and neither is attached to it", () => {
+            expect(
+                placed("Compare pump-rules with docs/a.md, irrigation-rules.", [
+                    RULES,
+                    OTHER_RULES,
+                ]),
+            ).toEqual([]);
+        });
+
+        it("places a file by a linked repository in parentheses right after it", () => {
+            expect(
+                placed(
+                    "Compare pump-rules with docs/a.md (irrigation-rules).",
+                    [RULES, OTHER_RULES],
+                ),
+            ).toEqual([`${RULES}:docs/a.md`]);
+        });
+
+        it("still places a file by the one linked repository its sentence names", () => {
+            expect(
+                placed("Use docs/a.md, irrigation-rules style.", [RULES]),
+            ).toEqual([`${RULES}:docs/a.md`]);
+        });
+
         it("still places a file by a linked repository named in an earlier sentence", () => {
             expect(
                 placed(

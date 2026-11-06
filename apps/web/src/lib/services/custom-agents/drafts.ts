@@ -1289,10 +1289,11 @@ export const mentionedFilesNotFollowed = (
     const mentionsBySentence = bySentence(mentions);
     // What follows a file and still belongs to it: "docs/b.md in the
     // pump-rules repository" (a place starts with its preposition), "docs/b.md
-    // from irrigation-rules" (a mention after one).
+    // from irrigation-rules" or "docs/b.md (irrigation-rules)" (a mention
+    // after one). A comma is not one: "docs/a.md, irrigation-rules" is a list.
     const PLACE_RIGHT_AFTER = /^[\s\x60'"),]*$/;
     const MENTION_RIGHT_AFTER =
-        /^[\s\x60'"),]*(?:in|from|on|at|inside|under)\s+(?:the\s+)?[\x60'"]?$/;
+        /^[\s\x60'"),]*(?:(?:in|from|on|at|inside|under)\s+(?:the\s+)?|\(\s*)[\x60'"]?$/;
     const rightAfter = <T extends { at: number }>(
         candidates: T[],
         end: number,
@@ -1352,8 +1353,12 @@ export const mentionedFilesNotFollowed = (
             repository = nearest(placesHere, at).repository;
             if (!repository) continue;
         } else if (mentionsHere.length) {
-            // "read x.mdc, kept in irrigation-rules"
-            repository = nearest(mentionsHere, at).repository;
+            // "read x.mdc, kept in irrigation-rules". A sentence naming two
+            // linked repositories with neither attached to the file does not
+            // say which one holds it: nothing is offered rather than a guess.
+            const named = new Set(mentionsHere.map((m) => m.repository));
+            if (named.size > 1) continue;
+            repository = mentionsHere[0].repository;
         } else {
             repository = mentions[firstMentionFrom(at) - 1]?.repository;
         }
