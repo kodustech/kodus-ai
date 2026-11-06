@@ -93,6 +93,11 @@ export class KodyRuleCentralizedConfigDto implements IKodyRuleCentralizedConfig 
         example: KodyRuleCentralizedStatus.PENDING_EDIT,
     })
     status: KodyRuleCentralizedStatus;
+
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({ example: '123456789' })
+    sourceRepositoryId?: string;
 }
 
 export class CreateKodyRuleDto {

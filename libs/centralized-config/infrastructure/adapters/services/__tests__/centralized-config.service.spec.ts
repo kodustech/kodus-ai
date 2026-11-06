@@ -16,6 +16,7 @@ import { PULL_REQUEST_MESSAGES_SERVICE_TOKEN } from '@libs/code-review/domain/pu
 import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
 import { DeleteRuleInOrganizationByIdKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/delete-rule-in-organization-by-id.use-case';
 import { KODY_RULES_SERVICE_TOKEN } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
+import { TEAM_SERVICE_TOKEN } from '@libs/organization/domain/team/contracts/team.service.contract';
 import * as yaml from 'js-yaml';
 import { CentralizedConfigService } from '../centralized-config.service';
 
@@ -33,6 +34,7 @@ describe('CentralizedConfigService', () => {
     let mockCreateOrUpdateKodyRulesUseCase: any;
     let mockDeleteRuleInOrganizationByIdKodyRulesUseCase: any;
     let mockKodyRulesService: any;
+    let mockTeamService: any;
 
     const organizationAndTeamData: OrganizationAndTeamData = {
         organizationId: 'org-1',
@@ -44,6 +46,27 @@ describe('CentralizedConfigService', () => {
         source: 'sync' as const,
         userEmail: 'kody@kodus.io',
         userId: 'kody',
+    };
+
+    // team-1 (the syncing team) uses config-b, team-a uses config-a.
+    const mockTeamConfigRepositories = () => {
+        const repositoryIdByTeam = {
+            'team-1': 'config-b-id',
+            'team-a': 'config-a-id',
+        };
+        mockTeamService.find.mockResolvedValue(
+            Object.keys(repositoryIdByTeam).map((uuid) => ({ uuid })),
+        );
+        mockParametersService.findByKey.mockImplementation(
+            async (_key: string, { teamId }: OrganizationAndTeamData) => ({
+                configValue: {
+                    repository: {
+                        name: teamId,
+                        id: repositoryIdByTeam[teamId],
+                    },
+                },
+            }),
+        );
     };
 
     beforeEach(async () => {
@@ -103,6 +126,10 @@ describe('CentralizedConfigService', () => {
             updateRulesStatusByFilter: jest.fn(),
         };
 
+        mockTeamService = {
+            find: jest.fn().mockResolvedValue([]),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CentralizedConfigService,
@@ -153,6 +180,10 @@ describe('CentralizedConfigService', () => {
                 {
                     provide: KODY_RULES_SERVICE_TOKEN,
                     useValue: mockKodyRulesService,
+                },
+                {
+                    provide: TEAM_SERVICE_TOKEN,
+                    useValue: mockTeamService,
                 },
             ],
         }).compile();
@@ -1437,6 +1468,143 @@ describe('CentralizedConfigService', () => {
                     centralizedConfig: {
                         path: '.kody-rules/memories/logging.yml',
                         status: 'synced',
+                        sourceRepositoryId: 'central-repo-id',
+                    },
+                }),
+                'org-1',
+                expect.any(Object),
+                true,
+            );
+        });
+
+        it("should not update another team's rule at the same path (#2215)", async () => {
+            const ruleFiles: any[] = [
+                {
+                    centralizedDirectoryPath: '.kody-rules/review',
+                    ruleType: 'standard' as any,
+                    ruleFilePath: '.kody-rules/review/open-redirect.yml',
+                    path: '.kody-rules/review/open-redirect.yml',
+                },
+            ];
+
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([]);
+            mockCodeManagementService.getDefaultBranch.mockResolvedValue(
+                'main',
+            );
+            mockCodeManagementService.getRepositoryContentFile.mockResolvedValue(
+                {
+                    data: {
+                        content: Buffer.from(
+                            yaml.dump({
+                                title: 'Open redirect',
+                                rule: 'Validate redirect targets',
+                            }),
+                        ).toString('base64'),
+                        encoding: 'base64',
+                    },
+                },
+            );
+            mockTeamConfigRepositories();
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [],
+            );
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                rules: [
+                    {
+                        uuid: 'team-a-rule',
+                        status: 'active',
+                        centralizedConfig: {
+                            path: '.kody-rules/review/open-redirect.yml',
+                            status: 'synced',
+                            sourceRepositoryId: 'config-a-id',
+                        },
+                    },
+                ],
+            });
+
+            await service.synchronizeKodyRules({
+                organizationAndTeamData,
+                ruleFiles,
+                actor,
+            });
+
+            expect(
+                mockCreateOrUpdateKodyRulesUseCase.execute,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    uuid: undefined,
+                    centralizedConfig: {
+                        path: '.kody-rules/review/open-redirect.yml',
+                        status: 'synced',
+                        sourceRepositoryId: 'config-b-id',
+                    },
+                }),
+                'org-1',
+                expect.any(Object),
+                true,
+            );
+        });
+
+        it('should adopt a rule whose config repository no team uses anymore (#2215)', async () => {
+            const ruleFiles: any[] = [
+                {
+                    centralizedDirectoryPath: '.kody-rules/review',
+                    ruleType: 'standard' as any,
+                    ruleFilePath: '.kody-rules/review/open-redirect.yml',
+                    path: '.kody-rules/review/open-redirect.yml',
+                },
+            ];
+
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([]);
+            mockCodeManagementService.getDefaultBranch.mockResolvedValue(
+                'main',
+            );
+            mockCodeManagementService.getRepositoryContentFile.mockResolvedValue(
+                {
+                    data: {
+                        content: Buffer.from(
+                            yaml.dump({
+                                title: 'Open redirect',
+                                rule: 'Validate redirect targets',
+                            }),
+                        ).toString('base64'),
+                        encoding: 'base64',
+                    },
+                },
+            );
+            mockTeamConfigRepositories();
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [],
+            );
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                rules: [
+                    {
+                        uuid: 'retired-rule',
+                        status: 'active',
+                        centralizedConfig: {
+                            path: '.kody-rules/review/open-redirect.yml',
+                            status: 'synced',
+                            sourceRepositoryId: 'retired-config-id',
+                        },
+                    },
+                ],
+            });
+
+            await service.synchronizeKodyRules({
+                organizationAndTeamData,
+                ruleFiles,
+                actor,
+            });
+
+            expect(
+                mockCreateOrUpdateKodyRulesUseCase.execute,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    uuid: 'retired-rule',
+                    centralizedConfig: {
+                        path: '.kody-rules/review/open-redirect.yml',
+                        status: 'synced',
+                        sourceRepositoryId: 'config-b-id',
                     },
                 }),
                 'org-1',
@@ -1523,6 +1691,7 @@ describe('CentralizedConfigService', () => {
                     centralizedConfig: {
                         path: '.kody-rules/review/security.yml',
                         status: 'synced',
+                        sourceRepositoryId: 'central-repo-id',
                     },
                     status: 'pending',
                     origin: 'past_reviews',
@@ -1685,6 +1854,7 @@ describe('CentralizedConfigService', () => {
                     centralizedConfig: {
                         path: '.kody-rules/review/style.yml',
                         status: 'synced',
+                        sourceRepositoryId: 'central-repo-id',
                     },
                     status: 'active',
                 }),
@@ -1774,6 +1944,7 @@ describe('CentralizedConfigService', () => {
                     centralizedConfig: {
                         path: '.kody-rules/review/docs.yml',
                         status: 'synced',
+                        sourceRepositoryId: 'central-repo-id',
                     },
                 }),
                 'org-1',
@@ -2067,6 +2238,11 @@ describe('CentralizedConfigService', () => {
         });
 
         it('should still delete a truly removed synced rule while keeping PENDING_ADD', async () => {
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    repository: { name: 'central-repo', id: 'central-repo-id' },
+                },
+            });
             mockKodyRulesService.findByOrganizationId.mockResolvedValue({
                 toJson: () => ({
                     rules: [
@@ -2084,6 +2260,7 @@ describe('CentralizedConfigService', () => {
                             centralizedConfig: {
                                 path: '.kody-rules/review/gone.yml',
                                 status: 'synced',
+                                sourceRepositoryId: 'central-repo-id',
                             },
                         },
                     ],
@@ -2110,6 +2287,108 @@ describe('CentralizedConfigService', () => {
             expect(
                 mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
             ).toHaveBeenCalledWith('removed-synced-rule', actor);
+        });
+
+        it("should NOT delete another team's rules (#2215)", async () => {
+            mockTeamConfigRepositories();
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                toJson: () => ({
+                    rules: [
+                        {
+                            uuid: 'team-a-rule',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: 'repo-a/.kody-rules/review/x.yml',
+                                status: 'synced',
+                                sourceRepositoryId: 'config-a-id',
+                            },
+                        },
+                        {
+                            uuid: 'legacy-unmarked-rule',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: 'repo-a/.kody-rules/review/y.yml',
+                                status: 'synced',
+                            },
+                        },
+                        {
+                            uuid: 'team-b-removed-rule',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: 'repo-b/.kody-rules/review/gone.yml',
+                                status: 'synced',
+                                sourceRepositoryId: 'config-b-id',
+                            },
+                        },
+                    ],
+                }),
+            });
+            mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute.mockResolvedValue(
+                true,
+            );
+
+            const result = await service.removeStaleKodyRules({
+                organizationAndTeamData,
+                actor,
+                ruleFiles: [
+                    { path: 'repo-b/.kody-rules/review/kept.yml' } as any,
+                ],
+            });
+
+            expect(result.removedRuleCount).toBe(1);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).toHaveBeenCalledWith('team-b-removed-rule', actor);
+        });
+
+        it('should delete a missing rule whose config repository no team uses anymore (#2215)', async () => {
+            mockTeamConfigRepositories();
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                toJson: () => ({
+                    rules: [
+                        {
+                            uuid: 'team-a-rule',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: 'repo-a/.kody-rules/review/x.yml',
+                                status: 'synced',
+                                sourceRepositoryId: 'config-a-id',
+                            },
+                        },
+                        {
+                            uuid: 'retired-rule',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: 'repo-a/.kody-rules/review/old.yml',
+                                status: 'synced',
+                                sourceRepositoryId: 'retired-config-id',
+                            },
+                        },
+                    ],
+                }),
+            });
+            mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute.mockResolvedValue(
+                true,
+            );
+
+            const result = await service.removeStaleKodyRules({
+                organizationAndTeamData,
+                actor,
+                ruleFiles: [
+                    { path: 'repo-b/.kody-rules/review/kept.yml' } as any,
+                ],
+            });
+
+            expect(result.removedRuleCount).toBe(1);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).toHaveBeenCalledWith('retired-rule', actor);
         });
 
         it('should NOT delete PENDING_ADD when discovery is empty but the tree read is proven', async () => {
@@ -2185,6 +2464,7 @@ describe('CentralizedConfigService.synchronizeKodyRules — rejected rule files'
             createOrUpdateKodyRulesUseCase as any,
             {} as any,
             { findByOrganizationId: jest.fn().mockResolvedValue(null) } as any,
+            {} as any, // teamService
         );
         jest.spyOn(service, 'getCentralizedConfigRepository').mockResolvedValue(
             { id: 'repo-central', name: 'central' } as any,

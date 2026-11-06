@@ -26,6 +26,10 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import {
+    ITeamService,
+    TEAM_SERVICE_TOKEN,
+} from '@libs/organization/domain/team/contracts/team.service.contract';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { DeleteRepositoryCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/delete-repository-code-review-parameter.use-case';
@@ -87,7 +91,37 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         private readonly deleteRuleInOrganizationByIdKodyRulesUseCase: DeleteRuleInOrganizationByIdKodyRulesUseCase,
         @Inject(KODY_RULES_SERVICE_TOKEN)
         private readonly kodyRulesService: IKodyRulesService,
+        @Inject(TEAM_SERVICE_TOKEN)
+        private readonly teamService: ITeamService,
     ) {}
+
+    /**
+     * Config repository ids the organization's teams currently sync. A rule
+     * stamped with a repository outside this set has no owner left, e.g. after
+     * a team re-pointed its config repository (#2215).
+     */
+    private async getOrganizationConfigRepositoryIds(
+        organizationId: string,
+    ): Promise<Set<string>> {
+        const teams = await this.teamService.find({
+            organization: { uuid: organizationId },
+        });
+        const parameters = await Promise.all(
+            (teams || []).map((team) =>
+                this.parametersService.findByKey(
+                    ParametersKey.CENTRALIZED_CONFIG,
+                    { organizationId, teamId: team.uuid },
+                ),
+            ),
+        );
+
+        return new Set(
+            parameters
+                .map((parameter) => parameter?.configValue?.repository?.id)
+                .filter(Boolean)
+                .map(String),
+        );
+    }
 
     async validateCentralizedConfig(params: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -2100,6 +2134,8 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             const getSourcePathLookupKey = (sourcePath?: string) =>
                 (sourcePath || '').split('#')[0];
 
+            let organizationConfigRepositoryIds: Set<string> | undefined;
+
             const existingRuleBySourcePath = new Map<
                 string,
                 {
@@ -2117,6 +2153,26 @@ export class CentralizedConfigService implements ICentralizedConfigService {
 
                 if (!sourcePathKey || !existingRule.uuid) {
                     continue;
+                }
+
+                // Another team's config repository owns this rule (#2215).
+                const ruleSourceRepositoryId =
+                    existingRule.centralizedConfig?.sourceRepositoryId;
+                if (
+                    ruleSourceRepositoryId &&
+                    ruleSourceRepositoryId !== String(centralizedRepository.id)
+                ) {
+                    organizationConfigRepositoryIds ??=
+                        await this.getOrganizationConfigRepositoryIds(
+                            organizationAndTeamData.organizationId,
+                        );
+                    if (
+                        organizationConfigRepositoryIds.has(
+                            ruleSourceRepositoryId,
+                        )
+                    ) {
+                        continue;
+                    }
                 }
 
                 const currentMapped =
@@ -2347,6 +2403,9 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                         centralizedConfig: {
                             path: ruleFileMeta.path,
                             status: KodyRuleCentralizedStatus.SYNCED,
+                            sourceRepositoryId: String(
+                                centralizedRepository.id,
+                            ),
                         },
                         origin:
                             existingMatch?.origin ??
@@ -2530,6 +2589,15 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 ruleFiles.map((meta) => meta.path),
             );
 
+            const centralizedConfigParameter =
+                await this.parametersService.findByKey(
+                    ParametersKey.CENTRALIZED_CONFIG,
+                    organizationAndTeamData,
+                );
+            const configRepositoryId =
+                centralizedConfigParameter?.configValue?.repository?.id;
+
+            let organizationConfigRepositoryIds: Set<string> | undefined;
             let removedCount = 0;
 
             const existingRules = existingEntity?.toJson?.()?.rules || [];
@@ -2580,6 +2648,38 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 // centralized PR is open) — deleting it here would wipe data
                 // the centralized config never owned.
                 if (!sourcePath) {
+                    continue;
+                }
+
+                // Rules are stored per organization, but each team syncs its
+                // own config repository: only reconcile this repository's
+                // rules, or rules whose repository no team syncs anymore
+                // (#2215). Rules synced before the marker existed are
+                // stamped by the next sync that still has their file; until
+                // then absence proves nothing, unless a delete was requested.
+                const ruleSourceRepositoryId =
+                    rule.centralizedConfig?.sourceRepositoryId;
+                let isOwnRule: boolean;
+                if (!ruleSourceRepositoryId) {
+                    isOwnRule =
+                        rule.centralizedConfig?.status ===
+                        KodyRuleCentralizedStatus.PENDING_DELETE;
+                } else if (configRepositoryId === undefined) {
+                    isOwnRule = false;
+                } else if (
+                    ruleSourceRepositoryId === String(configRepositoryId)
+                ) {
+                    isOwnRule = true;
+                } else {
+                    organizationConfigRepositoryIds ??=
+                        await this.getOrganizationConfigRepositoryIds(
+                            organizationAndTeamData.organizationId,
+                        );
+                    isOwnRule = !organizationConfigRepositoryIds.has(
+                        ruleSourceRepositoryId,
+                    );
+                }
+                if (!isOwnRule) {
                     continue;
                 }
 

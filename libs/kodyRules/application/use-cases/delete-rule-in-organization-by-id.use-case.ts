@@ -187,6 +187,7 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
                             status:
                                 existingRule.status || KodyRulesStatus.ACTIVE,
                             centralizedConfig: {
+                                ...existingRule.centralizedConfig,
                                 path: centralizedPath,
                                 status: KodyRuleCentralizedStatus.PENDING_DELETE,
                             },

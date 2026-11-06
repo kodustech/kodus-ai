@@ -563,6 +563,7 @@ export class CreateOrUpdateKodyRulesUseCase {
                     repositoryId: existingRule.repositoryId,
                     status: existingRule.status || KodyRulesStatus.ACTIVE,
                     centralizedConfig: {
+                        ...existingRule.centralizedConfig,
                         path: centralizedPath,
                         status: KodyRuleCentralizedStatus.PENDING_EDIT,
                     },

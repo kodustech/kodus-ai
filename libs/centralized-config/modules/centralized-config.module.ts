@@ -6,6 +6,7 @@ import { IntegrationConfigModule } from '@libs/integrations/modules/config.modul
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
 import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
+import { TeamModule } from '@libs/organization/modules/team.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { Module, forwardRef } from '@nestjs/common';
 
@@ -31,6 +32,7 @@ import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-re
         forwardRef(() => PullRequestMessagesModule),
         forwardRef(() => IntegrationConfigModule),
         forwardRef(() => CodeReviewConfigurationModule),
+        forwardRef(() => TeamModule),
     ],
     providers: [
         CentralizedConfigSyncUseCase,
