@@ -6,6 +6,7 @@ import {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { WebhookSetupResult } from '../types/codeManagement/webhook-setup.type';
 import { TreeItem } from '@libs/core/infrastructure/config/types/general/tree.type';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 
@@ -376,6 +377,16 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
     }): Promise<boolean>;
+
+    /**
+     * Makes sure each given repository has the Kodus webhook, creating it
+     * where missing. Touches only these repositories, never removes a hook,
+     * and reports per repository instead of throwing.
+     */
+    ensureRepositoryWebhooks(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositories: Repositories[];
+    }): Promise<WebhookSetupResult>;
 
     /**
      * Read-only check of what the stored credential can do on one selected
