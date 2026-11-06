@@ -196,7 +196,7 @@ export class GithubChecksService implements IChecksAdapter {
         conclusion: string;
         detailsUrl?: string;
         output: { title: string; summary: string };
-    }): Promise<number> {
+    }): Promise<number | null> {
         const {
             organizationAndTeamData,
             repository,
@@ -206,6 +206,13 @@ export class GithubChecksService implements IChecksAdapter {
             detailsUrl,
             output,
         } = params;
+
+        const authDetails = await this.gitHubService.getGithubAuthDetails(
+            organizationAndTeamData,
+        );
+        if (authDetails.authMode === AuthMode.TOKEN) {
+            return null;
+        }
 
         const octokit = await this.gitHubService.getAuthenticatedOctokit(
             organizationAndTeamData,

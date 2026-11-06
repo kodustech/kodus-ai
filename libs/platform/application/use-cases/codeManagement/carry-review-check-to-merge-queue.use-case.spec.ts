@@ -152,6 +152,8 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
         await expect(useCase.execute(queuePush())).rejects.toThrow(
             'API rate limit exceeded',
         );
+        // No failure check: the job retries after the reset.
+        expect(checks.createCompletedCheckRun).toHaveBeenCalledTimes(1);
     });
 
     it('rethrows a GraphQL rate limit from the merge queue lookup', async () => {
@@ -182,12 +184,66 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
         },
     );
 
-    it('posts nothing when the PR head has no finished Kody run', async () => {
+    it('fails the queue commit at once, with the reason and the fix, when the PR head has no finished Kody run', async () => {
         checks.findLatestCompletedCheckRun.mockResolvedValue(null);
 
         await expect(useCase.execute(queuePush())).resolves.toEqual({
             carried: false,
             reason: 'no_completed_run',
+            failurePosted: true,
+        });
+        expect(checks.createCompletedCheckRun).toHaveBeenCalledWith({
+            organizationAndTeamData,
+            repository: { owner: 'acme', name: 'service' },
+            headSha: queueSha,
+            name: KODY_CHECK_RUN_NAME,
+            conclusion: 'failure',
+            output: {
+                title: 'No finished Kody review',
+                summary: expect.stringMatching(
+                    /PR #7[\s\S]*60c06c3[\s\S]*@kody start-review/,
+                ),
+            },
+        });
+    });
+
+    it('fails the queue commit at once when the review result cannot be read', async () => {
+        checks.findLatestCompletedCheckRun.mockRejectedValue(new Error('boom'));
+
+        await expect(useCase.execute(queuePush())).resolves.toEqual({
+            carried: false,
+            reason: 'api_error',
+            failurePosted: true,
+        });
+        expect(checks.createCompletedCheckRun).toHaveBeenCalledWith(
+            expect.objectContaining({
+                headSha: queueSha,
+                conclusion: 'failure',
+                output: expect.objectContaining({
+                    title: "Could not carry Kody's review",
+                }),
+            }),
+        );
+    });
+
+    it('reports when the failure check itself cannot be posted', async () => {
+        checks.findLatestCompletedCheckRun.mockResolvedValue(null);
+        checks.createCompletedCheckRun.mockRejectedValue(new Error('boom'));
+
+        await expect(useCase.execute(queuePush())).resolves.toEqual({
+            carried: false,
+            reason: 'no_completed_run',
+            failurePosted: false,
+        });
+    });
+
+    it('posts nothing when the merge queue lookup fails, since the push is not verified', async () => {
+        checks.findMergeQueueEntry.mockRejectedValue(new Error('boom'));
+
+        await expect(useCase.execute(queuePush())).resolves.toEqual({
+            carried: false,
+            reason: 'api_error',
+            failurePosted: false,
         });
         expect(checks.createCompletedCheckRun).not.toHaveBeenCalled();
     });
@@ -209,6 +265,7 @@ describe('CarryReviewCheckToMergeQueueUseCase', () => {
         await expect(useCase.execute(queuePush())).resolves.toEqual({
             carried: false,
             reason: 'api_error',
+            failurePosted: false,
         });
     });
 

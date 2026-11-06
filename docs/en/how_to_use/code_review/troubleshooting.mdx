@@ -86,7 +86,7 @@ Work through this quick checklist:
 
 On GitHub, when `Kody Code Review` is a required check and a PR enters the merge queue, Kody reports the PR's last finished review result on the commit the queue tests. No new review runs. This needs Kody connected through the GitHub App; with a personal access token Kody posts no checks.
 
-The check means Kody reviewed the PR, not that the PR is free of issues. It passes even with critical suggestions still open, and fails only when the review itself could not run. Requiring it guarantees a review happened; it does not block a merge on Kody's findings.
+The check means Kody reviewed the PR, not that the PR is free of issues. It passes even with critical suggestions still open, and on the PR it fails only when the review itself could not run. Requiring it guarantees a review happened; it does not block a merge on Kody's findings.
 
-If a queued PR still waits for the check, its latest commit had no finished Kody review when it entered the queue, for example because an admin bypassed the required check. Let Kody finish a review on the PR, then add it to the queue again.
+If the PR's latest commit has no finished Kody review when it enters the queue (for example because an admin bypassed the required check), the check fails at once with **No finished Kody review** and the queue removes the PR. Comment `@kody start-review` on the PR, let the review finish, then add it to the queue again. **Could not carry Kody's review** means GitHub did not return the review result; add the PR to the queue again.
 

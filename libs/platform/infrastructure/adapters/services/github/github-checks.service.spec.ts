@@ -404,6 +404,24 @@ describe('GithubChecksService', () => {
             expect(result).toBe(77);
         });
 
+        it('posts nothing under PAT auth, which has no Checks API', async () => {
+            mockGithubService.getGithubAuthDetails.mockResolvedValue({
+                authMode: AuthMode.TOKEN,
+            } as any);
+
+            await expect(
+                service.createCompletedCheckRun({
+                    organizationAndTeamData: mockOrganizationAndTeamData,
+                    repository: mockRepository,
+                    headSha: 'queue-sha',
+                    name: 'Kody Code Review',
+                    conclusion: 'failure',
+                    output: { title: 't', summary: 's' },
+                }),
+            ).resolves.toBeNull();
+            expect(mockOctokit.checks.create).not.toHaveBeenCalled();
+        });
+
         it('throws when GitHub fails', async () => {
             mockOctokit.checks.create.mockRejectedValue(new Error('boom'));
 
