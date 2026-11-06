@@ -346,6 +346,32 @@ describe("mentionedFilesNotFollowed", () => {
         ]);
     });
 
+    it.each(["acme/İstanbul", "İstanbul"])(
+        "recognizes the linked repository named %s",
+        (name) => {
+            const repository = "acme/İstanbul";
+            expect(
+                mentionedFilesNotFollowed(
+                    `Read docs/ValveRules.md from ${name}.`,
+                    [repository],
+                    [],
+                    "valves",
+                ),
+            ).toEqual([{ path: "docs/ValveRules.md", kind: "doc", repository }]);
+        },
+    );
+
+    it("offers nothing when an unlinked repository with uppercase dotted I is an alternative", () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Read docs/ValveRules.md from pump-rules or acme/İstanbul.",
+                [OTHER_RULES],
+                [],
+                "valves",
+            ),
+        ).toEqual([]);
+    });
+
     it("places a file by a linked repository named after it in the same sentence", () => {
         expect(
             mentionedFilesNotFollowed(

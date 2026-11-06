@@ -156,12 +156,12 @@ const firstFrom = (items: Array<{ at: number }>, position: number) => {
 const escapeRegExp = (value: string) =>
     value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// Fold dotted I to one code unit so offsets still match the original text.
+const foldMentionText = (value: string) =>
+    value.replace(/\u0130/g, "i").toLowerCase();
+
 const read = (instructions: string): Reading => {
-    // Keep offsets aligned with the original file paths. Lowercasing U+0130
-    // (İ) expands it into two code units, so leave that character as written.
-    const text = instructions.replace(/[^\u0130]+/g, (part) =>
-        part.toLowerCase(),
-    );
+    const text = foldMentionText(instructions);
     const files = [...instructions.matchAll(MENTIONED_FILE)].map((match) => {
         const at = (match.index ?? 0) + match[0].indexOf(match[1]);
         return { cited: match[1], at, end: at + match[1].length };
@@ -198,7 +198,7 @@ const findMentions = (
 ): Mention[] => {
     const everyMention = repositories
         .flatMap((repository) => {
-            const full = repository.toLowerCase();
+            const full = foldMentionText(repository);
             const name = full.split("/").pop() ?? full;
             return [
                 new RegExp(
