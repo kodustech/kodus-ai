@@ -357,7 +357,9 @@ describe("mentionedFilesNotFollowed", () => {
                     [],
                     "valves",
                 ),
-            ).toEqual([{ path: "docs/ValveRules.md", kind: "doc", repository }]);
+            ).toEqual([
+                { path: "docs/ValveRules.md", kind: "doc", repository },
+            ]);
         },
     );
 
@@ -883,6 +885,15 @@ describe("mentionedFilesNotFollowed", () => {
                     ["acme/team"],
                 ),
             ).toEqual([]);
+        });
+
+        it("places a path under a linked repository spelled with a dotted capital I", () => {
+            expect(
+                placed(
+                    "Rules live in acme/istanbul. Read acme/istanbul/docs/a.md.",
+                    ["acme/\u0130stanbul"],
+                ),
+            ).toEqual(["acme/\u0130stanbul:docs/a.md"]);
         });
 
         it("reads a Portuguese list as it reads an English one", () => {

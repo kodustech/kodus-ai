@@ -539,18 +539,19 @@ export const mentionedFilesNotFollowed = (
         placesBySentence,
         mentionsBySentence,
     );
+    // Path prefixes are folded the same way as mentions, so a repository
+    // the text names is also the one a path starting with it names.
     const byFullName = new Map(
         repositories.map((repository) => [
-            repository.toLowerCase(),
+            foldMentionText(repository),
             repository,
         ]),
     );
     const bareNames = new Set(
-        repositories.map(
-            (repository) =>
-                repository.toLowerCase().split("/").pop() ??
-                repository.toLowerCase(),
-        ),
+        repositories.map((repository) => {
+            const full = foldMentionText(repository);
+            return full.split("/").pop() ?? full;
+        }),
     );
 
     // Where each file was placed. One placed by its own text (a prefix, what
@@ -568,7 +569,7 @@ export const mentionedFilesNotFollowed = (
         // may be the reviewed repository's own folder): nothing is offered.
         // The longest known prefix: a GitLab subgroup or an Azure project
         // makes a full name of more than two segments.
-        const segments = cited.toLowerCase().split("/");
+        const segments = foldMentionText(cited).split("/");
         let owner: string | undefined;
         let prefixLength = 0;
         for (let n = segments.length - 1; n >= 2 && !owner; n--) {
