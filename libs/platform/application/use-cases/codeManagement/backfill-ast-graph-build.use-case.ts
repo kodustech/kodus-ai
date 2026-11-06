@@ -121,7 +121,7 @@ export class BackfillAstGraphBuildUseCase implements IUseCase {
 
             try {
                 const repoRecord = await this.repositoryService.findOrCreate({
-                    integrationConfigId: teamId,
+                    integrationConfigId: cfgWithIntegration.uuid,
                     externalId: String(repo.id),
                     name: repo.name,
                     fullName,
