@@ -298,27 +298,6 @@
    "caseId": "notification-rule-processing-engine-grafana-codex"
   },
   {
-   "id": "github-oauth-security-enhancement-sentry#10",
-   "class": "other",
-   "where": "in-diff",
-   "reason": "The modified test passes a state that doesn't match the pipeline, so it fails at the OAuth state check and never reaches the installation-not-found branch it is supposed to cover. It is a test that does not test its target.",
-   "caseId": "github-oauth-security-enhancement-sentry"
-  },
-  {
-   "id": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The isinstance(process, multiprocessing.Process) guard the PR added never matches the SpawnProcess objects returned by the spawn context, so a hung worker is never killed before its replacement is started.",
-   "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry"
-  },
-  {
-   "id": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
-   "class": "error-handling",
-   "where": "in-diff",
-   "reason": "When the shared deadline runs out, join() breaks out of the loop and never terminates the remaining workers, so they keep running after shutdown.",
-   "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry"
-  },
-  {
    "id": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
    "class": "sibling-not-updated",
    "where": "in-diff",
@@ -331,34 +310,6 @@
    "where": "in-diff",
    "reason": "The test helper takes a value argument but never uses it, so the tests can't catch a wrong value being passed (for example 6 vs 10 for group_2), which makes this a test that doesn't test.",
    "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry"
-  },
-  {
-   "id": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
-   "class": "other",
-   "where": "in-diff",
-   "reason": "The test registers its cleanup with the literal alias \"alias\" instead of the aliases it created, so the created IdPs leak; this is a defect in the new test code itself.",
-   "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak"
-  },
-  {
-   "id": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01",
-   "class": "consumer-outside-diff",
-   "where": "outside-diff",
-   "reason": "The PR changed the shared LoginFilter.getLoginPredicate, but IdentityProviderBean.federatedProviderPredicate, which the PR did not change, also uses it and now hides a user's linked organization IdPs that are not public, even when organizations are disabled.",
-   "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak"
-  },
-  {
-   "id": "feat-2fa-backup-codes-cal-com#01",
-   "class": "security",
-   "where": "outside-diff",
-   "reason": "The new backup-code branch relies on the existing password check, but that check (an untouched guard) is skipped whenever any totpCode is sent, so a backup code plus a dummy totpCode logs in without the password: an authentication bypass.",
-   "caseId": "feat-2fa-backup-codes-cal-com"
-  },
-  {
-   "id": "feat-2fa-backup-codes-cal-com#gap-N1",
-   "class": "sibling-not-updated",
-   "where": "outside-diff",
-   "reason": "The new backupCodes field was added to the buildUser fixture, but the parallel hand-built User fixture in inviteMemberUtils.test.ts, a file the PR did not change, was not updated, so type-checking that file fails.",
-   "caseId": "feat-2fa-backup-codes-cal-com"
   },
   {
    "id": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
@@ -401,97 +352,6 @@
    "where": "outside-diff",
    "reason": "The retry counting and cleanup went only into the SMS cron; the parallel WhatsApp cron calls the same Twilio function and was left unchanged.",
    "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The new host checks compare hostnames case-sensitively, so a host that differs only in letter case is wrongly rejected.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The new PollFeed code calls scrub on i.content without a nil check, so a feed item that only has a description crashes the job.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
-   "class": "security",
-   "where": "in-diff",
-   "reason": "The URL is put unescaped into raw HTML that is rendered without sanitising, which allows stored XSS.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The update path in TopicEmbed.import never checks whether embed.post is nil (deleted post) before handing it to PostRevisor.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
-   "class": "error-handling",
-   "where": "in-diff",
-   "reason": "import_remote has no handling for network failures or for pages that cannot be parsed into content.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "absolutize_urls rewrites protocol-relative URLs wrongly and leaves path-relative links unresolved.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
-   "class": "performance",
-   "where": "in-diff",
-   "reason": "Every retrieval of an article not yet embedded polls the whole feed synchronously, and throttling is per URL, so the same feed work is repeated many times.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
-   "class": "other",
-   "where": "in-diff",
-   "reason": "These specs never enable feed polling, so they stop at the first check and never test the condition they are named after.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
-   "class": "other",
-   "where": "outside-diff",
-   "reason": "The new embed stylesheet and JS were not added to config.assets.precompile in the unchanged app config.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
-   "class": "security",
-   "where": "in-diff",
-   "reason": "The throttle is keyed by the full URL, so an anonymous client can change the query string to get past it and create unlimited topics.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04",
-   "class": "other",
-   "where": "in-diff",
-   "reason": "The spec leaves the other settings blank, so it would pass even if the enabled check were removed.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimip-01",
-   "class": "security",
-   "where": "in-diff",
-   "reason": "open-uri follows redirects after the host check has passed, which allows SSRF to internal services.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
-  },
-  {
-   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#gap-N1",
-   "class": "consumer-outside-diff",
-   "where": "outside-diff",
-   "reason": "PostMover#copy, which the PR did not change, recreates posts without passing the new cook_method, so a moved raw_html post gets re-cooked as markdown.",
-   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
   },
   {
    "id": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
@@ -548,69 +408,6 @@
    "where": "in-diff",
    "reason": "Guest emails are deduplicated against attendees and the blacklist with case-sensitive comparisons, so the same address in different case counts as a separate guest.",
    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
-   "class": "error-handling",
-   "where": "in-diff",
-   "reason": "In the new webhook, zod .parse, symmetricDecrypt and JSON.parse run with no error handling, so a bad payload produces a 500 instead of a 400.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "When the refresh response has no refresh_token, the new parser fills in the literal string 'refresh_token' instead of leaving the field out, and that value overwrites the valid stored token.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The computed keys built from z.string().toString() become one fixed literal key rather than a wildcard, so the sync-mode schema checks the wrong thing.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
-   "class": "consumer-outside-diff",
-   "where": "in-diff",
-   "reason": "The new helper returns a safeParse wrapper, but the Google Calendar caller still treats it as the plain key object (as the old schema.parse returned) and saves the wrapper as the credential.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
-   "class": "performance",
-   "where": "in-diff",
-   "reason": "Salesforce getClient now refreshes the token and writes the credential every time the service is constructed, even when the current access token is still valid.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
-   "class": "other",
-   "where": "in-diff",
-   "reason": "The new Salesforce code uses prisma without importing it, so type checking fails and it throws a ReferenceError at runtime.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "The success check compares statusText to 'OK' instead of using response.ok, which can treat a successful response as a failure.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
-   "class": "edge-case-logic",
-   "where": "in-diff",
-   "reason": "After the refresh, the connection is built from the old credentialKey values instead of the refreshed token data.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
-  },
-  {
-   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01",
-   "class": "edge-case-logic",
-   "where": "outside-diff",
-   "reason": "The webhook looks up appStoreMetadata by app slug, but the existing map (a file the PR did not change) is keyed by directory name, so apps whose slug differs from their directory always get a 404.",
-   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
   },
   {
    "id": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
@@ -891,6 +688,251 @@
    "where": "outside-diff",
    "reason": "The parallel segment-list code in delete_replays_script_async in replays/tasks.py did not get the max_segment_id None guard, so it still raises TypeError for replays with no segments.",
    "caseId": "replays-self-serve-bulk-delete-system-sentry"
+  },
+  {
+   "id": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The new isinstance(process, multiprocessing.Process) check never matches the SpawnProcess objects created by the PR's own spawn context, so kill() is skipped and a duplicate worker is started.",
+   "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry"
+  },
+  {
+   "id": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "class": "error-handling",
+   "where": "in-diff",
+   "reason": "When the join timeout expires, the loop breaks before terminating the remaining workers, so the timeout path leaks flusher processes instead of cleaning them up.",
+   "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry"
+  },
+  {
+   "id": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "class": "other",
+   "where": "in-diff",
+   "reason": "A test defect: the cleanup is registered for the literal alias \"alias\" instead of the aliases the test created, so the 21 identity providers are never removed.",
+   "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak"
+  },
+  {
+   "id": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01",
+   "class": "consumer-outside-diff",
+   "where": "outside-diff",
+   "reason": "The shared LoginFilter predicate gained an organization/BROKER_PUBLIC check, and IdentityProviderBean's federatedProviderPredicate (not changed by the PR) also uses it, so linked non-public org IdPs are now hidden even when organizations are disabled.",
+   "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak"
+  },
+  {
+   "id": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N3",
+   "class": "state-concurrency",
+   "where": "in-diff",
+   "reason": "The new cache-invalidation-on-update logic returns early without comparing BROKER_PUBLIC, so toggling that flag leaves the login caches stale.",
+   "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak"
+  },
+  {
+   "id": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N7",
+   "class": "state-concurrency",
+   "where": "in-diff",
+   "reason": "The cache-hit path streams IdPs from a HashSet, so the result order depends on whether the cache was hit rather than following the delegate's order.",
+   "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak"
+  },
+  {
+   "id": "fixing-re-authentication-with-passkeys-keycloak#gapb-N1",
+   "class": "edge-case-logic",
+   "where": "outside-diff",
+   "reason": "The new passkeys macro in login-password.ftl opens up an error path. On that path WebAuthnAuthenticator.fillContextForm (unchanged code) returns early when the user has no passwordless authenticator, after ENABLE_WEBAUTHN_CONDITIONAL_UI is set but before isUserIdentified/userVerification are, so the template's unconditional use of those two attributes fails.",
+   "caseId": "fixing-re-authentication-with-passkeys-keycloak"
+  },
+  {
+   "id": "feat-2fa-backup-codes-cal-com#01",
+   "class": "security",
+   "where": "outside-diff",
+   "reason": "The new backup-code branch skips TOTP validation, and the existing password guard (untouched line 121) is skipped whenever any totpCode is sent, so a backup code plus a dummy totpCode bypasses the password check.",
+   "caseId": "feat-2fa-backup-codes-cal-com"
+  },
+  {
+   "id": "feat-2fa-backup-codes-cal-com#gap-N1",
+   "class": "sibling-not-updated",
+   "where": "outside-diff",
+   "reason": "The PR added backupCodes to the buildUser fixture but missed the parallel hand-built User fixture in inviteMemberUtils.test.ts, which now fails type-checking.",
+   "caseId": "feat-2fa-backup-codes-cal-com"
+  },
+  {
+   "id": "feat-2fa-backup-codes-cal-com#gapb-N5",
+   "class": "edge-case-logic",
+   "where": "outside-diff",
+   "reason": "The explicit type=\"password\" prop on the new PasswordField overrides the visibility-driven type, because PasswordField in Input.tsx spreads props after setting type, so the toggle never unmasks the input.",
+   "caseId": "feat-2fa-backup-codes-cal-com"
+  },
+  {
+   "id": "github-oauth-security-enhancement-sentry#10",
+   "class": "other",
+   "where": "in-diff",
+   "reason": "The updated test passes a wrong OAuth state, so the request fails at the state check that this PR added to OAuthLoginView, before it reaches the missing-installation branch in GitHubInstallation; the test passes without ever exercising the path it is named for.",
+   "caseId": "github-oauth-security-enhancement-sentry"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The new host comparisons do not lowercase either side, so the same host in a different case is wrongly rejected.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The new PollFeed code assumes i.content is never nil, so a feed item with only a description raises and stops the import.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "class": "security",
+   "where": "in-diff",
+   "reason": "The URL is put unescaped into raw HTML that is rendered without sanitizing, which allows stored XSS.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The update path in import does not handle a nil embed.post when the post was deleted, so it crashes.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+   "class": "error-handling",
+   "where": "in-diff",
+   "reason": "import_remote handles neither network errors from open(url).read nor parse results with nil content.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "absolutize_urls only checks for a leading slash, so it rewrites protocol-relative URLs wrongly and leaves path-relative links unresolved.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "class": "performance",
+   "where": "in-diff",
+   "reason": "TopicRetriever polls the whole feed synchronously for every new article URL, and the per-URL throttle does not stop the work from being repeated.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "class": "other",
+   "where": "in-diff",
+   "reason": "These specs never enable feed polling, so they never reach the guards they name and pass even if those guards are removed.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+   "class": "other",
+   "where": "outside-diff",
+   "reason": "The new embed assets were not added to config.assets.precompile in the application config, which the PR did not change.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+   "class": "security",
+   "where": "in-diff",
+   "reason": "The throttle is keyed by the full URL, so an anonymous client can change the query string to get past it and create unlimited topics.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04",
+   "class": "other",
+   "where": "in-diff",
+   "reason": "The spec leaves the other settings blank, so poll_feed is skipped whatever the enabled check does and the test proves nothing.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimip-01",
+   "class": "security",
+   "where": "in-diff",
+   "reason": "open-uri follows redirects, so the host check on the first URL can be bypassed to make the server request internal services (SSRF).",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#gap-N1",
+   "class": "consumer-outside-diff",
+   "where": "outside-diff",
+   "reason": "PostMover#copy, which the PR did not change, calls PostCreator without the new cook_method option, so a moved raw_html post is cooked again as markdown.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#gapb-N1",
+   "class": "state-concurrency",
+   "where": "in-diff",
+   "reason": "The cache headers are also set on the loading placeholder, so the stale placeholder stays cached under the embed URL.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "enhance-embed-url-handling-and-validation-system-discourse-cursor#gapb-N3",
+   "class": "state-concurrency",
+   "where": "outside-diff",
+   "reason": "The outer transaction makes PostCreator, which deliberately enqueues jobs only after its own transaction (untouched code), enqueue them before the data is committed.",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+   "class": "error-handling",
+   "where": "in-diff",
+   "reason": "The new webhook calls zod .parse, symmetricDecrypt and JSON.parse without catching anything, so a bad payload throws and returns a 500 instead of a 400.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "When the response has no refresh_token, the new parser fills in the literal string 'refresh_token' instead of leaving the field absent, which overwrites the valid stored token.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "The computed keys built from z.string().toString() turn into one fixed literal key, not a wildcard, so the sync-mode schema does not validate real token responses.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "class": "consumer-outside-diff",
+   "where": "in-diff",
+   "reason": "The Google Calendar caller stores the result as if it were the old plain parsed object, but the new helper returns a safeParse wrapper, so the wrapper itself gets saved as the credential key.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "class": "performance",
+   "where": "in-diff",
+   "reason": "The new getClient code refreshes the token over the network and writes to the database every time the service is constructed, even when the access token is still valid.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+   "class": "other",
+   "where": "in-diff",
+   "reason": "The new code uses prisma without importing it, so type checking fails and it throws a ReferenceError at runtime.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+   "class": "edge-case-logic",
+   "where": "in-diff",
+   "reason": "Testing response.statusText !== 'OK' instead of response.ok can treat a successful response as a failure, for example when statusText is empty.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+   "class": "edge-case-logic",
+   "where": "outside-diff",
+   "reason": "The refreshed token is saved, but the existing jsforce.Connection construction still uses the stale credentialKey access_token and instance_url, so the refresh never reaches the connection.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
+  },
+  {
+   "id": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01",
+   "class": "edge-case-logic",
+   "where": "outside-diff",
+   "reason": "The webhook looks up appStoreMetadata by app.slug, but that map is defined elsewhere keyed by dirName, so apps whose slug differs from their directory name always get a 404.",
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com"
   }
  ]
 }

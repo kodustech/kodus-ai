@@ -333,6 +333,66 @@
      "earlierComments": [],
      "nit": true,
      "severity": "low"
+    },
+    {
+     "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N3",
+     "description": "registerIDPLoginInvalidationOnUpdate returns early when the IDP stays a login IDP with the same organizationId without comparing BROKER_PUBLIC, so toggling kc.org.broker.public on a realm-level IDP leaves the login caches stale.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+       "lines": [
+        409,
+        411
+       ],
+       "text": "registerIDPLoginInvalidationOnUpdate returns early whenever the IDP stays a login IDP and its organizationId is unchanged, without comparing the BROKER_PUBLIC config value. For a realm-level IDP (organizationId == null) the new predicate at IdentityProviderStorageProvider.java:254 short-circuits to true, so toggling kc.org.broker.public changes neither the predicate nor the org id, yet the ORG_ONLY/ALL login caches (which, per the default getForLogin, include realm-level IDPs whose BROKER_PUBLIC=true) are left stale — the login page then keeps showing an IDP whose BROKER_PUBLIC was cleared, or omits one that was just made public. Also invalidate when the BROKER_PUBLIC value differs between original and updated (or when the IDP's org-public status changes)."
+      }
+     ]
+    },
+    {
+     "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N5",
+     "description": "The constant IDP_LOGIN_SUFFIX is used as an infix in cacheKeyForLogin (realmId.idp.login.MODE), unlike its sibling *_SUFFIX constants, so the name misstates the key format.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+       "lines": [
+        47,
+        47
+       ],
+       "text": "The constant is named IDP_LOGIN_SUFFIX, matching its siblings IDP_COUNT_KEY_SUFFIX / IDP_ALIAS_KEY_SUFFIX / IDP_ORG_ID_KEY_SUFFIX which all terminate the cache key, but cacheKeyForLogin (line 78) uses it as an infix: `realm.getId() + IDP_LOGIN_SUFFIX + \".\" + fetchMode` produces \"realmId.idp.login.REALM_ONLY\", not a key ending in \".idp.login\". The name states a position the code does not use; a maintainer reading the name (or copying the sibling pattern) will misjudge the key format. Rename it (e.g. IDP_LOGIN_KEY_INFIX / IDP_LOGIN_SEGMENT) or move it to the end of the key so name and usage agree."
+      }
+     ]
+    },
+    {
+     "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N7",
+     "description": "The cache-hit path of getForLogin collects IDPs into a HashSet and streams it, so results come in hash order instead of the delegate's order returned on a miss, making ordering differ by cache state.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+       "lines": [
+        244,
+        254
+       ],
+       "text": "The cached path resolves the IDPs into a fresh `HashSet` and returns `identityProviders.stream()`, so the returned order is HashSet iteration order (derived from element hashCodes), not the order the delegate produces. On a cache miss (line 218) and in the null-id fallback (line 249) the delegate's stream/order is returned directly. Consumers therefore see the same IDPs in a different, nondeterministic order depending on whether the cache was hit, which can change UI listing order. Preserve the cached IDs' order (e.g. use a LinkedHashSet / LinkedHashMap keyed by the cached internal IDs) so cache-hit and cache-miss return a consistent ordering."
+      }
+     ]
+    },
+    {
+     "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N10",
+     "description": "The OrganizationCacheTest create/remove step only adds and removes non-login IDPs, so it would pass even if registerIDPLoginInvalidation were deleted from create() and remove().",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+       "lines": [
+        417,
+        440
+       ],
+       "text": "The test only exercises the negative create/remove case: the IDP added (`idp-alias-20`, `hideOnLogin(true)`) and the IDP removed (`idp-alias-1`, disabled) are both non-login IDPs, so only the `getLoginPredicate() == false` branch of `registerIDPLoginInvalidation` is hit. Since step 1 only asserts the login caches are still present (`assertNotNull`), and steps 2-4 only touch the update path, the entire test passes even if `registerIDPLoginInvalidation(model)` in `create()` and `registerIDPLoginInvalidation(storedIdp)` in `remove()` are deleted. The test therefore does not verify that creating or removing a login-capable IDP invalidates the login caches — a new behaviour introduced by this PR. Add a case that, after the caches are populated, creates (and/or removes) an enabled, non-hidden IDP and asserts the login caches are cleared."
+      }
+     ]
     }
    ]
   },
@@ -3384,6 +3444,51 @@
      ],
      "nit": false,
      "severity": "medium"
+    },
+    {
+     "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#gapb-N1",
+     "description": "EmbedController#best renders the 'loading' placeholder and still calls discourse_expires_in 1.minute, so the anonymous cache stores the placeholder under the embed URL and visitors keep seeing 'Loading Discussion...' for up to a minute after the topic exists.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "app/controllers/embed_controller.rb",
+       "lines": [
+        12,
+        19
+       ],
+       "text": "The 'loading' placeholder is rendered and then `discourse_expires_in 1.minute` still runs, so the anonymous cache stores the placeholder under the real embed URL. Anonymous visitors can keep seeing 'Loading Discussion...' for up to a minute after the topic has been created, and the 30s auto-reload can hit the same cached page. Call discourse_expires_in only in the branch where @topic_view was built, not when rendering 'loading'."
+      }
+     ]
+    },
+    {
+     "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#gapb-N3",
+     "description": "TopicEmbed.import wraps PostCreator#create in Topic.transaction, so PostCreator's post-transaction job enqueueing (process_post, feature_topic_users, etc.) runs before the outer transaction commits, and a worker that picks up ProcessPost early finds no post and skips post-processing for the imported topic.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "app/models/topic_embed.rb",
+       "lines": [
+        21,
+        30
+       ],
+       "text": "Wrapping `PostCreator#create` in `Topic.transaction do` defeats the job-enqueue ordering that `PostCreator` explicitly relies on. `PostCreator#enqueue_jobs` (lib/post_creator.rb:288) is deliberately called after its own transaction with the comment \"We need to enqueue jobs after the transaction. Otherwise they might begin before the data has been comitted\", but the nested `Post.transaction` joins this new outer transaction (no savepoint), so `trigger_post_process`/`feature_topic_users`/`after_post_create` are enqueued while the post/topic/embed rows are still uncommitted. A Sidekiq worker that picks up `Jobs::ProcessPost` before commit finds no post and silently returns (app/jobs/regular/process_post.rb:11), losing onebox/image post-processing and notifications for the imported topic. Enqueue the jobs after the `Topic.transaction` block commits (e.g. create the topic/post/embed inside the transaction but call the post-create jobs outside it)."
+      }
+     ]
+    },
+    {
+     "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#gapb-N4",
+     "description": "The migration adds posts.cook_method with a default and NOT NULL in one add_column, which on the PostgreSQL versions of the time rewrites the whole posts table under an ACCESS EXCLUSIVE lock and blocks reads and writes during deploy.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "db/migrate/20131219203905_add_cook_method_to_posts.rb",
+       "lines": [
+        3,
+        3
+       ],
+       "text": "`add_column :posts, :cook_method, :integer, default: 1, null: false` rewrites the entire `posts` table while holding an ACCESS EXCLUSIVE lock on the PostgreSQL versions in use at the time (the ADD COLUMN-with-default fast path only landed in PG 11). On any non-trivial forum this blocks all reads and writes to `posts` for the duration of the migration during deploy. Add the column as nullable first (or with a default applied in a separate backfill), then set the default/`NOT NULL` afterwards."
+      }
+     ]
     }
    ]
   },
@@ -3892,6 +3997,36 @@
      ],
      "nit": false,
      "severity": "high"
+    },
+    {
+     "issueId": "feat-2fa-backup-codes-cal-com#gapb-N4",
+     "description": "DisableTwoFactorModal resets twoFactorLostAccess only on success and toggle, not on cancel/ESC/close, and the modal stays mounted, so reopening it after dismissing from the backup-code screen shows the backup-code input instead of TOTP.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "apps/web/components/settings/DisableTwoFactorModal.tsx",
+       "lines": [
+        38,
+        38
+       ],
+       "text": "`twoFactorLostAccess` is only reset inside `handleDisable` on success and in the toggle handler; the cancel button and the dialog's `onOpenChange`/ESC/X do not reset it. Because `DisableTwoFactorModal` stays mounted in the settings page (apps/web/pages/settings/security/two-factor-auth.tsx:74), dismissing the modal from the backup-code screen leaves `twoFactorLostAccess` true, so reopening the modal shows the backup-code input instead of the TOTP input. Reset `twoFactorLostAccess` (and call `resetForm`) when the modal is dismissed via `onCancel`/`onOpenChange`."
+      }
+     ]
+    },
+    {
+     "issueId": "feat-2fa-backup-codes-cal-com#gapb-N5",
+     "description": "The backup-code field became a PasswordField but keeps an explicit type=\"password\" prop that overrides the internal visibility state, so the show/hide toggle never unmasks the input.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+       "lines": [
+        174,
+        181
+       ],
+       "text": "Switching this field from `TextField` to `PasswordField` introduced a show/hide toggle that cannot work, because the explicit `type=\"password\"` prop overrides the type `PasswordField` derives from its internal visibility state (it applies `{...props}` after its own `type` in Input.tsx). The eye button flips the icon but the input never unmasks; drop the `type=\"password\"` prop so the toggle takes effect."
+      }
+     ]
     }
    ]
   },
@@ -4270,6 +4405,21 @@
      ],
      "nit": true,
      "severity": "low"
+    },
+    {
+     "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#gapb-N1",
+     "description": "The new assignment_source parameter is declared on sync_status_outbound, which no caller passes it to, while sync_assignee_outbound, which actually receives it, only swallows it via **kwargs, so the declaration landed on the wrong method.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "src/sentry/integrations/mixins/issues.py",
+       "lines": [
+        411,
+        418
+       ],
+       "text": "The new `assignment_source` parameter was added to `sync_status_outbound`, but no caller ever passes it (the sole caller in tasks/sync_status_outbound.py:44 calls it without `assignment_source`), so the parameter is dead. The argument is actually threaded to `sync_assignee_outbound` in tasks/sync_assignee_outbound.py:59-61, but that abstract method does not declare `assignment_source` — it only swallows it via `**kwargs: Any`. The declaration landed on the wrong (near-identically named) method. Move the parameter to `sync_assignee_outbound` (and its implementations) so the declared interface matches where the argument is actually passed."
+      }
+     ]
     }
    ]
   },
@@ -5901,6 +6051,37 @@
      ],
      "nit": false,
      "severity": "low"
+    },
+    {
+     "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#gapb-N1",
+     "description": "The null guard for a concurrently deleted cached group is added only to getSubGroupsCount; the getSubGroupsStream overloads still dereference modelSupplier.get(), so e.g. GroupResource.getSubGroups still throws the NPE the PR set out to fix.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+       "lines": [
+        274,
+        275
+       ],
+       "text": "The null-guard added here is applied only to getSubGroupsCount, while the three sibling getSubGroupsStream(...) overloads (lines 256, 262, 268) still call modelSupplier.get().getSubGroupsStream(...) and dereference the result directly. Because modelSupplier.get() returns null when the cached group was deleted concurrently, those methods still throw the exact NPE this PR set out to fix - e.g. the /children endpoint (GroupResource.getSubGroups) invokes the line-268 overload on the cached parent adapter; apply the same null handling to those overloads so the concurrent-deletion NPE is fully resolved."
+      },
+      {
+       "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+       "lines": [
+        274,
+        275
+       ],
+       "text": "The null-guard for a concurrently deleted group was added only to getSubGroupsCount(). The three getSubGroupsStream overloads in the same class (lines 254-269) still call modelSupplier.get().getSubGroupsStream(...) with no null check. When the group is deleted between cache lookup and delegate load, they throw an NPE instead of returning Stream.empty(). Apply the same null handling to those overloads."
+      },
+      {
+       "file": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+       "lines": [
+        274,
+        275
+       ],
+       "text": "The null-guard added here for the lazily-loaded delegate was not applied to the three sibling accessors in this same class: getSubGroupsStream(String,Integer,Integer) at line 256, getSubGroupsStream(Integer,Integer) at line 262 and getSubGroupsStream(String,Boolean,Integer,Integer) at line 268 all still do `return modelSupplier.get().getSubGroupsStream(...)`. modelSupplier.get() returns null when the group was removed concurrently while this cached adapter is still in use (same race as getSubGroupsCount), so these methods throw a NullPointerException from GroupResource.java:180 (GET /admin/realms/{realm}/groups/{id}/children) instead of returning an empty stream. Apply the same guard, e.g. `GroupModel model = modelSupplier.get(); return model == null ? Stream.empty() : model.getSubGroupsStream(...)`, which also honours the GroupModel contract that these streams never return null."
+      }
+     ]
     }
    ]
   },
@@ -6602,6 +6783,21 @@
      "earlierComments": [],
      "nit": false,
      "severity": "medium"
+    },
+    {
+     "issueId": "fixing-re-authentication-with-passkeys-keycloak#gapb-N1",
+     "description": "login-password.ftl now renders the passkeys macro, making reachable an error path where fillContextForm sets enableWebAuthnConditionalUI but returns before setting isUserIdentified/userVerification, so passkeys.ftl fails to render and a FreeMarker error replaces the login page.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "themes/src/main/resources/theme/keycloak.v2/login/login-password.ftl",
+       "lines": [
+        18,
+        18
+       ],
+       "text": "Rendering the passkey macro on the password page makes an already-broken error path reachable: WebAuthnConditionalUIAuthenticator.createErrorResponse calls fillContextForm, which sets ENABLE_WEBAUTHN_CONDITIONAL_UI and then returns null (before setting IS_USER_IDENTIFIED/USER_VERIFICATION) when context.getUser() has no passwordless authenticator, and errorChallenge still renders the page. Because passkeys.ftl evaluates ${isUserIdentified} and ${userVerification} unconditionally inside <#if enableWebAuthnConditionalUI?has_content>, a POST carrying `error` + `userHandle` to the password form (reached via UsernamePasswordForm.action) produces a FreeMarker render failure instead of the login page. Guard the fill in createErrorResponse on a successful fillContextForm result (or default the two attributes in passkeys.ftl) so the password form renders when no allowed authenticator exists."
+      }
+     ]
     }
    ]
   },
@@ -6860,6 +7056,21 @@
      ],
      "nit": false,
      "severity": "medium"
+    },
+    {
+     "issueId": "github-oauth-security-enhancement-sentry#gapb-N3",
+     "description": "The installer check compares the OAuth login to integration.metadata['sender']['login'] with case-sensitive equality, although GitHub logins are case-insensitive, so a legitimate install can be rejected on a casing difference.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "src/sentry/integrations/github/integration.py",
+       "lines": [
+        501,
+        505
+       ],
+       "text": "The new identity check compares GitHub logins with exact, case-sensitive string equality: `pipeline.fetch_state(\"github_authenticated_user\") != integration.metadata[\"sender\"][\"login\"]`. GitHub usernames are case-insensitive identifiers (uniqueness is enforced case-insensitively), so the OAuth `/user` login and the installation webhook's `sender.login` can differ only in casing for the same user, causing the check to reject a legitimate install. Normalize both sides (e.g. casefold) before comparing."
+      }
+     ]
     }
    ]
   },
@@ -7828,6 +8039,21 @@
      ],
      "nit": false,
      "severity": "high"
+    },
+    {
+     "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#gapb-N1",
+     "description": "In Salesforce CalendarService, parseRefreshTokenResponse throws on parse failure, so the following if (!accessTokenParsed.success) guard can never be true and is dead code.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "packages/app-store/salesforce/lib/CalendarService.ts",
+       "lines": [
+        90,
+        94
+       ],
+       "text": "`parseRefreshTokenResponse` throws `new Error(\"Invalid refreshed tokens were returned\")` when parsing fails (parseRefreshTokenResponse.ts:21-23), so `accessTokenParsed` is always the successful wrapper. The guard `if (!accessTokenParsed.success)` can never be true — an unreachable branch; the failure path is already handled by the thrown error."
+      }
+     ]
     }
    ]
   },
@@ -9210,6 +9436,21 @@
      ],
      "nit": true,
      "severity": "medium"
+    },
+    {
+     "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#gapb-N1",
+     "description": "Each per-process SpansBuffer divides the global max-flush-segments across only its own shards, so the total segments loaded per flush becomes num_processes * max_flush_segments, multiplying memory and Redis load and weakening the any_shard_at_limit backpressure signal.",
+     "knownIssueText": null,
+     "earlierComments": [
+      {
+       "file": "src/sentry/spans/consumers/process/flusher.py",
+       "lines": [
+        92,
+        93
+       ],
+       "text": "Each per-process `SpansBuffer` is now constructed with only its subset of shards, so `SpansBuffer.flush_segments` computes `shard_factor = max(1, len(self.assigned_shards))` over that subset and `max_segments_per_shard = ceil(max_flush_segments / shard_factor)`. Because every process independently divides the global `spans.buffer.max-flush-segments` across its own (smaller) shard count, the total segments loaded per flush cycle becomes `num_processes * max_flush_segments` (e.g. 32 shards / 8 processes loads ~4000 segments vs ~512 with the old single shared buffer), multiplying flusher memory and Redis load and making `any_shard_at_limit` fire less often, which weakens the backpressure signal when `flusher_processes > 1`. Compute the per-shard budget from the total shard count (pass the full `assigned_shards` length into the buffer, or divide by the sum across processes) so the configured cap stays global."
+      }
+     ]
     }
    ]
   },

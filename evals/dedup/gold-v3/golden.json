@@ -826,6 +826,106 @@
     "severity": "low",
     "category": "perf",
     "class_reviewed": "FP nit"
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N3",
+    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+    "comment": "registerIDPLoginInvalidationOnUpdate returns early when the IDP stays a login IDP with the same organizationId without comparing BROKER_PUBLIC, so toggling kc.org.broker.public on a realm-level IDP leaves the login caches stale.",
+    "commentOpus": "registerIDPLoginInvalidationOnUpdate returns early when the IDP stays a login IDP with the same organizationId without comparing BROKER_PUBLIC, so toggling kc.org.broker.public on a realm-level IDP leaves the login caches stale.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@heavy": [
+      "synthesis-rescue"
+     ]
+    },
+    "reason_opus": "registerIDPLoginInvalidationOnUpdate (InfinispanIdentityProviderStorageProvider.java:409-411) returns early when the predicate and organizationId are unchanged; for a realm-level IDP the predicate ignores BROKER_PUBLIC (IdentityProviderStorageProvider.java:254), yet ORG_ONLY with a null org (used by OrganizationAwareIdentityProviderBean.java:74) filters on BROKER_PUBLIC=true with no org filter, so toggling it leaves that cache stale. The PR's own test sets BROKER_PUBLIC on a realm-level IDP (OrganizationCacheTest.java:503).",
+    "reason_astra": "IdentityProviderStorageProvider.java:176-181 filters by BROKER_PUBLIC without requiring an organization association when organizationId is null, so realm-level providers can enter ORG_ONLY results. Its predicate at line 254 ignores that flag for realm-level providers, allowing InfinispanIdentityProviderStorageProvider.java:409-411 to skip invalidation when their public status changes.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N5",
+    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+    "comment": "The constant IDP_LOGIN_SUFFIX is used as an infix in cacheKeyForLogin (realmId.idp.login.MODE), unlike its sibling *_SUFFIX constants, so the name misstates the key format.",
+    "commentOpus": "The constant IDP_LOGIN_SUFFIX is used as an infix in cacheKeyForLogin (realmId.idp.login.MODE), unlike its sibling *_SUFFIX constants, so the name misstates the key format.",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "agreed",
+    "severity": "low",
+    "category": "style",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@heavy": [
+      "lens-text-that-ships"
+     ]
+    },
+    "reason_opus": "IDP_LOGIN_SUFFIX (InfinispanIdentityProviderStorageProvider.java:47) is used as an infix in cacheKeyForLogin (line 78), unlike its sibling *_SUFFIX constants. Naming only.",
+    "reason_astra": "InfinispanIdentityProviderStorageProvider.java:47 names the constant IDP_LOGIN_SUFFIX, while line 78 appends the fetch mode after it. This is a naming imprecision with no behavioral effect because cache access and invalidation use the same key builder.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "nit",
+    "class_reviewed": "TP nit"
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N7",
+    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+    "comment": "The cache-hit path of getForLogin collects IDPs into a HashSet and streams it, so results come in hash order instead of the delegate's order returned on a miss, making ordering differ by cache state.",
+    "commentOpus": "The cache-hit path of getForLogin collects IDPs into a HashSet and streams it, so results come in hash order instead of the delegate's order returned on a miss, making ordering differ by cache state.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@heavy": [
+      "lens-value-boundary-and-position"
+     ]
+    },
+    "reason_opus": "Concede: IDP_COMPARATOR_INSTANCE (IdentityProviderBean.java:54) is OrderedModelComparator, which compares guiOrder only and maps missing guiOrder to 10000 (OrderedModel.java:40-55), so ties keep input order. JPA returns alias order (JpaIdentityProviderStorageProvider.java:289) while the new cached path (InfinispanIdentityProviderStorageProvider.java:229, 244-254) yields HashSet order, so login buttons without guiOrder reorder. My 'every consumer sorts' argument missed the ties.",
+    "reason_astra": "InfinispanIdentityProviderStorageProvider.java:229 and :244-254 discard delegate ordering through sets, whereas JpaIdentityProviderStorageProvider.java:289 orders by alias. IdentityProviderBean.java:241 sorts only by GUI order, whose comparator permits ties (OrderedModel.java:40-55), so default/equal-order providers can visibly reorder; ordinary cache misses also take the set path, despite the comment's inaccurate description of that branch.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
+   },
+   {
+    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N10",
+    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+    "comment": "The OrganizationCacheTest create/remove step only adds and removes non-login IDPs, so it would pass even if registerIDPLoginInvalidation were deleted from create() and remove().",
+    "commentOpus": "The OrganizationCacheTest create/remove step only adds and removes non-login IDPs, so it would pass even if registerIDPLoginInvalidation were deleted from create() and remove().",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@heavy": [
+      "lens-test-does-not-verify"
+     ]
+    },
+    "reason_opus": "OrganizationCacheTest.java:417-440 creates (hideOnLogin) and removes (disabled) only non-login IDPs and asserts the caches survive; no step creates or removes a login-capable IDP, so dropping registerIDPLoginInvalidation from create()/remove() (InfinispanIdentityProviderStorageProvider.java:84,111) would not fail the test.",
+    "reason_astra": "OrganizationCacheTest.java:375 makes idp-alias-1 disabled, and lines 421-438 create a hidden provider, remove the disabled provider, and assert that caches remain present. The cache-clearing scenarios exercise updates at lines 469-470 and 505-509, leaving the newly added positive create/remove invalidation behavior unverified.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
    }
   ],
   "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
@@ -8654,6 +8754,81 @@
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": "none",
     "class_reviewed": "TP"
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#gapb-N1",
+    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "comment": "EmbedController#best renders the 'loading' placeholder and still calls discourse_expires_in 1.minute, so the anonymous cache stores the placeholder under the embed URL and visitors keep seeing 'Loading Discussion...' for up to a minute after the topic exists.",
+    "commentOpus": "EmbedController#best renders the 'loading' placeholder and still calls discourse_expires_in 1.minute, so the anonymous cache stores the placeholder under the embed URL and visitors keep seeing 'Loading Discussion...' for up to a minute after the topic exists.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "claude-sonnet-5.5@heavy": [
+      "lens-invalid-state-and-concurrency"
+     ]
+    },
+    "reason_opus": "app/controllers/embed_controller.rb:14-19: after `render 'loading'` the action still runs `discourse_expires_in 1.minute`, so the placeholder response is sent with a 1-minute public cache header for the real embed URL.",
+    "reason_astra": "app/controllers/embed_controller.rb:16 renders the loading page and then reaches the cache call at line 19. lib/middleware/anonymous_cache.rb:52-60 caches that response by request URL, so the reload at app/views/embed/loading.html.erb:9 can receive the stale placeholder.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#gapb-N3",
+    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "comment": "TopicEmbed.import wraps PostCreator#create in Topic.transaction, so PostCreator's post-transaction job enqueueing (process_post, feature_topic_users, etc.) runs before the outer transaction commits, and a worker that picks up ProcessPost early finds no post and skips post-processing for the imported topic.",
+    "commentOpus": "TopicEmbed.import wraps PostCreator#create in Topic.transaction, so PostCreator's post-transaction job enqueueing (process_post, feature_topic_users, etc.) runs before the outer transaction commits, and a worker that picks up ProcessPost early finds no post and skips post-processing for the imported topic.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@heavy": [
+      "generalist"
+     ]
+    },
+    "reason_opus": "app/models/topic_embed.rb:21-30 wraps PostCreator#create in Topic.transaction; PostCreator#create (lib/post_creator.rb:56-85) calls enqueue_jobs after its inner Post.transaction, which now joins the outer one, so ProcessPost etc. are enqueued before commit and Jobs::ProcessPost returns early if the post is not yet visible (app/jobs/regular/process_post.rb:9-11).",
+    "reason_astra": "app/models/topic_embed.rb:21-30 wraps creator.create in an outer transaction, so lib/post_creator.rb:85 enqueues processing before that transaction commits. app/jobs/regular/process_post.rb:9-11 silently returns when the uncommitted post is invisible, making lost post-processing a real concurrency defect.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#gapb-N4",
+    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "comment": "The migration adds posts.cook_method with a default and NOT NULL in one add_column, which on the PostgreSQL versions of the time rewrites the whole posts table under an ACCESS EXCLUSIVE lock and blocks reads and writes during deploy.",
+    "commentOpus": "The migration adds posts.cook_method with a default and NOT NULL in one add_column, which on the PostgreSQL versions of the time rewrites the whole posts table under an ACCESS EXCLUSIVE lock and blocks reads and writes during deploy.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@heavy": [
+      "generalist"
+     ]
+    },
+    "reason_opus": "db/migrate/20131219203905_add_cook_method_to_posts.rb:3 adds a NOT NULL column with a default to posts, which on the PostgreSQL versions of that era rewrites the whole table under an ACCESS EXCLUSIVE lock.",
+    "reason_astra": "db/migrate/20131219203905_add_cook_method_to_posts.rb:3 adds the column with a non-null default, while README.md:23 supports PostgreSQL 9.1 onward. On these older versions, this requires a table rewrite under an exclusive lock, creating a meaningful deployment-blocking performance problem on large forums; see the [PostgreSQL documentation](https://www.postgresql.org/docs/9.3/sql-altertable.html).",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
    }
   ],
   "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": [
@@ -9942,6 +10117,56 @@
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": "none",
     "class_reviewed": "TP"
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#gapb-N4",
+    "caseId": "feat-2fa-backup-codes-cal-com",
+    "comment": "DisableTwoFactorModal resets twoFactorLostAccess only on success and toggle, not on cancel/ESC/close, and the modal stays mounted, so reopening it after dismissing from the backup-code screen shows the backup-code input instead of TOTP.",
+    "commentOpus": "DisableTwoFactorModal resets twoFactorLostAccess only on success and toggle, not on cancel/ESC/close, and the modal stays mounted, so reopening it after dismissing from the backup-code screen shows the backup-code input instead of TOTP.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@heavy": [
+      "generalist"
+     ]
+    },
+    "reason_opus": "apps/web/components/settings/DisableTwoFactorModal.tsx:38 keeps twoFactorLostAccess in state; it is reset only on success (line 60) and in the toggle (117), not by Cancel (122) or onOpenChange (89), and the modal stays mounted in pages/settings/security/two-factor-auth.tsx:74.",
+    "reason_astra": "apps/web/components/settings/DisableTwoFactorModal.tsx:89 and :122 pass dismissal callbacks through without resetting the new twoFactorLostAccess state. apps/web/pages/settings/security/two-factor-auth.tsx:74 keeps the component mounted while callbacks only change its open flag, so reopening retains the backup-code screen.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
+   },
+   {
+    "issueId": "feat-2fa-backup-codes-cal-com#gapb-N5",
+    "caseId": "feat-2fa-backup-codes-cal-com",
+    "comment": "The backup-code field became a PasswordField but keeps an explicit type=\"password\" prop that overrides the internal visibility state, so the show/hide toggle never unmasks the input.",
+    "commentOpus": "The backup-code field became a PasswordField but keeps an explicit type=\"password\" prop that overrides the internal visibility state, so the show/hide toggle never unmasks the input.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "low",
+    "category": "bug",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@heavy": [
+      "synthesis-rescue"
+     ]
+    },
+    "reason_opus": "apps/web/components/settings/EnableTwoFactorModal.tsx:174-181 passes type=\"password\" to PasswordField, and packages/ui/components/form/inputs/Input.tsx:36-39 spreads {...props} after its own visibility-driven type, so the eye toggle never unmasks the input.",
+    "reason_astra": "The newly used PasswordField explicitly receives type=\"password\" at apps/web/components/settings/EnableTwoFactorModal.tsx:176. packages/ui/components/form/inputs/Input.tsx:36 sets the visibility-dependent type before spreading props at line 39, so the explicit prop overrides visibility changes and prevents unmasking.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
    }
   ],
   "feat-add-calendar-cache-status-and-actions-22532-cal-com": [
@@ -10965,6 +11190,31 @@
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": "nit",
     "class_reviewed": "FP nit"
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#gapb-N1",
+    "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+    "comment": "The new assignment_source parameter is declared on sync_status_outbound, which no caller passes it to, while sync_assignee_outbound, which actually receives it, only swallows it via **kwargs, so the declaration landed on the wrong method.",
+    "commentOpus": "The new assignment_source parameter is declared on sync_status_outbound, which no caller passes it to, while sync_assignee_outbound, which actually receives it, only swallows it via **kwargs, so the declaration landed on the wrong method.",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "agreed",
+    "severity": "low",
+    "category": "style",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@heavy": [
+      "lens-says-one-thing-does-another"
+     ]
+    },
+    "reason_opus": "src/sentry/integrations/mixins/issues.py:411-418 adds assignment_source to sync_status_outbound, which no caller passes, while tasks/sync_assignee_outbound.py:59-61 passes it to sync_assignee_outbound where it is only absorbed by **kwargs. No behaviour changes.",
+    "reason_astra": "The PR adds an unused assignment_source parameter to sync_status_outbound at src/sentry/integrations/mixins/issues.py:416; its caller at src/sentry/integrations/tasks/sync_status_outbound.py:44 supplies no such argument. Assignment synchronization passes it at src/sentry/integrations/tasks/sync_assignee_outbound.py:59, and the abstract interface accepts it through **kwargs at src/sentry/integrations/mixins/issues.py:402, so this is interface tidying without a behavioral defect.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "nit",
+    "class_reviewed": "TP nit"
    }
   ],
   "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": [
@@ -15052,6 +15302,38 @@
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null,
     "class_reviewed": "FP nit"
+   },
+   {
+    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#gapb-N1",
+    "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+    "comment": "The null guard for a concurrently deleted cached group is added only to getSubGroupsCount; the getSubGroupsStream overloads still dereference modelSupplier.get(), so e.g. GroupResource.getSubGroups still throws the NPE the PR set out to fix.",
+    "commentOpus": "The null guard for a concurrently deleted cached group is added only to getSubGroupsCount; the getSubGroupsStream overloads still dereference modelSupplier.get(), so e.g. GroupResource.getSubGroups still throws the NPE the PR set out to fix.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@heavy": [
+      "synthesis-rescue"
+     ],
+     "claude-sonnet-5.5@gap": [
+      "lens-siblings"
+     ],
+     "deepseek-v4.1-flash-thinking-medium@gap": [
+      "lens-siblings"
+     ]
+    },
+    "reason_opus": "The unguarded lines are pre-existing, but the rubric counts 'a parallel implementation that needed the same change this pull request made'. The PR's goal (commit 'Fix NPE when accessing group concurrently') is handled by replacing getGroupModel() with a null-checked modelSupplier.get() only in GroupAdapter.java:274-275; the sibling overloads in the same adapter (GroupAdapter.java:256, 262, 268: `return modelSupplier.get().getSubGroupsStream(...)`) hit the same null from the same concurrently-deleted cached group, e.g. via GroupResource.getSubGroups. The fix is incomplete for the race the PR targets, which is exactly the parallel-change case.",
+    "reason_astra": "I change my classification to TP under the explicit parallel-implementation ruling. GroupAdapter’s three parameterized getSubGroupsStream overloads dereference modelSupplier.get(), whose underlying getGroupById lookup can return null after concurrent deletion. GroupResource.getSubGroups calls the four-argument overload, making the NPE reachable through /children. These sibling read methods need equivalent handling for the same missing delegate now handled by getSubGroupsCount; my earlier reasoning overlooked that exception for parallel implementations. This concurrency defect has medium severity because it causes intermittent request failures; SEVERITY.md was absent from the checkout.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "FP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP",
+    "alinhadoCom": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#gap-N1"
    }
   ],
   "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
@@ -17024,6 +17306,31 @@
     "severity": "medium",
     "category": "test_gap",
     "class_reviewed": "FP nit"
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#gapb-N1",
+    "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+    "comment": "login-password.ftl now renders the passkeys macro, making reachable an error path where fillContextForm sets enableWebAuthnConditionalUI but returns before setting isUserIdentified/userVerification, so passkeys.ftl fails to render and a FreeMarker error replaces the login page.",
+    "commentOpus": "login-password.ftl now renders the passkeys macro, making reachable an error path where fillContextForm sets enableWebAuthnConditionalUI but returns before setting isUserIdentified/userVerification, so passkeys.ftl fails to render and a FreeMarker error replaces the login page.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@heavy": [
+      "generalist"
+     ]
+    },
+    "reason_opus": "Concede: my claim was wrong. PasswordForm.java overrides createLoginForm to form.createLoginPassword(), and the webauthnAuth lambda in UsernamePasswordForm's constructor dispatches virtually, so the error path renders login-password.ftl, which this PR now makes include the passkeys macro (login-password.ftl:18). createErrorResponse sets enableWebAuthnConditionalUI, and WebAuthnAuthenticator.fillContextForm returns null before IS_USER_IDENTIFIED/USER_VERIFICATION for a user without passwordless credentials, so passkeys.ftl's ${isUserIdentified}/${userVerification} fail. Reachable via an error+userHandle POST since PasswordForm.action only checks the realm-level isPasskeysEnabled().",
+    "reason_astra": "UsernamePasswordForm.java:59-62 dispatches error submissions to WebAuthn, and WebAuthnPasswordlessAuthenticator.java:108-115 permits them when userHandle is present. WebAuthnConditionalUIAuthenticator.java:51-56 enables the macro and renders despite WebAuthnAuthenticator.java:103-117 returning null before setting its required attributes. This PR adds the macro to themes/src/main/resources/theme/keycloak.v2/login/login-password.ftl:18, exposing the missing-variable failure at themes/src/main/resources/theme/base/login/passkeys.ftl:23-25 for an identified user without passwordless credentials.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": "hallucination",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
    }
   ],
   "frontend-asset-optimization-grafana-codex": [
@@ -17662,6 +17969,31 @@
     "subclass_opus_inicial": null,
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null,
+    "class_reviewed": "TP"
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#gapb-N3",
+    "caseId": "github-oauth-security-enhancement-sentry",
+    "comment": "The installer check compares the OAuth login to integration.metadata['sender']['login'] with case-sensitive equality, although GitHub logins are case-insensitive, so a legitimate install can be rejected on a casing difference.",
+    "commentOpus": "The installer check compares the OAuth login to integration.metadata['sender']['login'] with case-sensitive equality, although GitHub logins are case-insensitive, so a legitimate install can be rejected on a casing difference.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@heavy": [
+      "lens-secret-and-identity"
+     ]
+    },
+    "reason_opus": "Concede. The state is reachable: webhook.py:202-210 persists sender.login when the app is installed, and integration.py:438 binds the /user login later, in a separate OAuth step that runs only when Integration exists without an OrganizationIntegration (integration.py:466-499). A casing-only username change between those two snapshots makes the exact comparison at integration.py:501-505 reject the original installer, and casefold would prevent that. This is an edge case, so medium.",
+    "reason_astra": "I retain TP (bug): webhook.py:202-210 persists the installation-time login, while integration.py:438 captures the later OAuth login and :501-505 introduces exact equality. Canonical casing can change between those snapshots through a casing-only username change, which [GitHub’s support discussion](https://github.com/orgs/community/discussions/22822) confirms is possible. An installation awaiting Sentry association can therefore reject its original installer after that change. Comparing IDs would also handle other renames, but that broader fix does not invalidate the casing-only failure that casefold would prevent.",
+    "class_opus_inicial": "FP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
     "class_reviewed": "TP"
    }
   ],
@@ -20052,6 +20384,31 @@
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": "none",
     "class_reviewed": "TP"
+   },
+   {
+    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#gapb-N1",
+    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
+    "comment": "In Salesforce CalendarService, parseRefreshTokenResponse throws on parse failure, so the following if (!accessTokenParsed.success) guard can never be true and is dead code.",
+    "commentOpus": "In Salesforce CalendarService, parseRefreshTokenResponse throws on parse failure, so the following if (!accessTokenParsed.success) guard can never be true and is dead code.",
+    "class": "TP",
+    "subclass": "nit",
+    "status": "agreed",
+    "severity": "low",
+    "category": "style",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@heavy": [
+      "lens-says-one-thing-does-another"
+     ]
+    },
+    "reason_opus": "parseRefreshTokenResponse throws on failure (packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:21-23), so `if (!accessTokenParsed.success)` in salesforce/lib/CalendarService.ts:90-94 is dead code.",
+    "reason_astra": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:21-23 throws on unsuccessful parsing, so its return at line 29 always has success=true. The PR adds the unreachable guard at packages/app-store/salesforce/lib/CalendarService.ts:92-94; this is dead code with no user-visible behavioral effect (category: style).",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": "nit",
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "nit",
+    "class_reviewed": "TP nit"
    }
   ],
   "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
@@ -23766,6 +24123,31 @@
     "class_astra_inicial": "TP",
     "subclass_astra_inicial": null,
     "class_reviewed": "FP nit"
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#gapb-N1",
+    "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "comment": "Each per-process SpansBuffer divides the global max-flush-segments across only its own shards, so the total segments loaded per flush becomes num_processes * max_flush_segments, multiplying memory and Redis load and weakening the any_shard_at_limit backpressure signal.",
+    "commentOpus": "Each per-process SpansBuffer divides the global max-flush-segments across only its own shards, so the total segments loaded per flush becomes num_processes * max_flush_segments, multiplying memory and Redis load and weakening the any_shard_at_limit backpressure signal.",
+    "class": "TP",
+    "subclass": null,
+    "status": "agreed",
+    "severity": "medium",
+    "category": "bug",
+    "source": "heavy-base-2026-11-05",
+    "martianRef": [],
+    "foundBy": {
+     "deepseek-v4.1-flash-thinking-medium@heavy": [
+      "synthesis-rescue"
+     ]
+    },
+    "reason_opus": "flusher.py:92-93 builds a SpansBuffer(shards) per process with only its shard subset, and buffer.py:382-384 divides spans.buffer.max-flush-segments by len(self.assigned_shards), so each process gets the full budget and the total per cycle scales with the number of processes.",
+    "reason_astra": "The PR partitions shards between workers and constructs each buffer with only its subset (src/sentry/spans/consumers/process/flusher.py:60-66,93), while src/sentry/spans/buffer.py:382-390 divides the unchanged flush budget by that subset’s size. With a budget of 500, 32 shards and eight workers can therefore load 4,000 segments concurrently instead of 512, increasing memory and Redis load. The larger threshold also affects any_shard_at_limit (buffer.py:411-412), which controls backpressure in flusher.py:172-176.",
+    "class_opus_inicial": "TP",
+    "subclass_opus_inicial": null,
+    "class_astra_inicial": "TP",
+    "subclass_astra_inicial": "none",
+    "class_reviewed": "TP"
    }
   ],
   "unified-storage-performance-optimizations-grafana-codex": [
@@ -24432,6 +24814,34 @@
     "fix-proper-handling-of-group-memberships-discourse-cursor#gap-N1"
    ],
    "regra": "Opus + Astra cegos, debate ate 3 rodadas, conferencia upstream"
+  },
+  {
+   "data": "2026-11-06",
+   "fonte": "kodus-eval-runs runs/2026-11-05_heavy-gap-agents/gold-update-base",
+   "novos": [
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor#gapb-N1",
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor#gapb-N3",
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor#gapb-N4",
+    "feat-2fa-backup-codes-cal-com#gapb-N4",
+    "feat-2fa-backup-codes-cal-com#gapb-N5",
+    "github-oauth-security-enhancement-sentry#gapb-N3",
+    "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#gapb-N1",
+    "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#gapb-N1",
+    "oauth-credential-sync-and-app-integration-enhancements-cal-com#gapb-N1",
+    "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#gapb-N1",
+    "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N3",
+    "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N5",
+    "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N7",
+    "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N10",
+    "fixing-re-authentication-with-passkeys-keycloak#gapb-N1"
+   ],
+   "regra": "Opus + Astra cegos, debate ate 3 rodadas, conferencia upstream; comentarios do heavy (sem os agentes novos) que nao casaram com o gold",
+   "semConsenso": {
+    "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#gapb-N1": "TP nit (Opus) x FP (Astra) apos 3 rodadas; fica fora (nit nao conta como TP valido)"
+   },
+   "alinhamento": {
+    "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#gapb-N1": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#gap-N1 foi concedido FP na leva anterior; a regra da rubrica (implementacao paralela que precisava da mesma mudanca) faz dele TP. Rotulo anterior: FP none."
+   }
   }
  ]
 }

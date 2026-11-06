@@ -142,6 +142,46 @@
        "veredito": "descontinuado"
       }
      ]
+    },
+    "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N3": {
+     "bug": "registerIDPLoginInvalidationOnUpdate returns early when the IDP stays a login IDP with the same organizationId without comparing BROKER_PUBLIC, so toggling kc.org.broker.public on a realm-level IDP leaves the login caches stale.",
+     "severity": "medium",
+     "status": "descontinuado",
+     "corrigidoEm": null,
+     "removidoEm": {
+      "data": "2024-09-20",
+      "pr": 32668,
+      "commit": "900c496ffe19b7413fab07130926bfc4465a1322",
+      "url": "https://github.com/keycloak/keycloak/pull/32668"
+     },
+     "diasNoAr": 2,
+     "reason": "PR #32668 ('Remove the kc.org.broker.public attribute and use hideOnLogin in the IDP instead') removed BROKER_PUBLIC entirely: getLoginPredicate no longer has the organizationId==null || BROKER_PUBLIC clause, and ORG_ONLY with a null org now filters on ORGANIZATION_ID_NOT_NULL instead of BROKER_PUBLIC=true, so realm-level IDPs can no longer enter ORG_ONLY results via a config flag that the update-invalidation ignores. The change was a feature redesign, not a fix aimed at the stale-cache case, so the behaviour is gone rather than fixed.",
+     "astra": []
+    },
+    "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N7": {
+     "bug": "The cache-hit path of getForLogin collects IDPs into a HashSet and streams it, so results come in hash order instead of the delegate's order returned on a miss, making ordering differ by cache state.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2025-02-07",
+      "pr": 36876,
+      "commit": "0fc0dcd1198d390b7e83204d28a41daabac8b92e",
+      "url": "https://github.com/keycloak/keycloak/pull/36876"
+     },
+     "removidoEm": null,
+     "diasNoAr": 142,
+     "reason": "PR #36876 'Ensure IDPs returned from infinispan provider are ordered by alias' (closes #33243) replaced the HashSet/Collectors.toSet() in getForLogin and getByOrganization with LinkedHashSet, preserving delegate (alias) order, and added testFindForLoginPreservesOrderByAlias. Upstream main today still uses LinkedHashSet at those points.",
+     "astra": []
+    },
+    "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#gapb-N10": {
+     "bug": "The OrganizationCacheTest create/remove step only adds and removes non-login IDPs, so it would pass even if registerIDPLoginInvalidation were deleted from create() and remove().",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 778,
+     "reason": "testCacheIDPForLogin was migrated to tests/base/.../organization/cache/OrganizationCacheTest.java (09ecbaa05d, 2026-04-17) with the same step 1: it creates a hideOnLogin IDP and removes the disabled idp-alias-1, asserting the login caches survive; no step creates or removes a login-capable IDP and asserts invalidation. create()/remove() in InfinispanIdentityProviderStorageProvider still call registerIDPLoginInvalidation, so the positive create/remove path is still untested.",
+     "astra": []
     }
    }
   },
@@ -2019,6 +2059,57 @@
      "diasNoAr": 1424,
      "reason": "At the benchmark head PostMover#copy called PostCreator.create with only raw/topic_id/acting_user. Blame of today's app/models/post_mover.rb shows `cook_method: post.cook_method` in create_first_post was added by commit b3094e9954 (PR #5360, 'FIX: incoming and outgoing emails got lost when post was moved'), whose diff adds cook_method, via_email and raw_email to the PostCreator options. Today the first-post copy preserves cook_method.",
      "astra": []
+    },
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor#gapb-N1": {
+     "bug": "EmbedController#best renders the 'loading' placeholder and still calls discourse_expires_in 1.minute, so the anonymous cache stores the placeholder under the embed URL and visitors keep seeing 'Loading Discussion...' for up to a minute after the topic exists.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2026-10-07",
+      "pr": 44101,
+      "commit": "778f26ba626e7884bff91924f91bae55ce359ca9",
+      "url": "https://github.com/discourse/discourse/pull/44101"
+     },
+     "removidoEm": null,
+     "diasNoAr": 4663,
+     "reason": "From 2013-12-31 the embed action (best, later comments) kept a trailing `discourse_expires_in 1.minute` after both branches, so the loading placeholder was cached. PR #44101 (2026-10-07, 'Render embedded comments without the 30 second refresh delay') moved `discourse_expires_in 1.minute` into the topic branch and sets `Cache-Control: no-cache` before `render \"loading\"`; its message states the loading page is no longer cached. Main today has that shape.",
+     "astra": []
+    },
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor#gapb-N3": {
+     "bug": "TopicEmbed.import wraps PostCreator#create in Topic.transaction, so PostCreator's post-transaction job enqueueing (process_post, feature_topic_users, etc.) runs before the outer transaction commits, and a worker that picks up ProcessPost early finds no post and skips post-processing for the imported topic.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2020-12-08",
+      "pr": 11293,
+      "commit": "c69bb5d5be8138bbadc3a2fb188a048d470671ff",
+      "url": "https://github.com/discourse/discourse/pull/11293"
+     },
+     "removidoEm": null,
+     "diasNoAr": 2534,
+     "reason": "TopicEmbed.import still wraps PostCreator.create in Topic.transaction on main, but PR #11293 (2020-12-08, 'Always enqueue sidekiq jobs after database transaction commit') changed Jobs.enqueue (app/jobs/base.rb) to push via `DB.after_commit`, which hooks the outermost ActiveRecord transaction. So ProcessPost and the other PostCreator jobs are no longer enqueued before the outer Topic.transaction commits; the buggy ordering is fixed generically.",
+     "astra": []
+    },
+    "enhance-embed-url-handling-and-validation-system-discourse-cursor#gapb-N4": {
+     "bug": "The migration adds posts.cook_method with a default and NOT NULL in one add_column, which on the PostgreSQL versions of the time rewrites the whole posts table under an ACCESS EXCLUSIVE lock and blocks reads and writes during deploy.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 4692,
+     "reason": "db/migrate/20131219203905_add_cook_method_to_posts.rb still exists on main with the identical `add_column :posts, :cook_method, :integer, default: 1, null: false`; its only later commits are the Migration[4.2] and frozen_string_literal edits. No upstream change altered the column-add strategy. The impact is moot today (migration ran once on existing sites; current Discourse requires PostgreSQL 13+, where a constant default does not rewrite the table), but the code is unchanged.",
+     "astra": [
+      {
+       "pergunta": "Code unchanged but PG13+ makes the rewrite moot and the migration runs once: pendente or descontinuado?",
+       "resposta": "Descontinuado: behaviour no longer occurs on supported PG versions; not confirmado since no fix.",
+       "veredito": "descontinuado"
+      },
+      {
+       "pergunta": "The rule's descontinuado requires code removed or rewritten; here only the environment changed. Strictly, pendente?",
+       "resposta": "Yes: code carrying the bug is still present and unchanged; loss of impact in current environment is neither a fix nor a removal.",
+       "veredito": "pendente"
+      }
+     ]
     }
    }
   },
@@ -2205,6 +2296,31 @@
        "veredito": "confirmado: the mockUser fixture still exists and the change made it type-check (any way of fixing counts)."
       }
      ]
+    },
+    "feat-2fa-backup-codes-cal-com#gapb-N4": {
+     "bug": "DisableTwoFactorModal resets twoFactorLostAccess only on success and toggle, not on cancel/ESC/close, and the modal stays mounted, so reopening it after dismissing from the backup-code screen shows the backup-code input instead of TOTP.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 1163,
+     "reason": "On calcom/cal.diy main, apps/web/components/settings/DisableTwoFactorModal.tsx still resets twoFactorLostAccess only on disable success and in the toggle; Dialog gets onOpenChange and the Cancel button calls onCancel directly, neither resetting it. The parent (apps/web/modules/settings/security/two-factor-auth-view.tsx) still keeps the modal mounted and only flips its open flag. Post-merge commits (#20184, #20088) only changed imports.",
+     "astra": []
+    },
+    "feat-2fa-backup-codes-cal-com#gapb-N5": {
+     "bug": "The backup-code field became a PasswordField but keeps an explicit type=\"password\" prop that overrides the internal visibility state, so the show/hide toggle never unmasks the input.",
+     "severity": "low",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2023-09-15",
+      "pr": 11361,
+      "commit": "e44e24ca42c6c311ee09e4489eae58eb487b3a6a",
+      "url": "https://github.com/calcom/cal.diy/pull/11361"
+     },
+     "removidoEm": null,
+     "diasNoAr": 16,
+     "reason": "PR #11361 ('fix: 2FA password visibility toggle show/hide state', 2023-09-15) removed the `type=\"password\"` prop from the PasswordField in EnableTwoFactorModal.tsx, letting PasswordField's own visibility-driven type take effect. Main today has PasswordField without the type prop.",
+     "astra": []
     }
    }
   },
@@ -3277,6 +3393,16 @@
      "diasNoAr": 466,
      "reason": "On main the deletes still run in a plain forEach followed by deletedAll.set(true), with no try/finally, so a failing remove() leaves the non-daemon reader thread looping. No later commit to GroupTest.java changed this test body.",
      "astra": []
+    },
+    "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#gapb-N1": {
+     "bug": "The null guard for a concurrently deleted cached group is added only to getSubGroupsCount; the getSubGroupsStream overloads still dereference modelSupplier.get(), so e.g. GroupResource.getSubGroups still throws the NPE the PR set out to fix.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 485,
+     "reason": "On upstream main today, model/infinispan/.../GroupAdapter.java still has the three getSubGroupsStream(search,first,max), (first,max) and (search,exact,first,max) overloads returning modelSupplier.get().getSubGroupsStream(...) with no null check, while only getSubGroupsCount carries the null guard from 332c9b6e4a. File history since 2025-07-08 (a2c1055f8d import order, 111ba36504 / ca89a0cdc4 org groups, a6b31e879f SCIM) does not touch these overloads.",
+     "astra": []
     }
    }
   },
@@ -3774,6 +3900,21 @@
      "diasNoAr": 452,
      "reason": "The test moved to tests/webauthn/.../passwordless/PasskeysUsernamePasswordFormTest.java (new testsuite) but reauthenticationOfUserWithoutPasskey on main still sets passkeysEnabled(false) before asserting the webauth form is absent, so it short-circuits on isPasskeysEnabled(). UsernamePasswordForm.isConditionalPasskeysEnabled on main is unchanged (isPasskeysEnabled() && (user == null || isConfiguredFor(...))). The 2026-10-06 commit bf57c22456 added an assertion for a user whose passkey was removed, but that path renders via WebAuthnConditionalUIAuthenticator.createErrorResponse/fillContextForm, not the per-user guard, and the named test was not changed.",
      "astra": []
+    },
+    "fixing-re-authentication-with-passkeys-keycloak#gapb-N1": {
+     "bug": "login-password.ftl now renders the passkeys macro, making reachable an error path where fillContextForm sets enableWebAuthnConditionalUI but returns before setting isUserIdentified/userVerification, so passkeys.ftl fails to render and a FreeMarker error replaces the login page.",
+     "severity": "medium",
+     "status": "confirmado",
+     "corrigidoEm": {
+      "data": "2026-10-06",
+      "pr": 53554,
+      "commit": "bf57c22456802340ef408e09641b662273aaced1",
+      "url": "https://github.com/keycloak/keycloak/pull/53554"
+     },
+     "removidoEm": null,
+     "diasNoAr": 441,
+     "reason": "PR #53554 'Passkeys conditional UI: HTTP 500 instead of login error page when an identified user has no passkey' (closes #52464) changed WebAuthnConditionalUIAuthenticator.fillContextForm to set ENABLE_WEBAUTHN_CONDITIONAL_UI only when super.fillContextForm returns a non-null form, and removed the unconditional setAttribute from createErrorResponse. The passkeys macro is therefore no longer enabled without isUserIdentified/userVerification, and a test removing the server-side passkey now asserts the error page renders.",
+     "astra": []
     }
    }
   },
@@ -3840,6 +3981,16 @@
      },
      "diasNoAr": 746,
      "reason": "Scanning every upstream revision of tests/sentry/integrations/github/test_integration.py since the merge, test_installation_not_found with the wrong state ddd023d8... is present unchanged until #113338 'Remove legacy pipeline views' (2026-04-20), which deleted it together with the legacy views (-609 lines in the test file). The test was removed with the flow, not fixed.",
+     "astra": []
+    },
+    "github-oauth-security-enhancement-sentry#gapb-N3": {
+     "bug": "The installer check compares the OAuth login to integration.metadata['sender']['login'] with case-sensitive equality, although GitHub logins are case-insensitive, so a legitimate install can be rejected on a casing difference.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 945,
+     "reason": "The pipeline was heavily refactored after the merge, but on main src/sentry/integrations/github/integration.py still raises USER_MISMATCH when `pipeline.fetch_state(\"github_authenticated_user\") != integration.metadata[\"sender\"][\"login\"]` (now gated on chosen_installation_id is None, i.e. the same GitHub-initiated install path). The comparison is still exact and case-sensitive; no casefold or user-ID comparison was introduced.",
      "astra": []
     }
    }
@@ -5032,6 +5183,16 @@
      "removidoEm": null,
      "diasNoAr": 481,
      "reason": "submit() on master still loops `for buffer in self.buffers.values(): memory_infos.extend(buffer.get_memory_info())`, and SpansBuffer.get_memory_info still returns iter_cluster_memory_usage(self.client) where every buffer's client is the same get_redis_client() cluster. The cluster-wide INFO is still repeated once per flusher process buffer.",
+     "astra": []
+    },
+    "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#gapb-N1": {
+     "bug": "Each per-process SpansBuffer divides the global max-flush-segments across only its own shards, so the total segments loaded per flush becomes num_processes * max_flush_segments, multiplying memory and Redis load and weakening the any_shard_at_limit backpressure signal.",
+     "severity": "medium",
+     "status": "pendente",
+     "corrigidoEm": null,
+     "removidoEm": null,
+     "diasNoAr": 500,
+     "reason": "On master today flusher.py _create_process_for_shards still builds SpansBuffer(shards, slice_id=...) per process with only that process's shard subset, and buffer.py flush_segments still computes shard_factor = max(1, len(self.assigned_shards)) and max_segments_per_shard = ceil(spans.buffer.max-flush-segments / shard_factor), so each process gets the whole global budget. The option is still documented as 'Maximum number of segments to fetch and flush per cycle' (default 500); none of the many later buffer/flusher refactors changed this division.",
      "astra": []
     }
    }
