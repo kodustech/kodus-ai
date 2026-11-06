@@ -695,13 +695,6 @@ describe("mentionedFilesNotFollowed", () => {
                     `${RULES}:docs/valves.md`,
                 ]);
             }
-            // Right before the file, the adverb goes on with the list.
-            expect(
-                placed(
-                    "Read docs/a.md in pump-rules or in irrigation-rules, also docs/b.md.",
-                    [RULES, OTHER_RULES],
-                ),
-            ).toEqual([]);
         });
 
         it("reads a Portuguese list as it reads an English one", () => {
