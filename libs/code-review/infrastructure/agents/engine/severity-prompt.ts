@@ -6,6 +6,7 @@ import { V2_DEFAULT_SEVERITY_FLAGS_TEXT } from '@libs/common/utils/codeReview/v2
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { samePromptText } from '@libs/common/utils/writing-guidelines';
 import { createLogger } from '@libs/core/log/logger';
+import { extractLastJsonObjectWith } from '@libs/llm/structured-output-repair';
 
 const logger = createLogger('SeverityPrompt');
 
@@ -217,20 +218,23 @@ export function parseSeverityResponse(text: string): {
         return { classifications, parseOk: false };
     }
 
-    const jsonMatch = text.match(/\{[\s\S]*"classifications"[\s\S]*\}/);
-    if (!jsonMatch) {
+    // The LAST object carrying `classifications`, not the span from the first
+    // `{` to the last `}`. A host that ends the reasoning channel at a
+    // `</think>` the model quotes (Together, DeepSeek V4.1 Flash) returns the
+    // rest of the reasoning ahead of the answer, and the braces it quotes made
+    // that span unparseable: every suggestion fell to medium (#2409).
+    const parsed = extractLastJsonObjectWith(text, ['classifications']);
+    if (!parsed) {
         return { classifications, parseOk: false };
     }
 
-    try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        for (const c of parsed.classifications || []) {
-            if (typeof c.index === 'number' && typeof c.severity === 'string') {
-                classifications.set(c.index, c.severity.toLowerCase());
-            }
+    const list = Array.isArray(parsed.classifications)
+        ? parsed.classifications
+        : [];
+    for (const c of list as any[]) {
+        if (typeof c?.index === 'number' && typeof c?.severity === 'string') {
+            classifications.set(c.index, c.severity.toLowerCase());
         }
-        return { classifications, parseOk: classifications.size > 0 };
-    } catch {
-        return { classifications, parseOk: false };
     }
+    return { classifications, parseOk: classifications.size > 0 };
 }

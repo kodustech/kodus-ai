@@ -4,6 +4,7 @@ import {
     DEFAULT_SEVERITY_FLAGS,
     buildSeverityPrompt,
     hasCustomSeverityFlags,
+    parseSeverityResponse,
 } from './severity-prompt';
 
 const suggestion = {
@@ -50,5 +51,35 @@ describe('hasCustomSeverityFlags', () => {
         expect(hasCustomSeverityFlags({ low: '   ' })).toBe(false);
         expect(hasCustomSeverityFlags({ critical: `  ${V2_DEFAULT_SEVERITY_FLAGS_TEXT.critical.replace(/\n/g, '\n\n')}` })).toBe(false);
         expect(hasCustomSeverityFlags({ medium: 'Our own rule' })).toBe(true);
+    });
+});
+
+describe('parseSeverityResponse', () => {
+    it('reads the answer after reasoning a host returned as content (#2409)', () => {
+        // Together cut the reasoning channel at a quoted `</think>`: the rest of
+        // the reasoning, quoting code and the format example, came before the
+        // answer.
+        const reply = [
+            '. If reasoning quotes , block ends early, rest read as the answer.',
+            "existingCode: `const end = text.indexOf('');` and improvedCode `{ index }`.",
+            'Format: {"classifications": [{"index": 0, "severity": "high", "reason": "brief reason"}]}',
+            'Index 0 high, index 1 medium, index 2 low.',
+            '{"classifications": [{"index": 0, "severity": "high", "reason": "loses every finding"}, {"index": 1, "severity": "medium", "reason": "falls back"}, {"index": 2, "severity": "Low", "reason": "cosmetic"}]}',
+        ].join('\n');
+
+        const { classifications, parseOk } = parseSeverityResponse(reply);
+
+        expect(parseOk).toBe(true);
+        expect([...classifications]).toEqual([
+            [0, 'high'],
+            [1, 'medium'],
+            [2, 'low'],
+        ]);
+    });
+
+    it('fails when no object carries classifications', () => {
+        expect(parseSeverityResponse('index 0 is high').parseOk).toBe(false);
+        expect(parseSeverityResponse('{"severity": "high"}').parseOk).toBe(false);
+        expect(parseSeverityResponse('{"classifications": {"index": 0}}').parseOk).toBe(false);
     });
 });

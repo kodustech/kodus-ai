@@ -181,7 +181,7 @@ const BOUNDARIES = [
             'libs/code-review/infrastructure/agents/engine/severity-prompt.ts',
         ],
         accepted: true,
-        note: 'text call; parseSeverityResponse is bespoke and degrades to all-medium (no dropped findings) — candidate to wire onto extractJsonFromText',
+        note: 'text call; parseSeverityResponse reads the last object carrying classifications (extractLastJsonObjectWith), so reasoning returned ahead of the answer does not break it; unparseable degrades to all-medium (no dropped findings)',
     },
     {
         phase: 'format-suggestion-content',
