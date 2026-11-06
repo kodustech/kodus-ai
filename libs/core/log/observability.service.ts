@@ -3,7 +3,11 @@ import {
     IdGenerator,
     StorageEnum,
 } from '@libs/core/observability';
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import {
+    BeforeApplicationShutdown,
+    Injectable,
+    OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ConnectionString } from 'connection-string';
 
@@ -147,7 +151,9 @@ function buildUsageSpanAttributes(p: UsageSpanInput): Record<string, any> {
 }
 
 @Injectable()
-export class ObservabilityService implements OnModuleInit {
+export class ObservabilityService
+    implements OnModuleInit, BeforeApplicationShutdown
+{
     private readonly instances = new Map<
         string,
         ReturnType<typeof getObservability>
@@ -193,6 +199,30 @@ export class ObservabilityService implements OnModuleInit {
     async onModuleInit() {
         const serviceName = process.env.COMPONENT_TYPE || 'unknown';
         await this.init(serviceName);
+    }
+
+    /**
+     * NestJS lifecycle hook - Flush observability before Nest re-sends the
+     * shutdown signal. Nest awaits this hook; the process-level SIGTERM/SIGINT
+     * listener does not hold the process, so without it the exit could cut off
+     * telemetry and MongoDB buffer writes. `shutdown()` is idempotent, so the
+     * signal listener and this hook share one run.
+     */
+    async beforeApplicationShutdown(): Promise<void> {
+        const entries = [...this.instances.entries()];
+        const results = await Promise.allSettled(
+            entries.map(([, obs]) => obs.shutdown()),
+        );
+        results.forEach((result, index) => {
+            if (result.status === 'rejected') {
+                this.logger.error({
+                    message: 'Error shutting down observability',
+                    context: ObservabilityService.name,
+                    error: this.safeErrorForLog(result.reason),
+                    metadata: { instance: entries[index][0] },
+                });
+            }
+        });
     }
 
     /**

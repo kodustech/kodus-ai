@@ -163,3 +163,45 @@ describe('ObservabilityService.runAiSdkLLMInSpan', () => {
         expect(usageAttrs()).toHaveLength(0);
     });
 });
+
+describe('ObservabilityService.beforeApplicationShutdown', () => {
+    it('waits for every observability instance to finish shutting down', async () => {
+        const service = new ObservabilityService({ get: jest.fn() } as any);
+        let finish!: () => void;
+        const shutdown = jest.fn(
+            () => new Promise<void>((resolve) => (finish = resolve)),
+        );
+        (service as any).instances.set('k', { shutdown });
+
+        let done = false;
+        const hook = service.beforeApplicationShutdown().then(() => {
+            done = true;
+        });
+        await Promise.resolve();
+
+        expect(shutdown).toHaveBeenCalledTimes(1);
+        expect(done).toBe(false);
+
+        finish();
+        await hook;
+        expect(done).toBe(true);
+    });
+
+    it('logs a failed shutdown with its instance key and still waits for the rest', async () => {
+        const service = new ObservabilityService({ get: jest.fn() } as any);
+        const error = jest.fn();
+        (service as any).logger = { error };
+        const ok = jest.fn().mockResolvedValue(undefined);
+        (service as any).instances.set('bad', {
+            shutdown: jest.fn().mockRejectedValue(new Error('flush failed')),
+        });
+        (service as any).instances.set('good', { shutdown: ok });
+
+        await expect(service.beforeApplicationShutdown()).resolves.toBeUndefined();
+
+        expect(ok).toHaveBeenCalledTimes(1);
+        expect(error).toHaveBeenCalledTimes(1);
+        expect(error.mock.calls[0][0].metadata).toEqual({ instance: 'bad' });
+        expect(error.mock.calls[0][0].error.message).toBe('flush failed');
+    });
+});
