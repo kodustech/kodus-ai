@@ -1194,6 +1194,9 @@ const LOCAL_PLACE = new RegExp(
     "gi",
 );
 
+/** What turns a local place into a comparison: "the same repo as …". */
+const COMPARED_TO = /^\s+(?:as|like|que)\s+(?:(?:the|o|a)\s+)?[\x60'"]?/;
+
 /** An owner/name the instructions write that is not a linked repository
  *  (a URL to it too): it can be the other side of a choice ("in acme/rules
  *  or other/policies"). A deeper path (an issue link) is not one. */
@@ -1245,10 +1248,6 @@ export const mentionedFilesNotFollowed = (
         const at = (match.index ?? 0) + match[0].indexOf(match[1]);
         return { cited: match[1], at, end: at + match[1].length };
     });
-    // A repository's name inside a file's path names no repository for the
-    // files after it ("rules/api.md" is not a mention of `acme/rules`).
-    const insideAFile = (at: number) =>
-        files.some((file) => at >= file.at && at < file.end);
     const names = repositories.map((repository) => {
         const full = repository.toLowerCase();
         return { repository, full, name: full.split("/").pop() ?? full };
@@ -1257,7 +1256,7 @@ export const mentionedFilesNotFollowed = (
     // "other/irrigation-rules" it is another owner's repository, not an
     // alias of the linked `greenhouse/irrigation-rules`. A dot ends a name
     // only at the end of a sentence: "acme/rules.v2" is another repository.
-    const mentions = names
+    const everyMention = names
         .flatMap(({ repository, full, name }) =>
             [
                 new RegExp(
@@ -1280,8 +1279,21 @@ export const mentionedFilesNotFollowed = (
                 }),
             ),
         )
-        .filter((mention) => !insideAFile(mention.at))
         .sort((a, b) => a.at - b.at);
+    // A repository's name inside a file's path names no repository for the
+    // files after it ("rules/api.md" is not a mention of `acme/rules`). Both
+    // lists are in text order: one cursor.
+    let pathCursor = 0;
+    const mentions = everyMention.filter((mention) => {
+        while (
+            pathCursor < files.length &&
+            files[pathCursor].end <= mention.at
+        ) {
+            pathCursor++;
+        }
+        const file = files[pathCursor];
+        return !(file && file.at <= mention.at);
+    });
     const byFullName = new Map(
         names.map(({ repository, full }) => [full, repository]),
     );
@@ -1320,12 +1332,18 @@ export const mentionedFilesNotFollowed = (
         }
     }
     // The other names a choice can offer: an owner/name that is not linked.
-    // Both lists are in text order and mentions do not overlap: one cursor.
+    // Matches, files and mentions are all in text order and neither files
+    // nor mentions overlap one another: one cursor over each.
     let overlapping = 0;
+    let containing = 0;
     const unlinked = [...text.matchAll(OWNER_NAME)].flatMap((match) => {
         const at = (match.index ?? 0) + match[0].length - match[1].length;
         const end = at + match[1].length;
-        if (/^(?:and\/or|e\/ou)$/.test(match[1]) || insideAFile(at)) return [];
+        if (/^(?:and\/or|e\/ou)$/.test(match[1])) return [];
+        while (containing < files.length && files[containing].end <= at) {
+            containing++;
+        }
+        if (files[containing] && files[containing].at <= at) return [];
         while (
             overlapping < mentions.length &&
             mentions[overlapping].end <= at
@@ -1396,23 +1414,51 @@ export const mentionedFilesNotFollowed = (
     // names an owner/name place ("in acme/rules. Repository notes follow.").
     // A place naming the reviewed repository itself ("in this repository")
     // is a place too: it wins over a repository named earlier. Not when a
-    // linked name follows it ("in the repository irrigation-rules").
-    const localPlaces = [...text.matchAll(LOCAL_PLACE)].flatMap((place) => {
-        const start = place.index ?? 0;
-        const end = start + place[0].length;
-        const named = mentions[firstMentionFrom(end)];
-        if (named && /^[\s\x60'"]*$/.test(text.slice(end, named.at))) return [];
-        return [{ at: start, end, local: true as const }];
-    });
-    // Local places are in text order like the place phrases: one cursor.
+    // linked name follows it ("in the repository irrigation-rules"), and not
+    // when it compares to another one: "in the same repo as acme/rules" is
+    // acme/rules, and nowhere when what it names is not linked.
+    type Place = { at: number; repository?: string; local?: true };
+    const localPlaces = [...text.matchAll(LOCAL_PLACE)].flatMap(
+        (place): Array<Place & { end: number }> => {
+            const start = place.index ?? 0;
+            const end = start + place[0].length;
+            const named = mentions[firstMentionFrom(end)];
+            if (named && /^[\s\x60'"]*$/.test(text.slice(end, named.at)))
+                return [];
+            const compared = COMPARED_TO.exec(text.slice(end));
+            if (compared) {
+                const repository =
+                    named &&
+                    !named.ambiguous &&
+                    /^(?:https?:\/\/[\w.-]+\/)?$/.test(
+                        text.slice(end + compared[0].length, named.at),
+                    )
+                        ? named.repository
+                        : undefined;
+                return [{ at: start, end, repository }];
+            }
+            return [{ at: start, end, local: true }];
+        },
+    );
+    // Local places and files are in text order like the place phrases: one
+    // cursor over each.
     let localCursor = 0;
-    const places: Array<{ at: number; repository?: string; local?: true }> = [
-        ...localPlaces.map(({ at, local }) => ({ at, local })),
+    let fileCursor = 0;
+    const places: Place[] = [
+        ...localPlaces.map(({ at, repository, local }) =>
+            local ? { at, local } : { at, repository },
+        ),
         ...[...text.matchAll(REPOSITORY_PLACE)].flatMap((place) => {
             const start = place.index ?? 0;
             let end = start + place[0].length;
-            if (files.some((file) => file.at < end && file.end > start))
-                return [];
+            while (
+                fileCursor < files.length &&
+                files[fileCursor].end <= start
+            ) {
+                fileCursor++;
+            }
+            const fileHere = files[fileCursor];
+            if (fileHere && fileHere.at < end) return [];
             while (
                 localCursor < localPlaces.length &&
                 localPlaces[localCursor].end <= start
@@ -1577,8 +1623,13 @@ export const mentionedFilesNotFollowed = (
             // "read x.mdc, kept in irrigation-rules". A sentence naming two
             // linked repositories with neither attached to the file does not
             // say which one holds it: nothing is offered rather than a guess.
+            // So does a sentence that names a choice ("In pump-rules or
+            // acme/style, read docs/a.md").
             const named = new Set(mentionsHere.map((m) => m.repository));
-            repository = named.size > 1 ? null : mentionsHere[0].repository;
+            repository =
+                named.size > 1 || mentionsHere.some((m) => m.ambiguous)
+                    ? null
+                    : mentionsHere[0].repository;
         } else {
             // Its own text says nothing: the repository named last before
             // it, else the reviewed repository.

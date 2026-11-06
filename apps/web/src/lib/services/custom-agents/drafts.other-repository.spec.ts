@@ -754,6 +754,33 @@ describe("mentionedFilesNotFollowed", () => {
             }
         });
 
+        it("offers nothing for a file whose sentence names a choice with an unlinked side", () => {
+            for (const text of [
+                "In pump-rules or acme/style, read docs/a.md.",
+                "Read docs/a.md, kept in pump-rules or acme/style.",
+            ]) {
+                expect(placed(text, [RULES, OTHER_RULES])).toEqual([]);
+            }
+        });
+
+        it("places a file compared to another repository in that repository", () => {
+            for (const text of [
+                "Read docs/conventions.md in the same repo as acme/rules.",
+                "Read docs/conventions.md in the same repository as https://github.com/acme/rules.",
+                "Leia docs/conventions.md no mesmo repositório que acme/rules.",
+            ]) {
+                expect(placed(text, ["acme/rules"])).toEqual([
+                    "acme/rules:docs/conventions.md",
+                ]);
+            }
+            expect(
+                placed(
+                    "Read docs/conventions.md in the same repo as other/policies.",
+                    ["acme/rules"],
+                ),
+            ).toEqual([]);
+        });
+
         it("reads a Portuguese list as it reads an English one", () => {
             expect(
                 placed(
