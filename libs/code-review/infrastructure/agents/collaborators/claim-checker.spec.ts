@@ -1237,9 +1237,7 @@ describe('checkClaims — an unused import, in every language the rules review',
             file: 'src/A.cs',
             line: 'using Json = Newtonsoft.Json.JsonConvert;',
             symbol: 'Json',
-            uses: [
-                'src/A.cs:9:    var s = JsonConvert.SerializeObject(x);',
-            ],
+            uses: ['src/A.cs:9:    var s = JsonConvert.SerializeObject(x);'],
             verdict: 'publish',
         },
         {
@@ -1250,6 +1248,26 @@ describe('checkClaims — an unused import, in every language the rules review',
             uses: ['src/a.ts:5:const b: Bar = make();'],
             verdict: 'drop',
             reason: 'src/a.ts:5',
+        },
+        {
+            lang: 'React, a stylesheet of the same module is not a use',
+            file: 'src/Card.tsx',
+            line: "import Button from './Button';",
+            symbol: 'Button',
+            uses: ["src/Card.tsx:2:import './Button.css';"],
+            elsewhere: 'src/Button.tsx:1:export default function Button() {}',
+            verdict: 'publish',
+        },
+        {
+            lang: 'React, a type import from the same module is not a use',
+            file: 'src/Card.tsx',
+            line: "import Button from './Button';",
+            symbol: 'Button',
+            uses: [
+                "src/Card.tsx:2:import type { ButtonProps } from './Button';",
+            ],
+            elsewhere: 'src/Button.tsx:1:export default function Button() {}',
+            verdict: 'publish',
         },
     ];
 
@@ -1471,6 +1489,27 @@ describe('checkClaims — an unused import is judged by its own finding, not the
             path: '.',
             glob: '/src/a.js',
         });
+    });
+
+    it('does not take the import line for a use when the finding is one line off', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 4,
+                    relevantLinesEnd: 4,
+                    claimKind: 'unused',
+                    claimSymbol: 'debounce',
+                    existingCode: "import { debounce } from 'lodash';",
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupOf([
+                "src/a.ts:3:import { debounce } from 'lodash';",
+                "src/b.ts:1:import { debounce } from 'lodash';",
+            ]),
+        });
+        expect(res.kept).toHaveLength(1);
     });
 
     it('judges the claim by the sibling that sits on the import', async () => {
