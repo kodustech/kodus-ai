@@ -1194,6 +1194,63 @@ describe('checkClaims — an unused import, in every language the rules review',
             verdict: 'drop',
             reason: 'src/a.js:9',
         },
+        {
+            lang: 'C#, used only in a using declaration',
+            file: 'src/Repo.cs',
+            line: 'using static Acme.Data.Factory;',
+            symbol: 'Factory',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'C#, imported class used in a using var',
+            file: 'src/Repo.cs',
+            line: 'using SqlConnection = Microsoft.Data.SqlClient.SqlConnection;',
+            symbol: 'SqlConnection',
+            uses: [
+                'src/Repo.cs:12:        using var conn = new SqlConnection(cs);',
+            ],
+            verdict: 'drop',
+            reason: 'src/Repo.cs:12',
+        },
+        {
+            lang: 'Kotlin, used only in a require precondition',
+            file: 'src/A.kt',
+            line: 'import com.acme.Validator',
+            symbol: 'Validator',
+            uses: ['src/A.kt:8:    require(Validator.isValid(x))'],
+            verdict: 'drop',
+            reason: 'src/A.kt:8',
+        },
+        {
+            lang: 'Solidity, used only in a require guard',
+            file: 'contracts/Vault.sol',
+            line: 'import {Errors} from "./Errors.sol";',
+            symbol: 'Errors',
+            uses: [
+                'contracts/Vault.sol:14:        require(msg.sender == owner, Errors.NotOwner());',
+            ],
+            verdict: 'drop',
+            reason: 'contracts/Vault.sol:14',
+        },
+        {
+            lang: 'C# using alias, only the source is used',
+            file: 'src/A.cs',
+            line: 'using Json = Newtonsoft.Json.JsonConvert;',
+            symbol: 'Json',
+            uses: [
+                'src/A.cs:9:    var s = JsonConvert.SerializeObject(x);',
+            ],
+            verdict: 'publish',
+        },
+        {
+            lang: 'TypeScript import = alias, used',
+            file: 'src/a.ts',
+            line: 'import Bar = NS.Bar;',
+            symbol: 'Bar',
+            uses: ['src/a.ts:5:const b: Bar = make();'],
+            verdict: 'drop',
+            reason: 'src/a.ts:5',
+        },
     ];
 
     it.each(CASES)('$lang: $verdict', async (c: Case) => {
@@ -1268,6 +1325,152 @@ describe('checkClaims — an unused import is judged by its own finding, not the
         });
         expect(res.kept).toEqual([]);
         expect(res.dropped[0].reason).toContain('src/a.js:20');
+    });
+
+    const lookupOf = (lines: string[]) =>
+        fakeLookup({
+            grep: (pattern) =>
+                lines
+                    .filter((l) =>
+                        new RegExp(pattern).test(
+                            l.split(':').slice(2).join(':'),
+                        ),
+                    )
+                    .join('\n'),
+        });
+
+    it('does not let a sibling hide a use between them, for a non-import claim either', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 10,
+                    relevantLinesEnd: 10,
+                    claimKind: 'unused',
+                    claimSymbol: 'helper',
+                }),
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 200,
+                    relevantLinesEnd: 200,
+                    claimKind: 'unused',
+                    claimSymbol: 'helper',
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupOf([
+                'src/a.ts:10:function helper() {',
+                'src/a.ts:100:  return helper();',
+            ]),
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('src/a.ts:100');
+    });
+
+    it('anchors the import on an undeclared sibling that sits on it', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    existingCode: "import { Foo } from './foo';",
+                }),
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 40,
+                    relevantLinesEnd: 40,
+                    claimKind: 'unused',
+                    claimSymbol: 'Foo',
+                    existingCode: '  return new Foo();',
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupOf([
+                "src/a.ts:3:import { Foo } from './foo';",
+                'src/a.ts:40:  return new Foo();',
+            ]),
+        });
+        const dropped = res.dropped.find(
+            (d) => d.violation.claimSymbol === 'Foo',
+        );
+        expect(dropped?.reason).toContain('src/a.ts:40');
+    });
+
+    it('does not take the import line for a use when the provider answers without text', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.js',
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    claimKind: 'unused',
+                    claimSymbol: 'debounce',
+                    existingCode: 'import { debounce } from "./timing";',
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: () =>
+                    'src/a.js:3:\nsrc/timing.js:1:export function debounce() {}',
+            }),
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('matches a reformatted citation of a multi-line import by its lines', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.js',
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 6,
+                    claimKind: 'unused',
+                    claimSymbol: 'Foo',
+                    existingCode: "import {\n  Bar,\n  Foo\n} from './x'",
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupOf([
+                'src/a.js:5:  Foo,',
+                'src/x.js:1:export class Foo {}',
+            ]),
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('greps the alias names in the importing file only', async () => {
+        const calls: Array<{ pattern: string; path?: string; glob?: string }> =
+            [];
+        const base = fakeLookup({
+            grep: () =>
+                'src/a.js:1:import { debounce as wait } from "./timing";\nsrc/timing.js:1:export function debounce() {}',
+        });
+        const lookup = {
+            ...base,
+            grep: async (pattern: string, path?: string, glob?: string) => {
+                calls.push({ pattern, path, glob });
+                return base.grep(pattern, path, glob);
+            },
+        };
+        await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.js',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'debounce',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(calls[1]).toEqual({
+            pattern: 'wait',
+            path: '.',
+            glob: '/src/a.js',
+        });
     });
 
     it('judges the claim by the sibling that sits on the import', async () => {

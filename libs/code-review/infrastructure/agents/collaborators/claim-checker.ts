@@ -163,7 +163,23 @@ function parseGrep(output: string): GrepMatch[] {
  * occurrence somewhere ELSE refutes it (and, symmetrically, only an occurrence
  * somewhere else can support a `duplicate` claim).
  */
+/**
+ * The lines of each finding of a group, for the span `spanOf` builds: a hit
+ * between two siblings is outside both, so it is elsewhere.
+ */
+const SPAN_RANGES = new WeakMap<ShardViolation, Array<[number, number]>>();
+
 function isElsewhere(match: GrepMatch, violation: ShardViolation): boolean {
+    const ranges = SPAN_RANGES.get(violation);
+    if (
+        ranges &&
+        violation.relevantFile &&
+        normalizePath(violation.relevantFile) === match.file
+    ) {
+        return ranges.every(
+            ([start, end]) => match.line < start || match.line > end,
+        );
+    }
     if (
         !violation.relevantFile ||
         normalizePath(violation.relevantFile) !== match.file
@@ -384,7 +400,7 @@ function hasIdentifier(text: string, symbol: string): boolean {
 }
 
 /** An identifier, a separator or a bracket of a statement's code. */
-const TOKEN = /[\p{L}_$][\p{L}\p{N}_$]*|::|=>|[{}()[\],\n:.\\]/gu;
+const TOKEN = /[\p{L}_$][\p{L}\p{N}_$]*|::|=>|[{}()[\],\n:.\\=]/gu;
 const IDENTIFIER = /^[\p{L}_$]/u;
 const OPENERS = new Set(['{', '(', '[']);
 const CLOSERS = new Set(['}', ')', ']']);
@@ -443,6 +459,20 @@ function boundNames(
     const item = importItemOf(readStatement(statement).code, symbol) ?? [];
     const named = (token: string) =>
         IDENTIFIER.test(token) && !IMPORT_KEYWORDS.has(token);
+    // `using Json = A.B;`, `import x = require('y')`, `local json = require(…)`:
+    // the name before `=` is the binding.
+    const assignAt = item.indexOf('=');
+    if (assignAt !== -1 && !item.some((token) => RENAMES.has(token))) {
+        const alias = item.slice(0, assignAt).filter(named).pop();
+        const source = item
+            .slice(assignAt + 1)
+            .filter(named)
+            .pop();
+        return {
+            bound: alias ? [alias] : [],
+            renamed: source && source !== alias ? [source] : [],
+        };
+    }
     const renameAt = item.findIndex((token) => RENAMES.has(token));
     if (renameAt !== -1) {
         const alias = item.slice(renameAt + 1).find(named);
@@ -550,30 +580,36 @@ async function judgeImport(
         ? [
               ...matches,
               ...parseGrep(
-                  await lookup.grep(others.map(escapeRegex).join('|')),
+                  await lookup.grep(
+                      others.map(escapeRegex).join('|'),
+                      '.',
+                      `/${globEscape(file)}`,
+                  ),
               ),
           ]
         : matches;
     const statementLines = statement.text
         .split('\n')
-        .map((line) => line.trim())
+        .map(lineKey)
         .filter(Boolean);
-    const uses = hits.filter(
-        (m) =>
-            // Anywhere in the file but the import itself: its own line is an
-            // import line, and a multi-line import's member lines are matched
-            // by place, or inside the finding by their text. The finding's
-            // range as such is not excluded: a model citing lines 1-40 for an
-            // import on line 3 would hide a real use on line 20.
-            m.file === file &&
-            !isImportLine(m.text, file) &&
-            !isStatementLine(m, violation, statement) &&
-            !(
-                !isElsewhere(m, violation) &&
-                statementLines.includes(m.text.trim())
-            ) &&
-            names.some((name) => namesSymbol(m.text, name)),
-    );
+    const uses = hits.filter((m) => {
+        if (m.file !== file) return false;
+        const inFinding = !isElsewhere(m, violation);
+        // The import itself is not a use: a multi-line import's member lines
+        // by place, and inside the finding a line whose text is one of the
+        // import's (or a hit the provider gave without text). Any other line
+        // counts, an import-looking one too: `using var`, Kotlin's
+        // `require(…)`, a trait `use` are code in some languages, and taking
+        // one for an import would publish an import the file uses.
+        if (isStatementLine(m, violation, statement)) return false;
+        if (
+            inFinding &&
+            (!m.text || statementLines.includes(lineKey(m.text)))
+        ) {
+            return false;
+        }
+        return names.some((name) => namesSymbol(m.text, name));
+    });
     const bound =
         names.includes(symbol) && others.length === 0
             ? ''
@@ -589,6 +625,19 @@ async function judgeImport(
     return names.includes(symbol) || renamed.includes(symbol)
         ? null
         : undefined;
+}
+
+/** A line compared to the import's: trimmed, without a trailing `,` or `;`. */
+function lineKey(line: string): string {
+    return line
+        .trim()
+        .replace(/[,;]+$/, '')
+        .trim();
+}
+
+/** A path as a literal ripgrep glob. */
+function globEscape(path: string): string {
+    return path.replace(/[\\*?[\]{}!]/g, '\\$&');
 }
 
 /**
@@ -635,6 +684,7 @@ async function refute(
     violation: ShardViolation,
     input: ClaimCheckInput,
     owners: ShardViolation[] = [violation],
+    group: ShardViolation[] = owners,
 ): Promise<string | null> {
     const { lookup, changedFiles } = input;
 
@@ -681,15 +731,23 @@ async function refute(
         // the import, not by the group's span: a sibling of the same rule
         // elsewhere in the file would make every use between them "inside
         // the finding".
-        const found = owners
-            .map((own) => ({
-                own,
-                statement: importStatementOf(own, matches, claim.symbol!),
-            }))
-            .find((o) => o.statement !== undefined);
+        // The claim's own findings first, then a sibling that sits on the
+        // import without declaring the claim itself.
+        let found:
+            { own: ShardViolation; statement: ImportStatement } | undefined;
+        for (const own of [
+            ...owners,
+            ...group.filter((v) => !owners.includes(v)),
+        ]) {
+            const statement = importStatementOf(own, matches, claim.symbol!);
+            if (statement) {
+                found = { own, statement };
+                break;
+            }
+        }
         if (found) {
             const verdict = await judgeImport(
-                found.statement!,
+                found.statement,
                 claim.symbol!,
                 found.own,
                 matches,
@@ -809,11 +867,22 @@ function spanOf(group: ShardViolation[]): ShardViolation {
     const ends = group
         .map((v) => v.relevantLinesEnd ?? v.relevantLinesStart)
         .filter((n): n is number => typeof n === 'number');
-    return {
+    const span: ShardViolation = {
         ...group[0],
         relevantLinesStart: starts.length ? Math.min(...starts) : undefined,
         relevantLinesEnd: ends.length ? Math.max(...ends) : undefined,
     };
+    const ranges = group.flatMap((v): Array<[number, number]> => {
+        const start = v.relevantLinesStart;
+        if (typeof start !== 'number') return [];
+        return [[start, v.relevantLinesEnd ?? start]];
+    });
+    // Every sibling must carry its lines for the ranges to stand in for the
+    // span; otherwise one without lines makes the whole file "inside".
+    if (group.length > 1 && ranges.length === group.length) {
+        SPAN_RANGES.set(span, ranges);
+    }
+    return span;
 }
 
 /**
@@ -853,10 +922,17 @@ export async function checkClaims(
         claim: Claim;
         span: ShardViolation;
         owners: ShardViolation[];
+        group: ShardViolation[];
     }> = [];
     for (const [groupKey, group] of groups) {
         const span = spanOf(group);
         const seen = new Set<string>();
+        const keys = new Map(
+            group.map((v) => {
+                const c = readClaim(v);
+                return [v, c.kind === 'none' ? '' : claimKeyOf(c)] as const;
+            }),
+        );
         for (const violation of group) {
             const claim = readClaim(violation);
             if (claim.kind === 'none') {
@@ -872,9 +948,8 @@ export async function checkClaims(
                 claimKey,
                 claim,
                 span,
-                owners: group.filter(
-                    (v) => claimKeyOf(readClaim(v)) === claimKey,
-                ),
+                owners: group.filter((v) => keys.get(v) === claimKey),
+                group,
             });
         }
     }
@@ -882,14 +957,14 @@ export async function checkClaims(
     const verdicts = await mapLimit(
         jobs,
         concurrency,
-        async ({ claim, span, owners }): Promise<string | null> => {
+        async ({ claim, span, owners, group }): Promise<string | null> => {
             if (!lookup.available) {
                 return `unverifiable: repository lookup unavailable (${lookup.unavailableReason})`;
             }
 
             try {
                 return await withTimeout(
-                    refute(claim, span, input, owners),
+                    refute(claim, span, input, owners, group),
                     timeoutMs,
                 );
             } catch (err) {
