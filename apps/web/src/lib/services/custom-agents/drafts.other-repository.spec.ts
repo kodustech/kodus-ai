@@ -527,21 +527,6 @@ describe("mentionedFilesNotFollowed", () => {
             ).toEqual(["(reviewed):docs/pumps.md"]);
         });
 
-        it("places a file by a linked owner/name or its URL over a repository named earlier", () => {
-            expect(
-                placed(
-                    `Read irrigation-rules first. Read docs/pumps.md in ${OTHER_RULES}.`,
-                    [RULES, OTHER_RULES],
-                ),
-            ).toEqual([`${OTHER_RULES}:docs/pumps.md`]);
-            expect(
-                placed(
-                    `Read irrigation-rules first. Read docs/pumps.md from https://github.com/${OTHER_RULES}.`,
-                    [RULES, OTHER_RULES],
-                ),
-            ).toEqual([`${OTHER_RULES}:docs/pumps.md`]);
-        });
-
         it("gives each file of one sentence the place right after it", () => {
             expect(
                 placed(
@@ -588,6 +573,40 @@ describe("mentionedFilesNotFollowed", () => {
                 `${RULES}:docs/a.md`,
                 `${RULES}:docs/b.md`,
                 `${RULES}:docs/c.md`,
+            ]);
+        });
+
+        it("offers nothing for a list item whose sentence names another place than the list's", () => {
+            // The list's place, a linked owner/name or its URL, still places
+            // the file it is attached to.
+            for (const listPlace of [
+                `in ${OTHER_RULES}`,
+                `from https://github.com/${OTHER_RULES}`,
+            ]) {
+                expect(
+                    placed(
+                        `In the irrigation-rules repository, see docs/a.md and docs/b.md ${listPlace}.`,
+                        [RULES, OTHER_RULES],
+                    ),
+                ).toEqual([`${OTHER_RULES}:docs/b.md`]);
+            }
+            expect(
+                placed(
+                    "In the pump-rules repository, see docs/a.md and rules.md in acme/rules.",
+                    [OTHER_RULES],
+                ),
+            ).toEqual([]);
+            // A place that follows another file is that file's, not the
+            // sentence's.
+            expect(
+                placed(
+                    "Read docs/a.md and docs/b.md in irrigation-rules, then docs/c.md in the pump-rules repository.",
+                    [RULES, OTHER_RULES],
+                ),
+            ).toEqual([
+                `${RULES}:docs/a.md`,
+                `${RULES}:docs/b.md`,
+                `${OTHER_RULES}:docs/c.md`,
             ]);
         });
     });

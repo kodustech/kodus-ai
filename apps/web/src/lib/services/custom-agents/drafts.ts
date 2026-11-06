@@ -1315,26 +1315,35 @@ export const mentionedFilesNotFollowed = (
     // back, so a list of any length inherits.
     const LIST_SEPARATOR = /^[\s\x60'"),]*(?:,|\band\b|\bor\b|&)?[\s\x60'"(]*$/;
     const attached: Array<{ repository?: string } | undefined> = [];
+    const inherited: boolean[] = [];
+    // Places that right follow a file belong to it, not to its sentence.
+    const placesOfAFile = new Set<{ at: number }>();
     for (let k = files.length - 1; k >= 0; k--) {
         const { at, end } = files[k];
         const sentence = sentenceOf(at);
         const next = files[k + 1];
-        attached[k] =
-            rightAfter(
-                placesBySentence.get(sentence) ?? [],
-                end,
-                PLACE_RIGHT_AFTER,
-            ) ??
+        const place = rightAfter(
+            placesBySentence.get(sentence) ?? [],
+            end,
+            PLACE_RIGHT_AFTER,
+        );
+        if (place) placesOfAFile.add(place);
+        const directly =
+            place ??
             rightAfter(
                 mentionsBySentence.get(sentence) ?? [],
                 end,
                 MENTION_RIGHT_AFTER,
-            ) ??
-            (next &&
+            );
+        const fromList =
+            !directly &&
+            next &&
             sentenceOf(next.at) === sentence &&
             LIST_SEPARATOR.test(text.slice(end, next.at))
                 ? attached[k + 1]
-                : undefined);
+                : undefined;
+        attached[k] = directly ?? fromList;
+        inherited[k] = !!fromList;
     }
     const offered = new Set<string>();
     const found: MentionedFile[] = [];
@@ -1370,7 +1379,20 @@ export const mentionedFilesNotFollowed = (
             repository = prefixed.repository;
         } else if (own) {
             // What the file is attached to says where it lives: there, or
-            // nowhere when it names no linked repository.
+            // nowhere when it names no linked repository. A list item whose
+            // sentence names another place of its own ("In the pump-rules
+            // repository, see docs/a.md and docs/b.md in irrigation-rules")
+            // has two: nothing is offered rather than a guess.
+            if (
+                inherited[index] &&
+                placesHere.some(
+                    (place) =>
+                        !placesOfAFile.has(place) &&
+                        place.repository !== own.repository,
+                )
+            ) {
+                continue;
+            }
             repository = own.repository;
             if (!repository) continue;
         } else if (placesHere.length) {
