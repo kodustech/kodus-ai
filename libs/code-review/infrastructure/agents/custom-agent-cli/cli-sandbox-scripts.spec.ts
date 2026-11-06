@@ -116,30 +116,51 @@ const fenceStubs = (ip: string) => ({
     setsid: '"$@"',
 });
 
+// Outside the ephemeral range: 49152 on macOS, 32768 by default on Linux,
+// so no `listen(0)` and no outbound connection is ever handed this port.
+const FENCE_PORT_MIN = 20_000;
+const FENCE_PORT_SPAN = 10_000;
+
 /**
- * A port that is free right now, for one run of the fence tests.
+ * A port outside the ephemeral range that nothing is listening on, taken
+ * again before every fence run.
  *
  * The identity's port is a hash of the agent, so every run of the suite
- * computes the same one. A proxy left behind by an interrupted run still
- * holds it, and the `finally` that would have killed it never runs when
- * jest itself is killed: every later run then dies where the fence waits
- * for the proxy (`listen EADDRINUSE` in the proxy's log, then
- * `egress proxy did not start` and exit 4), and passes again the moment
- * the leftover process is found and killed by hand (#2390).
+ * computed the same one: a proxy left behind by an interrupted run still
+ * held it, and the `finally` that would have killed it never runs when
+ * jest itself is killed, so every later run then died where the fence
+ * waits for the proxy (`listen EADDRINUSE` in the proxy's log, then
+ * `egress proxy did not start` and exit 4), until the leftover process
+ * was found and killed by hand (#2390).
  *
- * A port the kernel hands out is by definition one nothing is listening on,
- * so a leftover on the identity's port cannot take this run down with it.
- * The identity keeps its own port in production; only the suite, which has
- * to survive what an earlier run left behind, picks another.
+ * The identity keeps its own port in production. Here a fresh one is
+ * taken before each run because the fence starts its proxy well after
+ * the run begins: taking it once for the whole suite would leave the
+ * port free from the first test to the one that finally binds it, which
+ * is ten `it.each` cases wide. What is left between the probe releasing
+ * the port and the proxy binding it is this test's own set-up and the
+ * script's start-up.
  */
 const freePort = (): Promise<number> =>
     new Promise((resolve, reject) => {
-        const probe = net.createServer();
-        probe.once('error', reject);
-        probe.listen(0, '127.0.0.1', () => {
-            const { port } = probe.address() as net.AddressInfo;
-            probe.close(() => resolve(port));
-        });
+        let attempts = 0;
+        const tryNext = () => {
+            if (++attempts > 50) {
+                reject(new Error('no free port for the fence tests'));
+                return;
+            }
+            const probe = net.createServer();
+            probe.once('error', tryNext);
+            probe.listen(
+                FENCE_PORT_MIN + Math.floor(Math.random() * FENCE_PORT_SPAN),
+                '127.0.0.1',
+                () => {
+                    const { port } = probe.address() as net.AddressInfo;
+                    probe.close(() => resolve(port));
+                },
+            );
+        };
+        tryNext();
     });
 
 describe('network fence script', () => {
@@ -147,7 +168,7 @@ describe('network fence script', () => {
     // The fence is generated with the identity's port: see `freePort`.
     let port = identity.proxyPort;
 
-    beforeAll(async () => {
+    beforeEach(async () => {
         identity.proxyPort = await freePort();
         port = identity.proxyPort;
     });
