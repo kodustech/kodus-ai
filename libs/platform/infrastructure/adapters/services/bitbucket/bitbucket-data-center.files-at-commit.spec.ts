@@ -96,6 +96,50 @@ describe('BitbucketDataCenterService — PR diffs', () => {
         ]);
     });
 
+    it('reports a moved PR file as renamed from its source path', async () => {
+        const get = jest.fn((url: string) => {
+            if (url.endsWith('/pull-requests/7')) {
+                return Promise.resolve({
+                    data: { fromRef: { latestCommit: 'head' } },
+                });
+            }
+            if (url.endsWith('/pull-requests/7/changes')) {
+                return Promise.resolve({
+                    data: {
+                        values: [
+                            {
+                                path: { toString: 'new.ts' },
+                                srcPath: { toString: 'old.ts' },
+                                type: 'MOVE',
+                            },
+                        ],
+                    },
+                });
+            }
+            if (url.endsWith('/pull-requests/7/diff')) {
+                return Promise.resolve({
+                    data: { diffs: [jsonDiff('old.ts', 'new.ts')] },
+                });
+            }
+            return Promise.resolve({ data: 'content' });
+        });
+        const { service } = makeService(get);
+
+        const files = await service.getFilesByPullRequestId({
+            organizationAndTeamData: org,
+            repository,
+            prNumber: 7,
+        });
+
+        expect(files).toEqual([
+            expect.objectContaining({
+                filename: 'new.ts',
+                previous_filename: 'old.ts',
+                status: 'renamed',
+            }),
+        ]);
+    });
+
     describe('getPullRequestFilesAtCommit', () => {
         const read = (service: BitbucketDataCenterService) =>
             service.getPullRequestFilesAtCommit({
