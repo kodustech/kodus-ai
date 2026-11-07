@@ -159,7 +159,8 @@ export interface ReviewWarning {
         | "knowledge"
         | "cli_install_failed"
         | "tool_unavailable"
-        | "config_file";
+        | "config_file"
+        | "patch_line_limit";
     contextWindowTokens: number;
     modelName: string;
     detail?: string;

@@ -18,7 +18,8 @@ export type ReviewWarningKind =
     | 'CALLGRAPH_DROPPED'
     /** All file diffs rendered as hunk headers only. */
     | 'HUNK_HEADERS_ONLY'
-    /** At least one file's diff was truncated to the max-chars cap. */
+    /** At least one file's diff was truncated to the max-chars cap, or cut
+     *  at the patch line limit (MAX_PATCH_LINES). */
     | 'DIFF_TRUNCATED'
     /** Low-signal files (tests/md/css) dropped even in deep mode. */
     | 'LOW_SIGNAL_FILES_DROPPED'
@@ -99,7 +100,9 @@ export type ReviewWarningReason =
     /** A review tool the agent is configured for is missing from the sandbox. */
     | 'tool_unavailable'
     /** The repository's kodus-config.yml holds a key the review does not read. */
-    | 'config_file';
+    | 'config_file'
+    /** A file's patch was longer than the line limit the diff is built with. */
+    | 'patch_line_limit';
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -203,6 +206,21 @@ export function crossRepoUnavailableWarning(params: {
         contextWindowTokens: 0,
         modelName: params.modelName,
         detail: `${params.configured} linked repositories were not read: the review had no repository checkout`,
+    };
+}
+
+/** Files whose line-numbered diff stops at MAX_PATCH_LINES (#2206): without
+ *  this the review reads like it saw the whole file. */
+export function buildPatchLineLimitWarning(params: {
+    filenames: string[];
+    maxLines: number;
+}): ReviewWarning {
+    return {
+        kind: 'DIFF_TRUNCATED',
+        reason: 'patch_line_limit',
+        contextWindowTokens: 0,
+        modelName: '',
+        detail: `${params.filenames.length} file diff(s) cut at ${params.maxLines} lines, the rest was not reviewed: ${params.filenames.join(', ')}`,
     };
 }
 
