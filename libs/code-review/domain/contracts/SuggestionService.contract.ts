@@ -24,13 +24,32 @@ import {
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
-import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import {
+    ISuggestion,
+    ISuggestionByPR,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+
+/** What one implementation check did: why it stopped early, how many
+ *  suggestions it had to check, and what it persisted. */
+export type ImplementationCheckResult = {
+    skipped?: 'NO_SUGGESTIONS' | 'NO_RELEVANT_CHANGES' | 'NO_PATCH';
+    checked: number;
+    persisted: Partial<CodeSuggestion>[];
+};
 
 /**
  * Contract for the service that handles code suggestions lifecycle,
  * including validation, filtering, and prioritization.
  */
 export interface ISuggestionService {
+    checkImplementedSuggestions(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        prNumber: number;
+        changedFiles: Pick<FileChange, 'filename' | 'patch'>[];
+        savedSuggestions: Partial<ISuggestion>[];
+    }): Promise<ImplementationCheckResult>;
+
     /**
      * Validates if suggestions have been implemented by analyzing code patches
      */

@@ -449,6 +449,12 @@ async function main() {
             args: ['evals/pr-summary/run.js', '--model=eval-fake', '--gate'],
         },
         {
+            name: 'implementation-check',
+            result: 'shared',
+            model: true,
+            args: ['evals/implementation-check/run.js', '--model=eval-fake', '--limit=3'],
+        },
+        {
             name: 'reply-addressing',
             result: 'shared',
             model: true,
