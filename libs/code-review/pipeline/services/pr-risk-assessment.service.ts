@@ -199,6 +199,11 @@ export class PrRiskAssessmentService {
             this.logger.warn({
                 message: 'Shared PR risk assessment unavailable',
                 context: this.stageName,
+                metadata: {
+                    ...context.organizationAndTeamData,
+                    prNumber: context.pullRequest.number,
+                    repositoryId: context.repository.id,
+                },
                 error,
             });
             return unavailable('Kody could not assess risk for this PR.');

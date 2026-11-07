@@ -1083,6 +1083,42 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         }
 
         const pathsChanged = !!previousFolders && previousFolders.length > 0;
+        // A parent edit must not invalidate legacy restrictions in its children.
+        const defaults = getDefaultKodusConfigFile();
+        const globalDelta =
+            level === ConfigLevel.GLOBAL
+                ? newDelta
+                : (codeReviewConfigs.configs ?? {});
+        try {
+            resolveReviewSettings(defaults, globalDelta);
+            for (const childRepo of level === ConfigLevel.GLOBAL
+                ? (codeReviewConfigs.repositories ?? [])
+                : repository
+                  ? [repository]
+                  : []) {
+                const repoDelta =
+                    level === ConfigLevel.REPOSITORY
+                        ? newDelta
+                        : (childRepo.configs ?? {});
+                resolveReviewSettings(defaults, globalDelta, repoDelta);
+                for (const childDir of level === ConfigLevel.DIRECTORY
+                    ? directory
+                        ? [directory]
+                        : []
+                    : (childRepo.directories ?? [])) {
+                    resolveReviewSettings(
+                        defaults,
+                        globalDelta,
+                        repoDelta,
+                        level === ConfigLevel.DIRECTORY
+                            ? newDelta
+                            : (childDir.configs ?? {}),
+                    );
+                }
+            }
+        } catch (error) {
+            throw new BadRequestException(error.message);
+        }
         const isSelectionOnlyPayload =
             this.isSelectionOnlyConfigPayload(sanitizedIncomingConfig) &&
             level !== ConfigLevel.GLOBAL &&

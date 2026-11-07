@@ -113,14 +113,20 @@ export async function assessPrRisk(
         );
     }
     const paths = approvalPathsOf(input.files);
-    const relevant = (path: string) =>
-        paths.some(
-            (changed) => changed === path || changed.startsWith(`${path}/`),
-        );
+    const changedAreas = new Set<string>();
+    for (const path of paths) {
+        changedAreas.add(path);
+        for (
+            let end = path.indexOf('/');
+            end !== -1;
+            end = path.indexOf('/', end + 1)
+        )
+            changedAreas.add(path.slice(0, end));
+    }
     const areas = [
         ...(input.areaMap?.files ?? []),
         ...(input.areaMap?.directories ?? []),
-    ].filter((area) => relevant(area.path));
+    ].filter((area) => changedAreas.has(area.path));
     try {
         const raw = await LLM.run({
             schema: prRiskOutputSchema,

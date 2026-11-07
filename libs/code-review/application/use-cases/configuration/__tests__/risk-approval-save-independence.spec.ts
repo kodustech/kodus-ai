@@ -93,6 +93,16 @@ it('does not write inherited policy arrays into untouched directory scopes on an
     expect(dir.configs).not.toHaveProperty('approvalPolicies');
 });
 
+it('refuses a parent policy change that would leave legacy child restrictions ambiguous', async () => {
+    const { run, save } = setup(true);
+    await expect(
+        run({
+            approvalPolicies: [{ id: 'docs', name: 'Docs', enabled: false }],
+        }),
+    ).rejects.toThrow('Legacy approval filters cannot scope named policies');
+    expect(save).not.toHaveBeenCalled();
+});
+
 it('clears the old model-name alias when the canonical scope override is cleared', async () => {
     const { run, save, stored } = setup(true);
     (stored.repositories[0].configs as any).byokModel = 'old-scope-model';

@@ -9,6 +9,7 @@ import {
     Min,
     ArrayMaxSize,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class PreviewPrRiskDto {
     @IsString()
@@ -28,5 +29,6 @@ export class PreviewPrRiskDto {
     @IsOptional()
     @IsArray()
     @ArrayMaxSize(50)
+    @Type(() => Object)
     criteria?: unknown[];
 }

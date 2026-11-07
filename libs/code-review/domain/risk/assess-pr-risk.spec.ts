@@ -101,6 +101,35 @@ it('applies optional guidance to both rename paths and respects exclusions and d
     ).toEqual([]);
 });
 
+it('limits history to changed files and ancestors of both rename paths', async () => {
+    jest.mocked(LLM.run).mockResolvedValue({
+        judgment: 'no-risk',
+        reason: 'Equivalent change.',
+    } as any);
+    const paths = [
+        'src',
+        'src/auth.ts',
+        'docs',
+        'docs/auth.ts',
+        'src/auth',
+        'docs-old',
+        'other.ts',
+    ];
+    await assessPrRisk({
+        ...input,
+        areaMap: {
+            files: paths.map((path) => ({ path, recentEvidence: [] })),
+            directories: [],
+        } as any,
+    });
+    const data = JSON.parse(
+        jest.mocked(LLM.run).mock.calls[0][0].user as string,
+    );
+    expect(
+        data.historicalEvidence.map((area: { path: string }) => area.path),
+    ).toEqual(['src', 'src/auth.ts', 'docs', 'docs/auth.ts']);
+});
+
 it.each([
     undefined,
     {},

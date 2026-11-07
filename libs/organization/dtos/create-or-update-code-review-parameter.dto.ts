@@ -901,6 +901,7 @@ class CodeReviewConfigWithoutLLMProviderDto {
 
     @ValidateIf((_, value) => value !== undefined)
     @IsArray()
+    @Type(() => Object)
     @ValidateBy({
         name: 'approvalPolicies',
         validator: {
@@ -935,6 +936,7 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @ValidateIf((_, value) => value !== undefined)
     @IsArray()
     @ArrayMaxSize(50)
+    @Type(() => Object)
     @ValidateBy({
         name: 'riskCriteria',
         validator: {

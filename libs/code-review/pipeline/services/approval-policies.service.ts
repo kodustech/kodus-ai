@@ -31,13 +31,9 @@ import {
     riskApprovalVeto,
     type RiskAssessmentResult,
 } from '@libs/code-review/domain/risk/risk-assessment';
-import {
-    isByokConfig,
-    LLM_TASK,
-    type NormalizedModel,
-} from '@libs/llm/byok-config';
-import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { routeCodeReviewModel } from '../stages/route-code-review-model';
 
 export type ApprovalEligibilityCache = Record<string, PolicyEligibility>;
 
@@ -187,17 +183,13 @@ export class ApprovalPoliciesService {
                                 OrganizationParametersKey.BYOK_CONFIG,
                                 input.organizationAndTeamData,
                             );
-                        const resolution = resolveTaskSlot(
-                            isByokConfig(stored?.configValue)
-                                ? stored.configValue
-                                : undefined,
-                            input.heavy
-                                ? LLM_TASK.codeReviewHeavy
-                                : LLM_TASK.codeReview,
+                        const resolution = routeCodeReviewModel(
+                            stored?.configValue,
+                            input.config,
+                            input.heavy,
                         );
-                        modelSlot = resolution.slot;
-                        modelAvailable =
-                            !resolution.verdict || !!resolution.verdict.modelId;
+                        modelSlot = resolution.resolvedModelSlot;
+                        modelAvailable = !resolution.blocked;
                     }
                     modelLoaded = true;
                 }

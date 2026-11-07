@@ -534,6 +534,6 @@ async function main() {
 main()
     .then((code) => process.exit(code))
     .catch((error) => {
-        console.error(error);
+        console.error('approval-risk eval failed', { message: error.message });
         process.exit(2);
     });

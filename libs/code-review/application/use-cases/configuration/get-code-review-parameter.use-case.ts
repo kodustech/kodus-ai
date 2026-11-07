@@ -456,6 +456,7 @@ export class GetCodeReviewParameterUseCase {
             scope: { directoryPath?: string; directoryId?: string },
             overrideConfig: boolean,
             logMetadata: Record<string, unknown>,
+            parents: object[],
         ): Promise<{
             file?: KodusConfigFile;
             overlay: KodusConfigFileOverlay;
@@ -501,6 +502,8 @@ export class GetCodeReviewParameterUseCase {
                         ...scope,
                     }),
                 );
+                // Invalid inheritance is a failed overlay, not a missing repository.
+                if (file) migratedReviewLayer(overlay.defaults, parents, file);
 
                 // An empty result is NOT_FOUND, never LOADED. getKodusConfigFile
                 // returns undefined both for a repository that simply has no
@@ -541,7 +544,10 @@ export class GetCodeReviewParameterUseCase {
             }
         };
 
-        const repoFileResult = await readKodusConfigFile({}, repoOverride, {});
+        const repoFileResult = await readKodusConfigFile({}, repoOverride, {}, [
+            overlay.rawGlobal,
+            repo.configs ?? {},
+        ]);
         const parentSources = [overlay.rawGlobal, repo.configs ?? {}];
 
         const formattedRepoConfig = this.formatLevel(
@@ -588,6 +594,11 @@ export class GetCodeReviewParameterUseCase {
                         directoryId: dir.id,
                         directoryPath: dir.folders?.[0]?.path,
                     },
+                    [
+                        ...parentSources,
+                        repoFileResult.file ?? {},
+                        dir.configs ?? {},
+                    ],
                 );
 
                 const formattedDirConfig = this.formatLevel(

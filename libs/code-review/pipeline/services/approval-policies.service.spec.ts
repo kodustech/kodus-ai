@@ -4,6 +4,7 @@ import {
 } from './approval-policies.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { LLM } from '@libs/llm/llm';
+import { routeCodeReviewModel } from '../stages/route-code-review-model';
 
 jest.mock('@libs/llm/llm', () => ({ LLM: { run: jest.fn() } }));
 const policy = {
@@ -112,6 +113,44 @@ it('reuses exact eligibility without another model call or credit check', async 
     expect(LLM.run).not.toHaveBeenCalled();
     expect(permissions.gateKodusCreditsForSlot).not.toHaveBeenCalled();
 });
+
+it.each([{ byokModelId: 'pinned' }, { byokModel: 'gpt-4o-mini' }])(
+    'reuses pipeline eligibility in cron with the same scoped model: %j',
+    async (override) => {
+        const stored = {
+            version: 2,
+            credentials: [
+                { id: 'credential', provider: 'openai', apiKey: 'ciphertext' },
+            ],
+            models: [
+                { id: 'default', credentialId: 'credential', model: 'gpt-4o' },
+                {
+                    id: 'pinned',
+                    credentialId: 'credential',
+                    model: 'gpt-4o-mini',
+                },
+            ],
+            routing: { defaultModelId: 'default' },
+        };
+        org.findByKey.mockResolvedValue({ configValue: stored });
+        const config = { ...request().config, ...override };
+        const routed = routeCodeReviewModel(stored, config);
+        expect(routed.resolvedModelSlot?.model).toBe('gpt-4o-mini');
+        const pipeline = await service().evaluate(
+            request({ config: { ...config, ...routed } }),
+        );
+        expect(pipeline.decision.kind).toBe('approve');
+        jest.mocked(LLM.run).mockClear();
+        permissions.gateKodusCreditsForSlot.mockClear();
+        const cron = await service().evaluate(
+            request({ config, previousEligibility: pipeline.eligibility }),
+        );
+        expect(cron.decision.kind).toBe('approve');
+        expect(cron.eligibility).toEqual(pipeline.eligibility);
+        expect(LLM.run).not.toHaveBeenCalled();
+        expect(permissions.gateKodusCreditsForSlot).not.toHaveBeenCalled();
+    },
+);
 
 it('invalidates cached eligibility when the PR body changes on the same head', async () => {
     const first = await service().evaluate(request());

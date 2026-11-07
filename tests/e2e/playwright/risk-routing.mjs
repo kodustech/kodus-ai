@@ -40,11 +40,14 @@ async function save() {
         response.request().method() === 'POST' && response.url().includes('create-or-update-code-review'));
     await page.getByRole('button', { name: 'Save settings', exact: true }).click();
     const response = await responsePromise;
-    assert.ok(response.ok(), `Settings save returned HTTP ${response.status()}.`);
     const sent = response.request().postDataJSON()?.configValue || {};
     saves.push({ fields: Object.keys(sent), riskAssessmentActive: sent.riskAssessmentActive,
         criteriaCount: sent.riskCriteria?.length, policyCount: sent.approvalPolicies?.length,
         routing: sent.riskReviewRouting });
+    if (!response.ok()) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(`Settings save returned HTTP ${response.status()}: ${JSON.stringify(body.message ?? body.error ?? 'Request rejected').slice(0, 1200)}`);
+    }
     await page.getByText('Settings saved', { exact: true }).last().waitFor();
 }
 async function openMenu(name, heading = name) {

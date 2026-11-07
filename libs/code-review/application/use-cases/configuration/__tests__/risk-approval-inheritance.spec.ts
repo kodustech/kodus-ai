@@ -141,3 +141,24 @@ it.each([
         ).toBe(effective.riskAssessmentActive);
     },
 );
+
+it('keeps the repository visible when its YAML conflicts with inherited named policies', async () => {
+    const { get } = build(
+        { approvalLabels: ['ready'] },
+        {
+            approvalPolicies: [{ id: 'docs', name: 'Docs', enabled: true }],
+        },
+    );
+    const view = await get.execute(
+        { organization: { uuid: 'org' } } as any,
+        'team',
+        { skipAuthorization: true, includeFileOverlay: true },
+    );
+    expect(view.configValue.repositories).toHaveLength(1);
+    expect(view.configValue.repositories[0].kodusConfigFile).toMatchObject({
+        status: 'unavailable',
+        error: expect.stringContaining(
+            'Legacy approval filters cannot scope named policies',
+        ),
+    });
+});

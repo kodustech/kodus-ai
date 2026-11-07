@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { ValidationPipe } from '@nestjs/common';
 
 import { CreateOrUpdateCodeReviewParameterDto } from './create-or-update-code-review-parameter.dto';
 
@@ -79,6 +80,38 @@ describe('independent risk configuration validation', () => {
             }),
             { whitelist: true, forbidNonWhitelisted: true },
         );
+
+    it('preserves risk criteria and policies through the API implicit-conversion pipe', async () => {
+        const configValue = {
+            riskAssessmentActive: true,
+            riskCriteria: [criterion],
+            approvalPolicies: [{ id: 'docs', name: 'Docs', enabled: false }],
+        };
+        const pipe = new ValidationPipe({
+            transform: true,
+            whitelist: true,
+            forbidNonWhitelisted: true,
+            transformOptions: { enableImplicitConversion: true },
+        });
+        const result = await pipe
+            .transform(
+                {
+                    organizationAndTeamData: { teamId: 'team-1' },
+                    configValue,
+                },
+                {
+                    type: 'body',
+                    metatype: CreateOrUpdateCodeReviewParameterDto,
+                },
+            )
+            .catch((error) => {
+                throw new Error(JSON.stringify(error.getResponse()));
+            });
+        expect(result.configValue).toMatchObject(configValue);
+        expect(JSON.parse(JSON.stringify(result.configValue))).toEqual(
+            configValue,
+        );
+    });
 
     it('allows risk enabled with approval disabled and criteria omitted', async () => {
         expect(
