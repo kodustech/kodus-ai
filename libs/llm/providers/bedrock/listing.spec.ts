@@ -192,4 +192,15 @@ describe('bedrockModelListing', () => {
             'us.anthropic.claude-3-5-haiku-20241022-v1:0',
         );
     });
+
+    it('carries a curated fallback that EXCLUDES the EOL Sonnet 4, 3.7 Sonnet and 3.5 Sonnet v2 profiles', () => {
+        const ids = (listing().fallbackModels ?? []).map((m) => m.id);
+        expect(ids).not.toContain('us.anthropic.claude-sonnet-4-20250514-v1:0');
+        expect(ids).not.toContain(
+            'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
+        );
+        expect(ids).not.toContain(
+            'us.anthropic.claude-3-5-sonnet-20241022-v2:0',
+        );
+    });
 });
