@@ -259,6 +259,10 @@ function scanLastJson(
 ): Record<string, unknown> | unknown[] | null {
     const wanted = new Set(keys.map(normalizeKeyName));
     let found: Record<string, unknown> | unknown[] | null = null;
+    // End of the last JSON object passed over without a wanted key: an array
+    // inside it (a provider envelope's `choices`) is that object's data, not
+    // the answer, while an object carrying a key inside it still is.
+    let insideUntil = -1;
     for (let i = 0; i < text.length; i++) {
         const ch = text[i];
         if (ch !== '{' && !(arrays && ch === '[')) continue;
@@ -272,9 +276,9 @@ function scanLastJson(
             continue; // prose/code, not JSON — keep scanning (incl. nested).
         }
         if (Array.isArray(parsed)) {
-            // A list answer: empty, or every entry an object. `[1]` inside a
-            // quoted object is not one.
+            // A list answer: top level, and empty or every entry an object.
             if (
+                i < insideUntil ||
                 !parsed.every(
                     (e) => !!e && typeof e === 'object' && !Array.isArray(e),
                 )
@@ -290,6 +294,7 @@ function scanLastJson(
         }
         const obj = parsed as Record<string, unknown>;
         if (!Object.keys(obj).some((k) => wanted.has(normalizeKeyName(k)))) {
+            insideUntil = Math.max(insideUntil, i + slice.length);
             continue; // maybe a wrapper — let the scan reach the inner object.
         }
         if (accept(obj)) found = obj;
