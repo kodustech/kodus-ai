@@ -896,6 +896,59 @@ describe("mentionedFilesNotFollowed", () => {
             ).toEqual(["acme/\u0130stanbul:docs/a.md"]);
         });
 
+        it("does not cut a longer filename down to a rule document", () => {
+            expect(placed("Inspect docs/conventions.md.template.", [])).toEqual(
+                [],
+            );
+            expect(placed("Inspect `docs/conventions.md.erb`.", [])).toEqual(
+                [],
+            );
+            expect(placed("Inspect docs/rules.mdc.bak first.", [])).toEqual([]);
+            expect(placed("Inspect docs/guide.mdx.ts now.", [])).toEqual([]);
+        });
+
+        it("offers nothing when the other side of a choice is a named place, the reviewed repository or a subgroup path", () => {
+            expect(
+                placed(
+                    `Read docs/conventions.md in ${RULES} or the policies repository.`,
+                    [RULES],
+                ),
+            ).toEqual([]);
+            expect(
+                placed(
+                    `Read docs/conventions.md in this repository or ${RULES}.`,
+                    [RULES],
+                ),
+            ).toEqual([]);
+            expect(
+                placed(
+                    `Read docs/conventions.md in ${RULES} or external/group/policies.`,
+                    [RULES],
+                ),
+            ).toEqual([]);
+        });
+
+        it("does not read a linked repository inside another namespace", () => {
+            expect(
+                placed(`Read docs/conventions.md in other/${RULES}.`, [RULES]),
+            ).toEqual([]);
+            expect(
+                placed(
+                    `Read docs/conventions.md in https://gitlab.com/other/${RULES}.`,
+                    [RULES],
+                ),
+            ).toEqual([]);
+        });
+
+        it("places a file by the name right before the repository noun, not a modifier", () => {
+            expect(
+                placed(
+                    "Read docs/conventions.md in our team irrigation-rules repository.",
+                    ["greenhouse/team", RULES],
+                ),
+            ).toEqual([`${RULES}:docs/conventions.md`]);
+        });
+
         it("reads a Portuguese list as it reads an English one", () => {
             expect(
                 placed(

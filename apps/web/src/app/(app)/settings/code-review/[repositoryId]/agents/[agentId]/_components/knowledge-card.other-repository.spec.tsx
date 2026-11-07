@@ -191,6 +191,53 @@ describe("AgentKnowledgeField with another repository", () => {
         ]);
     });
 
+    it("does not point out a file the agent already follows from the level it inherits (#2384)", () => {
+        field([], jest.fn(), {
+            instructions: "Follow docs/conventions.md.",
+            readKnowledge: [
+                {
+                    path: "docs/conventions.md",
+                    kind: "doc",
+                    linkedTo: [
+                        { agentId: "valves" },
+                        { agentId: "pumps" },
+                        "main-review",
+                    ],
+                },
+            ],
+        });
+
+        expect(
+            screen.queryByRole("button", { name: "Follow it" }),
+        ).not.toBeInTheDocument();
+    });
+
+    it("keeps who already follows an inherited file when following it here (#2384)", () => {
+        const onChange = field([], jest.fn(), {
+            instructions: "Follow docs/conventions.md.",
+            readKnowledge: [
+                {
+                    path: "docs/conventions.md",
+                    kind: "doc",
+                    linkedTo: [{ agentId: "pumps" }, "main-review"],
+                },
+            ],
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: "Follow it" }));
+        expect(onChange).toHaveBeenCalledWith([
+            {
+                path: "docs/conventions.md",
+                kind: "doc",
+                linkedTo: [
+                    { agentId: "pumps" },
+                    "main-review",
+                    { agentId: "valves" },
+                ],
+            },
+        ]);
+    });
+
     it("names where a followed item lives and stops pointing out its repository", () => {
         field([
             {

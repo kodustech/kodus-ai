@@ -589,13 +589,17 @@ export const AgentKnowledgeField = ({
         item: Pick<KnowledgeItem, "path" | "kind" | "repository">,
     ) => reportOf(item)?.description ?? candidateOf(item)?.description;
     const linkedRepositories = resolved?.linkedRepositories ?? [];
+    // What the agent follows is what a review here reads: at a directory,
+    // what it inherits too, so a file it already follows from the
+    // repository is not pointed out again.
+    const reviewKnowledge = readKnowledge ?? knowledge;
     // A file the instructions name comes first: one click follows exactly
     // it, so its repository's broader "browse" note would say the same twice.
     const mentionedFiles = instructions
         ? mentionedFilesNotFollowed(
               instructions,
               linkedRepositories,
-              knowledge,
+              reviewKnowledge,
               agentId,
           )
         : [];
@@ -604,7 +608,7 @@ export const AgentKnowledgeField = ({
             ? mentionedButNotFollowed(
                   instructions,
                   linkedRepositories,
-                  knowledge,
+                  reviewKnowledge,
                   agentId,
               )
             : []
@@ -614,14 +618,27 @@ export const AgentKnowledgeField = ({
                 (file) => repositoryKey(file) === repository.toLowerCase(),
             ),
     );
+    // At a directory, an item written here replaces the inherited one with
+    // its path: the inherited item comes along whole, so the agents and the
+    // main review that follow it keep following it here.
     const followMentioned = (file: MentionedFile) => {
         const ref = file.repository
-            ? pinnedRef(readKnowledge ?? knowledge, file.repository)
+            ? pinnedRef(reviewKnowledge, file.repository)
             : undefined;
-        follow({ ...file, ...(ref && { ref }) }, true);
+        const inherited = knowledge.some((own) => sameKnowledge(own, file))
+            ? undefined
+            : readKnowledge?.find((item) => sameKnowledge(item, file));
+        onChange(
+            setAgentKnowledge(
+                inherited ? [...knowledge, inherited] : knowledge,
+                { ...file, ...(ref && { ref }) },
+                agentId,
+                true,
+            ),
+        );
     };
     const browse = (repository: string) => {
-        const ref = pinnedRef(readKnowledge ?? knowledge, repository);
+        const ref = pinnedRef(reviewKnowledge, repository);
         setSource({ repository, ...(ref && { ref }) });
         setAdding(true);
     };

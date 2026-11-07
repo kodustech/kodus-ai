@@ -17,9 +17,11 @@ import type { KnowledgeItem } from "./types";
 export type MentionedFile = Pick<KnowledgeItem, "path" | "kind" | "repository">;
 
 /** A text file named in prose: `rules/x.mdc`, `CLAUDE.md`, never a URL or a
- *  code file (instructions name code to look at, not rules to follow). */
+ *  code file (instructions name code to look at, not rules to follow). The
+ *  name ends at the extension: a dot after it ends the sentence, never the
+ *  name ("docs/a.md.template" is another file, not docs/a.md). */
 const MENTIONED_FILE =
-    /(?:^|[\s`'"([<])((?:[\w.-]+\/)*[\w.-]+\.(?:mdc|mdx|md|markdown))(?=$|[\s`'".,;:!?)\]>])/gi;
+    /(?:^|[\s`'"([<])((?:[\w.-]+\/)*[\w.-]+\.(?:mdc|mdx|md|markdown))(?=$|[\s`'",;:!?)\]>]|\.(?![\w-]))/gi;
 
 /** Files a repository has that are never a rule to follow. */
 const NOT_A_RULE_FILE =
@@ -32,16 +34,21 @@ const NOT_A_RULE_FILE =
  *  is about something else ("use the repository pattern"). */
 const SENTENCE_END = /[.;!?](?=\s|$)|\r?\n[ \t]*\r?\n/g;
 
+/** A path segment that turns a repository's URL into a deeper link (an
+ *  issue, a merge request, a file): "acme/app/issues/12" is no repository,
+ *  "acme/group/rules" (a GitLab subgroup) is one. */
+const DEEPER_LINK = String.raw`(?:issues|pulls?|merge_requests|-|tree|blob|commits?|wiki|discussions|compare|releases|actions)\/`;
+
 /** A phrase that names where a file lives: a named repository after "in",
  *  "from"… ("in the pump-rules repository", "from our rules repo"), the
  *  Portuguese "no repositório X", "repository owner/name", or an
  *  `owner/name` (a URL too) after "in", "from"… ("in acme/rules"). */
 const REPOSITORY_PLACE = new RegExp(
     [
-        String.raw`\b(?:in|from|on|at|inside|under)\s+(?:(?:the|our|a|their|its|this)\s+)?(?:(?!(?:the|our|a|their|its|this)\b)[\x60'"]?[\w./-]+[\x60'"]?\s+){1,4}(?:repo|repository)\b`,
+        String.raw`\b(?:in|from|on|at|inside|under)\s+(?:(?:the|our|a|their|its|this)\s+)?(?:(?!(?:the|our|a|their|its|this)\b)[\x60'"]?[\w./-]+(?:'s)?[\x60'"]?\s+){1,4}(?:repo|repository)\b`,
         String.raw`\b(?:no|na|do|da|em)\s+(?:nosso\s+|o\s+)?reposit[óo]rio\s+[\x60'"]?[\w./-]+`,
         String.raw`\b(?:repo|repository|reposit[óo]rio)\s+[\x60'"]?[\w.-]+\/[\w./-]+`,
-        String.raw`\b(?:in|from|on|at|inside|under)\s+(?:the\s+)?[\x60'"]?(?:https?:\/\/[\w.-]+\/)?[\w.-]+\/[\w.-]+(?![\w/-])`,
+        String.raw`\b(?:in|from|on|at|inside|under)\s+(?:the\s+)?[\x60'"]?(?:https?:\/\/[\w.-]+\/)?[\w.-]+\/(?:(?!${DEEPER_LINK})[\w.-]+\/)*[\w.-]+(?![\w/-])`,
     ].join("|"),
     "gi",
 );
@@ -66,7 +73,7 @@ const COMPARED_TO = /^\s+(?:as|like|que)\s+(?:(?:the|o|a)\s+)?[\x60'"]?/;
  *  not another. */
 const NAMES_A_REPOSITORY = new RegExp(
     [
-        String.raw`^(?:https?:\/\/[\w.-]+\/)?[\w-][\w.-]*\/[\w.-]*[\w-](?![\w/-])(?!\.[\w-])`,
+        String.raw`^(?:https?:\/\/[\w.-]+\/)?[\w-][\w.-]*(?:\/(?!${DEEPER_LINK})[\w.-]+)*\/[\w.-]*[\w-](?![\w/-])(?!\.[\w-])`,
         String.raw`^(?!(?:this|the\s+same)\s+(?:repo|repository)\b)(?:(?:our|their|its)\s+)?(?:[\x60'"]?[\w/-]+(?:[./][\w/-]+)*(?:'s)?[\x60'"]?\s+){1,4}(?:repo|repository)\b`,
         String.raw`^reposit[óo]rio\s+[\x60'"]?[\w./-]+`,
     ].join("|"),
@@ -74,10 +81,24 @@ const NAMES_A_REPOSITORY = new RegExp(
 );
 
 /** An owner/name the instructions write that is not a linked repository
- *  (a URL to it too): it can be the other side of a choice ("in acme/rules
- *  or other/policies"). A deeper path (an issue link) is not one. */
-const OWNER_NAME =
-    /(?:^|[^\w./:-])((?:https?:\/\/[\w.-]+\/)?[\w-][\w.-]*\/[\w.-]*[\w-])(?![\w/-])(?!\.[\w-])/g;
+ *  (a URL to it too, a GitLab subgroup path): it can be the other side of a
+ *  choice ("in acme/rules or other/policies"). */
+const OWNER_NAME = new RegExp(
+    String.raw`(?:^|[^\w./:-])((?:https?:\/\/[\w.-]+\/)?[\w-][\w.-]*(?:\/(?!${DEEPER_LINK})[\w.-]+)*\/[\w.-]*[\w-])(?![\w/-])(?!\.[\w-])`,
+    "g",
+);
+
+/** A repository named by a word, linked or not, that can be the other side
+ *  of a choice: the word before its noun ("the policies repository", "this
+ *  repository", "neste repositório"), or after the Portuguese noun ("no
+ *  repositório policies"). */
+const NAMED_REPOSITORY =
+    /(?<![\w./-])([\w][\w.-]*)(?:'s)?[\x60'"]?\s+(?:repo|repository|reposit[óo]rio)\b|\b(?:no|na|do|da|em|o)\s+reposit[óo]rio\s+[\x60'"]?([\w][\w.-]*[\w])(?![\w/-])/g;
+
+/** Words before a repository noun that name none: "the repository", "in
+ *  our repo". */
+const NOT_A_NAME =
+    /^(?:the|a|an|our|their|its|your|my|of|in|from|on|at|inside|under|to|for|with|and|or|o|um|uma|nosso|nossa|no|na|do|da|em|de|e|ou)$/;
 
 /** The noun a place phrase puts after or before a name ("repository"). */
 const REPOSITORY_NOUN =
@@ -87,7 +108,7 @@ const REPOSITORY_NOUN =
  *  b", "a (or b)", "a e b", and with the nouns dropped (REPOSITORY_NOUN),
  *  "the a repository or in the b repository". */
 const REPOSITORIES_JOINED =
-    /^[\s\x60'"(]*(?:,\s*(?:(?:and\/or|e\/ou|and|or|&|e|ou)\s+)?|(?:and\/or|e\/ou|and|or|&|e|ou)\s+)(?:(?:in|from|on|at|inside|under|no|na|do|da|em)\s+)?(?:(?:the|o|a)\s+)?[\x60'"]?$/;
+    /^[\s\x60'"(]*(?:,\s*(?:(?:and\/or|e\/ou|and|or|&|e|ou)\s+)?|(?:and\/or|e\/ou|and|or|&|e|ou)\s+)(?:(?:in|from|on|at|inside|under|no|na|do|da|em)\s+)?(?:(?:the|our|their|o|a|nosso|nossa)\s+)?[\x60'"]?$/;
 
 /** A conjunction that opens a clause with its own place: "and in the",
  *  "or from", "e no". Without the preposition ("a or b") it is a choice. */
@@ -183,10 +204,16 @@ const read = (instructions: string): Reading => {
     return { text, files, ends, sentenceOf };
 };
 
+/** What may come right before a full name in a URL: its host
+ *  ("https://gitlab.com/", "github.com/"). */
+const URL_HOST = String.raw`https?:\/\/[a-z0-9.-]+(?::\d+)?\/|(?<![a-z0-9_./-])(?:[a-z0-9-]+\.)+[a-z0-9-]+(?::\d+)?\/`;
+
 /**
  * The linked repositories the text names, in text order. A full name may
- * follow a `/` (a URL); a bare name may not: in "other/irrigation-rules" it
- * is another owner's repository, not an alias of the linked
+ * follow a URL's host, never another path segment: "other/acme/rules" is
+ * another namespace's repository, not the linked `acme/rules`. Nor may a
+ * bare name follow a `/`: in "other/irrigation-rules" it is another owner's
+ * repository, not an alias of the linked
  * `greenhouse/irrigation-rules`. A dot ends a name only at the end of a
  * sentence: "acme/rules.v2" is another repository. A name inside a file's
  * path names nothing ("rules/api.md" is not `acme/rules`). Two linked
@@ -202,7 +229,7 @@ const findMentions = (
             const name = full.split("/").pop() ?? full;
             return [
                 new RegExp(
-                    `(^|[^a-z0-9_.-])${escapeRegExp(full)}(?=$|[^a-z0-9_.-]|\\.(?![a-z0-9_-]))`,
+                    `(^|[^a-z0-9_./-]|${URL_HOST})${escapeRegExp(full)}(?=$|[^a-z0-9_.-]|\\.(?![a-z0-9_-]))`,
                     "g",
                 ),
                 new RegExp(
@@ -245,29 +272,44 @@ const findMentions = (
 /**
  * Marks as ambiguous every linked mention joined to another repository into
  * a choice ("irrigation-rules or pump-rules", "in acme/a and acme/b", "in the
- * a repository or the b repository", "in acme/rules or other/policies" with
- * the other side not linked): neither one places a file. Unless the second
- * opens a clause of its own, its preposition repeated, between a file the
- * first one places and a file it places itself: "docs/a.md in the pump-rules
- * repository, and in the irrigation-rules repository read docs/b.md".
+ * a repository or the b repository"), the other side linked or not ("in
+ * acme/rules or other/policies", "or external/group/policies", "or the
+ * policies repository", "in this repository or acme/rules"): none of them
+ * places a file. Unless the second opens a clause of its own, its
+ * preposition repeated, between a file the first one places and a file it
+ * places itself: "docs/a.md in the pump-rules repository, and in the
+ * irrigation-rules repository read docs/b.md". Returns the other sides
+ * that are not linked and are in a choice: a local place among them
+ * ("in this repository or acme/rules") places nothing either.
  */
 const markChoices = (
     { text, files, sentenceOf }: Reading,
     mentions: Mention[],
-): void => {
-    // The other side a choice can offer: an owner/name that is not linked.
-    // Matches, files and mentions are all in text order and neither files
-    // nor mentions overlap one another: one cursor over each.
+): Span[] => {
+    // The other side a choice can offer: a repository that is not linked,
+    // by its owner/name or by a word ("the policies repository", "this
+    // repository"). Sorted into text order, then files and mentions are
+    // skipped with one cursor each: neither overlaps one another.
+    const named = [
+        ...[...text.matchAll(OWNER_NAME)].map((match) => ({
+            name: match[1],
+            at: (match.index ?? 0) + match[0].length - match[1].length,
+        })),
+        ...[...text.matchAll(NAMED_REPOSITORY)].flatMap((match) => {
+            const name = match[1] ?? match[2];
+            if (NOT_A_NAME.test(name)) return [];
+            return [{ name, at: (match.index ?? 0) + match[0].indexOf(name) }];
+        }),
+    ].sort((a, b) => a.at - b.at);
     let overlapping = 0;
     let containing = 0;
-    const unlinked = [...text.matchAll(OWNER_NAME)].flatMap((match) => {
-        const at = (match.index ?? 0) + match[0].length - match[1].length;
-        const end = at + match[1].length;
-        if (/^(?:and\/or|e\/ou)$/.test(match[1])) return [];
+    const unlinked = named.flatMap(({ name, at }) => {
+        const end = at + name.length;
+        if (/^(?:and\/or|e\/ou)$/.test(name)) return [];
         while (containing < files.length && files[containing].end <= at) {
             containing++;
         }
-        if (files[containing] && files[containing].at <= at) return [];
+        if (files[containing] && files[containing].at < end) return [];
         while (
             overlapping < mentions.length &&
             mentions[overlapping].end <= at
@@ -275,9 +317,7 @@ const markChoices = (
             overlapping++;
         }
         if (mentions[overlapping] && mentions[overlapping].at < end) return [];
-        return [
-            { repository: `unlinked:${match[1]}`, at, end, ambiguous: false },
-        ];
+        return [{ repository: `unlinked:${name}`, at, end, ambiguous: false }];
     });
     const candidates = [...mentions, ...unlinked].sort((a, b) => a.at - b.at);
     // Whether each candidate closes a clause with a file right before it, and
@@ -323,50 +363,69 @@ const markChoices = (
         mention.ambiguous = true;
         next.ambiguous = true;
     }
+    return unlinked.filter((candidate) => candidate.ambiguous);
+};
+
+/**
+ * The linked repository a phrase names by the name at its end: the one right
+ * before its noun ("our team irrigation-rules repository" is
+ * irrigation-rules, not team; "our team's rules repository" is not team's),
+ * or the whole name ("acme/rules", its URL, "repositório acme/rules"). None
+ * when that name is not linked or is ambiguous.
+ */
+const nameAtTheEnd = (
+    text: string,
+    mentions: Mention[],
+    from: number,
+    to: number,
+) => {
+    const head = mentions[firstFrom(mentions, to) - 1];
+    return head &&
+        head.at >= from &&
+        !head.ambiguous &&
+        /^[\s\x60'".]*(?:repo|repository)?$/.test(text.slice(head.end, to))
+        ? head.repository
+        : undefined;
 };
 
 /**
  * The places that name the reviewed repository itself ("in this
  * repository"). Not one a linked name follows ("in the repository
- * irrigation-rules"), and not a comparison that names a repository: "in the
- * same repo as acme/rules" is acme/rules, "as other/policies" or "as the
- * pump-rules repository" (not linked) nowhere. "The same repo as before"
- * names none: still the reviewed one.
+ * irrigation-rules"), not one that is a side of a choice ("in this
+ * repository or acme/rules" places nothing), and not a comparison that names
+ * a repository: "in the same repo as acme/rules" is acme/rules, "as
+ * other/policies" or "as the pump-rules repository" (not linked) nowhere.
+ * "The same repo as before" names none: still the reviewed one.
  */
 const findLocalPlaces = (
     { text, ends, sentenceOf }: Reading,
     mentions: Mention[],
+    choiceSides: Span[],
 ): Array<Place & Span> =>
     [...text.matchAll(LOCAL_PLACE)].flatMap((place): Array<Place & Span> => {
         const at = place.index ?? 0;
         const end = at + place[0].length;
         const named = mentions[firstFrom(mentions, end)];
         if (named && /^[\s\x60'"]*$/.test(text.slice(end, named.at))) return [];
+        const side = choiceSides[firstFrom(choiceSides, at)];
+        if (side && side.at < end) return [{ at, end, repository: undefined }];
         const compared = COMPARED_TO.exec(text.slice(end));
         if (compared) {
             const after = end + compared[0].length;
             // A phrase naming a repository, read within its own sentence ("as
-            // before. Follow every repository rule." names none). The one
-            // compared to is the name at its head: right before its noun
-            // ("our team's irrigation-rules repository" is irrigation-rules,
-            // not team), or the whole name ("acme/rules", its URL,
-            // "repositório acme/rules"). Not linked: nowhere.
+            // before. Follow every repository rule." names none), names the
+            // repository at its end. Not linked: nowhere.
             const sentenceEnd = ends[sentenceOf(after)] ?? text.length;
             const naming = NAMES_A_REPOSITORY.exec(
                 text.slice(after, sentenceEnd),
             );
             if (naming) {
-                const phraseEnd = after + naming[0].length;
-                const head = mentions[firstFrom(mentions, phraseEnd) - 1];
-                const repository =
-                    head &&
-                    head.at >= after &&
-                    !head.ambiguous &&
-                    /^[\s\x60'"]*(?:repo|repository)?$/.test(
-                        text.slice(head.end, phraseEnd),
-                    )
-                        ? head.repository
-                        : undefined;
+                const repository = nameAtTheEnd(
+                    text,
+                    mentions,
+                    after,
+                    after + naming[0].length,
+                );
                 return [{ at, end, repository }];
             }
             // A linked name right after the connector ("as irrigation-rules").
@@ -385,15 +444,19 @@ const findLocalPlaces = (
 
 /**
  * Every place phrase, with the linked repository it names if any, and the
- * local places. A phrase over a file's own path is the file, not a place
- * ("the rules in docs/rules.md"). One that crosses a sentence end places
- * nothing ("in full. Pump repository notes follow."), unless its own
- * sentence already names an owner/name place ("in acme/rules. Repository
- * notes follow.").
+ * local places. A phrase names the repository at its end, as a comparison
+ * does. A phrase over a file's own path is the file, not a place ("the rules
+ * in docs/rules.md"). One that crosses a sentence end places nothing ("in
+ * full. Pump repository notes follow."), unless its own sentence already
+ * names an owner/name place ("in acme/rules. Repository notes follow.").
  */
-const findPlaces = (reading: Reading, mentions: Mention[]): Place[] => {
+const findPlaces = (
+    reading: Reading,
+    mentions: Mention[],
+    choiceSides: Span[],
+): Place[] => {
     const { text, files, ends, sentenceOf } = reading;
-    const localPlaces = findLocalPlaces(reading, mentions);
+    const localPlaces = findLocalPlaces(reading, mentions, choiceSides);
     // Local places and files are in text order like the place phrases: one
     // cursor over each.
     let local = 0;
@@ -413,12 +476,7 @@ const findPlaces = (reading: Reading, mentions: Mention[]): Place[] => {
                 if (!text.slice(at, ends[sentence]).includes("/")) return [];
                 end = ends[sentence];
             }
-            const named = mentions[firstFrom(mentions, at)];
-            const repository =
-                named && named.at < end && !named.ambiguous
-                    ? named.repository
-                    : undefined;
-            return [{ at, repository }];
+            return [{ at, repository: nameAtTheEnd(text, mentions, at, end) }];
         },
     );
     return [
@@ -528,9 +586,9 @@ export const mentionedFilesNotFollowed = (
     const reading = read(instructions);
     const { files, sentenceOf } = reading;
     const mentions = findMentions(reading, repositories);
-    markChoices(reading, mentions);
+    const choiceSides = markChoices(reading, mentions);
     const placesBySentence = bySentence(
-        findPlaces(reading, mentions),
+        findPlaces(reading, mentions, choiceSides),
         sentenceOf,
     );
     const mentionsBySentence = bySentence(mentions, sentenceOf);
