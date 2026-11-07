@@ -22,7 +22,7 @@ export function prRiskConfigurationKey(input: {
     return createHash('sha256')
         .update(
             JSON.stringify({
-                version: 1,
+                version: 2,
                 criteria: riskCriteriaSchema.parse(input.criteria ?? []),
                 language: input.language ?? 'en-US',
                 model: identity(input.modelSlot),
