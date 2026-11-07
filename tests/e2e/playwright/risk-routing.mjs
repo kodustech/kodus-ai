@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright';
+import { expect } from 'playwright/test';
 
 const WEB = process.env.KODUS_WEB_URL?.replace(/\/$/, '');
 const EMAIL = process.env.TEST_USER_EMAIL || 'preview@kodus.io';
@@ -102,7 +103,7 @@ try {
     await save();
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByText(criterionName, { exact: true }).waitFor();
-    assert.equal(await riskToggle.getAttribute('aria-checked'), 'true');
+    await expect(riskToggle).toHaveAttribute('aria-checked', 'true');
     pass('Risk and optional criteria persist through the real API');
     await screenshot('risk');
     const previewButton = page.getByRole('button', { name: 'Preview on a PR', exact: true });
@@ -119,7 +120,7 @@ try {
     await chooseMode('Risk found', 'Balanced');
     await save();
     await page.reload({ waitUntil: 'domcontentloaded' });
-    assert.match(await page.getByRole('combobox', { name: 'Risk found', exact: true }).innerText(), /Balanced/);
+    await expect(page.getByRole('combobox', { name: 'Risk found', exact: true })).toContainText('Balanced', { timeout: 20_000 });
     pass('Risk routing and model defaults render and persist');
     await screenshot('routing');
 
@@ -135,16 +136,16 @@ try {
     await policyDialog.getByLabel('Name', { exact: true }).fill(policyName);
     await policyDialog.getByText('All clean PRs', { exact: true }).waitFor();
     await policyDialog.getByRole('button', { name: 'Apply', exact: true }).click();
-    assert.equal(await page.getByRole('switch', { name: `Enable ${policyName}`, exact: true }).getAttribute('aria-checked'), 'false');
+    await expect(page.getByRole('switch', { name: `Enable ${policyName}`, exact: true })).toHaveAttribute('aria-checked', 'false');
     await save();
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', { name: policyName, exact: true }).waitFor();
-    assert.equal(await page.getByRole('switch', { name: `Enable ${policyName}`, exact: true }).getAttribute('aria-checked'), 'false');
+    await expect(page.getByRole('switch', { name: `Enable ${policyName}`, exact: true })).toHaveAttribute('aria-checked', 'false');
     pass('Empty policy explicitly covers clean PRs and starts disabled');
     await toggle(approval, false);
     await save();
     await openMenu('Risk assessment');
-    assert.equal(await riskToggle.getAttribute('aria-checked'), 'true');
+    await expect(riskToggle).toHaveAttribute('aria-checked', 'true');
     pass('Turning approval off preserves independent risk');
     await toggle(riskToggle, false);
     await save();
