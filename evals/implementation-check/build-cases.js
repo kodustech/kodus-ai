@@ -24,7 +24,10 @@ function fileAtHead(dataset, file) {
 
 function applyEdits(content, edits, where) {
     return edits.reduce((text, [find, replace]) => {
-        if (typeof text !== 'string' || typeof find !== 'string') throw new Error(`${where}: an edit is not text`);
+        // Checking `text` too is what CodeQL's type-confusion query recognizes.
+        if (typeof text !== 'string' || typeof find !== 'string' || typeof replace !== 'string') {
+            throw new Error(`${where}: an edit is not text`);
+        }
         const at = text.indexOf(find);
         if (at === -1 || text.indexOf(find, at + 1) !== -1) {
             throw new Error(`${where}: the edit must match exactly once: ${JSON.stringify(find.slice(0, 80))}`);
