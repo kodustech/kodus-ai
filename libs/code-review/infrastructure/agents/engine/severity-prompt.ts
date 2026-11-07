@@ -249,5 +249,18 @@ export function parseSeverityResponse(text: string): {
 }
 
 function isResponseExample(parsed: Record<string, unknown>): boolean {
-    return JSON.stringify(parsed) === JSON.stringify(JSON.parse(RESPONSE_EXAMPLE));
+    return canonical(parsed) === canonical(JSON.parse(RESPONSE_EXAMPLE));
+}
+
+/** JSON with every object's keys sorted: equal for any property order. */
+function canonical(value: unknown): string {
+    if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+    if (value && typeof value === 'object') {
+        const obj = value as Record<string, unknown>;
+        return `{${Object.keys(obj)
+            .sort()
+            .map((k) => `${JSON.stringify(k)}:${canonical(obj[k])}`)
+            .join(',')}}`;
+    }
+    return JSON.stringify(value);
 }
