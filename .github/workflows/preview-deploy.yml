@@ -62,6 +62,11 @@ on:
                 required: false
                 default: false
                 type: boolean
+            risk_routing_smoke:
+                description: Test Risk, Routing and General through the full web app
+                required: false
+                default: false
+                type: boolean
             provider_approval_smoke:
                 description: Test conditional approval on GitLab, Bitbucket and Azure QA repos
                 required: false
@@ -429,6 +434,37 @@ jobs:
                     $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
                       "BETA_FEATURES=true node evals/wiring-smoke.js --only=approval-risk"
                   done
+
+            - name: Risk and Routing full-app UI evidence
+              if: steps.up.outcome == 'success' && inputs.risk_routing_smoke == true
+              env:
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
+                  URLS: ${{ steps.up.outputs.urls }}
+                  TEST_USER_EMAIL: preview@kodus.io
+                  TEST_USER_PASSWORD: ${{ secrets.PREVIEW_SEED_PASSWORD }}
+                  OUT_DIR: risk-routing-evidence
+              run: |
+                  set -euo pipefail
+                  for entry in $URLS; do
+                    case "$entry" in cloud=*) KODUS_WEB_URL="${entry#cloud=}" ;; esac
+                  done
+                  : "${KODUS_WEB_URL:?cloud preview is required}"
+                  export KODUS_WEB_URL
+                  $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                    "PREVIEW_RISK_ROUTING_QA=true node scripts/preview/prepare-risk-routing-qa.cjs"
+                  npm ci --prefix tests/e2e
+                  (cd tests/e2e && npx playwright install --with-deps chromium)
+                  node tests/e2e/playwright/risk-routing.mjs
+
+            - name: Upload Risk and Routing UI evidence
+              if: always() && inputs.risk_routing_smoke == true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: preview-risk-routing-ui
+                  path: risk-routing-evidence/
+                  if-no-files-found: warn
 
             - name: Smoke conditional approval on real providers
               if: steps.env.outputs.configured == 'true' && inputs.provider_approval_smoke == true && steps.up.outcome == 'success'
