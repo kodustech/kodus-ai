@@ -187,12 +187,21 @@ try {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await openMenu('General', 'General settings');
     await toggle(approval, true);
-    await page.getByRole('button', { name: `Delete ${policyName}`, exact: true }).click();
+    const deletePolicy = page.getByRole('button', { name: `Delete ${policyName}`, exact: true });
+    await hydrated(deletePolicy);
+    await deletePolicy.click();
+    await expect(page.getByRole('heading', { name: policyName, exact: true })).toHaveCount(0);
     await toggle(approval, false);
     await save();
     await openMenu('Risk assessment');
-    await page.getByRole('button', { name: `Delete ${criterionName}`, exact: true }).click();
+    const deleteCriterion = page.getByRole('button', { name: `Delete ${criterionName}`, exact: true });
+    await hydrated(deleteCriterion);
+    await deleteCriterion.click();
+    await expect(page.getByRole('heading', { name: criterionName, exact: true })).toHaveCount(0);
     await save();
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await hydrated(riskToggle);
+    await expect(page.getByRole('heading', { name: criterionName, exact: true })).toHaveCount(0);
     pass('Only this run’s policy and criterion are removed after verification');
     assert.deepEqual(pageErrors, [], 'No uncaught app errors.');
 } catch (error) {
