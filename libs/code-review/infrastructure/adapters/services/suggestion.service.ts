@@ -9,7 +9,10 @@ import {
     ICommentManagerService,
 } from '@libs/code-review/domain/contracts/CommentManagerService.contract';
 import { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
-import { ISuggestionService } from '@libs/code-review/domain/contracts/SuggestionService.contract';
+import {
+    ImplementationCheckResult,
+    ISuggestionService,
+} from '@libs/code-review/domain/contracts/SuggestionService.contract';
 import {
     CrossFileContextSnippet,
     RemoteCommands,
@@ -20,6 +23,7 @@ import {
     CodeReviewVersion,
     CodeSuggestion,
     CommentResult,
+    FileChange,
     GroupingModeSuggestions,
     ImplementedSuggestionsToAnalyze,
     LimitationType,
@@ -35,7 +39,10 @@ import {
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
-import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import {
+    ISuggestion,
+    ISuggestionByPR,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
@@ -81,6 +88,87 @@ export class SuggestionService implements ISuggestionService {
             improvedCode: suggestion.improvedCode,
             existingCode: suggestion.existingCode,
         }));
+    }
+
+    /**
+     * The implementation check after a push: picks the delivered suggestions
+     * not yet implemented whose file changed, asks the model which of them the
+     * patch implements, and persists the answers. The processor and the
+     * implementation-check eval both enter here.
+     */
+    public async checkImplementedSuggestions({
+        organizationAndTeamData,
+        prNumber,
+        changedFiles,
+        savedSuggestions,
+    }: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        prNumber: number;
+        changedFiles: Pick<FileChange, 'filename' | 'patch'>[];
+        savedSuggestions: Partial<ISuggestion>[];
+    }): Promise<ImplementationCheckResult> {
+        const candidates = (savedSuggestions || []).filter(
+            (s) =>
+                s.deliveryStatus === DeliveryStatus.SENT &&
+                s.implementationStatus !== ImplementationStatus.IMPLEMENTED,
+        );
+
+        if (!candidates.length) {
+            return { skipped: 'NO_SUGGESTIONS', checked: 0, persisted: [] };
+        }
+
+        const changedFilenames = new Set(
+            (changedFiles || []).map((f) => f.filename),
+        );
+        const toValidate = candidates
+            .filter(
+                (s) => s.relevantFile && changedFilenames.has(s.relevantFile),
+            )
+            .map((s) => ({
+                id: s.id,
+                relevantFile: s.relevantFile,
+                language: s.language,
+                existingCode: s.existingCode,
+                improvedCode: s.improvedCode,
+                label: s.label,
+                severity: s.severity,
+            }));
+
+        if (!toValidate.length) {
+            return {
+                skipped: 'NO_RELEVANT_CHANGES',
+                checked: candidates.length,
+                persisted: [],
+            };
+        }
+
+        const codePatch = (changedFiles || [])
+            .filter((f) => f.patch)
+            .map((f) => `File: ${f.filename}\n${f.patch}`)
+            .join('\n\n');
+
+        if (!codePatch) {
+            this.logger.warn({
+                message: `No code patch found for PR #${prNumber}`,
+                context: SuggestionService.name,
+                metadata: { prNumber },
+            });
+            return {
+                skipped: 'NO_PATCH',
+                checked: candidates.length,
+                persisted: [],
+            };
+        }
+
+        const persisted =
+            (await this.validateImplementedSuggestions(
+                organizationAndTeamData,
+                codePatch,
+                toValidate,
+                prNumber,
+            )) || [];
+
+        return { checked: candidates.length, persisted };
     }
 
     /**

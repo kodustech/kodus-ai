@@ -28,6 +28,13 @@ const NIGHTLY_EVALS = [
         files: ['evals/reply-addressing/targets.json'],
     },
     {
+        id: 'implementation-check',
+        stage: 'implementation-check',
+        run: ['evals/implementation-check/run.js', '--repeats=1'],
+        sets: { controlled: ['--set=controlled'], full: null },
+        files: ['evals/implementation-check/targets.json', 'evals/implementation-check/cases.json'],
+    },
+    {
         id: 'review-rounds',
         stage: 'review-rounds',
         // The BYOK route with reasoning off, where the reposts were measured
