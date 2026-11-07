@@ -129,23 +129,14 @@ function sliceBalancedJson(s: string): string | null {
 }
 
 /**
- * Pull the JSON value out of free-form LLM text: unwrap a ```json fence, drop any
- * prose before/after the outermost balanced `{…}`/`[…]` (string-aware), and strip
- * trailing commas. Returns the JSON substring — even when the input was ALREADY
- * clean JSON (that is the difference from {@link repairJsonText}) — or null when
- * no JSON delimiter is present. This is the ONE text→JSON extractor; the bespoke
- * per-domain copies (finder / safeguard / business-rules) should call it so a
- * fenced or prose-wrapped payload is handled identically everywhere.
+ * The text with the reasoning blocks written ahead of the answer removed, or
+ * null when the text opens a block that never closes (no answer at all).
  */
-export function extractJsonFromText(text: string): string | null {
-    if (typeof text !== 'string' || text.trim() === '') {
-        return null;
-    }
-    let s = text.trim();
-
-    // 0. Skip reasoning written into the answer. Some models (MiniMax-M3 in
+export function stripReasoningBlocks(text: string): string | null {
+    const s = text.trim();
+    // Skip reasoning written into the answer. Some models (MiniMax-M3 in
     // production) put <think>…</think> before the JSON, and the reasoning
-    // quotes code, so the first balanced {…} below would be a quote, not the
+    // quotes code, so the first balanced {…} would be a quote, not the
     // answer.
     //
     // Only a block that opens BEFORE the JSON starts is reasoning: past that
@@ -170,14 +161,32 @@ export function extractJsonFromText(text: string): string | null {
         if (close < 0) {
             // A block that never closes and is the first thing in the response
             // carries no answer at all. Anywhere else, including right after a
-            // block that did close, the scan below may still find one.
+            // block that did close, the caller may still find one.
             if (pos === 0 && !gap.trim()) return null;
             break;
         }
         kept += gap;
         pos = close + closeTag.length;
     }
-    s = (kept + s.slice(pos)).trim();
+    return (kept + s.slice(pos)).trim();
+}
+
+/**
+ * Pull the JSON value out of free-form LLM text: unwrap a ```json fence, drop any
+ * prose before/after the outermost balanced `{…}`/`[…]` (string-aware), and strip
+ * trailing commas. Returns the JSON substring — even when the input was ALREADY
+ * clean JSON (that is the difference from {@link repairJsonText}) — or null when
+ * no JSON delimiter is present. This is the ONE text→JSON extractor; the bespoke
+ * per-domain copies (finder / safeguard / business-rules) should call it so a
+ * fenced or prose-wrapped payload is handled identically everywhere.
+ */
+export function extractJsonFromText(text: string): string | null {
+    if (typeof text !== 'string' || text.trim() === '') {
+        return null;
+    }
+    const stripped = stripReasoningBlocks(text);
+    if (stripped === null) return null;
+    let s = stripped;
 
     // 1. Unwrap a markdown code fence.
     const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -216,10 +225,43 @@ export function extractLastJsonObjectWith(
     if (typeof text !== 'string' || text.trim() === '' || keys.length === 0) {
         return null;
     }
+    return scanLastJson(text, keys, accept, false) as Record<
+        string,
+        unknown
+    > | null;
+}
+
+/**
+ * The answer at the end of a reply that may carry reasoning ahead of it: the
+ * reasoning blocks are removed first ({@link stripReasoningBlocks}; a block
+ * that never closes means no answer, null), then the LAST balanced value that
+ * is either an object carrying one of `keys` or a bare array (empty, or of
+ * objects) is returned. For a reply whose answer is a list: a draft the
+ * reasoning quoted never wins over the final `[]`.
+ */
+export function extractLastJsonAnswer(
+    text: string,
+    keys: readonly string[],
+): Record<string, unknown> | unknown[] | null {
+    if (typeof text !== 'string' || text.trim() === '' || keys.length === 0) {
+        return null;
+    }
+    const stripped = stripReasoningBlocks(text);
+    if (stripped === null) return null;
+    return scanLastJson(stripped, keys, () => true, true);
+}
+
+function scanLastJson(
+    text: string,
+    keys: readonly string[],
+    accept: (obj: Record<string, unknown>) => boolean,
+    arrays: boolean,
+): Record<string, unknown> | unknown[] | null {
     const wanted = new Set(keys.map(normalizeKeyName));
-    let found: Record<string, unknown> | null = null;
+    let found: Record<string, unknown> | unknown[] | null = null;
     for (let i = 0; i < text.length; i++) {
-        if (text[i] !== '{') continue;
+        const ch = text[i];
+        if (ch !== '{' && !(arrays && ch === '[')) continue;
         const slice = sliceBalancedJson(text.slice(i));
         // Unbalanced from HERE says nothing about a later `{` — keep scanning.
         if (!slice) continue;
@@ -229,7 +271,21 @@ export function extractLastJsonObjectWith(
         } catch {
             continue; // prose/code, not JSON — keep scanning (incl. nested).
         }
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        if (Array.isArray(parsed)) {
+            // A list answer: empty, or every entry an object. `[1]` inside a
+            // quoted object is not one.
+            if (
+                !parsed.every(
+                    (e) => !!e && typeof e === 'object' && !Array.isArray(e),
+                )
+            ) {
+                continue;
+            }
+            found = parsed;
+            i += slice.length - 1;
+            continue;
+        }
+        if (!parsed || typeof parsed !== 'object') {
             continue;
         }
         const obj = parsed as Record<string, unknown>;

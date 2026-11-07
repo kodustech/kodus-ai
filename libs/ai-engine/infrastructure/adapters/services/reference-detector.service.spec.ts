@@ -288,6 +288,48 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
                 expect(r).toEqual({ references: [], reliable: false });
             });
 
+            describe('a draft list in the reasoning never wins over the final answer', () => {
+                const draft =
+                    '{"references":[{"fileName":"docs/draft.md"}]}';
+                const final = (reply: string) => {
+                    mockRun(reply);
+                    return svc.detectReferencesWithStatus(baseParams() as any);
+                };
+
+                it('a final [] after a <think> block is a reliable "no references"', async () => {
+                    expect(
+                        await final(`<think>Consider ${draft}; actually no references.</think>\n[]`),
+                    ).toEqual({ references: [], reliable: true });
+                });
+
+                it('a final non-empty array after a <think> block', async () => {
+                    const r = await final(
+                        `<think>Consider ${draft}.</think>\n[{"fileName":"docs/tags.md","originalText":"@file:docs/tags.md"}]`,
+                    );
+                    expect(r.reliable).toBe(true);
+                    expect(r.references.map((x) => x.fileName)).toEqual(['docs/tags.md']);
+                });
+
+                it('a final items envelope after a <think> block', async () => {
+                    const r = await final(
+                        `<think>Consider ${draft}.</think>\n{"items":[{"fileName":"docs/tags.md"}]}`,
+                    );
+                    expect(r.references.map((x) => x.fileName)).toEqual(['docs/tags.md']);
+                });
+
+                it('a final [] after reasoning returned as content (no <think>)', async () => {
+                    expect(
+                        await final(`. Consider ${draft}; actually the rule cites no file.\n[]`),
+                    ).toEqual({ references: [], reliable: true });
+                });
+
+                it('an unfinished <think> holding a draft is no answer', async () => {
+                    expect(
+                        await final(`<think>Consider ${draft} and then`),
+                    ).toEqual({ references: [], reliable: false });
+                });
+            });
+
             it('a reply ending on the example is unreliable, not an earlier list', async () => {
                 // The list before the example may be one the reasoning quoted;
                 // an unreliable answer is retried, a wrong one is cached.

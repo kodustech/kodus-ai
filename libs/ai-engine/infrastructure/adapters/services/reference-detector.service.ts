@@ -20,7 +20,7 @@ import {
 } from '@libs/common/utils/prompts/kodyRulesExternalReferences';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
 import {
-    extractLastJsonObjectWith,
+    extractLastJsonAnswer,
     normalizeEnvelope,
 } from '@libs/llm/structured-output-repair';
 import { getModelName, trialDefaultModel } from '@libs/llm/byok-to-vercel';
@@ -93,14 +93,15 @@ function parseReferenceReply(
     onRecover: (reason: string) => void,
 ): IDetectedReference[] | null {
     const opts = { liftEmptyArray: true, onRecover };
-    // The LAST object carrying the list, when there is one. A host that ends
-    // the reasoning channel at a `</think>` the model quotes (Together,
-    // DeepSeek V4.1 Flash) returns the rest of the reasoning ahead of the
-    // answer, and what it quotes on the way made the reply unreadable (#2409).
+    // The LAST list in the reply (a bare array or an object carrying it),
+    // after any `<think>` block. A host that ends the reasoning channel at a
+    // `</think>` the model quotes (Together, DeepSeek V4.1 Flash) returns the
+    // rest of the reasoning ahead of the answer, and what it quotes on the way
+    // made the reply unreadable (#2409).
     const unquoted = unquoteJsonString(raw);
     const last =
         typeof unquoted === 'string'
-            ? extractLastJsonObjectWith(unquoted, LIST_KEYS)
+            ? extractLastJsonAnswer(unquoted, [...LIST_KEYS, 'items'])
             : null;
     let value = normalizeEnvelope(last ?? unquoted, 'items', LIST_KEYS, opts);
     // A provider response body written out as the text: read its content.
