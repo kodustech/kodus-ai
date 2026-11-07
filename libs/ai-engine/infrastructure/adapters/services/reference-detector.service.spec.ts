@@ -251,6 +251,54 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
             });
         });
 
+        describe('#2409 — reasoning returned ahead of the answer', () => {
+            // Together cut the reasoning channel at a quoted `</think>`; the rest
+            // of the reasoning, quoting the rule and the prompt's example, came
+            // before the answer.
+            const answer =
+                '{\n  "references": [\n    {"fileName": "docs/tags.md", "originalText": "@file:docs/tags.md"}\n  ]\n}';
+            const example =
+                '{"references": [{"fileName": "file-name.ext", "originalText": "@file:file-name.ext#L10-L20"}]}';
+
+            it('reads the answer after reasoning that quotes braces and lists', async () => {
+                mockRun(
+                    '` are in @file:docs/tags.md. Shape: {fileName, originalText}; keys like [references] and `{ a: [1] }`.\nNeed valid JSON.\n\nFinal.' +
+                        answer,
+                );
+                const r = await svc.detectReferencesWithStatus(
+                    baseParams() as any,
+                );
+                expect(r.reliable).toBe(true);
+                expect(r.references.map((x) => x.fileName)).toEqual([
+                    'docs/tags.md',
+                ]);
+            });
+
+            it('reads the answer, not the example the reasoning quoted', async () => {
+                mockRun(`\`. Format:\n${example}\nNow the answer.\n${answer}`);
+                const out = await svc.detectReferences(baseParams() as any);
+                expect(out.map((x) => x.fileName)).toEqual(['docs/tags.md']);
+            });
+
+            it('takes the example alone for no answer, not for "no references"', async () => {
+                mockRun(example);
+                const r = await svc.detectReferencesWithStatus(
+                    baseParams() as any,
+                );
+                expect(r).toEqual({ references: [], reliable: false });
+            });
+
+            it('a reply ending on the example is unreliable, not an earlier list', async () => {
+                // The list before the example may be one the reasoning quoted;
+                // an unreliable answer is retried, a wrong one is cached.
+                mockRun(`${answer}\nFormat was:\n${example}`);
+                const r = await svc.detectReferencesWithStatus(
+                    baseParams() as any,
+                );
+                expect(r).toEqual({ references: [], reliable: false });
+            });
+        });
+
         // ── C. Unparseable / transport — the fail-safe layer (rows 28-34) ──
         describe('C. unparseable / transport', () => {
             // Every reply with no recoverable array — empty, primitive, an
