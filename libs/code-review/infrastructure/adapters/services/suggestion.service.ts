@@ -107,7 +107,7 @@ export class SuggestionService implements ISuggestionService {
         changedFiles: Pick<FileChange, 'filename' | 'patch'>[];
         savedSuggestions: Partial<ISuggestion>[];
     }): Promise<ImplementationCheckResult> {
-        const candidates = (savedSuggestions || []).filter(
+        const candidates = savedSuggestions.filter(
             (s) =>
                 s.deliveryStatus === DeliveryStatus.SENT &&
                 s.implementationStatus !== ImplementationStatus.IMPLEMENTED,
@@ -117,9 +117,7 @@ export class SuggestionService implements ISuggestionService {
             return { skipped: 'NO_SUGGESTIONS', checked: 0, persisted: [] };
         }
 
-        const changedFilenames = new Set(
-            (changedFiles || []).map((f) => f.filename),
-        );
+        const changedFilenames = new Set(changedFiles.map((f) => f.filename));
         const toValidate = candidates
             .filter(
                 (s) => s.relevantFile && changedFilenames.has(s.relevantFile),
@@ -142,7 +140,7 @@ export class SuggestionService implements ISuggestionService {
             };
         }
 
-        const codePatch = (changedFiles || [])
+        const codePatch = changedFiles
             .filter((f) => f.patch)
             .map((f) => `File: ${f.filename}\n${f.patch}`)
             .join('\n\n');

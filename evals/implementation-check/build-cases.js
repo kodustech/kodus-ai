@@ -18,7 +18,7 @@ function fileAtHead(dataset, file) {
     const [record] = JSON.parse(fs.readFileSync(path.join(DATASETS, `${dataset}.json`), 'utf8'));
     const reads = JSON.parse(record.vars.toolReplay).readFile || [];
     const hit = reads.find((r) => r.match.path === file);
-    if (!hit) throw new Error(`${dataset}: no ${file} at the PR head`);
+    if (typeof hit?.result !== 'string') throw new Error(`${dataset}: no ${file} at the PR head`);
     return hit.result;
 }
 
