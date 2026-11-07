@@ -45,13 +45,19 @@ export const WeeklyImplementationChart = ({
         data.some((w) => w.bySeverity[severity]),
     );
 
+    // Suggestions the last implementation check could not decide stay out of
+    // the rate; say how many, so a gap reads as unmeasured, not as ignored.
+    const notMeasured = data.reduce((n, w) => n + (w.notMeasured ?? 0), 0);
+
     const chartData = data.map((w) => ({
         week: w.weekStart,
-        rate: Math.round(w.rate * 100),
+        // null leaves a gap: nothing decided that week (or at that severity)
+        // is not a 0% rate.
+        rate: w.rate === null ? null : Math.round(w.rate * 100),
         ...Object.fromEntries(
             severities.map((s) => [
                 s,
-                Math.round((w.bySeverity[s]?.rate ?? 0) * 100),
+                w.bySeverity[s] ? Math.round(w.bySeverity[s].rate * 100) : null,
             ]),
         ),
     }));
@@ -164,6 +170,14 @@ export const WeeklyImplementationChart = ({
                     </LineChart>
                 )}
             </ResponsiveContainer>
+
+            {notMeasured > 0 && (
+                <p className="text-text-tertiary text-center text-xs">
+                    {notMeasured === 1
+                        ? "1 delivered suggestion was not measured: the implementation check could not decide it, so it is left out of the rate."
+                        : `${notMeasured} delivered suggestions were not measured: the implementation check could not decide them, so they are left out of the rate.`}
+                </p>
+            )}
 
             {mode === "severity" && (
                 <div className="text-text-secondary flex justify-center gap-4 text-xs">
