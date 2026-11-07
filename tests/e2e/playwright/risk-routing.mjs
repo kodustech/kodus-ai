@@ -24,10 +24,15 @@ const pageErrors = [];
 page.on('pageerror', (error) => pageErrors.push(error.message));
 const pass = (name) => { checks.push(name); console.log(`PASS ${name}`); };
 const screenshot = (name) => page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true });
-const menu = (name) => page.getByRole('link', { name, exact: true });
+// The menu appends an accessible override-count description after its label.
+const menu = (name) => page.getByRole('link', { name: new RegExp(`^${name}(?:\\s|$)`) });
 async function toggle(locator, value) {
     if (await locator.getAttribute('aria-checked') !== String(value)) await locator.click();
-    assert.equal(await locator.getAttribute('aria-checked'), String(value));
+    const deadline = Date.now() + 15_000;
+    while (await locator.getAttribute('aria-checked') !== String(value)) {
+        assert.ok(Date.now() < deadline, `Switch did not become ${value}; disabled=${await locator.isDisabled()}`);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
 }
 async function save() {
     const responsePromise = page.waitForResponse((response) =>
@@ -153,6 +158,11 @@ try {
 } catch (error) {
     await screenshot('failure').catch(() => {});
     writeFileSync(`${OUT}/failure.txt`, `${error.stack}\n`);
+    const switches = await page.getByRole('switch').evaluateAll((nodes) => nodes.map((node) => ({
+        id: node.id, name: node.getAttribute('aria-label'),
+        checked: node.getAttribute('aria-checked'), disabled: node.hasAttribute('disabled'),
+    }))).catch(() => []);
+    writeFileSync(`${OUT}/controls.json`, JSON.stringify(switches, null, 2));
     process.exitCode = 1;
 } finally {
     writeFileSync(`${OUT}/result.json`, JSON.stringify({ web: WEB, checks, pageErrors, passed: !process.exitCode }, null, 2));
