@@ -22,7 +22,11 @@ page.setDefaultTimeout(45_000);
 const checks = [];
 const saves = [];
 const pageErrors = [];
+const consoleErrors = [];
 page.on('pageerror', (error) => pageErrors.push(error.message));
+page.on('console', (event) => {
+    if (event.type() === 'error') consoleErrors.push(event.text().replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]').slice(0, 3000));
+});
 const pass = (name) => { checks.push(name); console.log(`PASS ${name}`); };
 const screenshot = (name) => page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true });
 // The menu appends an accessible override-count description after its label.
@@ -69,7 +73,7 @@ try {
         maxRedirects: 0,
     });
     assert.ok((await context.cookies(WEB)).some((cookie) => cookie.name.includes('session-token')), 'Real NextAuth session required.');
-    await page.goto(`${WEB}/settings/code-review/global/general`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${WEB}/settings/code-review/global/general`, { waitUntil: 'networkidle' });
     await menu('Risk assessment').waitFor();
     assert.equal(await menu('Routing').count(), 1);
     pass('Risk and Routing are in the real app menu');
@@ -83,7 +87,7 @@ try {
     await criterion.getByLabel('What should Kody consider?').fill('Permission changes may expose customer data. Distinguish them from equivalent refactors.');
     await criterion.getByRole('button', { name: 'Apply', exact: true }).click();
     await save();
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'networkidle' });
     await page.getByText(criterionName, { exact: true }).waitFor();
     assert.equal(await riskToggle.getAttribute('aria-checked'), 'true');
     pass('Risk and optional criteria persist through the real API');
@@ -99,7 +103,7 @@ try {
     await page.getByRole('combobox', { name: 'No risk found', exact: true }).waitFor();
     await chooseMode('Risk found', 'Balanced');
     await save();
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'networkidle' });
     assert.match(await page.getByRole('combobox', { name: 'Risk found', exact: true }).innerText(), /Balanced/);
     pass('Risk routing and model defaults render and persist');
     await screenshot('routing');
@@ -118,7 +122,7 @@ try {
     await policyDialog.getByRole('button', { name: 'Apply', exact: true }).click();
     assert.equal(await page.getByRole('switch', { name: `Enable ${policyName}`, exact: true }).getAttribute('aria-checked'), 'false');
     await save();
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'networkidle' });
     await page.getByRole('heading', { name: policyName, exact: true }).waitFor();
     assert.equal(await page.getByRole('switch', { name: `Enable ${policyName}`, exact: true }).getAttribute('aria-checked'), 'false');
     pass('Empty policy explicitly covers clean PRs and starts disabled');
@@ -171,6 +175,7 @@ try {
         checked: node.getAttribute('aria-checked'), disabled: node.hasAttribute('disabled'),
     }))).catch(() => []);
     writeFileSync(`${OUT}/controls.json`, JSON.stringify(switches, null, 2));
+    writeFileSync(`${OUT}/console-errors.json`, JSON.stringify(consoleErrors, null, 2));
     process.exitCode = 1;
 } finally {
     writeFileSync(`${OUT}/result.json`, JSON.stringify({ web: WEB, checks, saves, pageErrors, passed: !process.exitCode }, null, 2));

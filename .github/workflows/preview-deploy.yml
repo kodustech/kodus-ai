@@ -67,6 +67,11 @@ on:
                 required: false
                 default: false
                 type: boolean
+            reuse_preview:
+                description: Run smoke tests against the existing preview without deploying changes
+                required: false
+                default: false
+                type: boolean
             provider_approval_smoke:
                 description: Test conditional approval on GitLab, Bitbucket and Azure QA repos
                 required: false
@@ -355,6 +360,17 @@ jobs:
                   set -euo pipefail
                   : "${RUNO_SERVER:?PREVIEW_RUNO_SERVER is not configured}"
                   : "${RUNO_TOKEN:?PREVIEW_RUNO_TOKEN is not configured}"
+                  if [ "${{ inputs.reuse_preview }}" = 'true' ]; then
+                    urls=""
+                    for profile in $PROFILES; do
+                      url=$($RUNO url --branch "$HEAD_REF" --profile "$profile")
+                      case "$url" in https://*) ;; *) echo '::error::No running preview URL'; exit 1 ;; esac
+                      urls="$urls$profile=$url "
+                    done
+                    echo "urls=${urls% }" >> "$GITHUB_OUTPUT"
+                    echo 'Testing existing preview; application source is unchanged.'
+                    exit 0
+                  fi
                   # Fail fast: a runo without --profile would silently treat both
                   # shapes as the branch's one env — the second `up` would
                   # overwrite the first, and `destroy --profile` would take the
@@ -525,7 +541,7 @@ jobs:
                   if-no-files-found: warn
 
             - name: Comment the preview link
-              if: always() && steps.env.outputs.configured == 'true'
+              if: always() && steps.env.outputs.configured == 'true' && inputs.reuse_preview != true
               uses: actions/github-script@v9.0.0
               env:
                   PR_NUMBER: ${{ inputs.pr_number }}
