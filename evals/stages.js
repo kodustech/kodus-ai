@@ -794,7 +794,7 @@ const STAGES = [
             {
                 kind: 'contract',
                 name: 'Shared production assessment and consumers through the configured model',
-                wiring: ['pr-risk'],
+                wiring: ['pr-risk', 'approval-risk-shared'],
             },
         ],
         eval: null,

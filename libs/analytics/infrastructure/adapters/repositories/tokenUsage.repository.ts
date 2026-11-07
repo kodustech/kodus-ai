@@ -65,6 +65,7 @@ const TASK_FALLBACK = '';
 // Valid routing tasks — mirror of ROUTING_TASKS in token-usage-tu.ts (LlmTask).
 // A `tu.route` outside this set (stale tier string, garbage) is NOT trusted.
 export const READ_ROUTING_TASKS = [
+    'riskAssessment',
     'codeReview',
     'codeReviewHeavy',
     'kodyRulesReview',
