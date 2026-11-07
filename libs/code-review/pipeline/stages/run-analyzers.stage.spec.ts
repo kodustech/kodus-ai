@@ -429,6 +429,50 @@ describe('recovered hunks reach the tools that need them', () => {
 });
 
 /**
+ * The pipeline context is frozen by immer, so assigning `patch` on a file
+ * object in place threw "Cannot assign to read only property 'patch'" and the
+ * whole stage failed (#2419).
+ */
+describe('recovering hunks on a frozen context', () => {
+    it('does not mutate the context files and still hands the tool the hunk', async () => {
+        const seen: Array<string | undefined> = [];
+        const tool = makeTool({
+            selectFiles: ((files: Array<{ patch?: string }>) => {
+                seen.push(...files.map((f) => f.patch));
+                return files.filter((f) => f.patch);
+            }) as never,
+            run: jest.fn().mockResolvedValue([]),
+        });
+        const stage = new RunAnalyzersStage(
+            new AnalyzerToolRouter(),
+            { isEnabled: jest.fn().mockResolvedValue(true) } as never,
+            {
+                getFilePatches: jest
+                    .fn()
+                    .mockResolvedValue([
+                        { path: 'big.ts', patch: patchAdding(1, 3) },
+                    ]),
+            } as never,
+            [tool],
+        );
+        const withheld = Object.freeze({ filename: 'big.ts' });
+
+        await (
+            stage as unknown as {
+                executeStage: (c: unknown) => Promise<unknown>;
+            }
+        ).executeStage(
+            makeContext({
+                changedFiles: Object.freeze([withheld]),
+            } as never),
+        );
+
+        expect(withheld).toEqual({ filename: 'big.ts' });
+        expect(seen).toContain(patchAdding(1, 3));
+    });
+});
+
+/**
  * Recovering a withheld hunk costs a full raw-diff download from the host.
  * The shipped default has every tool `off`, so without a precondition check
  * each review containing one withheld file paid for a download nobody read.

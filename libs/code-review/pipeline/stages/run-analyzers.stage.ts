@@ -61,8 +61,8 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
 
         const sandbox = context.sandboxHandle;
 
-        const reviewedFiles = (context.changedFiles ?? []) as ChangedFile[];
-        const ignoredFiles = (context.ignoredFileChanges ??
+        let reviewedFiles = (context.changedFiles ?? []) as ChangedFile[];
+        let ignoredFiles = (context.ignoredFileChanges ??
             []) as ChangedFile[];
 
         // `ignorePaths` means "do not comment on this file", and that has to
@@ -79,7 +79,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
         // Routing still considers everything, so a tool is not recorded as
         // `no-matching-files` when its only matches are ignored files that it
         // is allowed to read.
-        const changedFiles = [...reviewedFiles, ...ignoredFiles];
+        let changedFiles = [...reviewedFiles, ...ignoredFiles];
 
         // Before routing, because routing itself calls `selectFiles`: a tool
         // that requires a patch is dropped as `no-matching-files` on the very
@@ -96,7 +96,14 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
         );
 
         if (sandbox && anyToolEnabled) {
-            await this.backfillMissingPatches(context, changedFiles);
+            // The context's files are frozen by the pipeline's immutable
+            // state, so recovered hunks go on copies rather than in place.
+            changedFiles = await this.backfillMissingPatches(
+                context,
+                changedFiles,
+            );
+            reviewedFiles = changedFiles.slice(0, reviewedFiles.length);
+            ignoredFiles = changedFiles.slice(reviewedFiles.length);
         }
 
         const decisions = this.router.route(this.tools, {
@@ -254,7 +261,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
     private async backfillMissingPatches(
         context: CodeReviewPipelineContext,
         files: ChangedFile[],
-    ): Promise<void> {
+    ): Promise<ChangedFile[]> {
         const missing = [
             ...new Set(
                 files
@@ -265,7 +272,7 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
 
         const prNumber = context.pullRequest?.number;
         if (!missing.length || !prNumber || !context.repository?.name) {
-            return;
+            return files;
         }
 
         const recovered = await this.codeManagementService.getFilePatches({
@@ -277,12 +284,10 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
 
         const byPath = new Map(recovered.map((r) => [r.path, r.patch]));
 
-        for (const file of files) {
+        const patched = files.map((file) => {
             const patch = byPath.get(file.filename);
-            if (!file.patch && patch) {
-                file.patch = patch;
-            }
-        }
+            return !file.patch && patch ? { ...file, patch } : file;
+        });
 
         this.logger.log({
             message: `Recovered ${byPath.size} of ${missing.length} missing file patch(es)`,
@@ -294,6 +299,8 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
                 recovered: [...byPath.keys()],
             },
         });
+
+        return patched;
     }
 
     private clipToDiff(
