@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { randomUUID } from 'crypto';
 import { Repository, LessThan, EntityManager } from 'typeorm';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -72,6 +73,73 @@ export class OutboxMessageRepository implements IOutboxMessageRepository {
         } catch (error) {
             this.logger.error({
                 message: 'Failed to create outbox message',
+                context: OutboxMessageRepository.name,
+                error,
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Writes several messages in one go.
+     *
+     * `create` costs two round trips per row: the envelope's `messageId` is the
+     * row uuid, which only exists once the row is written, so it saves and then
+     * updates the payload. That is fine for the single emits scattered around,
+     * but the stale-job reaper writes one resume message per reclaimed job
+     * inside its requeue transaction, so a backlog of N jobs held that
+     * transaction open for 2N round trips (#1902 review).
+     *
+     * Here the uuid is drawn up front, so each row carries its
+     * `payload.messageId` in the same write and no follow-up update is needed.
+     */
+    async createMany(
+        messages: OutboxMessage[],
+        transactionManager?: EntityManager,
+    ): Promise<OutboxMessageModel[]> {
+        if (messages.length === 0) {
+            return [];
+        }
+
+        try {
+            const repo = transactionManager
+                ? transactionManager.getRepository(OutboxMessageModel)
+                : this.repository;
+
+            const models = messages.map((message) => {
+                const uuid = message.uuid ?? randomUUID();
+                return repo.create({
+                    uuid,
+                    job: message.jobId ? { uuid: message.jobId } : undefined,
+                    exchange: message.exchange,
+                    routingKey: message.routingKey,
+                    payload: Object.assign({}, message.payload, {
+                        messageId: uuid,
+                    }),
+                    status: OutboxStatus.READY,
+                    ...(message.nextAttemptAt
+                        ? { nextAttemptAt: message.nextAttemptAt }
+                        : {}),
+                });
+            });
+
+            // One `save` for the whole batch, instead of a save and an update
+            // per row, which is the point of this method.
+            const saved = await repo.save(models);
+
+            this.logger.debug({
+                message: 'Outbox messages created',
+                context: OutboxMessageRepository.name,
+                metadata: {
+                    count: saved.length,
+                    exchanges: [...new Set(saved.map((row) => row.exchange))],
+                },
+            });
+
+            return saved;
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to create outbox messages',
                 context: OutboxMessageRepository.name,
                 error,
             });

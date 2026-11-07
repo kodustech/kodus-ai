@@ -111,7 +111,10 @@ export class JobProcessorRouterService
         }
 
         const processor = this.getProcessor(job.workflowType);
-        return await processor.handleFailure(jobId, error);
+        // The router only reports the failure; the landed/not-landed answer a
+        // processor may give is its own to act on (#1830 review).
+        await processor.handleFailure(jobId, error);
+        return;
     }
 
     async markCompleted(jobId: string, result?: unknown): Promise<void> {
