@@ -31,7 +31,19 @@ const pass = (name) => { checks.push(name); console.log(`PASS ${name}`); };
 const screenshot = (name) => page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true });
 // The menu appends an accessible override-count description after its label.
 const menu = (name) => page.getByRole('link', { name: new RegExp(`^${name}(?:\\s|$)`) });
+// SSR controls are visible before React binds their handlers. Dev polling
+// prevents networkidle, so wait for the actual control's client handlers.
+async function hydrated(locator) {
+    await locator.waitFor();
+    const deadline = Date.now() + 20_000;
+    while (!await locator.evaluate((node) => Object.keys(node).some((key) =>
+        key.startsWith('__reactProps$') && Object.entries(node[key] || {}).some(([name, value]) => /^on[A-Z]/.test(name) && typeof value === 'function')))) {
+        assert.ok(Date.now() < deadline, 'The control did not hydrate.');
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+}
 async function toggle(locator, value) {
+    await hydrated(locator);
     if (await locator.getAttribute('aria-checked') !== String(value)) await locator.click();
     const deadline = Date.now() + 15_000;
     while (await locator.getAttribute('aria-checked') !== String(value)) {
@@ -55,6 +67,7 @@ async function save() {
     await page.getByText('Settings saved', { exact: true }).last().waitFor();
 }
 async function openMenu(name, heading = name) {
+    await hydrated(menu(name));
     await menu(name).click();
     await page.getByRole('heading', { name: heading, exact: true }).first().waitFor();
 }
@@ -73,7 +86,7 @@ try {
         maxRedirects: 0,
     });
     assert.ok((await context.cookies(WEB)).some((cookie) => cookie.name.includes('session-token')), 'Real NextAuth session required.');
-    await page.goto(`${WEB}/settings/code-review/global/general`, { waitUntil: 'networkidle' });
+    await page.goto(`${WEB}/settings/code-review/global/general`, { waitUntil: 'domcontentloaded' });
     await menu('Risk assessment').waitFor();
     assert.equal(await menu('Routing').count(), 1);
     pass('Risk and Routing are in the real app menu');
@@ -87,12 +100,14 @@ try {
     await criterion.getByLabel('What should Kody consider?').fill('Permission changes may expose customer data. Distinguish them from equivalent refactors.');
     await criterion.getByRole('button', { name: 'Apply', exact: true }).click();
     await save();
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByText(criterionName, { exact: true }).waitFor();
     assert.equal(await riskToggle.getAttribute('aria-checked'), 'true');
     pass('Risk and optional criteria persist through the real API');
     await screenshot('risk');
-    await page.getByRole('button', { name: 'Preview on a PR', exact: true }).click();
+    const previewButton = page.getByRole('button', { name: 'Preview on a PR', exact: true });
+    await hydrated(previewButton);
+    await previewButton.click();
     await page.getByRole('dialog').getByRole('heading', { name: 'Preview on a PR', exact: true }).waitFor();
     await screenshot('risk-preview-sheet');
     await page.getByRole('button', { name: 'Close preview', exact: true }).click();
@@ -103,7 +118,7 @@ try {
     await page.getByRole('combobox', { name: 'No risk found', exact: true }).waitFor();
     await chooseMode('Risk found', 'Balanced');
     await save();
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
     assert.match(await page.getByRole('combobox', { name: 'Risk found', exact: true }).innerText(), /Balanced/);
     pass('Risk routing and model defaults render and persist');
     await screenshot('routing');
@@ -122,7 +137,7 @@ try {
     await policyDialog.getByRole('button', { name: 'Apply', exact: true }).click();
     assert.equal(await page.getByRole('switch', { name: `Enable ${policyName}`, exact: true }).getAttribute('aria-checked'), 'false');
     await save();
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', { name: policyName, exact: true }).waitFor();
     assert.equal(await page.getByRole('switch', { name: `Enable ${policyName}`, exact: true }).getAttribute('aria-checked'), 'false');
     pass('Empty policy explicitly covers clean PRs and starts disabled');
