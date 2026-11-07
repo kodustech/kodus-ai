@@ -100,3 +100,74 @@ export function readAiSdkUsage(usage: AiSdkUsageInput): AiSdkUsage {
             usage?.cacheCreationInputTokens,
     };
 }
+
+const USAGE_KEYS: (keyof AiSdkUsage)[] = [
+    'inputTokens',
+    'outputTokens',
+    'totalTokens',
+    'reasoningTokens',
+    'cacheReadTokens',
+    'cacheWriteTokens',
+];
+
+/**
+ * Running total of the usage of the steps an agent loop finished. The loop's
+ * span records the usage `generateText` returns, and a loop that throws after
+ * some steps (an abort, the hard timeout) returns none, so the steps the
+ * provider already answered and billed would reach no cost span (#2389).
+ */
+export function createStepUsageTally(): {
+    add(usage: AiSdkUsageInput): void;
+    /** The total in the SDK's own shape, or undefined when no step reported. */
+    total(): AiSdkUsageInput;
+} {
+    const sum: AiSdkUsage = {};
+    let counted = false;
+    return {
+        add(usage) {
+            if (!usage) return;
+            const step = readAiSdkUsage(usage);
+            for (const key of USAGE_KEYS) {
+                const value = step[key];
+                if (typeof value === 'number' && Number.isFinite(value)) {
+                    sum[key] = (sum[key] ?? 0) + value;
+                    counted = true;
+                }
+            }
+        },
+        total() {
+            if (!counted) return undefined;
+            return {
+                inputTokens: sum.inputTokens,
+                outputTokens: sum.outputTokens,
+                totalTokens: sum.totalTokens,
+                inputTokenDetails: {
+                    cacheReadTokens: sum.cacheReadTokens,
+                    cacheWriteTokens: sum.cacheWriteTokens,
+                },
+                outputTokenDetails: { reasoningTokens: sum.reasoningTokens },
+            };
+        },
+    };
+}
+
+/**
+ * The usage to record for a call that threw: what the error carries (the
+ * provider's own report) or the tally of the steps the loop finished, whichever
+ * covers more. The SDK puts only the LAST step's usage on an output error, and
+ * an abort carries none, so the tally is the larger one after a multi-step loop.
+ * Undefined when neither reports a billed token.
+ */
+export function failedCallUsage(
+    err: unknown,
+    finishedSteps?: AiSdkUsageInput,
+): { usage: AiSdkUsage; finishReason?: string } | undefined {
+    const own = readAiSdkUsageFromError(err);
+    const tally = finishedSteps ? readAiSdkUsage(finishedSteps) : undefined;
+    const size = (u?: AiSdkUsage) =>
+        (u?.inputTokens ?? 0) + (u?.outputTokens ?? 0);
+    if (tally && size(tally) > 0 && size(tally) >= size(own?.usage)) {
+        return { usage: tally, finishReason: own?.finishReason };
+    }
+    return own;
+}

@@ -3200,7 +3200,9 @@ export class BitbucketCloudService implements Omit<
                     params,
                 },
             });
-            return null;
+            // The summary step reports a failed write only when it throws, as
+            // on GitHub and GitLab; returning null read as a success (#2380).
+            throw error;
         }
     }
 

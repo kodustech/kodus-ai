@@ -55,7 +55,7 @@ BYOK は**プロバイダーファースト**です：プロバイダーを一�
     - Kodus がプロバイダーのモデルをリスト化できる場合、ドロップダウンが表示されます。
     - そうでない場合（カスタムエンドポイント、セルフホスト、またはプラットフォームキーが未設定の場合）、正確なモデル ID を入力します。
 
-    カスタムエンドポイント（OpenAI-compatible / Anthropic-compatible）では、まず **Base URL** も求められます。
+    カスタムエンドポイント（OpenAI-compatible / Anthropic-compatible）では、まず **Base URL** も求められます。 **OpenAI** では、独自のプロキシやゲートウェイ用に任意の **Base URL** が表示されます。空のままにすると OpenAI を直接呼び出します。
   </Step>
 
   <Step title="Advanced settings を調整（任意）">
@@ -177,6 +177,15 @@ Moonshot と Z.ai はどちらも、ペイパートークンの Developer API �
     1. [OpenAI API Keys](https://platform.openai.com/api-keys) にアクセス
     2. Kodus 用の新しいキーを作成
     3. 請求情報を追加
+
+    **独自のゲートウェイ経由:** OpenAI へのトラフィックが Responses API を提供する OpenAI プロトコルのゲートウェイを経由する場合は、任意の **Base URL** にそのアドレスを設定し、ゲートウェイが求めるキーを使用します。OpenAI のモデル ID を使えば、レビューは OpenAI の直接キーと同じように動作します（Responses API、厳密な構造化出力、設定した推論レベル）。
+
+    - `https://your-gateway.example.com/v1` のように API バージョンを含めてください。Kodus は `<Base URL>/responses` を呼び出し、`<Base URL>/models` からモデルを一覧表示します。
+    - ゲートウェイが chat completions のみを提供する場合は、**OpenAI-compatible** として接続してください。
+    - Kodus はキーをこの URL に送信するため、URL は `https://` を使用し、パブリックアドレスに解決される必要があります。self-hosted 環境のプライベートネットワーク上のゲートウェイはまだサポートされていません（[#2381](https://github.com/kodustech/kodus-ai/issues/2381)）。
+    - リクエストは `store: false` で送信されるため、ゲートウェイにも OpenAI にも保存は求められません。
+    - OpenAI のモデル ID（例: `gpt-5.4`）を使用してください。ゲートウェイが名前を変更したモデルは推論モデルとして認識されず、推論レベルが送信されません（[#2382](https://github.com/kodustech/kodus-ai/issues/2382)）。
+    - ここでは非対応: キー以外に独自のヘッダーが必要なゲートウェイ（Portkey、Cloudflare AI Gateway）と、専用の **Azure OpenAI** プロバイダーがある Azure OpenAI。
   </Tab>
 
   <Tab title="Google Gemini">

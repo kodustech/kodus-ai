@@ -162,4 +162,92 @@ describe('ObservabilityService.runAiSdkLLMInSpan', () => {
 
         expect(usageAttrs()).toHaveLength(0);
     });
+
+    // #2389: an agent loop that throws after some steps reports what those
+    // steps cost through `usageOnError`; the error carries none of it.
+    describe('usage the caller measured for a failed call', () => {
+        const steps = {
+            inputTokens: 900,
+            outputTokens: 90,
+            totalTokens: 990,
+        };
+
+        it('is recorded for an abort that carries no usage', async () => {
+            const { service, usageAttrs } = buildService();
+            const abort = Object.assign(new Error('aborted'), {
+                name: 'AbortError',
+            });
+            await expect(
+                service.runAiSdkLLMInSpan({
+                    spanName: 'heavy-lens',
+                    exec: async () => {
+                        throw abort;
+                    },
+                    usageOnError: () => steps,
+                }),
+            ).rejects.toBe(abort);
+            expect(usageAttrs()[0]['gen_ai.usage.total_tokens']).toBe(990);
+            expect(usageAttrs()[0].tu).toMatchObject({ total: 990 });
+        });
+
+        it("wins over an output error that carries only the last step's usage", async () => {
+            const { service, usageAttrs } = buildService();
+            const lastStep = Object.assign(new Error('No object generated'), {
+                name: 'AI_NoObjectGeneratedError',
+                finishReason: 'stop',
+                usage: { inputTokens: 300, outputTokens: 30, totalTokens: 330 },
+            });
+            await service
+                .runAiSdkLLMInSpan({
+                    spanName: 'finder',
+                    exec: async () => {
+                        throw lastStep;
+                    },
+                    usageOnError: () => steps,
+                })
+                .catch(() => undefined);
+            expect(usageAttrs()[0]['gen_ai.usage.total_tokens']).toBe(990);
+            expect(usageAttrs()[0].finishReason).toBe('stop');
+        });
+
+        it('stamps the attributes the caller gives for a failed call, outside the billed usage', async () => {
+            const { service, span, usageAttrs } = buildService();
+            await service
+                .runAiSdkLLMInSpan({
+                    spanName: 'heavy-lens',
+                    exec: async () => {
+                        throw new Error('aborted');
+                    },
+                    attrsOnError: () => ({
+                        abortedInFlight: true,
+                        abortedInFlightInputTokensEstimate: 1200,
+                    }),
+                })
+                .catch(() => undefined);
+            const stamped = span.setAttributes.mock.calls.map(([a]: any) => a);
+            expect(stamped).toContainEqual({
+                abortedInFlight: true,
+                abortedInFlightInputTokensEstimate: 1200,
+            });
+            // An estimate is never billed: no usage, no `tu`.
+            expect(usageAttrs()).toHaveLength(0);
+        });
+
+        it('does not replace a larger usage the error reports', async () => {
+            const { service, usageAttrs } = buildService();
+            const err = Object.assign(new Error('No object generated'), {
+                usage,
+            });
+            await service
+                .runAiSdkLLMInSpan({
+                    spanName: 'finder',
+                    exec: async () => {
+                        throw err;
+                    },
+                    usageOnError: () => ({ inputTokens: 1, outputTokens: 1 }),
+                })
+                .catch(() => undefined);
+            expect(usageAttrs()[0]['gen_ai.usage.total_tokens']).toBe(3269);
+        });
+    });
 });

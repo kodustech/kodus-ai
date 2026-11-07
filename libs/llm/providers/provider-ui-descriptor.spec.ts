@@ -156,6 +156,42 @@ describe('describeProviderId - requiresBaseUrl', () => {
     });
 });
 
+describe('describeProviderId - acceptsBaseUrl', () => {
+    it('is true when the module offers its optional baseURL field in the form', () => {
+        const m = makeModule({
+            uiFields: [
+                { key: 'baseURL', required: false, offeredInForm: true },
+            ],
+        });
+        const d = describeProviderId(m, m.id);
+        expect(d.acceptsBaseUrl).toBe(true);
+        expect(d.requiresBaseUrl).toBe(false);
+    });
+
+    it('is false for an optional baseURL field the module does not offer', () => {
+        // Its listing or transport may not honor a custom endpoint yet.
+        const m = makeModule({
+            uiFields: [{ key: 'baseURL', required: false }],
+        });
+        expect(describeProviderId(m, m.id).acceptsBaseUrl).toBe(false);
+    });
+
+    it('is true whenever a base URL is required', () => {
+        const m = makeModule({ modelListing: () => null });
+        expect(describeProviderId(m, 'openai_compatible').acceptsBaseUrl).toBe(
+            true,
+        );
+    });
+
+    it('is false when the module declares no baseURL field and needs none', () => {
+        const m = makeModule({
+            uiFields: [{ key: 'apiKey', required: true }],
+            modelListing: () => httpListing({ requiresBaseURL: false }),
+        });
+        expect(describeProviderId(m, m.id).acceptsBaseUrl).toBe(false);
+    });
+});
+
 describe('describeProviderId - autoListModels (listingIsAutoListable)', () => {
     it('is false for a custom endpoint even when its listing is static/listable', () => {
         const m = makeModule({ modelListing: () => staticListing() });
@@ -296,6 +332,7 @@ describe('describeProviderId - doc passthrough and full shape', () => {
             requiresBaseUrl: false,
             autoListModels: true,
             listsModelsLive: true,
+            acceptsBaseUrl: false,
             doc: 'https://docs/openai',
         });
     });
@@ -317,6 +354,7 @@ describe('describeProviderId - doc passthrough and full shape', () => {
             requiresBaseUrl: true,
             autoListModels: false,
             listsModelsLive: true,
+            acceptsBaseUrl: true,
             doc: 'https://docs/openai',
         });
     });

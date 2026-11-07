@@ -678,8 +678,18 @@ Evidence field in ${params.languageResultPrompt}.`;
             });
 
             return { keep: result.verdict, evidence: result.evidence };
-        } catch {
+        } catch (error) {
             // Parse/LLM failure — keep suggestion (safe default)
+            this.logger.warn({
+                message: `${LLM_ERROR_TAG} safeguard prompt-only verification failed for PR#${params.prNumber}; keeping the suggestion`,
+                error,
+                context: SafeguardPipelineService.name,
+                metadata: {
+                    organizationAndTeamData: params.organizationAndTeamData,
+                    prNumber: params.prNumber,
+                    suggestionId: suggestion.id,
+                },
+            });
             return {
                 keep: true,
                 evidence: 'prompt-only parse failed, keeping as safe default',

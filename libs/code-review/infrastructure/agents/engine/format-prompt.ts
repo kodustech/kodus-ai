@@ -247,6 +247,19 @@ function extractSuggestionArray(text: string): unknown[] | null {
         return lone;
     }
 
+    // One item sent without the array around it.
+    const single = normalizeEnvelope(text, 'items', ARRAY_ALIASES);
+    if (
+        single &&
+        typeof single === 'object' &&
+        !Array.isArray(single) &&
+        'index' in single &&
+        typeof (single as { suggestionContent?: unknown }).suggestionContent ===
+            'string'
+    ) {
+        return [single];
+    }
+
     return null;
 }
 
@@ -334,6 +347,15 @@ function loneArrayInObject(text: string): unknown[] | null {
     return arrays.length === 1 ? arrays[0] : null;
 }
 
+/** The item's index, also when the model wrote it as an integer string. */
+function readIndex(raw: unknown): number | undefined {
+    if (typeof raw === 'number') return raw;
+    if (typeof raw === 'string' && /^\d+$/.test(raw.trim())) {
+        return Number(raw.trim());
+    }
+    return undefined;
+}
+
 /**
  * Parse the model response into a map of index → formatted suggestion.
  */
@@ -352,12 +374,13 @@ export function parseFormatResponse(text: string): {
     }
 
     for (const item of items as any[]) {
+        const index = readIndex(item?.index);
         if (
             item &&
-            typeof item.index === 'number' &&
+            index !== undefined &&
             typeof item.suggestionContent === 'string'
         ) {
-            formatted.set(item.index, {
+            formatted.set(index, {
                 suggestionContent: item.suggestionContent,
                 improvedCode: item.improvedCode || '',
                 ...(typeof item.title === 'string'

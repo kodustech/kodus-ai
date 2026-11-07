@@ -1,12 +1,14 @@
 // The cases this eval runs: one per PR of the severity dataset
 // (evals/severity/dataset/items.json), its suggestions in one call, each with what it checks.
 const { items } = require('../severity/dataset/items.json');
+// Run by hand only (README): suggestions that quote </think> (#2409).
+const SET_ITEMS = { 'think-tag-leak': () => require('./think-tag-leak.json').items };
 
 const LEVELS = ['low', 'medium', 'high', 'critical'];
 
-function casesOf() {
+function casesOf(set) {
     const byPr = new Map();
-    for (const item of items) {
+    for (const item of SET_ITEMS[set]?.() ?? items) {
         if (!byPr.has(item.caseId)) byPr.set(item.caseId, []);
         byPr.get(item.caseId).push(item);
     }

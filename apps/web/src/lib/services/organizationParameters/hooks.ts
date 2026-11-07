@@ -20,6 +20,9 @@ export function useSuspenseGetLLMProviders() {
             name: string;
             requiresApiKey: boolean;
             requiresBaseUrl: boolean;
+            /** A base URL field is offered, required or optional. Absent on an
+             *  API that predates it. */
+            acceptsBaseUrl?: boolean;
             autoListModels: boolean;
             /** Provider lists models via a live `/models` call (needs the key). */
             listsModelsLive: boolean;

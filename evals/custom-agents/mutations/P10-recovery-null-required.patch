@@ -1,0 +1,22 @@
+diff --git a/libs/code-review/infrastructure/agents/core/finder-output-schema.ts b/libs/code-review/infrastructure/agents/core/finder-output-schema.ts
+index 2c5929cfd..bfd4350c3 100644
+--- a/libs/code-review/infrastructure/agents/core/finder-output-schema.ts
++++ b/libs/code-review/infrastructure/agents/core/finder-output-schema.ts
+@@ -99,7 +99,7 @@ export const LEAN_RECOVERY = z.object({
+             relevantFile: true,
+             suggestionContent: true,
+         }).extend({
+-            label: z.string().optional(),
++            label: z.string().nullable(),
+             relevantLinesStart: z.number().optional(),
+             relevantLinesEnd: z.number().optional(),
+         }),
+@@ -108,7 +108,7 @@ export const LEAN_RECOVERY = z.object({
+ 
+ const FULL_RECOVERY_ITEM = FULL_FINDING.extend({
+     language: z.string().optional(),
+-    label: z.string().optional(),
++    label: z.string().nullable(),
+     oneSentenceSummary: z.string().optional().describe(TITLE_PROMPT_SPEC),
+     relevantLinesStart: z.number().optional(),
+     relevantLinesEnd: z.number().optional(),

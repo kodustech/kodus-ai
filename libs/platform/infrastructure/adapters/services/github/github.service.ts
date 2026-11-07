@@ -22,6 +22,8 @@ import {
     githubUserAuthorizationUrl,
     installationAuthorizationRedirectUri,
     InstallationAuthorizationError,
+    InstallationLinkProgress,
+    installationLinkLogMetadata,
     isInstallationId,
     openInstallationState,
     sealInstallationState,
@@ -627,6 +629,7 @@ export class GithubService
     private async assertCanLinkInstallation(
         appOctokit: Octokit,
         params: any,
+        progress: InstallationLinkProgress = { step: 'open-state' },
     ): Promise<void> {
         const installationId = params?.code;
         if (!isInstallationId(installationId)) {
@@ -634,6 +637,7 @@ export class GithubService
         }
         const organizationId = params?.organizationAndTeamData?.organizationId;
 
+        progress.step = 'open-state';
         let state: ReturnType<typeof openInstallationState>;
         try {
             state = openInstallationState(params?.githubState);
@@ -659,6 +663,7 @@ export class GithubService
             );
         }
 
+        progress.step = 'exchange-user-code';
         let userToken: string;
         try {
             const userAuth = (await appOctokit.auth({
@@ -673,16 +678,20 @@ export class GithubService
             );
         }
 
+        progress.step = 'list-user-installations';
         const installations = await this.createUserOctokit(userToken).paginate(
             'GET /user/installations',
             { per_page: 100 },
         );
-        if (!installations.some((i) => String(i.id) === installationId)) {
+        // GitHub's list can carry null entries; one must not end the link
+        // with "Cannot read properties of null (reading 'id')".
+        if (!installations.some((i) => String(i?.id) === installationId)) {
             throw new BadRequestException(
                 'Your GitHub account cannot access this installation of the Kodus app. Ask an owner of the GitHub organization to connect it.',
             );
         }
 
+        progress.step = 'check-existing-links';
         // Every active link, not one of them: an installation linked to the
         // caller's organization may also be linked to another one.
         const linked = (
@@ -715,17 +724,22 @@ export class GithubService
     async authenticateWithCodeOauth(
         params: any,
     ): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+        // Which step a failed link stopped at: the error below is rewrapped
+        // for the client, so without it the log only shows the catch.
+        const progress: InstallationLinkProgress = { step: 'check-env' };
         try {
             this.assertGithubOAuthEnv();
             const appOctokit = this.createOctokitInstance();
 
-            await this.assertCanLinkInstallation(appOctokit, params);
+            await this.assertCanLinkInstallation(appOctokit, params, progress);
 
+            progress.step = 'mint-installation-token';
             const installationAuthentication = await appOctokit.auth({
                 type: 'installation',
                 installationId: params.code,
             });
 
+            progress.step = 'get-installation';
             const installLogin = await appOctokit.rest.apps.getInstallation({
                 installation_id: parseInt(params.code),
             });
@@ -734,6 +748,8 @@ export class GithubService
             // Detectar tipo de conta e cachear no authDetails
             const installationData =
                 installLogin.data as GitHubInstallationData;
+            progress.targetType = installationData?.target_type;
+            progress.hasAccount = !!installationData?.account;
             const accountLogin = installationData.account.login;
             const accountType =
                 installationData.target_type.toLowerCase() === 'user'
@@ -760,14 +776,27 @@ export class GithubService
                 accountType: accountType as 'organization' | 'user',
             };
 
+            progress.step = 'list-repositories';
             const repoPermissions = await this.checkRepositoryPermissions({
                 organizationAndTeamData: params.organizationAndTeamData,
                 org: accountLogin,
                 authDetails,
             });
 
-            if (!repoPermissions.success) return repoPermissions;
+            if (!repoPermissions.success) {
+                this.logger.warn({
+                    message:
+                        'GitHub App installation not linked: no repository visible to it',
+                    context: GithubService.name,
+                    metadata: {
+                        ...installationLinkLogMetadata(params, progress),
+                        status: repoPermissions.status,
+                    },
+                });
+                return repoPermissions;
+            }
 
+            progress.step = 'find-integration';
             const integration = await this.integrationService.findOne({
                 organization: {
                     uuid: params.organizationAndTeamData.organizationId,
@@ -776,12 +805,16 @@ export class GithubService
                 platform: PlatformType.GITHUB,
             });
 
+            progress.step = integration
+                ? 'update-integration'
+                : 'create-integration';
             await this.handleIntegration(
                 integration,
                 authDetails,
                 params.organizationAndTeamData,
             );
 
+            progress.step = 'update-installation-status';
             const githubStatus = await this.findOneByOrganizationId(
                 params.organizationAndTeamData,
             );
@@ -797,14 +830,42 @@ export class GithubService
                 );
             }
 
+            this.logger.log({
+                message: 'GitHub App installation linked',
+                context: GithubService.name,
+                metadata: {
+                    ...installationLinkLogMetadata(params, progress),
+                    created: !integration,
+                },
+            });
+
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (err) {
-            if (err instanceof BadRequestException) throw err;
+            const metadata = installationLinkLogMetadata(params, progress);
+            if (err instanceof BadRequestException) {
+                // An expected refusal (state, access, another org's link):
+                // the reason is the message the user sees.
+                this.logger.warn({
+                    message: 'GitHub App installation link refused',
+                    context: GithubService.name,
+                    metadata: { ...metadata, reason: err.message },
+                });
+                throw err;
+            }
+            // Unexpected: keep the original error and its stack, which the
+            // client-facing BadRequestException below does not carry.
+            this.logger.error({
+                message: 'GitHub App installation link failed',
+                context: GithubService.name,
+                error: err,
+                metadata: { ...metadata, githubStatus: err?.status },
+            });
             throw new BadRequestException(
-                err.message || 'Error authenticating with OAUTH.',
+                err?.message || 'Error authenticating with OAUTH.',
+                { cause: err },
             );
         }
     }
@@ -2931,6 +2992,13 @@ export class GithubService
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<Octokit> {
         return this.instanceOctokit(organizationAndTeamData);
+    }
+
+    /** Id of the GitHub App this deployment authenticates as, if set. */
+    public getGithubAppId(): number | undefined {
+        const raw = this.configService.get<string>('API_GITHUB_APP_ID')?.trim();
+        const appId = raw ? Number(raw) : NaN;
+        return Number.isInteger(appId) && appId > 0 ? appId : undefined;
     }
 
     async getCheckEvidence(
