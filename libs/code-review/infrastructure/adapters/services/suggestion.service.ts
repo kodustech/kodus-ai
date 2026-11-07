@@ -113,7 +113,7 @@ export class SuggestionService implements ISuggestionService {
         savedSuggestions: Partial<ISuggestion>[];
         diffSource?: ChangedFilesSource;
     }): Promise<ImplementationCheckResult> {
-        const candidates = (savedSuggestions || []).filter(
+        const candidates = savedSuggestions.filter(
             (s) =>
                 s.id &&
                 s.deliveryStatus === DeliveryStatus.SENT &&
@@ -126,9 +126,7 @@ export class SuggestionService implements ISuggestionService {
             return { skipped: 'NO_SUGGESTIONS', checked: 0, ...empty };
         }
 
-        const patches = new Map(
-            (changedFiles || []).map((f) => [f.filename, f.patch]),
-        );
+        const patches = new Map(changedFiles.map((f) => [f.filename, f.patch]));
         const onChangedFiles = candidates.filter(
             (s) => s.relevantFile && patches.has(s.relevantFile),
         );
@@ -278,7 +276,10 @@ export class SuggestionService implements ISuggestionService {
                             },
                         );
                         if (raised) {
-                            persisted.push({ id, implementationStatus: status });
+                            persisted.push({
+                                id,
+                                implementationStatus: status,
+                            });
                             return;
                         }
                     }

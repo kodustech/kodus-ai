@@ -85,6 +85,9 @@ async function runCase(testCase, makeService) {
         changedFiles: testCase.changedFiles,
         savedSuggestions: suggestions,
     });
+    // A suggestion the check leaves alone keeps its status, and that status is
+    // the verdict the Cockpit reads; only a check that records an unmeasured
+    // outcome takes it out of the score.
     return suggestions.map((s) => {
         const written = writes.get(s.id) || {};
         const unmeasured = written.implementationCheck?.outcome === 'unmeasured';
