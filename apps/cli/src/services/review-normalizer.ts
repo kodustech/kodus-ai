@@ -50,15 +50,22 @@ export function mapPrLevelSuggestions(
     }));
 }
 
+function normalizeIssueSeverities(issues: ReviewIssue[]): ReviewIssue[] {
+    return issues.map((issue) => ({
+        ...issue,
+        severity: normalizeSeverity(issue.severity),
+    }));
+}
+
 export function normalizeSuggestionsResponse(
     response: PullRequestSuggestionsResponse,
 ): ReviewResult {
     let issues: ReviewIssue[] = [];
 
     if (Array.isArray(response.issues)) {
-        issues = response.issues;
+        issues = normalizeIssueSeverities(response.issues);
     } else if (Array.isArray(response.suggestions)) {
-        issues = response.suggestions;
+        issues = normalizeIssueSeverities(response.suggestions);
     } else if (
         response.suggestions &&
         typeof response.suggestions === 'object'
