@@ -35,6 +35,7 @@ import { LlmVerifier } from '@libs/code-review/infrastructure/agents/core/verifi
 import { ConventionVerifier } from '@libs/code-review/infrastructure/agents/core/convention-verifier.agent';
 import {
     checkConventionQuotes,
+    isTeamSystemSource,
     isToolSource,
     isProvenByAstGrep,
     type AstGrepOutputLog,
@@ -881,6 +882,10 @@ export interface FinderWithVerifyResult {
     droppedByQuoteCheck: ConventionCheckRejected[];
     /** The finder's RunState (for usage/steps/trace mapping by callers). */
     finderState: RunState;
+    /** The RunState of each extra pass (the synthesis rescue), in run order.
+     *  A result one of them submitted whole is the agent's result too, when
+     *  the first pass's was unusable (#2384). */
+    recallStates: RunState[];
     /** Token usage of the verify sub-step (sum across verifier runs). The
      *  finder's own usage is in finderState.usage; this is reported separately
      *  so callers can attribute cost — it is NOT in finderState. */
@@ -1030,6 +1035,7 @@ export async function runFinderWithVerify(
     const recallUsage = lensResult
         ? sumVerifyUsage(recall.usage, lensResult.usage)
         : recall.usage;
+    const recallStates = recall.states;
     const passStats = [
         baseStat,
         ...recall.passStats,
@@ -1046,6 +1052,7 @@ export async function runFinderWithVerify(
             unverified: [],
             droppedByQuoteCheck: [],
             finderState,
+            recallStates,
             verifyUsage: ZERO_VERIFY_USAGE,
             recallUsage,
             passStats,
@@ -1060,13 +1067,18 @@ export async function runFinderWithVerify(
     // Without `conventionCheck` everything below sees only `bugs` = all.
     const verifyT0 = Date.now();
     const route = params.conventionCheck
-        ? await routeByKind(suggestions, params.conventionCheck, {
-              organizationId: params.telemetryMetadata?.organizationId,
-              teamId: params.telemetryMetadata?.teamId,
-              repositoryId: params.telemetryMetadata?.repositoryId,
-              pullRequestId: params.telemetryMetadata?.pullRequestId,
-              agent: params.agentName,
-          })
+        ? await routeByKind(
+              suggestions,
+              params.conventionCheck,
+              {
+                  organizationId: params.telemetryMetadata?.organizationId,
+                  teamId: params.telemetryMetadata?.teamId,
+                  repositoryId: params.telemetryMetadata?.repositoryId,
+                  pullRequestId: params.telemetryMetadata?.pullRequestId,
+                  agent: params.agentName,
+              },
+              params.teamSystemTools,
+          )
         : {
               bugs: suggestions,
               proven: [] as FinderSuggestion[],
@@ -1202,6 +1214,7 @@ export async function runFinderWithVerify(
         unverified,
         droppedByQuoteCheck: route.rejected,
         finderState,
+        recallStates,
         verifyUsage: sumVerifyUsage(hv2.verifyUsage, conventionUsage),
         verifyMs,
         recallUsage,
@@ -1425,6 +1438,7 @@ async function routeByKind(
     suggestions: FinderSuggestion[],
     check: ConventionCheckParams,
     logContext: Record<string, unknown> = {},
+    teamSystemTools: readonly string[] = [],
 ): Promise<{
     bugs: FinderSuggestion[];
     proven: FinderSuggestion[];
@@ -1432,10 +1446,14 @@ async function routeByKind(
     sectionOf: Map<FinderSuggestion, string>;
     rejected: ConventionCheckRejected[];
 }> {
-    // A "convention" sourced from a tool's output (e.g. a CLI) quotes no
-    // rule, so the quote gate would drop it: it is checked as a bug instead.
+    // A "convention" sourced from a tool's output (e.g. a CLI) or from a
+    // record in one of the team's systems quotes no rule, so the quote gate
+    // would drop it: it is checked as a bug instead.
+    const notAGuide = (s: FinderSuggestion) =>
+        isToolSource(s, check.guideFiles) ||
+        isTeamSystemSource(s, teamSystemTools);
     const toolSourced = suggestions.filter(
-        (s) => s.kind === 'convention' && isToolSource(s, check.guideFiles),
+        (s) => s.kind === 'convention' && notAGuide(s),
     );
     const bugs = [
         ...suggestions.filter((s) => s.kind !== 'convention'),
@@ -1446,7 +1464,7 @@ async function routeByKind(
         })),
     ];
     const candidates = suggestions.filter(
-        (s) => s.kind === 'convention' && !isToolSource(s, check.guideFiles),
+        (s) => s.kind === 'convention' && !notAGuide(s),
     );
     if (candidates.length === 0) {
         return {
@@ -1689,6 +1707,9 @@ export async function runRecallPasses(
     findings: FinderFindings;
     usage: VerifyUsage;
     passStats: RecallPassStat[];
+    /** Each pass's RunState, in run order, read by the caller to tell whether
+     *  the agent delivered a result (see FinderWithVerifyResult.recallStates). */
+    states: RunState[];
     /** Files the recall passes opened with readFile/checkTypes. The evidence
      *  gate only saw the base pass's reads, so a recall finding on a file the
      *  pass itself read still got the full re-verify as "uninvestigated". */
@@ -1701,8 +1722,9 @@ export async function runRecallPasses(
     // numbers compare across PRs and runs without carrying epochs.
     const FINDER_T0 = Date.now();
     const passStats: RecallPassStat[] = [];
+    const states: RunState[] = [];
     if (params.skipHeavyPasses) {
-        return { findings, usage, passStats, investigatedFiles };
+        return { findings, usage, passStats, states, investigatedFiles };
     }
 
     const toolCalls = collectToolCalls(params.finderState);
@@ -1728,6 +1750,7 @@ export async function runRecallPasses(
             ctx,
         );
         const elapsedMs = Date.now() - t0;
+        states.push(state);
         // Extract BEFORE touching the shared accumulators, then merge
         // synchronously (single-threaded, so the read-modify-write is atomic).
         const extracted = await extractFindingsWithRecovery(
@@ -1781,7 +1804,7 @@ export async function runRecallPasses(
         );
     }
 
-    return { findings, usage, passStats, investigatedFiles };
+    return { findings, usage, passStats, states, investigatedFiles };
 }
 
 /** Dedup-merge extra findings into the base set (ported from legacy

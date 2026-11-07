@@ -48,6 +48,10 @@ const SPEC = {
         'libs/code-review/infrastructure/agents/knowledge/other-repository-knowledge.spec.ts',
     reviewKnowledge:
         'libs/code-review/infrastructure/agents/knowledge/review-knowledge.spec.ts',
+    finished:
+        'libs/code-review/infrastructure/agents/core/incomplete-and-unverified.spec.ts',
+    recovery:
+        'libs/code-review/infrastructure/agents/core/finder.recovery-nulls.spec.ts',
 };
 
 // The cases whose checks a model-judged property owns, so its run pays only for them.
@@ -131,6 +135,18 @@ const MUTATIONS = [
         patch: 'P8-main-review-reads-other-repository.patch',
         break: 'a guide of another repository linked to the main review reaches the built-in agents, which have no quote gate',
         checks: [{ jest: [SPEC.reviewKnowledge] }],
+    },
+    {
+        property: 'P9',
+        patch: 'P9-first-pass-only-result.patch',
+        break: 'only the first pass can deliver the result, so a synthesis rescue that submitted a whole one is read as no result (#2384)',
+        checks: [{ jest: [SPEC.finished] }],
+    },
+    {
+        property: 'P10',
+        patch: 'P10-recovery-null-required.patch',
+        break: 'prose recovery requires the label key, so an answer with "label": null fails and asks the model again (#2384)',
+        checks: [{ jest: [SPEC.recovery] }],
     },
 ];
 
