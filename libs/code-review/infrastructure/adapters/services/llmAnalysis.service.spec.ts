@@ -42,6 +42,7 @@ import {
 } from './llmAnalysis.service';
 import { setLlmObservability } from '@libs/llm/llm-observability';
 import { LLM } from '@libs/llm/llm';
+import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
 import { ReviewModeResponse } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { prompt_severity_analysis_user } from '@libs/common/utils/prompts/severityAnalysis';
 import { prompt_checkSuggestionImplementation } from '@libs/common/utils/prompts';
@@ -259,15 +260,19 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             });
         });
 
-        it('accepts an item whose status is null on the wire, so it costs that item only', () => {
-            expect(
-                implementationCheckSchema.safeParse({
-                    verdicts: [
-                        { id: 's1', implementationStatus: 'implemented' },
-                        { id: 's2', implementationStatus: null },
-                    ],
-                }).success,
-            ).toBe(true);
+        // LLM.run validates through the strict wire schema, which drops null
+        // properties before parsing.
+        it('accepts an item whose status is null on the wire, so it costs that item only', async () => {
+            const wire = zodToStrictWireSchema(implementationCheckSchema);
+
+            const parsed = await wire.validate!({
+                verdicts: [
+                    { id: 's1', implementationStatus: 'implemented' },
+                    { id: 's2', implementationStatus: null },
+                ],
+            });
+
+            expect(parsed.success).toBe(true);
         });
 
         it('marks a suggestion answered with a null status invalid_output', async () => {
@@ -299,23 +304,6 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
                 ],
             });
         });
-
-        it.each([null, { codeSuggestions: [] }, 'implemented'])(
-            'marks every suggestion invalid_output when the model returns %j',
-            async (result) => {
-                runSpy.mockResolvedValue(result as any);
-
-                const out = await check(buildService());
-
-                expect(out).toEqual({
-                    verdicts: [],
-                    unmeasured: [
-                        { id: 's1', reason: 'invalid_output' },
-                        { id: 's2', reason: 'invalid_output' },
-                    ],
-                });
-            },
-        );
     });
 
     describe('filterSuggestionsSafeGuard', () => {

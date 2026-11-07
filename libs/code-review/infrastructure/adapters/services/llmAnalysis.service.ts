@@ -59,9 +59,10 @@ export const implementationCheckSchema = z.object({
     verdicts: z.array(
         z.object({
             id: z.string(),
-            // Nullable: a model that cannot answer one item writes null, and
-            // that costs the item, not the whole file.
-            implementationStatus: z.string().nullable(),
+            // Optional, so a model that cannot answer one item can write null
+            // (the wire schema turns null into absent): that costs the item,
+            // not the whole file.
+            implementationStatus: z.string().optional(),
         }),
     ),
 });
@@ -231,7 +232,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
             unmeasured: ids.map((id) => ({ id, reason })),
         });
 
-        let result: unknown;
+        let result: z.infer<typeof implementationCheckSchema>;
         try {
             result = await LLM.run({
                 schema: implementationCheckSchema,
@@ -263,35 +264,18 @@ export class LLMAnalysisService implements IAIAnalysisService {
             return allUnmeasured('llm_error');
         }
 
-        const answers = (result as { verdicts?: unknown })?.verdicts;
-        if (!Array.isArray(answers)) {
-            this.logger.warn({
-                message: `Implementation check for PR#${prNumber} returned no verdicts`,
-                context: LLMAnalysisService.name,
-                metadata: {
-                    organizationAndTeamData,
-                    prNumber,
-                    file: file.filename,
-                    resultType: Array.isArray(result) ? 'array' : typeof result,
-                    usingByok: !!byokConfig,
-                },
-            });
-            return allUnmeasured('invalid_output');
-        }
-
+        // LLM.run validates the answer against the schema, or throws.
         const asked = new Set(ids);
-        const byId = new Map<string, unknown>();
+        const byId = new Map<string, string | undefined>();
         let foreign = 0;
-        for (const answer of answers as Array<{
-            id?: unknown;
-            implementationStatus?: unknown;
-        }>) {
-            const id = typeof answer?.id === 'string' ? answer.id : undefined;
-            if (!id || !asked.has(id)) {
+        for (const answer of result.verdicts) {
+            if (!asked.has(answer.id)) {
                 foreign += 1;
                 continue;
             }
-            if (!byId.has(id)) byId.set(id, answer.implementationStatus);
+            if (!byId.has(answer.id)) {
+                byId.set(answer.id, answer.implementationStatus);
+            }
         }
 
         const out: ImplementationCheckModelResult = {

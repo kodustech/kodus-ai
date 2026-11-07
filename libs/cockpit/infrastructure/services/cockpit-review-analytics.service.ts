@@ -158,7 +158,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
             }
             const sent = Number(r.sent);
             const implemented = Number(r.implemented);
-            const notMeasured = Number(r.not_measured ?? 0);
+            const notMeasured = Number(r.not_measured);
             week.sent += sent;
             week.implemented += implemented;
             week.notMeasured += notMeasured;
