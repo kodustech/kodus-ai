@@ -53,10 +53,12 @@ async function toggle(locator, value) {
     }
 }
 async function save() {
-    const responsePromise = page.waitForResponse((response) =>
-        response.request().method() === 'POST' && response.url().includes('create-or-update-code-review'));
-    await page.getByRole('button', { name: 'Save settings', exact: true }).click();
-    const response = await responsePromise;
+    const button = page.getByRole('button', { name: 'Save settings', exact: true });
+    await expect(button).toBeEnabled({ timeout: 15_000 });
+    const [response] = await Promise.all([
+        page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes('create-or-update-code-review')),
+        button.click(),
+    ]);
     const sent = response.request().postDataJSON()?.configValue || {};
     saves.push({ fields: Object.keys(sent), riskAssessmentActive: sent.riskAssessmentActive,
         criteriaCount: sent.riskCriteria?.length, policyCount: sent.approvalPolicies?.length,
@@ -66,6 +68,7 @@ async function save() {
         throw new Error(`Settings save returned HTTP ${response.status()}: ${JSON.stringify(body.message ?? body.error ?? 'Request rejected').slice(0, 1200)}`);
     }
     await page.getByText('Settings saved', { exact: true }).last().waitFor();
+    await expect(button).not.toHaveAttribute('data-loading', 'true');
 }
 async function openMenu(name, heading = name) {
     await hydrated(menu(name));
@@ -75,6 +78,18 @@ async function openMenu(name, heading = name) {
 async function chooseMode(label, mode) {
     await page.getByRole('combobox', { name: label, exact: true }).click();
     await page.getByRole('option', { name: mode, exact: true }).click();
+}
+async function setMode(label, mode, forceChange = false) {
+    const combo = page.getByRole('combobox', { name: label, exact: true });
+    await hydrated(combo);
+    await expect(combo).toContainText(/Balanced|Heavy/, { timeout: 20_000 });
+    if ((await combo.innerText()).includes(mode)) {
+        if (!forceChange) return;
+        await chooseMode(label, mode === 'Balanced' ? 'Heavy' : 'Balanced');
+        await save();
+    }
+    await chooseMode(label, mode);
+    await save();
 }
 
 try {
@@ -117,8 +132,7 @@ try {
     await openMenu('Routing');
     await page.getByText('Default model', { exact: true }).waitFor();
     await page.getByRole('combobox', { name: 'No risk found', exact: true }).waitFor();
-    await chooseMode('Risk found', 'Balanced');
-    await save();
+    await setMode('Risk found', 'Balanced', true);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('combobox', { name: 'Risk found', exact: true })).toContainText('Balanced', { timeout: 20_000 });
     pass('Risk routing and model defaults render and persist');
@@ -127,7 +141,8 @@ try {
     await openMenu('General', 'General settings');
     const summary = page.getByRole('heading', { name: 'Review mode', exact: true }).locator('..').locator('..');
     await summary.getByText('Risk found', { exact: true }).waitFor();
-    assert.doesNotMatch(await summary.innerText(), /Heavy|Not configured/);
+    await expect(summary.getByText('Risk found', { exact: true }).locator('..')).toContainText('Balanced');
+    await expect(summary).not.toContainText('Not configured');
     pass('General shows the effective routing');
     const approval = page.getByRole('switch', { name: 'Automatic PR approval', exact: true });
     await toggle(approval, true);
@@ -151,22 +166,19 @@ try {
     await save();
     await openMenu('Routing');
     await page.getByRole('combobox', { name: 'All PRs', exact: true }).waitFor();
-    await chooseMode('All PRs', 'Heavy');
-    await save();
+    await setMode('All PRs', 'Heavy', true);
     await openMenu('General', 'General settings');
     await page.getByText('All PRs', { exact: true }).waitFor();
     await screenshot('risk-off-general');
     pass('Risk off uses one fixed review mode and a configured default');
 
     await openMenu('Routing');
-    await chooseMode('All PRs', 'Balanced');
-    await save();
+    await setMode('All PRs', 'Balanced');
     await openMenu('Risk assessment');
     await toggle(riskToggle, true);
     await save();
     await openMenu('Routing');
-    await chooseMode('Risk found', 'Heavy');
-    await save();
+    await setMode('Risk found', 'Heavy');
     await screenshot('routing-final');
     await page.setViewportSize({ width: 390, height: 844 });
     await screenshot('routing-mobile');
