@@ -366,7 +366,7 @@ jobs:
                       name=$($RUNO environments | jq -er --arg b "$HEAD_REF" --arg p "$profile" \
                         '[.[] | select(.repo == "kodus-ai" and .branch == $b and .profile == $p)] | if length == 1 then .[0].envName else error("Expected one matching preview") end')
                       $RUNO attach "$name"
-                      url=$($RUNO url --branch "$HEAD_REF" --profile "$profile")
+                      url=$($RUNO url --branch "$HEAD_REF" --profile "$profile" | head -n 1)
                       case "$url" in https://*) ;; *) echo '::error::No running preview URL'; exit 1 ;; esac
                       urls="$urls$profile=$url "
                     done

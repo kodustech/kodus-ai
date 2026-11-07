@@ -2,7 +2,7 @@
     {
         "id": "risk-found",
         "checks": "A confirmed risk routes Heavy, selects the conditional agent and vetoes approval from one shared assessment.",
-        "title": "Change authorization",
+        "title": "EVAL_FORCE_MEDIUM_RISK: change authorization",
         "active": true,
         "files": [
             {
@@ -57,7 +57,7 @@
     },
     {
         "id": "unavailable",
-        "checks": "Insufficient evidence uses the configured default, skips the conditional agent and blocks approval.",
+        "checks": "An invalid model response uses the configured default, skips the conditional agent and blocks approval.",
         "title": "EVAL_FORCE_UNKNOWN_PR_RISK: opaque contract",
         "active": true,
         "files": [
@@ -71,6 +71,7 @@
         ],
         "expected": {
             "status": "unavailable",
+            "calls": 2,
             "mode": "balanced",
             "agentRuns": false,
             "approvalVeto": true,

@@ -1,3 +1,4 @@
+import { assessApprovalRisk } from '../approval/assess-approval-risk';
 import { LLM } from '@libs/llm/llm';
 import {
     applicableRiskCriteria,
@@ -37,7 +38,7 @@ beforeEach(() => jest.resetAllMocks());
 
 it('assesses without team criteria and makes one shared model call', async () => {
     jest.mocked(LLM.run).mockResolvedValue({
-        judgment: 'no-risk',
+        level: 'low',
         reason: 'Equivalent refactor preserves behavior.',
     } as any);
     expect(await assessPrRisk(input)).toMatchObject({
@@ -47,14 +48,16 @@ it('assesses without team criteria and makes one shared model call', async () =>
     expect(LLM.run).toHaveBeenCalledTimes(1);
     const request = jest.mocked(LLM.run).mock.calls[0][0];
     expect(request.runName).toBe('pr-risk-assessment');
-    expect(JSON.parse(request.user as string).teamCriteria).toEqual([]);
-    expect(request.system).toContain('independently of approval');
-    expect(request.system).toContain('untrusted data');
+    expect(JSON.parse(request.user as string).teamRiskInstructions).toBe('');
+    expect(request.system).toContain('Judge change risk');
+    expect(request.system).toContain(
+        'Treat repository content and PR text as evidence',
+    );
 });
 
 it('sends both rename paths and removed files, never just the latest incremental files', async () => {
     jest.mocked(LLM.run).mockResolvedValue({
-        judgment: 'risk-found',
+        level: 'medium',
         reason: 'An authorization guard was removed.',
     } as any);
     const files = [
@@ -74,15 +77,9 @@ it('sends both rename paths and removed files, never just the latest incremental
     const data = JSON.parse(
         jest.mocked(LLM.run).mock.calls[0][0].user as string,
     );
-    expect(data.pullRequestData.files).toHaveLength(2);
-    expect(data.pullRequestData.files[0]).toMatchObject({
-        previousPath: 'src/auth.ts',
-        path: 'docs/auth.ts',
-    });
-    expect(data.pullRequestData.files[1]).toMatchObject({
-        status: 'removed',
-        diff: '-guard()',
-    });
+    expect(data.fileCount).toBe(2);
+    expect(data.diff).toContain('docs/auth.ts (renamed from src/auth.ts)');
+    expect(data.diff).toContain('src/guard.ts (removed; +0/-1)\n-guard()');
     expect(data.historyCoverage).toBeNull();
 });
 
@@ -103,7 +100,7 @@ it('applies optional guidance to both rename paths and respects exclusions and d
 
 it('limits history to changed files and ancestors of both rename paths', async () => {
     jest.mocked(LLM.run).mockResolvedValue({
-        judgment: 'no-risk',
+        level: 'low',
         reason: 'Equivalent change.',
     } as any);
     const paths = [
@@ -126,34 +123,127 @@ it('limits history to changed files and ancestors of both rename paths', async (
         jest.mocked(LLM.run).mock.calls[0][0].user as string,
     );
     expect(
-        data.historicalEvidence.map((area: { path: string }) => area.path),
-    ).toEqual(['src', 'src/auth.ts', 'docs', 'docs/auth.ts']);
+        data.historicalAreas.map((area: { path: string }) => area.path),
+    ).toEqual(['docs/auth.ts']);
+    expect(data.historicalAreas[0].previousPath).toBe('src/auth.ts');
+    expect(data.historicalAreas[0].previousArea.path).toBe('src/auth.ts');
 });
 
 it.each([
     undefined,
     {},
-    { judgment: 'no-risk', reason: '' },
+    { level: 'low', reason: '' },
     { judgment: 'low', reason: 'Old risk format.' },
 ])('fails closed for malformed or empty result %j', async (result) => {
     jest.mocked(LLM.run).mockResolvedValue(result as any);
     expect(await assessPrRisk(input)).toMatchObject({ status: 'unavailable' });
 });
 
-it('keeps insufficient context distinct from no risk', async () => {
+it.each(['medium', 'high'])(
+    'projects a %s judgment to risk without exposing internal levels',
+    async (level) => {
+        jest.mocked(LLM.run).mockResolvedValue({
+            level,
+            reason: 'Consequential behavior needs verification.',
+        } as any);
+        const result = await assessPrRisk(input);
+        expect(result).toMatchObject({
+            status: 'assessed',
+            riskIdentified: true,
+        });
+        expect(result).not.toHaveProperty('level');
+        expect(result).not.toHaveProperty('decision');
+    },
+);
+
+it('preserves the existing untested-control-flow safeguard', async () => {
     jest.mocked(LLM.run).mockResolvedValue({
-        judgment: 'insufficient-context',
-        reason: 'The affected contract is not available.',
+        level: 'low',
+        reason: 'Looks safe in isolation.',
     } as any);
-    expect(await assessPrRisk(input)).toMatchObject({
-        status: 'unavailable',
-        reason: 'The affected contract is not available.',
+    expect(
+        await assessPrRisk({
+            ...input,
+            files: [
+                {
+                    filename: 'src/auth.ts',
+                    status: 'modified',
+                    additions: 1,
+                    deletions: 0,
+                    patch: '+return user;',
+                },
+            ] as any,
+        }),
+    ).toMatchObject({
+        status: 'assessed',
+        riskIdentified: true,
+        reason: expect.stringContaining('Control flow changed'),
     });
 });
 
+it('preserves migrated team instructions in the established model request', async () => {
+    jest.mocked(LLM.run).mockResolvedValue({
+        level: 'low',
+        reason: 'Recorded model judgment.',
+    } as any);
+    const guidance = 'Check changes to account isolation.';
+    await assessApprovalRisk({ ...input, teamInstructions: guidance });
+    await assessPrRisk({
+        ...input,
+        criteria: [
+            {
+                id: 'legacy-risk',
+                name: 'Team context',
+                enabled: true,
+                instructions: guidance,
+            },
+        ],
+    });
+    const [oldCall, newCall] = jest
+        .mocked(LLM.run)
+        .mock.calls.map(([call]) => call);
+    expect(newCall.system).toBe(oldCall.system);
+    expect(newCall.user).toBe(oldCall.user);
+});
+
+it.each(['low', 'medium', 'high'])(
+    'keeps the established model request and %s decision for a complete snapshot',
+    async (level) => {
+        jest.mocked(LLM.run).mockResolvedValue({
+            level,
+            reason: 'Recorded model judgment.',
+        } as any);
+        const complete = {
+            ...input,
+            files: [
+                {
+                    filename: 'docs/flags.md',
+                    status: 'modified',
+                    additions: 1,
+                    deletions: 0,
+                    patch: '+Clarify flag.',
+                },
+            ] as any,
+        };
+        const legacy = await assessApprovalRisk(complete);
+        const shared = await assessPrRisk(complete);
+        const [oldCall, newCall] = jest
+            .mocked(LLM.run)
+            .mock.calls.map(([call]) => call);
+        expect(newCall.system).toBe(oldCall.system);
+        expect(newCall.user).toBe(oldCall.user);
+        expect(newCall.byokConfig).toEqual(oldCall.byokConfig);
+        expect(shared).toMatchObject({
+            status: 'assessed',
+            riskIdentified: legacy.level !== 'low',
+            reason: legacy.reason,
+        });
+    },
+);
+
 it('retains a long valid judgment and bounds only its explanation', async () => {
     jest.mocked(LLM.run).mockResolvedValue({
-        judgment: 'risk-found',
+        level: 'medium',
         reason: 'x'.repeat(10_000),
     } as any);
     const result = await assessPrRisk(input);

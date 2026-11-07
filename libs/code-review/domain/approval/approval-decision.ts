@@ -1,6 +1,7 @@
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import type { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import type { ChangeRiskAssessment } from '../risk/assess-change-risk';
 
 export interface ApprovalPolicy {
     /** Any configured label matches. When authors are also set, both groups apply. */
@@ -13,15 +14,8 @@ export interface ApprovalPolicy {
     sensitivePaths?: string[];
 }
 
-export type ApprovalRiskLevel = 'low' | 'medium' | 'high' | 'unknown';
-
-export interface ApprovalRiskAssessment {
-    level: ApprovalRiskLevel;
-    reason: string;
-    reviewedHeadSha: string;
-    areaMapVersion?: string;
-    failure?: { category: string; errorName: string; httpStatus?: number };
-}
+export type ApprovalRiskLevel = ChangeRiskAssessment['level'];
+export type ApprovalRiskAssessment = ChangeRiskAssessment;
 
 export interface ApprovalDecision {
     kind: 'approve' | 'hold' | 'out-of-scope' | 'disabled';

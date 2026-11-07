@@ -309,8 +309,7 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
     // covered above. Keep this in lockstep with the schema lists — the scan
     // below fails if a call site appears in a file that isn't listed here.
     const REGISTERED_CALL_SITE_FILES = new Set<string>([
-        'libs/code-review/domain/approval/assess-approval-risk.ts', // approvalRiskOutputSchema
-        'libs/code-review/domain/risk/assess-pr-risk.ts', // prRiskOutputSchema
+        'libs/code-review/domain/risk/assess-change-risk.ts', // approvalRiskOutputSchema (shared evaluator)
         'libs/code-review/domain/approval/assess-policy-eligibility.ts', // policyEligibilityOutputSchema
         'libs/ee/kodyRules/service/kody-rule-detector-compiler.service.ts', // compilerOutputSchema
         'libs/ee/kodyRules/service/kodyRules.service.ts', // kodyRulesRecommendationSchema, kodyMemoryResolutionSchema
