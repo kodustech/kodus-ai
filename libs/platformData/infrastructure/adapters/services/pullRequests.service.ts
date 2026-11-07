@@ -1,3 +1,4 @@
+import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import {
     BulkApplyResult,
     FileBulkOp,
@@ -613,11 +614,13 @@ export class PullRequestsService implements IPullRequestsService {
         suggestionId: string,
         updateData: Partial<ISuggestion>,
         organizationAndTeamData: OrganizationAndTeamData,
+        options?: UpdateSuggestionOptions,
     ): Promise<PullRequestsEntity | null> {
         return this.pullRequestsRepository.updateSuggestion(
             suggestionId,
             updateData,
             organizationAndTeamData,
+            options,
         );
     }
 

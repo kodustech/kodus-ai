@@ -76,7 +76,12 @@ describe('ImplementationVerificationProcessor', () => {
         suggestionService = {
             checkImplementedSuggestions: jest
                 .fn()
-                .mockResolvedValue({ checked: 1, persisted: [] }),
+                .mockResolvedValue({
+                    checked: 1,
+                    decided: 0,
+                    persisted: [],
+                    unmeasured: [],
+                }),
             resolveImplementedSuggestionsOnPlatform: jest
                 .fn()
                 .mockResolvedValue(undefined),
@@ -137,15 +142,50 @@ describe('ImplementationVerificationProcessor', () => {
             [],
             { sha: 'reviewed-sha' },
             'develop',
+            { onDiffSource: expect.any(Function) },
         );
+    });
+
+    it('tells the check which diff it got, and records what it decided in the job', async () => {
+        pullRequestManagerService.getChangedFiles.mockImplementation(
+            async (...args: any[]) => {
+                args[6].onDiffSource('full');
+                return [{ filename: 'app/a.rb', patch: '@@ -1 +1 @@' }];
+            },
+        );
+        suggestionService.checkImplementedSuggestions.mockResolvedValue({
+            checked: 3,
+            decided: 1,
+            persisted: [],
+            unmeasured: [
+                { id: 's-2', reason: 'diff_unavailable' },
+                { id: 's-3', reason: 'diff_unavailable' },
+            ],
+        });
+
+        await processor.process('job-1');
+
+        expect(
+            suggestionService.checkImplementedSuggestions.mock.calls[0][0]
+                .diffSource,
+        ).toBe('full');
+        completedWith({
+            checkedCount: 3,
+            decided: 1,
+            raised: 0,
+            unmeasured: { diff_unavailable: 2 },
+            diffSource: 'full',
+        });
     });
 
     it('validates against the new patch, resolves on the platform, completes and broadcasts', async () => {
         suggestionService.checkImplementedSuggestions.mockResolvedValue({
             checked: 1,
+            decided: 1,
             persisted: [
                 { id: 's-1', implementationStatus: ImplementationStatus.IMPLEMENTED },
             ],
+            unmeasured: [],
         });
 
         await processor.process('job-1');
@@ -157,6 +197,7 @@ describe('ImplementationVerificationProcessor', () => {
             prNumber: 42,
             changedFiles: [{ filename: 'app/a.rb', patch: '@@ -1 +1 @@' }],
             savedSuggestions: [expect.objectContaining({ id: 's-1' })],
+            diffSource: undefined,
         });
         expect(
             suggestionService.resolveImplementedSuggestionsOnPlatform,
@@ -173,7 +214,13 @@ describe('ImplementationVerificationProcessor', () => {
             { name: 'repo-name', id: 'repo-1' },
             42,
         );
-        completedWith({ checkedCount: 1 });
+        completedWith({
+            checkedCount: 1,
+            decided: 1,
+            raised: 1,
+            unmeasured: {},
+            diffSource: undefined,
+        });
         // Tells the dashboard's "Needs attention" card to refetch.
         expect(eventEmitter.emit).toHaveBeenCalledWith(
             'pr-execution.updated',
@@ -198,7 +245,13 @@ describe('ImplementationVerificationProcessor', () => {
         ).toEqual([expect.objectContaining({ id: 'partial' })]);
         expect(eventEmitter.emit).not.toHaveBeenCalled();
         // The count of checked suggestions, not of implemented ones.
-        completedWith({ checkedCount: 1 });
+        completedWith({
+            checkedCount: 1,
+            decided: 0,
+            raised: 0,
+            unmeasured: {},
+            diffSource: undefined,
+        });
     });
 
     it('still checks when the team has no code review automation', async () => {
@@ -206,7 +259,13 @@ describe('ImplementationVerificationProcessor', () => {
 
         await processor.process('job-1');
 
-        completedWith({ checkedCount: 1 });
+        completedWith({
+            checkedCount: 1,
+            decided: 0,
+            raised: 0,
+            unmeasured: {},
+            diffSource: undefined,
+        });
     });
 
     it.each([
@@ -326,7 +385,9 @@ describe('ImplementationVerificationProcessor', () => {
         suggestionService.checkImplementedSuggestions.mockResolvedValue({
             skipped: 'NO_RELEVANT_CHANGES',
             checked: 1,
+            decided: 0,
             persisted: [],
+            unmeasured: [],
         });
 
         await processor.process('job-1');

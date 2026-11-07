@@ -9,9 +9,16 @@ export type ImplementationRateBreakdown = {
     sent: number;
     implemented: number;
     rate: number;
+    /** Delivered suggestions the last implementation check could not decide; not in `sent`. */
+    notMeasured?: number;
 };
 
-export type ImplementationRateWeeklyRow = ImplementationRateBreakdown & {
+export type ImplementationRateWeeklyRow = Omit<
+    ImplementationRateBreakdown,
+    "rate"
+> & {
+    /** null when the implementation check decided nothing that week. */
+    rate: number | null;
     weekStart: string;
     bySeverity: Record<string, ImplementationRateBreakdown>;
 };

@@ -1,3 +1,4 @@
+import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
@@ -29,6 +30,7 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         suggestionId: string,
         updateData: Partial<ISuggestion>,
         organizationAndTeamData: OrganizationAndTeamData,
+        options?: UpdateSuggestionOptions,
     ): Promise<PullRequestsEntity | null>;
 
     aggregateAndSaveDataStructure(
