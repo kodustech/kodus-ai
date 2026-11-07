@@ -20,6 +20,7 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1000
 const page = await context.newPage();
 page.setDefaultTimeout(45_000);
 const checks = [];
+const saves = [];
 const pageErrors = [];
 page.on('pageerror', (error) => pageErrors.push(error.message));
 const pass = (name) => { checks.push(name); console.log(`PASS ${name}`); };
@@ -40,6 +41,10 @@ async function save() {
     await page.getByRole('button', { name: 'Save settings', exact: true }).click();
     const response = await responsePromise;
     assert.ok(response.ok(), `Settings save returned HTTP ${response.status()}.`);
+    const sent = response.request().postDataJSON()?.configValue || {};
+    saves.push({ fields: Object.keys(sent), riskAssessmentActive: sent.riskAssessmentActive,
+        criteriaCount: sent.riskCriteria?.length, policyCount: sent.approvalPolicies?.length,
+        routing: sent.riskReviewRouting });
     await page.getByText('Settings saved', { exact: true }).last().waitFor();
 }
 async function openMenu(name, heading = name) {
@@ -165,6 +170,6 @@ try {
     writeFileSync(`${OUT}/controls.json`, JSON.stringify(switches, null, 2));
     process.exitCode = 1;
 } finally {
-    writeFileSync(`${OUT}/result.json`, JSON.stringify({ web: WEB, checks, pageErrors, passed: !process.exitCode }, null, 2));
+    writeFileSync(`${OUT}/result.json`, JSON.stringify({ web: WEB, checks, saves, pageErrors, passed: !process.exitCode }, null, 2));
     await browser.close();
 }
