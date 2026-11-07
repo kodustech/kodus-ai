@@ -1,3 +1,4 @@
+import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as crypto from 'crypto';
@@ -2265,6 +2266,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         suggestionId: string,
         updateData: Partial<ISuggestion>,
         organizationAndTeamData: OrganizationAndTeamData,
+        options?: UpdateSuggestionOptions,
     ): Promise<PullRequestsEntity | null> {
         const updateFields = Object.entries(updateData).reduce(
             (acc, [key, value]) => {
@@ -2274,19 +2276,56 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             {},
         );
 
+        // With a condition, a suggestion whose stored status is one of the
+        // excluded ones matches nothing, so a concurrent check that already
+        // wrote a higher status keeps it.
+        const excluded = options?.implementationStatusNotIn;
+        const suggestionMatch = excluded
+            ? {
+                  id: suggestionId,
+                  implementationStatus: { $nin: excluded },
+              }
+            : null;
+
         const doc = await this.pullRequestsModel
             .findOneAndUpdate(
-                {
-                    'files.suggestions.id': suggestionId,
-                    'organizationId': organizationAndTeamData.organizationId,
-                },
+                suggestionMatch
+                    ? {
+                          'organizationId':
+                              organizationAndTeamData.organizationId,
+                          'files.suggestions': { $elemMatch: suggestionMatch },
+                      }
+                    : {
+                          'files.suggestions.id': suggestionId,
+                          'organizationId':
+                              organizationAndTeamData.organizationId,
+                      },
                 { $set: updateFields },
                 {
-                    arrayFilters: [
-                        { 'file.suggestions.id': suggestionId },
-                        { 'suggestion.id': suggestionId },
-                    ],
+                    arrayFilters: suggestionMatch
+                        ? [
+                              {
+                                  'file.suggestions': {
+                                      $elemMatch: suggestionMatch,
+                                  },
+                              },
+                              {
+                                  'suggestion.id': suggestionId,
+                                  'suggestion.implementationStatus': {
+                                      $nin: excluded,
+                                  },
+                              },
+                          ]
+                        : [
+                              { 'file.suggestions.id': suggestionId },
+                              { 'suggestion.id': suggestionId },
+                          ],
                     new: true,
+                    // Callers that only need to know a suggestion was written
+                    // skip the whole PR document coming back.
+                    ...(options?.returnDocument === false
+                        ? { projection: { _id: 1 } }
+                        : {}),
                 },
             )
             .exec();

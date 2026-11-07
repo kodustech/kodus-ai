@@ -29,11 +29,13 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import {
+    ChangedFilesSource,
     IPullRequestManagerService,
     PULL_REQUEST_MANAGER_SERVICE_TOKEN,
 } from '../domain/contracts/PullRequestManagerService.contract';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
+import { countByReason } from '@libs/platformData/domain/pullRequests/implementation-status';
 import { PR_EXECUTION_UPDATED_EVENT } from '@libs/automation/infrastructure/adapters/services/automationExecution.service';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
 
@@ -188,6 +190,9 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
             platformPr.number = payload.pullRequestNumber;
 
             // 3. Fetch Changed Files (Diff)
+            // Which diff came back: only the changes since the last review
+            // say what the developer did about its suggestions.
+            let diffSource: ChangedFilesSource | undefined;
             const changedFiles =
                 await this.pullRequestManagerService.getChangedFiles(
                     payload.organizationAndTeamData,
@@ -200,6 +205,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     [],
                     lastAnalyzedCommit,
                     lastExecution?.dataExecution?.reviewedBaseBranch,
+                    { onDiffSource: (source) => (diffSource = source) },
                 );
 
             // 4. Verify Implementation
@@ -209,6 +215,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     prNumber: payload.pullRequestNumber,
                     changedFiles,
                     savedSuggestions,
+                    diffSource,
                 });
 
             if (check.skipped) {
@@ -265,7 +272,11 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
             }
 
             await this.markCompleted(jobId, {
-                checkedCount: suggestionsToCheck.length,
+                checkedCount: check.checked,
+                decided: check.decided,
+                raised: check.persisted.length,
+                unmeasured: countByReason(check.unmeasured),
+                diffSource,
             });
             })(), signal);
         } catch (error) {

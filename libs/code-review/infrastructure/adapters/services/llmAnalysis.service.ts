@@ -12,7 +12,15 @@ import {
     CrossFileContextSnippet,
     RemoteCommands,
 } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
-import { prompt_validateImplementedSuggestions } from '@libs/common/utils/prompts';
+import {
+    prompt_checkSuggestionImplementation,
+    type ImplementationCheckSuggestion,
+} from '@libs/common/utils/prompts';
+import {
+    normalizeImplementationStatus,
+    type ImplementationUnmeasuredReason,
+} from '@libs/platformData/domain/pullRequests/implementation-status';
+import type { ImplementationCheckModelResult } from '@libs/code-review/domain/contracts/AIAnalysisService.contract';
 import { prompt_severity_analysis_user } from '@libs/common/utils/prompts/severityAnalysis';
 import {
     CodeSuggestion,
@@ -43,15 +51,17 @@ export const severityAnalysisSchema = z.object({
 });
 
 /**
- * Validate-implemented output — `prompt_validateImplementedSuggestions` returns
- * `{ id, relevantFile, implementationStatus }` per suggestion.
+ * Implementation-check output: one verdict per suggestion asked about. The
+ * status stays a string on the wire so one unreadable item costs that item
+ * only, not the whole call; the service normalizes it.
  */
-export const validateImplementedSchema = z.object({
-    codeSuggestions: z.array(
+export const implementationCheckSchema = z.object({
+    verdicts: z.array(
         z.object({
             id: z.string(),
-            relevantFile: z.string(),
-            implementationStatus: z.string(),
+            // Nullable: a model that cannot answer one item writes null, and
+            // that costs the item, not the whole file.
+            implementationStatus: z.string().nullable(),
         }),
     ),
 });
@@ -192,30 +202,43 @@ export class LLMAnalysisService implements IAIAnalysisService {
     }
     //#endregion
 
-    //#region Validate Implemented Suggestions
-    async validateImplementedSuggestions(
-        organizationAndTeamData: OrganizationAndTeamData,
-        prNumber: number,
-        byokConfig: NormalizedModel | undefined,
-        codePatch: string,
-        codeSuggestions: Partial<CodeSuggestion>[],
-    ): Promise<Partial<CodeSuggestion>[]> {
+    //#region Implementation check
+    /**
+     * Asks the model which of a file's suggestions the patch implemented.
+     * Every suggestion comes back either with a verdict or as unmeasured with
+     * the reason; a failure never reads as "not implemented".
+     */
+    async checkSuggestionImplementation({
+        organizationAndTeamData,
+        prNumber,
+        byokConfig,
+        file,
+        suggestions,
+    }: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        prNumber: number;
+        byokConfig: NormalizedModel | undefined;
+        file: { filename: string; patch: string };
+        suggestions: ImplementationCheckSuggestion[];
+    }): Promise<ImplementationCheckModelResult> {
+        // Token usage and billing are keyed on this runName.
         const runName = 'validateImplementedSuggestions';
+        const ids = suggestions.map((s) => s.id);
+        const allUnmeasured = (
+            reason: ImplementationUnmeasuredReason,
+        ): ImplementationCheckModelResult => ({
+            verdicts: [],
+            unmeasured: ids.map((id) => ({ id, reason })),
+        });
 
-        const payload = { codePatch, codeSuggestions };
-
+        let result: unknown;
         try {
-            // Migrated off the legacy LangChain PromptRunner onto the AI SDK
-            // path (REQ-NOLC-01), single span (Q4). Routed through the org's own
-            // BYOK slot (resolveTaskSlot at the caller) — falls back to the
-            // managed default when the org has none configured for this task.
-            // The prompt returns `{ id, relevantFile, implementationStatus }` per
-            // suggestion; the structured result is re-serialized and fed through
-            // LLMResponseProcessor exactly as the STRING/JSON path did, preserving
-            // the downstream mapping.
-            const result = await LLM.run({
-                schema: validateImplementedSchema,
-                user: prompt_validateImplementedSuggestions(payload),
+            result = await LLM.run({
+                schema: implementationCheckSchema,
+                user: prompt_checkSuggestionImplementation({
+                    file,
+                    suggestions,
+                }),
                 runName,
                 organizationId: organizationAndTeamData?.organizationId,
                 byokConfig,
@@ -224,45 +247,89 @@ export class LLMAnalysisService implements IAIAnalysisService {
                     prNumber,
                 },
             });
-
-            if (!result) {
-                const message = `No response from validate implemented suggestions for PR#${prNumber}`;
-                this.logger.warn({
-                    message,
-                    context: LLMAnalysisService.name,
-                    metadata: {
-                        organizationAndTeamData,
-                        prNumber,
-                        usingByok: !!byokConfig,
-                    },
-                });
-                throw new Error(message);
-            }
-
-            const suggestionsWithImplementedStatus =
-                this.llmResponseProcessor.processResponse(
-                    organizationAndTeamData,
-                    prNumber,
-                    JSON.stringify(result),
-                );
-
-            const implementedSuggestions =
-                suggestionsWithImplementedStatus?.codeSuggestions || [];
-
-            return implementedSuggestions;
         } catch (error) {
             this.logger.error({
-                message: `${LLM_ERROR_TAG} Error executing validate implemented suggestions chain:`,
+                message: `${LLM_ERROR_TAG} Implementation check failed for PR#${prNumber}`,
                 error,
                 context: LLMAnalysisService.name,
                 metadata: {
                     organizationAndTeamData,
                     prNumber,
+                    file: file.filename,
+                    suggestions: ids.length,
                     usingByok: !!byokConfig,
                 },
             });
+            return allUnmeasured('llm_error');
         }
-        return codeSuggestions;
+
+        const answers = (result as { verdicts?: unknown })?.verdicts;
+        if (!Array.isArray(answers)) {
+            this.logger.warn({
+                message: `Implementation check for PR#${prNumber} returned no verdicts`,
+                context: LLMAnalysisService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    prNumber,
+                    file: file.filename,
+                    resultType: Array.isArray(result) ? 'array' : typeof result,
+                    usingByok: !!byokConfig,
+                },
+            });
+            return allUnmeasured('invalid_output');
+        }
+
+        const asked = new Set(ids);
+        const byId = new Map<string, unknown>();
+        let foreign = 0;
+        for (const answer of answers as Array<{
+            id?: unknown;
+            implementationStatus?: unknown;
+        }>) {
+            const id = typeof answer?.id === 'string' ? answer.id : undefined;
+            if (!id || !asked.has(id)) {
+                foreign += 1;
+                continue;
+            }
+            if (!byId.has(id)) byId.set(id, answer.implementationStatus);
+        }
+
+        const out: ImplementationCheckModelResult = {
+            verdicts: [],
+            unmeasured: [],
+        };
+        for (const id of ids) {
+            if (!byId.has(id)) {
+                out.unmeasured.push({ id, reason: 'omitted' });
+                continue;
+            }
+            const status = normalizeImplementationStatus(byId.get(id));
+            if (status) out.verdicts.push({ id, status });
+            else out.unmeasured.push({ id, reason: 'invalid_output' });
+        }
+
+        if (out.unmeasured.length || foreign) {
+            this.logger.warn({
+                message: `Implementation check for PR#${prNumber} left suggestions undecided`,
+                context: LLMAnalysisService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    prNumber,
+                    file: file.filename,
+                    asked: ids.length,
+                    decided: out.verdicts.length,
+                    omitted: out.unmeasured.filter(
+                        (u) => u.reason === 'omitted',
+                    ).length,
+                    invalid: out.unmeasured.filter(
+                        (u) => u.reason === 'invalid_output',
+                    ).length,
+                    foreignIds: foreign,
+                },
+            });
+        }
+
+        return out;
     }
     //#endregion
 }

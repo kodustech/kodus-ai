@@ -1,3 +1,6 @@
+import type { ImplementationCheckSuggestion } from '@libs/common/utils/prompts';
+import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
+import type { ImplementationUnmeasuredReason } from '@libs/platformData/domain/pullRequests/implementation-status';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
@@ -12,6 +15,12 @@ import {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+
+/** What the model decided for one file's suggestions: a status, or why not. */
+export type ImplementationCheckModelResult = {
+    verdicts: { id: string; status: ImplementationStatus }[];
+    unmeasured: { id: string; reason: ImplementationUnmeasuredReason }[];
+};
 
 export interface IAIAnalysisService {
     filterSuggestionsSafeGuard(
@@ -32,13 +41,13 @@ export interface IAIAnalysisService {
         getFreshCloneParams?: () => Promise<CreateSandboxParams>,
         documentationContext?: DocumentationContextItem[],
     ): Promise<any>;
-    validateImplementedSuggestions(
-        organizationAndTeamData: OrganizationAndTeamData,
-        prNumber: number,
-        byokConfig: NormalizedModel | undefined,
-        codePatch: any,
-        codeSuggestions: Partial<CodeSuggestion>[],
-    ): Promise<Partial<CodeSuggestion>[]>;
+    checkSuggestionImplementation(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        prNumber: number;
+        byokConfig: NormalizedModel | undefined;
+        file: { filename: string; patch: string };
+        suggestions: ImplementationCheckSuggestion[];
+    }): Promise<ImplementationCheckModelResult>;
     severityAnalysisAssignment(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,

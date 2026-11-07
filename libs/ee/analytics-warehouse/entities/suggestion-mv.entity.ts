@@ -47,6 +47,17 @@ export class SuggestionMvEntity {
     })
     suggestionImplementationStatus: string | null;
 
+    /**
+     * Outcome of the last implementation check that looked at the suggestion:
+     * `decided`, `unmeasured` (it could not decide), or null when none did.
+     */
+    @Column({
+        name: 'suggestionImplementationCheckOutcome',
+        type: 'text',
+        nullable: true,
+    })
+    suggestionImplementationCheckOutcome: string | null;
+
     @Column({
         name: 'suggestionCreatedAt',
         type: 'timestamptz',

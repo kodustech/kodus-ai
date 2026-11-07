@@ -1,3 +1,4 @@
+import type { ImplementationCheckRecord } from '@libs/platformData/domain/pullRequests/implementation-status';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
@@ -120,6 +121,8 @@ export class PullRequestsModel extends CoreDocument {
                     'not_implemented',
                 ];
             };
+            // The last implementation check that looked at the suggestion.
+            implementationCheck?: ImplementationCheckRecord;
             comment: {
                 id: number;
                 pullRequestReviewId: number;

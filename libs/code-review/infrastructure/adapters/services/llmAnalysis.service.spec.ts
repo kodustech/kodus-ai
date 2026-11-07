@@ -2,7 +2,7 @@
  * LLMAnalysisService — migrated-consumer parity spec (Phase 3, plan 03-06).
  *
  * llmAnalysis sits on the customer review hot path for its surviving methods
- * (severityAnalysisAssignment, validateImplementedSuggestions,
+ * (severityAnalysisAssignment, checkSuggestionImplementation,
  * filterSuggestionsSafeGuard), so this spec is mandatory for those (not a
  * grep-only gate). It proves the "no behavior change on the happy path"
  * contract after migrating the structured call-sites off the legacy
@@ -38,13 +38,13 @@ jest.mock('@libs/core/log/langfuse', () => ({
 import {
     LLMAnalysisService,
     severityAnalysisSchema,
-    validateImplementedSchema,
+    implementationCheckSchema,
 } from './llmAnalysis.service';
 import { setLlmObservability } from '@libs/llm/llm-observability';
 import { LLM } from '@libs/llm/llm';
 import { ReviewModeResponse } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { prompt_severity_analysis_user } from '@libs/common/utils/prompts/severityAnalysis';
-import { prompt_validateImplementedSuggestions } from '@libs/common/utils/prompts';
+import { prompt_checkSuggestionImplementation } from '@libs/common/utils/prompts';
 
 // runAiSdkLLMInSpan just runs the exec and returns its result — one span path.
 // runLLMInSpan is the OLD LangChain wrapper; it must never be touched (Q4).
@@ -79,12 +79,14 @@ const byokConfig = {
  * `ProcessFilesPrLevelReviewStage`, none of which appear in either active
  * pipeline strategy (`CodeReviewPipelineStrategy`, `CliReviewPipelineStrategy`).
  *
- * These three each own a fail-safe contract (a provider failure must degrade to
- * the INPUT suggestions, never drop them) and a distinct request shape (severity
- * carries the org's BYOK slot; the implemented-check runs on whatever slot the
- * caller resolves — `undefined` when the org has none configured for the task —
- * never a hardcoded provider). A regression that swallows the fallback or
- * crosses the wires is invisible elsewhere.
+ * Each owns a fail-safe contract and a distinct request shape. Severity and
+ * safeguard degrade to the INPUT suggestions on a provider failure, never
+ * dropping them. The implementation check reports every suggestion it could not
+ * decide as unmeasured, never echoing its input, which used to read as "not
+ * implemented". Severity carries the org's BYOK slot; the implementation check
+ * runs on whatever slot the caller resolves (`undefined` when the org has none
+ * configured for the task), never a hardcoded provider. A regression that
+ * swallows the fallback or crosses the wires is invisible elsewhere.
  *
  * We spy on LLM.run directly and, for the success paths, stub the internal
  * response processor.
@@ -157,91 +159,163 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
         });
     });
 
-    describe('validateImplementedSuggestions', () => {
-        it('runs on the managed default (byokConfig undefined) with the implemented schema', async () => {
-            runSpy.mockResolvedValue({ codeSuggestions: [] });
-            const service = buildService();
-            jest.spyOn(
-                (service as any).llmResponseProcessor,
-                'processResponse',
-            ).mockReturnValue({ codeSuggestions: [] });
+    describe('checkSuggestionImplementation', () => {
+        const file = { filename: 'src/a.ts', patch: '@@ -1 +1 @@\n-a\n+b' };
+        const asked = [
+            {
+                id: 's1',
+                relevantLinesStart: 3,
+                relevantLinesEnd: 4,
+                problem: 'Use || instead of &&',
+                existingCode: 'a && b',
+                improvedCode: 'a || b',
+            },
+            {
+                id: 's2',
+                relevantLinesStart: 9,
+                relevantLinesEnd: 9,
+                problem: 'Escape the url',
+                existingCode: 'url',
+                improvedCode: '',
+            },
+        ];
+        const check = (service: LLMAnalysisService, byok: any = undefined) =>
+            service.checkSuggestionImplementation({
+                organizationAndTeamData: org,
+                prNumber: 77,
+                byokConfig: byok,
+                file,
+                suggestions: asked,
+            });
 
-            await service.validateImplementedSuggestions(
-                org,
-                77,
-                undefined,
-                'diff',
-                suggestions,
-            );
+        it("runs on the caller's slot with the check's schema, prompt and billing runName, and no system prompt", async () => {
+            runSpy.mockResolvedValue({ verdicts: [] });
+
+            await check(buildService(), byokConfig);
 
             const arg = runSpy.mock.calls[0][0];
-            expect(arg.schema).toBe(validateImplementedSchema);
+            expect(arg.schema).toBe(implementationCheckSchema);
             expect(arg.user).toBe(
-                prompt_validateImplementedSuggestions({
-                    codePatch: 'diff',
-                    codeSuggestions: suggestions,
-                }),
+                prompt_checkSuggestionImplementation({ file, suggestions: asked }),
             );
+            // Token usage and billing are keyed on this runName
+            // (token-usage-tu.ts, backfill-tu.ts).
             expect(arg.runName).toBe('validateImplementedSuggestions');
-            // Whatever byokConfig the caller resolved is forwarded verbatim —
-            // undefined here means the org has no BYOK slot for this task, so
-            // LLM.run falls back to the managed default.
-            expect(arg.byokConfig).toBeUndefined();
-            // No system prompt at all (not even ''): some BYOK providers reject
-            // an explicit empty system content block outright (prod incident,
-            // 2026-09-16, root cause of the implementation_rate_pct drop) —
-            // LLM.run must see it unset to omit the field.
+            expect(arg.byokConfig).toBe(byokConfig);
+            // An explicit empty system block is rejected by some BYOK providers
+            // (root cause of the 2026-09 implementation-rate incident).
             expect(arg.system).toBeUndefined();
         });
 
-        it('returns the parsed implemented-status suggestions on success', async () => {
-            runSpy.mockResolvedValue({ codeSuggestions: [] });
-            const service = buildService();
-            const processed = [
-                { id: 's1', implementationStatus: 'implemented' },
-            ];
-            jest.spyOn(
-                (service as any).llmResponseProcessor,
-                'processResponse',
-            ).mockReturnValue({ codeSuggestions: processed });
+        it('returns each verdict normalized to one of the three statuses', async () => {
+            runSpy.mockResolvedValue({
+                verdicts: [
+                    { id: 's1', implementationStatus: 'IMPLEMENTED' },
+                    { id: 's2', implementationStatus: 'not implemented' },
+                ],
+            });
 
-            const out = await service.validateImplementedSuggestions(
-                org,
-                77,
-                undefined,
-                'diff',
-                suggestions,
-            );
-            expect(out).toEqual(processed);
+            const out = await check(buildService());
+
+            expect(out).toEqual({
+                verdicts: [
+                    { id: 's1', status: 'implemented' },
+                    { id: 's2', status: 'not_implemented' },
+                ],
+                unmeasured: [],
+            });
         });
 
-        it('falls back to the ORIGINAL suggestions on failure', async () => {
+        it('marks a suggestion with an answer that is not a status as invalid_output, and keeps the others', async () => {
+            runSpy.mockResolvedValue({
+                verdicts: [
+                    { id: 's1', implementationStatus: 'The patch fixes it.' },
+                    { id: 's2', implementationStatus: 'partially_implemented' },
+                ],
+            });
+
+            const out = await check(buildService());
+
+            expect(out).toEqual({
+                verdicts: [{ id: 's2', status: 'partially_implemented' }],
+                unmeasured: [{ id: 's1', reason: 'invalid_output' }],
+            });
+        });
+
+        it('marks a suggestion the model left out as omitted, and ignores ids it was not asked about', async () => {
+            runSpy.mockResolvedValue({
+                verdicts: [
+                    { id: 's1', implementationStatus: 'implemented' },
+                    { id: 'other', implementationStatus: 'implemented' },
+                    { id: 's1', implementationStatus: 'not_implemented' },
+                ],
+            });
+
+            const out = await check(buildService());
+
+            expect(out).toEqual({
+                verdicts: [{ id: 's1', status: 'implemented' }],
+                unmeasured: [{ id: 's2', reason: 'omitted' }],
+            });
+        });
+
+        it('accepts an item whose status is null on the wire, so it costs that item only', () => {
+            expect(
+                implementationCheckSchema.safeParse({
+                    verdicts: [
+                        { id: 's1', implementationStatus: 'implemented' },
+                        { id: 's2', implementationStatus: null },
+                    ],
+                }).success,
+            ).toBe(true);
+        });
+
+        it('marks a suggestion answered with a null status invalid_output', async () => {
+            runSpy.mockResolvedValue({
+                verdicts: [
+                    { id: 's1', implementationStatus: 'implemented' },
+                    { id: 's2', implementationStatus: null },
+                ],
+            });
+
+            const out = await check(buildService());
+
+            expect(out).toEqual({
+                verdicts: [{ id: 's1', status: 'implemented' }],
+                unmeasured: [{ id: 's2', reason: 'invalid_output' }],
+            });
+        });
+
+        it('marks every suggestion llm_error when the call fails, never echoing the input', async () => {
             runSpy.mockRejectedValue(new Error('boom'));
-            const service = buildService();
 
-            const out = await service.validateImplementedSuggestions(
-                org,
-                77,
-                undefined,
-                'diff',
-                suggestions,
-            );
-            expect(out).toBe(suggestions);
+            const out = await check(buildService());
+
+            expect(out).toEqual({
+                verdicts: [],
+                unmeasured: [
+                    { id: 's1', reason: 'llm_error' },
+                    { id: 's2', reason: 'llm_error' },
+                ],
+            });
         });
 
-        it('falls back to the ORIGINAL suggestions when the model returns nothing', async () => {
-            runSpy.mockResolvedValue(null as any);
-            const service = buildService();
+        it.each([null, { codeSuggestions: [] }, 'implemented'])(
+            'marks every suggestion invalid_output when the model returns %j',
+            async (result) => {
+                runSpy.mockResolvedValue(result as any);
 
-            const out = await service.validateImplementedSuggestions(
-                org,
-                77,
-                undefined,
-                'diff',
-                suggestions,
-            );
-            expect(out).toBe(suggestions);
-        });
+                const out = await check(buildService());
+
+                expect(out).toEqual({
+                    verdicts: [],
+                    unmeasured: [
+                        { id: 's1', reason: 'invalid_output' },
+                        { id: 's2', reason: 'invalid_output' },
+                    ],
+                });
+            },
+        );
     });
 
     describe('filterSuggestionsSafeGuard', () => {
