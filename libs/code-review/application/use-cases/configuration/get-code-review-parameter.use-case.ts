@@ -4,6 +4,10 @@ import { DeepPartial } from 'typeorm';
 
 import { createLogger } from '@libs/core/log/logger';
 import {
+    migratedReviewLayer,
+    resolveReviewSettings,
+} from '@libs/code-review/domain/approval/migrate-review-settings';
+import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
@@ -281,11 +285,13 @@ export class GetCodeReviewParameterUseCase {
         includeFileOverlay: boolean,
     ): Promise<FormattedGlobalCodeReviewConfig> {
         const defaultConfig = getDefaultKodusConfigFile();
-        const formattedDefaultConfig = this.formatDefaultConfig(defaultConfig);
+        const formattedDefaultConfig = this.formatDefaultConfig(
+            resolveReviewSettings(defaultConfig),
+        );
 
         let formattedGlobalConfig = this.formatLevel(
             formattedDefaultConfig,
-            configValue.configs,
+            migratedReviewLayer(defaultConfig, [], configValue.configs),
             FormattedConfigLevel.GLOBAL,
         );
 
@@ -318,7 +324,12 @@ export class GetCodeReviewParameterUseCase {
                     formattedGlobalConfig,
                     repo,
                     includeFileOverlay,
-                    { providerLimit, deadlineAt },
+                    {
+                        providerLimit,
+                        deadlineAt,
+                        rawGlobal: configValue.configs ?? {},
+                        defaults: defaultConfig,
+                    },
                 ),
             ),
         );
@@ -370,6 +381,10 @@ export class GetCodeReviewParameterUseCase {
         overlay: {
             providerLimit: ReturnType<typeof pLimit>;
             deadlineAt: number;
+            rawGlobal: object;
+            defaults: DeepPartial<
+                import('@libs/core/infrastructure/config/types/general/codeReview.type').CodeReviewConfig
+            >;
         },
     ): Promise<FormattedRepositoryCodeReviewConfig> {
         const repository = { id: repo.id, name: repo.name };
@@ -527,16 +542,25 @@ export class GetCodeReviewParameterUseCase {
         };
 
         const repoFileResult = await readKodusConfigFile({}, repoOverride, {});
+        const parentSources = [overlay.rawGlobal, repo.configs ?? {}];
 
         const formattedRepoConfig = this.formatLevel(
             formattedGlobalConfig,
-            repo.configs,
+            migratedReviewLayer(
+                overlay.defaults,
+                [overlay.rawGlobal],
+                repo.configs,
+            ),
             FormattedConfigLevel.REPOSITORY,
         );
 
         let formattedRepoFileConfig = this.formatLevel(
             formattedRepoConfig,
-            repoFileResult.file,
+            migratedReviewLayer(
+                overlay.defaults,
+                parentSources,
+                repoFileResult.file,
+            ),
             FormattedConfigLevel.REPOSITORY_FILE,
         );
 
@@ -568,13 +592,25 @@ export class GetCodeReviewParameterUseCase {
 
                 const formattedDirConfig = this.formatLevel(
                     formattedRepoFileConfig,
-                    dir.configs,
+                    migratedReviewLayer(
+                        overlay.defaults,
+                        [...parentSources, repoFileResult.file ?? {}],
+                        dir.configs,
+                    ),
                     FormattedConfigLevel.DIRECTORY,
                 );
 
                 let formattedDirFileConfig = this.formatLevel(
                     formattedDirConfig,
-                    directoryFileResult.file,
+                    migratedReviewLayer(
+                        overlay.defaults,
+                        [
+                            ...parentSources,
+                            repoFileResult.file ?? {},
+                            dir.configs ?? {},
+                        ],
+                        directoryFileResult.file,
+                    ),
                     FormattedConfigLevel.DIRECTORY_FILE,
                 );
 

@@ -15,18 +15,23 @@ import {
     approvalPolicyFromConfig,
     evaluateApproval,
     matchesApprovalScope,
+    type ApprovalRiskAssessment,
 } from '@libs/code-review/domain/approval/approval-decision';
 import { assessApprovalRisk } from '@libs/code-review/domain/approval/assess-approval-risk';
+import { reviewsOnlyIgnoredFiles } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
+import { riskApprovalVeto } from '@libs/code-review/domain/risk/risk-assessment';
 import {
     CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
     IConditionalApprovalAccessService,
 } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import { ApprovalPoliciesService } from '../services/approval-policies.service';
+import { SUMMARY_GENERATION_FAILED_REASON } from './finish-comments.stage';
 
 @Injectable()
 export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineContext> {
     readonly stageName = 'DecidePrApprovalStage';
-    readonly label = 'Assessing approval risk';
+    readonly label = 'Checking approval policies';
     readonly visibility = StageVisibility.SECONDARY;
     readonly errorSeverity = 'partial' as const;
 
@@ -38,6 +43,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         private readonly areaMaps: ICodeAreaRiskMapService,
         @Inject(CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN)
         private readonly conditionalApprovalAccess: IConditionalApprovalAccessService,
+        private readonly approvalPolicies?: ApprovalPoliciesService,
     ) {
         super();
     }
@@ -46,12 +52,55 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
         const config = context.codeReviewConfig;
+        const hasBlockingFailure = (context.errors ?? []).some(
+            (error) =>
+                error.metadata?.reason !== SUMMARY_GENERATION_FAILED_REASON &&
+                ['critical', 'partial'].includes(error.severity ?? 'critical'),
+        );
         if (
             !config?.pullRequestApprovalActive ||
             context.onlyCustomAgent ||
+            reviewsOnlyIgnoredFiles(context) ||
             context.origin === 'cli'
         ) {
             return context;
+        }
+        if (config.approvalPolicies !== undefined) {
+            const result = this.approvalPolicies
+                ? await this.approvalPolicies.evaluate({
+                      organizationAndTeamData: context.organizationAndTeamData,
+                      repository: context.repository,
+                      pullRequest: context.pullRequest,
+                      config,
+                      platformType: context.platformType,
+                      reviewClean:
+                          (context.lineComments?.length ?? 0) === 0 &&
+                          (context.prLevelCommentResults?.length ?? 0) === 0 &&
+                          !hasBlockingFailure,
+                      risk: context.riskAssessment,
+                      fullPrFiles: context.fullPrFiles,
+                      heavy: context.heavy,
+                      previousEligibility:
+                          context.lastExecution?.approvalPolicyEligibility,
+                  })
+                : {
+                      decision: {
+                          kind: 'hold' as const,
+                          reason: 'Approval policies are unavailable.',
+                      },
+                      eligibility: {},
+                  };
+            return this.updateContext(context, (draft) => {
+                draft.approvalDecision = result.decision;
+                draft.approvalPolicyEligibility = result.eligibility;
+                draft.approvalReviewSummary = {
+                    lineFindings: context.lineComments?.length ?? 0,
+                    prFindings: context.prLevelCommentResults?.length ?? 0,
+                    complete:
+                        Array.isArray(context.lineComments) &&
+                        !hasBlockingFailure,
+                };
+            });
         }
         const configuredPolicy = approvalPolicyFromConfig(config);
         if (
@@ -143,12 +192,13 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         // run. Approval and team path vetoes apply to the entire current PR.
         const needsFiles = policy.assessRisk || !!policy.sensitivePaths?.length;
         const fullFiles = needsFiles
-            ? await this.codeManagement.getFilesByPullRequestId({
+            ? (context.fullPrFiles ??
+              (await this.codeManagement.getFilesByPullRequestId({
                   organizationAndTeamData,
                   repository,
                   prNumber: pullRequest.number,
                   headSha,
-              })
+              })))
             : [];
         if (
             needsFiles &&
@@ -167,10 +217,44 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         const sensitive = paths.some((path) =>
             isFileMatchingGlob(path, policy.sensitivePaths ?? []),
         );
-        let risk = undefined;
+        // Compatibility projection for persisted executions and the approval
+        // cron. Shared consumers use riskAssessment, never these old levels.
+        const sharedRisk = context.riskAssessment;
+        let risk: ApprovalRiskAssessment | undefined =
+            config.riskAssessmentActive === true
+                ? {
+                      level:
+                          sharedRisk?.status === 'assessed'
+                              ? ((sharedRisk.riskIdentified
+                                    ? 'high'
+                                    : 'low') as 'high' | 'low')
+                              : ('unknown' as const),
+                      reason:
+                          sharedRisk && sharedRisk.status !== 'disabled'
+                              ? sharedRisk.reason
+                              : 'Risk assessment is unavailable.',
+                      reviewedHeadSha:
+                          sharedRisk?.status === 'assessed'
+                              ? sharedRisk.snapshot.headSha
+                              : headSha,
+                      areaMapVersion:
+                          sharedRisk?.status === 'assessed'
+                              ? sharedRisk.areaMapVersion
+                              : undefined,
+                      failure:
+                          sharedRisk?.status === 'unavailable'
+                              ? sharedRisk.failure
+                              : undefined,
+                  }
+                : undefined;
         // Preserve the assessment even if the required label arrives after
         // review; the cron can then reconsider this exact reviewed head.
-        if (policy.assessRisk && !sensitive && headSha) {
+        if (
+            policy.assessRisk &&
+            config.riskAssessmentActive === undefined &&
+            !sensitive &&
+            headSha
+        ) {
             let areaMap;
             try {
                 const storedMap = await this.areaMaps.read(
@@ -207,23 +291,25 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                 modelSlot: config.resolvedModelSlot,
             });
         }
-        const decision = evaluateApproval({
-            approvalActive: true,
-            policy,
-            author,
-            labels,
-            changedPaths: paths,
-            reviewClean:
-                (context.lineComments?.length ?? 0) === 0 &&
-                (context.prLevelCommentResults?.length ?? 0) === 0 &&
-                !(context.errors ?? []).some((error) =>
-                    ['critical', 'partial'].includes(
-                        error.severity ?? 'critical',
-                    ),
-                ),
-            risk,
-            currentHeadSha: headSha,
-        });
+        const sharedVeto =
+            config.riskAssessmentActive === true
+                ? riskApprovalVeto(true, sharedRisk, headSha)
+                : undefined;
+        const decision = sharedVeto
+            ? { kind: 'hold' as const, reason: sharedVeto }
+            : evaluateApproval({
+                  approvalActive: true,
+                  policy,
+                  author,
+                  labels,
+                  changedPaths: paths,
+                  reviewClean:
+                      (context.lineComments?.length ?? 0) === 0 &&
+                      (context.prLevelCommentResults?.length ?? 0) === 0 &&
+                      !hasBlockingFailure,
+                  risk,
+                  currentHeadSha: headSha,
+              });
         return this.updateContext(context, (draft) => {
             draft.approvalRisk = risk;
             draft.approvalDecision = decision;

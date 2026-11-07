@@ -5,6 +5,8 @@ import { ReviewCadenceType } from '@libs/core/infrastructure/config/types/genera
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { formatApprovalReasonComment } from '@libs/code-review/infrastructure/approval/approval-reason-comment';
 import { CheckIfPRCanBeApprovedCronProvider } from '../CheckIfPRCanBeApproved.cron';
+import { prRiskConfigurationKey } from '@libs/code-review/domain/risk/risk-configuration';
+import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -52,9 +54,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         } as any;
 
         const pullRequestService = {
-            setApprovalReasonDeliveryFailure: jest
-                .fn()
-                .mockResolvedValue(true),
+            setApprovalReasonDeliveryFailure: jest.fn().mockResolvedValue(true),
             findPullRequestsWithDeliveredSuggestions: jest
                 .fn()
                 .mockResolvedValue([]),
@@ -70,6 +70,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         } as any;
 
         const codeManagementService = {
+            approvePullRequest: jest.fn().mockResolvedValue(undefined),
             getPullRequest: jest.fn(),
             getPullRequestReviewThreads: jest.fn(),
             getPullRequestReviewComments: jest.fn().mockResolvedValue([]),
@@ -84,6 +85,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         } as any;
 
         const automationExecutionService = {
+            update: jest.fn().mockResolvedValue(undefined),
             findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId:
                 jest.fn().mockResolvedValue([]),
             find: jest.fn().mockResolvedValue([]),
@@ -116,6 +118,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         const conditionalApprovalAccess = {
             isEnabled: jest.fn().mockResolvedValue(true),
         };
+        const organizationParameters = {
+            findByKey: jest.fn().mockResolvedValue(undefined),
+        };
+        const approvalPolicies = { evaluate: jest.fn() };
 
         const cron = new CheckIfPRCanBeApprovedCronProvider(
             teamService,
@@ -129,11 +135,14 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             pullRequestMessagesService,
             distributedLockService,
             conditionalApprovalAccess as any,
+            organizationParameters as any,
+            approvalPolicies as any,
         );
 
         return {
             cron,
             deps: {
+                approvalPolicies,
                 teamService,
                 parametersService,
                 pullRequestService,
@@ -145,10 +154,264 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 pullRequestMessagesService,
                 distributedLockService,
                 conditionalApprovalAccess,
+                organizationParameters,
                 lock,
             },
         };
     };
+
+    const namedPolicyCase = () => {
+        const { cron, deps } = makeCron();
+        const live = {
+            head: { sha: 'head' },
+            base: { sha: 'base' },
+            title: 'Docs',
+            body: '',
+            user: { login: 'alice' },
+            labels: ['ready'],
+        };
+        const reviewed = {
+            kind: 'approve',
+            reason: 'Approved by policy “Docs”.',
+            matchedPolicy: { id: 'docs', name: 'Docs' },
+            reviewedHeadSha: 'head',
+            reviewedBaseSha: 'base',
+            reviewedMetadataKey: approvalPrMetadataKey(live),
+        };
+        const execution = {
+            uuid: 'execution-1',
+            status: AutomationStatus.SUCCESS,
+            dataExecution: {
+                approvalDecision: reviewed,
+                lastAnalyzedCommit: { sha: 'head' },
+                approvalReviewSummary: {
+                    complete: true,
+                    lineFindings: 0,
+                    prFindings: 0,
+                },
+            },
+        };
+        const input = {
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: makeOpenPr(1, 'repo-a'),
+            teamAutomationId: 'team-automation-1',
+            codeReviewConfig: {
+                pullRequestApprovalActive: true,
+                riskAssessmentActive: false,
+                approvalPolicies: [{ id: 'docs', name: 'Docs', enabled: true }],
+            },
+        };
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            execution,
+        );
+        deps.automationExecutionService.find.mockResolvedValue([]);
+        deps.codeManagementService.getPullRequest.mockResolvedValue(live);
+        deps.codeManagementService.getReviewStatusByPullRequest
+            .mockResolvedValueOnce(PullRequestReviewState.PENDING)
+            .mockResolvedValue(PullRequestReviewState.APPROVED);
+        deps.approvalPolicies.evaluate.mockResolvedValue({
+            decision: reviewed,
+            eligibility: {},
+        });
+        return {
+            cron,
+            deps,
+            input,
+            live,
+            reviewed,
+            execution,
+            run: () => (cron as any).shouldApprovePR(input),
+        };
+    };
+
+    it('approves a new named policy on its exact reviewed head and publishes the policy name', async () => {
+        const { deps, run } = namedPolicyCase();
+        expect(await run()).toBe(true);
+        expect(deps.approvalPolicies.evaluate).toHaveBeenCalledWith(
+            expect.objectContaining({ reviewClean: true, risk: undefined }),
+        );
+        expect(
+            deps.codeManagementService.approvePullRequest,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({ headSha: 'head' }),
+            PlatformType.GITLAB,
+        );
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({ body: expect.stringContaining('Docs') }),
+            PlatformType.GITLAB,
+        );
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        AutomationStatus.PARTIAL_ERROR,
+        AutomationStatus.ERROR,
+        AutomationStatus.IN_PROGRESS,
+    ])(
+        'never exposes an older clean approval behind the latest %s execution',
+        async (status) => {
+            const { deps, execution, run } = namedPolicyCase();
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                { ...execution, status },
+            );
+            expect(await run()).toBe(false);
+            expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.approvePullRequest,
+            ).not.toHaveBeenCalled();
+        },
+    );
+
+    it('preserves an approval already on the host when policies change', async () => {
+        const { deps, run } = namedPolicyCase();
+        deps.codeManagementService.getReviewStatusByPullRequest
+            .mockReset()
+            .mockResolvedValue(PullRequestReviewState.APPROVED);
+        expect(await run()).toBe(false);
+        expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('publishes no-match outcomes and never falls back to the old generic approval path', async () => {
+        const { deps, input, run } = namedPolicyCase();
+        input.codeReviewConfig.approvalPolicies = [];
+        deps.approvalPolicies.evaluate.mockResolvedValue({
+            decision: {
+                kind: 'out-of-scope',
+                reason: 'No approval policy matched. Docs: Required labels did not match.',
+            },
+            eligibility: {},
+        });
+        expect(await run()).toBe(false);
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining('No approval policy matched'),
+            }),
+            PlatformType.GITLAB,
+        );
+        expect(
+            deps.codeManagementService.approvePullRequest,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('holds PR-level findings that have no verified resolution', async () => {
+        const { deps, execution, run } = namedPolicyCase();
+        execution.dataExecution.approvalReviewSummary.prFindings = 1;
+        expect(await run()).toBe(false);
+        expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+    });
+
+    it.each([false, undefined])(
+        'does not approve an unresolved or missing delivered finding: %p',
+        async (isResolved) => {
+            const { deps, execution, input, run } = namedPolicyCase();
+            execution.dataExecution.approvalReviewSummary.lineFindings = 1;
+            input.pr.suggestions = [{ comment: { id: 'c-1' } }] as any;
+            deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+                isResolved === undefined ? [] : [{ id: 'c-1', isResolved }],
+            );
+            expect(await run()).toBe(false);
+            expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+        },
+    );
+
+    it('rechecks old delivered findings even when an incremental review adds none', async () => {
+        const { deps, input, run } = namedPolicyCase();
+        input.pr.suggestions = [{ comment: { id: 'c-1' } }] as any;
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            [{ id: 'c-1', isResolved: false }],
+        );
+        expect(await run()).toBe(false);
+        expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+    });
+
+    it('allows resolved delivered findings through the policy check', async () => {
+        const { deps, input, execution, run } = namedPolicyCase();
+        execution.dataExecution.approvalReviewSummary.lineFindings = 1;
+        input.pr.suggestions = [{ comment: { id: 'c-1' } }] as any;
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            [{ id: 'c-1', isResolved: true }],
+        );
+        expect(await run()).toBe(true);
+    });
+
+    it('holds if an evaluation sees a fresh failed rerun before approving', async () => {
+        const { deps, execution, run } = namedPolicyCase();
+        deps.automationExecutionService.findLatestExecutionByFilters
+            .mockResolvedValueOnce(execution)
+            .mockResolvedValue({
+                ...execution,
+                uuid: 'execution-2',
+                status: AutomationStatus.ERROR,
+            });
+        expect(await run()).toBe(false);
+        expect(
+            deps.codeManagementService.approvePullRequest,
+        ).not.toHaveBeenCalled();
+    });
+
+    it.each(['head', 'base', 'labels', 'body'])(
+        'holds when %s changes after the policy decision',
+        async (field) => {
+            const { deps, live, run } = namedPolicyCase();
+            const changed = {
+                ...live,
+                [field]:
+                    field === 'head' || field === 'base'
+                        ? { sha: 'new' }
+                        : field === 'labels'
+                          ? []
+                          : 'New description',
+            };
+            deps.codeManagementService.getPullRequest
+                .mockResolvedValueOnce(live)
+                .mockResolvedValue(changed);
+            expect(await run()).toBe(false);
+            expect(
+                deps.codeManagementService.approvePullRequest,
+            ).not.toHaveBeenCalled();
+        },
+    );
+
+    it('does not approve with risk enabled and no current shared assessment', async () => {
+        const { deps, input, run } = namedPolicyCase();
+        input.codeReviewConfig.riskAssessmentActive = true;
+        expect(await run()).toBe(false);
+        expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+    });
+
+    it('persists eligibility for cron reuse without mutating review evidence', async () => {
+        const { deps, reviewed, execution, run } = namedPolicyCase();
+        const eligibility = { key: { status: 'eligible', key: 'key' } };
+        deps.approvalPolicies.evaluate.mockResolvedValue({
+            decision: reviewed,
+            eligibility,
+        });
+        expect(await run()).toBe(true);
+        expect(deps.automationExecutionService.update).toHaveBeenCalledWith(
+            { uuid: execution.uuid },
+            {
+                dataExecution: {
+                    ...execution.dataExecution,
+                    approvalPolicyEligibility: eligibility,
+                },
+            },
+        );
+    });
 
     it('does not evaluate a saved conditional policy when access is disabled', async () => {
         const { cron, deps } = makeCron();
@@ -361,14 +624,93 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         );
     });
 
+    it.each([false, true])(
+        'revalidates the shared risk configuration before cron approval (changed=%s)',
+        async (changed) => {
+            const { cron, deps } = makeCron();
+            deps.codeManagementService.getReviewStatusByPullRequest
+                .mockResolvedValueOnce(PullRequestReviewState.NONE)
+                .mockResolvedValueOnce(PullRequestReviewState.APPROVED);
+            deps.codeManagementService.getPullRequest.mockResolvedValue({
+                head: { sha: 'same-sha' },
+                base: { sha: 'same-base' },
+                user: { login: 'alice' },
+            });
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                {
+                    dataExecution: {
+                        lastAnalyzedCommit: 'same-sha',
+                        approvalDecision: { kind: 'approve' },
+                        approvalRisk: {
+                            level: 'low',
+                            reviewedHeadSha: 'same-sha',
+                            reason: 'No material risk.',
+                        },
+                        riskAssessment: {
+                            status: 'assessed',
+                            riskIdentified: false,
+                            reason: 'No material risk.',
+                            snapshot: {
+                                organizationId: 'org-1',
+                                repositoryId: 'repo-b',
+                                prNumber: 77,
+                                baseSha: 'same-base',
+                                headSha: 'same-sha',
+                                assessmentKey: 'key',
+                                configurationKey: prRiskConfigurationKey({}),
+                            },
+                        },
+                    },
+                },
+            );
+            const result = await (cron as any).shouldApprovePR({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                pr: makeOpenPr(77, 'repo-b'),
+                codeReviewConfig: {
+                    pullRequestApprovalActive: true,
+                    riskAssessmentActive: true,
+                    ...(changed
+                        ? {
+                              riskCriteria: [
+                                  {
+                                      id: 'access',
+                                      name: 'Access',
+                                      enabled: true,
+                                      instructions: 'Check tenant isolation.',
+                                  },
+                              ],
+                          }
+                        : {}),
+                },
+                teamAutomationId: 'team-automation-1',
+            });
+            expect(result).toBe(!changed);
+            if (changed)
+                expect(
+                    deps.codeManagementService
+                        .checkIfPullRequestShouldBeApproved,
+                ).not.toHaveBeenCalled();
+            else
+                expect(
+                    deps.codeManagementService
+                        .checkIfPullRequestShouldBeApproved,
+                ).toHaveBeenCalledTimes(1);
+        },
+    );
+
     it('holds a clean zero-comment PR that changes a sensitive path without requiring labels', async () => {
         const { cron, deps } = makeCron();
-        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue({
-            dataExecution: {
-                lastAnalyzedCommit: 'same-sha',
-                approvalDecision: { kind: 'hold' },
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            {
+                dataExecution: {
+                    lastAnalyzedCommit: 'same-sha',
+                    approvalDecision: { kind: 'hold' },
+                },
             },
-        });
+        );
         deps.codeManagementService.getPullRequest.mockResolvedValue({
             head: { sha: 'same-sha' },
             user: { login: 'alice' },
@@ -391,13 +733,17 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         });
 
         expect(result).toBe(false);
-        expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
             expect.objectContaining({
                 body: expect.stringContaining('src/qa-approval/smoke.ts'),
             }),
             PlatformType.GITLAB,
         );
-        expect(deps.codeManagementService.checkIfPullRequestShouldBeApproved).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
     });
 
     it('approves a clean zero-comment PR outside sensitive paths without requiring labels', async () => {
@@ -405,12 +751,14 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         deps.codeManagementService.getReviewStatusByPullRequest
             .mockResolvedValueOnce(PullRequestReviewState.NONE)
             .mockResolvedValueOnce(PullRequestReviewState.APPROVED);
-        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue({
-            dataExecution: {
-                lastAnalyzedCommit: 'same-sha',
-                approvalDecision: { kind: 'approve' },
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            {
+                dataExecution: {
+                    lastAnalyzedCommit: 'same-sha',
+                    approvalDecision: { kind: 'approve' },
+                },
             },
-        });
+        );
         deps.codeManagementService.getPullRequest.mockResolvedValue({
             head: { sha: 'same-sha' },
             user: { login: 'alice' },
@@ -433,8 +781,12 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         });
 
         expect(result).toBe(true);
-        expect(deps.codeManagementService.checkIfPullRequestShouldBeApproved).toHaveBeenCalled();
-        expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
             expect.objectContaining({
                 body: expect.stringContaining('Automatic approval completed'),
             }),
@@ -586,13 +938,21 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                     status: AutomationStatus.PARTIAL_ERROR,
                     dataExecution: {
                         lastAnalyzedCommit: 'same-sha',
-                        approvalDecision: { kind: 'approve', reason: 'Low risk.' },
-                        approvalRisk: { level: 'low', reviewedHeadSha: 'same-sha' },
+                        approvalDecision: {
+                            kind: 'approve',
+                            reason: 'Low risk.',
+                        },
+                        approvalRisk: {
+                            level: 'low',
+                            reviewedHeadSha: 'same-sha',
+                        },
                     },
                 },
             );
             deps.codeManagementService.getPullRequest.mockResolvedValue({
-                head: { sha: hostState === 'new-head' ? 'new-sha' : 'same-sha' },
+                head: {
+                    sha: hostState === 'new-head' ? 'new-sha' : 'same-sha',
+                },
             });
             if (hostState === 'provider-error') {
                 deps.codeManagementService.getReviewStatusByPullRequest.mockRejectedValue(
@@ -623,8 +983,8 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             expect(
                 deps.codeManagementService.checkIfPullRequestShouldBeApproved,
             ).not.toHaveBeenCalled();
-            for (const [args] of deps.codeManagementService.createIssueComment.mock
-                .calls) {
+            for (const [args] of deps.codeManagementService.createIssueComment
+                .mock.calls) {
                 expect(args.body).not.toContain('Automatic approval completed');
             }
             if (hostState !== PullRequestReviewState.NONE) {
@@ -712,16 +1072,11 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         );
         expect(
             deps.pullRequestService.setApprovalReasonDeliveryFailure,
-        ).toHaveBeenCalledWith(
-            'org-1',
-            'repo-1',
-            7,
-            {
-                decision: 'hold',
-                reason: 'A person should review this.',
-                occurredAt: expect.any(String),
-            },
-        );
+        ).toHaveBeenCalledWith('org-1', 'repo-1', 7, {
+            decision: 'hold',
+            reason: 'A person should review this.',
+            occurredAt: expect.any(String),
+        });
     });
 
     it('clears a prior delivery failure when the reason is already on the PR', async () => {
@@ -1417,46 +1772,53 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ['missing', null],
         ['empty', []],
         ['pathless', [{ filename: undefined }]],
-    ])('holds and explains an %s sensitive-path file list', async (_label, files) => {
-        const { cron, deps } = makeCron();
-        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
-            { dataExecution: { lastAnalyzedCommit: 'same-sha' } },
-        );
-        deps.codeManagementService.getPullRequest.mockResolvedValue({
-            head: { sha: 'same-sha' },
-            user: { login: 'alice' },
-        });
-        deps.codeManagementService.getFilesByPullRequestId.mockResolvedValue(
-            files,
-        );
+    ])(
+        'holds and explains an %s sensitive-path file list',
+        async (_label, files) => {
+            const { cron, deps } = makeCron();
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                { dataExecution: { lastAnalyzedCommit: 'same-sha' } },
+            );
+            deps.codeManagementService.getPullRequest.mockResolvedValue({
+                head: { sha: 'same-sha' },
+                user: { login: 'alice' },
+            });
+            deps.codeManagementService.getFilesByPullRequestId.mockResolvedValue(
+                files,
+            );
 
-        const result = await (cron as any).shouldApprovePR({
-            organizationAndTeamData: {
-                organizationId: 'org-1',
-                teamId: 'team-1',
-            },
-            pr: {
-                ...makeOpenPr(77, 'repo-b'),
-                suggestions: [{ comment: { id: 1 } }],
-            },
-            codeReviewConfig: {
-                pullRequestApprovalActive: true,
-                approvalSensitivePaths: ['src/auth/**'],
-            },
-            teamAutomationId: 'team-automation-1',
-        });
+            const result = await (cron as any).shouldApprovePR({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                pr: {
+                    ...makeOpenPr(77, 'repo-b'),
+                    suggestions: [{ comment: { id: 1 } }],
+                },
+                codeReviewConfig: {
+                    pullRequestApprovalActive: true,
+                    approvalSensitivePaths: ['src/auth/**'],
+                },
+                teamAutomationId: 'team-automation-1',
+            });
 
-        expect(result).toBe(false);
-        expect(
-            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
-        ).not.toHaveBeenCalled();
-        expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
-            expect.objectContaining({
-                body: expect.stringContaining('incomplete changed-file list'),
-            }),
-            PlatformType.GITLAB,
-        );
-    });
+            expect(result).toBe(false);
+            expect(
+                deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringContaining(
+                        'incomplete changed-file list',
+                    ),
+                }),
+                PlatformType.GITLAB,
+            );
+        },
+    );
 
     it('holds and explains a sensitive-path file lookup failure', async () => {
         const { cron, deps } = makeCron();
@@ -1491,7 +1853,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         expect(
             deps.codeManagementService.checkIfPullRequestShouldBeApproved,
         ).not.toHaveBeenCalled();
-        expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
             expect.objectContaining({
                 body: expect.stringContaining('could not be verified'),
             }),
@@ -1538,7 +1902,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         expect(
             deps.codeManagementService.checkIfPullRequestShouldBeApproved,
         ).not.toHaveBeenCalled();
-        expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
             expect.objectContaining({
                 body: expect.stringContaining('src/auth/login.ts'),
             }),
@@ -1760,7 +2126,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             deps.automationExecutionService.findLatestExecutionByFilters,
         ).toHaveBeenCalledWith(
             expect.objectContaining({
-                status: [AutomationStatus.SUCCESS, AutomationStatus.PARTIAL_ERROR],
+                status: [
+                    AutomationStatus.SUCCESS,
+                    AutomationStatus.PARTIAL_ERROR,
+                ],
             }),
         );
         expect(deps.codeBaseConfigService.getConfig).toHaveBeenCalledTimes(2);
@@ -1868,9 +2237,13 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             deps.codeManagementService.getFilesByPullRequestId,
         ).not.toHaveBeenCalled();
         expect(deps.codeBaseConfigService.getConfig).not.toHaveBeenCalled();
-        expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
             expect.objectContaining({
-                body: expect.stringContaining('source commit could not be verified'),
+                body: expect.stringContaining(
+                    'source commit could not be verified',
+                ),
             }),
             PlatformType.GITLAB,
         );
@@ -2016,40 +2389,47 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ['empty', [], 'returned no changed files'],
         ['missing', null, 'returned no changed files'],
         ['pathless', [{ filename: undefined }], 'did not return a path'],
-    ])('explains why approval is held when the provider returns %s files', async (_label, files, reason) => {
-        const { cron, deps } = makeCron();
-        deps.parametersService.findOne.mockResolvedValue({
-            team: { uuid: 'team-1' },
-            configValue: {
-                repositories: [
-                    {
-                        id: 'repo-a',
-                        name: 'Repo A',
-                        directories: [{ path: 'src/auth', configs: {} }],
-                    },
-                ],
-            },
-        });
-        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
-            [{ repositoryId: 'repo-a', pullRequestNumber: 1 }],
-        );
-        deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
-            [makeOpenPr(1, 'repo-a')],
-        );
-        deps.codeManagementService.getFilesByPullRequestId.mockResolvedValue(files);
-        const shouldApprove = jest.spyOn(cron as any, 'shouldApprovePR');
+    ])(
+        'explains why approval is held when the provider returns %s files',
+        async (_label, files, reason) => {
+            const { cron, deps } = makeCron();
+            deps.parametersService.findOne.mockResolvedValue({
+                team: { uuid: 'team-1' },
+                configValue: {
+                    repositories: [
+                        {
+                            id: 'repo-a',
+                            name: 'Repo A',
+                            directories: [{ path: 'src/auth', configs: {} }],
+                        },
+                    ],
+                },
+            });
+            deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+                [{ repositoryId: 'repo-a', pullRequestNumber: 1 }],
+            );
+            deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                [makeOpenPr(1, 'repo-a')],
+            );
+            deps.codeManagementService.getFilesByPullRequestId.mockResolvedValue(
+                files,
+            );
+            const shouldApprove = jest.spyOn(cron as any, 'shouldApprovePR');
 
-        await cron.handleCron();
+            await cron.handleCron();
 
-        expect(shouldApprove).not.toHaveBeenCalled();
-        expect(deps.codeBaseConfigService.getConfig).not.toHaveBeenCalled();
-        expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
-            expect.objectContaining({
-                body: expect.stringContaining(reason),
-            }),
-            PlatformType.GITLAB,
-        );
-    });
+            expect(shouldApprove).not.toHaveBeenCalled();
+            expect(deps.codeBaseConfigService.getConfig).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringContaining(reason),
+                }),
+                PlatformType.GITLAB,
+            );
+        },
+    );
 
     it("approves none of a repository's PRs when its config turns approval off", async () => {
         const { cron, deps } = makeCron();

@@ -327,9 +327,7 @@ const TaskModelControl = ({
     );
 };
 
-/** The 5 agent cards. Maps the 6 backend tasks onto the reference's agent
- *  framing: Kody Rules is ONE card holding its Review + Generation tasks; every
- *  other task is its own card. Nothing is hidden. */
+/** Each agent uses the existing task model control and default inheritance. */
 type AgentCard = {
     task: LlmTask;
     Icon: LucideIcon;
@@ -342,6 +340,11 @@ type AgentCard = {
 };
 
 const AGENT_CARDS: AgentCard[] = [
+    {
+        task: "riskAssessment",
+        Icon: ShieldCheckIcon,
+        title: "Risk Assessment",
+    },
     {
         // One card, one model per review mode: Balanced keeps the codeReview
         // task every existing override already points at; Heavy is its own.

@@ -1,5 +1,19 @@
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import {
+    ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+    IOrganizationParametersService,
+} from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
+import { OrganizationParametersKey } from '@libs/core/domain/enums/organization-parameters-key.enum';
+import {
+    isCurrentRiskAssessment,
+    type RiskAssessmentResult,
+} from '@libs/code-review/domain/risk/risk-assessment';
+import { prRiskConfigurationKey } from '@libs/code-review/domain/risk/risk-configuration';
+import { ApprovalPoliciesService } from '@libs/code-review/pipeline/services/approval-policies.service';
+import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
+import { isByokConfig, LLM_TASK } from '@libs/llm/byok-config';
+import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import { Cron } from '@nestjs/schedule';
 import pLimit from 'p-limit';
 
@@ -117,6 +131,8 @@ const APPROVAL_REASON_LOOKUP_TIMEOUT_MS = 10_000;
 const APPROVAL_REASON_WRITE_TIMEOUT_MS = 15_000;
 const APPROVAL_FILES_TIMEOUT_MS = 10_000;
 const DIRECTORY_FILE_CACHE_TTL_MS = 10 * 60 * 1000;
+const SHARED_RISK_STALE_REASON =
+    'The risk assessment does not match the current PR or risk settings. Run a new review before automatic approval.';
 
 @Injectable()
 export class CheckIfPRCanBeApprovedCronProvider {
@@ -153,7 +169,59 @@ export class CheckIfPRCanBeApprovedCronProvider {
         private readonly distributedLockService: DistributedLockService,
         @Inject(CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN)
         private readonly conditionalApprovalAccess: IConditionalApprovalAccessService,
+        @Optional()
+        @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
+        private readonly organizationParameters?: IOrganizationParametersService,
+        private readonly approvalPolicies?: ApprovalPoliciesService,
     ) {}
+
+    private async sharedRiskIsCurrent(input: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId: string;
+        prNumber: number;
+        pullRequest: PullRequest;
+        config: CodeReviewConfig;
+        risk?: RiskAssessmentResult;
+    }): Promise<boolean> {
+        if (!this.organizationParameters) return false;
+        try {
+            const stored = await runWithBoundedTimeout(
+                this.organizationParameters.findByKey(
+                    OrganizationParametersKey.BYOK_CONFIG,
+                    input.organizationAndTeamData,
+                ),
+                FINAL_PROVIDER_TIMEOUT_MS,
+                'risk model configuration lookup',
+            );
+            const { slot, verdict } = resolveTaskSlot(
+                isByokConfig(stored?.configValue)
+                    ? stored.configValue
+                    : undefined,
+                LLM_TASK.riskAssessment,
+            );
+            if (verdict && !verdict.modelId) return false;
+            return isCurrentRiskAssessment(input.risk, {
+                organizationId: input.organizationAndTeamData.organizationId,
+                repositoryId: input.repositoryId,
+                prNumber: input.prNumber,
+                headSha: input.pullRequest?.head?.sha ?? '',
+                baseSha: input.pullRequest?.base?.sha ?? '',
+                configurationKey: prRiskConfigurationKey({
+                    criteria: input.config.riskCriteria,
+                    language: input.config.languageResultPrompt,
+                    modelSlot: slot,
+                }),
+            });
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not verify shared risk configuration for approval',
+                context: CheckIfPRCanBeApprovedCronProvider.name,
+                error,
+            });
+            return false;
+        }
+    }
 
     @Cron(API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED, {
         name: 'CHECK IF PR SHOULD BE APPROVED',
@@ -793,6 +861,235 @@ export class CheckIfPRCanBeApprovedCronProvider {
         }
     }
 
+    private async approveByNamedPolicy(input: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        pr: IPullRequestWithDeliveredSuggestions;
+        codeReviewConfig: CodeReviewConfig;
+        teamAutomationId: string;
+    }): Promise<boolean> {
+        const {
+            organizationAndTeamData,
+            pr,
+            codeReviewConfig,
+            teamAutomationId,
+        } = input;
+        const request = {
+            organizationAndTeamData,
+            repository: pr.repository,
+            prNumber: pr.number,
+        };
+        const platformType = pr.provider as PlatformType;
+        const hold = async (reason: string) => {
+            await this.postConditionalApprovalReason(request, platformType, {
+                kind: 'hold',
+                reason,
+            });
+            return false;
+        };
+        try {
+            if (!codeReviewConfig.pullRequestApprovalActive) return false;
+            const status = await runWithBoundedTimeout(
+                this.codeManagementService.getReviewStatusByPullRequest(
+                    request,
+                ),
+                FINAL_PROVIDER_TIMEOUT_MS,
+                'policy approval status',
+            );
+            // Policy edits never withdraw or rewrite an approval already on the host.
+            if (status === PullRequestReviewState.APPROVED) return false;
+            if (status == null || !this.approvalPolicies)
+                return hold('Approval conditions could not be verified.');
+            const latest =
+                await this.automationExecutionService.findLatestExecutionByFilters(
+                    {
+                        teamAutomation: { uuid: teamAutomationId },
+                        pullRequestNumber: pr.number,
+                        repositoryId: pr.repository.id,
+                    },
+                );
+            if (latest?.status !== AutomationStatus.SUCCESS)
+                return hold('The latest review did not complete.');
+            const data = latest.dataExecution;
+            const reviewed = data?.approvalDecision as
+                ApprovalDecision | undefined;
+            const summary = data?.approvalReviewSummary;
+            if (
+                !summary?.complete ||
+                !reviewed?.reviewedHeadSha ||
+                !reviewed.reviewedBaseSha
+            )
+                return hold(
+                    'Run a complete PR review before automatic approval.',
+                );
+            const live = await runWithBoundedTimeout(
+                this.codeManagementService.getPullRequest(
+                    { ...request, includeLabels: true },
+                    platformType,
+                ),
+                FINAL_PROVIDER_TIMEOUT_MS,
+                'policy PR snapshot',
+            );
+            if (
+                live?.head?.sha !== reviewed.reviewedHeadSha ||
+                live?.base?.sha !== reviewed.reviewedBaseSha ||
+                this.getLastAnalyzedCommitSha(data.lastAnalyzedCommit) !==
+                    reviewed.reviewedHeadSha
+            )
+                return hold('The PR changed after it was reviewed.');
+            if (summary.prFindings > 0)
+                return hold(
+                    'PR-level findings require a new clean review before automatic approval.',
+                );
+            if (summary.lineFindings > 0 || pr.suggestions?.length) {
+                if (!pr.suggestions?.length)
+                    return hold('Review findings could not be verified.');
+                const comments = await runWithBoundedTimeout(
+                    platformType === PlatformType.GITHUB
+                        ? this.codeManagementService.getPullRequestReviewThreads(
+                              request,
+                              platformType,
+                          )
+                        : this.codeManagementService.getPullRequestReviewComments(
+                              request,
+                              platformType,
+                          ),
+                    FINAL_PROVIDER_TIMEOUT_MS,
+                    'policy review findings',
+                );
+                if (
+                    !Array.isArray(comments) ||
+                    pr.suggestions.some((suggestion) => {
+                        const id = suggestion.comment?.id;
+                        const comment = comments.find(
+                            (candidate) =>
+                                String(
+                                    platformType === PlatformType.GITHUB
+                                        ? (candidate.fullDatabaseId ??
+                                              candidate.id)
+                                        : platformType ===
+                                            PlatformType.AZURE_REPOS
+                                          ? candidate.threadId
+                                          : candidate.id,
+                                ) === String(id),
+                        );
+                        return !id || comment?.isResolved !== true;
+                    })
+                )
+                    return hold('Review findings remain unresolved.');
+            }
+            if (
+                codeReviewConfig.riskAssessmentActive === true &&
+                !(await this.sharedRiskIsCurrent({
+                    organizationAndTeamData,
+                    repositoryId: pr.repository.id,
+                    prNumber: pr.number,
+                    pullRequest: live,
+                    config: codeReviewConfig,
+                    risk: data.riskAssessment,
+                }))
+            )
+                return hold(SHARED_RISK_STALE_REASON);
+            const { decision, eligibility } =
+                await this.approvalPolicies.evaluate({
+                    organizationAndTeamData,
+                    repository: pr.repository,
+                    pullRequest: { ...live, number: pr.number },
+                    config: codeReviewConfig,
+                    platformType,
+                    reviewClean: true,
+                    risk: data.riskAssessment,
+                    heavy: data.heavy,
+                    previousEligibility: data.approvalPolicyEligibility,
+                });
+            if (Object.keys(eligibility).length)
+                await this.automationExecutionService.update(
+                    { uuid: latest.uuid },
+                    {
+                        dataExecution: {
+                            ...data,
+                            approvalPolicyEligibility: eligibility,
+                        },
+                    },
+                );
+            if (decision.kind !== 'approve') {
+                await this.postConditionalApprovalReason(
+                    request,
+                    platformType,
+                    decision,
+                );
+                return false;
+            }
+            if (
+                await this.hasInProgressReviewExecution({
+                    teamAutomationId,
+                    pullRequestNumber: pr.number,
+                    repositoryId: pr.repository.id,
+                })
+            )
+                return false;
+            // A failed or partial rerun that finished during policy evaluation also wins.
+            const finalExecution =
+                await this.automationExecutionService.findLatestExecutionByFilters(
+                    {
+                        teamAutomation: { uuid: teamAutomationId },
+                        pullRequestNumber: pr.number,
+                        repositoryId: pr.repository.id,
+                    },
+                );
+            if (
+                finalExecution?.uuid !== latest.uuid ||
+                finalExecution?.status !== AutomationStatus.SUCCESS
+            )
+                return hold(
+                    'A newer review must complete before automatic approval.',
+                );
+            const finalPr = await runWithBoundedTimeout(
+                this.codeManagementService.getPullRequest(
+                    { ...request, includeLabels: true },
+                    platformType,
+                ),
+                FINAL_PROVIDER_TIMEOUT_MS,
+                'policy final snapshot',
+            );
+            if (
+                finalPr?.head?.sha !== decision.reviewedHeadSha ||
+                finalPr?.base?.sha !== decision.reviewedBaseSha ||
+                approvalPrMetadataKey(finalPr) !== decision.reviewedMetadataKey
+            )
+                return hold(
+                    'The PR changed while approval conditions were evaluated.',
+                );
+            await this.codeManagementService.approvePullRequest(
+                { ...request, headSha: decision.reviewedHeadSha },
+                platformType,
+            );
+            if (
+                (await this.codeManagementService.getReviewStatusByPullRequest(
+                    request,
+                )) !== PullRequestReviewState.APPROVED
+            )
+                return hold('The provider did not confirm automatic approval.');
+            await this.postConditionalApprovalReason(
+                request,
+                platformType,
+                decision,
+            );
+            return true;
+        } catch (error) {
+            this.logger.warn({
+                message: 'Approval policy verification failed',
+                context: CheckIfPRCanBeApprovedCronProvider.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: pr.repository.id,
+                    prNumber: pr.number,
+                },
+            });
+            return hold('Approval conditions could not be verified.');
+        }
+    }
+
     private async shouldApprovePR({
         organizationAndTeamData,
         pr,
@@ -808,6 +1105,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
         currentPullRequest?: PullRequest | null;
         directoryChangedPaths?: string[];
     }): Promise<boolean> {
+        if (codeReviewConfig?.approvalPolicies !== undefined)
+            return this.approveByNamedPolicy({
+                organizationAndTeamData,
+                pr,
+                codeReviewConfig,
+                teamAutomationId,
+            });
         const repository = pr?.repository;
         const prNumber = pr?.number;
         const platformType = pr?.provider as PlatformType;
@@ -1087,6 +1391,25 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         });
                         return null;
                     })) === PullRequestReviewState.APPROVED;
+                if (
+                    codeReviewConfig?.riskAssessmentActive === true &&
+                    !approvedOnHost &&
+                    !(await this.sharedRiskIsCurrent({
+                        organizationAndTeamData,
+                        repositoryId: repository.id,
+                        prNumber,
+                        pullRequest: currentPullRequest,
+                        config: codeReviewConfig,
+                        risk: lastExecution.dataExecution?.riskAssessment,
+                    }))
+                ) {
+                    await this.postConditionalApprovalReason(
+                        codeManagementRequestData,
+                        platformType,
+                        { kind: 'hold', reason: SHARED_RISK_STALE_REASON },
+                    );
+                    return false;
+                }
                 const decision = evaluateReviewedHeadApproval({
                     approvalActive: true,
                     reviewedDecision,
@@ -1370,6 +1693,24 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                 },
                             );
                         }
+                        return false;
+                    }
+                    if (
+                        codeReviewConfig?.riskAssessmentActive === true &&
+                        !(await this.sharedRiskIsCurrent({
+                            organizationAndTeamData,
+                            repositoryId: repository.id,
+                            prNumber,
+                            pullRequest: latestPullRequest,
+                            config: codeReviewConfig,
+                            risk: lastExecution.dataExecution?.riskAssessment,
+                        }))
+                    ) {
+                        await this.postConditionalApprovalReason(
+                            codeManagementRequestData,
+                            platformType,
+                            { kind: 'hold', reason: SHARED_RISK_STALE_REASON },
+                        );
                         return false;
                     }
                     conditionalDecision = evaluateReviewedHeadApproval({

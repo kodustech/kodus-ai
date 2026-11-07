@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
-import { toast } from "@components/ui/toaster/use-toast";
 import {
     Dialog,
     DialogContent,
@@ -15,6 +14,7 @@ import {
 import { FormControl } from "@components/ui/form-control";
 import { Input } from "@components/ui/input";
 import { ScrollArea } from "@components/ui/scroll-area";
+import { toast } from "@components/ui/toaster/use-toast";
 import { AlertTriangle, CheckCircle2, Plus, X } from "lucide-react";
 import { findIgnoreMatch } from "src/core/utils/ignore-paths/match-file-against-ignore-paths";
 import { checkIgnorePattern } from "src/core/utils/ignore-paths/validate-glob-pattern";
@@ -24,6 +24,7 @@ import { checkIgnorePattern } from "src/core/utils/ignore-paths/validate-glob-pa
 const VALIDATOR_MIN_LENGTH = 4;
 
 type IgnorePathsModalProps = {
+    purpose?: "ignore" | "include" | "exclude";
     initialPaths: string[];
     onCancel: () => void;
     onSave: (paths: string[]) => void;
@@ -40,6 +41,7 @@ type IgnorePathsModalProps = {
  * dropped, nothing persisted, and a reload restored the old list.
  */
 export const IgnorePathsModal = ({
+    purpose = "ignore",
     initialPaths,
     onCancel,
     onSave,
@@ -109,10 +111,17 @@ export const IgnorePathsModal = ({
         <Dialog open onOpenChange={(open) => !open && onCancel()}>
             <DialogContent className="max-w-(--breakpoint-md)">
                 <DialogHeader>
-                    <DialogTitle>Ignored files</DialogTitle>
+                    <DialogTitle>
+                        {purpose === "ignore"
+                            ? "Ignored files"
+                            : purpose === "include"
+                              ? "Included files"
+                              : "Excluded files"}
+                    </DialogTitle>
                     <DialogDescription>
-                        Files matching any of these glob patterns are skipped by
-                        the review.
+                        {purpose === "ignore"
+                            ? "Files matching any of these glob patterns are skipped by the review."
+                            : "Match file paths with glob patterns."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -214,9 +223,16 @@ export const IgnorePathsModal = ({
 
                     {validation ? (
                         validation.ignored ? (
-                            <FormControl.Helper className="text-danger flex flex-row items-center gap-1.5">
-                                <X className="size-3.5 shrink-0" />
-                                Ignored by{" "}
+                            <FormControl.Helper
+                                className={`${purpose === "ignore" ? "text-danger" : "text-text-secondary"} flex flex-row items-center gap-1.5`}>
+                                {purpose === "ignore" ? (
+                                    <X className="size-3.5 shrink-0" />
+                                ) : (
+                                    <CheckCircle2 className="size-3.5 shrink-0" />
+                                )}
+                                {purpose === "ignore"
+                                    ? "Ignored by"
+                                    : "Matched by"}{" "}
                                 <code className="font-mono">
                                     {validation.matchedBy}
                                 </code>
@@ -224,7 +240,9 @@ export const IgnorePathsModal = ({
                         ) : (
                             <FormControl.Helper className="text-success flex flex-row items-center gap-1.5">
                                 <CheckCircle2 className="size-3.5 shrink-0" />
-                                This file will be reviewed.
+                                {purpose === "ignore"
+                                    ? "This file will be reviewed."
+                                    : "No pattern matches this file."}
                             </FormControl.Helper>
                         )
                     ) : (
@@ -261,9 +279,12 @@ export const IgnorePathsModal = ({
                                 onSave(paths);
                                 toast({
                                     variant: "info",
-                                    title: paths.length
-                                        ? `${paths.length} ignored ${paths.length === 1 ? "path" : "paths"} updated`
-                                        : "Ignored paths cleared",
+                                    title:
+                                        purpose !== "ignore"
+                                            ? "File patterns updated"
+                                            : paths.length
+                                              ? `${paths.length} ignored ${paths.length === 1 ? "path" : "paths"} updated`
+                                              : "Ignored paths cleared",
                                     description:
                                         "Save settings to persist the change.",
                                 });

@@ -96,6 +96,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         reviewHasPartialErrors: boolean,
     ): Promise<CodeReviewPipelineContext> {
         if (
+            context.codeReviewConfig?.approvalPolicies !== undefined ||
             context.approvalDecision?.kind !== 'hold' ||
             reviewFailed ||
             reviewHasPartialErrors

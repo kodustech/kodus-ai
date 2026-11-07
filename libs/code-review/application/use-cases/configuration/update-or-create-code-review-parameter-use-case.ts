@@ -5,6 +5,7 @@ import {
     ForbiddenException,
     Inject,
     Injectable,
+    Optional,
 } from '@nestjs/common';
 
 import { produce } from 'immer';
@@ -120,6 +121,13 @@ import {
     isHeavyModePlanAllowed,
 } from '@libs/ee/heavy-mode/heavy-mode-plan';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { approvalPolicyProviderError } from '@libs/code-review/domain/approval/approval-policy-provider';
+import {
+    migratedReviewSettings,
+    resolveReviewSettings,
+} from '@libs/code-review/domain/approval/migrate-review-settings';
+import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/general/approval-policies';
 
 @Injectable()
 export class UpdateOrCreateCodeReviewParameterUseCase {
@@ -146,6 +154,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService: ILicenseService,
         private readonly telemetry: TelemetryService,
+        @Optional() private readonly codeManagement?: CodeManagementService,
     ) {}
 
     async execute(
@@ -244,6 +253,31 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     resource: ResourceType.CodeReviewSettings,
                     repoIds: [repositoryId],
                 });
+            }
+
+            if (configValue.approvalPolicies !== undefined) {
+                const parsed = approvalPoliciesSchema.safeParse(
+                    configValue.approvalPolicies,
+                );
+                if (!parsed.success)
+                    throw new BadRequestException(
+                        'Approval policies are invalid.',
+                    );
+                const needsProvider = parsed.data.some(
+                    (policy) =>
+                        policy.labels?.length || policy.authorTeams?.length,
+                );
+                if (needsProvider) {
+                    const provider =
+                        await this.codeManagement?.getTypeIntegration(
+                            organizationAndTeamData,
+                        );
+                    const error = approvalPolicyProviderError(
+                        parsed.data,
+                        provider,
+                    );
+                    if (error) throw new BadRequestException(error);
+                }
             }
 
             const codeReviewConfigs = await this.getCodeReviewConfigs(
@@ -1030,6 +1064,23 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 delete (newDelta as Record<string, unknown>)[key];
             }
         }
+        if (sanitizedIncomingConfig.byokModelId !== undefined)
+            delete newDelta.byokModel;
+
+        // Changing approval never changes the independent engine seen by the user.
+        // Keep even an explicit false: diffing against an old default could otherwise erase it.
+        if (
+            actor?.source !== 'sync' &&
+            sanitizedIncomingConfig.pullRequestApprovalActive !== undefined &&
+            sanitizedIncomingConfig.riskAssessmentActive === undefined
+        ) {
+            newDelta.riskAssessmentActive = resolveReviewSettings(
+                getDefaultKodusConfigFile(),
+                codeReviewConfigs.configs ?? {},
+                repository?.configs ?? {},
+                directory?.configs ?? {},
+            ).riskAssessmentActive;
+        }
 
         const pathsChanged = !!previousFolders && previousFolders.length > 0;
         const isSelectionOnlyPayload =
@@ -1302,6 +1353,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             this.hasNoScopedConfigChanges(
                 existingScopedConfigFileContent,
                 configFileContent,
+                params.level === ConfigLevel.GLOBAL,
             )
         ) {
             return {
@@ -1938,7 +1990,28 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     private hasNoScopedConfigChanges(
         existingScopedConfig: Record<string, any> | null | undefined,
         nextScopedConfig: Record<string, any>,
+        globalScope = false,
     ): boolean {
+        if (globalScope) {
+            const defaults = getDefaultKodusConfigFile();
+            const existing = existingScopedConfig ?? {};
+            return this.isDeepEqualIgnoringEmpty(
+                {
+                    ...existing,
+                    ...migratedReviewSettings(
+                        deepMerge(defaults, existing),
+                        existing,
+                    ),
+                },
+                {
+                    ...nextScopedConfig,
+                    ...migratedReviewSettings(
+                        deepMerge(defaults, nextScopedConfig),
+                        nextScopedConfig,
+                    ),
+                },
+            );
+        }
         return this.isDeepEqualIgnoringEmpty(
             existingScopedConfig || {},
             nextScopedConfig || {},

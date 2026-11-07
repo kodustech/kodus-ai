@@ -26,6 +26,11 @@ export interface ApprovalRiskAssessment {
 export interface ApprovalDecision {
     kind: 'approve' | 'hold' | 'out-of-scope' | 'disabled';
     reason: string;
+    matchedPolicy?: { id: string; name: string };
+    policies?: import('./approval-policies').ApprovalPolicyResult[];
+    reviewedHeadSha?: string;
+    reviewedBaseSha?: string;
+    reviewedMetadataKey?: string;
 }
 
 const normalized = (value: string) => value.trim().toLocaleLowerCase('en-US');
@@ -36,7 +41,7 @@ export function approvalPolicyFromConfig(
     return {
         labels: config.approvalLabels,
         authors: config.approvalAuthors,
-        assessRisk: config.approvalRiskActive,
+        assessRisk: config.riskAssessmentActive ?? config.approvalRiskActive,
         riskInstructions: config.approvalRiskInstructions,
         sensitivePaths: config.approvalSensitivePaths,
     };
@@ -56,9 +61,10 @@ export function approvalPathsOf(
     return files.flatMap((file) => {
         const path = file.filename ?? file.path;
         const previous = file.previous_filename;
-        return [path, previous && previous !== path ? previous : undefined].filter(
-            (p): p is string => !!p,
-        );
+        return [
+            path,
+            previous && previous !== path ? previous : undefined,
+        ].filter((p): p is string => !!p);
     });
 }
 

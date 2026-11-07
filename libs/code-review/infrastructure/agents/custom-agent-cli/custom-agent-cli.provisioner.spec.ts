@@ -132,6 +132,43 @@ describe('customAgentMatchesFiles', () => {
 });
 
 describe('provisionCustomAgentClis', () => {
+    it('provisions conditional agents from the same shared risk result used by dispatch', async () => {
+        const sb = sandbox('e2b');
+        const result = await provisionCustomAgentClis({
+            sandbox: sb,
+            agents: [agent({ runWhen: 'risk-found' })],
+            changedFiles: ['src/ledger/post.ts'],
+            riskAssessment: {
+                status: 'assessed',
+                riskIdentified: true,
+                reason: 'Ledger balance can change.',
+                snapshot: {
+                    organizationId: 'org',
+                    repositoryId: 'repo',
+                    prNumber: 1,
+                    baseSha: 'base',
+                    headSha: 'head',
+                    assessmentKey: 'key',
+                },
+            },
+        });
+        expect(result.byAgentId['agent-1']).toBeDefined();
+        expect(sb.run).toHaveBeenCalled();
+    });
+
+    it('does no tooling work for a conditional automatic agent without confirmed risk', async () => {
+        const sb = sandbox('e2b');
+        const result = await provisionCustomAgentClis({
+            sandbox: sb,
+            agents: [agent({ runWhen: 'risk-found' })],
+            changedFiles: ['src/ledger/post.ts'],
+            riskAssessment: { status: 'unavailable', reason: 'Timeout.' },
+        });
+        expect(result.byAgentId).toEqual({});
+        expect(result.warnings).toEqual([]);
+        expect(sb.run).not.toHaveBeenCalled();
+    });
+
     it('never installs on the local sandbox', async () => {
         const sb = sandbox('local');
         const result = await provisionCustomAgentClis({

@@ -1,331 +1,230 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
-import { FormControl } from "@components/ui/form-control";
 import { Switch } from "@components/ui/switch";
-import TagInput from "@components/ui/tag-input";
-import { Textarea } from "@components/ui/textarea";
-import { Controller, useFormContext, useWatch } from "react-hook-form";
-import { useApprovalLabelsUnavailable } from "src/app/(app)/settings/_components/use-code-management-platform";
+import type { ApprovalPolicy } from "@services/approval-policies/types";
+import { ArrowDown, ArrowUp, Plus } from "lucide-react";
+import { useController, useFormContext, useWatch } from "react-hook-form";
+import {
+    useApprovalLabelsUnavailable,
+    useApprovalTeamsUnavailable,
+} from "src/app/(app)/settings/_components/use-code-management-platform";
 import { OverrideIndicatorForm } from "src/app/(app)/settings/code-review/_components/override";
 
 import type { CodeReviewFormType } from "../../../_types";
-
-const eligibilityFields = [
-    {
-        name: "approvalLabels" as const,
-        label: "PR labels",
-        maxTags: 50,
-        placeholder: "Add a label",
-        help: "Match any listed label. Leave empty to allow all labels.",
-    },
-    {
-        name: "approvalAuthors" as const,
-        label: "PR authors",
-        maxTags: 50,
-        placeholder: "Add a provider login",
-        help: "Match a provider username. Leave empty to allow all authors.",
-    },
-];
-
-function EligibilityFields() {
-    const form = useFormContext<CodeReviewFormType>();
-    const labelsUnavailable = useApprovalLabelsUnavailable();
-
-    return (
-        <div className="grid min-w-0 gap-5 sm:grid-cols-2">
-            {eligibilityFields.map(
-                ({ name, label, maxTags, placeholder, help }) => (
-                    <Controller
-                        key={name}
-                        name={`${name}.value`}
-                        control={form.control}
-                        render={({ field }) => (
-                            <FormControl.Root className="min-w-0">
-                                <div className="mb-2 flex flex-wrap items-center gap-2">
-                                    <FormControl.Label
-                                        htmlFor={field.name}
-                                        className="mb-0 font-medium">
-                                        {label}
-                                    </FormControl.Label>
-                                    <OverrideIndicatorForm fieldName={name} />
-                                </div>
-                                <FormControl.Input>
-                                    <TagInput
-                                        id={field.name}
-                                        disabled={field.disabled}
-                                        tags={field.value ?? []}
-                                        maxTags={maxTags}
-                                        placeholder={placeholder}
-                                        onTagsChange={field.onChange}
-                                    />
-                                </FormControl.Input>
-                                <FormControl.Helper className="text-xs leading-5">
-                                    {name === "approvalLabels" &&
-                                    labelsUnavailable
-                                        ? "Bitbucket ignores approval labels. Azure Repos needs a person while labels are configured. You can remove saved labels here."
-                                        : help}
-                                </FormControl.Helper>
-                            </FormControl.Root>
-                        )}
-                    />
-                ),
-            )}
-        </div>
-    );
-}
+import { ApprovalPolicyEditor } from "./approval-policy-editor";
+import { approvalPolicyScope } from "./approval-policy-scope";
+import { FilePatternsField } from "./file-patterns-field";
 
 export function ApprovalPolicySettings() {
     const form = useFormContext<CodeReviewFormType>();
-    const [guidanceOpen, setGuidanceOpen] = useState(false);
-    const autoEnabledAtDefaults = useRef<object | null>(null);
-    const approvalActive = useWatch({
+    const { field } = useController({
+        name: "approvalPolicies.value",
         control: form.control,
-        name: "pullRequestApprovalActive.value",
     });
-    useEffect(() => {
-        // An explicit parent-off takes ownership away from the risk toggle.
-        if (!approvalActive) autoEnabledAtDefaults.current = null;
-    }, [approvalActive]);
-    const riskAssessmentActive = useWatch({
+    const { field: sensitive } = useController({
+        name: "approvalSensitivePaths.value",
         control: form.control,
-        name: "approvalRiskActive.value",
     });
+    const riskEnabled = useWatch({
+        control: form.control,
+        name: "riskAssessmentActive.value",
+    });
+    const legacyLabels = useWatch({
+        control: form.control,
+        name: "approvalLabels.value",
+    });
+    const legacyAuthors = useWatch({
+        control: form.control,
+        name: "approvalAuthors.value",
+    });
+    const labelsUnavailable = useApprovalLabelsUnavailable();
+    const teamsUnavailable = useApprovalTeamsUnavailable();
+    const policies: ApprovalPolicy[] = field.value ?? [
+        {
+            id: "legacy-approval",
+            name: "Existing approval policy",
+            enabled: true,
+            labels: legacyLabels ?? [],
+            authors: legacyAuthors ?? [],
+        },
+    ];
+    const [editing, setEditing] = useState<ApprovalPolicy | "new" | null>(null);
+    const update = (next: ApprovalPolicy[]) => field.onChange(next);
+    const move = (index: number, direction: number) => {
+        const next = [...policies];
+        [next[index], next[index + direction]] = [
+            next[index + direction],
+            next[index],
+        ];
+        update(next);
+    };
 
     return (
-        <div>
-            <div className="border-card-lv3/60 border-b px-5 py-4 sm:px-6">
+        <section className="space-y-4 px-5 py-5 sm:px-6">
+            <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
                     <h3 className="text-text-primary text-sm font-semibold">
-                        Conditional approval
+                        Approval policies
                     </h3>
-                    <Badge>Beta</Badge>
+                    <OverrideIndicatorForm fieldName="approvalPolicies" />
                 </div>
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="primary"
+                    leftIcon={<Plus className="size-4" />}
+                    disabled={field.disabled || policies.length >= 50}
+                    onClick={() => setEditing("new")}>
+                    Add policy
+                </Button>
             </div>
-            <section className="border-card-lv3/60 border-b px-5 py-6 sm:px-6">
-                <div className="mb-5">
-                    <h3 className="text-text-primary text-base font-semibold">
-                        Which PRs can be auto-approved?
-                    </h3>
-                    <p className="text-text-secondary mt-1 text-sm leading-6">
-                        After a clean review, all PRs are eligible by default.
-                        Add labels or authors to limit this. If you set both, a
-                        PR must match both.
-                    </p>
-                </div>
-                <EligibilityFields />
-            </section>
-
-            <section className="px-5 py-6 sm:px-6">
-                <div className="mb-5">
-                    <h3 className="text-text-primary text-base font-semibold">
-                        When is human approval required?
-                    </h3>
-                    <p className="text-text-secondary mt-1 text-sm leading-6">
-                        Files matching a path below always need a person. Turn
-                        on risk assessment to also hold PRs Kody cannot judge
-                        low risk.
-                    </p>
-                </div>
-                <div className="flex min-w-0 flex-col gap-5">
-                    <Controller
-                        name="approvalSensitivePaths.value"
-                        control={form.control}
-                        render={({ field }) => (
-                            <FormControl.Root>
-                                <div className="mb-2 flex flex-wrap items-center gap-2">
-                                    <FormControl.Label
-                                        htmlFor={field.name}
-                                        className="mb-0 font-medium">
-                                        Paths requiring human approval
-                                    </FormControl.Label>
-                                    <OverrideIndicatorForm fieldName="approvalSensitivePaths" />
+            <p className="text-text-secondary text-xs">
+                A clean review and one matching policy are required.
+                {riskEnabled
+                    ? " Risk found or unavailable blocks approval."
+                    : ""}
+            </p>
+            {policies.length === 0 && (
+                <p className="text-text-secondary py-4 text-sm">
+                    No policies. Add one to enable automatic approval.
+                </p>
+            )}
+            <ol className="space-y-3">
+                {policies.map((policy, index) => (
+                    <li
+                        key={policy.id}
+                        className="border-card-lv3 rounded-xl border px-4 py-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <h4 className="text-text-primary text-sm font-medium break-words">
+                                        {policy.name}
+                                    </h4>
+                                    {!policy.enabled && (
+                                        <Badge variant="helper">Off</Badge>
+                                    )}
                                 </div>
-                                <FormControl.Input>
-                                    <TagInput
-                                        id={field.name}
-                                        disabled={field.disabled}
-                                        tags={field.value ?? []}
-                                        maxTags={100}
-                                        placeholder="Add a file glob, e.g. src/auth/**"
-                                        onTagsChange={field.onChange}
-                                    />
-                                </FormControl.Input>
-                                <FormControl.Helper className="text-xs leading-5">
-                                    Any matching file blocks automatic approval.
-                                    Up to 100 paths.
-                                </FormControl.Helper>
-                            </FormControl.Root>
-                        )}
-                    />
-
-                    <div className="border-card-lv3/60 bg-card-lv2/35 rounded-lg border p-4">
-                        <Controller
-                            name="approvalRiskActive.value"
-                            control={form.control}
-                            render={({ field }) => (
-                                <div className="flex items-start justify-between gap-4">
-                                    <div className="min-w-0">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <label
-                                                htmlFor={field.name}
-                                                className="text-text-primary cursor-pointer text-sm font-medium">
-                                                Assess PR risk
-                                            </label>
-                                            <OverrideIndicatorForm fieldName="approvalRiskActive" />
-                                        </div>
-                                        <p className="text-text-secondary mt-1 text-xs leading-5">
-                                            Kody assesses the PR changes and
-                                            available code history using its
-                                            built-in criteria. After a clean
-                                            review, it approves low-risk PRs and
-                                            leaves the others for a person.
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        id={field.name}
-                                        checked={field.value ?? false}
-                                        disabled={field.disabled}
-                                        onCheckedChange={(checked) => {
-                                            if (
-                                                checked &&
-                                                !form.getValues(
-                                                    "pullRequestApprovalActive.value",
-                                                )
-                                            ) {
-                                                autoEnabledAtDefaults.current =
-                                                    form.control._defaultValues;
-                                                form.setValue(
-                                                    "pullRequestApprovalActive.value",
-                                                    true,
-                                                    { shouldDirty: true },
-                                                );
-                                            }
-                                            if (!checked) {
-                                                // Undo only this unsaved activation. A save/reset
-                                                // replaces the defaults and commits the choice.
-                                                if (
-                                                    autoEnabledAtDefaults.current ===
-                                                    form.control._defaultValues
-                                                ) {
-                                                    form.setValue(
-                                                        "pullRequestApprovalActive.value",
-                                                        false,
-                                                        { shouldDirty: true },
-                                                    );
-                                                }
-                                                autoEnabledAtDefaults.current =
-                                                    null;
-                                                setGuidanceOpen(false);
-                                            }
-                                            field.onChange(checked);
-                                        }}
-                                        className="shrink-0"
-                                    />
-                                </div>
-                            )}
-                        />
-
-                        {riskAssessmentActive && (
-                            <div className="border-card-lv3/60 mt-4 border-t pt-4">
-                                <Controller
-                                    name="approvalRiskInstructions.value"
-                                    control={form.control}
-                                    render={({ field }) => {
-                                        const hasGuidance = Boolean(
-                                            field.value?.trim(),
-                                        );
-
-                                        return (
-                                            <div>
-                                                <div className="flex items-start justify-between gap-4">
-                                                    <div className="min-w-0">
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <span className="text-text-primary text-sm font-medium">
-                                                                Additional team
-                                                                guidance
-                                                            </span>
-                                                            <OverrideIndicatorForm fieldName="approvalRiskInstructions" />
-                                                        </div>
-                                                        {hasGuidance ? (
-                                                            <p className="text-text-secondary mt-1 line-clamp-2 text-xs leading-5 break-words whitespace-pre-line">
-                                                                {field.value}
-                                                            </p>
-                                                        ) : (
-                                                            <p className="text-text-secondary mt-1 text-xs leading-5">
-                                                                No team-specific
-                                                                instructions.
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                    <Button
-                                                        type="button"
-                                                        variant="helper"
-                                                        size="xs"
-                                                        disabled={
-                                                            field.disabled
-                                                        }
-                                                        aria-expanded={
-                                                            guidanceOpen
-                                                        }
-                                                        onClick={() =>
-                                                            setGuidanceOpen(
-                                                                !guidanceOpen,
-                                                            )
-                                                        }>
-                                                        {guidanceOpen
-                                                            ? "Close"
-                                                            : hasGuidance
-                                                              ? "Edit"
-                                                              : "Add"}
-                                                    </Button>
-                                                </div>
-                                                {guidanceOpen && (
-                                                    <FormControl.Root className="mt-4">
-                                                        <FormControl.Label
-                                                            htmlFor={field.name}
-                                                            className="mb-2 font-medium">
-                                                            Additional
-                                                            instructions
-                                                        </FormControl.Label>
-                                                        <FormControl.Input>
-                                                            <Textarea
-                                                                id={field.name}
-                                                                value={
-                                                                    field.value ??
-                                                                    ""
-                                                                }
-                                                                disabled={
-                                                                    field.disabled
-                                                                }
-                                                                maxLength={4000}
-                                                                onChange={
-                                                                    field.onChange
-                                                                }
-                                                                placeholder="e.g. Require a person to approve payment retry changes"
-                                                                className="bg-card-lv1 min-h-24 resize-y px-4 py-3"
-                                                            />
-                                                        </FormControl.Input>
-                                                        <FormControl.Helper className="text-xs leading-5">
-                                                            These instructions
-                                                            add context to
-                                                            Kody&apos;s built-in
-                                                            assessment. Up to
-                                                            4,000 characters.
-                                                        </FormControl.Helper>
-                                                    </FormControl.Root>
-                                                )}
-                                            </div>
-                                        );
-                                    }}
-                                />
+                                <p className="text-text-secondary mt-1 text-xs leading-5 break-words">
+                                    {approvalPolicyScope(policy)}
+                                </p>
                             </div>
-                        )}
-                    </div>
+                            <div className="flex items-center gap-2">
+                                <Switch
+                                    checked={policy.enabled}
+                                    disabled={field.disabled}
+                                    aria-label={`Enable ${policy.name}`}
+                                    onCheckedChange={(enabled) =>
+                                        update(
+                                            policies.map((item) =>
+                                                item.id === policy.id
+                                                    ? { ...item, enabled }
+                                                    : item,
+                                            ),
+                                        )
+                                    }
+                                />
+                                <Button
+                                    type="button"
+                                    variant="cancel"
+                                    size="sm"
+                                    disabled={field.disabled}
+                                    onClick={() => setEditing(policy)}>
+                                    Edit
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="cancel"
+                                    size="sm"
+                                    disabled={field.disabled}
+                                    aria-label={`Delete ${policy.name}`}
+                                    onClick={() =>
+                                        update(
+                                            policies.filter(
+                                                (item) => item.id !== policy.id,
+                                            ),
+                                        )
+                                    }>
+                                    Delete
+                                </Button>
+                                {policies.length > 1 && (
+                                    <div className="flex gap-1">
+                                        <Button
+                                            type="button"
+                                            variant="cancel"
+                                            size="sm"
+                                            disabled={
+                                                field.disabled || index === 0
+                                            }
+                                            aria-label={`Move ${policy.name} up`}
+                                            onClick={() => move(index, -1)}>
+                                            <ArrowUp className="size-3.5" />
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="cancel"
+                                            size="sm"
+                                            disabled={
+                                                field.disabled ||
+                                                index === policies.length - 1
+                                            }
+                                            aria-label={`Move ${policy.name} down`}
+                                            onClick={() => move(index, 1)}>
+                                            <ArrowDown className="size-3.5" />
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </li>
+                ))}
+            </ol>
+            {policies.length > 1 && (
+                <p className="text-text-secondary text-xs">
+                    The first matching policy is used.
+                </p>
+            )}
+            <details className="border-card-lv3 border-t pt-4">
+                <summary className="text-text-secondary cursor-pointer text-xs">
+                    Files requiring human approval
+                </summary>
+                <div className="mt-4">
+                    <FilePatternsField
+                        label="Always require human approval"
+                        purpose="exclude"
+                        value={sensitive.value ?? []}
+                        disabled={sensitive.disabled}
+                        onChange={sensitive.onChange}
+                        hint="These files block every approval policy."
+                    />
                 </div>
-            </section>
-        </div>
+            </details>
+            {editing !== null && (
+                <ApprovalPolicyEditor
+                    policy={editing === "new" ? undefined : editing}
+                    existingNames={policies
+                        .filter(
+                            (policy) =>
+                                editing === "new" || policy.id !== editing.id,
+                        )
+                        .map((policy) => policy.name)}
+                    labelsUnavailable={labelsUnavailable}
+                    teamsUnavailable={teamsUnavailable}
+                    onClose={() => setEditing(null)}
+                    onApply={(policy) => {
+                        update(
+                            editing === "new"
+                                ? [...policies, policy]
+                                : policies.map((item) =>
+                                      item.id === policy.id ? policy : item,
+                                  ),
+                        );
+                        setEditing(null);
+                    }}
+                />
+            )}
+        </section>
     );
 }

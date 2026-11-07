@@ -164,6 +164,20 @@ const BOUNDARIES = [
         note: 'invalid or unavailable risk output is held for human approval',
     },
     {
+        phase: 'approval-policy-eligibility',
+        files: [
+            'libs/code-review/domain/approval/assess-policy-eligibility.ts',
+        ],
+        requires: ['schema'],
+        note: 'only explicit eligibility qualifies a policy; incomplete or invalid evidence never authorizes it',
+    },
+    {
+        phase: 'pr-risk-assessment',
+        files: ['libs/code-review/domain/risk/assess-pr-risk.ts'],
+        requires: ['schema'],
+        note: 'invalid or insufficient output remains unavailable; review uses its configured default and automatic approval stays blocked',
+    },
+    {
         phase: 'llmResponseProcessor',
         files: [
             'libs/ai-engine/infrastructure/adapters/services/llmResponseProcessor.transform.ts',

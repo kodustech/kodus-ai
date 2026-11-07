@@ -1,8 +1,35 @@
 import type { ReviewMode } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import type { RiskReviewRouting } from '@libs/core/infrastructure/config/types/general/risk-assessment';
+import type { RiskAssessmentResult } from './risk/risk-assessment';
 
 /** The mode a review command asks for (`--balanced` / `--heavy`), over the
  *  mode set in settings. */
 export type RequestedReviewMode = 'balanced' | 'heavy';
+
+/** Resolve before model selection. Commands win; unavailable risk uses settings. */
+export function resolveRiskReviewMode(input: {
+    requested?: RequestedReviewMode;
+    configured?: ReviewMode;
+    routing?: RiskReviewRouting;
+    risk?: RiskAssessmentResult;
+    currentHeadSha: string;
+    heavyAllowed: boolean;
+}): ReviewMode {
+    // Preserve the CLI's separate fast mode and the legacy deep mode.
+    if (input.configured === 'fast') return 'fast';
+    let mode: ReviewMode = input.requested ?? input.configured ?? 'balanced';
+    if (
+        !input.requested &&
+        input.risk?.status === 'assessed' &&
+        !!input.currentHeadSha &&
+        input.risk.snapshot.headSha === input.currentHeadSha
+    ) {
+        mode = input.risk.riskIdentified
+            ? (input.routing?.riskFound ?? 'heavy')
+            : (input.routing?.noRisk ?? 'balanced');
+    }
+    return mode === 'heavy' && !input.heavyAllowed ? 'balanced' : mode;
+}
 
 /**
  * Whether a review runs heavy: the mode the command asked for, else the mode

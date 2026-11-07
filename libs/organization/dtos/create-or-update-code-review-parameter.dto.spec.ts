@@ -61,3 +61,65 @@ describe('CreateOrUpdateCodeReviewParameterDto — byokModelId', () => {
         expect(JSON.stringify(errors)).toContain('byokModelId');
     });
 });
+
+describe('independent risk configuration validation', () => {
+    const criterion = {
+        id: 'access',
+        name: 'Access',
+        enabled: true,
+        instructions: 'Check tenant isolation.',
+        includedFiles: ['src/**/*.{ts,tsx}'],
+        excludedFiles: ['**/*.test.ts'],
+    };
+    const errorsFor = async (configValue: Record<string, unknown>) =>
+        validate(
+            plainToInstance(CreateOrUpdateCodeReviewParameterDto, {
+                organizationAndTeamData: { teamId: 'team-1' },
+                configValue,
+            }),
+            { whitelist: true, forbidNonWhitelisted: true },
+        );
+
+    it('allows risk enabled with approval disabled and criteria omitted', async () => {
+        expect(
+            await errorsFor({
+                riskAssessmentActive: true,
+                pullRequestApprovalActive: false,
+            }),
+        ).toEqual([]);
+    });
+    it('round-trips array globs and both review modes without changing brace syntax', async () => {
+        expect(
+            await errorsFor({
+                riskCriteria: [criterion],
+                riskReviewRouting: { noRisk: 'balanced', riskFound: 'heavy' },
+            }),
+        ).toEqual([]);
+    });
+    it('accepts a routing delta without resetting the inherited other result', async () => {
+        expect(
+            await errorsFor({ riskReviewRouting: { noRisk: 'heavy' } }),
+        ).toEqual([]);
+        expect(
+            await errorsFor({ riskReviewRouting: { riskFound: 'balanced' } }),
+        ).toEqual([]);
+    });
+    it.each([
+        { riskCriteria: [{ ...criterion, instructions: 42 }] },
+        { riskCriteria: [criterion, criterion] },
+        { riskCriteria: [{ ...criterion, includedFiles: '**/*.ts' }] },
+        { riskCriteria: [{ ...criterion, includedFiles: ['src/['] }] },
+        { riskCriteria: [{ ...criterion, excludedFiles: ['!src/**'] }] },
+        { riskReviewRouting: { noRisk: 'light', riskFound: 'heavy' } },
+        { riskAssessmentActive: 'true' },
+        { riskAssessmentActive: null },
+        { riskCriteria: null },
+        { riskReviewRouting: null },
+        { approvalPolicies: null },
+    ])(
+        'rejects malformed or ambiguous risk configuration %j',
+        async (config) => {
+            expect((await errorsFor(config)).length).toBeGreaterThan(0);
+        },
+    );
+});

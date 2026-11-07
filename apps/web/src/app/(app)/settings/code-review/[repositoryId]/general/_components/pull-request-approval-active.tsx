@@ -36,8 +36,8 @@ export const PullRequestApprovalActive = ({
                         </div>
                         <p className="text-text-secondary mt-1.5 max-w-2xl text-sm leading-5">
                             {conditionalApprovalEnabled
-                                ? "After a clean automated review, Kody approves a PR only when it passes the conditions below."
-                                : "After a clean automated review, Kody can approve the PR automatically."}
+                                ? "Approve clean PRs that match a policy."
+                                : "Approve PRs after a clean review."}
                         </p>
                     </div>
                     <Switch

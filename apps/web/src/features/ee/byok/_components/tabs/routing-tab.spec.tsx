@@ -3,10 +3,10 @@ import "@testing-library/jest-dom";
 
 import { TooltipProvider } from "@components/ui/tooltip";
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { SubscriptionProvider } from "src/features/ee/subscription/_providers/subscription-context";
 
 import type { BYOKConfig } from "../../_types";
 import { ModelCombobox, type PoolModel } from "../routing/task-override-grid";
-import { SubscriptionProvider } from "src/features/ee/subscription/_providers/subscription-context";
 import { RoutingTab } from "./routing-tab";
 
 jest.mock("next/navigation", () => ({
@@ -90,7 +90,7 @@ describe("RoutingTab — searching the model picker", () => {
         expect(() => act(() => typeInSearch("g"))).not.toThrow();
 
         // The page is still there, and the filter actually filtered.
-        expect(screen.getByText("Routing policy")).toBeInTheDocument();
+        expect(screen.getByText("Defaults")).toBeInTheDocument();
         expect(screen.getByRole("option", { name: /Gemini/ })).toBeVisible();
         expect(
             screen.queryByRole("option", { name: /Claude Sonnet/ }),

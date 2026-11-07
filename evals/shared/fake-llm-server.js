@@ -121,7 +121,18 @@ function decide(body) {
 
     const format = body.response_format;
     if (format?.type === 'json_schema' && format.json_schema?.schema) {
-        const prefer = promptText(body).includes('EVAL_FORCE_MEDIUM_RISK') ? ['medium'] : [];
+        const text = promptText(body);
+        const prefer = text.includes('EVAL_FORCE_INELIGIBLE_POLICY')
+            ? ['no-risk', 'ineligible']
+            : text.includes('EVAL_FORCE_UNKNOWN_POLICY')
+              ? ['no-risk', 'insufficient-context']
+              : text.includes('EVAL_FORCE_MEDIUM_RISK')
+                ? ['medium']
+                : text.includes('EVAL_FORCE_NO_PR_RISK')
+                  ? ['no-risk']
+                  : text.includes('EVAL_FORCE_UNKNOWN_PR_RISK')
+                    ? ['insufficient-context']
+                    : [];
         return { text: JSON.stringify(instanceOf(format.json_schema.schema, format.json_schema.schema, 0, prefer)) };
     }
     return { text: '{}' };

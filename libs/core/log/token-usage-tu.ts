@@ -114,10 +114,7 @@ const n = (v: unknown): number => (typeof v === 'number' ? v : 0);
  * specific name families. Mirrored as an aggregation `$switch` in the Mongo
  * backfill (backfill-tu.ts) — keep the two in sync.
  */
-export function deriveArea(
-    runName: unknown,
-    phase?: unknown,
-): TokenUsageArea {
+export function deriveArea(runName: unknown, phase?: unknown): TokenUsageArea {
     const rn = typeof runName === 'string' ? runName : '';
 
     if (SYSTEM_RUN_NAMES.has(rn)) return 'system';
@@ -169,6 +166,7 @@ export function deriveArea(
 export const ROUTING_TASKS: ReadonlySet<string> = new Set([
     'codeReview',
     'codeReviewHeavy',
+    'riskAssessment',
     'kodyRulesReview',
     'ruleGeneration',
     'businessValidation',

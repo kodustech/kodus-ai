@@ -218,6 +218,18 @@ const SETTINGS_TABS = [
         keywords: "code review settings automated approval",
     },
     {
+        label: "Risk assessment",
+        href: "risk",
+        icon: ShieldIcon,
+        keywords: "risk criteria assessment",
+    },
+    {
+        label: "Routing",
+        href: "routing",
+        icon: SettingsIcon,
+        keywords: "review mode model balanced heavy routing",
+    },
+    {
         label: "What to review",
         href: "review-scope",
         icon: ScanSearchIcon,

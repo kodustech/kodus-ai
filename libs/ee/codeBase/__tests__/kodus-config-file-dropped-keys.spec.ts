@@ -7,6 +7,7 @@
 import CodeBaseConfigService from '@libs/ee/codeBase/codeBaseConfig.service';
 import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import * as yaml from 'js-yaml';
 
 const FILE = `version: 1.2
 automatedReviewActive: false
@@ -22,6 +23,15 @@ function service(fileContent: string | null) {
     svc.DEFAULT_CONFIG = {
         automatedReviewActive: true,
         kodusConfigFileOverridesWebPreferences: false,
+        approvalPolicies: [],
+        riskAssessmentActive: false,
+        riskCriteria: [],
+        riskReviewRouting: { noRisk: 'balanced', riskFound: 'heavy' },
+        pullRequestApprovalActive: false,
+        approvalRiskActive: false,
+        approvalLabels: [],
+        approvalAuthors: [],
+        approvalRiskInstructions: '',
     };
     svc.codeManagementService = {
         getTypeIntegration: jest.fn(async () => 'github'),
@@ -57,6 +67,184 @@ const merge = (svc: CodeBaseConfigService, fileWins = true) =>
     );
 
 describe('kodus-config.yml with app-only keys', () => {
+    const storedWith = (global: object, directory?: object) => ({
+        id: 'global',
+        name: 'Global',
+        isSelected: true,
+        configs: global,
+        repositories: [
+            {
+                id: 'repo-1',
+                name: 'hive-inventory',
+                isSelected: true,
+                configs: { kodusConfigFileOverridesWebPreferences: true },
+                directories: directory
+                    ? [
+                          {
+                              id: 'dir',
+                              name: 'Source',
+                              isSelected: true,
+                              folders: [
+                                  { id: 'src', name: 'src', path: 'src' },
+                              ],
+                              configs: directory,
+                          },
+                      ]
+                    : [],
+            },
+        ],
+    });
+    const resolve = (file: object, global: object, directory?: object) =>
+        service(yaml.dump(file)).getMergedCodeReviewConfigs(
+            { organizationId: 'org-1', teamId: 'team-1' },
+            { id: 'repo-1', name: 'hive-inventory' },
+            storedWith(global, directory) as any,
+            'main',
+            [{ filename: 'src/file.ts' }] as any,
+        );
+
+    it('keeps a legacy YAML label over a migrated stored policy instead of approving without it', async () => {
+        const result = await resolve(
+            { approvalLabels: ['ready'] },
+            {
+                pullRequestApprovalActive: true,
+                approvalPolicies: [
+                    {
+                        id: 'legacy-approval',
+                        name: 'Existing approval policy',
+                        enabled: true,
+                    },
+                ],
+            },
+        );
+        expect(result.approvalPolicies).toEqual([
+            expect.objectContaining({ labels: ['ready'] }),
+        ]);
+    });
+
+    it('ANDs a directory author with the repository YAML label', async () => {
+        const result = await resolve(
+            { approvalLabels: ['ready'] },
+            {
+                pullRequestApprovalActive: true,
+                approvalPolicies: [
+                    {
+                        id: 'legacy-approval',
+                        name: 'Existing approval policy',
+                        enabled: true,
+                    },
+                ],
+            },
+            { approvalAuthors: ['build-bot'] },
+        );
+        expect(result.approvalPolicies).toEqual([
+            expect.objectContaining({
+                labels: ['ready'],
+                authors: ['build-bot'],
+            }),
+        ]);
+    });
+
+    it.each([
+        [
+            { riskAssessmentActive: false, pullRequestApprovalActive: true },
+            { approvalRiskActive: true },
+            true,
+        ],
+        [
+            { riskAssessmentActive: true, pullRequestApprovalActive: true },
+            { approvalRiskActive: false },
+            false,
+        ],
+        [
+            { approvalRiskActive: true, pullRequestApprovalActive: true },
+            { pullRequestApprovalActive: false },
+            false,
+        ],
+        [
+            { riskAssessmentActive: true },
+            { pullRequestApprovalActive: false },
+            true,
+        ],
+    ])(
+        'resolves legacy and independent risk in actual YAML source order',
+        async (global, file, active) => {
+            expect(
+                (await resolve(file as object, global as object))
+                    .riskAssessmentActive,
+            ).toBe(active);
+        },
+    );
+
+    it('fails visibly when a legacy YAML restriction cannot be assigned to the new named policies', async () => {
+        await expect(
+            resolve(
+                { approvalLabels: ['ready'] },
+                {
+                    approvalPolicies: [
+                        { id: 'docs', name: 'Docs', enabled: true },
+                    ],
+                },
+            ),
+        ).rejects.toThrow('Legacy approval filters');
+    });
+
+    it('loads risk and named policies from the production YAML entry point', async () => {
+        const config = {
+            riskAssessmentActive: true,
+            riskCriteria: [
+                {
+                    id: 'data',
+                    name: 'Data',
+                    enabled: true,
+                    instructions: 'Check data loss.',
+                    includedFiles: ['src/**/*.{ts,tsx}'],
+                },
+            ],
+            approvalPolicies: [
+                {
+                    id: 'docs',
+                    name: 'Docs',
+                    enabled: false,
+                    includedFiles: ['docs/**'],
+                },
+            ],
+            riskReviewRouting: { noRisk: 'heavy', riskFound: 'balanced' },
+        };
+        const result = await merge(service(yaml.dump(config)));
+        expect(result).toMatchObject(config);
+        expect(result.kodusConfigFileDroppedKeys).toBeUndefined();
+    });
+
+    it.each([
+        {
+            riskCriteria: [
+                {
+                    id: 'data',
+                    name: 'Data',
+                    enabled: true,
+                    instructions: 'Check data.',
+                    includedFiles: ['src/['],
+                },
+            ],
+        },
+        {
+            approvalPolicies: [
+                { id: 'one', name: 'Same', enabled: true },
+                { id: 'two', name: 'same', enabled: true },
+            ],
+        },
+        { riskReviewRouting: { riskFound: 'light' } },
+        { riskAssessmentActive: 'true' },
+    ])(
+        'rejects invalid YAML contracts before a review can run: %j',
+        async (config) => {
+            await expect(merge(service(yaml.dump(config)))).rejects.toThrow(
+                'Invalid code review settings',
+            );
+        },
+    );
+
     it('applies the rest of the file and names the dropped keys', async () => {
         const merged = await merge(service(FILE));
 
@@ -210,7 +398,10 @@ describe('CodeBaseConfigService.getConfig — plan-limit reconciliation', () => 
         };
         const filterKodyRules = jest
             .fn()
-            .mockReturnValue({ standardRules: [unlockedRule], memoryRules: [] });
+            .mockReturnValue({
+                standardRules: [unlockedRule],
+                memoryRules: [],
+            });
         const kodyRulesValidationService = { filterKodyRules };
         const permissionValidationService = {
             shouldLimitResources: jest.fn().mockResolvedValue(limited),
@@ -218,7 +409,10 @@ describe('CodeBaseConfigService.getConfig — plan-limit reconciliation', () => 
         const codeManagementService = {
             verifyConnection: jest
                 .fn()
-                .mockResolvedValue({ hasConnection: true, isSetupComplete: true }),
+                .mockResolvedValue({
+                    hasConnection: true,
+                    isSetupComplete: true,
+                }),
         };
 
         const service = new CodeBaseConfigService(
@@ -234,20 +428,24 @@ describe('CodeBaseConfigService.getConfig — plan-limit reconciliation', () => 
             {} as any, // cacheService
         );
 
-        jest.spyOn(service as any, 'getDefaultBranch').mockResolvedValue('main');
-        jest
-            .spyOn(service as any, 'getReviewModeConfigParameter')
-            .mockResolvedValue({});
-        jest
-            .spyOn(service as any, 'getMergedCodeReviewConfigs')
-            .mockResolvedValue({
-                directoryId: undefined,
-                ignorePaths: [],
-                v2PromptOverrides: {},
-            });
-        jest
-            .spyOn(service as any, 'sanitizeV2PromptOverrides')
-            .mockReturnValue({});
+        jest.spyOn(service as any, 'getDefaultBranch').mockResolvedValue(
+            'main',
+        );
+        jest.spyOn(
+            service as any,
+            'getReviewModeConfigParameter',
+        ).mockResolvedValue({});
+        jest.spyOn(
+            service as any,
+            'getMergedCodeReviewConfigs',
+        ).mockResolvedValue({
+            directoryId: undefined,
+            ignorePaths: [],
+            v2PromptOverrides: {},
+        });
+        jest.spyOn(service as any, 'sanitizeV2PromptOverrides').mockReturnValue(
+            {},
+        );
 
         return { service, kodyRulesService, filterKodyRules, loadedEntity };
     };

@@ -1,5 +1,6 @@
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-review-configuration.module';
+import { CodeReviewPipelineModule } from '@libs/code-review/pipeline/code-review-pipeline.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { PullRequestsModule } from '@libs/code-review/modules/pull-requests.module';
 import { PullRequestMessagesModule } from '@libs/code-review/modules/pullRequestMessages.module';
@@ -40,9 +41,12 @@ import { CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN } from '@libs/code-review/dom
 import { FeatureGateModule } from '@libs/feature-gate';
 import { LicenseModule } from '@libs/ee/license/license.module';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
+import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
 
 @Module({
     imports: [
+        forwardRef(() => CodeReviewPipelineModule),
+        OrganizationParametersModule,
         ScheduleModule.forRoot(),
         AutomationModule,
         ParametersModule,

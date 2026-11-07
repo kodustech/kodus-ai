@@ -1,3 +1,7 @@
+import type {
+    ApprovalTeamMembership,
+    ApprovalTeamMembershipParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/approvalTeamMembership.type';
 import {
     BadRequestException,
     Inject,
@@ -3846,6 +3850,49 @@ export class GithubService
         }
     }
 
+    async getApprovalTeamMembership(
+        params: ApprovalTeamMembershipParams,
+    ): Promise<ApprovalTeamMembership> {
+        try {
+            const auth = await this.getGithubAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!auth?.org || auth.accountType === 'user') return 'unavailable';
+            const segments = params.team.replace(/^@/, '').split('/');
+            const slug = segments.pop();
+            if (
+                !slug ||
+                segments.length > 1 ||
+                (segments.length === 1 &&
+                    segments[0].toLowerCase() !== auth.org.toLowerCase())
+            )
+                return 'unavailable';
+            const octokit = await this.instanceOctokit(
+                params.organizationAndTeamData,
+            );
+            // Verify visibility before treating a membership 404 as a nonmember.
+            await octokit.rest.teams.getByName({
+                org: auth.org,
+                team_slug: slug,
+            });
+            try {
+                const { data } =
+                    await octokit.rest.teams.getMembershipForUserInOrg({
+                        org: auth.org,
+                        team_slug: slug,
+                        username: params.author,
+                    });
+                return data.state === 'active' ? 'member' : 'not-member';
+            } catch (error) {
+                return this.statusOf(error) === 404
+                    ? 'not-member'
+                    : 'unavailable';
+            }
+        } catch {
+            return 'unavailable';
+        }
+    }
+
     async getAllMembersByOrg(organizationAndTeamData: OrganizationAndTeamData) {
         try {
             const githubAuthDetail = await this.getGithubAuthDetails(
@@ -6936,6 +6983,7 @@ This is an experimental feature that generates committable changes. Review the d
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
         repository: { id: string; name: string };
+        headSha?: string;
     }) {
         try {
             const { organizationAndTeamData, prNumber, repository } = params;
@@ -6951,6 +6999,7 @@ This is an experimental feature that generates committable changes. Review the d
                 repo: repository.name,
                 pull_number: prNumber,
                 event: 'APPROVE',
+                ...(params.headSha ? { commit_id: params.headSha } : {}),
             });
 
             this.logger.log({

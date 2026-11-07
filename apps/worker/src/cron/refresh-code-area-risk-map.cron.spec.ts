@@ -225,6 +225,35 @@ describe('refresh order and batch budget', () => {
         ]);
     });
 
+    it('prioritizes independent risk with approval off and honors an explicit risk-off override', async () => {
+        const { cron, order } = build(
+            [
+                {
+                    id: 'a-off',
+                    name: 'off',
+                    configs: {
+                        riskAssessmentActive: false,
+                        pullRequestApprovalActive: true,
+                        approvalRiskActive: true,
+                    },
+                },
+                {
+                    id: 'b-shared',
+                    name: 'shared',
+                    configs: {
+                        riskAssessmentActive: true,
+                        pullRequestApprovalActive: false,
+                    },
+                },
+            ],
+            {},
+            {},
+            {},
+        );
+        await cron.handleCron();
+        expect(order()).toEqual(['b-shared', 'a-off']);
+    });
+
     it('keeps the 40-batch cap when risk approval takes priority over an unfinished scan', async () => {
         const { cron, order } = build(
             [

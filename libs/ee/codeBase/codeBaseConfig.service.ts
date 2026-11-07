@@ -28,9 +28,11 @@ import { decrypt } from '@libs/common/utils/crypto';
 import { ValidateCodeManagementIntegration } from '@libs/common/utils/decorators/validate-code-management-integration.decorator';
 import { deepMerge } from '@libs/common/utils/deep';
 import { withDirectoryAgentLists } from '@libs/code-review/domain/custom-agents/directory-cascade';
+import { resolveReviewSettings } from '@libs/code-review/domain/approval/migrate-review-settings';
 import {
     buildDefaultGlobalCodeReviewConfig,
     getDefaultKodusConfigFile,
+    validateRiskApprovalSettings,
 } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { CacheService } from '@libs/core/cache/cache.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
@@ -61,6 +63,8 @@ import {
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { KodyRulesValidationService } from '../kodyRules/service/kody-rules-validation.service';
+import { approvalPolicyProviderError } from '@libs/code-review/domain/approval/approval-policy-provider';
+import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/general/approval-policies';
 
 const IP_E2B_CACHE_KEY = 'global:ip_e2b';
 const IP_E2B_CACHE_TTL = 604800000; // 1 week
@@ -216,7 +220,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             });
 
             if (!parameter?.configValue) {
-                return this.DEFAULT_CONFIG;
+                return this.mergeReviewSettings();
             }
 
             const globalDelta = parameter.configValue?.configs;
@@ -246,17 +250,12 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             const directoryDelta = directoryConfig?.configs;
 
             const merged = withDirectoryAgentLists(
-                deepMerge(
-                    this.DEFAULT_CONFIG,
+                this.mergeReviewSettings(
                     globalDelta || {},
                     repoDelta || {},
                     directoryDelta || {},
                 ),
-                deepMerge(
-                    this.DEFAULT_CONFIG,
-                    globalDelta || {},
-                    repoDelta || {},
-                ),
+                this.mergeReviewSettings(globalDelta || {}, repoDelta || {}),
                 directoryDelta,
             );
 
@@ -404,7 +403,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         preliminaryFiles?: FileChange[],
     ): Promise<CodeReviewConfigWithoutLLMProvider> {
         if (!parameter) {
-            return this.DEFAULT_CONFIG;
+            return this.mergeReviewSettings();
         }
 
         const globalDelta = parameter?.configs;
@@ -462,16 +461,14 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         // loader drops them), so the directory's stored delta is their only
         // directory-level source.
         const merged = withDirectoryAgentLists(
-            deepMerge(
-                this.DEFAULT_CONFIG,
+            this.mergeReviewSettings(
                 globalDelta || {},
                 repoDelta || {},
                 repositoryFileDelta || {},
                 directoryDelta || {},
                 directoryFileDelta || {},
             ),
-            deepMerge(
-                this.DEFAULT_CONFIG,
+            this.mergeReviewSettings(
                 globalDelta || {},
                 repoDelta || {},
                 repositoryFileDelta || {},
@@ -526,6 +523,10 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         return this.DEFAULT_CONFIG.kodusConfigFileOverridesWebPreferences;
     }
 
+    private mergeReviewSettings(...sources: object[]): CodeReviewConfig {
+        return resolveReviewSettings(this.DEFAULT_CONFIG, ...sources);
+    }
+
     private getDefaultConfigs(): CodeReviewConfig {
         try {
             const kodusConfigYMLfile = getDefaultKodusConfigFile();
@@ -559,8 +560,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             });
 
             const platform = integration.platform.toLowerCase() as
-                | 'github'
-                | 'gitlab';
+                'github' | 'gitlab';
             const authDetails = integration?.authIntegration?.authDetails;
             const accessToken = await this.getAccessToken(
                 platform,
@@ -621,8 +621,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             });
 
             const platform = integration.platform.toLowerCase() as
-                | 'github'
-                | 'gitlab';
+                'github' | 'gitlab';
             const authDetails = integration?.authIntegration?.authDetails;
             const accessToken = await this.getAccessToken(
                 platform,
@@ -793,6 +792,21 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             }
         }
         if (droppedKeys.length) params.onDroppedKeys?.(droppedKeys);
+
+        const contractErrors = validateRiskApprovalSettings(kodusConfigYMLfile);
+        if (contractErrors.length)
+            throw new Error(
+                `Invalid code review settings in kodus-config.yml: ${contractErrors.map((error) => error.instancePath).join(', ')}`,
+            );
+        if (kodusConfigYMLfile.approvalPolicies !== undefined) {
+            const providerError = approvalPolicyProviderError(
+                approvalPoliciesSchema.parse(
+                    kodusConfigYMLfile.approvalPolicies,
+                ),
+                hasIntegration,
+            );
+            if (providerError) throw new Error(providerError);
+        }
 
         if (removeProperties) {
             delete kodusConfigYMLfile.version;
@@ -991,16 +1005,15 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 },
             );
 
-            const matchingEntries = groupMatchers.filter(
-                ({ normalizedPath }) =>
-                    affectedPaths.some((filePath: string) => {
-                        const normalizedFile = normalizePath(filePath);
+            const matchingEntries = groupMatchers.filter(({ normalizedPath }) =>
+                affectedPaths.some((filePath: string) => {
+                    const normalizedFile = normalizePath(filePath);
 
-                        return isPathCoveredByDirectory(
-                            normalizedPath,
-                            normalizedFile,
-                        );
-                    }),
+                    return isPathCoveredByDirectory(
+                        normalizedPath,
+                        normalizedFile,
+                    );
+                }),
             );
 
             // Deduplicate by group id
@@ -1057,20 +1070,18 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             const normalizedAffectedPath = normalizePath(affectedPath);
 
             // Build a flat list of { groupId, folderPath } from all groups (with legacy `path` fallback)
-            const allFolderEntries = repoConfig.directories.flatMap(
-                (group) => {
-                    const folders =
-                        group.folders?.length > 0
-                            ? group.folders
-                            : (group as any).path
-                              ? [{ path: (group as any).path }]
-                              : [];
-                    return folders.map((folder) => ({
-                        groupId: group.id,
-                        folderPath: folder.path,
-                    }));
-                },
-            );
+            const allFolderEntries = repoConfig.directories.flatMap((group) => {
+                const folders =
+                    group.folders?.length > 0
+                        ? group.folders
+                        : (group as any).path
+                          ? [{ path: (group as any).path }]
+                          : [];
+                return folders.map((folder) => ({
+                    groupId: group.id,
+                    folderPath: folder.path,
+                }));
+            });
 
             const matchingFolders = allFolderEntries.filter(
                 ({ folderPath }) => {

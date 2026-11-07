@@ -16,6 +16,10 @@ import { UserCoreModule } from '@libs/identity/modules/user-core.module';
 
 import { RequestChangesOrApproveStage } from './stages/finish-process-review.stage';
 import { DecidePrApprovalStage } from './stages/decide-pr-approval.stage';
+import { AssessPrRiskStage } from './stages/assess-pr-risk.stage';
+import { PrRiskAssessmentService } from './services/pr-risk-assessment.service';
+import { ApprovalPoliciesService } from './services/approval-policies.service';
+import { ResolveRiskRoutingStage } from './stages/resolve-risk-routing.stage';
 import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
 import { CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import { PlatformDataModule } from '@libs/platformData/platformData.module';
@@ -175,6 +179,10 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         CreateFileCommentsStage,
         AggregateResultsStage,
         DecidePrApprovalStage,
+        AssessPrRiskStage,
+        PrRiskAssessmentService,
+        ApprovalPoliciesService,
+        ResolveRiskRoutingStage,
         UpdateCommentsAndGenerateSummaryStage,
         RequestChangesOrApproveStage,
         ValidateSuggestionsStage,
@@ -224,6 +232,8 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         CodeReviewPipelineObserver,
     ],
     exports: [
+        ApprovalPoliciesService,
+        PrRiskAssessmentService,
         CodeReviewPipelineStrategy,
 
         CodeReviewJobProcessorService,

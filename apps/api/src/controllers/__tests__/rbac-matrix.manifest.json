@@ -1716,6 +1716,17 @@
     }
   },
   {
+    "key": "riskAssessment.controller.ts#previewOnPr",
+    "httpMethod": "POST",
+    "urlPath": "/code-review/risk/preview",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "skills.controller.ts#getInstructions",
     "httpMethod": "GET",
     "urlPath": "/skills/:skillName/instructions",

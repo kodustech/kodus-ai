@@ -1,4 +1,4 @@
-name: "Evals: wiring smoke (PR)"
+name: 'Evals: wiring smoke (PR)'
 
 # The PR half of the code-review evals. No model keys, no cost, a few minutes.
 #
@@ -34,53 +34,58 @@ on:
     pull_request:
         types: [opened, synchronize, reopened, labeled]
         paths:
-            - "libs/**"
-            - "apps/api/src/cron/CheckIfPRCanBeApproved*"
-            - "apps/api/src/cron/__tests__/CheckIfPRCanBeApproved*"
-            - "apps/worker/src/cron/refresh-code-area-risk-map*"
-            - "evals/**"
-            - "test/fixtures/**"
-            - "package.json"
-            - "pnpm-lock.yaml"
-            - "tsconfig*.json"
+            - 'libs/**'
+            - 'apps/api/src/cron/CheckIfPRCanBeApproved*'
+            - 'apps/api/src/cron/__tests__/CheckIfPRCanBeApproved*'
+            - 'apps/worker/src/cron/refresh-code-area-risk-map*'
+            - 'evals/**'
+            - 'test/fixtures/**'
+            - 'package.json'
+            - 'pnpm-lock.yaml'
+            - 'tsconfig*.json'
             # The shipped defaults (writing guidelines): read by production's
             # resolveWritingGuidelines, which evals/format runs.
-            - "default-kodus-config.yml"
-            - "release/features-snapshot.json"
+            - 'default-kodus-config.yml'
+            - 'release/features-snapshot.json'
             # The mcp-manager's Kodus MCP tool list and registry: the
             # connection the conversation eval gives its agent.
-            - "apps/mcp-manager/package.json"
-            - "apps/mcp-manager/src/clients/kodusMCP/**"
-            - "apps/mcp-manager/src/config/managed-mcp-servers.json"
-            - "apps/mcp-manager/src/modules/providers/interfaces/**"
-            - ".github/workflows/code-review-evals-*.yml"
+            - 'apps/mcp-manager/package.json'
+            - 'apps/mcp-manager/src/clients/kodusMCP/**'
+            - 'apps/mcp-manager/src/config/managed-mcp-servers.json'
+            - 'apps/mcp-manager/src/modules/providers/interfaces/**'
+            - '.github/workflows/code-review-evals-*.yml'
             # What the review's sandbox finds on the runner, at the worker
             # image's versions (bun, kodus-graph).
-            - ".github/actions/eval-sandbox/**"
-            - "docker/Dockerfile"
+            - '.github/actions/eval-sandbox/**'
+            - 'docker/Dockerfile'
     workflow_dispatch:
         inputs:
             run_full_approval_eval:
-                description: "Run paid 200-case approval-risk evaluation"
+                description: 'Run paid 200-case approval-risk evaluation'
                 required: false
                 type: boolean
                 default: false
             approval_case_ids:
-                description: "Comma-separated approval-risk case IDs to rerun (empty = all 200)"
+                description: 'Comma-separated approval-risk case IDs to rerun (empty = all 200)'
                 required: false
                 type: string
             approval_batch:
-                description: "Unique batch name for concurrent approval-risk runs"
+                description: 'Unique batch name for concurrent approval-risk runs'
                 required: false
                 type: string
             approval_set:
-                description: "Frozen approval-risk corpus"
+                description: 'Frozen approval-risk corpus'
                 required: false
                 type: choice
                 default: full
                 options:
                     - full
                     - full-balanced
+            compare_shared_risk:
+                description: 'Compare legacy approval risk and shared risk on the same frozen PRs'
+                required: false
+                type: boolean
+                default: false
 
 concurrency:
     # A label that asks for nothing gets a group of its own: it must not cancel a running experiment.
@@ -89,7 +94,7 @@ concurrency:
 
 jobs:
     wiring:
-        name: "eval wiring smoke (no keys)"
+        name: 'eval wiring smoke (no keys)'
         # A label re-runs it only when it asks for the full experiment.
         if: github.event.action != 'labeled' || github.event.label.name == 'experiment:full'
         runs-on: ubuntu-latest
@@ -105,8 +110,8 @@ jobs:
             - uses: pnpm/action-setup@v4
             - uses: actions/setup-node@v4
               with:
-                  node-version: "22"
-                  cache: "pnpm"
+                  node-version: '22'
+                  cache: 'pnpm'
             - name: Install deps
               run: pnpm install --frozen-lockfile
             # The finder and memories steps review a repository written for the
@@ -130,8 +135,12 @@ jobs:
               run: |
                   if [ -z "$BASE_SHA" ] || ! git diff --quiet "$BASE_SHA...$HEAD_SHA" -- \
                     libs/code-review/domain/approval/ \
+                    libs/code-review/domain/risk/ \
                     libs/code-review/infrastructure/approval/ \
                     'libs/code-review/pipeline/stages/*approval*' \
+                    'libs/code-review/pipeline/stages/*risk*' \
+                    'libs/code-review/pipeline/services/*risk*' \
+                    'libs/code-review/pipeline/services/*approval*' \
                     'libs/code-review/pipeline/stages/finish-process-review*' \
                     'apps/api/src/cron/CheckIfPRCanBeApproved*' \
                     'apps/api/src/cron/__tests__/CheckIfPRCanBeApproved*' \
@@ -139,7 +148,7 @@ jobs:
                     libs/platformData/domain/code-area-risk/ \
                     'libs/platformData/infrastructure/adapters/services/refresh-code-area-risk-map*' \
                     'apps/worker/src/cron/refresh-code-area-risk-map*' \
-                    evals/approval-risk/ evals/area-risk-map/ \
+                    evals/approval-risk/ evals/pr-risk/ evals/area-risk-map/ \
                     .github/workflows/code-review-evals-pr.yml; then
                     echo "needed=true" >> "$GITHUB_OUTPUT"
                   fi
@@ -152,6 +161,19 @@ jobs:
                   mkdir -p eval-results
                   pnpm exec jest --runInBand --json --outputFile=eval-results/approval-risk-regressions.json --runTestsByPath \
                     libs/code-review/domain/approval/assess-approval-risk.spec.ts \
+                    libs/code-review/domain/approval/approval-policies.spec.ts \
+                    libs/code-review/domain/approval/approval-file-conditions.spec.ts \
+                    libs/code-review/domain/approval/approval-policy-provider.spec.ts \
+                    libs/code-review/domain/approval/migrate-review-settings.spec.ts \
+                    libs/code-review/application/use-cases/configuration/__tests__/risk-approval-inheritance.spec.ts \
+                    libs/code-review/application/use-cases/configuration/__tests__/risk-approval-save-independence.spec.ts \
+                    libs/code-review/domain/approval/assess-policy-eligibility.spec.ts \
+                    libs/code-review/pipeline/services/approval-policies.service.spec.ts \
+                    libs/platform/infrastructure/adapters/services/approval-team-membership.spec.ts \
+                    libs/code-review/domain/risk/risk-assessment.spec.ts \
+                    libs/code-review/domain/risk/assess-pr-risk.spec.ts \
+                    libs/code-review/pipeline/stages/assess-pr-risk.stage.spec.ts \
+                    libs/code-review/domain/review-mode.spec.ts \
                     libs/code-review/pipeline/stages/decide-pr-approval.stage.spec.ts \
                     apps/api/src/cron/__tests__/CheckIfPRCanBeApproved.cron.spec.ts
                   node evals/area-risk-map/run.js --set=holdout-2026 --output=eval-results/area-risk-holdout.json
@@ -191,7 +213,7 @@ jobs:
 
     approval-risk-full:
         if: github.event_name == 'workflow_dispatch' && inputs.run_full_approval_eval
-        name: "approval risk · 200 snapshots"
+        name: 'approval risk · 200 snapshots'
         runs-on: ubuntu-latest
         timeout-minutes: 120
         steps:
@@ -199,8 +221,8 @@ jobs:
             - uses: pnpm/action-setup@v4
             - uses: actions/setup-node@v4
               with:
-                  node-version: "22"
-                  cache: "pnpm"
+                  node-version: '22'
+                  cache: 'pnpm'
             - name: Install deps
               run: pnpm install --frozen-lockfile
             - name: Create environment.ts (gitignored EE config)
@@ -225,8 +247,12 @@ jobs:
                   API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
                   APPROVAL_CASE_IDS: ${{ inputs.approval_case_ids }}
                   APPROVAL_SET: ${{ inputs.approval_set }}
+                  COMPARE_SHARED_RISK: ${{ inputs.compare_shared_risk }}
               run: |
                   case_args=()
+                  if [ "$COMPARE_SHARED_RISK" = "true" ]; then
+                    case_args+=(--compare-shared)
+                  fi
                   if [ -n "$APPROVAL_CASE_IDS" ]; then
                     case_args+=("--ids=$APPROVAL_CASE_IDS")
                   fi
@@ -250,7 +276,7 @@ jobs:
         needs: wiring
         # The model keys are repository secrets: not on PRs from forks.
         if: needs.wiring.outputs.steps != '' && needs.wiring.outputs.steps != '[]' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        name: "experiment · ${{ matrix.step }}"
+        name: 'experiment · ${{ matrix.step }}'
         runs-on: ubuntu-latest
         timeout-minutes: 120
         permissions:
@@ -270,13 +296,13 @@ jobs:
             - uses: pnpm/action-setup@v4
             - uses: actions/setup-node@v4
               with:
-                  node-version: "22"
-                  cache: "pnpm"
+                  node-version: '22'
+                  cache: 'pnpm'
             - name: Install deps
               run: pnpm install --frozen-lockfile
             - uses: ./.github/actions/eval-sandbox
               with:
-                  repositories: "true"
+                  repositories: 'true'
             - name: Create environment.ts (gitignored EE config)
               run: |
                   cat <<'EOF' > libs/ee/configs/environment/environment.ts

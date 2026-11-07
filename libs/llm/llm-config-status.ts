@@ -52,7 +52,7 @@ export function isByokSlotConfigured(
     if (slot.provider === BYOKProvider.AMAZON_BEDROCK) {
         return Boolean(
             slot.awsBearerToken ||
-                (slot.awsAccessKeyId && slot.awsSecretAccessKey),
+            (slot.awsAccessKeyId && slot.awsSecretAccessKey),
         );
     }
 
@@ -177,6 +177,12 @@ export interface LLMConfigStatus {
         balanced: { modelId?: string; inherited: boolean };
         heavy: { modelId?: string; inherited: boolean };
     };
+    /** Routing metadata for scoped settings. Contains model IDs only, never credentials. */
+    modelRouting?: {
+        defaultModelId?: string;
+        fallbackModelId?: string;
+        riskAssessment: { modelId?: string; inherited: boolean };
+    };
 }
 
 /**
@@ -238,8 +244,15 @@ function enumerateModels(
                 model: model.model,
                 providerId: credential?.provider,
                 baseUrl,
-                resolvable: isV2ModelResolvable(model, credential, envReachable),
-                capabilities: modelCapabilities(credential?.provider, model.model),
+                resolvable: isV2ModelResolvable(
+                    model,
+                    credential,
+                    envReachable,
+                ),
+                capabilities: modelCapabilities(
+                    credential?.provider,
+                    model.model,
+                ),
             };
         });
 }
@@ -280,7 +293,8 @@ export function describeLLMConfigStatus(configValue: unknown): LLMConfigStatus {
               // call to N" instead of leaving admins guessing why hard-coded
               // prompt temperatures are ignored.
               temperatureOverride: envDescriptor.temperatureOverride,
-              providerSource: envDescriptor.providerSource ?? ('inferred' as const),
+              providerSource:
+                  envDescriptor.providerSource ?? ('inferred' as const),
               warnings: envDescriptor.warnings,
               reasoningEffort: envDescriptor.reasoningEffort,
           }
@@ -320,5 +334,10 @@ export function describeLLMConfigStatus(configValue: unknown): LLMConfigStatus {
         heavy: reviewModelOf(LLM_TASK.codeReviewHeavy),
     };
 
-    return { source, models, byok, env, reviewModels };
+    const modelRouting = {
+        defaultModelId: byokMain?.byokModelId,
+        fallbackModelId: configValue.routing?.fallbackModelId,
+        riskAssessment: reviewModelOf(LLM_TASK.riskAssessment),
+    };
+    return { source, models, byok, env, reviewModels, modelRouting };
 }

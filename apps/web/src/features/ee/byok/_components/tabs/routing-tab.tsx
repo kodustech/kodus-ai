@@ -2,17 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { Card, CardContent } from "@components/ui/card";
 import { toast } from "@components/ui/toaster/use-toast";
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from "@components/ui/tooltip";
-import * as ToggleGroup from "@radix-ui/react-toggle-group";
+import { TooltipProvider } from "@components/ui/tooltip";
 import {
     createOrUpdateOrganizationParameter,
     type LLMConfigStatus,
@@ -54,9 +47,6 @@ type RoutingTabProps = {
     onScrolled?: () => void;
 };
 
-const AUTO_TOOLTIP =
-    "The auto-optimizing router is on the roadmap — your pool of models is ready for it.";
-
 /**
  * Strip task-override entries that shouldn't persist: empty ids AND overrides
  * equal to the org default. Routing is FLAT — an un-overridden task inherits the
@@ -80,9 +70,8 @@ const cleanOverrides = (
 };
 
 /**
- * The Routing tab (04-10) — a POLICY chooser (D-UI-ROUTING): Manual (active) /
- * Auto (disabled "Coming soon"). Auto is a no-op; routing.mode is always written
- * 'manual' this slice. Default + Fallback selects bind routing.defaultModelId /
+ * Explicit organization model routing. Default and Fallback select
+ * routing.defaultModelId /
  * routing.fallbackModelId; the 3-row grid writes routing.taskOverrides[task] with
  * a LIVE capability warning (incompatible cells disabled with a tooltip before
  * save). Model capabilities arrive via the already-fetched llm-config/status.
@@ -298,44 +287,6 @@ export const RoutingTab = ({
     return (
         <TooltipProvider>
             <div ref={rowsRef} className="flex flex-col gap-6">
-                {/* ── Policy chooser: Manual (active) / Auto (coming soon) ── */}
-                <div className="flex flex-col gap-2">
-                    <span className="text-text-primary text-sm font-medium">
-                        Routing policy
-                    </span>
-                    <ToggleGroup.Root
-                        type="single"
-                        value="manual"
-                        className="bg-card-lv2 grid grid-cols-2 gap-px overflow-hidden rounded-lg p-0.5">
-                        <ToggleGroup.Item
-                            value="manual"
-                            className="text-text-secondary data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:ring-primary/40 rounded-md px-3 py-2 text-xs font-medium transition-colors data-[state=on]:shadow-sm data-[state=on]:ring-1">
-                            Manual · you choose
-                        </ToggleGroup.Item>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <span
-                                    className="inline-flex opacity-50"
-                                    tabIndex={0}
-                                    aria-disabled>
-                                    <ToggleGroup.Item
-                                        value="auto"
-                                        disabled
-                                        className="text-text-tertiary flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-normal disabled:cursor-not-allowed">
-                                        Auto · Kodus optimizes
-                                        <Badge variant="helper">
-                                            Coming soon
-                                        </Badge>
-                                    </ToggleGroup.Item>
-                                </span>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-64">
-                                {AUTO_TOOLTIP}
-                            </TooltipContent>
-                        </Tooltip>
-                    </ToggleGroup.Root>
-                </div>
-
                 {/* ── Defaults: one model for everything + fallback ── */}
                 <div className="flex flex-col gap-3">
                     <div className="flex flex-col gap-0.5">

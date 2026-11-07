@@ -1,14 +1,14 @@
 // @ts-nocheck
-import { authorizedFetch } from '@services/fetch';
+import { authorizedFetch } from "@services/fetch";
 import {
     OrganizationParametersConfigKey,
     type CockpitMetricsVisibility,
     type OrganizationParametersAutoAssignConfig,
-} from '@services/parameters/types';
-import { axiosAuthorized } from 'src/core/utils/axios';
-import type { BYOKConfig } from 'src/features/ee/byok/_types';
+} from "@services/parameters/types";
+import { axiosAuthorized } from "src/core/utils/axios";
+import type { BYOKConfig } from "src/features/ee/byok/_types";
 
-import { ORGANIZATION_PARAMETERS_PATHS } from '.';
+import { ORGANIZATION_PARAMETERS_PATHS } from ".";
 
 export const createOrUpdateOrganizationParameter = async (
     key: string,
@@ -33,7 +33,7 @@ export const getBYOK = async (): Promise<BYOKConfig | undefined> => {
             key: OrganizationParametersConfigKey.BYOK_CONFIG,
         },
         {
-            cache: 'no-store',
+            cache: "no-store",
         },
     );
 
@@ -60,15 +60,15 @@ export const deleteBYOK = async (params: { modelId: string }) => {
 };
 
 export type TestBYOKResultCode =
-    | 'ok'
-    | 'auth'
-    | 'not_found'
-    | 'bad_request'
-    | 'payment'
-    | 'rate_limit'
-    | 'server_error'
-    | 'network'
-    | 'unknown';
+    | "ok"
+    | "auth"
+    | "not_found"
+    | "bad_request"
+    | "payment"
+    | "rate_limit"
+    | "server_error"
+    | "network"
+    | "unknown";
 
 export type TestBYOKResult = {
     ok: boolean;
@@ -97,7 +97,7 @@ export const testBYOK = async (params: {
     // and exercised on the real chat probe, so a mismatch (e.g. a temperature an
     // always-thinking model won't honor) fails the Test instead of saving quiet.
     temperature?: number;
-    reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+    reasoningEffort?: "none" | "low" | "medium" | "high";
     // The rest of what the save will persist. Sent so the probe exercises the
     // exact slot being saved — a raw reasoning override with the wrong shape, or
     // an OpenRouter pin no upstream can serve, used to save clean and only fail
@@ -145,7 +145,7 @@ export const testBYOKModel = async (params: {
 };
 
 export type ModelOverrideEntry = {
-    scope: 'global' | 'repository' | 'directory';
+    scope: "global" | "repository" | "directory";
     repositoryId?: string;
     repositoryName?: string;
     directoryId?: string;
@@ -157,14 +157,14 @@ export type ModelOverrideEntry = {
 
 /** A custom agent that pins its own BYOK model for one step (#2172). */
 export type CustomAgentModelOverrideEntry = {
-    scope: 'global' | 'repository' | 'directory';
+    scope: "global" | "repository" | "directory";
     repositoryId?: string;
     repositoryName?: string;
     directoryId?: string;
     directoryName?: string;
     agentId: string;
     agentName: string;
-    step: 'run';
+    step: "run";
     model: string;
 };
 
@@ -189,7 +189,7 @@ export const listModelOverrides = async (
 ): Promise<ListModelOverridesResult> => {
     const result = await authorizedFetch<ListModelOverridesResult>(
         ORGANIZATION_PARAMETERS_PATHS.MODEL_OVERRIDES,
-        { cache: 'no-store', params: { teamId } },
+        { cache: "no-store", params: { teamId } },
     );
     return result ?? { overrides: [], mismatchedCount: 0 };
 };
@@ -208,7 +208,7 @@ export const clearModelOverrides = async (
     return envelope.data;
 };
 
-export type LLMConfigSource = 'byok' | 'env' | 'none';
+export type LLMConfigSource = "byok" | "env" | "none";
 
 /**
  * One enumerated v2 model in the per-org status. Web mirror of the backend
@@ -239,15 +239,15 @@ export type LLMConfigStatus = {
         configured: boolean;
         model?: string;
         providerId?:
-            | 'openai'
-            | 'openai_compatible'
-            | 'anthropic'
-            | 'google_gemini'
-            | 'google_vertex';
+            | "openai"
+            | "openai_compatible"
+            | "anthropic"
+            | "google_gemini"
+            | "google_vertex";
         baseUrl?: string;
         vertexLocation?: string;
         /** `declared`: set in API_LLM_PROVIDER; `inferred`: guessed from the model name. */
-        providerSource?: 'declared' | 'inferred';
+        providerSource?: "declared" | "inferred";
         reasoningEffort?: string;
         /** Env vars that disagree, named without their values. */
         warnings?: string[];
@@ -260,12 +260,17 @@ export type LLMConfigStatus = {
         balanced: { modelId?: string; inherited: boolean };
         heavy: { modelId?: string; inherited: boolean };
     };
+    modelRouting?: {
+        defaultModelId?: string;
+        fallbackModelId?: string;
+        riskAssessment: { modelId?: string; inherited: boolean };
+    };
 };
 
 export const getLLMConfigStatus = async (): Promise<LLMConfigStatus> => {
     return await authorizedFetch<LLMConfigStatus>(
         ORGANIZATION_PARAMETERS_PATHS.GET_LLM_CONFIG_STATUS,
-        { cache: 'no-store' },
+        { cache: "no-store" },
     );
 };
 
@@ -297,7 +302,7 @@ export const listByokProviders = async (): Promise<
     const response = await authorizedFetch<{
         providers: ByokProviderDescriptor[];
     }>(ORGANIZATION_PARAMETERS_PATHS.GET_BYOK_PROVIDERS, {
-        cache: 'no-store',
+        cache: "no-store",
     });
     return response?.providers ?? [];
 };
@@ -321,7 +326,7 @@ export const getLLMProviderModels = async (
 ): Promise<LLMProviderModel[]> => {
     const response = await authorizedFetch<{ models: LLMProviderModel[] }>(
         ORGANIZATION_PARAMETERS_PATHS.GET_PROVIDER_MODELS_LIST,
-        { cache: 'no-store', params: { provider } },
+        { cache: "no-store", params: { provider } },
     );
     return response?.models ?? [];
 };
@@ -358,9 +363,9 @@ export const previewLLMProviderModels = async (input: {
  *  from `@libs/*`, which breaks the isolated prod build). `adjustable` = editable,
  *  `unsupported` = hidden, `fixed` = locked to `value`. */
 export type TemperaturePolicy =
-    | { kind: 'adjustable' }
-    | { kind: 'unsupported' }
-    | { kind: 'fixed'; value: number };
+    | { kind: "adjustable" }
+    | { kind: "unsupported" }
+    | { kind: "fixed"; value: number };
 
 export type ModelUiCapabilities = {
     temperature: TemperaturePolicy;
@@ -369,7 +374,7 @@ export type ModelUiCapabilities = {
      *  function of (provider, model) and the toggle never refetches. */
     temperatureWhenReasoningOff?: TemperaturePolicy;
     supportsReasoning: boolean;
-    reasoningOptions: Array<'low' | 'medium' | 'high'>;
+    reasoningOptions: Array<"low" | "medium" | "high">;
     /** Provider-owned example for the "Custom" reasoning-override textarea. */
     reasoningOverrideExample?: string;
 };
@@ -380,11 +385,11 @@ export const getModelCapabilities = async (input: {
 }): Promise<ModelUiCapabilities> => {
     const response = await authorizedFetch<ModelUiCapabilities>(
         ORGANIZATION_PARAMETERS_PATHS.GET_MODEL_CAPABILITIES,
-        { cache: 'no-store', params: input },
+        { cache: "no-store", params: input },
     );
     return (
         response ?? {
-            temperature: { kind: 'adjustable' },
+            temperature: { kind: "adjustable" },
             supportsReasoning: false,
             reasoningOptions: [],
         }

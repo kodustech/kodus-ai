@@ -1,5 +1,15 @@
 import { Type } from 'class-transformer';
 import {
+    approvalPoliciesSchema,
+    type NamedApprovalPolicy,
+} from '@libs/core/infrastructure/config/types/general/approval-policies';
+import {
+    riskCriteriaSchema,
+    riskReviewRoutingSchema,
+    type RiskCriterion,
+    type RiskReviewRouting,
+} from '@libs/core/infrastructure/config/types/general/risk-assessment';
+import {
     ArrayMaxSize,
     ArrayMinSize,
     IsArray,
@@ -712,6 +722,10 @@ class CustomAgentConfigDto {
     @IsBoolean()
     enabled: boolean;
 
+    @IsOptional()
+    @IsIn(['always', 'risk-found'])
+    runWhen?: 'always' | 'risk-found';
+
     @IsString()
     @MaxLength(CUSTOM_AGENT_LIMITS.maxInstructionsLength)
     instructions: string;
@@ -885,6 +899,19 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsBoolean()
     pullRequestApprovalActive?: boolean;
 
+    @ValidateIf((_, value) => value !== undefined)
+    @IsArray()
+    @ValidateBy({
+        name: 'approvalPolicies',
+        validator: {
+            validate: (value: unknown) =>
+                approvalPoliciesSchema.safeParse(value).success,
+            defaultMessage: () =>
+                'Approval policies must be valid and have distinct IDs and names.',
+        },
+    })
+    approvalPolicies?: NamedApprovalPolicy[];
+
     @IsOptional()
     @IsArray()
     @ArrayMaxSize(50)
@@ -900,6 +927,36 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsBoolean()
     approvalRiskActive?: boolean;
+
+    @ValidateIf((_, value) => value !== undefined)
+    @IsBoolean()
+    riskAssessmentActive?: boolean;
+
+    @ValidateIf((_, value) => value !== undefined)
+    @IsArray()
+    @ArrayMaxSize(50)
+    @ValidateBy({
+        name: 'riskCriteria',
+        validator: {
+            validate: (value: unknown) =>
+                riskCriteriaSchema.safeParse(value).success,
+            defaultMessage: () =>
+                'Risk criteria must be valid and have unique IDs.',
+        },
+    })
+    riskCriteria?: RiskCriterion[];
+
+    @ValidateIf((_, value) => value !== undefined)
+    @IsObject()
+    @ValidateBy({
+        name: 'riskReviewRouting',
+        validator: {
+            validate: (value: unknown) =>
+                riskReviewRoutingSchema.safeParse(value).success,
+            defaultMessage: () => 'Risk routing must select Balanced or Heavy.',
+        },
+    })
+    riskReviewRouting?: RiskReviewRouting;
 
     @IsOptional()
     @IsString()

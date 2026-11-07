@@ -46,6 +46,7 @@ export const BACKFILL_SUGGESTION_RUN_NAMES = [
 export const BACKFILL_ROUTING_TASKS = [
     'codeReview',
     'codeReviewHeavy',
+    'riskAssessment',
     'kodyRulesReview',
     'ruleGeneration',
     'businessValidation',

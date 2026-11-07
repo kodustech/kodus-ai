@@ -1,4 +1,5 @@
 import type { RequestedReviewMode } from '@libs/code-review/domain/review-mode';
+import type { RiskAssessmentResult } from '@libs/code-review/domain/risk/risk-assessment';
 import { readAttemptedSlot } from '@libs/llm/model-failover';
 import type {
     ContextEvidence,
@@ -136,6 +137,8 @@ export interface CodeReviewPipelineContext extends PipelineContext {
         lastAnalyzedCommit?: any;
         /** Base branch the last review read the PR against. */
         reviewedBaseBranch?: string;
+        riskAssessment?: RiskAssessmentResult;
+        approvalPolicyEligibility?: import('../services/approval-policies.service').ApprovalEligibilityCache;
     };
     /** The status note of the latest finished run, partial or failed ones
      *  included, which the next run edits (#1721). `lastExecution` is the
@@ -265,7 +268,19 @@ export interface CodeReviewPipelineContext extends PipelineContext {
 
     /** Approval policy result for this reviewed head; reused by the finish stage. */
     approvalDecision?: ApprovalDecision;
+    approvalPolicyEligibility?: import('../services/approval-policies.service').ApprovalEligibilityCache;
+    approvalReviewSummary?: {
+        lineFindings: number;
+        prFindings: number;
+        complete: boolean;
+    };
     approvalRisk?: ApprovalRiskAssessment;
+    /** Shared pre-review result, including disabled and unavailable states. */
+    riskAssessment?: RiskAssessmentResult;
+    /** Intentional automatic skips, including reviews stopped before dispatch. */
+    customAgentRiskSkips?: Array<{ id: string; reason: string }>;
+    /** Complete base-to-head diff; never filtered for incremental review or ignorePaths. */
+    fullPrFiles?: FileChange[];
 
     // Resultados dos comentários de nível de PR
     prLevelCommentResults?: Array<CommentResult>;
