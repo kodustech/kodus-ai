@@ -21,11 +21,21 @@ const mockStatus: any = {
         { modelId: "b", model: "model-b", resolvable: true },
         { modelId: "c", model: "risk-model", resolvable: true },
     ],
-    byok: { configured: true, model: "model-a" },
+    byok: {
+        configured: true,
+        model: "model-a",
+        providerId: undefined as string | undefined,
+    },
     env: { configured: false },
     reviewModels: {
         balanced: { modelId: "a", inherited: true },
         heavy: { modelId: "b", inherited: false },
+    },
+    reviewModelsByOverride: {
+        a: { balanced: "a", heavy: "a" },
+        b: { balanced: "b", heavy: "b" },
+        c: { balanced: "c", heavy: "c" },
+        rejected: { balanced: "a", heavy: "b" },
     },
     modelRouting: {
         defaultModelId: "a",
@@ -130,6 +140,7 @@ beforeEach(() => {
     mockCanEdit = true;
     mockOrgEdit = true;
     mockHeavy = true;
+    mockStatus.byok.providerId = undefined;
     save.mockReset().mockResolvedValue(true);
 });
 beforeAll(() => {
@@ -284,4 +295,54 @@ it("shows the actual Balanced fallback after a plan downgrade", () => {
     expect(screen.getByText("All PRs").parentElement).toHaveTextContent(
         "Balanced Model A",
     );
+});
+
+it("falls back to the effective organization models when a saved model was deleted", () => {
+    mount(true, true, { byokModelId: leaf("deleted-model") });
+    expect(screen.getByText("No risk found").parentElement).toHaveTextContent(
+        "Model A",
+    );
+    expect(screen.getByText("Risk found").parentElement).toHaveTextContent(
+        "Model B",
+    );
+    expect(screen.queryByText("deleted-model")).not.toBeInTheDocument();
+});
+
+it("shows the server-resolved capability fallback for a configured pin", () => {
+    mockStatus.models.push({
+        modelId: "rejected",
+        model: "not-a-review-model",
+        resolvable: true,
+    });
+    try {
+        mount(true, true, { byokModelId: leaf("rejected") });
+        expect(
+            screen.getByText("No risk found").parentElement,
+        ).toHaveTextContent("Model A");
+        expect(screen.getByText("Risk found").parentElement).toHaveTextContent(
+            "Model B",
+        );
+    } finally {
+        mockStatus.models.pop();
+    }
+});
+
+it("does not turn a legacy model name into an ID when only the mode changes", async () => {
+    mockStatus.byok.providerId = "openai";
+    mount(false, false, {
+        byokModelId: undefined,
+        byokModel: leaf("legacy-custom-model"),
+    });
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "All PRs" }), {
+        key: "Enter",
+    });
+    fireEvent.click(screen.getByRole("option", { name: "Heavy" }));
+    await waitFor(() =>
+        expect(
+            screen.getByRole("button", { name: "Save settings" }),
+        ).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][0]).toEqual({ reviewMode: "heavy" });
 });

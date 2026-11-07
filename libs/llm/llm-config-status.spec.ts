@@ -342,6 +342,9 @@ describe('describeLLMConfigStatus — effective config projection', () => {
                 balanced: { modelId: 'model-1', inherited: true },
                 heavy: { modelId: 'model-1', inherited: true },
             },
+            reviewModelsByOverride: {
+                'model-1': { balanced: 'model-1', heavy: 'model-1' },
+            },
             modelRouting: {
                 defaultModelId: 'model-1',
                 fallbackModelId: undefined,
@@ -368,6 +371,31 @@ describe('describeLLMConfigStatus — effective config projection', () => {
             balanced: { modelId: 'model-2', inherited: false },
             heavy: { modelId: 'model-1', inherited: true },
         });
+    });
+
+    it('projects the actual scope-pin fallback through production routing without credentials', () => {
+        const config: BYOKConfig = {
+            version: 2,
+            credentials: [
+                { id: 'key', provider: 'openai', apiKey: 'private-key' },
+            ],
+            models: [
+                { id: 'default', credentialId: 'key', model: 'gpt-4o' },
+                { id: 'balanced', credentialId: 'key', model: 'gpt-4o-mini' },
+                { id: 'missing-key', credentialId: 'deleted', model: 'gpt-4o' },
+            ],
+            routing: {
+                defaultModelId: 'default',
+                taskOverrides: { codeReview: 'balanced' },
+            },
+        };
+        const result = describeLLMConfigStatus(config);
+        expect(result.reviewModelsByOverride).toEqual({
+            'default': { balanced: 'default', heavy: 'default' },
+            'balanced': { balanced: 'balanced', heavy: 'balanced' },
+            'missing-key': { balanced: 'balanced', heavy: 'default' },
+        });
+        expect(JSON.stringify(result)).not.toContain('private-key');
     });
 
     it('no BYOK slot + env configured → source "env", env fields surfaced, models []', () => {

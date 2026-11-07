@@ -17,7 +17,7 @@ export const modeLabel = (mode: Mode) =>
 
 /** The same effective plan fallback and scope override the review uses. */
 export function useReviewRouting() {
-    const { control } = useFormContext<CodeReviewFormType>();
+    const { control, getFieldState } = useFormContext<CodeReviewFormType>();
     const config = useCodeReviewConfig();
     const { llmConfigStatus: status } = useCodeReviewModelData();
     const heavyAllowed = isHeavyModePlan(useSubscriptionContext().license);
@@ -52,8 +52,32 @@ export function useReviewRouting() {
     };
     const effectiveMode = (mode: string): Mode =>
         mode === "heavy" && heavyAllowed ? "heavy" : "balanced";
-    const modelFor = (mode: Mode) =>
-        labelOf(scopeModel || status?.reviewModels?.[mode]?.modelId);
+    const modelFor = (mode: Mode) => {
+        const pin = status?.models.find(
+            (model) => model.modelId === scopeModel,
+        );
+        const resolvedPin =
+            pin && status?.reviewModelsByOverride?.[pin.modelId];
+        const id = resolvedPin
+            ? resolvedPin[mode]
+            : pin?.resolvable
+              ? pin.modelId
+              : status?.reviewModels?.[mode]?.modelId;
+        // Legacy name overrides still ride the organization's configured provider.
+        const legacy = !config?.byokModelId?.value && config?.byokModel?.value;
+        if (
+            legacy &&
+            !pin &&
+            !getFieldState("byokModelId.value").isDirty &&
+            status?.byok.configured
+        )
+            return labelOf(legacy);
+        return id
+            ? labelOf(id)
+            : status?.env.model
+              ? formatModelLabel(status.env.model)
+              : "Kodus default";
+    };
     return {
         active,
         heavyAllowed,

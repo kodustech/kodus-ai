@@ -23,7 +23,7 @@ async function main() {
         throw new Error('Preview organization identity is invalid.');
     execFileSync('docker', ['exec', '-i', 'db_postgres', 'sh', '-c',
         'PGPASSWORD=$POSTGRES_PASSWORD psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'], {
-        input: `UPDATE organizations SET "releaseTrack" = 'beta' WHERE uuid = '${organizationId}';`,
+        input: `UPDATE organizations SET release_track = 'beta' WHERE uuid = '${organizationId}';`,
         stdio: ['pipe', 'pipe', 'pipe'],
     });
     console.log('Risk-routing QA tenant is ready (beta, existing Teams trial).');

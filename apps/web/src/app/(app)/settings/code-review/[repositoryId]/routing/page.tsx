@@ -140,13 +140,20 @@ function RoutingSettings() {
             const result = await saveSettings(data, {
                 prepare: (current) => {
                     const config = unformatConfig(current);
+                    const { byokModelId: _pin, ...withoutSyntheticPin } =
+                        current;
                     return {
-                        savedFormData: current,
+                        savedFormData:
+                            !dirtyFields.byokModelId &&
+                            !form.formState.defaultValues?.byokModelId
+                                ? withoutSyntheticPin
+                                : current,
                         codeReviewConfig: {
                             reviewMode: config.reviewMode ?? "balanced",
                             riskReviewRouting: config.riskReviewRouting,
-                            byokModelId: config.byokModelId,
-                            byokModel: config.byokModel,
+                            ...(dirtyFields.byokModelId
+                                ? { byokModelId: config.byokModelId }
+                                : {}),
                         },
                     };
                 },

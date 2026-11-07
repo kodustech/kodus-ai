@@ -20,6 +20,7 @@ import {
 } from './byok-config';
 import { resolveDefaultSlot } from './resolve-model-slot';
 import { resolveTaskSlot } from './resolve-task-model';
+import { overrideContext } from './routing-strategy';
 import { LLM_TASK, type LlmTask } from './llm-tasks';
 import { describeEnvLLMConfig, type EnvLLMProviderId } from './env-llm-config';
 // Barrel import (side-effect self-registers every provider module), so
@@ -177,6 +178,11 @@ export interface LLMConfigStatus {
         balanced: { modelId?: string; inherited: boolean };
         heavy: { modelId?: string; inherited: boolean };
     };
+    /** Effective task models for each configured scope pin, including capability fallback. */
+    reviewModelsByOverride?: Record<
+        string,
+        { balanced?: string; heavy?: string }
+    >;
     /** Routing metadata for scoped settings. Contains model IDs only, never credentials. */
     modelRouting?: {
         defaultModelId?: string;
@@ -333,11 +339,34 @@ export function describeLLMConfigStatus(configValue: unknown): LLMConfigStatus {
         balanced: reviewModelOf(LLM_TASK.codeReview),
         heavy: reviewModelOf(LLM_TASK.codeReviewHeavy),
     };
+    const reviewModelsByOverride = Object.fromEntries(
+        models.map(({ modelId }) => [
+            modelId,
+            {
+                balanced:
+                    resolveTaskSlot(configValue, LLM_TASK.codeReview, {
+                        ctx: overrideContext(modelId),
+                    }).verdict?.modelId ?? undefined,
+                heavy:
+                    resolveTaskSlot(configValue, LLM_TASK.codeReviewHeavy, {
+                        ctx: overrideContext(modelId),
+                    }).verdict?.modelId ?? undefined,
+            },
+        ]),
+    );
 
     const modelRouting = {
         defaultModelId: byokMain?.byokModelId,
         fallbackModelId: configValue.routing?.fallbackModelId,
         riskAssessment: reviewModelOf(LLM_TASK.riskAssessment),
     };
-    return { source, models, byok, env, reviewModels, modelRouting };
+    return {
+        source,
+        models,
+        byok,
+        env,
+        reviewModels,
+        reviewModelsByOverride,
+        modelRouting,
+    };
 }

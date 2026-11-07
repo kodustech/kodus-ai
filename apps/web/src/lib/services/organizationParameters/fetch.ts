@@ -260,6 +260,10 @@ export type LLMConfigStatus = {
         balanced: { modelId?: string; inherited: boolean };
         heavy: { modelId?: string; inherited: boolean };
     };
+    reviewModelsByOverride?: Record<
+        string,
+        { balanced?: string; heavy?: string }
+    >;
     modelRouting?: {
         defaultModelId?: string;
         fallbackModelId?: string;
