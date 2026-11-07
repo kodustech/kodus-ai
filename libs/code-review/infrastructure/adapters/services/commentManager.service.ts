@@ -2337,6 +2337,11 @@ ${summaryContent}
                 context,
             );
 
+            // Self-hosted installs serve the dashboard from their own domain.
+            const dashboardBase = (
+                process.env.API_USER_INVITE_BASE_URL || 'https://app.kodus.io'
+            ).replace(/\/+$/, '');
+
             return `
 <details>
 <summary>${translation.title}</summary>
@@ -2357,7 +2362,7 @@ ${summaryContent}
 
 ${reviewOptions}
 
-**[${translation.configurationLink}](https://app.kodus.io/settings/code-review/global/general)**
+**[${translation.configurationLink}](${dashboardBase}/settings/code-review/global/general)**
 
 </details>
 </details>
