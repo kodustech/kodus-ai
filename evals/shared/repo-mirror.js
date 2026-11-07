@@ -28,13 +28,39 @@ const git = (dir, args, opts = {}) =>
     execFileAsync('git', ['-C', dir, ...args], { maxBuffer: 64 * 1024 * 1024, timeout: opts.timeout ?? 15 * 60_000, env: gitEnv(opts.env) });
 
 // One fetch at a time per mirror: concurrent fetches into one repository fight
-// over its lock files.
+// over its lock files. Within a process, a queue; across processes (several
+// models' runs at once share the cache), a lock directory beside the mirror.
 const queues = new Map();
 function serial(key, fn) {
+    const locked = () => acrossProcesses(key, fn);
     const prev = queues.get(key) || Promise.resolve();
-    const next = prev.then(fn, fn);
+    const next = prev.then(locked, locked);
     queues.set(key, next.catch(() => undefined));
     return next;
+}
+const LOCK_STALE_MS = 20 * 60_000;
+async function acrossProcesses(key, fn) {
+    const lock = `${key}.eval-lock`;
+    for (;;) {
+        try {
+            fs.mkdirSync(lock);
+            break;
+        } catch (error) {
+            if (error.code !== 'EEXIST') throw error;
+            // A process killed while holding it leaves it behind.
+            try {
+                if (Date.now() - fs.statSync(lock).mtimeMs > LOCK_STALE_MS) fs.rmSync(lock, { recursive: true, force: true });
+            } catch {
+                // released meanwhile
+            }
+            await new Promise((resolve) => setTimeout(resolve, 250 + Math.random() * 250));
+        }
+    }
+    try {
+        return await fn();
+    } finally {
+        fs.rmSync(lock, { recursive: true, force: true });
+    }
 }
 
 async function hasRef(dir, ref, sha) {
@@ -103,7 +129,9 @@ async function mirrorFor({ repo, prNumber, headSha, baseRef, baseSha }) {
         if (baseRef && baseSha) await fetchInto(dir, upstream, baseSha, `refs/eval/${baseSha}`, baseSha);
         else if (baseRef) await fetchInto(dir, upstream, `refs/heads/${baseRef}`, `refs/heads/${baseRef}`);
 
-        const view = path.join(ROOT, `${name}.views`, `${prNumber || headSha}.git`);
+        // One view per process: another run's sandbox may be cloning from its own
+        // while this one rewrites the refs and the shallow list.
+        const view = path.join(ROOT, `${name}.views`, `${prNumber || headSha}-${process.pid}.git`);
         await ensureBare(view);
         fs.writeFileSync(path.join(view, 'objects', 'info', 'alternates'), `${path.join(dir, 'objects')}\n`);
         // The mirror's commits are depth 1: the view borrowing them says so too,
