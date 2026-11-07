@@ -100,11 +100,7 @@ function parseReferenceReply(
     const unquoted = unquoteJsonString(raw);
     const last =
         typeof unquoted === 'string'
-            ? extractLastJsonObjectWith(
-                  unquoted,
-                  LIST_KEYS,
-                  (obj) => !isPromptExample(obj),
-              )
+            ? extractLastJsonObjectWith(unquoted, LIST_KEYS)
             : null;
     let value = normalizeEnvelope(last ?? unquoted, 'items', LIST_KEYS, opts);
     // A provider response body written out as the text: read its content.
@@ -149,28 +145,16 @@ function parseReferenceReply(
             (item): item is IDetectedReference =>
                 isObject(item) && typeof item.fileName === 'string',
         );
-    // The prompt's own example, quoted in the reasoning or copied by a model
-    // cut mid-thought, names no file of the rule's.
+    // The prompt's own example names no file of the rule's. When it is the
+    // last list in the reply, what came before may be a list the reasoning
+    // quoted, so the answer is unreliable (retried on the next save) rather
+    // than an earlier list cached as the rule's references.
     const real = refs.filter((ref) => ref.fileName !== EXAMPLE_FILE_NAME);
     if (real.length < refs.length) {
         onRecover('dropped-prompt-example');
         if (real.length === 0) return null;
     }
     return real;
-}
-
-/** A list whose every entry is the prompt's example file. */
-function isPromptExample(obj: Record<string, unknown>): boolean {
-    const list = Object.values(obj).find(Array.isArray) as unknown[] | undefined;
-    return (
-        !!list?.length &&
-        list.every(
-            (item) =>
-                !!item &&
-                typeof item === 'object' &&
-                (item as { fileName?: unknown }).fileName === EXAMPLE_FILE_NAME,
-        )
-    );
 }
 
 function isControlMarker(value: unknown): boolean {

@@ -288,15 +288,14 @@ describe('ReferenceDetectorService — reference detection & marker extraction',
                 expect(r).toEqual({ references: [], reliable: false });
             });
 
-            it('keeps the answer when the reply restates the example after it', async () => {
+            it('a reply ending on the example is unreliable, not an earlier list', async () => {
+                // The list before the example may be one the reasoning quoted;
+                // an unreliable answer is retried, a wrong one is cached.
                 mockRun(`${answer}\nFormat was:\n${example}`);
                 const r = await svc.detectReferencesWithStatus(
                     baseParams() as any,
                 );
-                expect(r.reliable).toBe(true);
-                expect(r.references.map((x) => x.fileName)).toEqual([
-                    'docs/tags.md',
-                ]);
+                expect(r).toEqual({ references: [], reliable: false });
             });
         });
 
