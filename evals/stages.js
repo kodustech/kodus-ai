@@ -848,6 +848,28 @@ const STAGES = [
         eval: null,
     },
     {
+        id: 'rule-references',
+        name: 'Files a rule cites',
+        short: 'Finds the files a rule cites',
+        group: 'Where rules and memories come from',
+        does: 'When a Kody Rule is saved, reads its text for the files it cites (@file:, paths) so the review can load them as the rule\'s context.',
+        pipeline: null,
+        tests: [
+            {
+                kind: 'unit',
+                name: 'The reply parser and its fail-safe',
+                specs: ['libs/ai-engine/infrastructure/adapters/services/reference-detector.service.spec.ts'],
+            },
+            {
+                kind: 'contract',
+                name: "Sends the rule to the org's model and reads its reply, with a scripted model",
+                wiring: ['reference-detection'],
+            },
+        ],
+        eval: null,
+        note: 'evals/reference-detection is run by hand (README): its #2409 cases leak only on Together.',
+    },
+    {
         id: 'thread-rule',
         name: 'Rule from a thread',
         short: 'Creates or narrows a rule from a thread',
