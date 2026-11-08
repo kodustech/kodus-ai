@@ -45,14 +45,14 @@ const DEFAULT_MAX_TOKENS = "2000000";
 type LimitBy = "usd" | "tokens";
 
 /**
- * "Run deep scan" button and its dialog. Starting a scan needs the same
- * permission as editing a repository's code review settings, so the button
- * hides without it and the picker lists only the repositories it covers.
+ * "Run deep scan" button and its dialog. Starting a scan is its own
+ * permission, granted per repository, so the button hides without it and the
+ * picker lists only the repositories it covers.
  */
 export const RunSecurityScanButton = () => {
     const canStartScan = usePermission(
-        Action.Update,
-        ResourceType.CodeReviewSettings,
+        Action.Create,
+        ResourceType.SecurityScan,
     );
     const [open, setOpen] = useState(false);
 
@@ -89,8 +89,8 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
             hasPermission({
                 permissions,
                 organizationId,
-                action: Action.Update,
-                resource: ResourceType.CodeReviewSettings,
+                action: Action.Create,
+                resource: ResourceType.SecurityScan,
                 repoId: String(repo.id),
             }),
         );
