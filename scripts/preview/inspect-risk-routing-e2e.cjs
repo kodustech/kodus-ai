@@ -50,6 +50,7 @@ async function main() {
             SELECT uuid, status, "createdAt", "errorMessage", "dataExecution"->'riskAssessment' AS risk,
                 "dataExecution"->'heavy' AS heavy,
                 "dataExecution"->'approvalDecision' AS decision,
+                "dataExecution"->'approvalPolicyEligibility' AS eligibility,
                 "dataExecution"->'customAgentRiskSkips' AS "agentSkips"
             FROM automation_execution
             WHERE "dataExecution"#>>'{organizationAndTeamData,organizationId}'=$1

@@ -30,6 +30,7 @@ type Evidence = {
         heavy?: boolean;
         risk?: { status: string; riskIdentified?: boolean; reason?: string };
         decision?: { kind: string; reason?: string };
+        eligibility?: Record<string, unknown>;
         agentSkips?: Array<{ id: string; reason: string }>;
     } | null;
     stages: Array<{ name: string; status: string }>;
@@ -376,6 +377,8 @@ export const riskRoutingPipeline: Scenario = {
                 );
         };
         let active: OpenedPR | undefined;
+        const label = `qa-risk-${ctx.runId.slice(-6)}`;
+        let createdLabel = false;
         try {
             await configure({ pullRequestApprovalActive: false });
             let opened = await open(
@@ -567,6 +570,141 @@ export const riskRoutingPipeline: Scenario = {
             await ctx.provider.closePR(active);
             active = undefined;
 
+            const integrationHeaders = {
+                Authorization: `Bearer ${ctx.provider.authToken()}`,
+            };
+            const author = await http<{ login: string }>(
+                'https://api.github.com/user',
+                {
+                    headers: {
+                        Authorization: `Bearer ${process.env.GH_TEST_TOKEN}`,
+                    },
+                },
+            );
+            ctx.assert(
+                author.status === 200 && author.body.login,
+                'Could not resolve the QA PR author',
+            );
+            const githubRoot = `https://api.github.com/repos/${repo.full_name}`;
+            const newLabel = await http(`${githubRoot}/labels`, {
+                method: 'POST',
+                headers: integrationHeaders,
+                body: {
+                    name: label,
+                    color: 'C9BBF2',
+                    description: 'Temporary risk-routing E2E condition',
+                },
+            });
+            ctx.assert(
+                newLabel.status === 201,
+                'Could not create the isolated QA label',
+            );
+            createdLabel = true;
+            await configure({
+                approvalPolicies: [
+                    {
+                        id: 'qa-other-author',
+                        name: 'QA different author',
+                        enabled: true,
+                        authors: ['qa-not-the-pr-author'],
+                        labels: [label],
+                    },
+                    {
+                        id: 'qa-labeled',
+                        name: 'QA labeled static changes',
+                        enabled: true,
+                        authors: [author.body.login],
+                        labels: [label],
+                        includedFiles: ['src/qa-risk-routing/**'],
+                        excludedFiles: ['**/*.test.ts'],
+                        maxChangedLines: 10,
+                        instruction:
+                            'Eligible only when the change exports a static serviceStatus string literal and introduces no executable logic.',
+                    },
+                ],
+            });
+            opened = await open(
+                'Named policy waits for its label and then approves the same clean head',
+            );
+            active = opened.pr;
+            const beforeLabel = await waitForRun(
+                ctx,
+                session,
+                repo,
+                active,
+                opened.since,
+            );
+            check(beforeLabel, 'assessed', false, false);
+            ctx.assert(
+                beforeLabel.execution!.decision?.kind === 'out-of-scope' &&
+                    (await providerState(ctx, repo, active)).approvals
+                        .length === 0,
+                'A PR without the required label was approved',
+            );
+            ctx.assert(
+                Object.keys(beforeLabel.execution!.eligibility ?? {}).length ===
+                    0,
+                'Eligibility instructions ran before fixed conditions matched',
+            );
+            record('label-missing-policy-holds', active, beforeLabel);
+            const addLabel = await http(
+                `${githubRoot}/issues/${active.number}/labels`,
+                {
+                    method: 'POST',
+                    headers: integrationHeaders,
+                    body: { labels: [label] },
+                },
+            );
+            ctx.assert(
+                addLabel.status === 200,
+                'Could not add the required label',
+            );
+            const approvalDeadline = Date.now() + 6 * 60_000;
+            let labelState = await providerState(ctx, repo, active);
+            while (
+                !labelState.approvals.length &&
+                Date.now() < approvalDeadline
+            ) {
+                await settle(8_000);
+                labelState = await providerState(ctx, repo, active);
+            }
+            ctx.assert(
+                labelState.approvals.length > 0,
+                'The approval cron did not approve after the required label was added',
+            );
+            ctx.assert(
+                labelState.decisions.some((comment) =>
+                    comment.body.includes('QA labeled static changes'),
+                ),
+                'The decision comment does not name the matched filtered policy',
+            );
+            ctx.assert(
+                labelState.decisions.every(
+                    (comment) => !comment.body.includes('Eligible only when'),
+                ),
+                'Private eligibility instructions leaked into a provider comment',
+            );
+            const afterLabel = await inspect(
+                ctx,
+                session,
+                repo,
+                active,
+                opened.since,
+            );
+            ctx.assert(
+                Object.keys(afterLabel.execution!.eligibility ?? {}).includes(
+                    'qa-labeled',
+                ),
+                'The actual eligibility judgment was not persisted',
+            );
+            record(
+                'label-author-files-lines-instruction-cron-approved',
+                active,
+                afterLabel,
+            );
+            await ctx.provider.closePR(active);
+            active = undefined;
+
             await configure({
                 automatedReviewActive: false,
                 riskAssessmentActive: false,
@@ -616,6 +754,16 @@ export const riskRoutingPipeline: Scenario = {
                 riskAssessmentActive: false,
                 customAgents: [],
             });
+            if (createdLabel)
+                await http(
+                    `https://api.github.com/repos/${repo.full_name}/labels/${encodeURIComponent(label)}`,
+                    {
+                        method: 'DELETE',
+                        headers: {
+                            Authorization: `Bearer ${ctx.provider.authToken()}`,
+                        },
+                    },
+                );
         }
     },
 };
