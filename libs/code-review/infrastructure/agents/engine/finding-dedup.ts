@@ -77,6 +77,18 @@ export type DedupTiebreak = (
 /** Description embeddings memoized per dedup run, by suggestion key. */
 export type DedupEmbedCache = Map<string, number[] | null>;
 
+/** The review a dedup runs for, on the warnings it logs. */
+export interface DedupLogMeta {
+    prNumber?: number;
+    organizationId?: string;
+    teamId?: string;
+}
+
+export interface DedupMergeOptions {
+    crossStream?: boolean;
+    logMeta?: DedupLogMeta;
+}
+
 export interface DedupMergeDecision {
     honor: boolean;
     reason: string;
@@ -95,7 +107,7 @@ export interface FindingDedupDeps extends FindingDedupLog {
         keepKey: string,
         embedCache: DedupEmbedCache,
         tiebreak: DedupTiebreak,
-        opts?: { crossStream?: boolean },
+        opts?: DedupMergeOptions,
     ): Promise<DedupMergeDecision>;
     buildTiebreak(
         byokConfig: NormalizedModel | undefined,
@@ -127,6 +139,7 @@ export async function embedDedupSuggestion(
     suggestion: Partial<CodeSuggestion>,
     key: string,
     cache: DedupEmbedCache,
+    logMeta?: DedupLogMeta,
 ): Promise<number[] | null> {
     if (cache.has(key)) {
         return cache.get(key) ?? null;
@@ -147,6 +160,7 @@ export async function embedDedupSuggestion(
             message: `[DEDUP-GUARD] embedding unavailable, falling back to the tiebreak`,
             context: deps.context,
             error: err,
+            ...(logMeta ? { metadata: logMeta } : {}),
         });
         vector = null;
     }
@@ -174,6 +188,7 @@ export async function resolveDedupMerge(
             suggestion: Partial<CodeSuggestion>,
             key: string,
             cache: DedupEmbedCache,
+            logMeta?: DedupLogMeta,
         ): Promise<number[] | null>;
     },
     dup: Partial<CodeSuggestion>,
@@ -182,7 +197,7 @@ export async function resolveDedupMerge(
     keepKey: string,
     embedCache: DedupEmbedCache,
     tiebreak: DedupTiebreak,
-    opts?: { crossStream?: boolean },
+    opts?: DedupMergeOptions,
 ): Promise<DedupMergeDecision> {
     const lexical = contentSimilarity(dup, keep);
 
@@ -203,8 +218,8 @@ export async function resolveDedupMerge(
     }
 
     const [vecDup, vecKeep] = await Promise.all([
-        deps.embed(dup, dupKey, embedCache),
-        deps.embed(keep, keepKey, embedCache),
+        deps.embed(dup, dupKey, embedCache, opts?.logMeta),
+        deps.embed(keep, keepKey, embedCache, opts?.logMeta),
     ]);
     if (!vecDup || !vecKeep) {
         // A scanner fact the model restated is the duplicate we are most
@@ -691,6 +706,13 @@ export async function deduplicateFindings(
                     `n${keepIdx}`,
                     embedCache,
                     runTiebreak,
+                    {
+                        logMeta: {
+                            prNumber,
+                            organizationId: telemetryMeta?.organizationId,
+                            teamId: telemetryMeta?.teamId,
+                        },
+                    },
                 );
                 if (!decision.honor) {
                     // The model grouped these as duplicates but the guard is
@@ -856,12 +878,14 @@ export function createFindingDedupDeps(
             suggestion: Partial<CodeSuggestion>,
             key: string,
             cache: DedupEmbedCache,
+            logMeta?: DedupLogMeta,
         ) =>
             embedDedupSuggestion(
                 { ...log, getEmbedder },
                 suggestion,
                 key,
                 cache,
+                logMeta,
             ),
     };
     return {

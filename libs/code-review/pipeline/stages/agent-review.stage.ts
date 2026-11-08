@@ -18,6 +18,8 @@ import {
     resolveDedupMerge,
     summarizeDedupSuggestion,
     type DedupEmbedCache,
+    type DedupLogMeta,
+    type DedupMergeOptions,
     type DedupMergeDecision,
     type DedupTiebreak,
     type FindingDedupDeps,
@@ -2803,6 +2805,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         suggestion: Partial<CodeSuggestion>,
         key: string,
         cache: DedupEmbedCache,
+        logMeta?: DedupLogMeta,
     ): Promise<number[] | null> {
         return embedDedupSuggestion(
             {
@@ -2813,6 +2816,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             suggestion,
             key,
             cache,
+            logMeta,
         );
     }
 
@@ -2825,12 +2829,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         keepKey: string,
         embedCache: DedupEmbedCache,
         tiebreak: DedupTiebreak,
-        opts?: { crossStream?: boolean },
+        opts?: DedupMergeOptions,
     ): Promise<DedupMergeDecision> {
         return resolveDedupMerge(
             {
-                embed: (suggestion, key, cache) =>
-                    this.embedDedupSuggestion(suggestion, key, cache),
+                embed: (suggestion, key, cache, logMeta) =>
+                    this.embedDedupSuggestion(suggestion, key, cache, logMeta),
             },
             dup,
             keep,
