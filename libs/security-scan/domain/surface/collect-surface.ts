@@ -36,13 +36,12 @@ function normalizePath(path: string): string {
 }
 
 function parseRgLines(stdout: string): RgLine[] {
-    const out = stdout ?? '';
-    const trimmed = out.trim();
+    const trimmed = stdout.trim();
     if (!trimmed || trimmed === NO_MATCHES || trimmed.startsWith('Error:')) {
         return [];
     }
     const lines: RgLine[] = [];
-    for (const raw of out.split('\n')) {
+    for (const raw of stdout.split('\n')) {
         // Lazy `.*?` splits on the FIRST `:<digits>:`, so a colon inside the
         // matched text never moves the boundary.
         const m = /^(.+?):(\d+):(.*)$/.exec(raw.replace(/\r$/, ''));
@@ -322,7 +321,7 @@ export async function collectSurface(
                 });
                 return;
             }
-            if (stdout?.trim().startsWith('Error:')) {
+            if (stdout.trim().startsWith('Error:')) {
                 errors.push({
                     language: b.language,
                     patternIds: b.patterns.map((p) => p.id),

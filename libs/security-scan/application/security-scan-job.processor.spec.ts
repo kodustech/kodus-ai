@@ -125,7 +125,7 @@ function setup(engineResult: any, scan = scanRecord()) {
         kodyIssuesManagement as any,
     );
 
-    return { processor, scans, jobQueue, issuesService, sandbox, kodyIssuesManagement, leaseManager };
+    return { processor, scans, jobQueue, issuesService, sandbox, kodyIssuesManagement, leaseManager, pricingResolver };
 }
 
 const lastUpdate = (scans: { update: jest.Mock }) =>
@@ -231,11 +231,11 @@ describe('SecurityScanJobProcessor', () => {
         // The next job dedups against what this one and the ones before it reported.
         const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
         expect(engine.run.mock.calls[0][0].reported).toEqual([earlier]);
+        // Each unit appends what it reported, in the same write as its progress.
         const unitUpdate = scans.update.mock.calls.find(
-            ([, changes]: any) => changes.reported,
+            (call: any[]) => call[2]?.length,
         ) as any;
-        expect(unitUpdate[1].reported).toEqual([
-            earlier,
+        expect(unitUpdate[2]).toEqual([
             expect.objectContaining({
                 filePath: finding.filePath,
                 startLine: finding.startLine,
@@ -279,6 +279,22 @@ describe('SecurityScanJobProcessor', () => {
             expect.objectContaining({
                 status: SecurityScanStatus.FAILED,
                 error: 'sandbox died',
+            }),
+        );
+    });
+
+    it('fails a USD-capped scan whose model has lost its price, instead of running it uncapped', async () => {
+        const { processor, scans, pricingResolver } = setup({ result: finishedResult() });
+        pricingResolver.resolve.mockResolvedValue({ priced: false } as any);
+        (SecurityScanEngine as unknown as jest.Mock).mockClear();
+
+        await processor.process('job-1');
+
+        expect(SecurityScanEngine).not.toHaveBeenCalled();
+        expect(lastUpdate(scans)).toEqual(
+            expect.objectContaining({
+                status: SecurityScanStatus.FAILED,
+                error: expect.stringMatching(/no known price/),
             }),
         );
     });

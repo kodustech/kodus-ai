@@ -38,7 +38,7 @@ import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
 
-import { ScanBudgetMeter } from '../domain/budget-meter';
+import { ScanBudgetMeter, validateBudget } from '../domain/budget-meter';
 import {
     ScanFinding,
     ScanReportedFinding,
@@ -175,11 +175,16 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             organizationAndTeamData: orgTeam,
             permissionValidationService: this.permissionValidationService,
             pricingResolver: this.pricingResolver,
-            pricingOverrides: (
-                await this.spendLimitConfig.getConfig(orgTeam).catch(() => null)
-            )?.modelPricing,
+            pricingOverrides: (await this.spendLimitConfig.getConfig(orgTeam))
+                ?.modelPricing,
         });
 
+        // Priced at start, the model may have lost its price since: a USD cap
+        // it cannot compute would never stop the scan.
+        const budgetError = validateBudget(scan.budget, !!rates);
+        if (budgetError) {
+            throw new Error(budgetError);
+        }
         const meter = new ScanBudgetMeter(scan.budget, rates, scan.spend);
 
         const cloneParams = await this.codeManagementService.getCloneParams(
@@ -312,30 +317,31 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 if (progress.state !== 'pending') {
                     list.push(progress);
                 }
-                await this.scans.update(scan.uuid, {
-                    progress: list,
-                    reported: [
-                        ...(current?.reported ?? []),
-                        ...findings.map(toReported),
-                    ],
-                    spend: meter.snapshot(),
-                    outcome: counts,
-                    // Live counts for the scans list; the examined files are
-                    // only settled when the slice ends.
-                    ...(current?.coverage && {
-                        coverage: {
-                            ...current.coverage,
-                            unitsDone: list.filter((p) => p.state === 'done')
-                                .length,
-                            unitsFailed: list.filter(
-                                (p) => p.state === 'failed',
-                            ).length,
-                            unitsSkippedByBudget: list.filter(
-                                (p) => p.state === 'skipped_budget',
-                            ).length,
-                        },
-                    }),
-                });
+                await this.scans.update(
+                    scan.uuid,
+                    {
+                        progress: list,
+                        spend: meter.snapshot(),
+                        outcome: counts,
+                        // Live counts for the scans list; the examined files are
+                        // only settled when the slice ends.
+                        ...(current?.coverage && {
+                            coverage: {
+                                ...current.coverage,
+                                unitsDone: list.filter(
+                                    (p) => p.state === 'done',
+                                ).length,
+                                unitsFailed: list.filter(
+                                    (p) => p.state === 'failed',
+                                ).length,
+                                unitsSkippedByBudget: list.filter(
+                                    (p) => p.state === 'skipped_budget',
+                                ).length,
+                            },
+                        }),
+                    },
+                    findings.map(toReported),
+                );
             },
         });
 

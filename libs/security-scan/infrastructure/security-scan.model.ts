@@ -75,6 +75,12 @@ export class SecurityScanModel extends CoreDocument {
 
     @Prop({ type: String })
     public finishedAt?: string;
+
+    /** `organization:repository` while the scan is queued or running, unset
+     *  once it ends: the unique index below allows one active scan per
+     *  repository, whatever two requests race. */
+    @Prop({ type: String })
+    public activeKey?: string;
 }
 
 export const SecurityScanSchema =
@@ -83,4 +89,13 @@ export const SecurityScanSchema =
 SecurityScanSchema.index(
     { 'organizationId': 1, 'repository.id': 1, 'createdAt': -1 },
     { name: 'organization_repository_recent' },
+);
+
+SecurityScanSchema.index(
+    { activeKey: 1 },
+    {
+        name: 'one_active_scan_per_repository',
+        unique: true,
+        partialFilterExpression: { activeKey: { $exists: true } },
+    },
 );

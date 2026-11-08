@@ -142,4 +142,43 @@ function handler(req) {
             'UsersService.update',
         );
     });
+
+    it('does not read a declaration inside a block comment or a string', () => {
+        const src = `function handler(req) {
+    /*
+    function legacyHandler(req) {
+    */
+    const help = \`
+function fake(x) {
+\`;
+    return db.query(req.query.sql); // SINK
+}`;
+        expect(enclosingSymbol(src, lineOf(src, 'SINK'))).toBe('handler');
+    });
+
+    it('skips a function that closed before the line', () => {
+        const src = `function outer() {
+    function helper() {
+        return 1;
+    }
+    exec(input); // SINK
+}`;
+        expect(enclosingSymbol(src, lineOf(src, 'SINK'))).toBe('outer');
+    });
+
+    it('does not count a brace inside a string', () => {
+        const src = `function render(name) {
+    const open = "}";
+    return eval(name); // SINK
+}`;
+        expect(enclosingSymbol(src, lineOf(src, 'SINK'))).toBe('render');
+    });
+
+    it('skips a Python function whose body ended above the line', () => {
+        const src = `def helper():
+    return 1
+
+result = eval(user_input)  # SINK`;
+        expect(enclosingSymbol(src, lineOf(src, 'SINK'))).toBeUndefined();
+    });
 });
