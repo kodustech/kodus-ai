@@ -605,6 +605,10 @@ export async function captureRiskRoutingStates({
             'Mobile',
             'Ações permanecem visíveis após rolagem',
         );
+        await apply.click();
+        await expect(
+            page.getByRole('dialog', { name: 'Edit policy', exact: true }),
+        ).toHaveCount(0);
     } finally {
         releasePreview?.();
         await page.unroute(previewPath);

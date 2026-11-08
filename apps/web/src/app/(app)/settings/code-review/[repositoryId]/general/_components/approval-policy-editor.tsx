@@ -363,7 +363,7 @@ export function ApprovalPolicyEditor({
                         </Select>
                     )}
                 </div>
-                <SheetFooter className="border-card-lv3 shrink-0 border-t py-4 sm:flex-row sm:justify-end">
+                <SheetFooter className="border-card-lv3 shrink-0 flex-row justify-end border-t py-4">
                     <Button
                         type="button"
                         variant="cancel"
