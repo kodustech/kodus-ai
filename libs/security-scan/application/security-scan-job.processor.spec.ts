@@ -166,6 +166,7 @@ describe('SecurityScanJobProcessor', () => {
             repositoryId: 'repo-1',
             scanId: 'scan-1',
             filePaths: ['src/orders.controller.ts'],
+            scanStartedAt: expect.any(String),
         });
         const last = lastUpdate(scans);
         expect(last).toEqual(

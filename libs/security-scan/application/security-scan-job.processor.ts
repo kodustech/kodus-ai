@@ -117,9 +117,10 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             startedAt: new Date(),
             currentStage: 'SCANNING',
         });
+        scan.startedAt ??= new Date().toISOString();
         await this.scans.update(scan.uuid, {
             status: SecurityScanStatus.RUNNING,
-            startedAt: scan.startedAt ?? new Date().toISOString(),
+            startedAt: scan.startedAt,
         });
 
         let releaseLease: (() => Promise<void>) | undefined;
@@ -378,6 +379,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             repositoryId: scan.repository.id,
             scanId: scan.uuid,
             filePaths: coverage.examinedFiles,
+            scanStartedAt: scan.startedAt ?? new Date().toISOString(),
         });
 
         await this.kodyIssuesManagement
