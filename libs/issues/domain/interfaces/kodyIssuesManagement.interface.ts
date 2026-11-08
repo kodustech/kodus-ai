@@ -4,6 +4,8 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 
+import type { IIssueEvidence, IIssueOwner } from './issues.interface';
+
 export interface IIssueDetails {
     id: string;
     title: string;
@@ -35,6 +37,18 @@ export interface IIssueDetails {
         id: string;
         name: string;
     };
+    /** Only on issues a security scan opened. */
+    source?: string;
+    security?: {
+        cwe?: string;
+        vulnerabilityClass?: string;
+        symbol?: string;
+        startLine?: number;
+        endLine?: number;
+        evidence?: IIssueEvidence;
+        lastSeenAt?: string;
+    };
+    owner?: IIssueOwner;
 }
 
 export interface IContributingSuggestion {

@@ -6,10 +6,14 @@ import { IssueStatus } from '@libs/core/infrastructure/config/types/general/issu
 import {
     IIssuesRepository,
     ISSUES_REPOSITORY_TOKEN,
+    ResolveUnseenScanFindingsParams,
+    ScanFindingOutcome,
+    ScanFindingUpsert,
 } from '@libs/issues/domain/contracts/issues.repository';
 import { IIssuesService } from '@libs/issues/domain/contracts/issues.service.contract';
 import { IssuesEntity } from '@libs/issues/domain/entities/issues.entity';
 import { IIssue } from '@libs/issues/domain/interfaces/issues.interface';
+import { IContributingSuggestion } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 
@@ -121,10 +125,29 @@ export class IssuesService implements IIssuesService {
     }
     //#endregion
 
-    async addSuggestionIds(
+    async addContributingSuggestions(
         uuid: string,
-        suggestionIds: string[],
+        suggestions: IContributingSuggestion[],
     ): Promise<IssuesEntity | null> {
-        return this.issuesRepository.addSuggestionIds(uuid, suggestionIds);
+        return this.issuesRepository.addContributingSuggestions(
+            uuid,
+            suggestions,
+        );
+    }
+
+    /** Same `language` rule as `create`, for the same reason. */
+    async upsertScanFinding(
+        finding: ScanFindingUpsert,
+    ): Promise<{ issue: IssuesEntity; outcome: ScanFindingOutcome }> {
+        return this.issuesRepository.upsertScanFinding({
+            ...finding,
+            language: finding.language?.trim() || 'unknown',
+        });
+    }
+
+    async resolveUnseenScanFindings(
+        params: ResolveUnseenScanFindingsParams,
+    ): Promise<number> {
+        return this.issuesRepository.resolveUnseenScanFindings(params);
     }
 }

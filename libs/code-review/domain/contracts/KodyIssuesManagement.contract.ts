@@ -36,4 +36,7 @@ export interface IKodyIssuesManagementService {
         files: any[],
         byokConfig: NormalizedModel | undefined,
     ): Promise<void>;
+
+    /** Drops the organization's cached issue list so new issues show at once. */
+    clearIssuesCache(organizationId: string): Promise<void>;
 }

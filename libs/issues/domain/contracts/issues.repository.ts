@@ -4,8 +4,46 @@ import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 
 import { IssuesEntity } from '../entities/issues.entity';
 import { IIssue } from '../interfaces/issues.interface';
+import { IContributingSuggestion } from '../interfaces/kodyIssuesManagement.interface';
 
 export const ISSUES_REPOSITORY_TOKEN = Symbol.for('IssuesRepository');
+
+/**
+ * What a security scan did to the issue behind one finding: opened it, found
+ * it still open, reopened one a later change had resolved, or left alone one a
+ * person dismissed.
+ */
+export type ScanFindingOutcome =
+    | 'created'
+    | 'still_open'
+    | 'reopened'
+    | 'dismissed';
+
+export type ScanFindingUpsert = Omit<
+    IIssue,
+    | 'uuid'
+    | 'status'
+    | 'contributingSuggestions'
+    | 'createdAt'
+    | 'updatedAt'
+    | 'source'
+    | 'lastSeenAt'
+    | 'resolvedAt'
+> & {
+    fingerprint: string;
+    lastSeenScanId: string;
+};
+
+export interface ResolveUnseenScanFindingsParams {
+    organizationId: string;
+    repositoryId: string;
+    scanId: string;
+    /**
+     * Only files this scan actually examined. A scan stopped by its budget
+     * never looked at the rest, so an issue there was not "gone", just unseen.
+     */
+    filePaths: string[];
+}
 
 export interface IIssuesRepository {
     getNativeCollection(): any;
@@ -47,8 +85,16 @@ export interface IIssuesRepository {
         status: IssueStatus,
     ): Promise<IssuesEntity[] | null>;
 
-    addSuggestionIds(
+    addContributingSuggestions(
         uuid: string,
-        suggestionIds: string[],
+        suggestions: IContributingSuggestion[],
     ): Promise<IssuesEntity | null>;
+
+    upsertScanFinding(
+        finding: ScanFindingUpsert,
+    ): Promise<{ issue: IssuesEntity; outcome: ScanFindingOutcome }>;
+
+    resolveUnseenScanFindings(
+        params: ResolveUnseenScanFindingsParams,
+    ): Promise<number>;
 }
