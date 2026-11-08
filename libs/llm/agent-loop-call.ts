@@ -40,7 +40,7 @@ import {
     createStepUsageTally,
     type AiSdkUsageInput,
 } from '@libs/llm/ai-sdk-usage';
-import { reportUsage } from '@libs/llm/usage-meter';
+import { meteredRequest, reportUsage } from '@libs/llm/usage-meter';
 import { abortedInFlightAttrs } from '@libs/llm/aborted-in-flight';
 import {
     hardTimeout,
@@ -294,7 +294,16 @@ export async function runAgentLoopCall(
                     inputSchema: opts.inputSchema,
                     error: opts.error,
                     inSpan: (repair) =>
-                        usageSpan(`${runName}-tool-repair`, repair, false),
+                        usageSpan(
+                            `${runName}-tool-repair`,
+                            () =>
+                                meteredRequest(
+                                    repair,
+                                    inv.modelName,
+                                    `${runName}-tool-repair`,
+                                ),
+                            false,
+                        ),
                     logContext: {
                         organizationId,
                         teamId: attrs?.teamId as string | undefined,
