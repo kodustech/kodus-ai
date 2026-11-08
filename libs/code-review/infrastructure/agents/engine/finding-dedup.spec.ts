@@ -1,4 +1,5 @@
 import { LLM } from '@libs/llm/llm';
+import { tracedEmbed } from '@libs/llm/llm-call';
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
 
 import { createFindingDedupDeps, deduplicateFindings } from './finding-dedup';
@@ -13,6 +14,11 @@ jest.mock('@libs/llm/managed-slot', () => {
 jest.mock('@libs/common/utils/document', () => {
     const actual = jest.requireActual('@libs/common/utils/document');
     return { ...actual, buildPlatformEmbedder: jest.fn(() => null) };
+});
+
+jest.mock('@libs/llm/llm-call', () => {
+    const actual = jest.requireActual('@libs/llm/llm-call');
+    return { ...actual, tracedEmbed: jest.fn(actual.tracedEmbed) };
 });
 
 describe('deduplicateFindings with createFindingDedupDeps', () => {
@@ -131,6 +137,37 @@ describe('deduplicateFindings with createFindingDedupDeps', () => {
         });
         expect(out.suggestions).toHaveLength(2);
         expect(out.trace.removedCount).toBe(0);
+    });
+
+    it('logs an embedding outage with the review it happened in', async () => {
+        (buildPlatformEmbedder as jest.Mock).mockReturnValueOnce({} as any);
+        (tracedEmbed as jest.Mock).mockRejectedValue(new Error('embeddings down'));
+        runSpy = jest
+            .spyOn(LLM, 'run')
+            .mockResolvedValueOnce({
+                groups: [{ keep: 0, duplicates: [1] }],
+                unique: [],
+            } as any)
+            .mockResolvedValueOnce({ sameBug: false } as any);
+
+        await deduplicateFindings(
+            makeDeps(),
+            [distinctX(), distinctY()],
+            7,
+            slot,
+            telemetryMeta,
+        );
+
+        expect(logger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('embedding unavailable'),
+                metadata: {
+                    prNumber: 7,
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+            }),
+        );
     });
 
     it('skips a single finding without calling the model', async () => {
