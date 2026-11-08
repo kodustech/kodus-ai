@@ -52,4 +52,12 @@ export const WORKFLOW_JOB_QUEUE_ARGUMENTS: Record<
         'x-dead-letter-exchange': 'workflow.exchange.dlx',
         'x-dead-letter-routing-key': 'workflow.job.failed',
     },
+    // A scan slice runs at most ~30 min (the sandbox lifetime); a consumer
+    // holding a message past 40 min has hung.
+    'workflow.jobs.security_scan.queue': {
+        'x-queue-type': 'quorum',
+        'x-consumer-timeout': 40 * 60 * 1000,
+        'x-dead-letter-exchange': 'workflow.exchange.dlx',
+        'x-dead-letter-routing-key': 'workflow.job.failed',
+    },
 };

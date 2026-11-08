@@ -1,0 +1,12 @@
+{
+    "__doc": [
+        "Floors per model, as ratios. `precision` gates every language measured (run.js --gate): of the findings judged (the dataset's own locations, plus off-list findings a person judged in adjudications.json), the share that are real; at least `minJudgedPerLanguage` judged findings per language (all of them when there are fewer), or the run did not measure. Decided in #2451: 0.6. `recall` is recorded as the baseline, not gated, until two runs give it a floor.",
+        "RATCHET: a PR that adds cases or moves a value on purpose recalibrates here in the same PR, with its runs as evidence."
+    ],
+    "models": {
+        "deepseek-v4-flash@fireworks": {
+            "precision": 0.6,
+            "minJudgedPerLanguage": 20
+        }
+    }
+}
