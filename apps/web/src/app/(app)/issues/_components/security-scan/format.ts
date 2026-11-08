@@ -90,6 +90,7 @@ export const VULNERABILITY_CLASS_LABEL = {
     ssrf: "SSRF",
     data_exposure: "Data exposure",
     secret_identity: "Secrets and identity",
+    misconfiguration: "Misconfiguration",
 } as const satisfies Record<SecurityVulnerabilityClass, string>;
 
 export const OWNER_ORIGIN_NOTE = {
