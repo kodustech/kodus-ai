@@ -27,7 +27,12 @@ export type IssueOwner = {
 };
 
 export type SecurityVulnerabilityClass =
-    "authz" | "injection" | "ssrf" | "data_exposure" | "secret_identity";
+    | "authz"
+    | "injection"
+    | "ssrf"
+    | "data_exposure"
+    | "secret_identity"
+    | "misconfiguration";
 
 export type IssueSecurityDetails = {
     cwe?: string;
