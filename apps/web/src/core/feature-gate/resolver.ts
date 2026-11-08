@@ -68,10 +68,10 @@ export const isFeatureEnabled = async ({
                 entry?.stage === "beta" && !releaseTrackBeta
                     ? "beta"
                     : releaseTrack,
-            selfHostedBetaEnabled:
-                releaseTrackBeta || entry?.stage !== "beta"
-                    ? process.env.BETA_FEATURES === "true"
-                    : true,
+            // Self-hosted beta stays behind BETA_FEATURES whatever the
+            // feature: the release track only decides CLOUD beta, since the
+            // `track` input is ignored for a self-hosted audience (#2425).
+            selfHostedBetaEnabled: process.env.BETA_FEATURES === "true",
         });
 
         if (decision === "deny") return false;

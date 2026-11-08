@@ -84,10 +84,12 @@ export class FeatureGateService implements IFeatureGateService {
                 entry?.stage === 'beta' && !releaseTrackBeta
                     ? 'beta'
                     : ctx.releaseTrack,
-            selfHostedBetaEnabled:
-                releaseTrackBeta || entry?.stage !== 'beta'
-                    ? this.betaFeaturesEnabled
-                    : true,
+            // Self-hosted beta stays behind BETA_FEATURES whatever the
+            // feature: the release track only decides CLOUD beta, since the
+            // `track` input is ignored for a self-hosted audience. Reading
+            // `true` for any other beta turned every self-hosted beta on
+            // without the env (#2425).
+            selfHostedBetaEnabled: this.betaFeaturesEnabled,
         });
 
         if (decision === 'deny') return false;

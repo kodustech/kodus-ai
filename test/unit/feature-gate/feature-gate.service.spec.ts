@@ -361,6 +361,27 @@ describe('FeatureGateService', () => {
             ).resolves.toBe(false);
         });
 
+        it('keeps a non-release-track beta behind BETA_FEATURES', async () => {
+            // #2425: only the release-track beta (conditional approval) was
+            // ever meant to be decided elsewhere. Every other beta read
+            // `true` here, so it came on for every self-hosted install with
+            // the env unset.
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'beta',
+                    audience: ['cloud', 'self-hosted'],
+                },
+            );
+            const posthog = fakePostHog();
+            const svc = new FeatureGateService(posthog as never);
+
+            await expect(
+                svc.isEnabled(FEATURE_KEYS.githubEnterpriseServerPat, orgCtx),
+            ).resolves.toBe(false);
+            expect(posthog.isFeatureEnabled).not.toHaveBeenCalled();
+        });
+
         it('returns false for alpha features even with BETA_FEATURES=true', async () => {
             process.env.BETA_FEATURES = 'true';
             mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {

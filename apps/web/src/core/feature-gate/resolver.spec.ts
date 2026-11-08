@@ -150,10 +150,16 @@ describe("isFeatureEnabled (web resolver)", () => {
         );
     });
 
-    it("keeps other beta features available on self-hosted", async () => {
+    it("keeps other beta features behind BETA_FEATURES on self-hosted", async () => {
+        // #2425: the release track only decides cloud beta. Every other beta
+        // on self-hosted follows BETA_FEATURES, as before #2193.
         process.env.WEB_NODE_ENV = "self-hosted";
         featureMock.current = { ...baseFeature, stage: "beta" };
 
+        expect(
+            await isFeatureEnabled({ feature: "github-enterprise-server-pat" }),
+        ).toBe(false);
+        process.env.BETA_FEATURES = "true";
         expect(
             await isFeatureEnabled({ feature: "github-enterprise-server-pat" }),
         ).toBe(true);
