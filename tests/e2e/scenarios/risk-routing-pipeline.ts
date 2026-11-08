@@ -29,7 +29,7 @@ type Evidence = {
         status: string;
         heavy?: boolean;
         risk?: { status: string; riskIdentified?: boolean; reason?: string };
-        decision?: { kind: string; reason?: string };
+        decision?: { kind: string; reason?: string; reviewedHeadSha?: string };
         eligibility?: Record<string, unknown>;
         agentSkips?: Array<{ id: string; reason: string }>;
     } | null;
@@ -161,23 +161,99 @@ async function providerState(
         'X-GitHub-Api-Version': '2022-11-28',
     };
     const root = `https://api.github.com/repos/${repo.full_name}`;
+    const live = await http<{ head: { sha: string } }>(
+        `${root}/pulls/${pr.number}`,
+        { headers },
+    );
     const reviews = await http<
-        Array<{ state: string; user: { login: string } }>
+        Array<{
+            id: number;
+            state: string;
+            commit_id: string;
+            user: { login: string };
+        }>
     >(`${root}/pulls/${pr.number}/reviews`, { headers });
     const comments = await http<Array<{ body: string }>>(
         `${root}/issues/${pr.number}/comments?per_page=100`,
         { headers },
     );
     ctx.assert(
-        reviews.status === 200 && comments.status === 200,
+        live.status === 200 &&
+            reviews.status === 200 &&
+            comments.status === 200,
         'Could not read actual provider approval/comments',
     );
     return {
-        approvals: reviews.body.filter((review) => review.state === 'APPROVED'),
+        headSha: live.body.head.sha,
+        approvals: reviews.body.filter(
+            (review) =>
+                review.state === 'APPROVED' &&
+                review.commit_id === live.body.head.sha,
+        ),
         decisions: comments.body.filter((comment) =>
             comment.body.includes('<!-- kodus-conditional-approval -->'),
         ),
     };
+}
+
+async function waitForApproval(
+    ctx: RunContext,
+    session: KodusSession,
+    repo: ProviderRepoRef,
+    pr: OpenedPR,
+    since: string,
+    initial: Evidence,
+    policyName: string,
+) {
+    // Metadata may change after the policy decision (including generated PR
+    // descriptions). Preserve the snapshot veto and let the real cron recheck.
+    const deadline = Date.now() + 6 * 60_000;
+    let data = initial;
+    while (true) {
+        const state = await providerState(ctx, repo, pr);
+        if (
+            data.execution?.decision?.reviewedHeadSha === state.headSha &&
+            state.approvals.length > 0 &&
+            state.decisions.some(
+                (comment) =>
+                    comment.body.includes('**Automatic approval completed**') &&
+                    comment.body.includes(policyName),
+            )
+        ) {
+            const verified = {
+                ...data,
+                providerApproval: {
+                    headSha: state.headSha,
+                    policyName,
+                    reviews: state.approvals.map((review) => ({
+                        id: review.id,
+                        state: review.state,
+                        headSha: review.commit_id,
+                        reviewer: review.user.login,
+                    })),
+                },
+            };
+            writeFileSync(
+                join(
+                    ctx.artifactDir,
+                    `execution-${pr.number}-${data.execution.uuid}-approved.json`,
+                ),
+                JSON.stringify(verified, null, 2),
+            );
+            return { data: verified, state };
+        }
+        ctx.assert(
+            Date.now() < deadline,
+            `PR #${pr.number} approval was not confirmed: ${data.execution?.decision?.reason ?? 'no decision'}`,
+        );
+        await settle(8_000);
+        data = await inspect(ctx, session, repo, pr, since);
+        ctx.assert(
+            data.execution?.uuid === initial.execution?.uuid &&
+                data.execution?.status === 'success',
+            'Approval evidence changed execution or lost its successful status',
+        );
+    }
 }
 
 async function realPreview(
@@ -436,10 +512,19 @@ export const riskRoutingPipeline: Scenario = {
             active = opened.pr;
             data = await waitForRun(ctx, session, repo, active, opened.since);
             check(data, 'assessed', false, false);
-            let state = await providerState(ctx, repo, active);
+            const confirmed = await waitForApproval(
+                ctx,
+                session,
+                repo,
+                active,
+                opened.since,
+                data,
+                'QA clean PRs',
+            );
+            data = confirmed.data;
+            let state = confirmed.state;
             ctx.assert(
-                data.execution!.decision?.kind === 'approve' &&
-                    state.approvals.length > 0,
+                state.approvals.length > 0,
                 'Clean matching policy did not produce an actual provider approval',
             );
             ctx.assert(
@@ -551,10 +636,19 @@ export const riskRoutingPipeline: Scenario = {
                 ),
                 'Disabled risk still spent a model call',
             );
+            data = (
+                await waitForApproval(
+                    ctx,
+                    session,
+                    repo,
+                    active,
+                    opened.since,
+                    data,
+                    'QA clean PRs',
+                )
+            ).data;
             ctx.assert(
-                data.execution!.decision?.kind === 'approve' &&
-                    (await providerState(ctx, repo, active)).approvals.length >
-                        0,
+                (await providerState(ctx, repo, active)).approvals.length > 0,
                 'Risk off prevented a clean matching policy from approving',
             );
             record('risk-off-fixed-heavy', active, data);
@@ -709,15 +803,16 @@ export const riskRoutingPipeline: Scenario = {
                 addLabel.status === 200,
                 'Could not add the required label',
             );
-            const approvalDeadline = Date.now() + 6 * 60_000;
-            let labelState = await providerState(ctx, repo, active);
-            while (
-                !labelState.approvals.length &&
-                Date.now() < approvalDeadline
-            ) {
-                await settle(8_000);
-                labelState = await providerState(ctx, repo, active);
-            }
+            const labelApproval = await waitForApproval(
+                ctx,
+                session,
+                repo,
+                active,
+                opened.since,
+                beforeLabel,
+                'QA labeled static changes',
+            );
+            const labelState = labelApproval.state;
             ctx.assert(
                 labelState.approvals.length > 0,
                 'The approval cron did not approve after the required label was added',
@@ -734,13 +829,7 @@ export const riskRoutingPipeline: Scenario = {
                 ),
                 'Private eligibility instructions leaked into a provider comment',
             );
-            const afterLabel = await inspect(
-                ctx,
-                session,
-                repo,
-                active,
-                opened.since,
-            );
+            const afterLabel = labelApproval.data;
             ctx.assert(
                 Object.keys(afterLabel.execution!.eligibility ?? {}).includes(
                     'qa-labeled',
