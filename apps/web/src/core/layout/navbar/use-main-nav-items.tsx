@@ -10,6 +10,7 @@ import {
     GaugeIcon,
     GitPullRequestIcon,
     LockIcon,
+    ShieldCheckIcon,
     SparklesIcon,
     type LucideIcon,
 } from "lucide-react";
@@ -18,7 +19,13 @@ import { isCockpitTierAllowed } from "src/features/ee/cockpit/_helpers/tier-poli
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
 export type MainNavItem = {
-    id: "reviews" | "cockpit" | "repositories" | "ai-providers" | "plugins";
+    id:
+        | "reviews"
+        | "cockpit"
+        | "deep-scan"
+        | "repositories"
+        | "ai-providers"
+        | "plugins";
     label: string;
     icon: LucideIcon;
     href: string;
@@ -49,6 +56,7 @@ export const useMainNavItems = () => {
         Action.Read,
         ResourceType.PluginSettings,
     );
+    const canReadIssues = usePermission(Action.Read, ResourceType.Issues);
     const canReadRepositories = usePermission(
         Action.Read,
         ResourceType.GitSettings,
@@ -60,7 +68,7 @@ export const useMainNavItems = () => {
     const credits = useKodusCreditBalance();
     const { data: isMCPAvailable = true } = useMCPAvailability(canReadPlugins);
 
-    // Five destinations. Reviews folds Pull Requests + CLI Reviews (tabs on
+    // Six destinations. Reviews folds Pull Requests + CLI Reviews (tabs on
     // the page); Issues lives inside the Cockpit; Library is reached from
     // Kody Rules.
     const items = useMemo(() => {
@@ -89,6 +97,17 @@ export const useMainNavItems = () => {
                 ) ? undefined : (
                     <LockIcon className="size-3.5" />
                 ),
+            },
+            {
+                // A whole-repository security scan, run on demand: its own
+                // destination, so a team finds it without knowing it lives
+                // next to the Cockpit's issues.
+                id: "deep-scan",
+                label: "Deep scan",
+                icon: ShieldCheckIcon,
+                href: "/deep-scan",
+                visible: canReadIssues,
+                matcher: (path) => path.startsWith("/deep-scan"),
             },
             {
                 // Which repositories Kody reviews: where every workspace
@@ -159,6 +178,7 @@ export const useMainNavItems = () => {
             ? subscription.license.planType
             : undefined,
         canReadPlugins,
+        canReadIssues,
         canReadRepositories,
         canEditOrg,
         isMCPAvailable,

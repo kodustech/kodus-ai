@@ -10,6 +10,16 @@ import type {
     IssueListItem,
 } from "./types";
 
+// The API leaves `source` out for code review issues. Filling it in gives the
+// list filters a value to match on ("code_review" vs "security_scan").
+// Module-level so React Query memoizes the selected data across renders.
+const withIssueSource = (issues: IssueListItem[]): IssueListItem[] =>
+    Array.isArray(issues)
+        ? issues.map((issue) =>
+              issue.source ? issue : { ...issue, source: "code_review" },
+          )
+        : issues;
+
 export const useIssues = () => {
     const { organizationId } = useOrganizationContext();
 
@@ -21,6 +31,7 @@ export const useIssues = () => {
             placeholderData: (prev) => {
                 return prev;
             },
+            select: withIssueSource,
         },
     );
 

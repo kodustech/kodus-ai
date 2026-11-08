@@ -9,6 +9,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useQueryState } from "nuqs";
 import { cn } from "src/core/utils/components";
 
+import { SecurityScanBadge } from "../_components/security-scan/security-scan-badge";
 import { StatusBadge } from "../_components/status-badge";
 
 type Row = IssueListItem;
@@ -102,7 +103,10 @@ export const columns: ColumnDef<Row>[] = [
             <DataTableColumnHeader column={column} title="Title" />
         ),
         cell: ({ getValue, row }) => (
-            <TableLink id={row.original.uuid}>
+            <TableLink id={row.original.uuid} className="gap-2">
+                {row.original.source === "security_scan" && (
+                    <SecurityScanBadge />
+                )}
                 <Markdown>{getValue<string>()}</Markdown>
             </TableLink>
         ),
