@@ -90,6 +90,23 @@ export async function assessPrRisk(
     if (!input.headSha || !input.baseSha || !input.files.length) {
         return unavailable('Kody could not verify the complete PR snapshot.');
     }
+    // Providers can omit large/binary patches while retaining the file and its
+    // line counts. An absent patch must not turn a partial diff into a judgment.
+    // A pure rename has no textual patch; both paths still reach the assessor.
+    if (
+        input.files.some(
+            (file) =>
+                (typeof file.patch !== 'string' || !file.patch.trim()) &&
+                !(
+                    file.status === 'renamed' &&
+                    file.previous_filename &&
+                    file.additions === 0 &&
+                    file.deletions === 0
+                ),
+        )
+    ) {
+        return unavailable('Kody could not verify the complete PR diff.');
+    }
     // The legacy assessor bounds its diff. The independent engine must never
     // classify an omitted part as safe, so an oversized snapshot stays unknown.
     if (buildChangeRiskDiff(input.files).length > 50_000) {

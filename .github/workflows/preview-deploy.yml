@@ -510,11 +510,11 @@ jobs:
                   : "${CLOUD_WEB_BASE_URL:?cloud preview is required}"
                   : "${GH_TEST_TOKEN:?QA PR author credential is required}"
                   : "${GH_INTEGRATION_TOKEN:?QA integration credential is required}"
-                  export CLOUD_WEB_BASE_URL
+                  export CLOUD_WEB_BASE_URL="${CLOUD_WEB_BASE_URL%/}"
                   export CLOUD_API_BASE_URL="${CLOUD_WEB_BASE_URL%/}/api/proxy/api"
                   export CLOUD_TENANT_PAID_EMAIL="preview-risk-${{ github.run_id }}@kodus.io"
                   auth_ready() {
-                    node -e 'fetch(process.env.CLOUD_WEB_BASE_URL+"/api/auth/csrf").then(async r=>process.exit(r.ok && typeof (await r.json()).csrfToken === "string" ? 0 : 1)).catch(()=>process.exit(1))'
+                    node -e 'fetch(process.env.CLOUD_WEB_BASE_URL+"/api/auth/csrf",{signal:AbortSignal.timeout(10000)}).then(async r=>process.exit(r.ok && typeof (await r.json()).csrfToken === "string" ? 0 : 1)).catch(()=>process.exit(1))'
                   }
                   if ! auth_ready; then
                     echo 'Preview auth route is not ready; restarting only the preview web service.'

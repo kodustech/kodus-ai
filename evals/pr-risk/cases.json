@@ -56,6 +56,28 @@
         ]
     },
     {
+        "id": "omitted-provider-patch",
+        "checks": "An omitted provider patch stays unknown without a model call, uses the default mode, skips the conditional agent and vetoes approval.",
+        "title": "EVAL_FORCE_NO_PR_RISK: a large patch is absent from the provider response",
+        "active": true,
+        "files": [
+            {
+                "filename": "qa-risk-large/notes.txt",
+                "status": "added",
+                "additions": 2500,
+                "deletions": 0
+            }
+        ],
+        "expected": {
+            "status": "unavailable",
+            "calls": 0,
+            "mode": "balanced",
+            "agentRuns": false,
+            "approvalVeto": true,
+            "policyDecision": "hold"
+        }
+    },
+    {
         "id": "unavailable",
         "checks": "An invalid model response uses the configured default, skips the conditional agent and blocks approval.",
         "title": "EVAL_FORCE_UNKNOWN_PR_RISK: opaque contract",

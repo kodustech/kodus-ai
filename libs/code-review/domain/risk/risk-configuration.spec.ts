@@ -69,6 +69,20 @@ describe('cron snapshot validation', () => {
     it('accepts a judgment only for this exact PR, base/head and configuration', () => {
         expect(isCurrentRiskAssessment(result, expected)).toBe(true);
     });
+    it('invalidates assessments made before the provider-patch completeness guard', () => {
+        // Managed/default configuration identity recorded by real PR #871.
+        const oldKey =
+            'd05f34bb6df785b943b84cfe7308ba728f15b3a542d1d92085d82a58692d0ab5';
+        expect(
+            isCurrentRiskAssessment(
+                {
+                    ...result,
+                    snapshot: { ...result.snapshot, configurationKey: oldKey },
+                },
+                expected,
+            ),
+        ).toBe(false);
+    });
     it.each(Object.keys(expected))('rejects changed %s', (key) => {
         expect(
             isCurrentRiskAssessment(result, {

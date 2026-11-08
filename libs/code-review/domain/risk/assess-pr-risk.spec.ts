@@ -278,6 +278,47 @@ it.each([
     },
 );
 
+it.each([
+    { status: 'added', additions: 2500, deletions: 0, patch: undefined },
+    { status: 'modified', additions: 1, deletions: 1, patch: undefined },
+    { status: 'removed', additions: 0, deletions: 1, patch: undefined },
+    { status: 'modified', additions: 1, deletions: 0, patch: '' },
+    { status: 'modified', additions: 1, deletions: 0, patch: '  \n' },
+    { status: 'modified', additions: 0, deletions: 0, patch: undefined },
+])(
+    'does not guess risk when a provider omits a changed file patch: %j',
+    async (file) => {
+        jest.mocked(LLM.run).mockResolvedValue({
+            level: 'low',
+            reason: 'The visible change looks harmless.',
+        } as any);
+        expect(
+            await assessPrRisk({
+                ...input,
+                files: [
+                    ...input.files,
+                    { filename: 'qa-risk-large/notes.txt', ...file },
+                ] as any,
+            }),
+        ).toMatchObject({ status: 'unavailable' });
+        expect(LLM.run).not.toHaveBeenCalled();
+    },
+);
+
+it('still assesses a pure rename without a textual patch', async () => {
+    jest.mocked(LLM.run).mockResolvedValue({
+        level: 'low',
+        reason: 'The rename preserves behavior.',
+    } as any);
+    expect(
+        await assessPrRisk({
+            ...input,
+            files: [{ ...input.files[0], patch: undefined }],
+        }),
+    ).toMatchObject({ status: 'assessed', riskIdentified: false });
+    expect(LLM.run).toHaveBeenCalledTimes(1);
+});
+
 it('invalidates identity when guidance, model, history, PR data or the diff changes', () => {
     const key = prRiskSnapshot(input).assessmentKey;
     for (const overrides of [

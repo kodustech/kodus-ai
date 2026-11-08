@@ -108,7 +108,20 @@ async function waitForRun(
                 `PR #${pr.number} ended ${status}; stages=${JSON.stringify(last.stages)}`,
             );
             await settle(3_000);
-            return await inspect(ctx, session, repo, pr, since);
+            const settled = await inspect(ctx, session, repo, pr, since);
+            ctx.assert(
+                settled.execution?.uuid === last.execution!.uuid &&
+                    settled.execution.status === 'success',
+                'Settled evidence changed execution or lost its successful status',
+            );
+            writeFileSync(
+                join(
+                    ctx.artifactDir,
+                    `execution-${pr.number}-${settled.execution.uuid}.json`,
+                ),
+                JSON.stringify(settled, null, 2),
+            );
+            return settled;
         }
         await settle(8_000);
     }
@@ -540,7 +553,7 @@ export const riskRoutingPipeline: Scenario = {
 
             await configure();
             opened = await open(
-                'Oversized full diff stays unknown even when its file is excluded from review',
+                'An omitted large patch stays unknown even when its file is excluded from review',
                 {
                     [FILE]: safe,
                     'qa-risk-large/notes.txt': Array.from(
@@ -559,6 +572,12 @@ export const riskRoutingPipeline: Scenario = {
                 opened.since,
             );
             check(unknownData, 'unavailable', false, false);
+            ctx.assert(
+                !unknownData.models.some(
+                    (model) => model.runName === 'pr-risk-assessment',
+                ),
+                'An incomplete diff still spent a risk model call',
+            );
             ctx.assert(
                 unknownData.execution!.decision?.kind === 'hold' &&
                     (await providerState(ctx, repo, active)).approvals
