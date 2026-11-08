@@ -175,10 +175,7 @@ it("shows both risk outcomes and a separate default for unavailable assessments"
     expect(
         screen.getByRole("combobox", { name: "Risk found" }),
     ).toHaveTextContent("Heavy");
-    fireEvent.click(screen.getByText("Default review mode · Balanced"));
-    expect(
-        screen.getByText("Used when risk assessment has no result."),
-    ).toBeInTheDocument();
+    fireEvent.click(screen.getByText("If risk is unavailable · Balanced"));
     expect(
         screen.getByRole("combobox", { name: "Default review mode" }),
     ).toHaveTextContent("Balanced");

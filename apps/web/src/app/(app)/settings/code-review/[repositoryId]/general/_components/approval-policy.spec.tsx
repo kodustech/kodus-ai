@@ -115,18 +115,33 @@ it("keeps risk in its own screen and never enables automatic approval when polic
         screen.queryByRole("switch", { name: "Assess PR risk" }),
     ).not.toBeInTheDocument();
     expect(
-        screen.getByText(/Risk found or unavailable blocks approval/),
+        screen.getByText(
+            "Policies are saved. Turn on automatic approval to use them.",
+        ),
     ).toBeInTheDocument();
+    expect(screen.getByText("Paused")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Enable Docs" })).toBeChecked();
     fireEvent.click(screen.getByRole("switch", { name: "Enable Docs" }));
     expect(
         screen.getByRole("switch", { name: "Automatic PR approval" }),
     ).not.toBeChecked();
+    fireEvent.click(
+        screen.getByRole("switch", { name: "Automatic PR approval" }),
+    );
+    expect(
+        screen.getByRole("switch", { name: "Enable Docs" }),
+    ).not.toBeChecked();
+    expect(screen.queryByText("Paused")).not.toBeInTheDocument();
+    expect(
+        screen.getByText(/Risk found or unavailable blocks approval/),
+    ).toBeInTheDocument();
 });
 
 it("shows All clean PRs immediately when the last filter is removed, without another all-PRs control", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("data-slot", "sheet-content");
     fireEvent.click(
         within(dialog).getByRole("button", {
             name: "Remove pr labels condition",

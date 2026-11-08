@@ -32,6 +32,11 @@ export function ApprovalPolicySettings() {
         control: form.control,
         name: "riskAssessmentActive.value",
     });
+    const approvalEnabled =
+        useWatch({
+            control: form.control,
+            name: "pullRequestApprovalActive.value",
+        }) ?? false;
     const legacyLabels = useWatch({
         control: form.control,
         name: "approvalLabels.value",
@@ -81,9 +86,13 @@ export function ApprovalPolicySettings() {
                     Add policy
                 </Button>
             </div>
-            <p className="text-text-secondary text-xs">
-                A clean review and one matching policy are required.
-                {riskEnabled
+            <p
+                id="approval-policies-status"
+                className="text-text-secondary text-xs">
+                {approvalEnabled
+                    ? "A clean review and one matching policy are required."
+                    : "Policies are saved. Turn on automatic approval to use them."}
+                {approvalEnabled && riskEnabled
                     ? " Risk found or unavailable blocks approval."
                     : ""}
             </p>
@@ -103,8 +112,10 @@ export function ApprovalPolicySettings() {
                                     <h4 className="text-text-primary text-sm font-medium break-words">
                                         {policy.name}
                                     </h4>
-                                    {!policy.enabled && (
-                                        <Badge variant="helper">Off</Badge>
+                                    {(!approvalEnabled || !policy.enabled) && (
+                                        <Badge variant="helper">
+                                            {policy.enabled ? "Paused" : "Off"}
+                                        </Badge>
                                     )}
                                 </div>
                                 <p className="text-text-secondary mt-1 text-xs leading-5 break-words">
@@ -115,7 +126,17 @@ export function ApprovalPolicySettings() {
                                 <Switch
                                     checked={policy.enabled}
                                     disabled={field.disabled}
+                                    className={
+                                        !approvalEnabled
+                                            ? "switch-checked:bg-text-placeholder/50"
+                                            : undefined
+                                    }
                                     aria-label={`Enable ${policy.name}`}
+                                    aria-describedby={
+                                        !approvalEnabled
+                                            ? "approval-policies-status"
+                                            : undefined
+                                    }
                                     onCheckedChange={(enabled) =>
                                         update(
                                             policies.map((item) =>

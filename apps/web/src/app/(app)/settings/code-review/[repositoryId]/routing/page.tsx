@@ -2,7 +2,6 @@
 
 import { Suspense } from "react";
 import { Card } from "@components/ui/card";
-import { FormControl } from "@components/ui/form-control";
 import { Link } from "@components/ui/link";
 import { Page } from "@components/ui/page";
 import {
@@ -295,12 +294,9 @@ function RoutingSettings() {
                     {routing.active && (
                         <details className="border-card-lv3 mt-2 border-t pt-4">
                             <summary className="text-text-secondary cursor-pointer text-xs">
-                                Default review mode ·{" "}
+                                If risk is unavailable ·{" "}
                                 {modeLabel(routing.defaultMode)}
                             </summary>
-                            <FormControl.Helper>
-                                Used when risk assessment has no result.
-                            </FormControl.Helper>
                             <ModeRow
                                 label="Default review mode"
                                 name="reviewMode.value"

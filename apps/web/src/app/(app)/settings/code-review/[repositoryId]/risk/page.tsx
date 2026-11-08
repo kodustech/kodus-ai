@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { Card } from "@components/ui/card";
 import { Page } from "@components/ui/page";
@@ -29,6 +30,7 @@ import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-sett
 import type { CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
 import { useCodeReviewRouteParams } from "../../../_hooks";
+import { SettingToggleRow } from "../general/_components/setting-toggle-row";
 import { CriterionDialog } from "./_components/criterion-dialog";
 import { RiskPreview } from "./_components/risk-preview";
 
@@ -138,35 +140,32 @@ function RiskSettings() {
             </Page.Header>
             <Page.Content className="gap-6">
                 <CentralizedConfigReadOnlyAlert />
-                <Card
-                    color="lv1"
-                    className="flex-row items-start justify-between gap-4 p-5 sm:p-6">
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <label
-                                htmlFor="risk-assessment-active"
-                                className="text-sm font-semibold">
-                                Risk assessment
-                            </label>
-                            <OverrideIndicatorForm fieldName="riskAssessmentActive" />
-                        </div>
-                        <p className="text-text-secondary mt-1 text-sm">
-                            {!available
-                                ? planAllowed
-                                    ? "Risk assessment is not enabled for this workspace."
-                                    : "Risk assessment is available on Teams and Enterprise."
-                                : active
-                                  ? "Assesses each PR independently of automatic approval."
-                                  : "Turn on to assess PR risk."}
-                        </p>
-                    </div>
+                <Card color="lv1">
                     <Controller
                         name="riskAssessmentActive.value"
                         control={form.control}
                         render={({ field }) => (
-                            <Switch
-                                className="shrink-0"
+                            <SettingToggleRow
                                 id="risk-assessment-active"
+                                title="Risk assessment"
+                                fieldName="riskAssessmentActive"
+                                badge={
+                                    <Badge
+                                        variant={
+                                            active ? "primary-dark" : "helper"
+                                        }>
+                                        {active ? "On" : "Off"}
+                                    </Badge>
+                                }
+                                description={
+                                    !available
+                                        ? planAllowed
+                                            ? "Risk assessment is not enabled for this workspace."
+                                            : "Risk assessment is available on Teams and Enterprise."
+                                        : active
+                                          ? "Assesses each PR independently of automatic approval."
+                                          : "PR risk is not assessed."
+                                }
                                 checked={field.value ?? false}
                                 disabled={
                                     !canEdit ||
@@ -191,7 +190,9 @@ function RiskSettings() {
                                 <OverrideIndicatorForm fieldName="riskCriteria" />
                             </div>
                             <p className="text-text-secondary mt-1 text-sm">
-                                Add context to Kody’s assessment.
+                                {active
+                                    ? "Add context to Kody’s assessment."
+                                    : "Saved criteria are not used while assessment is off."}
                             </p>
                         </div>
                         <Button
@@ -220,9 +221,18 @@ function RiskSettings() {
                             color="lv1"
                             className="flex flex-col gap-3 p-5">
                             <div className="flex flex-wrap items-center justify-between gap-3">
-                                <h3 className="text-sm font-semibold">
-                                    {criterion.name}
-                                </h3>
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-sm font-semibold">
+                                        {criterion.name}
+                                    </h3>
+                                    {(!active || !criterion.enabled) && (
+                                        <Badge variant="helper">
+                                            {criterion.enabled
+                                                ? "Paused"
+                                                : "Off"}
+                                        </Badge>
+                                    )}
+                                </div>
                                 <div className="flex items-center gap-3">
                                     <Switch
                                         aria-label={`Enable ${criterion.name}`}

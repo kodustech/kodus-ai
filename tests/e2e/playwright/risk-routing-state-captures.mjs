@@ -328,7 +328,7 @@ export async function captureRiskRoutingStates({
         await open('routing');
         await shot('14-routing-on', 'Routing', 'Por risco: Balanced / Heavy');
         await page
-            .getByText('Default review mode · Balanced', { exact: true })
+            .getByText('If risk is unavailable · Balanced', { exact: true })
             .click();
         await shot(
             '15-routing-default',
@@ -427,6 +427,9 @@ export async function captureRiskRoutingStates({
         );
         await open('general');
         await editPolicy('Dependency updates');
+        await expect(
+            page.getByRole('button', { name: 'Apply', exact: true }),
+        ).toBeInViewport();
         await shot(
             '30-policy-dependencies',
             'Políticas',
@@ -434,9 +437,14 @@ export async function captureRiskRoutingStates({
                 ? 'Label, autor, linhas e instrução'
                 : 'Autor, linhas e instrução',
         );
-        await page.getByRole('dialog').evaluate((node) => {
-            node.scrollTop = node.scrollHeight;
-        });
+        await page
+            .getByRole('region', { name: 'Policy settings', exact: true })
+            .evaluate((node) => {
+                node.scrollTop = node.scrollHeight;
+            });
+        await expect(
+            page.getByRole('button', { name: 'Apply', exact: true }),
+        ).toBeInViewport();
         await shot(
             '31-policy-dependencies-bottom',
             'Políticas',
@@ -445,6 +453,30 @@ export async function captureRiskRoutingStates({
         await open('general');
         await editPolicy('Documentation');
         await shot('32-policy-files', 'Políticas', 'Condições de arquivos');
+        await page
+            .getByRole('button', { name: 'Edit included files', exact: true })
+            .click();
+        const fileDialog = page.getByRole('dialog', {
+            name: 'Included files',
+            exact: true,
+        });
+        await fileDialog
+            .getByLabel('Test a file', { exact: true })
+            .fill('docs/api.md');
+        await expect(
+            fileDialog.getByText('Matched by', { exact: false }),
+        ).toBeVisible();
+        await shot(
+            '42-policy-file-validator',
+            'Políticas',
+            'Validação de glob no editor lateral',
+        );
+        await fileDialog
+            .getByRole('button', { name: 'Cancel', exact: true })
+            .click();
+        await expect(
+            page.getByRole('dialog', { name: 'Edit policy', exact: true }),
+        ).toBeVisible();
 
         await page.route(repositoriesPath, (route) =>
             route.fulfill({
@@ -548,6 +580,31 @@ export async function captureRiskRoutingStates({
         await shot('40-routing-mobile', 'Mobile', 'Routing no mobile');
         await open('general');
         await shot('41-general-mobile', 'Mobile', 'General no mobile');
+        await editPolicy('Dependency updates');
+        const apply = page.getByRole('button', { name: 'Apply', exact: true });
+        await expect(apply).toBeInViewport();
+        const before = await apply.boundingBox();
+        await shot(
+            '43-policy-mobile',
+            'Mobile',
+            'Editor de política com ações fixas',
+        );
+        await page
+            .getByRole('region', { name: 'Policy settings', exact: true })
+            .evaluate((node) => {
+                node.scrollTop = node.scrollHeight;
+            });
+        await expect(apply).toBeInViewport();
+        const after = await apply.boundingBox();
+        assert.ok(
+            before && after && Math.abs(before.y - after.y) <= 2,
+            'Policy actions must stay fixed while conditions scroll.',
+        );
+        await shot(
+            '44-policy-mobile-scrolled',
+            'Mobile',
+            'Ações permanecem visíveis após rolagem',
+        );
     } finally {
         releasePreview?.();
         await page.unroute(previewPath);
