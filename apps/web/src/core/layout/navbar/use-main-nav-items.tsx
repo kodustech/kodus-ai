@@ -56,7 +56,10 @@ export const useMainNavItems = () => {
         Action.Read,
         ResourceType.PluginSettings,
     );
-    const canReadIssues = usePermission(Action.Read, ResourceType.Issues);
+    const canReadSecurityScans = usePermission(
+        Action.Read,
+        ResourceType.SecurityScan,
+    );
     const canReadRepositories = usePermission(
         Action.Read,
         ResourceType.GitSettings,
@@ -106,7 +109,7 @@ export const useMainNavItems = () => {
                 label: "Deep scan",
                 icon: ShieldCheckIcon,
                 href: "/deep-scan",
-                visible: canReadIssues,
+                visible: canReadSecurityScans,
                 matcher: (path) => path.startsWith("/deep-scan"),
             },
             {
@@ -178,7 +181,7 @@ export const useMainNavItems = () => {
             ? subscription.license.planType
             : undefined,
         canReadPlugins,
-        canReadIssues,
+        canReadSecurityScans,
         canReadRepositories,
         canEditOrg,
         isMCPAvailable,

@@ -56,10 +56,11 @@ export const FindingsList = ({
                     new Date(a.createdAt).getTime(),
         );
 
+    // Counted under the same severity filter the list shows.
     const countOf = (value: FindingsStatusFilter) =>
-        value === "all"
-            ? findings.length
-            : findings.filter((f) => f.status === value).length;
+        findings
+            .filter((f) => !severity || f.severity === severity)
+            .filter((f) => value === "all" || f.status === value).length;
 
     return (
         <section className="flex min-h-0 flex-col gap-3">
