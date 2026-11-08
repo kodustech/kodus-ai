@@ -21,6 +21,7 @@ const safeText = (value) => {
     return text
         .replace(/\b(Bearer|Basic)\s+[^\s,;]+/gi, '$1 [redacted]')
         .replace(/([?&](?:token|key|api_key|code)=)[^\s&]+/gi, '$1[redacted]')
+        .replace(/\b(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]+\b/g, '[redacted]')
         .slice(0, 1500);
 };
 
@@ -131,9 +132,47 @@ async function main() {
                 },
             ])
             .toArray();
+        const logs = await mongo.db
+            .collection('observability_logs_ts')
+            .find(
+                {
+                    $or: [
+                        { tenantId: organizationId },
+                        ...(execution
+                            ? [
+                                  { executionId: execution.uuid },
+                                  { correlationId: execution.uuid },
+                                  {
+                                      'attributes.automationExecutionId':
+                                          execution.uuid,
+                                  },
+                              ]
+                            : []),
+                    ],
+                    timestamp: { $gte: new Date(since) },
+                },
+                {
+                    projection: {
+                        '_id': 0,
+                        'timestamp': 1,
+                        'level': 1,
+                        'component': 1,
+                        'message': 1,
+                        'error.name': 1,
+                        'error.message': 1,
+                    },
+                },
+            )
+            .sort({ timestamp: -1 })
+            .limit(80)
+            .toArray();
+        for (const log of logs) {
+            log.message = safeText(log.message);
+            if (log.error) log.error.message = safeText(log.error.message);
+        }
         console.log(
             'RISK_E2E_JSON=' +
-                JSON.stringify({ execution, stages, agents, models }),
+                JSON.stringify({ execution, stages, agents, models, logs }),
         );
     } finally {
         await sql.end();

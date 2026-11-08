@@ -77,6 +77,11 @@ on:
                 required: false
                 default: false
                 type: boolean
+            risk_pipeline_inspect:
+                description: 'Read existing QA execution evidence only: organizationId,repositoryId,prNumber,sinceISO'
+                required: false
+                default: ''
+                type: string
             provider_approval_smoke:
                 description: Test conditional approval on GitLab, Bitbucket and Azure QA repos
                 required: false
@@ -502,8 +507,21 @@ jobs:
                   GH_INTEGRATION_TOKEN: ${{ secrets.GH_INTEGRATION_TOKEN_PAID }}
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
                   GH_TEST_REPO_CLOUD: ${{ secrets.GH_TEST_REPO_CLOUD }}
+                  RISK_INSPECT: ${{ inputs.risk_pipeline_inspect }}
               run: |
                   set -euo pipefail
+                  if [ -n "${RISK_INSPECT:-}" ]; then
+                    scope=$(node -e 'const p=process.env.RISK_INSPECT.split(",");if(p.length!==4||!/^[a-f0-9-]{36}$/i.test(p[0])||!/^[a-z0-9_-]+$/i.test(p[1])||!/^[1-9][0-9]*$/.test(p[2])||!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(p[3])||!Number.isFinite(Date.parse(p[3])))process.exit(1);process.stdout.write(p.join(" "))')
+                    inspector_payload=$(base64 -w0 scripts/preview/inspect-risk-routing-e2e.cjs)
+                    $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                      "printf '%s' '$inspector_payload' | base64 -d > scripts/preview/inspect-risk-routing-e2e.cjs"
+                    mkdir -p tests/e2e/evidence
+                    $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                      "docker exec -e PREVIEW_RISK_ROUTING_QA=true kodus_api node scripts/preview/inspect-risk-routing-e2e.cjs $scope" \
+                      | tee tests/e2e/evidence/qa-execution-inspection.txt
+                    echo 'Read-only QA inspection complete; no pipeline cases were run.'
+                    exit 0
+                  fi
                   for entry in $URLS; do
                     case "$entry" in cloud=*) CLOUD_WEB_BASE_URL="${entry#cloud=}" ;; esac
                   done
