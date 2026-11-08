@@ -11,10 +11,38 @@ import {
     SelectValue,
 } from "@components/ui/select";
 import { useIssues } from "@services/issues/hooks";
+import type { IssueListItem } from "@services/issues/types";
 import { XIcon } from "lucide-react";
 import { type FilterValueItem, type Operator } from "src/core/utils/filtering";
 
 import { COLUMNS_META_OBJECT } from "../../_constants";
+
+const getFieldMeta = (field: string) =>
+    (COLUMNS_META_OBJECT[field]?.meta as
+        | {
+              filtersValueInputType?: "text" | "options";
+              /** Fixed options, instead of the values found in the issues. */
+              filtersValueOptions?: string[];
+              filtersValueLabels?: Record<string, string>;
+          }
+        | undefined) ?? { filtersValueInputType: "options" };
+
+const fieldValues = (issues: IssueListItem[], field: string) =>
+    getFieldMeta(field).filtersValueOptions ?? [
+        ...new Set(
+            issues.map((i) => {
+                const splittedByDots = field.split(".");
+
+                if (splittedByDots.length === 1)
+                    return i[field as keyof typeof i];
+
+                return splittedByDots.reduce<any>(
+                    (acc, current) => acc?.[current],
+                    i,
+                );
+            }),
+        ),
+    ];
 
 export const FilterItem = ({
     filter,
@@ -25,13 +53,6 @@ export const FilterItem = ({
 }) => {
     const { data: issues } = useIssues();
 
-    const getFieldMeta = (field: string) =>
-        (COLUMNS_META_OBJECT[field]?.meta as
-            | {
-                  filtersValueInputType?: "text" | "options";
-              }
-            | undefined) ?? { filtersValueInputType: "options" };
-
     const currentFieldMeta = getFieldMeta(filter.field);
     const filterValueInputType =
         currentFieldMeta.filtersValueInputType ?? "options";
@@ -41,21 +62,7 @@ export const FilterItem = ({
     ) as Operator[];
 
     const values = useMemo(
-        () => [
-            ...new Set(
-                issues.map((i) => {
-                    const splittedByDots = filter.field.split(".");
-
-                    if (splittedByDots.length === 1)
-                        return i[filter.field as keyof typeof i];
-
-                    return splittedByDots.reduce<any>(
-                        (acc, current) => acc?.[current],
-                        i,
-                    );
-                }),
-            ),
-        ],
+        () => fieldValues(issues, filter.field),
         [issues, filter],
     );
 
@@ -79,21 +86,7 @@ export const FilterItem = ({
                     const nextFieldInputType =
                         nextFieldMeta.filtersValueInputType ?? "options";
 
-                    const values = [
-                        ...new Set(
-                            issues.map((i) => {
-                                const splittedByDots = v.split(".");
-
-                                if (splittedByDots.length === 1)
-                                    return i[v as keyof typeof i];
-
-                                return splittedByDots.reduce<any>(
-                                    (acc, current) => acc?.[current],
-                                    i,
-                                );
-                            }),
-                        ),
-                    ];
+                    const values = fieldValues(issues, v);
 
                     if (operator === "is" || operator === "is-not") {
                         value = nextFieldInputType === "text" ? "" : values[0];
@@ -182,7 +175,9 @@ export const FilterItem = ({
                                                 key={s}
                                                 value={s}
                                                 className="min-h-auto gap-1.5 px-3 py-1.5 pr-4 text-xs [--icon-size:calc(var(--spacing)*4)]">
-                                                {s}
+                                                {currentFieldMeta
+                                                    .filtersValueLabels?.[s] ??
+                                                    s}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

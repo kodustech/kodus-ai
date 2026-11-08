@@ -31,6 +31,21 @@ const ADDITIONAL_FILTER_FIELDS: Record<
             filtersValueInputType: "text",
         },
     },
+    // `useIssues` fills in "code_review" where the API leaves source out.
+    "source": {
+        meta: {
+            name: "Source",
+            filters: {
+                "is": true,
+                "is-not": true,
+            },
+            filtersValueOptions: ["code_review", "security_scan"],
+            filtersValueLabels: {
+                code_review: "Code review",
+                security_scan: "Security scan",
+            },
+        },
+    },
 };
 
 Object.assign(COLUMNS_META_OBJECT, ADDITIONAL_FILTER_FIELDS);
