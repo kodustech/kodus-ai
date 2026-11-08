@@ -72,6 +72,11 @@ on:
                 required: false
                 default: false
                 type: boolean
+            risk_pipeline_smoke:
+                description: Test real GitHub PR webhooks, risk, routing, agents and approvals
+                required: false
+                default: false
+                type: boolean
             provider_approval_smoke:
                 description: Test conditional approval on GitLab, Bitbucket and Azure QA repos
                 required: false
@@ -324,7 +329,7 @@ jobs:
                   else
                     echo "::notice::PREVIEW_OPENAI_EMBEDDINGS_KEY is not set — the dedup guard runs without embeddings and vetoes low-overlap merges"
                   fi
-                  if [ "${{ inputs.provider_approval_smoke }}" = 'true' ]; then
+                  if [ "${{ inputs.provider_approval_smoke }}" = 'true' ] || [ "${{ inputs.risk_pipeline_smoke }}" = 'true' ]; then
                     : "${PREVIEW_FIREWORKS_QA_KEY:?BYOK_FIREWORKS_API_KEY is required for managed trial review QA}"
                     grep -v '^API_FIREWORKS_API_KEY=' .env > "$RUNNER_TEMP/env.no-fireworks"
                     {
@@ -483,6 +488,45 @@ jobs:
               with:
                   name: preview-risk-routing-ui
                   path: risk-routing-evidence/
+                  if-no-files-found: warn
+
+            - name: Risk pipeline end-to-end on GitHub
+              if: steps.env.outputs.configured == 'true' && inputs.risk_pipeline_smoke == true && steps.up.outcome == 'success'
+              env:
+                  URLS: ${{ steps.up.outputs.urls }}
+                  CLOUD_TENANT_PAID_PASSWORD: ${{ secrets.PREVIEW_SEED_PASSWORD }}
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
+                  GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
+                  GH_INTEGRATION_TOKEN: ${{ secrets.GH_INTEGRATION_TOKEN_PAID }}
+                  GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
+                  GH_TEST_REPO_CLOUD: ${{ secrets.GH_TEST_REPO_CLOUD }}
+              run: |
+                  set -euo pipefail
+                  for entry in $URLS; do
+                    case "$entry" in cloud=*) CLOUD_WEB_BASE_URL="${entry#cloud=}" ;; esac
+                  done
+                  : "${CLOUD_WEB_BASE_URL:?cloud preview is required}"
+                  : "${GH_TEST_TOKEN:?QA PR author credential is required}"
+                  : "${GH_INTEGRATION_TOKEN:?QA integration credential is required}"
+                  export CLOUD_WEB_BASE_URL
+                  export CLOUD_API_BASE_URL="${CLOUD_WEB_BASE_URL%/}/api/proxy/api"
+                  export CLOUD_TENANT_PAID_EMAIL="preview-risk-${{ github.run_id }}@kodus.io"
+                  $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                    "PREVIEW_SEED_EMAIL=$CLOUD_TENANT_PAID_EMAIL pnpm run seed:preview >/dev/null 2>&1"
+                  $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                    "PREVIEW_RISK_ROUTING_QA=true PREVIEW_SEED_EMAIL=$CLOUD_TENANT_PAID_EMAIL node scripts/preview/prepare-risk-routing-qa.cjs"
+                  npm ci --prefix tests/e2e
+                  (cd tests/e2e && npx playwright install --with-deps chromium)
+                  (cd tests/e2e && ./node_modules/.bin/tsx cli/run-scenario.ts risk-routing-pipeline --target cloud --provider github --license paid)
+
+            - name: Upload Risk pipeline evidence
+              if: always() && inputs.risk_pipeline_smoke == true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: preview-risk-pipeline-evidence
+                  path: tests/e2e/evidence/
                   if-no-files-found: warn
 
             - name: Smoke conditional approval on real providers

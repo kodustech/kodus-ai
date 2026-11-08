@@ -1,0 +1,112 @@
+// Read-only evidence from the same databases the Runo worker writes.
+require('dotenv/config');
+require('ts-node/register/transpile-only');
+require('tsconfig-paths/register');
+const { Client } = require('pg');
+const {
+    mongoMigrationClient,
+} = require('../../libs/core/infrastructure/database/mongo/mongo-migration-client');
+
+async function main() {
+    if (process.env.PREVIEW_RISK_ROUTING_QA !== 'true')
+        throw new Error('Preview QA opt-in required');
+    const [organizationId, repositoryId, number, since] = process.argv.slice(2);
+    if (
+        !/^[a-f0-9-]{36}$/i.test(organizationId ?? '') ||
+        !/^[a-z0-9_-]+$/i.test(repositoryId ?? '') ||
+        !/^[1-9][0-9]*$/.test(number ?? '') ||
+        !Number.isFinite(Date.parse(since))
+    )
+        throw new Error('Invalid evidence scope');
+    const sql = new Client({
+        host: process.env.API_PG_DB_HOST,
+        port: Number(process.env.API_PG_DB_PORT ?? 5432),
+        user: process.env.API_PG_DB_USERNAME,
+        password: process.env.API_PG_DB_PASSWORD,
+        database: process.env.API_PG_DB_DATABASE,
+    });
+    await sql.connect();
+    let mongo;
+    try {
+        const { rows } = await sql.query(
+            `
+            SELECT uuid, status, "createdAt", "dataExecution"->'riskAssessment' AS risk,
+                "dataExecution"->'heavy' AS heavy,
+                "dataExecution"->'approvalDecision' AS decision,
+                "dataExecution"->'customAgentRiskSkips' AS "agentSkips"
+            FROM automation_execution
+            WHERE "dataExecution"#>>'{organizationAndTeamData,organizationId}'=$1
+                AND "repositoryId"=$2 AND "pullRequestNumber"=$3 AND "createdAt">=$4
+            ORDER BY "createdAt" DESC LIMIT 1`,
+            [organizationId, repositoryId, Number(number), since],
+        );
+        const execution = rows[0] ?? null;
+        const stages = execution
+            ? (
+                  await sql.query(
+                      `
+            SELECT stage_name AS name,status FROM code_review_execution
+            WHERE automation_execution_id=$1 ORDER BY "createdAt"`,
+                      [execution.uuid],
+                  )
+              ).rows
+            : [];
+        mongo = await mongoMigrationClient();
+        const agents = await mongo.db
+            .collection('customAgentRuns')
+            .find(
+                {
+                    organizationId,
+                    repositoryId,
+                    prNumber: Number(number),
+                    at: { $gte: new Date(since) },
+                },
+                { projection: { _id: 0, agentId: 1, status: 1, reason: 1 } },
+            )
+            .toArray();
+        const models = await mongo.db
+            .collection('observability_telemetry')
+            .aggregate([
+                {
+                    $match: {
+                        'attributes.organizationId': organizationId,
+                        'attributes.prNumber': {
+                            $in: [Number(number), number],
+                        },
+                        'attributes.tu.total': { $gt: 0 },
+                    },
+                },
+                {
+                    $group: {
+                        _id: {
+                            task: '$attributes.tu.route',
+                            model: '$attributes.tu.model',
+                        },
+                        calls: { $sum: 1 },
+                        tokens: { $sum: '$attributes.tu.total' },
+                    },
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        task: '$_id.task',
+                        model: '$_id.model',
+                        calls: 1,
+                        tokens: 1,
+                    },
+                },
+            ])
+            .toArray();
+        console.log(
+            'RISK_E2E_JSON=' +
+                JSON.stringify({ execution, stages, agents, models }),
+        );
+    } finally {
+        await sql.end();
+        if (mongo) await mongo.close();
+    }
+}
+main().catch(() => {
+    console.error('Could not read scoped preview execution evidence');
+    process.exit(1);
+});
