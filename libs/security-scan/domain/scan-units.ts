@@ -148,8 +148,8 @@ export function mergeMapPlan(params: {
 
     const normalize = (p: string) => p.trim().replace(/^\.?\//, '');
 
-    for (const item of params.plan ?? []) {
-        const file = normalize(item?.file ?? '');
+    for (const item of params.plan) {
+        const file = normalize(item.file);
         if (!file || seen.has(file) || !params.existingFiles.has(file)) {
             continue;
         }

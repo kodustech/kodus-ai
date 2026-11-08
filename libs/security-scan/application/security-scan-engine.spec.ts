@@ -321,10 +321,11 @@ describe('SecurityScanEngine', () => {
 
     it('resumes a plan and skips the units already done', async () => {
         const runLens = fakeLens(() => []);
-        const collect = jest.fn();
+        const collect = jest.fn(async () => SURFACE);
+        const llm = fakeLlm();
         const engine = new SecurityScanEngine({
             runLens,
-            llm: fakeLlm(),
+            llm,
             collectSurface: collect,
         });
         const units = [
@@ -356,10 +357,15 @@ describe('SecurityScanEngine', () => {
             progress: [{ unitId: 'a', state: 'done', findings: 0 }],
         } as any);
 
-        expect(collect).not.toHaveBeenCalled();
+        // The plan is reused, not mapped again…
+        expect(
+            llm.mock.calls.some(([req]: any[]) => req.runName.endsWith('-map')),
+        ).toBe(false);
         expect(runLens).toHaveBeenCalledTimes(1);
+        // …but the lens still gets the pattern scan's leads for its files.
+        expect(collect).toHaveBeenCalledTimes(1);
         expect(runLens.mock.calls[0][0].userPrompt).toContain(
-            'src/orders/orders.controller.ts',
+            "src/orders/orders.controller.ts:5 [entry_point, nestjs] @Get(':id')",
         );
         expect(result.finished).toBe(true);
     });
@@ -628,7 +634,7 @@ describe('SecurityScanEngine', () => {
         const engine = new SecurityScanEngine({
             runLens: fakeLens(() => [IDOR]),
             llm: fakeLlm(),
-            collectSurface: jest.fn(),
+            collectSurface: jest.fn(async () => SURFACE),
         });
 
         const result = await engine.run({
@@ -667,6 +673,45 @@ describe('SecurityScanEngine', () => {
                 state: 'done',
                 findings: 0,
             }),
+        ]);
+    });
+
+    it("sends a unit's dedup only the earlier findings near its files", async () => {
+        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => ({
+            suggestions,
+            trace: {} as any,
+        }));
+        const far = {
+            vulnerabilityClass: 'injection',
+            title: 'Shell command from the query',
+            description: 'd',
+            severity: 'high',
+            filePath: 'src/admin/exec.ts',
+            startLine: 2,
+            endLine: 2,
+        };
+        const near = { ...far, vulnerabilityClass: 'authz', filePath: 'src/orders/orders.controller.ts', startLine: 40, endLine: 41 };
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((_file, cls) => (cls === 'authz' ? [IDOR] : [])),
+            llm: fakeLlm(),
+            collectSurface: jest.fn(async () => SURFACE),
+            dedup: dedup as any,
+        });
+
+        await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            units: [
+                { id: 'b', file: 'src/orders/orders.controller.ts', relatedFiles: [], language: 'typescript', classes: ['authz'], priority: 80, reasons: [] },
+            ],
+            reported: [far, near],
+        } as any);
+
+        const sent = (dedup.mock.calls[0] as unknown as [unknown, any[]])[1];
+        expect(sent.map((x) => x.relevantFile)).toEqual([
+            'src/orders/orders.controller.ts',
+            'src/orders/orders.controller.ts',
         ]);
     });
 

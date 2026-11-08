@@ -1,4 +1,11 @@
-import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    ConflictException,
+    ForbiddenException,
+    Inject,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -17,7 +24,10 @@ import {
     ILicenseService,
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
-import { isHeavyModePlanAllowed } from '@libs/ee/heavy-mode/heavy-mode-plan';
+import {
+    heavyModePlansRequired,
+    isHeavyModePlanAllowed,
+} from '@libs/ee/heavy-mode/heavy-mode-plan';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { PricingResolver } from '@libs/analytics/application/use-cases/usage/pricing-resolver';
@@ -37,8 +47,12 @@ import {
 } from '../infrastructure/security-scan.repository';
 
 /** Same plans as heavy mode until Product decides the security tier (#2451). */
-export const SECURITY_SCAN_PLAN_REQUIRED =
-    'Security scans are available on the Teams and Enterprise plans, and Kody could not confirm this organization is on one.';
+export const SECURITY_SCAN_PLAN_REQUIRED = heavyModePlansRequired(
+    'Security scans are',
+);
+
+const ALREADY_RUNNING =
+    'A security scan of this repository is already running.';
 
 interface ConfiguredRepository {
     id: string;
@@ -101,9 +115,8 @@ export class StartSecurityScanUseCase {
             organizationAndTeamData: orgTeam,
             permissionValidationService: this.permissionValidationService,
             pricingResolver: this.pricingResolver,
-            pricingOverrides: (
-                await this.spendLimitConfig.getConfig(orgTeam).catch(() => null)
-            )?.modelPricing,
+            pricingOverrides: (await this.spendLimitConfig.getConfig(orgTeam))
+                ?.modelPricing,
         });
         const budgetError = validateBudget(input.budget, !!rates);
         if (budgetError) {
@@ -116,45 +129,51 @@ export class StartSecurityScanUseCase {
             String(repository.id),
         );
         if (active) {
-            throw new ConflictException(
-                'A security scan of this repository is already running.',
-            );
+            throw new ConflictException(ALREADY_RUNNING);
         }
 
-        const platform = await this.codeManagementService.getTypeIntegration(
-            orgTeam,
-        );
+        const platform =
+            await this.codeManagementService.getTypeIntegration(orgTeam);
         const fullName =
             repository.full_name ||
             (repository.name.includes('/')
                 ? repository.name
                 : `${repository.organizationName ?? ''}/${repository.name}`);
 
-        const scan = await this.scans.create({
-            organizationId: orgTeam.organizationId,
-            teamId: orgTeam.teamId,
-            repository: {
-                id: String(repository.id),
-                name: repository.name,
-                fullName,
-                platform: String(platform),
-                defaultBranch: repository.default_branch || 'main',
-            },
-            status: SecurityScanStatus.QUEUED,
-            budget: {
-                ...(input.budget.maxUsd !== undefined && rates
-                    ? { maxUsd: input.budget.maxUsd }
-                    : {}),
-                ...(input.budget.maxTokens !== undefined
-                    ? { maxTokens: input.budget.maxTokens }
-                    : {}),
-            },
-            spend: { usd: 0, inputTokens: 0, outputTokens: 0, requests: 0 },
-            units: [],
-            progress: [],
-            modelName: model.modelName,
-            requestedBy: input.requestedBy,
-        });
+        const scan = await this.scans
+            .create({
+                organizationId: orgTeam.organizationId,
+                teamId: orgTeam.teamId,
+                repository: {
+                    id: String(repository.id),
+                    name: repository.name,
+                    fullName,
+                    platform: String(platform),
+                    defaultBranch: repository.default_branch || 'main',
+                },
+                status: SecurityScanStatus.QUEUED,
+                budget: {
+                    ...(input.budget.maxUsd !== undefined && rates
+                        ? { maxUsd: input.budget.maxUsd }
+                        : {}),
+                    ...(input.budget.maxTokens !== undefined
+                        ? { maxTokens: input.budget.maxTokens }
+                        : {}),
+                },
+                spend: { usd: 0, inputTokens: 0, outputTokens: 0, requests: 0 },
+                units: [],
+                progress: [],
+                modelName: model.modelName,
+                requestedBy: input.requestedBy,
+            })
+            .catch((error) => {
+                // Another request started one between the check above and
+                // this write; the one-active-scan index refused the second.
+                if (error?.code === 11000) {
+                    throw new ConflictException(ALREADY_RUNNING);
+                }
+                throw error;
+            });
 
         await this.jobQueue.enqueue({
             correlationId: scan.uuid,

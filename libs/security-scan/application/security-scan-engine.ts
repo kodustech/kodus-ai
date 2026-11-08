@@ -199,13 +199,21 @@ export class SecurityScanEngine {
         const existingFiles = new Set(listing);
         const languages = detectLanguages(listing);
 
+        // Collected on every run, a continuation too: the lenses read its
+        // hits as leads, and a resumed plan would audit without them.
+        const surface = await this.collect(
+            params.sandbox.remoteCommands.grep as GrepFn,
+            { languages },
+        );
+        const hitsByFile = new Map<string, SurfaceHit[]>();
+        for (const hit of surface.hits) {
+            const list = hitsByFile.get(hit.file);
+            if (list) list.push(hit);
+            else hitsByFile.set(hit.file, [hit]);
+        }
+
         let units = params.units;
-        let surface: SurfaceMap | undefined;
         if (!units?.length) {
-            surface = await this.collect(
-                params.sandbox.remoteCommands.grep as GrepFn,
-                { languages },
-            );
             units = await this.plan(
                 params,
                 surface,
@@ -239,13 +247,9 @@ export class SecurityScanEngine {
                 break;
             }
 
-            const unitHits = surface
-                ? surface.hits.filter(
-                      (h) =>
-                          h.file === unit.file ||
-                          unit.relatedFiles.includes(h.file),
-                  )
-                : [];
+            const unitHits = [unit.file, ...unit.relatedFiles].flatMap(
+                (file) => hitsByFile.get(file) ?? [],
+            );
 
             const reported = [...(params.reported ?? []), ...findings];
             const result = await this.auditUnit(
@@ -286,7 +290,7 @@ export class SecurityScanEngine {
             result.findings = await this.withoutDuplicates(
                 params,
                 result.findings,
-                reported,
+                nearby(reported, unit, result.findings),
             );
 
             const unitProgress: ScanUnitProgress = {
@@ -867,6 +871,29 @@ function onAttackPath(
             step.line >= finding.startLine - 2 &&
             step.line <= finding.endLine + 2,
     );
+}
+
+/** At most this many earlier findings go to one unit's dedup call. */
+const DEDUP_EARLIER_LIMIT = 40;
+
+/**
+ * The earlier findings a unit's findings could duplicate: those in a file the
+ * unit read or one of its findings' attack paths crosses, newest first. The
+ * dedup call's size stays bounded however long the scan runs.
+ */
+function nearby(
+    earlier: ScanReportedFinding[],
+    unit: ScanUnit,
+    fresh: ScanFinding[],
+): ScanReportedFinding[] {
+    const files = new Set([unit.file, ...unit.relatedFiles]);
+    for (const finding of fresh) {
+        files.add(finding.filePath);
+        for (const step of finding.attackPath) files.add(step.file);
+    }
+    return earlier
+        .filter((f) => files.has(f.filePath))
+        .slice(-DEDUP_EARLIER_LIMIT);
 }
 
 function sampleListing(listing: string[], limit: number): string[] {

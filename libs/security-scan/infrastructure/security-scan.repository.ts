@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
 import {
+    ScanReportedFinding,
     SecurityScanRecord,
     SecurityScanStatus,
 } from '../domain/security-scan.types';
@@ -21,9 +22,11 @@ export type NewSecurityScan = Omit<
 export interface ISecurityScanRepository {
     create(scan: NewSecurityScan): Promise<SecurityScanRecord>;
     findById(uuid: string): Promise<SecurityScanRecord | null>;
+    /** `appendReported` is pushed onto `reported` in the same write. */
     update(
         uuid: string,
         changes: Partial<NewSecurityScan>,
+        appendReported?: ScanReportedFinding[],
     ): Promise<SecurityScanRecord | null>;
     findRecent(
         organizationId: string,
@@ -45,6 +48,9 @@ export interface ISecurityScanRepository {
 
 const ACTIVE = [SecurityScanStatus.QUEUED, SecurityScanStatus.RUNNING];
 
+const activeKeyOf = (organizationId: string, repositoryId: string) =>
+    `${organizationId}:${repositoryId}`;
+
 export const STALE_SCAN_ERROR =
     'Interrupted: the worker running this scan stopped. Its findings so far are kept; run the scan again to cover the rest.';
 
@@ -55,8 +61,19 @@ export class SecurityScanRepository implements ISecurityScanRepository {
         private readonly model: Model<SecurityScanModel>,
     ) {}
 
+    /** Throws a duplicate-key error (11000) while the repository has an active scan. */
     async create(scan: NewSecurityScan): Promise<SecurityScanRecord> {
-        const doc = await this.model.create(scan);
+        const doc = await this.model.create({
+            ...scan,
+            ...(ACTIVE.includes(scan.status)
+                ? {
+                      activeKey: activeKeyOf(
+                          scan.organizationId,
+                          scan.repository.id,
+                      ),
+                  }
+                : {}),
+        });
         return toRecord(doc);
     }
 
@@ -68,9 +85,21 @@ export class SecurityScanRepository implements ISecurityScanRepository {
     async update(
         uuid: string,
         changes: Partial<NewSecurityScan>,
+        appendReported?: ScanReportedFinding[],
     ): Promise<SecurityScanRecord | null> {
+        const ended = changes.status && !ACTIVE.includes(changes.status);
         const doc = await this.model
-            .findByIdAndUpdate(uuid, { $set: changes }, { new: true })
+            .findByIdAndUpdate(
+                uuid,
+                {
+                    $set: changes,
+                    ...(ended ? { $unset: { activeKey: '' } } : {}),
+                    ...(appendReported?.length
+                        ? { $push: { reported: { $each: appendReported } } }
+                        : {}),
+                },
+                { new: true },
+            )
             .exec();
         return doc ? toRecord(doc) : null;
     }
@@ -83,7 +112,9 @@ export class SecurityScanRepository implements ISecurityScanRepository {
         const docs = await this.model
             .find({
                 organizationId,
-                ...(repositoryIds ? { 'repository.id': { $in: repositoryIds } } : {}),
+                ...(repositoryIds
+                    ? { 'repository.id': { $in: repositoryIds } }
+                    : {}),
             })
             // The plan and the per-unit progress can be large; the list does
             // not show them.
@@ -125,9 +156,10 @@ export class SecurityScanRepository implements ISecurityScanRepository {
                     error: STALE_SCAN_ERROR,
                     finishedAt: new Date().toISOString(),
                 },
+                $unset: { activeKey: '' },
             },
         );
-        return result?.modifiedCount ?? 0;
+        return result.modifiedCount;
     }
 }
 
@@ -154,7 +186,13 @@ function toRecord(doc: any): SecurityScanRecord {
         error: o.error,
         startedAt: o.startedAt,
         finishedAt: o.finishedAt,
-        createdAt: o.createdAt instanceof Date ? o.createdAt.toISOString() : o.createdAt,
-        updatedAt: o.updatedAt instanceof Date ? o.updatedAt.toISOString() : o.updatedAt,
+        createdAt:
+            o.createdAt instanceof Date
+                ? o.createdAt.toISOString()
+                : o.createdAt,
+        updatedAt:
+            o.updatedAt instanceof Date
+                ? o.updatedAt.toISOString()
+                : o.updatedAt,
     };
 }

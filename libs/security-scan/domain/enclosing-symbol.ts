@@ -87,11 +87,133 @@ function matchFunction(line: string): string | undefined {
     return undefined;
 }
 
+/**
+ * The source with comments and string literals blanked out, line by line, so
+ * a declaration written inside a block comment or a multi-line string is not
+ * read as code and a brace in a string never counts. Lengths and indentation
+ * are kept.
+ */
+export function codeLines(source: string): string[] {
+    const out: string[] = [];
+    let line = '';
+    // What the text being read is inside, if anything.
+    let inside: '/*' | '"""' | "'''" | '`' | '"' | "'" | null = null;
+
+    for (let i = 0; i < source.length; i++) {
+        const ch = source[i];
+        if (ch === '\n') {
+            // A plain quote never spans lines; an unterminated one ends here.
+            if (inside === '"' || inside === "'") inside = null;
+            out.push(line.replace(/\r$/, ''));
+            line = '';
+            continue;
+        }
+        if (inside) {
+            const closer = inside === '/*' ? '*/' : inside;
+            if (ch === '\\' && inside !== '/*') {
+                line += '  ';
+                i++;
+                continue;
+            }
+            if (source.startsWith(closer, i)) {
+                line += ' '.repeat(closer.length);
+                i += closer.length - 1;
+                inside = null;
+            } else {
+                line += ch === '\t' ? '\t' : ' ';
+            }
+            continue;
+        }
+        if (source.startsWith('/*', i)) {
+            inside = '/*';
+            line += '  ';
+            i++;
+            continue;
+        }
+        if (source.startsWith('//', i)) {
+            const end = source.indexOf('\n', i);
+            const rest = (end < 0 ? source.length : end) - i;
+            line += ' '.repeat(rest);
+            i += rest - 1;
+            continue;
+        }
+        if (ch === '#' && !line.trim() && source[i + 1] !== '[') {
+            // A line comment (Python, Ruby, shell); a C directive is no
+            // declaration either.
+            const end = source.indexOf('\n', i);
+            const rest = (end < 0 ? source.length : end) - i;
+            line += ' '.repeat(rest);
+            i += rest - 1;
+            continue;
+        }
+        const triple = source.startsWith('"""', i)
+            ? '"""'
+            : source.startsWith("'''", i)
+              ? "'''"
+              : null;
+        if (triple) {
+            inside = triple;
+            line += '   ';
+            i += 2;
+            continue;
+        }
+        if (
+            ch === '`' ||
+            ch === '"' ||
+            (ch === "'" && !/\w/.test(line.slice(-1)))
+        ) {
+            // A quote right after a word character is an apostrophe or a
+            // Rust lifetime, not a string.
+            inside = ch as '`' | '"' | "'";
+            line += ' ';
+            continue;
+        }
+        line += ch;
+    }
+    out.push(line.replace(/\r$/, ''));
+    return out;
+}
+
+/**
+ * Whether the declaration on `decl` still encloses `target`: its braces have
+ * not closed before it, or (an indentation language) no line in between sits
+ * at or left of the declaration.
+ */
+function encloses(code: string[], decl: number, target: number): boolean {
+    if (decl === target) {
+        return true;
+    }
+    const head = code[decl].trimEnd();
+    if (head.endsWith(':') && !head.includes('{')) {
+        // Python-style: the body is the lines indented under it.
+        const declIndent = indentOf(code[decl]);
+        for (let i = decl + 1; i <= target; i++) {
+            if (code[i].trim() && indentOf(code[i]) <= declIndent) {
+                return false;
+            }
+        }
+        return true;
+    }
+    let depth = 0;
+    let opened = false;
+    for (let i = decl; i < target; i++) {
+        for (const ch of code[i]) {
+            if (ch === '{') {
+                depth++;
+                opened = true;
+            } else if (ch === '}' && --depth <= 0 && opened) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 export function enclosingSymbol(
     source: string,
     line: number,
 ): string | undefined {
-    const lines = source.split(/\r?\n/);
+    const lines = codeLines(source);
     const start = Math.min(Math.max(line, 1), lines.length) - 1;
     if (start < 0) {
         return undefined;
@@ -103,11 +225,14 @@ export function enclosingSymbol(
 
     for (; i >= 0; i--) {
         const text = lines[i];
-        if (!text.trim() || indentOf(text) > indentOf(lines[start]) && i !== start) {
+        if (
+            !text.trim() ||
+            (indentOf(text) > indentOf(lines[start]) && i !== start)
+        ) {
             continue;
         }
         const name = matchFunction(text);
-        if (name) {
+        if (name && encloses(lines, i, start)) {
             fn = name;
             fnIndent = indentOf(text);
             break;

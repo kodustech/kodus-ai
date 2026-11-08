@@ -38,3 +38,50 @@ describe('SecurityScanRepository.failStale', () => {
         expect(update.$set.error).toMatch(/Interrupted/);
     });
 });
+
+describe('SecurityScanRepository: one active scan per repository', () => {
+    const exec = (value: unknown) => ({ exec: jest.fn(async () => value) });
+
+    it('keys a queued scan by its repository, so the unique index refuses a second', async () => {
+        const create = jest.fn(async (doc) => ({ _doc: { ...doc, _id: 'id-1' } }));
+        const repository = new SecurityScanRepository({ create } as any);
+
+        await repository.create({
+            organizationId: 'org-1',
+            repository: { id: 'repo-1' },
+            status: 'queued',
+        } as any);
+
+        expect((create.mock.calls[0] as unknown[])[0]).toEqual(
+            expect.objectContaining({ activeKey: 'org-1:repo-1' }),
+        );
+    });
+
+    it('frees the key when the scan ends and appends what it reported in the same write', async () => {
+        const findByIdAndUpdate = jest.fn(() => exec({ _doc: { _id: 'id-1' } }));
+        const repository = new SecurityScanRepository({ findByIdAndUpdate } as any);
+        const reported = [{ filePath: 'src/a.ts' }] as any;
+
+        await repository.update('id-1', { status: 'completed' } as any, reported);
+        await repository.update('id-1', { status: 'running' } as any);
+
+        const [, ended] = findByIdAndUpdate.mock.calls[0] as unknown as [string, any];
+        expect(ended).toEqual({
+            $set: { status: 'completed' },
+            $unset: { activeKey: '' },
+            $push: { reported: { $each: reported } },
+        });
+        const [, running] = findByIdAndUpdate.mock.calls[1] as unknown as [string, any];
+        expect(running).toEqual({ $set: { status: 'running' } });
+    });
+
+    it('frees the key of a scan it fails as stale', async () => {
+        const updateMany = jest.fn(async () => ({ modifiedCount: 1 }));
+        const repository = new SecurityScanRepository({ updateMany } as any);
+
+        await repository.failStale('org-1', 60_000);
+
+        const [, update] = updateMany.mock.calls[0] as unknown as [any, any];
+        expect(update.$unset).toEqual({ activeKey: '' });
+    });
+});

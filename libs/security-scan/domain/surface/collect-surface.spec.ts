@@ -39,7 +39,6 @@ describe('parseRgOutput', () => {
         expect(parseRgOutput('No matches found.')).toEqual([]);
         expect(parseRgOutput('Error: regex parse error')).toEqual([]);
         expect(parseRgOutput('')).toEqual([]);
-        expect(parseRgOutput(undefined as unknown as string)).toEqual([]);
     });
 
     it('skips lines that are not matches and strips CRLF', () => {

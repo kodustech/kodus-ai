@@ -1,4 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { isValidObjectId } from 'mongoose';
 
 import { SecurityScanRecord } from '../domain/security-scan.types';
 import {
@@ -29,7 +30,7 @@ export class GetSecurityScansUseCase {
         return this.scans.findRecent(
             organizationId,
             repositoryIds,
-            Math.min(Math.max(limit, 1), 100),
+            Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 100) : 20,
         );
     }
 
@@ -38,7 +39,10 @@ export class GetSecurityScansUseCase {
         scanId: string,
         repositoryIds: string[] | undefined,
     ): Promise<SecurityScanRecord> {
-        const scan = await this.scans.findById(scanId).catch(() => null);
+        // Not an id a scan could have: as unknown as one that does not exist.
+        const scan = isValidObjectId(scanId)
+            ? await this.scans.findById(scanId)
+            : null;
         if (
             !scan ||
             scan.organizationId !== organizationId ||
