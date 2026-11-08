@@ -77,6 +77,9 @@ glob_escape() { printf '%s' "$1" | sed -e 's/[][()*?{}]/[&]/g'; }
 SPECS=()
 add_spec() {
     [ -f "$1" ] || return 0
+    # An integration suite needs a real database this job does not start (it
+    # fails loudly in CI without one, test/integration/mongo-test-uri.ts).
+    [[ "$1" == *.integration.spec.ts ]] && return 0
     local escaped="<rootDir>/$(glob_escape "$1")"
     for existing in "${SPECS[@]-}"; do
         [ "$existing" = "$escaped" ] && return 0
