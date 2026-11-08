@@ -7,6 +7,23 @@ const {
     mongoMigrationClient,
 } = require('../../libs/core/infrastructure/database/mongo/mongo-migration-client');
 
+const secretValues = Object.entries(process.env)
+    .filter(
+        ([key, value]) =>
+            /key|token|secret|password/i.test(key) && value?.length >= 8,
+    )
+    .map(([, value]) => value);
+const safeText = (value) => {
+    if (typeof value !== 'string') return undefined;
+    let text = value;
+    for (const secret of secretValues)
+        text = text.split(secret).join('[redacted]');
+    return text
+        .replace(/\b(Bearer|Basic)\s+[^\s,;]+/gi, '$1 [redacted]')
+        .replace(/([?&](?:token|key|api_key|code)=)[^\s&]+/gi, '$1[redacted]')
+        .slice(0, 1500);
+};
+
 async function main() {
     if (process.env.PREVIEW_RISK_ROUTING_QA !== 'true')
         throw new Error('Preview QA opt-in required');
@@ -30,7 +47,7 @@ async function main() {
     try {
         const { rows } = await sql.query(
             `
-            SELECT uuid, status, "createdAt", "dataExecution"->'riskAssessment' AS risk,
+            SELECT uuid, status, "createdAt", "errorMessage", "dataExecution"->'riskAssessment' AS risk,
                 "dataExecution"->'heavy' AS heavy,
                 "dataExecution"->'approvalDecision' AS decision,
                 "dataExecution"->'customAgentRiskSkips' AS "agentSkips"
@@ -45,12 +62,21 @@ async function main() {
             ? (
                   await sql.query(
                       `
-            SELECT stage_name AS name,status FROM code_review_execution
+                SELECT stage_name AS name,status,message,
+                    metadata#>>'{agentTrace,error,name}' AS "errorName",
+                    metadata#>>'{agentTrace,error,message}' AS "errorMessage"
+                FROM code_review_execution
             WHERE automation_execution_id=$1 ORDER BY "createdAt"`,
                       [execution.uuid],
                   )
               ).rows
             : [];
+        if (execution)
+            execution.errorMessage = safeText(execution.errorMessage);
+        for (const stage of stages) {
+            stage.message = safeText(stage.message);
+            stage.errorMessage = safeText(stage.errorMessage);
+        }
         mongo = await mongoMigrationClient();
         const agents = await mongo.db
             .collection('customAgentRuns')
