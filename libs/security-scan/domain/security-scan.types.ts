@@ -143,4 +143,5 @@ export type ScanReportedFinding = Pick<
     | 'filePath'
     | 'startLine'
     | 'endLine'
->;
+> &
+    Partial<Pick<ScanFinding, 'attackPath'>>;

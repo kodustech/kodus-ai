@@ -200,7 +200,10 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 `Could not resolve how to clone ${scan.repository.fullName}`,
             );
         }
-        const branch = scan.repository.defaultBranch.replace(/^refs\/heads\//, '');
+        const branch = scan.repository.defaultBranch.replace(
+            /^refs\/heads\//,
+            '',
+        );
 
         const acquired = await this.leaseManager.acquire(
             // org:repo:<slot> — the lease manager's key shape; one key per
@@ -222,7 +225,9 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         onLease(() => sandbox.cleanup());
 
         const head = await sandbox
-            .run(`git -C ${sandbox.repoDir} rev-parse HEAD`, { timeoutMs: 10_000 })
+            .run(`git -C ${sandbox.repoDir} rev-parse HEAD`, {
+                timeoutMs: 10_000,
+            })
             .catch(() => undefined);
         const commitSha = head?.stdout?.trim() || scan.commitSha;
         if (commitSha && commitSha !== scan.commitSha) {
@@ -288,7 +293,9 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         owners,
                     );
                     if (outcome) {
-                        counts[outcome === 'still_open' ? 'stillOpen' : outcome]++;
+                        counts[
+                            outcome === 'still_open' ? 'stillOpen' : outcome
+                        ]++;
                     }
                 }
                 if (findings.length) {
@@ -317,8 +324,11 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     ...(current?.coverage && {
                         coverage: {
                             ...current.coverage,
-                            unitsDone: list.filter((p) => p.state === 'done').length,
-                            unitsFailed: list.filter((p) => p.state === 'failed').length,
+                            unitsDone: list.filter((p) => p.state === 'done')
+                                .length,
+                            unitsFailed: list.filter(
+                                (p) => p.state === 'failed',
+                            ).length,
                             unitsSkippedByBudget: list.filter(
                                 (p) => p.state === 'skipped_budget',
                             ).length,
@@ -336,7 +346,8 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             examinedFiles: [...examined],
             unitsTotal: result.units.length,
             unitsDone: result.progress.filter((p) => p.state === 'done').length,
-            unitsFailed: result.progress.filter((p) => p.state === 'failed').length,
+            unitsFailed: result.progress.filter((p) => p.state === 'failed')
+                .length,
             unitsSkippedByBudget: result.progress.filter(
                 (p) => p.state === 'skipped_budget',
             ).length,
@@ -517,5 +528,6 @@ function toReported(finding: ScanFinding): ScanReportedFinding {
         filePath: finding.filePath,
         startLine: finding.startLine,
         endLine: finding.endLine,
+        attackPath: finding.attackPath,
     };
 }

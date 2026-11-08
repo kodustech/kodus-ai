@@ -54,7 +54,10 @@ import type {
     SurfaceMap,
     VulnClass,
 } from '../domain/surface/surface.types';
-import { collectSurface, detectLanguages } from '../domain/surface/collect-surface';
+import {
+    collectSurface,
+    detectLanguages,
+} from '../domain/surface/collect-surface';
 
 const logger = createLogger('SecurityScanEngine');
 
@@ -167,7 +170,9 @@ export class SecurityScanEngine {
         this.now = deps.now ?? Date.now;
     }
 
-    async run(params: SecurityScanEngineParams): Promise<SecurityScanEngineResult> {
+    async run(
+        params: SecurityScanEngineParams,
+    ): Promise<SecurityScanEngineResult> {
         // Every model request below is metered; reaching the cap aborts the
         // lens that is running and no new one starts.
         const budgetAbort = new AbortController();
@@ -195,7 +200,13 @@ export class SecurityScanEngine {
                 params.sandbox.remoteCommands.grep as GrepFn,
                 { languages },
             );
-            units = await this.plan(params, surface, listing, existingFiles, languages);
+            units = await this.plan(
+                params,
+                surface,
+                listing,
+                existingFiles,
+                languages,
+            );
             await params.onPlanned?.(units, languages);
         }
 
@@ -360,7 +371,9 @@ export class SecurityScanEngine {
                 { organizationId: params.organizationId } as any,
             );
             const kept = new Set(suggestions.map((s) => s.id));
-            return fresh.filter((_, i) => kept.has(`scan-${earlier.length + i}`));
+            return fresh.filter((_, i) =>
+                kept.has(`scan-${earlier.length + i}`),
+            );
         } catch (error) {
             logger.warn({
                 message: 'Security scan dedup failed; keeping every finding',
@@ -426,7 +439,8 @@ export class SecurityScanEngine {
             // The map is a ranking aid; without it the scan still runs on the
             // pattern scan's own order.
             logger.warn({
-                message: 'Security scan planner failed; using the pattern ranking',
+                message:
+                    'Security scan planner failed; using the pattern ranking',
                 context: SecurityScanEngine.name,
                 error,
                 metadata: { repositoryId: params.repositoryId },
@@ -491,7 +505,10 @@ export class SecurityScanEngine {
                     message: `Security lens ${vulnClass} failed on ${unit.file}`,
                     context: SecurityScanEngine.name,
                     error,
-                    metadata: { repositoryId: params.repositoryId, unit: unit.id },
+                    metadata: {
+                        repositoryId: params.repositoryId,
+                        unit: unit.id,
+                    },
                 });
             }
         }
@@ -598,7 +615,10 @@ export class SecurityScanEngine {
             return null;
         }
         const startLine = Math.max(1, suggestion.relevantLinesStart ?? 1);
-        const endLine = Math.max(startLine, suggestion.relevantLinesEnd ?? startLine);
+        const endLine = Math.max(
+            startLine,
+            suggestion.relevantLinesEnd ?? startLine,
+        );
         const { snippet, whole } = await this.readAround(
             params.sandbox,
             filePath,
@@ -625,7 +645,8 @@ export class SecurityScanEngine {
             });
         } catch (error) {
             logger.warn({
-                message: 'Security finding could not be structured; keeping it plain',
+                message:
+                    'Security finding could not be structured; keeping it plain',
                 context: SecurityScanEngine.name,
                 error,
                 metadata: { repositoryId: params.repositoryId, filePath },
@@ -700,7 +721,10 @@ export class SecurityScanEngine {
             if (sandbox.type !== 'e2b') {
                 return;
             }
-            await sandbox.writeFile(`${sandbox.repoDir}/${path}`, repro.content);
+            await sandbox.writeFile(
+                `${sandbox.repoDir}/${path}`,
+                repro.content,
+            );
             await this.ensureDependencies(sandbox, finding.language);
             const result = await sandbox
                 .run(`cd ${sandbox.repoDir} && ${record.command}`, {
@@ -748,7 +772,9 @@ export class SecurityScanEngine {
             return;
         }
         await sandbox
-            .run(`cd ${sandbox.repoDir} && (${command})`, { timeoutMs: 300_000 })
+            .run(`cd ${sandbox.repoDir} && (${command})`, {
+                timeoutMs: 300_000,
+            })
             .catch(() => undefined);
     }
 
@@ -791,8 +817,7 @@ export class SecurityScanEngine {
 const INSTALL_COMMANDS: Record<string, string> = {
     typescript:
         '[ -f pnpm-lock.yaml ] && (corepack enable >/dev/null 2>&1; pnpm install --frozen-lockfile --ignore-scripts) || ([ -f yarn.lock ] && yarn install --frozen-lockfile --ignore-scripts) || npm ci --ignore-scripts || npm install --ignore-scripts',
-    python:
-        '([ -f requirements.txt ] && pip install -q -r requirements.txt); ([ -f pyproject.toml ] && pip install -q -e .); pip install -q pytest',
+    python: '([ -f requirements.txt ] && pip install -q -r requirements.txt); ([ -f pyproject.toml ] && pip install -q -e .); pip install -q pytest',
     go: 'go mod download',
     ruby: 'bundle install --quiet',
     php: 'composer install --no-interaction --quiet',
@@ -807,7 +832,9 @@ function normalizeCwe(value?: string): string | undefined {
  * Two lenses, two passes or two units reporting the same operation are one
  * finding, whatever class each gave it: the SSRF lens and the data-exposure
  * lens both flag a fetch whose response leaks, and the developer has one
- * line to fix.
+ * line to fix. So are the route, the handler and the query of one missing
+ * check, reported from three units: same class, and one sits on the other's
+ * attack path.
  */
 function isDuplicate(
     existing: ScanReportedFinding[],
@@ -815,9 +842,24 @@ function isDuplicate(
 ): boolean {
     return existing.some(
         (f) =>
-            f.filePath === candidate.filePath &&
-            candidate.startLine <= f.endLine &&
-            f.startLine <= candidate.endLine,
+            (f.filePath === candidate.filePath &&
+                candidate.startLine <= f.endLine &&
+                f.startLine <= candidate.endLine) ||
+            (f.vulnerabilityClass === candidate.vulnerabilityClass &&
+                (onAttackPath(f, candidate) || onAttackPath(candidate, f))),
+    );
+}
+
+/** Whether `finding`'s location is a step of `path`'s attack path. */
+function onAttackPath(
+    path: ScanReportedFinding,
+    finding: ScanReportedFinding,
+): boolean {
+    return (path.attackPath ?? []).some(
+        (step) =>
+            step.file === finding.filePath &&
+            step.line >= finding.startLine - 2 &&
+            step.line <= finding.endLine + 2,
     );
 }
 
@@ -826,7 +868,10 @@ function sampleListing(listing: string[], limit: number): string[] {
         return listing;
     }
     const step = listing.length / limit;
-    return Array.from({ length: limit }, (_, i) => listing[Math.floor(i * step)]);
+    return Array.from(
+        { length: limit },
+        (_, i) => listing[Math.floor(i * step)],
+    );
 }
 
 function anySignal(signals: Array<AbortSignal | undefined>): AbortSignal {
