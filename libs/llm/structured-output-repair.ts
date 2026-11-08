@@ -129,19 +129,23 @@ function sliceBalancedJson(s: string): string | null {
 }
 
 /**
- * Drop the reasoning a model wrote into the answer text. Some models (MiniMax-M3
- * in production) put <think>…</think> before the JSON, and the reasoning quotes
- * code, so the first balanced {…} would be a quote, not the answer.
- *
- * Only a block that opens BEFORE the JSON starts is reasoning: past that point a
- * <think> or </think> is text inside the answer (a finding about a prompt file
- * quotes both), and each block ends at its FIRST closing tag so an answer that
- * quotes the tag, or is followed by another block, survives. One left-to-right
- * pass, so the cost grows with the length of the text and not with its length
- * times the number of blocks.
+ * The text with the reasoning blocks written ahead of the answer removed, or
+ * null when the text opens a block that never closes (no answer at all).
  */
-function stripReasoning(text: string): string {
-    const s = text;
+export function stripReasoningBlocks(text: string): string | null {
+    const s = text.trim();
+    // Skip reasoning written into the answer. Some models (MiniMax-M3 in
+    // production) put <think>…</think> before the JSON, and the reasoning
+    // quotes code, so the first balanced {…} would be a quote, not the
+    // answer.
+    //
+    // Only a block that opens BEFORE the JSON starts is reasoning: past that
+    // point a <think> or </think> is text inside the answer (a finding about a
+    // prompt file quotes both), and each block ends at its FIRST closing tag so
+    // an answer that quotes the tag, or is followed by another block, survives.
+    // One left-to-right pass, so the cost grows with the length of the text and
+    // not with its length times the number of blocks.
+    // `<thinking>` is the same block under the other name models use.
     let kept = '';
     let pos = 0;
     // `<thinking>` is the same block under the other name models use.
@@ -158,8 +162,8 @@ function stripReasoning(text: string): string {
         if (close < 0) {
             // A block that never closes and is the first thing in the response
             // carries no answer at all. Anywhere else, including right after a
-            // block that did close, the scan below may still find one.
-            if (pos === 0 && !gap.trim()) return '';
+            // block that did close, the caller may still find one.
+            if (pos === 0 && !gap.trim()) return null;
             break;
         }
         kept += gap;
@@ -181,9 +185,9 @@ export function extractJsonFromText(text: string): string | null {
     if (typeof text !== 'string' || text.trim() === '') {
         return null;
     }
-    let s = text.trim();
-
-    s = stripReasoning(s);
+    const stripped = stripReasoningBlocks(text);
+    if (stripped === null) return null;
+    let s = stripped;
 
     // 1. Unwrap a markdown code fence.
     const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -211,18 +215,58 @@ export function extractJsonFromText(text: string): string | null {
  * parse fails. This walks to the end instead, so the answer wins over anything
  * quoted on the way there. Key matching is convention-insensitive
  * (`shouldKeep` ≡ `should_keep`) — the same rule {@link normalizeEnvelope} uses.
+ * A match `accept` rejects (the prompt's own example, restated after the
+ * answer) is skipped, so the answer before it still wins.
  */
 export function extractLastJsonObjectWith(
     text: string,
     keys: readonly string[],
+    accept: (obj: Record<string, unknown>) => boolean = () => true,
 ): Record<string, unknown> | null {
     if (typeof text !== 'string' || text.trim() === '' || keys.length === 0) {
         return null;
     }
+    return scanLastJson(text, keys, accept, false) as Record<
+        string,
+        unknown
+    > | null;
+}
+
+/**
+ * The answer at the end of a reply that may carry reasoning ahead of it: the
+ * reasoning blocks are removed first ({@link stripReasoningBlocks}; a block
+ * that never closes means no answer, null), then the LAST balanced value that
+ * is either an object carrying one of `keys` or a bare array (empty, or of
+ * objects) is returned. For a reply whose answer is a list: a draft the
+ * reasoning quoted never wins over the final `[]`.
+ */
+export function extractLastJsonAnswer(
+    text: string,
+    keys: readonly string[],
+): Record<string, unknown> | unknown[] | null {
+    if (typeof text !== 'string' || text.trim() === '' || keys.length === 0) {
+        return null;
+    }
+    const stripped = stripReasoningBlocks(text);
+    if (stripped === null) return null;
+    return scanLastJson(stripped, keys, () => true, true);
+}
+
+function scanLastJson(
+    text: string,
+    keys: readonly string[],
+    accept: (obj: Record<string, unknown>) => boolean,
+    arrays: boolean,
+): Record<string, unknown> | unknown[] | null {
     const wanted = new Set(keys.map(normalizeKeyName));
-    let found: Record<string, unknown> | null = null;
+    let found: Record<string, unknown> | unknown[] | null = null;
+    // End of the last JSON object passed over without a wanted key: an array
+    // inside it (a provider envelope's `choices`) is that object's data, not
+    // the answer, while an object carrying a key inside it still is.
+    let insideUntil = -1;
     for (let i = 0; i < text.length; i++) {
-        if (text[i] !== '{') continue;
+        const ch = text[i];
+        if (ch !== '{' && !(arrays && ch === '[')) continue;
         const slice = sliceBalancedJson(text.slice(i));
         // Unbalanced from HERE says nothing about a later `{` — keep scanning.
         if (!slice) continue;
@@ -232,14 +276,29 @@ export function extractLastJsonObjectWith(
         } catch {
             continue; // prose/code, not JSON — keep scanning (incl. nested).
         }
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        if (Array.isArray(parsed)) {
+            // A list answer: top level, and empty or every entry an object.
+            if (
+                i < insideUntil ||
+                !parsed.every(
+                    (e) => !!e && typeof e === 'object' && !Array.isArray(e),
+                )
+            ) {
+                continue;
+            }
+            found = parsed;
+            i += slice.length - 1;
+            continue;
+        }
+        if (!parsed || typeof parsed !== 'object') {
             continue;
         }
         const obj = parsed as Record<string, unknown>;
         if (!Object.keys(obj).some((k) => wanted.has(normalizeKeyName(k)))) {
+            insideUntil = Math.max(insideUntil, i + slice.length);
             continue; // maybe a wrapper — let the scan reach the inner object.
         }
-        found = obj;
+        if (accept(obj)) found = obj;
         i += slice.length - 1; // don't re-match objects nested inside the hit.
     }
     return found;
@@ -497,7 +556,8 @@ function jsonCandidates(rawText: string): string[] {
         }
     };
     add(extractJsonFromText(rawText));
-    const answerText = stripReasoning(rawText);
+    const answerText = stripReasoningBlocks(rawText);
+    if (answerText === null) return candidates;
     const fenced = [...answerText.matchAll(/```[^\n`]*\n?([\s\S]*?)```/g)];
     for (const block of [...fenced].reverse()) {
         // Every balanced value after the fence, in order: bracketed prose such as

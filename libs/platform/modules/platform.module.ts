@@ -23,6 +23,7 @@ import { AzureReposPullRequestHandler } from '../infrastructure/webhooks/azure/a
 import { BitbucketPullRequestHandler } from '../infrastructure/webhooks/bitbucket/bitbucketPullRequest.handler';
 import { ForgejoPullRequestHandler } from '../infrastructure/webhooks/forgejo/forgejoPullRequest.handler';
 import { GitHubPullRequestHandler } from '../infrastructure/webhooks/github/githubPullRequest.handler';
+import { GithubChecksService } from '../infrastructure/adapters/services/github/github-checks.service';
 import { GitLabMergeRequestHandler } from '../infrastructure/webhooks/gitlab/gitlabPullRequest.handler';
 
 import { BusinessLogicPublisher } from '../application/services/business-logic-publisher.service';
@@ -80,6 +81,7 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         GetOrganizationLanguageUseCase,
         OrganizationMemberListService,
         WebhookContextService,
+        GithubChecksService,
         BusinessLogicPublisher,
         BusinessLogicReplies,
         BusinessLogicRecheckService,

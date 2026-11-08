@@ -490,6 +490,124 @@ describe('GetModelsByProviderUseCase — a key only goes to its own host', () =>
     });
 });
 
+describe('GetModelsByProviderUseCase — native OpenAI behind a custom base URL (#2150)', () => {
+    const ENV_KEY = 'API_OPEN_AI_API_KEY';
+    const PROXY = 'https://llm-proxy.example.com/v1';
+    let savedEnv: string | undefined;
+    const { assertSafeOpenAICompatibleUrl } = jest.requireMock(
+        './test-byok-connection.use-case',
+    );
+
+    beforeEach(() => {
+        mockedAxios.get.mockReset();
+        mockedAxios.get.mockResolvedValue({
+            data: { object: 'list', data: [{ id: 'gpt-5.4' }] },
+        } as any);
+        assertSafeOpenAICompatibleUrl.mockClear();
+        savedEnv = process.env[ENV_KEY];
+        process.env[ENV_KEY] = 'sk-kodus-env';
+    });
+
+    afterEach(() => {
+        if (savedEnv === undefined) delete process.env[ENV_KEY];
+        else process.env[ENV_KEY] = savedEnv;
+    });
+
+    const savedProxy = {
+        version: 2,
+        credentials: [
+            {
+                id: 'c-proxy',
+                provider: 'openai',
+                apiKey: 'enc-proxy',
+                settings: { baseURL: PROXY },
+            },
+        ],
+        models: [{ id: 'm1', credentialId: 'c-proxy', model: 'gpt-5.4' }],
+    };
+
+    const calls = () =>
+        mockedAxios.get.mock.calls.map(([url, cfg]) => ({
+            url,
+            auth: (cfg as any)?.headers?.Authorization,
+            maxRedirects: (cfg as any)?.maxRedirects,
+        }));
+
+    it('lists a typed key against the typed proxy, SSRF-checked, without redirects', async () => {
+        const useCase = buildUseCase(null);
+
+        await useCase.execute(
+            'openai',
+            { organizationId: 'org-1' },
+            {
+                apiKey: 'proxy-key',
+                baseURL: PROXY,
+            },
+        );
+
+        expect(calls()).toEqual([
+            {
+                url: `${PROXY}/models`,
+                auth: 'Bearer proxy-key',
+                maxRedirects: 0,
+            },
+        ]);
+        expect(assertSafeOpenAICompatibleUrl).toHaveBeenCalledWith(PROXY);
+    });
+
+    it('lists a saved proxy credential against its own endpoint, never api.openai.com', async () => {
+        const useCase = buildUseCase(savedProxy);
+
+        await useCase.execute(
+            'openai',
+            { organizationId: 'org-1' },
+            undefined,
+            'c-proxy',
+        );
+
+        expect(calls()).toEqual([
+            {
+                url: `${PROXY}/models`,
+                auth: 'Bearer decrypted:enc-proxy',
+                maxRedirects: 0,
+            },
+        ]);
+    });
+
+    it('never sends the saved proxy key to a different host from the request', async () => {
+        const useCase = buildUseCase(savedProxy);
+
+        await useCase
+            .execute(
+                'openai',
+                { organizationId: 'org-1' },
+                { baseURL: 'https://other.example.com/v1' },
+                'c-proxy',
+            )
+            .catch(() => undefined);
+
+        expect(calls().map((c) => c.auth)).not.toContain(
+            'Bearer decrypted:enc-proxy',
+        );
+        expect(calls().map((c) => c.auth)).not.toContain('Bearer sk-kodus-env');
+    });
+
+    it('without a base URL still lists api.openai.com, unchecked, with the env key', async () => {
+        const useCase = buildUseCase(null);
+
+        await useCase.execute('openai', { organizationId: 'org-1' });
+
+        expect(calls()).toEqual([
+            {
+                url: 'https://api.openai.com/v1/models',
+                auth: 'Bearer sk-kodus-env',
+                maxRedirects: undefined,
+            },
+        ]);
+        expect(assertSafeOpenAICompatibleUrl).not.toHaveBeenCalled();
+    });
+});
+
 describe('GetModelsByProviderUseCase — a saved credential named by id', () => {
     beforeEach(() => {
         mockedAxios.get.mockReset();
@@ -532,7 +650,7 @@ describe('GetModelsByProviderUseCase — a saved credential named by id', () => 
         expect(cfg?.headers?.Authorization).toBe('Bearer decrypted:enc-b');
     });
 
-    it("never sends the named key to a host the request supplies", async () => {
+    it('never sends the named key to a host the request supplies', async () => {
         const useCase = buildUseCase(twoGateways);
 
         await useCase

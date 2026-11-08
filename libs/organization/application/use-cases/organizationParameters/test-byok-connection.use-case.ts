@@ -1,6 +1,7 @@
 import {
     describeBaseUrlProblem,
     describeProtocolMismatch,
+    suggestApiVersion,
 } from '@libs/llm/base-url-hygiene';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
@@ -115,6 +116,17 @@ function isPrivateOrReservedIp(ip: string): boolean {
     if (/^f[cd][0-9a-f]{2}:/i.test(lower)) return true; // fc00::/7 ULA
     if (/^fe[89ab][0-9a-f]:/i.test(lower)) return true; // fe80::/10 link-local
     return false;
+}
+
+/** A 404 whose message says the requested MODEL is missing (OpenAI's
+ *  `model_not_found`, "The model `x` does not exist"), as opposed to a route
+ *  that does not exist, which is what a missing `/v1` produces. */
+function namesMissingModel(providerMessage: string | undefined): boolean {
+    const said = providerMessage ?? '';
+    return (
+        /model_not_found|no such model|unknown model/i.test(said) ||
+        /\bmodel\b(?:[^.]|\.\w){0,80}\b(does not exist|not found)/i.test(said)
+    );
 }
 
 /**
@@ -508,7 +520,25 @@ export class TestByokConnectionUseCase {
             await assertSafeOpenAICompatibleUrl(effectiveBaseURL);
         }
 
-        return await this.probeViaRuntime(input, effectiveBaseURL);
+        const result = await this.probeViaRuntime(input, effectiveBaseURL);
+        // Both OpenAI-protocol transports dial `<base URL>/responses` or
+        // `/chat/completions` verbatim, so a URL typed without its version 404s
+        // on every call (#2150). Not when the provider says the model is missing:
+        // then the URL was reached, and blaming it would hide the reason.
+        const versioned =
+            result.code === 'not_found' &&
+            (byokProvider === BYOKProvider.OPENAI ||
+                byokProvider === BYOKProvider.OPENAI_COMPATIBLE) &&
+            effectiveBaseURL &&
+            !namesMissingModel(result.providerMessage)
+                ? suggestApiVersion(effectiveBaseURL)
+                : undefined;
+        return versioned
+            ? {
+                  ...result,
+                  message: `${result.message ?? ''} The base URL has no API version, and OpenAI-protocol gateways usually serve under /v1: try ${versioned}.`.trim(),
+              }
+            : result;
     }
 
     /**

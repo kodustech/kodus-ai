@@ -242,6 +242,7 @@ export class OrganizationParametersController {
                 description: provider.description,
                 requiresApiKey: provider.requiresApiKey,
                 requiresBaseUrl: provider.requiresBaseUrl,
+                acceptsBaseUrl: provider.acceptsBaseUrl,
                 autoListModels: provider.autoListModels,
                 listsModelsLive: provider.listsModelsLive,
                 doc: provider.doc,

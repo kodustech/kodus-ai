@@ -7,8 +7,9 @@
  * (USD per 1M tokens). The org is billed for
  * exactly these numbers from its Kodus credits, so the catalog is the billing
  * price list, not a hint: a price change is a code change (reviewed, versioned),
- * never a runtime catalog fetch. `models.dev` is the source the numbers were
- * copied from; the `asOf` date says when.
+ * never a runtime catalog fetch. The Fireworks pricing page
+ * (fireworks.ai/pricing) is the source the numbers were copied from; the
+ * `asOf` date says when.
  *
  * Model ids are `<upstream>/<model>`: the prefix picks the upstream account
  * (`fireworks`), the remainder is the upstream's own model id, passed through
@@ -20,8 +21,8 @@ import { canonicalKodusModelId, type KodusUpstream } from './model-id';
 
 export { KODUS_UPSTREAMS, type KodusUpstream } from './model-id';
 
-/** Date the list prices below were copied from models.dev. */
-export const KODUS_CATALOG_PRICES_AS_OF = '2026-09-09';
+/** Date the list prices below were copied from the Fireworks pricing page. */
+export const KODUS_CATALOG_PRICES_AS_OF = '2026-11-03';
 
 type KodusCatalogEntry = {
     id: `${KodusUpstream}/${string}`;
@@ -39,40 +40,19 @@ const ENTRIES: KodusCatalogEntry[] = [
             'Fast, cheap, 1M context. The model Kodus runs trials on — our default pick.',
         recommended: true,
         pricing: {
-            inputPerMillion: 0.22,
-            outputPerMillion: 0.66,
-            cacheReadPerMillion: 0.007,
+            inputPerMillion: 0.3,
+            outputPerMillion: 1.2,
+            cacheReadPerMillion: 0.006,
         },
     },
     {
-        id: 'fireworks/accounts/fireworks/models/deepseek-v4-pro-0813',
-        name: 'DeepSeek V4 Pro',
-        description: 'Deeper reasoning for large or tricky PRs, still 1M context.',
-        recommended: true,
-        pricing: {
-            inputPerMillion: 1.32,
-            outputPerMillion: 3.96,
-            cacheReadPerMillion: 0.044,
-        },
-    },
-    {
-        id: 'fireworks/accounts/fireworks/models/kimi-k2p7-code',
-        name: 'Kimi K2.7 Code',
-        description: 'Code-tuned, always thinks. Strong on refactors; 262K context.',
-        pricing: {
-            inputPerMillion: 0.95,
-            outputPerMillion: 4,
-            cacheReadPerMillion: 0.19,
-        },
-    },
-    {
-        id: 'fireworks/accounts/fireworks/models/glm-5p2',
-        name: 'GLM 5.2',
-        description: 'Solid all-rounder with 1M context.',
+        id: 'fireworks/accounts/fireworks/models/glm-5p3',
+        name: 'GLM 5.3',
+        description: 'Solid all-rounder for larger PRs, 1M context.',
         pricing: {
             inputPerMillion: 1.4,
             outputPerMillion: 4.4,
-            cacheReadPerMillion: 0.14,
+            cacheReadPerMillion: 0.26,
         },
     },
     {

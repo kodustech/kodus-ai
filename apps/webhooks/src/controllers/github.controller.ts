@@ -5,6 +5,7 @@ import { Request, Response } from 'express';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import { EnqueueWebhookUseCase } from '@libs/platform/application/use-cases/webhook/enqueue-webhook.use-case';
+import { isMergeQueuePush } from '@libs/platform/infrastructure/webhooks/github/merge-queue-ref';
 
 @Public()
 @Controller('github')
@@ -27,7 +28,12 @@ export class GithubController {
             'pull_request_review_comment',
             'push',
         ];
-        if (!supportedEvents.includes(event)) {
+        // Pushes matter only for merge queue branches; every other push
+        // would be enqueued just to be dropped by the worker.
+        if (
+            !supportedEvents.includes(event) ||
+            (event === 'push' && !isMergeQueuePush(event, payload))
+        ) {
             return res
                 .status(HttpStatus.OK)
                 .send('Webhook ignored (event not supported)');

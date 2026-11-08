@@ -4,9 +4,10 @@
 // per PR as the review makes it, scored against the level each suggestion's
 // text gets under the defined levels (README.md).
 //
-//   node evals/severity-levels/run.js [--model=<id>] [--set=controlled|full] [--cases=<id,id>] [--limit=N] [--concurrency=N] [--gate] [--output=<file>]
+//   node evals/severity-levels/run.js [--model=<id>] [--set=controlled|full|think-tag-leak] [--cases=<id,id>] [--limit=N] [--concurrency=N] [--gate] [--output=<file>]
 //
-// --set   controlled and full are the same 205 suggestions: one set, cheap enough to run whole
+// --set   controlled and full are the same 205 suggestions: one set, cheap enough to run whole;
+//         think-tag-leak is three suggestions quoting </think>, run by hand (README)
 //
 // Exit: 0 pass, 1 below a floor (--gate), 2 did not measure (evals/README.md).
 const fs = require('fs');
@@ -86,8 +87,8 @@ async function main() {
     const args = parseArgs(process.argv.slice(2));
     const MODEL = args.model || 'deepseek-v4-flash@fireworks';
     const SET = args.set || 'controlled';
-    if (!['controlled', 'full'].includes(SET)) {
-        console.error(`unknown --set=${SET}: controlled or full`);
+    if (!['controlled', 'full', 'think-tag-leak'].includes(SET)) {
+        console.error(`unknown --set=${SET}: controlled, full or think-tag-leak`);
         return 2;
     }
     const TARGET = (require('./targets.json').sets[SET]?.models || {})[MODEL] || {};
@@ -100,7 +101,7 @@ async function main() {
     const permissionService = internals.evalPermissionService(route.storedConfig);
 
     const only = args.cases ? new Set(String(args.cases).split(',')) : null;
-    const cases = casesOf()
+    const cases = casesOf(SET)
         .filter((c) => !only || only.has(c.id))
         .slice(0, args.limit ? Number(args.limit) : undefined);
 
