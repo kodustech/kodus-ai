@@ -513,6 +513,7 @@ jobs:
                   export CLOUD_WEB_BASE_URL="${CLOUD_WEB_BASE_URL%/}"
                   export CLOUD_API_BASE_URL="${CLOUD_WEB_BASE_URL%/}/api/proxy/api"
                   export CLOUD_TENANT_PAID_EMAIL="preview-risk-${{ github.run_id }}@kodus.io"
+                  export CLOUD_RISK_POLICY_TENANT_EMAIL="preview-risk-policies-${{ github.run_id }}@kodus.io"
                   auth_ready() {
                     node -e 'fetch(process.env.CLOUD_WEB_BASE_URL+"/api/auth/csrf",{signal:AbortSignal.timeout(10000)}).then(async r=>process.exit(r.ok && typeof (await r.json()).csrfToken === "string" ? 0 : 1)).catch(()=>process.exit(1))'
                   }
@@ -528,10 +529,12 @@ jobs:
                     fi
                     sleep 5
                   done
-                  $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
-                    "PREVIEW_SEED_EMAIL=$CLOUD_TENANT_PAID_EMAIL pnpm run seed:preview >/dev/null 2>&1"
-                  $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
-                    "PREVIEW_RISK_ROUTING_QA=true PREVIEW_SEED_EMAIL=$CLOUD_TENANT_PAID_EMAIL node scripts/preview/prepare-risk-routing-qa.cjs"
+                  for seed_email in "$CLOUD_TENANT_PAID_EMAIL" "$CLOUD_RISK_POLICY_TENANT_EMAIL"; do
+                    $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                      "PREVIEW_SEED_EMAIL=$seed_email pnpm run seed:preview >/dev/null 2>&1"
+                    $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                      "PREVIEW_RISK_ROUTING_QA=true PREVIEW_SEED_EMAIL=$seed_email node scripts/preview/prepare-risk-routing-qa.cjs"
+                  done
                   npm ci --prefix tests/e2e
                   (cd tests/e2e && npx playwright install --with-deps chromium)
                   (cd tests/e2e && ./node_modules/.bin/tsx cli/run-scenario.ts risk-routing-pipeline --target cloud --provider github --license paid)

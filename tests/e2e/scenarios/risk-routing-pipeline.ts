@@ -262,36 +262,46 @@ export const riskRoutingPipeline: Scenario = {
     timeoutSec: 4500,
     async run(ctx: RunContext) {
         ctx.assert(ctx.tenant, 'An isolated Runo QA tenant is required');
-        const session = await ctx.kodus.login(ctx.tenant!);
-        await ctx.kodus.registerIntegration(session);
-        const repo = await ctx.kodus.registerRepo(session);
-        await ctx.kodus.finishOnboarding(session, repo);
-        const seat = await http<any>(
-            `${ctx.target.webBaseUrl}/api/proxy/billing/assign-license`,
-            {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${session.accessToken}` },
-                body: {
-                    organizationId: session.organizationId,
-                    teamId: session.teamId,
-                    users: [
-                        {
-                            gitId: await ctx.provider.currentUserId(),
-                            gitTool: ctx.provider.licenseGitTool(),
-                            licenseStatus: 'active',
-                        },
-                    ],
-                    userName: 'Risk routing QA',
-                },
-            },
-        );
         ctx.assert(
-            seat.status >= 200 &&
-                seat.status < 300 &&
-                !seat.body?.failed?.length &&
-                !seat.body?.error?.length,
-            'QA author seat was not assigned',
+            process.env.CLOUD_RISK_POLICY_TENANT_EMAIL?.startsWith(
+                'preview-risk-policies-',
+            ),
+            'A separate isolated policy tenant is required to respect trial review limits',
         );
+        const prepareTenant = async (session: KodusSession) => {
+            await ctx.kodus.registerIntegration(session);
+            const repo = await ctx.kodus.registerRepo(session);
+            await ctx.kodus.finishOnboarding(session, repo);
+            const seat = await http<any>(
+                `${ctx.target.webBaseUrl}/api/proxy/billing/assign-license`,
+                {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${session.accessToken}` },
+                    body: {
+                        organizationId: session.organizationId,
+                        teamId: session.teamId,
+                        users: [
+                            {
+                                gitId: await ctx.provider.currentUserId(),
+                                gitTool: ctx.provider.licenseGitTool(),
+                                licenseStatus: 'active',
+                            },
+                        ],
+                        userName: 'Risk routing QA',
+                    },
+                },
+            );
+            ctx.assert(
+                seat.status >= 200 &&
+                    seat.status < 300 &&
+                    !seat.body?.failed?.length &&
+                    !seat.body?.error?.length,
+                'QA author seat was not assigned',
+            );
+            return repo;
+        };
+        let session = await ctx.kodus.login(ctx.tenant!);
+        const repo = await prepareTenant(session);
         const results: Array<Record<string, unknown>> = [];
         const record = (name: string, pr: OpenedPR, data: Evidence) => {
             results.push({ name, pr: pr.url, ...data });
@@ -591,6 +601,24 @@ export const riskRoutingPipeline: Scenario = {
             );
             await ctx.provider.closePR(active);
             active = undefined;
+
+            // The core group consumes the normal six managed trial reviews.
+            // Continue with a separately seeded QA tenant, preserving the gate.
+            await configure({
+                pullRequestApprovalActive: false,
+                automatedReviewActive: false,
+                riskAssessmentActive: false,
+                customAgents: [],
+            });
+            session = await ctx.kodus.login({
+                email: process.env.CLOUD_RISK_POLICY_TENANT_EMAIL!,
+                password: ctx.tenant!.password,
+            });
+            const policyRepo = await prepareTenant(session);
+            ctx.assert(
+                policyRepo.id === repo.id,
+                'Policy tenant selected a different QA repository',
+            );
 
             const integrationHeaders = {
                 Authorization: `Bearer ${ctx.provider.authToken()}`,
