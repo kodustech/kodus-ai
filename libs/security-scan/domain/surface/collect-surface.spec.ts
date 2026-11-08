@@ -71,7 +71,6 @@ describe('isSkippedPath', () => {
         'src/test/java/com/acme/UserServiceTest.java',
         'fixtures/a.rb',
         'deps/plug/lib/plug.ex',
-        'target/debug/build.rs',
     ])('skips %s', (p) => expect(isSkippedPath(p)).toBe(true));
 
     it.each([
@@ -81,6 +80,8 @@ describe('isSkippedPath', () => {
         'lib/builder.ex',
         'cmd/server/main.go',
         'src/latest/x.py',
+        // A tracked app under target/ (RealVuln's realvuln-python-app).
+        'target/project/controllers/search.py',
     ])('keeps %s', (p) => expect(isSkippedPath(p)).toBe(false));
 });
 

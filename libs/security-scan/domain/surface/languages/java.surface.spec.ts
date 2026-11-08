@@ -5,6 +5,28 @@ describeSurfaceCases(
     JAVA_SURFACE,
     'src/main/java/com/acme/UserController.java',
     [
+        // misconfiguration
+        {
+            role: 'sink',
+            vulnClass: 'misconfiguration',
+            match: true,
+            patternId: 'java.config.csrf-off',
+            code: 'http.csrf().disable();',
+        },
+        {
+            role: 'sink',
+            vulnClass: 'misconfiguration',
+            match: true,
+            patternId: 'java.config.csrf-off',
+            code: 'http.csrf(AbstractHttpConfigurer::disable);',
+        },
+        {
+            role: 'sink',
+            vulnClass: 'misconfiguration',
+            match: false,
+            patternId: 'java.config.csrf-off',
+            code: 'http.csrf(csrf -> csrf.ignoringRequestMatchers("/webhooks/**"));',
+        },
         // entry points
         {
             role: 'entry_point',

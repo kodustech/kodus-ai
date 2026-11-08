@@ -72,9 +72,15 @@ export function rankCandidates(
 
     const candidates = Object.entries(surface.files).map(([file, f]) => {
         const classes = new Set<VulnClass>(f.classes);
-        // An entry point with no visible check is where authz bugs live.
+        // Where outside input enters, a missing check (authz), input reaching
+        // a sink the pattern scan did not know (injection) and an unsafe
+        // web setting (misconfiguration) are the likeliest bugs, whatever
+        // sinks the patterns saw.
         if (f.entryPoints > 0) {
             classes.add('authz');
+            classes.add('injection');
+            // A route served to a browser is where CSRF and cookie flags live.
+            classes.add('misconfiguration');
         }
         const score =
             (f.entryPoints > 0 && f.sinks > 0 ? 50 : 0) +
@@ -156,8 +162,11 @@ export function mergeMapPlan(params: {
         const classes = VULN_CLASSES.filter((c) =>
             (item.classes ?? []).includes(c),
         );
-        const fallback = candidateByFile.get(file)?.classes ?? [];
-        const finalClasses = classes.length ? classes : fallback;
+        // The model adds classes; it never drops what the pattern scan saw.
+        const seenByPatterns = candidateByFile.get(file)?.classes ?? [];
+        const finalClasses = VULN_CLASSES.filter(
+            (c) => classes.includes(c) || seenByPatterns.includes(c),
+        );
         if (!finalClasses.length) {
             continue;
         }

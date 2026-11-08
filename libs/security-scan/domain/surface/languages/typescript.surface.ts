@@ -215,6 +215,18 @@ export const TYPESCRIPT_SURFACE: LanguageSurface = {
             'CWE-295',
             String.raw`\brejectUnauthorized\s*:\s*false|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*['"]?0`,
         ),
+        sink(
+            'ts.config.cors-open',
+            'misconfiguration',
+            'CWE-942',
+            String.raw`\bcors\(\s*\)|\borigin\s*:\s*(?:true|['"]\*['"])`,
+        ),
+        sink(
+            'ts.config.cookie-flags',
+            'misconfiguration',
+            'CWE-1004',
+            String.raw`\bhttpOnly\s*:\s*false|\bsecure\s*:\s*false|\bsameSite\s*:\s*['"]?none\b`,
+        ),
         ...commonSinks('ts', { nosql: true }),
     ],
 };

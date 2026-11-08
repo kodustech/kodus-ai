@@ -137,6 +137,7 @@ export interface ScanFinding {
 export type ScanReportedFinding = Pick<
     ScanFinding,
     | 'vulnerabilityClass'
+    | 'cwe'
     | 'title'
     | 'description'
     | 'severity'

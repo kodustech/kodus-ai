@@ -30,13 +30,13 @@ describe('rankCandidates', () => {
         ]);
     });
 
-    it('checks an entry point for authorization even without a sink', () => {
+    it('checks an entry point for authorization, injection and misconfiguration even without a sink', () => {
         const [only] = rankCandidates(
             surface({
                 'src/routes.ts': { entryPoints: 1, authChecks: 0, sinks: 0, classes: [] },
             }),
         );
-        expect(only.classes).toEqual(['authz']);
+        expect(only.classes).toEqual(['authz', 'injection', 'misconfiguration']);
     });
 
     it('drops a file with nothing to check', () => {
@@ -85,7 +85,7 @@ describe('mergeMapPlan', () => {
             expect.objectContaining({
                 file: 'src/api.ts',
                 relatedFiles: ['src/service.ts'],
-                classes: ['authz', 'injection'],
+                classes: ['authz', 'injection', 'misconfiguration'],
                 priority: 95,
             }),
         );
@@ -95,6 +95,23 @@ describe('mergeMapPlan', () => {
             expect.objectContaining({ file: 'src/util.ts', classes: ['ssrf'] }),
         );
         expect(units[1].priority).toBeLessThanOrEqual(10);
+    });
+
+    it('never drops a class the pattern scan saw on a file the planner kept', () => {
+        const units = mergeMapPlan({
+            // The planner kept the file but only asked for SSRF.
+            plan: [{ file: 'src/api.ts', classes: ['ssrf'], priority: 90 }],
+            candidates,
+            existingFiles: existing,
+            maxUnits: 1,
+        });
+
+        expect(units[0].classes).toEqual([
+            'authz',
+            'injection',
+            'ssrf',
+            'misconfiguration',
+        ]);
     });
 
     it('lets the planner add a file the pattern scan missed, and says so', () => {

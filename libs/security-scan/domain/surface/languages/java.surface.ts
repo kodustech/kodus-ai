@@ -120,6 +120,12 @@ export const JAVA_SURFACE: LanguageSurface = {
         ),
         ...jcaCrypto('java'),
         timingCompare('java', JVM_EQUALS_COMPARE),
+        sink(
+            'java.config.csrf-off',
+            'misconfiguration',
+            'CWE-352',
+            String.raw`\.csrf\(\)\s*\.disable\(\)|\.csrf\(\s*(?:AbstractHttpConfigurer::disable|\w+\s*->\s*\w+\.disable\(\))\s*\)`,
+        ),
         ...commonSinks('java', { nosql: true }),
     ],
 };

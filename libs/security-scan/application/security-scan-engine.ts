@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { LLM } from '@libs/llm/llm';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { runWithUsageMeter } from '@libs/llm/usage-meter';
+import { cweFamily } from '@libs/issues/domain/scan-fingerprint';
 import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
 import type {
     AgentLoopInput,
@@ -62,7 +63,13 @@ import {
 const logger = createLogger('SecurityScanEngine');
 
 export const SCAN_RUN_NAME = 'security-scan';
-const LENS_MAX_STEPS = 18;
+const LENS_MAX_STEPS = 30;
+/**
+ * How many times each lens reads a unit. A second reading, told what the
+ * first reported, finds more in a file with many bugs (RealVuln dev slice:
+ * F3 50.0 -> 55.3) at twice the lens cost; one until that cost is decided.
+ */
+const LENS_PASSES = 1;
 const LISTING_LIMIT = 4000;
 const MAP_LISTING_SAMPLE = 600;
 
@@ -475,18 +482,36 @@ export class SecurityScanEngine {
         const findings: ScanFinding[] = [];
         let failures = 0;
 
-        for (const vulnClass of unit.classes) {
+        const runs = unit.classes.flatMap((vulnClass) =>
+            Array.from({ length: LENS_PASSES }, (_, pass) => ({
+                vulnClass,
+                pass,
+            })),
+        );
+        for (const { vulnClass, pass } of runs) {
             if (signal.aborted) {
                 return { findings, aborted: true };
             }
             try {
-                const output = await this.runLens(
-                    this.lensInput(params, unit, vulnClass, hits, signal),
-                    {
-                        remoteCommands: params.sandbox.remoteCommands,
-                        byokConfig: params.model.slot,
-                    },
+                const input = this.lensInput(
+                    params,
+                    unit,
+                    vulnClass,
+                    hits,
+                    signal,
                 );
+                const already = findings.filter(
+                    (f) => f.vulnerabilityClass === vulnClass,
+                );
+                if (pass > 0 && already.length) {
+                    input.userPrompt += `\n\nAlready reported in these files by an earlier reading (do not report these again; look for the others):\n${already
+                        .map((f) => `- ${f.filePath}:${f.startLine} ${f.title}`)
+                        .join('\n')}`;
+                }
+                const output = await this.runLens(input, {
+                    remoteCommands: params.sandbox.remoteCommands,
+                    byokConfig: params.model.slot,
+                });
                 if (signal.aborted) {
                     return { findings, aborted: true };
                 }
@@ -537,7 +562,7 @@ export class SecurityScanEngine {
             }
         }
 
-        return failures === unit.classes.length && unit.classes.length > 0
+        return failures === runs.length && runs.length > 0
             ? { findings, error: 'every lens failed' }
             : { findings };
     }
@@ -839,12 +864,12 @@ function normalizeCwe(value?: string): string | undefined {
 }
 
 /**
- * Two lenses, two passes or two units reporting the same operation are one
- * finding, whatever class each gave it: the SSRF lens and the data-exposure
- * lens both flag a fetch whose response leaks, and the developer has one
- * line to fix. So are the route, the handler and the query of one missing
- * check, reported from three units: same class, and one sits on the other's
- * attack path.
+ * Two lenses, two passes or two units reporting the same weakness on the same
+ * lines are one finding, and so are the route, the handler and the query of
+ * one missing check (one sits on the other's attack path). Two different
+ * weaknesses on neighbouring lines, a SQL injection and an XSS in one handler,
+ * stay two: the review's dedup that runs next judges what text alone shows
+ * is one bug.
  */
 function isDuplicate(
     existing: ScanReportedFinding[],
@@ -852,12 +877,20 @@ function isDuplicate(
 ): boolean {
     return existing.some(
         (f) =>
-            (f.filePath === candidate.filePath &&
+            sameKind(f, candidate) &&
+            ((f.filePath === candidate.filePath &&
                 candidate.startLine <= f.endLine &&
                 f.startLine <= candidate.endLine) ||
-            (f.vulnerabilityClass === candidate.vulnerabilityClass &&
-                (onAttackPath(f, candidate) || onAttackPath(candidate, f))),
+                onAttackPath(f, candidate) ||
+                onAttackPath(candidate, f)),
     );
+}
+
+/** Same kind of weakness: the CWE's family when both have one, else the lens. */
+function sameKind(a: ScanReportedFinding, b: ScanReportedFinding): boolean {
+    const fa = cweFamily(a.cwe);
+    const fb = cweFamily(b.cwe);
+    return fa && fb ? fa === fb : a.vulnerabilityClass === b.vulnerabilityClass;
 }
 
 /** Whether `finding`'s location is a step of `path`'s attack path. */

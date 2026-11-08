@@ -2,6 +2,77 @@ import { describeSurfaceCases } from '../testing/surface-cases';
 import { PYTHON_SURFACE } from './python.surface';
 
 describeSurfaceCases(PYTHON_SURFACE, 'app/views.py', [
+    // misconfiguration
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: true,
+        patternId: 'py.config.debug',
+        code: 'app.run(host="0.0.0.0", debug=True)',
+    },
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: true,
+        patternId: 'py.config.debug',
+        code: 'DEBUG = True',
+    },
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: true,
+        patternId: 'py.config.csrf-off',
+        code: '@csrf_exempt',
+    },
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: true,
+        patternId: 'py.config.csrf-off',
+        code: "app.config['WTF_CSRF_ENABLED'] = False",
+    },
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: true,
+        patternId: 'py.config.cookie-flags',
+        code: 'SESSION_COOKIE_HTTPONLY = False',
+    },
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: true,
+        patternId: 'py.config.cookie-flags',
+        code: "resp.set_cookie('session', token, httponly=False)",
+    },
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: true,
+        patternId: 'py.config.cors-open',
+        code: 'CORS(app)',
+    },
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: true,
+        patternId: 'py.config.cors-open',
+        code: 'CORS_ORIGIN_ALLOW_ALL = True',
+    },
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: false,
+        patternId: 'py.config.debug',
+        code: 'app.run(host="0.0.0.0", port=8080)',
+    },
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: false,
+        patternId: 'py.config.cors-open',
+        code: 'CORS(app, origins=["https://app.example.com"])',
+    },
     // entry points
     {
         role: 'entry_point',
@@ -154,6 +225,21 @@ describeSurfaceCases(PYTHON_SURFACE, 'app/views.py', [
         match: true,
         patternId: 'py.template.injection',
         code: 'return render_template_string(request.args.get("tpl"))',
+    },
+    {
+        role: 'sink',
+        vulnClass: 'injection',
+        match: true,
+        patternId: 'py.template.injection',
+        // A template built from a variable (RealVuln's python-insecure-app).
+        code: 'return Template(content).render()',
+    },
+    {
+        role: 'sink',
+        vulnClass: 'injection',
+        match: false,
+        patternId: 'py.template.injection',
+        code: 'tpl = Template("Hello {{ name }}")',
     },
     {
         role: 'sink',

@@ -23,6 +23,7 @@ const VULN_CLASS_ORDER: VulnClass[] = [
     'ssrf',
     'data_exposure',
     'secret_identity',
+    'misconfiguration',
 ];
 
 export interface RgLine {
@@ -64,11 +65,13 @@ export function parseRgOutput(stdout: string): RgLine[] {
 }
 
 const SKIP_DIR =
-    /(?:^|\/)(?:test|tests|__tests__|__test__|spec|specs|__mocks__|fixtures?|__fixtures__|testdata|test_data|vendor|third_party|node_modules|bower_components|dist|build|target|coverage|\.next|_build|deps|Pods|DerivedData|\.dart_tool)\//;
+    /(?:^|\/)(?:test|tests|__tests__|__test__|spec|specs|__mocks__|fixtures?|__fixtures__|testdata|test_data|vendor|third_party|node_modules|bower_components|dist|build|coverage|\.next|_build|deps|Pods|DerivedData|\.dart_tool)\//;
 const SKIP_FILE =
     /(?:\.(?:spec|test|e2e-spec|stories)\.\w+|_test\.(?:go|py|rb|exs?|dart|c|cc|cpp)|_spec\.rb|\.min\.\w+|\.d\.ts|\.pb\.go|_pb2\.py|\.generated\.\w+|(?:^|\/)test_[^/]*\.py|(?:^|\/)conftest\.py|[a-z0-9](?:Tests?|Spec|IT)\.(?:java|kt|scala|cs|swift))$/;
 
-/** Tests, fixtures, vendored deps and build output are not the app's attack surface. */
+/** Tests, fixtures, vendored deps and build output are not the app's attack surface.
+ *  `target/` is not here: the listing is tracked files, where a Maven or Cargo
+ *  build never is, and an app may live under it. */
 export function isSkippedPath(path: string): boolean {
     const p = normalizePath(path);
     return SKIP_DIR.test(p) || SKIP_FILE.test(p);

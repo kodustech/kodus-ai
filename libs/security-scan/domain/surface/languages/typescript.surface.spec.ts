@@ -2,6 +2,42 @@ import { describeSurfaceCases } from '../testing/surface-cases';
 import { TYPESCRIPT_SURFACE } from './typescript.surface';
 
 describeSurfaceCases(TYPESCRIPT_SURFACE, 'src/app.ts', [
+    // misconfiguration
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: true,
+        patternId: 'ts.config.cors-open',
+        code: 'app.use(cors());',
+    },
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: true,
+        patternId: 'ts.config.cors-open',
+        code: 'app.use(cors({ origin: true, credentials: true }));',
+    },
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: true,
+        patternId: 'ts.config.cookie-flags',
+        code: "res.cookie('sid', token, { httpOnly: false });",
+    },
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: true,
+        patternId: 'ts.config.cookie-flags',
+        code: 'cookie: { secure: false, maxAge: 3600 },',
+    },
+    {
+        role: 'sink',
+        vulnClass: 'misconfiguration',
+        match: false,
+        patternId: 'ts.config.cors-open',
+        code: 'app.use(cors({ origin: allowedOrigins }));',
+    },
     // entry points
     {
         role: 'entry_point',

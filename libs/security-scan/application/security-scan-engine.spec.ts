@@ -122,6 +122,15 @@ function fakeLens(findingsFor: (file: string, cls: string) => any[]) {
     });
 }
 
+const FINALIZED_CWE: Record<string, string> = {
+    authz: 'CWE 639',
+    injection: 'CWE 89',
+    ssrf: 'CWE 918',
+    data_exposure: 'CWE 200',
+    secret_identity: 'CWE 798',
+    misconfiguration: 'CWE 16',
+};
+
 function fakeLlm(plan?: any) {
     return jest.fn(async (req: any) => {
         reportUsage({ inputTokens: 1000, outputTokens: 100 } as any, {
@@ -132,10 +141,12 @@ function fakeLlm(plan?: any) {
             return plan;
         }
         if (req.runName.endsWith('-finalize')) {
+            // Each lens's weakness gets its own CWE, as a real model gives.
+            const cls = /Vulnerability class: (\w+)/.exec(req.user)?.[1] ?? 'authz';
             return {
                 title: 'Any user reads any order',
                 severity: 'high',
-                cwe: 'CWE 639',
+                cwe: FINALIZED_CWE[cls] ?? 'CWE 639',
                 attackPath: [
                     {
                         file: 'src/orders/orders.controller.ts',
@@ -225,7 +236,9 @@ describe('SecurityScanEngine', () => {
         expect(result.units[0].relatedFiles).toEqual([
             'src/orders/orders.service.ts',
         ]);
-        expect(runLens).toHaveBeenCalledTimes(2);
+        // The controller holds a route: its unit runs injection and
+        // misconfiguration besides the authz the plan asked for.
+        expect(runLens).toHaveBeenCalledTimes(4);
         expect(result.findings).toEqual([
             expect.objectContaining({
                 vulnerabilityClass: 'authz',
@@ -243,7 +256,8 @@ describe('SecurityScanEngine', () => {
             'src/orders/orders.service.ts',
         ]);
         // Every model request inside the scan was metered.
-        expect(meter.snapshot().requests).toBe(2 + 1 + 1);
+        // Four lenses, the map and one finalize.
+        expect(meter.snapshot().requests).toBe(4 + 1 + 1);
     });
 
     it('gives each lens the scan prompt, the sandbox tools and no diff', async () => {
@@ -499,10 +513,16 @@ describe('SecurityScanEngine', () => {
     });
 
     it("runs the review's dedup on each unit against what earlier units reported", async () => {
-        // The same missing check reported from the controller and the DAO.
-        const runLens = fakeLens((file) =>
+        // The controller's IDOR and the service's leak of the same order: two
+        // weaknesses, so it is the review's dedup, not the overlap check,
+        // that sees them together and keeps one.
+        const runLens = fakeLens((file, cls) =>
             file.endsWith('orders.controller.ts')
-                ? [IDOR]
+                ? cls === 'authz'
+                    ? [IDOR]
+                    : []
+                : cls !== 'data_exposure'
+                  ? []
                 : [
                       {
                           ...IDOR,
@@ -531,7 +551,7 @@ describe('SecurityScanEngine', () => {
                     {
                         file: 'src/orders/orders.service.ts',
                         relatedFiles: [],
-                        classes: ['authz'],
+                        classes: ['data_exposure'],
                         priority: 80,
                         reason: '',
                     },
@@ -652,10 +672,11 @@ describe('SecurityScanEngine', () => {
                     reasons: [],
                 },
             ],
-            // The authz lens of the previous job's unit flagged the same line.
+            // The previous job's unit flagged the same leak on the same line.
             reported: [
                 {
-                    vulnerabilityClass: 'authz',
+                    vulnerabilityClass: 'data_exposure',
+                    cwe: 'CWE-200',
                     title: 'Any user can read any order',
                     description: 'No owner check.',
                     severity: 'high',
@@ -715,12 +736,36 @@ describe('SecurityScanEngine', () => {
         ]);
     });
 
+    it('keeps two different weaknesses on the same line apart', async () => {
+        const keepAll = jest.fn(async (_deps: any, suggestions: any[]) => ({ suggestions, trace: {} as any }));
+        const engine = new SecurityScanEngine({
+            // An IDOR and a SQL injection in the same handler line.
+            runLens: fakeLens((_file, cls) => (cls === 'authz' || cls === 'injection' ? [IDOR] : [])),
+            llm: fakeLlm({
+                units: [{ file: 'src/orders/orders.controller.ts', relatedFiles: [], classes: ['authz', 'injection'], priority: 90, reason: '' }],
+            }),
+            collectSurface: jest.fn(async () => SURFACE),
+            dedup: keepAll as any,
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.findings.map((f) => f.cwe).sort()).toEqual(['CWE-639', 'CWE-89']);
+    });
+
     it('keeps every finding when the dedup fails', async () => {
         const engine = new SecurityScanEngine({
-            runLens: fakeLens(() => [
-                IDOR,
-                { ...IDOR, relevantFile: 'src/admin/exec.ts' },
-            ]),
+            runLens: fakeLens((_file, cls) =>
+                cls === 'authz'
+                    ? [IDOR]
+                    : cls === 'injection'
+                      ? [{ ...IDOR, relevantFile: 'src/admin/exec.ts' }]
+                      : [],
+            ),
             llm: fakeLlm({
                 units: [
                     {
