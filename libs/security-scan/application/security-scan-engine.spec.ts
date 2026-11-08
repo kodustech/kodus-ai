@@ -1,3 +1,9 @@
+// No test reaches a real model: the review's dedup finds no managed key.
+jest.mock('@libs/llm/managed-slot', () => {
+    const actual = jest.requireActual('@libs/llm/managed-slot');
+    return { ...actual, hasManagedModelKey: jest.fn(() => false) };
+});
+
 import { ScanBudgetMeter } from '../domain/budget-meter';
 import type { SurfaceMap } from '../domain/surface/surface.types';
 import { reportUsage } from '@libs/llm/usage-meter';
@@ -475,7 +481,22 @@ describe('SecurityScanEngine', () => {
     });
 
     it('keeps one finding for an operation two lenses or two units report', async () => {
+        // The review's dedup folds what lands on the same line (deterministic
+        // here; the real one asks the model).
+        const sameLine = jest.fn(async (_deps: any, suggestions: any[]) => {
+            const seen = new Set<string>();
+            return {
+                suggestions: suggestions.filter((x) => {
+                    const key = `${x.relevantFile}:${x.relevantLinesStart}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                }),
+                trace: {} as any,
+            };
+        });
         const engine = new SecurityScanEngine({
+            dedup: sameLine as any,
             // Both units' lenses, every class, report the same line.
             runLens: fakeLens(() => [IDOR, { ...IDOR, relevantLinesStart: 6 }]),
             llm: fakeLlm({
