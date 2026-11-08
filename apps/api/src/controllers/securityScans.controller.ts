@@ -72,19 +72,18 @@ export class StartSecurityScanDto {
     maxTokens?: number;
 }
 
-// A scan spends the organization's model budget on one repository: the same
-// people who change that repository's review settings may start one.
+// A scan spends the organization's model budget on one repository.
 const canStartScan = checkRepoPermissions({
-    action: Action.Update,
-    resource: ResourceType.CodeReviewSettings,
+    action: Action.Create,
+    resource: ResourceType.SecurityScan,
     repo: { key: { body: 'repositoryId' } },
 });
 
-// The scans list says which repositories were scanned and what each found;
-// whoever reads the issues reads it, scoped to their repositories below.
+// The scans list says which repositories were scanned and what each found,
+// scoped to the caller's repositories below.
 const canReadScans = checkPermissions({
     action: Action.Read,
-    resource: ResourceType.Issues,
+    resource: ResourceType.SecurityScan,
 });
 
 @ApiTags('Security Scans')
@@ -113,7 +112,7 @@ export class SecurityScansController {
         return this.authorizationService.getRepositoryScope({
             user: this.request.user,
             action: Action.Read,
-            resource: ResourceType.Issues,
+            resource: ResourceType.SecurityScan,
         });
     }
 

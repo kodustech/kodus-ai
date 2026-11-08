@@ -179,8 +179,14 @@ export class SecurityScanEngine {
         params.meter.onExhausted(() => budgetAbort.abort(new Error('budget')));
         const signal = anySignal([params.signal, budgetAbort.signal]);
 
-        return runWithUsageMeter(params.meter, () =>
-            this.runMetered(params, signal, budgetAbort.signal),
+        return runWithUsageMeter(
+            params.meter,
+            () => this.runMetered(params, signal, budgetAbort.signal),
+            {
+                organizationId: params.organizationId,
+                teamId: params.teamId,
+                repositoryId: params.repositoryId,
+            },
         );
     }
 

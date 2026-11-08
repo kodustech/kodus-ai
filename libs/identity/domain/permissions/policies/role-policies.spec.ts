@@ -66,6 +66,30 @@ describe('ROLE_POLICIES', () => {
         expect(
             has(Role.BILLING_MANAGER, { resource: ResourceType.CliReview }),
         ).toBe(false);
+        // Security scan: Repo Admin starts one on an assigned repo, Contributor
+        // reads; Billing never sees it.
+        expect(
+            has(Role.REPO_ADMIN, {
+                action: Action.Create,
+                resource: ResourceType.SecurityScan,
+                scope: 'repo',
+            }),
+        ).toBe(true);
+        expect(
+            has(Role.CONTRIBUTOR, {
+                action: Action.Read,
+                resource: ResourceType.SecurityScan,
+            }),
+        ).toBe(true);
+        expect(
+            has(Role.CONTRIBUTOR, {
+                action: Action.Create,
+                resource: ResourceType.SecurityScan,
+            }),
+        ).toBe(false);
+        expect(
+            has(Role.BILLING_MANAGER, { resource: ResourceType.SecurityScan }),
+        ).toBe(false);
     });
 
     // The policy is shared with the Next.js frontend, so it (and the enum file
