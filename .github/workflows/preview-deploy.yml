@@ -1,4 +1,4 @@
-name: "Preview: Deploy"
+name: 'Preview: Deploy'
 
 # =============================================================================
 # One preview environment per pull request AND per shape of the product it
@@ -67,6 +67,11 @@ on:
                 required: false
                 default: false
                 type: boolean
+            risk_ui_seed_run_id:
+                description: Existing real-PR QA run whose connected tenant supplies UI evidence
+                required: false
+                default: ''
+                type: string
             reuse_preview:
                 description: Run smoke tests against the existing preview without deploying changes
                 required: false
@@ -473,16 +478,21 @@ jobs:
                   URLS: ${{ steps.up.outputs.urls }}
                   TEST_USER_EMAIL: preview@kodus.io
                   TEST_USER_PASSWORD: ${{ secrets.PREVIEW_SEED_PASSWORD }}
+                  RISK_UI_SEED_RUN_ID: ${{ inputs.risk_ui_seed_run_id }}
                   OUT_DIR: risk-routing-evidence
               run: |
                   set -euo pipefail
+                  if [ -n "${RISK_UI_SEED_RUN_ID:-}" ]; then
+                    case "$RISK_UI_SEED_RUN_ID" in *[!0-9]*) echo '::error::QA run id must contain only digits'; exit 1 ;; esac
+                    export TEST_USER_EMAIL="preview-risk-$RISK_UI_SEED_RUN_ID@kodus.io"
+                  fi
                   for entry in $URLS; do
                     case "$entry" in cloud=*) KODUS_WEB_URL="${entry#cloud=}" ;; esac
                   done
                   : "${KODUS_WEB_URL:?cloud preview is required}"
                   export KODUS_WEB_URL
                   $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
-                    "PREVIEW_RISK_ROUTING_QA=true node scripts/preview/prepare-risk-routing-qa.cjs"
+                    "PREVIEW_RISK_ROUTING_QA=true PREVIEW_SEED_EMAIL=$TEST_USER_EMAIL node scripts/preview/prepare-risk-routing-qa.cjs"
                   npm ci --prefix tests/e2e
                   (cd tests/e2e && npx playwright install --with-deps chromium)
                   node tests/e2e/playwright/risk-routing.mjs

@@ -126,6 +126,46 @@ export async function captureRiskRoutingStates({
         const response = await context.request.post(settingsRequest.url, {
             data: { ...settingsRequest.body, configValue },
         });
+        if (!response.ok()) {
+            const failure = await response.json().catch(() => ({}));
+            const messages = Array.isArray(failure.message)
+                ? failure.message
+                : [failure.message].filter(Boolean);
+            // The default preview has no git connection. Keep that account
+            // usable without inventing an integration or bypassing its guard.
+            if (
+                response.status() === 400 &&
+                messages.includes(
+                    'Connect a code provider before adding label or team conditions.',
+                ) &&
+                configValue.approvalPolicies?.some(
+                    (policy) => policy.labels?.length,
+                )
+            ) {
+                for (const policy of policies) delete policy.labels;
+                return configure({
+                    ...configValue,
+                    approvalPolicies: configValue.approvalPolicies.map(
+                        ({ labels: _labels, ...policy }) => policy,
+                    ),
+                });
+            }
+            writeFileSync(
+                `${dir}/settings-validation.json`,
+                JSON.stringify(
+                    {
+                        status: response.status(),
+                        messages,
+                        fields: Object.keys(configValue),
+                    },
+                    null,
+                    2,
+                ),
+            );
+            throw new Error(
+                `QA settings update returned HTTP ${response.status()}: ${messages.join('; ')}`,
+            );
+        }
         assert.ok(
             response.ok(),
             `QA settings update returned HTTP ${response.status()}.`,
@@ -152,6 +192,15 @@ export async function captureRiskRoutingStates({
         );
     }
     async function shot(id, group, title, note = '', fixture = false) {
+        if (group === 'General') {
+            await page
+                .locator(
+                    id === '26-general-risk-off'
+                        ? '[data-field-name="reviewMode"]'
+                        : '[data-field-name="pullRequestApprovalActive"]',
+                )
+                .scrollIntoViewIfNeeded();
+        }
         // Let Radix enter transitions settle before preserving the image.
         await page.waitForTimeout(500);
         if (page.viewportSize().width >= 768) {
@@ -190,6 +239,7 @@ export async function captureRiskRoutingStates({
     }
     const previewPath = '**/code-review/risk/preview';
     const repositoriesPath = '**/code-management/repositories/selected?*';
+    let releasePreview;
     try {
         await page.setViewportSize({ width: 1440, height: 1000 });
         await open('risk', { riskCriteria: [] });
@@ -380,7 +430,9 @@ export async function captureRiskRoutingStates({
         await shot(
             '30-policy-dependencies',
             'Políticas',
-            'Label, autor, linhas e instrução',
+            policies[1].labels?.length
+                ? 'Label, autor, linhas e instrução'
+                : 'Autor, linhas e instrução',
         );
         await page.getByRole('dialog').evaluate((node) => {
             node.scrollTop = node.scrollHeight;
@@ -412,6 +464,7 @@ export async function captureRiskRoutingStates({
                 if (status === 'loading')
                     await new Promise((resolve) => {
                         pending = resolve;
+                        releasePreview = resolve;
                     });
                 if (status === 'error')
                     return route.fulfill({
@@ -452,9 +505,7 @@ export async function captureRiskRoutingStates({
             if (status !== 'empty') {
                 const dialog = page.getByRole('dialog');
                 await dialog.getByRole('combobox').click();
-                await page
-                    .getByRole('option', { name: 'api', exact: true })
-                    .click();
+                await page.getByRole('option').first().click();
                 await dialog
                     .getByRole('spinbutton', { name: 'PR number' })
                     .fill('42');
@@ -487,6 +538,7 @@ export async function captureRiskRoutingStates({
             );
             pending?.();
             await page.unroute(previewPath);
+            releasePreview = undefined;
         }
         await page.unroute(repositoriesPath);
         await page.setViewportSize({ width: 390, height: 844 });
@@ -497,6 +549,7 @@ export async function captureRiskRoutingStates({
         await open('general');
         await shot('41-general-mobile', 'Mobile', 'General no mobile');
     } finally {
+        releasePreview?.();
         await page.unroute(previewPath);
         await page.unroute(repositoriesPath);
         await configure(restore);

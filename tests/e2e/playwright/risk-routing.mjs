@@ -1,4 +1,5 @@
-// Full app on Runo: real NextAuth, menu, APIs and persistence. No network mocks.
+// Full app on Runo: real NextAuth, menu, settings APIs and persistence.
+// The state capture helper labels preview-only fixtures in its manifest.
 // Run against the opt-in preview fixture with KODUS_WEB_URL, TEST_USER_EMAIL,
 // TEST_USER_PASSWORD. Evidence contains screenshots and verdicts, no credentials.
 import assert from 'node:assert/strict';
