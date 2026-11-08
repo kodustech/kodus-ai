@@ -519,6 +519,7 @@ jobs:
                     $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
                       "docker exec -e PREVIEW_RISK_ROUTING_QA=true kodus_api node scripts/preview/inspect-risk-routing-e2e.cjs $scope" \
                       | tee tests/e2e/evidence/qa-execution-inspection.txt
+                    node --experimental-strip-types scripts/preview/inspect-risk-provider.mjs > tests/e2e/evidence/qa-provider-inspection.json
                     echo 'Read-only QA inspection complete; no pipeline cases were run.'
                     exit 0
                   fi

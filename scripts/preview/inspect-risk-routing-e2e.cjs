@@ -52,6 +52,7 @@ async function main() {
                 "dataExecution"->'heavy' AS heavy,
                 "dataExecution"->'approvalDecision' AS decision,
                 "dataExecution"->'approvalPolicyEligibility' AS eligibility,
+                "dataExecution"->'approvalReviewSummary' AS "reviewSummary",
                 "dataExecution"->'customAgentRiskSkips' AS "agentSkips"
             FROM automation_execution
             WHERE "dataExecution"#>>'{organizationAndTeamData,organizationId}'=$1
@@ -60,6 +61,16 @@ async function main() {
             [organizationId, repositoryId, Number(number), since],
         );
         const execution = rows[0] ?? null;
+        const relatedExecutions = (
+            await sql.query(
+                `
+            SELECT uuid,status,"createdAt",
+                "dataExecution"#>>'{organizationAndTeamData,organizationId}' AS "organizationId"
+            FROM automation_execution WHERE "repositoryId"=$1 AND "pullRequestNumber"=$2
+                AND "createdAt">=$3 ORDER BY "createdAt" LIMIT 10`,
+                [repositoryId, Number(number), since],
+            )
+        ).rows;
         const stages = execution
             ? (
                   await sql.query(
@@ -137,7 +148,16 @@ async function main() {
             .find(
                 {
                     $or: [
-                        { tenantId: organizationId },
+                        {
+                            tenantId: {
+                                $in: [
+                                    organizationId,
+                                    ...relatedExecutions
+                                        .map((row) => row.organizationId)
+                                        .filter(Boolean),
+                                ],
+                            },
+                        },
                         ...(execution
                             ? [
                                   { executionId: execution.uuid },
@@ -155,6 +175,7 @@ async function main() {
                     projection: {
                         '_id': 0,
                         'timestamp': 1,
+                        'tenantId': 1,
                         'level': 1,
                         'component': 1,
                         'message': 1,
@@ -172,7 +193,14 @@ async function main() {
         }
         console.log(
             'RISK_E2E_JSON=' +
-                JSON.stringify({ execution, stages, agents, models, logs }),
+                JSON.stringify({
+                    execution,
+                    relatedExecutions,
+                    stages,
+                    agents,
+                    models,
+                    logs,
+                }),
         );
     } finally {
         await sql.end();
