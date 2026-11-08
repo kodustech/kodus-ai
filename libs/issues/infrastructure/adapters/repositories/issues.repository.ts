@@ -57,10 +57,13 @@ export class IssuesRepository implements IIssuesRepository {
         filePath: string,
         status?: IssueStatus,
     ): Promise<IssuesEntity[] | null> {
+        // A scan issue stores its path normalized; a review issue stores it as
+        // the PR spelled it. Either spelling finds both.
+        const spellings = [...new Set([filePath, normalizeScanPath(filePath)])];
         const issues = await this.issuesModel.find({
             'organizationId': organizationId,
             'repository.id': repositoryId,
-            'filePath': filePath,
+            'filePath': { $in: spellings },
             'status': status ? status : { $ne: IssueStatus.OPEN },
         });
 
