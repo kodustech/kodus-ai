@@ -24,6 +24,7 @@ const checks = [];
 const saves = [];
 const pageErrors = [];
 const consoleErrors = [];
+const cleanupState = [];
 page.on('pageerror', (error) => pageErrors.push(error.message));
 page.on('console', (event) => {
     if (event.type() === 'error') consoleErrors.push(event.text().replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]').slice(0, 3000));
@@ -90,6 +91,23 @@ async function setMode(label, mode, forceChange = false) {
     }
     await chooseMode(label, mode);
     await save();
+}
+async function readRiskForm(locator, phase) {
+    const state = await locator.evaluate((node) => {
+        let fiber = node[Object.keys(node).find((key) => key.startsWith('__reactFiber$'))];
+        while (fiber) {
+            const props = fiber.memoizedProps;
+            const control = props?.control ?? props?.value?.control;
+            if (control?._formValues) {
+                const criteria = (value) => value?.value?.map(({ id, name }) => ({ id, name }));
+                return { current: criteria(control._formValues.riskCriteria), defaults: criteria(control._defaultValues.riskCriteria), dirty: control._formState.dirtyFields.riskCriteria,
+                    registered: [...control._names.mount].filter((name) => name.startsWith('riskCriteria')) };
+            }
+            fiber = fiber.return;
+        }
+        return { missing: true };
+    });
+    cleanupState.push({ phase, ...state });
 }
 
 try {
@@ -196,7 +214,11 @@ try {
     await openMenu('Risk assessment');
     const deleteCriterion = page.getByRole('button', { name: `Delete ${criterionName}`, exact: true });
     await hydrated(deleteCriterion);
+    await readRiskForm(deleteCriterion, 'before-delete');
     await deleteCriterion.click();
+    await readRiskForm(riskToggle, 'after-delete');
+    await page.waitForTimeout(250);
+    await readRiskForm(riskToggle, 'after-render');
     await expect(page.getByRole('heading', { name: criterionName, exact: true })).toHaveCount(0);
     await save();
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -215,6 +237,7 @@ try {
     writeFileSync(`${OUT}/console-errors.json`, JSON.stringify(consoleErrors, null, 2));
     process.exitCode = 1;
 } finally {
+    writeFileSync(`${OUT}/cleanup-state.json`, JSON.stringify(cleanupState, null, 2));
     writeFileSync(`${OUT}/result.json`, JSON.stringify({ web: WEB, checks, saves, pageErrors, passed: !process.exitCode }, null, 2));
     await browser.close();
 }
