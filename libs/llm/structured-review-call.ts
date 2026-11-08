@@ -13,6 +13,7 @@
  * on a transient (5xx/network) blip; it never touches a 2nd model.
  * (Reliability caveat accepted 2026-07-29; resilience is re-addressed in Phase 5.)
  */
+import { reportUsage } from '@libs/llm/usage-meter';
 import {
     Output,
     NoObjectGeneratedError,
@@ -568,7 +569,10 @@ async function runReviewCall<T>(
               })
             : exec();
 
-        return run.then((r: any) => (override?.extract ?? mode.extract)(r));
+        return run.then((r: any) => {
+            reportUsage(r?.usage, { modelName, runName });
+            return (override?.extract ?? mode.extract)(r);
+        });
     };
 
     // ONE re-issue in json_object mode with the schema written INTO the prompt —

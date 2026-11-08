@@ -40,6 +40,7 @@ import {
     createStepUsageTally,
     type AiSdkUsageInput,
 } from '@libs/llm/ai-sdk-usage';
+import { reportUsage } from '@libs/llm/usage-meter';
 import { abortedInFlightAttrs } from '@libs/llm/aborted-in-flight';
 import {
     hardTimeout,
@@ -264,6 +265,7 @@ export async function runAgentLoopCall(
     const onStepFinish = (event: any) => {
         inFlightPrompt = undefined;
         finishedSteps.add(event?.usage);
+        reportUsage(event?.usage, { modelName: inv.modelName, runName });
         return loop.onStepFinish?.(event);
     };
 
