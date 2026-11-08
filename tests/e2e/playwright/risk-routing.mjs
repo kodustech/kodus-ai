@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { expect as baseExpect } from 'playwright/test';
+import { captureRiskRoutingStates } from './risk-routing-state-captures.mjs';
 
 const expect = baseExpect.configure({ timeout: 45_000 });
 
@@ -27,6 +28,7 @@ const saves = [];
 const pageErrors = [];
 let consoleErrorCount = 0;
 const cleanupState = [];
+let settingsRequest;
 page.on('pageerror', (error) => pageErrors.push(error.name));
 page.on('console', (event) => {
     if (event.type() === 'error') consoleErrorCount++;
@@ -63,6 +65,7 @@ async function save() {
         button.click(),
     ]);
     const sent = response.request().postDataJSON()?.configValue || {};
+    settingsRequest = { url: response.url(), body: response.request().postDataJSON() };
     saves.push({ fields: Object.keys(sent), riskAssessmentActive: sent.riskAssessmentActive,
         criteriaCount: sent.riskCriteria?.length, policyCount: sent.approvalPolicies?.length,
         routing: sent.riskReviewRouting });
@@ -225,6 +228,8 @@ try {
     await hydrated(riskToggle);
     await expect(page.getByRole('heading', { name: criterionName, exact: true })).toHaveCount(0);
     pass('Only this run’s policy and criterion are removed after verification');
+    await captureRiskRoutingStates({ page, context, web: WEB, out: OUT, settingsRequest, hydrated });
+    pass('Settings states are captured inside the complete application');
     assert.deepEqual(pageErrors, [], 'No uncaught app errors.');
 } catch (error) {
     await screenshot('failure').catch(() => {});
