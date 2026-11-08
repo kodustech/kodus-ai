@@ -108,6 +108,12 @@ async function main() {
                         _id: {
                             task: '$attributes.tu.route',
                             model: '$attributes.tu.model',
+                            runName: {
+                                $getField: {
+                                    field: 'gen_ai.run.name',
+                                    input: '$attributes',
+                                },
+                            },
                         },
                         calls: { $sum: 1 },
                         tokens: { $sum: '$attributes.tu.total' },
@@ -118,6 +124,7 @@ async function main() {
                         _id: 0,
                         task: '$_id.task',
                         model: '$_id.model',
+                        runName: '$_id.runName',
                         calls: 1,
                         tokens: 1,
                     },

@@ -41,15 +41,18 @@ it('keeps the managed model route valid after preview secrets are neutralized', 
             },
         );
         const text = readFileSync(env, 'utf8');
-        const vars = Object.fromEntries(
-            text
-                .split('\n')
-                .filter((line) => /^[A-Z_]+=/.test(line))
-                .map((line) => {
-                    const at = line.indexOf('=');
-                    return [line.slice(0, at), line.slice(at + 1)];
-                }),
-        );
+        const vars: NodeJS.ProcessEnv = {
+            NODE_ENV: 'test',
+            ...Object.fromEntries(
+                text
+                    .split('\n')
+                    .filter((line) => /^[A-Z_]+=/.test(line))
+                    .map((line) => {
+                        const at = line.indexOf('=');
+                        return [line.slice(0, at), line.slice(at + 1)];
+                    }),
+            ),
+        };
         expect(text).not.toContain('private-developer');
         expect(vars.API_FIREWORKS_API_KEY).toBe('preview-disabled');
         expect(resolveDeclaredEnvProvider(vars)).toEqual({ kind: 'inferred' });

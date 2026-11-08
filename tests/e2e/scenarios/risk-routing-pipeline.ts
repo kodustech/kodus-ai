@@ -38,6 +38,7 @@ type Evidence = {
     models: Array<{
         task: string;
         model: string;
+        runName: string;
         calls: number;
         tokens: number;
     }>;
@@ -430,7 +431,7 @@ export const riskRoutingPipeline: Scenario = {
             ctx.assert(
                 reviewTask?.model &&
                     data.models.some(
-                        (model) => model.task === 'riskAssessment',
+                        (model) => model.runName === 'pr-risk-assessment',
                     ),
                 'Actual risk/review model usage is missing',
             );
@@ -522,7 +523,9 @@ export const riskRoutingPipeline: Scenario = {
             data = await waitForRun(ctx, session, repo, active, opened.since);
             check(data, 'disabled', true, false);
             ctx.assert(
-                !data.models.some((model) => model.task === 'riskAssessment'),
+                !data.models.some(
+                    (model) => model.runName === 'pr-risk-assessment',
+                ),
                 'Disabled risk still spent a model call',
             );
             ctx.assert(
