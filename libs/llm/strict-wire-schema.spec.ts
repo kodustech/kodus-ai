@@ -325,7 +325,7 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/platform/application/use-cases/codeManagement/implicit-reply.ts', // replyAddressedToKodySchema
         // Phase 3b: withStructuredOutputFallback → LLM.run migrations.
         'libs/code-review/infrastructure/agents/core/finder.agent.ts', // RECOVERY_SCHEMA (zod)
-        'libs/code-review/pipeline/stages/agent-review.stage.ts', // DEDUP_SCHEMA, DEDUP_TIEBREAK_SCHEMA via jsonSchema() — AI-SDK Schema, passes through untouched (exempt from strict-wire conversion)
+        'libs/code-review/infrastructure/agents/engine/finding-dedup.ts', // DEDUP_SCHEMA, DEDUP_TIEBREAK_SCHEMA via jsonSchema() — AI-SDK Schema, passes through untouched (exempt from strict-wire conversion)
         'libs/code-review/infrastructure/agents/engine/repeat-check.ts', // REPEAT_CHECK_SCHEMA via jsonSchema(), pass-through, born strict (#2097)
         // Second-doors → LLM.run migration.
         'libs/cli-review/infrastructure/services/public-pr-grouping.service.ts', // GroupingSchema — all-required zod (no `.optional()`), so strict-wire conversion is a no-op; public-demo path on a fixed Gemini default, never OpenAI-strict.
