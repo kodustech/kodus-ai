@@ -1,4 +1,4 @@
-import { computeScanFingerprint } from './scan-fingerprint';
+import { computeScanFingerprint, cweFamily } from './scan-fingerprint';
 
 describe('computeScanFingerprint', () => {
     const base = {
@@ -6,6 +6,7 @@ describe('computeScanFingerprint', () => {
         vulnerabilityClass: 'authz',
         filePath: 'src/orders/orders.controller.ts',
         symbol: 'OrdersController.findOne',
+        cwe: 'CWE-639',
     };
 
     it('is stable for the same finding', () => {
@@ -34,6 +35,7 @@ describe('computeScanFingerprint', () => {
         ['class', { vulnerabilityClass: 'injection' }],
         ['file', { filePath: 'src/orders/orders.service.ts' }],
         ['symbol', { symbol: 'OrdersController.update' }],
+        ['kind of weakness', { cwe: 'CWE-89' }],
     ])('changes when the %s changes', (_name, change) => {
         expect(computeScanFingerprint({ ...base, ...change })).not.toBe(
             computeScanFingerprint(base),
@@ -44,5 +46,24 @@ describe('computeScanFingerprint', () => {
         expect(
             computeScanFingerprint({ ...base, symbol: undefined }),
         ).toBe(computeScanFingerprint({ ...base, symbol: '' }));
+    });
+
+    it('keeps the identity when the model names a neighbouring CWE', () => {
+        expect(computeScanFingerprint({ ...base, cwe: 'CWE-862' })).toBe(
+            computeScanFingerprint(base),
+        );
+    });
+});
+
+describe('cweFamily', () => {
+    it.each([
+        ['CWE-89', 'sql'],
+        ['CWE-943', 'sql'],
+        ['cwe-79', 'xss'],
+        ['CWE 1336', 'template'],
+        ['CWE-1234', 'cwe-1234'],
+        [undefined, ''],
+    ])('%s → %s', (cwe, family) => {
+        expect(cweFamily(cwe)).toBe(family);
     });
 });
