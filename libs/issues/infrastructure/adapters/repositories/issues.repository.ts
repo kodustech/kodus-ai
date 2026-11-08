@@ -14,6 +14,7 @@ import {
     ScanFindingUpsert,
 } from '@libs/issues/domain/contracts/issues.repository';
 import { IssuesEntity } from '@libs/issues/domain/entities/issues.entity';
+import { normalizeScanPath } from '@libs/issues/domain/scan-fingerprint';
 import {
     IIssue,
     IssueSource,
@@ -185,24 +186,24 @@ export class IssuesRepository implements IIssuesRepository {
         uuid: string,
         suggestions: IContributingSuggestion[],
     ): Promise<IssuesEntity | null> {
-        const current = await this.issuesModel.findById(uuid).exec();
-        if (!current) {
-            return null;
+        // One conditional push per suggestion: two writers merging the same
+        // PR (a redelivered webhook) cannot both add it.
+        const seen = new Set<string>();
+        for (const suggestion of suggestions) {
+            if (!suggestion?.id || seen.has(suggestion.id)) {
+                continue;
+            }
+            seen.add(suggestion.id);
+            await this.issuesModel.updateOne(
+                {
+                    '_id': uuid,
+                    'contributingSuggestions.id': { $ne: suggestion.id },
+                },
+                { $push: { contributingSuggestions: suggestion } },
+            );
         }
 
-        const known = new Set(
-            (current.contributingSuggestions ?? []).map((s) => s.id),
-        );
-        const fresh = suggestions.filter((s) => s?.id && !known.has(s.id));
-        if (!fresh.length) {
-            return mapSimpleModelToEntity(current, IssuesEntity);
-        }
-
-        const doc = await this.issuesModel.findByIdAndUpdate(
-            uuid,
-            { $push: { contributingSuggestions: { $each: fresh } } },
-            { new: true },
-        );
+        const doc = await this.issuesModel.findById(uuid).exec();
         return doc ? mapSimpleModelToEntity(doc, IssuesEntity) : null;
     }
 
@@ -222,6 +223,7 @@ export class IssuesRepository implements IIssuesRepository {
             try {
                 const created = await this.issuesModel.create({
                     ...finding,
+                    filePath: normalizeScanPath(finding.filePath),
                     source: IssueSource.SECURITY_SCAN,
                     status: IssueStatus.OPEN,
                     contributingSuggestions: [],
@@ -245,6 +247,7 @@ export class IssuesRepository implements IIssuesRepository {
         }
 
         const refreshed: Partial<IIssue> = {
+            filePath: normalizeScanPath(finding.filePath),
             title: finding.title,
             description: finding.description,
             severity: finding.severity,
@@ -302,8 +305,10 @@ export class IssuesRepository implements IIssuesRepository {
                 'repository.id': params.repositoryId,
                 'source': IssueSource.SECURITY_SCAN,
                 'status': IssueStatus.OPEN,
-                'filePath': { $in: params.filePaths },
+                'filePath': { $in: params.filePaths.map(normalizeScanPath) },
                 'lastSeenScanId': { $ne: params.scanId },
+                // Sighted by a newer scan that overlapped this one: not gone.
+                'lastSeenAt': { $lt: params.scanStartedAt },
             },
             {
                 $set: {

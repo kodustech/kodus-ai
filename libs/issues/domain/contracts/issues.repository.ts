@@ -14,10 +14,7 @@ export const ISSUES_REPOSITORY_TOKEN = Symbol.for('IssuesRepository');
  * person dismissed.
  */
 export type ScanFindingOutcome =
-    | 'created'
-    | 'still_open'
-    | 'reopened'
-    | 'dismissed';
+    'created' | 'still_open' | 'reopened' | 'dismissed';
 
 export type ScanFindingUpsert = Omit<
     IIssue,
@@ -43,6 +40,11 @@ export interface ResolveUnseenScanFindingsParams {
      * never looked at the rest, so an issue there was not "gone", just unseen.
      */
     filePaths: string[];
+    /**
+     * When this scan started. A finding another scan sighted after it is not
+     * resolved by this one, even if their runs overlapped.
+     */
+    scanStartedAt: string;
 }
 
 export interface IIssuesRepository {

@@ -42,6 +42,7 @@ function modelWith(existing: Record<string, unknown> | null) {
         })),
         findById: jest.fn(() => exec(existing)),
         updateMany: jest.fn(async () => ({ modifiedCount: 3 })),
+        updateOne: jest.fn(async () => ({ modifiedCount: 1 })),
     };
 }
 
@@ -146,7 +147,9 @@ describe('IssuesRepository — security-scan findings', () => {
             organizationId: 'org-1',
             repositoryId: 'repo-1',
             scanId: 'scan-2',
-            filePaths: ['src/a.ts', 'src/b.ts'],
+            // A scan may spell a path as it was found; the issue stores it clean.
+            filePaths: ['./src/a.ts', 'src\\b.ts'],
+            scanStartedAt: '2026-11-08T10:00:00.000Z',
         });
 
         expect(resolved).toBe(3);
@@ -157,6 +160,8 @@ describe('IssuesRepository — security-scan findings', () => {
             'status': IssueStatus.OPEN,
             'filePath': { $in: ['src/a.ts', 'src/b.ts'] },
             'lastSeenScanId': { $ne: 'scan-2' },
+            // A newer, overlapping scan's sightings are not this one's to resolve.
+            'lastSeenAt': { $lt: '2026-11-08T10:00:00.000Z' },
         });
     });
 
@@ -170,6 +175,7 @@ describe('IssuesRepository — security-scan findings', () => {
                 repositoryId: 'repo-1',
                 scanId: 'scan-2',
                 filePaths: [],
+                scanStartedAt: '2026-11-08T10:00:00.000Z',
             }),
         ).resolves.toBe(0);
         expect(model.updateMany).not.toHaveBeenCalled();
@@ -177,48 +183,25 @@ describe('IssuesRepository — security-scan findings', () => {
 });
 
 describe('IssuesRepository.addContributingSuggestions', () => {
-    it('pushes only suggestions the issue does not already have', async () => {
-        const model = modelWith({
-            _id: 'i-1',
-            contributingSuggestions: [{ id: 's1' }],
-        });
+    it('adds each suggestion only while the issue does not have it, in one atomic write each', async () => {
+        const model = modelWith({ _id: 'i-1', contributingSuggestions: [] });
         const repository = new IssuesRepository(model as any);
+        const s1 = { id: 's1', prNumber: 1, prAuthor: { id: '1', name: 'a' } };
+        const s2 = { id: 's2', prNumber: 2, prAuthor: { id: '1', name: 'a' } };
 
-        await repository.addContributingSuggestions('i-1', [
-            { id: 's1', prNumber: 1, prAuthor: { id: '1', name: 'a' } },
-            { id: 's2', prNumber: 2, prAuthor: { id: '1', name: 'a' } },
+        await repository.addContributingSuggestions('i-1', [s1, s2, s1]);
+
+        // The filter carries the "not there yet" check, so two writers
+        // merging the same PR cannot both push it.
+        expect(model.updateOne.mock.calls).toEqual([
+            [
+                { '_id': 'i-1', 'contributingSuggestions.id': { $ne: 's1' } },
+                { $push: { contributingSuggestions: s1 } },
+            ],
+            [
+                { '_id': 'i-1', 'contributingSuggestions.id': { $ne: 's2' } },
+                { $push: { contributingSuggestions: s2 } },
+            ],
         ]);
-
-        expect(model.findByIdAndUpdate).toHaveBeenCalledWith(
-            'i-1',
-            {
-                $push: {
-                    contributingSuggestions: {
-                        $each: [
-                            {
-                                id: 's2',
-                                prNumber: 2,
-                                prAuthor: { id: '1', name: 'a' },
-                            },
-                        ],
-                    },
-                },
-            },
-            { new: true },
-        );
-    });
-
-    it('writes nothing when every suggestion is already there', async () => {
-        const model = modelWith({
-            _id: 'i-1',
-            contributingSuggestions: [{ id: 's1' }],
-        });
-        const repository = new IssuesRepository(model as any);
-
-        await repository.addContributingSuggestions('i-1', [
-            { id: 's1', prNumber: 1, prAuthor: { id: '1', name: 'a' } },
-        ]);
-
-        expect(model.findByIdAndUpdate).not.toHaveBeenCalled();
     });
 });

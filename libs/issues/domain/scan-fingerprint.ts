@@ -19,13 +19,17 @@ export function computeScanFingerprint(input: ScanFingerprintInput): string {
     const parts = [
         input.repositoryId,
         input.vulnerabilityClass.trim().toLowerCase(),
-        normalizePath(input.filePath),
+        normalizeScanPath(input.filePath),
         (input.symbol ?? '').trim(),
     ];
 
     return createHash('sha256').update(parts.join('\u0000')).digest('hex');
 }
 
-function normalizePath(path: string): string {
-    return path.trim().replace(/\\/g, '/').replace(/^\.?\//, '');
+/** The spelling a scan finding's path is stored and compared in. */
+export function normalizeScanPath(path: string): string {
+    return path
+        .trim()
+        .replace(/\\/g, '/')
+        .replace(/^\.?\//, '');
 }
