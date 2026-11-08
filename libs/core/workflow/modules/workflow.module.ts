@@ -15,6 +15,7 @@ import {
 import { CodeReviewPipelineModule } from '@libs/code-review/pipeline/code-review-pipeline.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { CliReviewModule } from '@libs/cli-review/cli-review.module';
+import { SecurityScanModule } from '@libs/security-scan/security-scan.module';
 import { WorkflowCoreModule } from './workflow-core.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 
@@ -131,7 +132,12 @@ export class WorkflowModule {
             forwardRef(() => PermissionValidationModule),
             SharedMongoModule, // Ensure MongoDB is available for worker
             ...(isWorker && useEcs ? [EcsModule] : []),
-            ...(isWorker ? [forwardRef(() => CliReviewModule)] : []),
+            ...(isWorker
+                ? [
+                      forwardRef(() => CliReviewModule),
+                      forwardRef(() => SecurityScanModule),
+                  ]
+                : []),
         ];
 
         const providers: Provider[] = [

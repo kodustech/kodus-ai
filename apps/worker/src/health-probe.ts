@@ -48,6 +48,7 @@ const DEFAULT_WORKER_CHANNELS = [
     'channel-feedback',
     'channel-ast-graph-build',
     'channel-ast-graph-incremental',
+    'channel-security-scan',
 ];
 
 interface HealthStatus {

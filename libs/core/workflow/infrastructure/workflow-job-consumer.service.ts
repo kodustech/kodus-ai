@@ -269,6 +269,37 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
     }
 
     /**
+     * Security scan slices (#2451). One slice per sandbox lifetime; a scan
+     * that needs more re-enqueues itself. Prefetch is low: every slice holds
+     * a sandbox and runs model calls for up to half an hour.
+     */
+    @RabbitSubscribe({
+        exchange: 'workflow.exchange',
+        routingKey: 'workflow.jobs.*.SECURITY_SCAN',
+        queue: 'workflow.jobs.security_scan.queue',
+        errorBehavior: MessageHandlerErrorBehavior.ACK,
+        errorHandler: createRabbitMQErrorHandlerWithFallback(
+            'workflow.job.failed',
+        ),
+        queueOptions: {
+            channel: 'channel-security-scan',
+            arguments:
+                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.security_scan.queue'],
+        },
+    })
+    async handleSecurityScanJob(
+        message: WorkflowJobMessage | MessagePayload<WorkflowJobMessage>,
+        amqpMsg: ConsumeMessage,
+    ): Promise<void> {
+        return this.handleWorkflowJob(
+            'workflow-job-consumer.security_scan',
+            'workflow.jobs.security_scan.queue',
+            message,
+            amqpMsg,
+        );
+    }
+
+    /**
      * Inbox claim timeout per queue, in minutes. Dimensioned as
      * (workflow timeout + overhead) so a hard worker crash doesn't
      * block retries for the default 2.5h while we wait for the reaper.
@@ -280,6 +311,7 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
             return 15;
         if (queueName === 'workflow.jobs.webhook.queue') return 20;
         if (queueName === 'workflow.jobs.cli_code_review.queue') return 35;
+        if (queueName === 'workflow.jobs.security_scan.queue') return 45;
         return 150;
     }
 

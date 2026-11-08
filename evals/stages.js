@@ -49,6 +49,7 @@ const GROUPS = [
     'On the PR',
     'Where rules and memories come from',
     'Conversation with Kody',
+    'Security scan',
 ];
 
 // The funnel's evals read a production review's frozen output (evals/funnel/snapshot).
@@ -1066,6 +1067,34 @@ const STAGES = [
             nightly: 'shared',
             caveat: 'A judge reads whether the reply asserts what the code shows; offering or taking actions is evals/thread-actions.',
         },
+    },
+    {
+        id: 'security-scan',
+        name: 'Security scan',
+        short: 'Audits a whole repository',
+        group: 'Security scan',
+        does: "Scans a repository's default branch on demand, outside any pull request: maps where outside input enters and where dangerous operations sit, audits each part with five security lenses on the review's own finder and verify, within the team's spend limit, and stores what survives as Kody Issues.",
+        pipeline: null,
+        tests: [
+            {
+                kind: 'unit',
+                name: 'The map, the lenses, the spend meter, the owners and the stored issues',
+                specs: [
+                    'libs/security-scan/application/security-scan-engine.spec.ts',
+                    'libs/security-scan/application/security-scan-job.processor.spec.ts',
+                    'libs/security-scan/domain/budget-meter.spec.ts',
+                    'libs/security-scan/domain/surface/collect-surface.spec.ts',
+                    'libs/issues/infrastructure/adapters/repositories/issues-scan-findings.repository.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: "A scripted model scans a repository written for it, end to end",
+                wiring: ['security-scan'],
+            },
+        ],
+        eval: null,
+        note: 'Measured on demand, not nightly: every case is a whole-repository scan and precision needs a person to judge the findings the dataset does not list (evals/security-scan).',
     },
 ];
 

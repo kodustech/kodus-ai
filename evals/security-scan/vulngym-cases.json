@@ -1,0 +1,1829 @@
+{
+ "source": "VulnGym v0.1.5 (Tencent, CC-BY-4.0) https://github.com/Tencent/VulnGym",
+ "cases": [
+  {
+   "id": "flowise-f0c12941",
+   "repo": "FlowiseAI/Flowise",
+   "commit": "f0c1294173a55f26e0b972c39c0c16917f5ca9e7",
+   "language": "typescript",
+   "advisories": [
+    {
+     "id": "GHSA-4JPM-CGX2-8H37",
+     "title": "Flowise getSinglePublicChatbotConfig 未授权暴露完整 flowData 凭证 (GHSA-4jpm-cgx2-8h37)",
+     "class": "authz",
+     "source": "https://github.com/advisories/GHSA-4jpm-cgx2-8h37",
+     "locations": [
+      {
+       "file": "packages/server/src/services/chatflows/index.ts",
+       "line": 391
+      },
+      {
+       "file": "packages/server/src/utils/constants.ts",
+       "line": 10
+      },
+      {
+       "file": "packages/server/src/utils/constants.ts",
+       "line": "6-10"
+      },
+      {
+       "file": "packages/server/src/index.ts",
+       "line": "221-223"
+      },
+      {
+       "file": "packages/server/src/routes/public-chatbots/index.ts",
+       "line": 8
+      },
+      {
+       "file": "packages/server/src/controllers/chatflows/index.ts",
+       "line": 246
+      },
+      {
+       "file": "packages/server/src/services/chatflows/index.ts",
+       "line": "363-371"
+      },
+      {
+       "file": "packages/server/src/services/chatflows/index.ts",
+       "line": "382-391"
+      }
+     ]
+    },
+    {
+     "id": "GHSA-F6HC-C5JR-878P",
+     "title": "Flowise AccountService.resetPassword() null-token 认证绕过（GHSA-f6hc-c5jr-878p）",
+     "class": "authz",
+     "source": "https://github.com/advisories/GHSA-f6hc-c5jr-878p",
+     "locations": [
+      {
+       "file": "packages/server/src/enterprise/services/account.service.ts",
+       "line": "570-571"
+      },
+      {
+       "file": "packages/server/src/enterprise/routes/account.route.ts",
+       "line": 29
+      },
+      {
+       "file": "packages/server/src/enterprise/controllers/account.controller.ts",
+       "line": "67-71"
+      },
+      {
+       "file": "packages/server/src/enterprise/services/account.service.ts",
+       "line": "563-564"
+      },
+      {
+       "file": "packages/server/src/enterprise/services/account.service.ts",
+       "line": "568-569"
+      }
+     ]
+    },
+    {
+     "id": "GHSA-XHMJ-RG95-44HV",
+     "title": "Flowise Custom Function SSRF Protection Bypass via Node.js Built-in Modules - utils.ts",
+     "class": "ssrf",
+     "source": "https://github.com/advisories/GHSA-xhmj-rg95-44hv",
+     "locations": [
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 1671
+      },
+      {
+       "file": "packages/server/src/controllers/nodes/index.ts",
+       "line": 90
+      },
+      {
+       "file": "packages/server/src/services/nodes/index.ts",
+       "line": 151
+      },
+      {
+       "file": "packages/server/src/utils/executeCustomNodeFunction.ts",
+       "line": 24
+      },
+      {
+       "file": "packages/server/src/utils/executeCustomNodeFunction.ts",
+       "line": 49
+      },
+      {
+       "file": "packages/components/nodes/utilities/CustomFunction/CustomFunction.ts",
+       "line": 140
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 1631
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 1640
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 1685
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 1494
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 1663
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 1682
+      }
+     ]
+    },
+    {
+     "id": "GHSA-2X8M-83VC-6WV4",
+     "title": "Flowise SSRF 防护绕过（DNS 重绑定 + 默认不安全配置） - httpSecurity.ts",
+     "class": null,
+     "source": "https://github.com/advisories/GHSA-2x8m-83vc-6wv4",
+     "locations": [
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 88
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 1494
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 1644
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 75
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 234
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 409
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 192
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 196
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 142
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 482
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 139
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 190
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 233
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 461
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 222
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 42
+      },
+      {
+       "file": "packages/server/src/services/fetch-links/index.ts",
+       "line": 6
+      },
+      {
+       "file": "packages/server/src/services/fetch-links/index.ts",
+       "line": 9
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 41
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 426
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 189
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 197
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 209
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 220
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 216
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 478
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 133
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 188
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 51
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 456
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 457
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": "52-54"
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": "214-218"
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 40
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 235
+      },
+      {
+       "file": "packages/components/src/utils.ts",
+       "line": 1659
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 193
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 210
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 214
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 215
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 224
+      },
+      {
+       "file": "packages/components/nodes/tools/WebScraperTool/WebScraperTool.ts",
+       "line": 60
+      },
+      {
+       "file": "packages/components/nodes/tools/WebScraperTool/WebScraperTool.ts",
+       "line": 62
+      }
+     ]
+    },
+    {
+     "id": "GHSA-6F7G-V4PP-R667",
+     "title": "Flowise: 未认证端点泄露 OAuth 2.0 凭据并允许刷新第三方访问令牌 - index.ts",
+     "class": "authz",
+     "source": "https://github.com/advisories/GHSA-6f7g-v4pp-r667",
+     "locations": [
+      {
+       "file": "packages/server/src/services/chatflows/index.ts",
+       "line": 391
+      },
+      {
+       "file": "packages/server/src/routes/public-chatbots/index.ts",
+       "line": 8
+      },
+      {
+       "file": "packages/server/src/utils/constants.ts",
+       "line": 10
+      },
+      {
+       "file": "packages/server/src/index.ts",
+       "line": 221
+      },
+      {
+       "file": "packages/server/src/index.ts",
+       "line": 223
+      },
+      {
+       "file": "packages/server/src/controllers/chatflows/index.ts",
+       "line": 246
+      },
+      {
+       "file": "packages/server/src/services/chatflows/index.ts",
+       "line": 366
+      },
+      {
+       "file": "packages/server/src/routes/oauth2/index.ts",
+       "line": 355
+      },
+      {
+       "file": "packages/server/src/routes/oauth2/index.ts",
+       "line": 307
+      },
+      {
+       "file": "packages/server/src/utils/constants.ts",
+       "line": 40
+      },
+      {
+       "file": "packages/server/src/index.ts",
+       "line": 222
+      },
+      {
+       "file": "packages/server/src/routes/oauth2/index.ts",
+       "line": 309
+      },
+      {
+       "file": "packages/server/src/routes/oauth2/index.ts",
+       "line": 314
+      },
+      {
+       "file": "packages/server/src/routes/oauth2/index.ts",
+       "line": 325
+      }
+     ]
+    },
+    {
+     "id": "GHSA-5FW2-MWHH-9947",
+     "title": "Flowise TTS 接口认证白名单绕过 + IDOR 越权调用他人 API 凭证",
+     "class": "authz",
+     "source": "https://github.com/advisories/GHSA-5fw2-mwhh-9947",
+     "locations": [
+      {
+       "file": "packages/components/src/textToSpeech.ts",
+       "line": 34
+      },
+      {
+       "file": "packages/server/src/utils/constants.ts",
+       "line": 41
+      },
+      {
+       "file": "packages/server/src/index.ts",
+       "line": 221
+      },
+      {
+       "file": "packages/server/src/index.ts",
+       "line": 222
+      },
+      {
+       "file": "packages/server/src/routes/text-to-speech/index.ts",
+       "line": 6
+      },
+      {
+       "file": "packages/server/src/controllers/text-to-speech/index.ts",
+       "line": 18
+      },
+      {
+       "file": "packages/server/src/controllers/text-to-speech/index.ts",
+       "line": 58
+      },
+      {
+       "file": "packages/server/src/controllers/text-to-speech/index.ts",
+       "line": 95
+      },
+      {
+       "file": "packages/server/src/controllers/text-to-speech/index.ts",
+       "line": 108
+      },
+      {
+       "file": "packages/components/src/textToSpeech.ts",
+       "line": 33
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "flowise-55b6913c",
+   "repo": "FlowiseAI/Flowise",
+   "commit": "55b6913c03f0dba37cc207975f0c0d0786e0f3c7",
+   "language": "typescript",
+   "advisories": [
+    {
+     "id": "GHSA-WVHQ-WP8G-C7VQ",
+     "title": "Flowise x-request-from: internal 请求头授权绕过 (CVE-2026-30820) - index.ts",
+     "class": "authz",
+     "source": "https://github.com/advisories/GHSA-wvhq-wp8g-c7vq",
+     "locations": [
+      {
+       "file": "packages/server/src/controllers/credentials/index.ts",
+       "line": 104
+      },
+      {
+       "file": "packages/server/src/index.ts",
+       "line": 222
+      },
+      {
+       "file": "packages/server/src/index.ts",
+       "line": "222-225"
+      },
+      {
+       "file": "packages/server/src/routes/index.ts",
+       "line": 84
+      },
+      {
+       "file": "packages/server/src/routes/credentials/index.ts",
+       "line": 14
+      },
+      {
+       "file": "packages/server/src/enterprise/rbac/PermissionCheck.ts",
+       "line": "24-33"
+      },
+      {
+       "file": "packages/server/src/controllers/credentials/index.ts",
+       "line": "97-106"
+      },
+      {
+       "file": "packages/server/src/controllers/chat-messages/index.ts",
+       "line": 125
+      },
+      {
+       "file": "packages/server/src/index.ts",
+       "line": 321
+      },
+      {
+       "file": "packages/server/src/routes/index.ts",
+       "line": 93
+      },
+      {
+       "file": "packages/server/src/routes/internal-chat-messages/index.ts",
+       "line": 8
+      },
+      {
+       "file": "packages/server/src/controllers/chat-messages/index.ts",
+       "line": 110
+      },
+      {
+       "file": "packages/server/src/controllers/apikey/index.ts",
+       "line": 30
+      },
+      {
+       "file": "packages/server/src/index.ts",
+       "line": 229
+      },
+      {
+       "file": "packages/server/src/index.ts",
+       "line": "229-230"
+      },
+      {
+       "file": "packages/server/src/enterprise/middleware/passport/index.ts",
+       "line": 427
+      },
+      {
+       "file": "packages/server/src/enterprise/rbac/PermissionCheck.ts",
+       "line": 10
+      },
+      {
+       "file": "packages/server/src/routes/apikey/index.ts",
+       "line": 7
+      },
+      {
+       "file": "packages/server/src/controllers/internal-predictions/index.ts",
+       "line": 49
+      },
+      {
+       "file": "packages/server/src/index.ts",
+       "line": 226
+      },
+      {
+       "file": "packages/server/src/enterprise/middleware/passport/index.ts",
+       "line": 429
+      },
+      {
+       "file": "packages/server/src/routes/index.ts",
+       "line": 94
+      }
+     ]
+    },
+    {
+     "id": "GHSA-J8G8-J7FC-43V6",
+     "title": "Flowise 任意文件上传（MIME 类型欺骗绕过白名单） - createAttachment.ts",
+     "class": "authz",
+     "source": "https://github.com/advisories/GHSA-j8g8-j7fc-43v6",
+     "locations": [
+      {
+       "file": "packages/server/src/utils/createAttachment.ts",
+       "line": 137
+      },
+      {
+       "file": "packages/server/src/routes/attachments/index.ts",
+       "line": 8
+      },
+      {
+       "file": "packages/server/src/utils/constants.ts",
+       "line": 25
+      },
+      {
+       "file": "packages/server/src/index.ts",
+       "line": 226
+      },
+      {
+       "file": "packages/server/src/index.ts",
+       "line": 227
+      },
+      {
+       "file": "packages/server/src/utils/index.ts",
+       "line": 1958
+      },
+      {
+       "file": "packages/server/src/utils/createAttachment.ts",
+       "line": 124
+      },
+      {
+       "file": "packages/server/src/utils/createAttachment.ts",
+       "line": 129
+      },
+      {
+       "file": "packages/server/src/utils/createAttachment.ts",
+       "line": 150
+      },
+      {
+       "file": "packages/server/src/utils/createAttachment.ts",
+       "line": 128
+      },
+      {
+       "file": "packages/server/src/utils/createAttachment.ts",
+       "line": 146
+      },
+      {
+       "file": "packages/server/src/utils/createAttachment.ts",
+       "line": 149
+      }
+     ]
+    },
+    {
+     "id": "GHSA-FVCW-9W9R-PXC7",
+     "title": "Flowise HTTP Node 默认无 SSRF 防护 (CVE-2026-31829) - httpSecurity.ts",
+     "class": "ssrf",
+     "source": "https://github.com/advisories/GHSA-fvcw-9w9r-pxc7",
+     "locations": [
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": "69-71"
+      },
+      {
+       "file": "packages/server/src/controllers/predictions/index.ts",
+       "line": 14
+      },
+      {
+       "file": "packages/server/src/controllers/predictions/index.ts",
+       "line": 79
+      },
+      {
+       "file": "packages/server/src/utils/buildChatflow.ts",
+       "line": 473
+      },
+      {
+       "file": "packages/server/src/utils/buildAgentflow.ts",
+       "line": 1105
+      },
+      {
+       "file": "packages/server/src/utils/buildAgentflow.ts",
+       "line": 1192
+      },
+      {
+       "file": "packages/components/nodes/agentflow/HTTP/HTTP.ts",
+       "line": 206
+      },
+      {
+       "file": "packages/components/nodes/agentflow/HTTP/HTTP.ts",
+       "line": 303
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 38
+      },
+      {
+       "file": "packages/server/src/routes/predictions/index.ts",
+       "line": 10
+      },
+      {
+       "file": "packages/server/src/utils/buildChatflow.ts",
+       "line": 778
+      },
+      {
+       "file": "packages/components/nodes/tools/RequestsGet/core.ts",
+       "line": 96
+      },
+      {
+       "file": "packages/components/nodes/tools/RequestsGet/core.ts",
+       "line": 170
+      },
+      {
+       "file": "packages/components/src/httpSecurity.ts",
+       "line": 175
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "paperclip-50cd76d8",
+   "repo": "paperclipai/paperclip",
+   "commit": "50cd76d8a3f2fc06d1a5af63840abd3d7a1bcd02",
+   "language": "typescript",
+   "advisories": [
+    {
+     "id": "GHSA-265W-RF2W-CJH4",
+     "title": "OS Command Injection via adapterConfig.workspaceStrategy.provisionCommand in PATCH /agents/:id",
+     "class": null,
+     "source": "https://github.com/advisories/GHSA-265w-rf2w-cjh4",
+     "locations": [
+      {
+       "file": "server/src/services/workspace-runtime.ts",
+       "line": 746
+      },
+      {
+       "file": "server/src/routes/agents.ts",
+       "line": 1870
+      },
+      {
+       "file": "server/src/routes/agents.ts",
+       "line": 1877
+      },
+      {
+       "file": "server/src/routes/agents.ts",
+       "line": 1887
+      },
+      {
+       "file": "server/src/routes/agents.ts",
+       "line": 1967
+      },
+      {
+       "file": "server/src/services/workspace-runtime.ts",
+       "line": 980
+      },
+      {
+       "file": "server/src/services/workspace-runtime.ts",
+       "line": 987
+      },
+      {
+       "file": "server/src/services/workspace-runtime.ts",
+       "line": 1044
+      },
+      {
+       "file": "server/src/services/workspace-runtime.ts",
+       "line": 901
+      },
+      {
+       "file": "server/src/services/workspace-runtime.ts",
+       "line": 905
+      }
+     ]
+    },
+    {
+     "id": "GHSA-XFQJ-R5QW-8G4J",
+     "title": "@paperclipai/server 多个 API 端点缺失身份认证 (GHSA-xfqj-r5qw-8g4j) - activity.ts",
+     "class": "authz",
+     "source": "https://github.com/advisories/GHSA-xfqj-r5qw-8g4j",
+     "locations": [
+      {
+       "file": "server/src/routes/activity.ts",
+       "line": 87
+      },
+      {
+       "file": "server/src/routes/activity.ts",
+       "line": 83
+      },
+      {
+       "file": "server/src/routes/activity.ts",
+       "line": "83-84"
+      },
+      {
+       "file": "server/src/routes/activity.ts",
+       "line": "85-89"
+      },
+      {
+       "file": "server/src/routes/access.ts",
+       "line": "1648-1657"
+      },
+      {
+       "file": "server/src/routes/access.ts",
+       "line": "1638-1641"
+      },
+      {
+       "file": "server/src/routes/access.ts",
+       "line": 1642
+      },
+      {
+       "file": "server/src/routes/access.ts",
+       "line": 1910
+      },
+      {
+       "file": "server/src/routes/access.ts",
+       "line": 1909
+      },
+      {
+       "file": "server/src/middleware/auth.ts",
+       "line": "74-75"
+      },
+      {
+       "file": "server/src/routes/access.ts",
+       "line": "1909-1911"
+      },
+      {
+       "file": "server/src/routes/access.ts",
+       "line": 1914
+      },
+      {
+       "file": "server/src/routes/access.ts",
+       "line": 1913
+      },
+      {
+       "file": "server/src/routes/access.ts",
+       "line": 1933
+      },
+      {
+       "file": "server/src/routes/access.ts",
+       "line": 1929
+      },
+      {
+       "file": "server/src/routes/health.ts",
+       "line": 88
+      },
+      {
+       "file": "server/src/routes/health.ts",
+       "line": 26
+      },
+      {
+       "file": "server/src/routes/health.ts",
+       "line": "32-41"
+      },
+      {
+       "file": "server/src/routes/health.ts",
+       "line": "88-97"
+      }
+     ]
+    },
+    {
+     "id": "GHSA-VR7G-88FQ-VHQ3",
+     "title": "Paperclip AI cleanupCommand OS Command Injection RCE (GHSA-vr7g-88fq-vhq3)",
+     "class": "injection",
+     "source": "https://github.com/advisories/GHSA-vr7g-88fq-vhq3",
+     "locations": [
+      {
+       "file": "server/src/services/workspace-runtime.ts",
+       "line": 479
+      },
+      {
+       "file": "server/src/routes/execution-workspaces.ts",
+       "line": 423
+      },
+      {
+       "file": "server/src/routes/execution-workspaces.ts",
+       "line": 448
+      },
+      {
+       "file": "server/src/routes/execution-workspaces.ts",
+       "line": 454
+      },
+      {
+       "file": "server/src/routes/execution-workspaces.ts",
+       "line": 535
+      },
+      {
+       "file": "server/src/services/workspace-runtime.ts",
+       "line": 1339
+      },
+      {
+       "file": "server/src/services/workspace-runtime.ts",
+       "line": 1352
+      },
+      {
+       "file": "server/src/services/workspace-runtime.ts",
+       "line": 851
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "n8n-8e81f3e3",
+   "repo": "n8n-io/n8n",
+   "commit": "8e81f3e31398b04fd6f8cc27cf844980cd382117",
+   "language": "typescript",
+   "advisories": [
+    {
+     "id": "GHSA-VPCF-GVG4-6QWR",
+     "title": "n8n Expression Sandbox Escape leads to RCE (CVE-2026-27577) - expression.ts",
+     "class": "injection",
+     "source": "https://github.com/advisories/GHSA-vpcf-gvg4-6qwr",
+     "locations": [
+      {
+       "file": "packages/workflow/src/expression.ts",
+       "line": 427
+      },
+      {
+       "file": "packages/workflow/src/expression.ts",
+       "line": 360
+      },
+      {
+       "file": "packages/workflow/src/expression.ts",
+       "line": 371
+      },
+      {
+       "file": "packages/workflow/src/expression.ts",
+       "line": 385
+      },
+      {
+       "file": "packages/workflow/src/expression.ts",
+       "line": 410
+      },
+      {
+       "file": "packages/workflow/src/expression-evaluator-proxy.ts",
+       "line": 19
+      },
+      {
+       "file": "packages/workflow/src/expression-sandboxing.ts",
+       "line": 281
+      },
+      {
+       "file": "packages/workflow/src/expression.ts",
+       "line": 354
+      },
+      {
+       "file": "packages/workflow/src/expression-evaluator-proxy.ts",
+       "line": 9
+      },
+      {
+       "file": "packages/workflow/src/expression-sandboxing.ts",
+       "line": 290
+      },
+      {
+       "file": "packages/workflow/src/expression-sandboxing.ts",
+       "line": 76
+      },
+      {
+       "file": "packages/workflow/src/expression-sandboxing.ts",
+       "line": 22
+      },
+      {
+       "file": "packages/workflow/src/expression-sandboxing.ts",
+       "line": 250
+      },
+      {
+       "file": "packages/workflow/src/expression-sandboxing.ts",
+       "line": 71
+      },
+      {
+       "file": "packages/@n8n/task-runner/src/js-task-runner/js-task-runner.ts",
+       "line": 677
+      },
+      {
+       "file": "packages/@n8n/task-runner/src/js-task-runner/js-task-runner.ts",
+       "line": 633
+      },
+      {
+       "file": "packages/@n8n/task-runner/src/js-task-runner/js-task-runner.ts",
+       "line": 640
+      },
+      {
+       "file": "packages/@n8n/task-runner/src/js-task-runner/js-task-runner.ts",
+       "line": 653
+      },
+      {
+       "file": "packages/@n8n/task-runner/src/js-task-runner/js-task-runner.ts",
+       "line": 252
+      },
+      {
+       "file": "packages/@n8n/task-runner/src/js-task-runner/js-task-runner.ts",
+       "line": 245
+      },
+      {
+       "file": "packages/@n8n/task-runner-python/src/constants.py",
+       "line": 118
+      },
+      {
+       "file": "packages/@n8n/task-runner-python/src/constants.py",
+       "line": 126
+      }
+     ]
+    },
+    {
+     "id": "GHSA-WXX7-MCGF-J869",
+     "title": "n8n Merge Node SQL Query Mode Arbitrary Code Execution & Arbitrary File Write (RCE) - combineBySql.ts",
+     "class": "injection",
+     "source": "https://github.com/advisories/GHSA-wxx7-mcgf-j869",
+     "locations": [
+      {
+       "file": "packages/nodes-base/nodes/Merge/v3/actions/mode/combineBySql.ts",
+       "line": 341
+      },
+      {
+       "file": "packages/nodes-base/nodes/Merge/v3/actions/mode/combineBySql.ts",
+       "line": 249
+      },
+      {
+       "file": "packages/nodes-base/nodes/Merge/v3/actions/mode/combineBySql.ts",
+       "line": "262-264"
+      },
+      {
+       "file": "packages/nodes-base/nodes/Merge/v3/actions/mode/combineBySql.ts",
+       "line": 253
+      },
+      {
+       "file": "packages/nodes-base/nodes/Merge/v3/actions/mode/combineBySql.ts",
+       "line": 290
+      },
+      {
+       "file": "packages/nodes-base/nodes/Merge/v3/actions/mode/combineBySql.ts",
+       "line": 227
+      },
+      {
+       "file": "packages/nodes-base/nodes/Merge/v3/actions/mode/combineBySql.ts",
+       "line": 260
+      },
+      {
+       "file": "packages/nodes-base/nodes/Merge/v3/actions/mode/combineBySql.ts",
+       "line": 266
+      },
+      {
+       "file": "packages/nodes-base/nodes/Merge/v3/actions/mode/combineBySql.ts",
+       "line": "270-277"
+      },
+      {
+       "file": "packages/nodes-base/nodes/Merge/v3/actions/mode/combineBySql.ts",
+       "line": 206
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "openclaw-d08dafb0",
+   "repo": "openclaw/openclaw",
+   "commit": "d08dafb08fee1e36ef929d6ccfdc322fdf52cee6",
+   "language": "typescript",
+   "advisories": [
+    {
+     "id": "GHSA-JV6R-27WW-4GW4",
+     "title": "openclaw DM pairing-store identity bypass group allowlist authorization - bot-handlers.ts",
+     "class": "authz",
+     "source": "https://github.com/advisories/GHSA-jv6r-27ww-4gw4",
+     "locations": [
+      {
+       "file": "src/line/bot-handlers.ts",
+       "line": 135
+      },
+      {
+       "file": "src/pairing/pairing-store.ts",
+       "line": 386
+      },
+      {
+       "file": "src/line/bot-handlers.ts",
+       "line": 110
+      },
+      {
+       "file": "src/line/bot-handlers.ts",
+       "line": 119
+      },
+      {
+       "file": "src/line/bot-handlers.ts",
+       "line": 120
+      },
+      {
+       "file": "src/line/bot-handlers.ts",
+       "line": 130
+      },
+      {
+       "file": "src/line/bot-access.ts",
+       "line": 30
+      },
+      {
+       "file": "src/channels/allow-from.ts",
+       "line": 1
+      },
+      {
+       "file": "src/line/bot-handlers.ts",
+       "line": 182
+      },
+      {
+       "file": "extensions/mattermost/src/mattermost/monitor.ts",
+       "line": 411
+      },
+      {
+       "file": "extensions/mattermost/src/mattermost/monitor.ts",
+       "line": 360
+      },
+      {
+       "file": "extensions/mattermost/src/mattermost/monitor.ts",
+       "line": 402
+      },
+      {
+       "file": "extensions/mattermost/src/mattermost/monitor.ts",
+       "line": 405
+      },
+      {
+       "file": "extensions/mattermost/src/mattermost/monitor.ts",
+       "line": 410
+      },
+      {
+       "file": "extensions/mattermost/src/mattermost/monitor.ts",
+       "line": 492
+      },
+      {
+       "file": "src/telegram/bot-message-context.ts",
+       "line": 198
+      },
+      {
+       "file": "src/telegram/bot-access.ts",
+       "line": 56
+      },
+      {
+       "file": "src/telegram/bot-access.ts",
+       "line": 1
+      }
+     ]
+    },
+    {
+     "id": "GHSA-GP3Q-WPQ4-5C5H",
+     "title": "openclaw group allowlist scope mismatch allows DM-paired senders to bypass group authorization - dm-policy-shared.ts",
+     "class": "authz",
+     "source": "https://github.com/advisories/GHSA-gp3q-wpq4-5c5h",
+     "locations": [
+      {
+       "file": "src/security/dm-policy-shared.ts",
+       "line": 28
+      },
+      {
+       "file": "src/pairing/pairing-store.ts",
+       "line": 386
+      },
+      {
+       "file": "src/line/bot-handlers.ts",
+       "line": 119
+      },
+      {
+       "file": "src/line/bot-handlers.ts",
+       "line": 130
+      },
+      {
+       "file": "src/line/bot-handlers.ts",
+       "line": 135
+      },
+      {
+       "file": "src/channels/allow-from.ts",
+       "line": 1
+      },
+      {
+       "file": "src/line/bot-handlers.ts",
+       "line": 182
+      },
+      {
+       "file": "extensions/mattermost/src/mattermost/monitor.ts",
+       "line": 405
+      },
+      {
+       "file": "extensions/mattermost/src/mattermost/monitor.ts",
+       "line": 411
+      },
+      {
+       "file": "extensions/mattermost/src/mattermost/monitor.ts",
+       "line": 493
+      },
+      {
+       "file": "extensions/mattermost/src/mattermost/monitor.ts",
+       "line": 498
+      },
+      {
+       "file": "extensions/mattermost/src/mattermost/monitor.ts",
+       "line": 888
+      },
+      {
+       "file": "extensions/mattermost/src/mattermost/monitor.ts",
+       "line": 893
+      },
+      {
+       "file": "src/security/dm-policy-shared.ts",
+       "line": 94
+      },
+      {
+       "file": "src/security/dm-policy-shared.ts",
+       "line": 58
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "langflow-73c1f203",
+   "repo": "langflow-ai/langflow",
+   "commit": "73c1f203b0205d00928a0af7fa0e0fc93170f03e",
+   "language": "python",
+   "advisories": [
+    {
+     "id": "GHSA-8C4J-F57C-35CF",
+     "title": "Langflow flow API 水平越权（CVE-2026-34046 / GHSA-8c4j-f57c-35cf） - flows.py",
+     "class": "authz",
+     "source": "https://github.com/advisories/GHSA-8c4j-f57c-35cf",
+     "locations": [
+      {
+       "file": "src/backend/base/langflow/api/v1/flows.py",
+       "line": 277
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/flows.py",
+       "line": 287
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/flows.py",
+       "line": 291
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/flows.py",
+       "line": 295
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/flows.py",
+       "line": 276
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/flows.py",
+       "line": 315
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/flows.py",
+       "line": 319
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/flows.py",
+       "line": 326
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/flows.py",
+       "line": 400
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/flows.py",
+       "line": 384
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/flows.py",
+       "line": 388
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/flows.py",
+       "line": 392
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "langflow-198fab1d",
+   "repo": "langflow-ai/langflow",
+   "commit": "198fab1dc7d4e018fd92767e226b6da6057cd704",
+   "language": "python",
+   "advisories": [
+    {
+     "id": "GHSA-PH9W-R52H-28P7",
+     "title": "langflow download_profile_picture 路径穿越任意文件读取（CVE-2026-33497） - files.py",
+     "class": "injection",
+     "source": "https://github.com/advisories/GHSA-ph9w-r52h-28p7",
+     "locations": [
+      {
+       "file": "src/backend/base/langflow/api/v1/files.py",
+       "line": 230
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/files.py",
+       "line": 168
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/files.py",
+       "line": 182
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/files.py",
+       "line": 193
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/files.py",
+       "line": 201
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/files.py",
+       "line": 206
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/files.py",
+       "line": 231
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/files.py",
+       "line": 169
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/files.py",
+       "line": 197
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/files.py",
+       "line": 205
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/files.py",
+       "line": 211
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/files.py",
+       "line": 215
+      },
+      {
+       "file": "src/backend/base/langflow/api/v1/files.py",
+       "line": 219
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mlflow-083eac9c",
+   "repo": "mlflow/mlflow",
+   "commit": "083eac9cd0be4a8934fac7010f9248c7888c6da4",
+   "language": "python",
+   "advisories": [
+    {
+     "id": "GHSA-7QHF-V65M-G5F3",
+     "title": "MLflow FastAPI Jobs端点完全绕过认证鉴权（CWE-306） - __init__.py",
+     "class": "authz",
+     "source": "https://github.com/advisories/GHSA-7qhf-v65m-g5f3",
+     "locations": [
+      {
+       "file": "mlflow/server/auth/__init__.py",
+       "line": 2958
+      },
+      {
+       "file": "mlflow/server/job_api.py",
+       "line": 68
+      },
+      {
+       "file": "mlflow/server/fastapi_app.py",
+       "line": 89
+      },
+      {
+       "file": "mlflow/server/auth/__init__.py",
+       "line": 2950
+      },
+      {
+       "file": "mlflow/server/auth/__init__.py",
+       "line": 2959
+      },
+      {
+       "file": "mlflow/server/job_api.py",
+       "line": 69
+      },
+      {
+       "file": "mlflow/server/jobs/utils.py",
+       "line": 553
+      },
+      {
+       "file": "mlflow/server/jobs/__init__.py",
+       "line": 221
+      },
+      {
+       "file": "mlflow/server/auth/__init__.py",
+       "line": 2924
+      },
+      {
+       "file": "mlflow/server/job_api.py",
+       "line": 48
+      },
+      {
+       "file": "mlflow/server/auth/__init__.py",
+       "line": 2951
+      },
+      {
+       "file": "mlflow/server/auth/__init__.py",
+       "line": 2910
+      },
+      {
+       "file": "mlflow/server/job_api.py",
+       "line": 86
+      },
+      {
+       "file": "mlflow/server/auth/__init__.py",
+       "line": 2925
+      },
+      {
+       "file": "mlflow/server/job_api.py",
+       "line": 87
+      },
+      {
+       "file": "mlflow/server/jobs/__init__.py",
+       "line": 265
+      },
+      {
+       "file": "mlflow/server/auth/__init__.py",
+       "line": 2960
+      },
+      {
+       "file": "mlflow/server/job_api.py",
+       "line": 114
+      },
+      {
+       "file": "mlflow/server/auth/__init__.py",
+       "line": 2927
+      },
+      {
+       "file": "mlflow/server/job_api.py",
+       "line": 115
+      },
+      {
+       "file": "mlflow/server/job_api.py",
+       "line": 122
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mlflow-d1312edf",
+   "repo": "mlflow/mlflow",
+   "commit": "d1312edfca36c7acae0d064ef6a094eded88e14f",
+   "language": "python",
+   "advisories": [
+    {
+     "id": "GHSA-RVHJ-8CHJ-8V3C",
+     "title": "MLflow model serving 命令注入漏洞（enable_mlserver=True）CVE-2026-0596 - mlserver.py",
+     "class": "injection",
+     "source": "https://github.com/advisories/GHSA-rvhj-8chj-8v3c",
+     "locations": [
+      {
+       "file": "mlflow/pyfunc/backend.py",
+       "line": "311-317"
+      },
+      {
+       "file": "mlflow/pyfunc/backend.py",
+       "line": "229-231"
+      },
+      {
+       "file": "mlflow/pyfunc/backend.py",
+       "line": 244
+      },
+      {
+       "file": "mlflow/pyfunc/mlserver.py",
+       "line": "10-18"
+      },
+      {
+       "file": "mlflow/pyfunc/backend.py",
+       "line": 309
+      },
+      {
+       "file": "mlflow/utils/environment.py",
+       "line": 1014
+      },
+      {
+       "file": "mlflow/models/cli.py",
+       "line": 24
+      },
+      {
+       "file": "mlflow/models/cli.py",
+       "line": "24-25"
+      },
+      {
+       "file": "mlflow/models/cli.py",
+       "line": 100
+      },
+      {
+       "file": "mlflow/pyfunc/mlserver.py",
+       "line": "43-45"
+      },
+      {
+       "file": "mlflow/pyfunc/backend.py",
+       "line": 294
+      },
+      {
+       "file": "mlflow/pyfunc/backend.py",
+       "line": "296-303"
+      },
+      {
+       "file": "mlflow/utils/environment.py",
+       "line": "1013-1014"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "open-webui-6cdb13d5",
+   "repo": "open-webui/open-webui",
+   "commit": "6cdb13d5cb26b7bceebfe0b85723d8a61aebae3b",
+   "language": "python",
+   "advisories": [
+    {
+     "id": "GHSA-C6XV-RCVW-V685",
+     "title": "Open WebUI SSRF via /api/v1/retrieval/process/web 缺失云元数据端点拦截 (CVE-2025-65958)",
+     "class": "injection",
+     "source": "https://github.com/advisories/GHSA-c6xv-rcvw-v685",
+     "locations": [
+      {
+       "file": "backend/open_webui/retrieval/web/utils.py",
+       "line": 556
+      },
+      {
+       "file": "backend/open_webui/routers/retrieval.py",
+       "line": 1778
+      },
+      {
+       "file": "backend/open_webui/routers/retrieval.py",
+       "line": 1785
+      },
+      {
+       "file": "backend/open_webui/retrieval/utils.py",
+       "line": "78-82"
+      },
+      {
+       "file": "backend/open_webui/retrieval/utils.py",
+       "line": "62-71"
+      },
+      {
+       "file": "backend/open_webui/retrieval/web/utils.py",
+       "line": "636-643"
+      },
+      {
+       "file": "backend/open_webui/retrieval/web/utils.py",
+       "line": "73-82"
+      },
+      {
+       "file": "backend/open_webui/retrieval/web/utils.py",
+       "line": "49-58"
+      },
+      {
+       "file": "backend/open_webui/retrieval/web/utils.py",
+       "line": "556-563"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "weknora-a20541cd",
+   "repo": "Tencent/WeKnora",
+   "commit": "a20541cd9d0a54dbff0b9112f1299c64347370ff",
+   "language": "go",
+   "advisories": [
+    {
+     "id": "GHSA-78H3-63C4-5FQC",
+     "title": "WeKnora MCP stdio 配置命令注入 (CVE-2026-22688) - client.go",
+     "class": "injection",
+     "source": "https://github.com/advisories/GHSA-78h3-63c4-5fqc",
+     "locations": [
+      {
+       "file": "internal/mcp/client.go",
+       "line": 133
+      },
+      {
+       "file": "internal/handler/mcp_service.go",
+       "line": 41
+      },
+      {
+       "file": "internal/handler/mcp_service.go",
+       "line": "325-334"
+      },
+      {
+       "file": "internal/application/service/mcp_service.go",
+       "line": "246-251"
+      },
+      {
+       "file": "internal/mcp/client.go",
+       "line": 120
+      },
+      {
+       "file": "internal/handler/mcp_service.go",
+       "line": 356
+      },
+      {
+       "file": "internal/application/service/mcp_service.go",
+       "line": "321-323"
+      },
+      {
+       "file": "internal/mcp/manager.go",
+       "line": "47-48"
+      },
+      {
+       "file": "internal/mcp/client.go",
+       "line": "120-128"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "weknora-10b6c980",
+   "repo": "Tencent/WeKnora",
+   "commit": "10b6c98078dc5206c8fd00d3eebe5535a7571eb4",
+   "language": "go",
+   "advisories": [
+    {
+     "id": "GHSA-CCJ6-79J6-CQ5Q",
+     "title": "WeKnora 租户管理接口越权访问 (CVE-2026-30855) - tenant.go",
+     "class": "authz",
+     "source": "https://github.com/advisories/GHSA-ccj6-79j6-cq5q",
+     "locations": [
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 117
+      },
+      {
+       "file": "internal/router/router.go",
+       "line": 308
+      },
+      {
+       "file": "internal/middleware/auth.go",
+       "line": 86
+      },
+      {
+       "file": "internal/middleware/auth.go",
+       "line": 131
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 107
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 110
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 114
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 170
+      },
+      {
+       "file": "internal/router/router.go",
+       "line": 309
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 148
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 153
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 157
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 169
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 220
+      },
+      {
+       "file": "internal/router/router.go",
+       "line": 310
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 206
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 211
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 215
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 252
+      },
+      {
+       "file": "internal/router/router.go",
+       "line": 311
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 249
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 250
+      },
+      {
+       "file": "internal/handler/tenant.go",
+       "line": 251
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ollama-73257915",
+   "repo": "ollama/ollama",
+   "commit": "7325791599409de52534429897481918717a9e85",
+   "language": "go",
+   "advisories": [
+    {
+     "id": "GHSA-F6MR-38G8-39RG",
+     "title": "Ollama 多个 API 端点缺少服务端认证导致未授权模型管理操作 (CVE-2025-63389) - routes.go",
+     "class": "authz",
+     "source": "https://github.com/advisories/GHSA-f6mr-38g8-39rg",
+     "locations": [
+      {
+       "file": "server/routes.go",
+       "line": 848
+      },
+      {
+       "file": "server/routes.go",
+       "line": 1503
+      },
+      {
+       "file": "server/routes.go",
+       "line": 1015
+      },
+      {
+       "file": "server/routes.go",
+       "line": 1508
+      },
+      {
+       "file": "server/routes.go",
+       "line": "982-990"
+      },
+      {
+       "file": "server/routes.go",
+       "line": "1015-1023"
+      },
+      {
+       "file": "server/routes.go",
+       "line": 1266
+      },
+      {
+       "file": "server/routes.go",
+       "line": 1506
+      },
+      {
+       "file": "server/routes.go",
+       "line": 1217
+      },
+      {
+       "file": "server/create.go",
+       "line": 44
+      },
+      {
+       "file": "server/routes.go",
+       "line": 1517
+      },
+      {
+       "file": "server/routes.go",
+       "line": 176
+      },
+      {
+       "file": "server/routes.go",
+       "line": 1524
+      },
+      {
+       "file": "server/routes.go",
+       "line": 941
+      },
+      {
+       "file": "server/routes.go",
+       "line": 1504
+      },
+      {
+       "file": "server/routes.go",
+       "line": 899
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "milvus-5519df6e",
+   "repo": "milvus-io/milvus",
+   "commit": "5519df6efc738abadf46b23cf63b51a2145146d5",
+   "language": "go",
+   "advisories": [
+    {
+     "id": "GHSA-7PPG-37FH-VCR6",
+     "title": "Milvus 9091 端口未授权访问：REST API 及 /expr 调试端点缺失认证（CVE-2026-26190） - service.go",
+     "class": "authz",
+     "source": "https://github.com/advisories/GHSA-7ppg-37fh-vcr6",
+     "locations": [
+      {
+       "file": "internal/distributed/proxy/service.go",
+       "line": 168
+      },
+      {
+       "file": "internal/distributed/proxy/service.go",
+       "line": 155
+      },
+      {
+       "file": "internal/distributed/proxy/service.go",
+       "line": 166
+      },
+      {
+       "file": "internal/proxy/impl.go",
+       "line": 6644
+      },
+      {
+       "file": "internal/distributed/proxy/service.go",
+       "line": 172
+      },
+      {
+       "file": "internal/proxy/impl.go",
+       "line": 6641
+      },
+      {
+       "file": "internal/proxy/impl.go",
+       "line": 6643
+      },
+      {
+       "file": "pkg/util/expr/expr.go",
+       "line": 95
+      },
+      {
+       "file": "internal/http/server.go",
+       "line": 98
+      },
+      {
+       "file": "internal/http/server.go",
+       "line": 108
+      },
+      {
+       "file": "internal/http/server.go",
+       "line": 112
+      },
+      {
+       "file": "internal/http/server.go",
+       "line": 119
+      },
+      {
+       "file": "pkg/util/expr/expr.go",
+       "line": 60
+      },
+      {
+       "file": "internal/distributed/proxy/service.go",
+       "line": 174
+      },
+      {
+       "file": "internal/distributed/proxy/service.go",
+       "line": 167
+      },
+      {
+       "file": "internal/distributed/proxy/service.go",
+       "line": 170
+      },
+      {
+       "file": "internal/distributed/proxy/httpserver/handler.go",
+       "line": 73
+      },
+      {
+       "file": "internal/distributed/proxy/httpserver/handler.go",
+       "line": 74
+      },
+      {
+       "file": "internal/http/server.go",
+       "line": 263
+      },
+      {
+       "file": "internal/http/server.go",
+       "line": 285
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

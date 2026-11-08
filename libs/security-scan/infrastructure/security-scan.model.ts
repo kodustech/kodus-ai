@@ -1,0 +1,86 @@
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+
+import { CoreDocument } from '@libs/core/infrastructure/repositories/model/mongodb';
+
+import {
+    ScanReportedFinding,
+    ScanUnit,
+    ScanUnitProgress,
+    SecurityScanBudget,
+    SecurityScanCoverage,
+    SecurityScanOutcomeCounts,
+    SecurityScanSpend,
+    SecurityScanStatus,
+} from '../domain/security-scan.types';
+
+@Schema({ collection: 'security_scans', timestamps: true, autoIndex: true })
+export class SecurityScanModel extends CoreDocument {
+    @Prop({ type: String, required: true })
+    public organizationId: string;
+
+    @Prop({ type: String, required: true })
+    public teamId: string;
+
+    @Prop({ type: Object, required: true })
+    public repository: {
+        id: string;
+        name: string;
+        fullName: string;
+        platform: string;
+        defaultBranch: string;
+    };
+
+    @Prop({
+        type: String,
+        required: true,
+        enum: Object.values(SecurityScanStatus),
+    })
+    public status: SecurityScanStatus;
+
+    @Prop({ type: Object, required: true })
+    public budget: SecurityScanBudget;
+
+    @Prop({ type: Object, required: true })
+    public spend: SecurityScanSpend;
+
+    @Prop({ type: String })
+    public commitSha?: string;
+
+    @Prop({ type: [Object], default: [] })
+    public units: ScanUnit[];
+
+    @Prop({ type: [Object], default: [] })
+    public progress: ScanUnitProgress[];
+
+    @Prop({ type: [Object], default: [] })
+    public reported: ScanReportedFinding[];
+
+    @Prop({ type: Object })
+    public coverage?: SecurityScanCoverage;
+
+    @Prop({ type: Object })
+    public outcome?: SecurityScanOutcomeCounts;
+
+    @Prop({ type: String })
+    public modelName?: string;
+
+    @Prop({ type: Object })
+    public requestedBy?: { userId?: string; email?: string };
+
+    @Prop({ type: String })
+    public error?: string;
+
+    @Prop({ type: String })
+    public startedAt?: string;
+
+    @Prop({ type: String })
+    public finishedAt?: string;
+}
+
+export const SecurityScanSchema =
+    SchemaFactory.createForClass(SecurityScanModel);
+
+SecurityScanSchema.index(
+    { 'organizationId': 1, 'repository.id': 1, 'createdAt': -1 },
+    { name: 'organization_repository_recent' },
+);

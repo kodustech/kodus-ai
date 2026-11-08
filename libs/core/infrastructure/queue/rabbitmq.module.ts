@@ -169,6 +169,10 @@ export class RabbitMQWrapperModule {
                             prefetchCount: 5,
                             default: false,
                         },
+                        'channel-security-scan': {
+                            prefetchCount: 2,
+                            default: false,
+                        },
                     },
                 };
             },
