@@ -3,7 +3,13 @@ import "@testing-library/jest-dom";
 
 import { previewPrRisk } from "@services/risk-assessment/fetch";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+    act,
+    fireEvent,
+    render,
+    screen,
+    waitFor,
+} from "@testing-library/react";
 import { FormProvider, useForm, type UseFormReturn } from "react-hook-form";
 
 import RiskPage from "./page";
@@ -61,7 +67,10 @@ type RiskTestForm = {
     pullRequestApprovalActive: { value: boolean; level: string };
 };
 let currentForm: UseFormReturn<RiskTestForm>;
-function setup(active = true) {
+function setup(
+    active = true,
+    criteria: RiskTestForm["riskCriteria"]["value"] = [],
+) {
     const queryClient = new QueryClient({
         defaultOptions: {
             queries: { retry: false },
@@ -72,7 +81,7 @@ function setup(active = true) {
         const form = useForm<RiskTestForm>({
             defaultValues: {
                 riskAssessmentActive: { value: active, level: "global" },
-                riskCriteria: { value: [], level: "global" },
+                riskCriteria: { value: criteria, level: "global" },
                 pullRequestApprovalActive: { value: false, level: "global" },
             },
         });
@@ -81,6 +90,9 @@ function setup(active = true) {
             <QueryClientProvider client={queryClient}>
                 <FormProvider {...form}>
                     <RiskPage />
+                    <span data-testid="form-state">
+                        {form.formState.isDirty ? "dirty" : "clean"}
+                    </span>
                 </FormProvider>
             </QueryClientProvider>
         );
@@ -93,6 +105,55 @@ beforeEach(() => {
     mockAccess = true;
     saveSettings.mockResolvedValue(undefined);
 });
+
+it.each([1, 2])(
+    "preserves criterion deletion across refetch with %i saved criteria",
+    async (count) => {
+        const criteria = ["Access control", "Customer data"]
+            .slice(-count)
+            .map((name, index) => ({
+                id: `criterion-${index}`,
+                name,
+                instructions: `Check ${name}.`,
+                enabled: true,
+            }));
+        setup(true, criteria);
+        const snapshot = JSON.parse(JSON.stringify(currentForm.getValues()));
+
+        fireEvent.click(
+            screen.getByRole("button", { name: "Delete Customer data" }),
+        );
+        expect(
+            screen.queryByRole("heading", { name: "Customer data" }),
+        ).toBeNull();
+        expect(screen.getByTestId("form-state")).toHaveTextContent("dirty");
+
+        act(() =>
+            currentForm.reset(snapshot, {
+                keepDirtyValues: true,
+                keepDirty: true,
+                keepErrors: true,
+                keepTouched: true,
+            }),
+        );
+        expect(
+            screen.queryByRole("heading", { name: "Customer data" }),
+        ).toBeNull();
+        const remaining = criteria.slice(0, -1);
+        expect(currentForm.getValues("riskCriteria.value")).toEqual(remaining);
+        await waitFor(() =>
+            expect(
+                screen.getByRole("button", { name: "Save settings" }),
+            ).toBeEnabled(),
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+        await waitFor(() => expect(saveSettings).toHaveBeenCalled());
+        const [data, options] = saveSettings.mock.calls[0];
+        expect(options.prepare(data).codeReviewConfig.riskCriteria).toEqual(
+            remaining,
+        );
+    },
+);
 
 it("always allows turning a saved assessment off after access is removed", async () => {
     mockAccess = false;

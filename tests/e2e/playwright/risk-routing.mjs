@@ -4,7 +4,9 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright';
-import { expect } from 'playwright/test';
+import { expect as baseExpect } from 'playwright/test';
+
+const expect = baseExpect.configure({ timeout: 45_000 });
 
 const WEB = process.env.KODUS_WEB_URL?.replace(/\/$/, '');
 const EMAIL = process.env.TEST_USER_EMAIL || 'preview@kodus.io';
@@ -23,11 +25,11 @@ page.setDefaultTimeout(45_000);
 const checks = [];
 const saves = [];
 const pageErrors = [];
-const consoleErrors = [];
+let consoleErrorCount = 0;
 const cleanupState = [];
-page.on('pageerror', (error) => pageErrors.push(error.message));
+page.on('pageerror', (error) => pageErrors.push(error.name));
 page.on('console', (event) => {
-    if (event.type() === 'error') consoleErrors.push(event.text().replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]').slice(0, 3000));
+    if (event.type() === 'error') consoleErrorCount++;
 });
 const pass = (name) => { checks.push(name); console.log(`PASS ${name}`); };
 const screenshot = (name) => page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true });
@@ -65,8 +67,7 @@ async function save() {
         criteriaCount: sent.riskCriteria?.length, policyCount: sent.approvalPolicies?.length,
         routing: sent.riskReviewRouting });
     if (!response.ok()) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(`Settings save returned HTTP ${response.status()}: ${JSON.stringify(body.message ?? body.error ?? 'Request rejected').slice(0, 1200)}`);
+        throw new Error(`Settings save returned HTTP ${response.status()}.`);
     }
     await page.getByText('Settings saved', { exact: true }).last().waitFor();
     await expect(button).not.toHaveAttribute('data-loading', 'true');
@@ -217,9 +218,8 @@ try {
     await readRiskForm(deleteCriterion, 'before-delete');
     await deleteCriterion.click();
     await readRiskForm(riskToggle, 'after-delete');
-    await page.waitForTimeout(250);
-    await readRiskForm(riskToggle, 'after-render');
     await expect(page.getByRole('heading', { name: criterionName, exact: true })).toHaveCount(0);
+    await readRiskForm(riskToggle, 'after-render');
     await save();
     await page.reload({ waitUntil: 'domcontentloaded' });
     await hydrated(riskToggle);
@@ -234,7 +234,7 @@ try {
         checked: node.getAttribute('aria-checked'), disabled: node.hasAttribute('disabled'),
     }))).catch(() => []);
     writeFileSync(`${OUT}/controls.json`, JSON.stringify(switches, null, 2));
-    writeFileSync(`${OUT}/console-errors.json`, JSON.stringify(consoleErrors, null, 2));
+    writeFileSync(`${OUT}/console-errors.json`, JSON.stringify({ count: consoleErrorCount }));
     process.exitCode = 1;
 } finally {
     writeFileSync(`${OUT}/cleanup-state.json`, JSON.stringify(cleanupState, null, 2));

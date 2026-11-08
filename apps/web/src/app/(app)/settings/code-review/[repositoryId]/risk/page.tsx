@@ -12,6 +12,7 @@ import { Action, ResourceType } from "@services/permissions/types";
 import type { RiskCriterion } from "@services/risk-assessment/types";
 import {
     Controller,
+    useController,
     useFormContext,
     useFormState,
     useWatch,
@@ -43,8 +44,13 @@ function RiskSettings() {
             control: form.control,
             name: "riskAssessmentActive.value",
         }) ?? false;
-    const criteria =
-        useWatch({ control: form.control, name: "riskCriteria.value" }) ?? [];
+    // Register the array as one field so refetches preserve removals as edits.
+    const { field: criteriaField } = useController({
+        control: form.control,
+        name: "riskCriteria.value",
+        defaultValue: [],
+    });
+    const criteria = criteriaField.value ?? [];
     const canEdit = usePermission(
         Action.Update,
         ResourceType.CodeReviewSettings,
@@ -64,7 +70,7 @@ function RiskSettings() {
     const [editing, setEditing] = useState<RiskCriterion | "new" | null>(null);
     const [previewing, setPreviewing] = useState(false);
     const updateCriteria = (next: RiskCriterion[]) =>
-        form.setValue("riskCriteria.value", next, { shouldDirty: true });
+        criteriaField.onChange(next);
     const submit = form.handleSubmit(async (data) => {
         try {
             const result = await saveSettings(data, {

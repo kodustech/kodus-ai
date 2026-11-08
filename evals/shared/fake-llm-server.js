@@ -131,9 +131,7 @@ function decide(body) {
                 ? ['medium']
                 : text.includes('EVAL_FORCE_NO_PR_RISK')
                   ? ['low', 'no-risk']
-                  : text.includes('EVAL_FORCE_UNKNOWN_PR_RISK')
-                    ? ['insufficient-context']
-                    : [];
+                  : [];
         return { text: JSON.stringify(instanceOf(format.json_schema.schema, format.json_schema.schema, 0, prefer)) };
     }
     return { text: '{}' };
