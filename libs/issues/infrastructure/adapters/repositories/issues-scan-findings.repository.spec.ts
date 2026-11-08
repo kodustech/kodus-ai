@@ -205,3 +205,23 @@ describe('IssuesRepository.addContributingSuggestions', () => {
         ]);
     });
 });
+
+describe('IssuesRepository.findByFileAndStatus', () => {
+    it('finds a scan issue stored normalized when the caller spells the path another way', async () => {
+        const model = { find: jest.fn(async () => []) };
+        const repository = new IssuesRepository(model as any);
+
+        await repository.findByFileAndStatus(
+            'org-1',
+            'repo-1',
+            './src/a.ts',
+            IssueStatus.OPEN,
+        );
+
+        expect((model.find.mock.calls[0] as unknown[])[0]).toEqual(
+            expect.objectContaining({
+                filePath: { $in: ['./src/a.ts', 'src/a.ts'] },
+            }),
+        );
+    });
+});
