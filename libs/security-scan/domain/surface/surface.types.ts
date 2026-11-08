@@ -1,5 +1,10 @@
 export type VulnClass =
-    'authz' | 'injection' | 'ssrf' | 'data_exposure' | 'secret_identity';
+    | 'authz'
+    | 'injection'
+    | 'ssrf'
+    | 'data_exposure'
+    | 'secret_identity'
+    | 'misconfiguration';
 
 export type SurfaceRole = 'entry_point' | 'auth_check' | 'sink';
 

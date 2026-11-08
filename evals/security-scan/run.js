@@ -24,8 +24,8 @@ const path = require('path');
 
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { countTokens, tokensUsed, registerTs } = require('../shared/eval-kit');
-const { orgRouteOrExit, evalPermissionService, EVAL_ORG } = require('../shared/model-route');
-const { mirrorFor, inlineMirror } = require('../shared/repo-mirror');
+const { orgRouteOrExit } = require('../shared/model-route');
+const { pricingResolver, scanRepository } = require('./scan-repo');
 
 registerTs();
 countTokens();
@@ -45,14 +45,6 @@ const OUT = args.output || path.join(__dirname, '..', 'results', `security-scan-
 
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 
-const LIBS = path.join(__dirname, '../../libs');
-const { SecurityScanEngine } = require(path.join(LIBS, 'security-scan/application/security-scan-engine.ts'));
-const { resolveScanModel } = require(path.join(LIBS, 'security-scan/application/scan-model.ts'));
-const { ScanBudgetMeter } = require(path.join(LIBS, 'security-scan/domain/budget-meter.ts'));
-const { PricingResolver } = require(path.join(LIBS, 'analytics/application/use-cases/usage/pricing-resolver.ts'));
-const { TokenPricingUseCase } = require(path.join(LIBS, 'analytics/application/use-cases/usage/token-pricing.use-case.ts'));
-const { LocalSandboxService } = require(path.join(LIBS, 'sandbox/infrastructure/providers/local-sandbox.service.ts'));
-const { computeScanFingerprint } = require(path.join(LIBS, 'issues/domain/scan-fingerprint.ts'));
 
 const DATA = require('./vulngym-cases.json');
 const TARGETS = require('./targets.json');
@@ -79,72 +71,10 @@ function matches(finding, advisory) {
     );
 }
 
-// The pricing the job reads (catalog, no org override), with no shared cache.
-function pricingResolver() {
-    const memory = new Map();
-    const cache = {
-        getFromCache: async (k) => memory.get(k),
-        addToCache: async (k, v) => void memory.set(k, v),
-        removeFromCache: async (k) => void memory.delete(k),
-    };
-    return new PricingResolver(new TokenPricingUseCase(cache));
-}
-
-async function openSandbox(c) {
-    if (c.files) {
-        // A repository written for the case, cloned like any other.
-        const mirror = await inlineMirror(c.files);
-        const sandbox = await new LocalSandboxService(undefined).createSandboxWithRepo({ cloneUrl: mirror.cloneUrl, authToken: '', branch: mirror.branch, platform: 'github' });
-        const cleanup = sandbox.cleanup;
-        sandbox.cleanup = async () => {
-            await cleanup();
-            await mirror.cleanup();
-        };
-        return sandbox;
-    }
-    const cloneUrl = await mirrorFor({ repo: c.repo, headSha: c.commit });
-    const params = { cloneUrl, authToken: '', branch: '', platform: 'github', checkoutSha: c.commit, sandboxMetadata: { stage: 'eval-security-scan' } };
-    if (SANDBOX === 'e2b') {
-        const { E2BSandboxService } = require(path.join(LIBS, 'sandbox/infrastructure/providers/e2b-sandbox.service.ts'));
-        const env = { ...require('dotenv').parse(fs.existsSync(path.join(__dirname, '../../.env')) ? fs.readFileSync(path.join(__dirname, '../../.env')) : ''), ...process.env };
-        // E2B clones from GitHub itself: a file:// mirror is on this machine.
-        return new E2BSandboxService({ get: (k) => env[k] }).createSandboxWithRepo({ ...params, cloneUrl: `https://github.com/${c.repo}.git` });
-    }
-    return new LocalSandboxService(undefined).createSandboxWithRepo(params);
-}
-
 async function runCase(c, route, pricing) {
     const startedAt = Date.now();
-    const sandbox = await openSandbox(c);
-    try {
-        const { model, rates } = await resolveScanModel({
-            organizationAndTeamData: EVAL_ORG,
-            permissionValidationService: evalPermissionService(route.storedConfig),
-            pricingResolver: pricing,
-        });
-        const meter = new ScanBudgetMeter(rates ? { maxUsd: BUDGET_USD } : { maxTokens: BUDGET_USD * 2_000_000 }, rates);
-        const result = await new SecurityScanEngine().run({
-            organizationId: EVAL_ORG.organizationId,
-            teamId: EVAL_ORG.teamId,
-            repositoryId: c.repo,
-            repositoryFullName: c.repo,
-            sandbox,
-            model,
-            meter,
-            maxUnits: 400,
-            reproduce: SANDBOX === 'e2b',
-        });
-
-        // What ships: the job stores one issue per fingerprint, so findings
-        // that share one are one issue (the first is the one stored).
-        const shipped = [];
-        const seen = new Set();
-        for (const f of result.findings) {
-            const fp = computeScanFingerprint({ repositoryId: c.repo, vulnerabilityClass: f.vulnerabilityClass, filePath: f.filePath, symbol: f.symbol });
-            if (seen.has(fp)) continue;
-            seen.add(fp);
-            shipped.push(f);
-        }
+    {
+        const { result, shipped, spend } = await scanRepository({ c, route, pricing, budgetUsd: BUDGET_USD, sandbox: SANDBOX });
         const inScope = c.advisories.filter((a) => a.class);
         const found = inScope.filter((a) => shipped.some((f) => matches(f, a)));
         const offList = shipped.filter((f) => !c.advisories.some((a) => matches(f, a)));
@@ -195,11 +125,9 @@ async function runCase(c, route, pricing) {
                 skippedByBudget: result.progress.filter((p) => p.state === 'skipped_budget').length,
                 stoppedByBudget: result.stoppedByBudget,
             },
-            spend: meter.snapshot(),
+            spend,
             ms: Date.now() - startedAt,
         };
-    } finally {
-        await sandbox.cleanup().catch(() => undefined);
     }
 }
 

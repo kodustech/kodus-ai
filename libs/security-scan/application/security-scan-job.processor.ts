@@ -435,6 +435,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     vulnerabilityClass: finding.vulnerabilityClass,
                     filePath: finding.filePath,
                     symbol: finding.symbol,
+                    cwe: finding.cwe,
                 }),
                 cwe: finding.cwe,
                 vulnerabilityClass: finding.vulnerabilityClass,
@@ -530,6 +531,7 @@ export function buildIssueDescription(
 function toReported(finding: ScanFinding): ScanReportedFinding {
     return {
         vulnerabilityClass: finding.vulnerabilityClass,
+        cwe: finding.cwe,
         title: finding.title,
         description: finding.description,
         severity: finding.severity,
