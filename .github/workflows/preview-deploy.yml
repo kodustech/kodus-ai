@@ -513,6 +513,21 @@ jobs:
                   export CLOUD_WEB_BASE_URL
                   export CLOUD_API_BASE_URL="${CLOUD_WEB_BASE_URL%/}/api/proxy/api"
                   export CLOUD_TENANT_PAID_EMAIL="preview-risk-${{ github.run_id }}@kodus.io"
+                  auth_ready() {
+                    node -e 'fetch(process.env.CLOUD_WEB_BASE_URL+"/api/auth/csrf").then(async r=>process.exit(r.ok && typeof (await r.json()).csrfToken === "string" ? 0 : 1)).catch(()=>process.exit(1))'
+                  }
+                  if ! auth_ready; then
+                    echo 'Preview auth route is not ready; restarting only the preview web service.'
+                    $RUNO exec --branch "$HEAD_REF" --profile cloud -- 'docker restart kodus_web'
+                  fi
+                  for attempt in $(seq 1 24); do
+                    if auth_ready; then break; fi
+                    if [ "$attempt" = 24 ]; then
+                      echo '::error::Preview authentication remains unavailable; no pipeline cases were measured.'
+                      exit 1
+                    fi
+                    sleep 5
+                  done
                   $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
                     "PREVIEW_SEED_EMAIL=$CLOUD_TENANT_PAID_EMAIL pnpm run seed:preview >/dev/null 2>&1"
                   $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
