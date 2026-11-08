@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { IssueSource } from '@libs/issues/domain/interfaces/issues.interface';
 import { REQUEST } from '@nestjs/core';
 
 import {
@@ -153,6 +154,19 @@ export class GetIssueByIdUseCase implements IUseCase {
                 id: issue.repository.id,
                 name: issue.repository.name,
             },
+            ...(issue.source === IssueSource.SECURITY_SCAN && {
+                source: issue.source,
+                security: {
+                    cwe: issue.cwe,
+                    vulnerabilityClass: issue.vulnerabilityClass,
+                    symbol: issue.symbol,
+                    startLine: issue.startLine,
+                    endLine: issue.endLine,
+                    evidence: issue.evidence,
+                    lastSeenAt: issue.lastSeenAt,
+                },
+                owner: issue.owner,
+            }),
         };
     }
 

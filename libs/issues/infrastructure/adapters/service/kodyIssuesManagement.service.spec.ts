@@ -201,6 +201,112 @@ describe('KodyIssuesManagementService', () => {
         expect(valid.map((s: { id: string }) => s.id)).toEqual(['suggestion-1']);
     });
 
+    describe('mergeSuggestionsIntoIssues', () => {
+        beforeEach(() => {
+            pullRequestsServiceMock.findByNumberAndRepositoryName = jest
+                .fn()
+                .mockResolvedValue({
+                    number: 42,
+                    user: { id: 'user-1', name: 'test-user' },
+                });
+            issuesServiceMock.addContributingSuggestions = jest.fn();
+            kodyIssuesAnalysisServiceMock.mergeSuggestionsIntoIssues =
+                jest.fn();
+        });
+
+        it('stores a matched suggestion on the issue it matched', async () => {
+            issuesServiceMock.findByFileAndStatus = jest.fn().mockResolvedValue([
+                {
+                    uuid: 'issue-1',
+                    contributingSuggestions: [
+                        { id: 'old', prNumber: 'not-a-number' },
+                    ],
+                },
+            ]);
+            kodyIssuesAnalysisServiceMock.mergeSuggestionsIntoIssues.mockResolvedValue(
+                {
+                    matches: [
+                        {
+                            suggestionId: 'suggestion-1',
+                            existingIssueId: 'issue-1',
+                        },
+                    ],
+                },
+            );
+
+            await service.mergeSuggestionsIntoIssues(
+                baseParams,
+                'src/main.ts',
+                [mockSuggestion],
+                undefined,
+            );
+
+            expect(
+                issuesServiceMock.addContributingSuggestions,
+            ).toHaveBeenCalledWith('issue-1', [
+                {
+                    id: 'suggestion-1',
+                    prNumber: 42,
+                    prAuthor: { id: 'user-1', name: 'test-user' },
+                },
+            ]);
+            expect(issuesServiceMock.create).not.toHaveBeenCalled();
+        });
+
+        it('matches against a security-scan issue, which has no PR suggestion', async () => {
+            issuesServiceMock.findByFileAndStatus = jest.fn().mockResolvedValue([
+                {
+                    uuid: 'scan-issue',
+                    title: 'IDOR on order lookup',
+                    description: 'Any user can read any order.',
+                    filePath: 'src/main.ts',
+                    language: 'typescript',
+                    contributingSuggestions: [],
+                },
+            ]);
+            kodyIssuesAnalysisServiceMock.mergeSuggestionsIntoIssues.mockResolvedValue(
+                { matches: [] },
+            );
+
+            await service.mergeSuggestionsIntoIssues(
+                baseParams,
+                'src/main.ts',
+                [mockSuggestion],
+                undefined,
+            );
+
+            const promptData =
+                kodyIssuesAnalysisServiceMock.mergeSuggestionsIntoIssues.mock
+                    .calls[0][2];
+            expect(promptData.existingIssues).toEqual([
+                {
+                    issueId: 'scan-issue',
+                    representativeSuggestion: [
+                        expect.objectContaining({
+                            id: 'scan-issue',
+                            oneSentenceSummary: 'IDOR on order lookup',
+                            suggestionContent: 'Any user can read any order.',
+                        }),
+                    ],
+                },
+            ]);
+        });
+    });
+
+    describe('buildFilter', () => {
+        it('filters by label when the API asks for a category', async () => {
+            const filter = await service.buildFilter({
+                organizationId: 'org-uuid',
+                category: 'security' as any,
+            });
+
+            expect(filter).toEqual({
+                organizationId: 'org-uuid',
+                label: 'security',
+            });
+        });
+    });
+
     describe('processClosedPr', () => {
         let mergeSpy: jest.SpyInstance;
 

@@ -207,6 +207,25 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                 filePath,
                 existingIssues: await Promise.all(
                     existingIssues.map(async (issue) => {
+                        // A security-scan issue has no PR suggestion behind it;
+                        // the issue itself is what a new suggestion matches.
+                        if (!issue.contributingSuggestions?.length) {
+                            return {
+                                issueId: issue.uuid,
+                                representativeSuggestion: [
+                                    {
+                                        id: issue.uuid,
+                                        language: issue.language,
+                                        relevantFile: issue.filePath,
+                                        suggestionContent: issue.description,
+                                        existingCode: '',
+                                        improvedCode: '',
+                                        oneSentenceSummary: issue.title,
+                                    },
+                                ],
+                            };
+                        }
+
                         const enrichedSuggestions =
                             await this.enrichContributingSuggestions(
                                 [issue.contributingSuggestions[0]],
@@ -218,9 +237,9 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                                 id: suggestion.id,
                                 language: suggestion.language,
                                 relevantFile: suggestion.relevantFile,
-                                suggestionContent:
-                                    suggestion.fullExplanation ||
-                                    suggestion.suggestionContent,
+                                // enrichContributingSuggestions already put
+                                // the full explanation here when there is one.
+                                suggestionContent: suggestion.suggestionContent,
                                 existingCode: suggestion.existingCode,
                                 improvedCode: suggestion.improvedCode,
                                 oneSentenceSummary:
@@ -319,22 +338,11 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                             label: suggestion?.label as LabelType,
                             severity: suggestion?.severity as SeverityLevel,
                             contributingSuggestions: [
-                                {
-                                    id: suggestion.id,
-                                    prNumber: context.pullRequest.number,
-                                    prAuthor: {
-                                        id:
-                                            pullRequest?.user?.id.toString() ||
-                                            '',
-                                        name: pullRequest?.user?.name || '',
-                                    },
-                                    ...(suggestion.brokenKodyRulesIds?.length
-                                        ? {
-                                              brokenKodyRulesIds:
-                                                  suggestion.brokenKodyRulesIds,
-                                          }
-                                        : {}),
-                                },
+                                this.toContributingSuggestion(
+                                    suggestion,
+                                    context.pullRequest.number,
+                                    pullRequest,
+                                ),
                             ],
                             repository: {
                                 id: context.repository.id,
@@ -373,6 +381,24 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
 
             return;
         }
+    }
+
+    private toContributingSuggestion(
+        suggestion: Partial<CodeSuggestion>,
+        prNumber: number,
+        pullRequest: { user?: { id?: string | number; name?: string } },
+    ): IContributingSuggestion {
+        return {
+            id: suggestion.id,
+            prNumber,
+            prAuthor: {
+                id: pullRequest?.user?.id?.toString() || '',
+                name: pullRequest?.user?.name || '',
+            },
+            ...(suggestion.brokenKodyRulesIds?.length
+                ? { brokenKodyRulesIds: suggestion.brokenKodyRulesIds }
+                : {}),
+        };
     }
 
     async resolveExistingIssues(
@@ -554,6 +580,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
         const suggestionsMap = new Map(newSuggestions.map((s) => [s.id, s]));
 
         const unmatchedSuggestions: Partial<CodeSuggestion>[] = [];
+        let pullRequest: any;
 
         for (const match of mergeResult.matches) {
             const suggestion = suggestionsMap.get(match.suggestionId);
@@ -561,15 +588,23 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
             if (!suggestion) continue;
 
             if (match.existingIssueId) {
-                const existingIssue = await this.issuesService.findById(
-                    match.existingIssueId,
-                );
-                if (existingIssue) {
-                    await this.issuesService.addSuggestionIds(
-                        match.existingIssueId,
-                        [suggestion.id],
+                pullRequest ??=
+                    await this.pullRequestsService.findByNumberAndRepositoryName(
+                        context.pullRequest.number,
+                        context.repository.name,
+                        context.organizationAndTeamData,
                     );
-                }
+
+                await this.issuesService.addContributingSuggestions(
+                    match.existingIssueId,
+                    [
+                        this.toContributingSuggestion(
+                            suggestion,
+                            context.pullRequest.number,
+                            pullRequest,
+                        ),
+                    ],
+                );
             } else {
                 unmatchedSuggestions.push(suggestion);
             }
@@ -616,7 +651,6 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
 
         const exactMatchFields = [
             'severity',
-            'category',
             'organizationId',
             'filePath',
             'status',
@@ -626,6 +660,11 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                 filter[field] = filters[field];
             }
         });
+
+        // The API calls it `category`; the stored field is `label`.
+        if (filters.category) {
+            filter['label'] = filters.category;
+        }
 
         if (filters.repositoryName) {
             filter['repository.name'] = {
