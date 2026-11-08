@@ -30,7 +30,7 @@ type Evidence = {
         heavy?: boolean;
         risk?: { status: string; riskIdentified?: boolean; reason?: string };
         decision?: { kind: string; reason?: string; reviewedHeadSha?: string };
-        eligibility?: Record<string, unknown>;
+        eligibility?: Record<string, { key: string; status: string }>;
         agentSkips?: Array<{ id: string; reason: string }>;
     } | null;
     stages: Array<{ name: string; status: string }>;
@@ -787,7 +787,11 @@ export const riskRoutingPipeline: Scenario = {
             );
             ctx.assert(
                 Object.keys(beforeLabel.execution!.eligibility ?? {}).length ===
-                    0,
+                    0 &&
+                    !beforeLabel.models.some(
+                        (model) =>
+                            model.runName === 'approval-policy-eligibility',
+                    ),
                 'Eligibility instructions ran before fixed conditions matched',
             );
             record('label-missing-policy-holds', active, beforeLabel);
@@ -830,10 +834,21 @@ export const riskRoutingPipeline: Scenario = {
                 'Private eligibility instructions leaked into a provider comment',
             );
             const afterLabel = labelApproval.data;
+            const eligibility = Object.entries(
+                afterLabel.execution!.eligibility ?? {},
+            );
             ctx.assert(
-                Object.keys(afterLabel.execution!.eligibility ?? {}).includes(
-                    'qa-labeled',
-                ),
+                eligibility.length === 1 &&
+                    eligibility.every(
+                        ([key, result]) =>
+                            Boolean(key) &&
+                            result.key === key &&
+                            result.status === 'eligible',
+                    ) &&
+                    afterLabel.models.some(
+                        (model) =>
+                            model.runName === 'approval-policy-eligibility',
+                    ),
                 'The actual eligibility judgment was not persisted',
             );
             record(
