@@ -77,6 +77,11 @@ on:
                 required: false
                 default: false
                 type: boolean
+            recover_webhooks:
+                description: Restart an existing preview's webhook service before deployment
+                required: false
+                default: false
+                type: boolean
             risk_pipeline_smoke:
                 description: Test real GitHub PR webhooks, risk, routing, agents and approvals
                 required: false
@@ -367,6 +372,45 @@ jobs:
                   } >> .env
                   chmod 600 .env
 
+            - name: Recover existing preview webhooks
+              if: steps.env.outputs.configured == 'true' && inputs.recover_webhooks
+              env:
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
+                  PROFILES: ${{ steps.decide.outputs.profiles }}
+              run: |
+                  set -euo pipefail
+                  for profile in $PROFILES; do
+                    name=$($RUNO environments | jq -er --arg b "$HEAD_REF" --arg p "$profile" \
+                      '[.[] | select(.repo == "kodus-ai" and .branch == $b and .profile == $p)] | if length == 1 then .[0].envName else error("Expected one matching preview") end')
+                    $RUNO attach "$name"
+                    url=$($RUNO url --branch "$HEAD_REF" --profile "$profile" | head -n 1)
+                    case "$url" in
+                      https://*.sslip.io) webhook_url="https://webhooks.${url#https://}" ;;
+                      *) echo '::error::Webhook recovery requires an existing sslip.io preview'; exit 1 ;;
+                    esac
+                    # Print state and a known error category, never raw request logs.
+                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
+                      "docker inspect --format '{{.Name}} status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} restarts={{.RestartCount}}' kodus_webhooks"
+                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
+                      "docker logs --tail 250 kodus_webhooks 2>&1 | grep -q 'heap out of memory' && echo 'webhooks: heap exhaustion detected' || true"
+                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- 'docker restart kodus_webhooks'
+                    recovered=false
+                    for attempt in $(seq 1 60); do
+                      if curl --fail --silent --max-time 3 "$webhook_url/health/ready" >/dev/null; then
+                        recovered=true
+                        break
+                      fi
+                      sleep 5
+                    done
+                    if [ "$recovered" != true ]; then
+                      echo '::error::The preview webhook service did not recover'
+                      exit 1
+                    fi
+                    echo "Webhook readiness restored for $profile"
+                  done
+
             - name: Bring the environment up
               id: up
               if: steps.env.outputs.configured == 'true'
@@ -446,11 +490,9 @@ jobs:
                   # token-bearing URLs, and Stripe payloads. Detailed logs are
                   # available through the authenticated Runo exec/logs path.
                   for profile in $PROFILES; do
-                    overlay=docker-compose.preview.cloud.yml
-                    [ "$profile" = self-hosted ] && overlay=docker-compose.preview.selfhosted.yml
                     echo "== $profile"
                     $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
-                      "docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml -f $overlay --profile mcp ps" || true
+                      "docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'" || true
                   done
 
             - name: Smoke approval and area map on Runo
