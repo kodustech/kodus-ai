@@ -1,11 +1,13 @@
-import { describeLLMConfigStatus } from '@libs/llm/llm-config-status';
+import {
+    describeLLMConfigStatus,
+    type LLMConfigStatus,
+} from '@libs/llm/llm-config-status';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import { REGISTRY } from '@libs/llm/providers';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import { overrideContext } from '@libs/llm/routing-strategy';
 import { resolveModelSlot } from '@libs/llm/resolve-model-slot';
 import type { BYOKConfig as StoredConfig } from '@libs/llm/byok-config';
-import type { LLMConfigStatus } from '@services/organizationParameters/fetch';
 
 import {
     draftTaskModel,

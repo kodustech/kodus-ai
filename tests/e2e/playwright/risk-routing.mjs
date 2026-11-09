@@ -503,7 +503,7 @@ try {
         initialCaptures,
     });
     pass('Settings states are captured inside the complete application');
-    await testRoutingProviderMatrix({ page, web: WEB, out: OUT, hydrated });
+    await testRoutingProviderMatrix({ page, context, settingsRequest, web: WEB, out: OUT, hydrated });
     pass('Provider HTTP fixture matrix passes in the full app without external model calls');
     assert.deepEqual(pageErrors, [], 'No uncaught app errors.');
 } catch (error) {

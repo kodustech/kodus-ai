@@ -11,8 +11,11 @@ const target = '/settings/code-review/global/routing';
 
 function fixture(providers = ['openai', 'anthropic']) {
     const credentials = providers.map((provider, i) => ({
-        id: `matrix-credential-${i}`, provider, apiKey: '••••',
-        settings: provider === 'openai_compatible' ? { baseURL: `https://gateway-${i}.example.test/v1` } : {},
+        id: `matrix-credential-${i}`, provider,
+        ...(!['kodus', 'amazon_bedrock'].includes(provider) ? { apiKey: '••••' } : {}),
+        settings: provider === 'openai_compatible' ? { baseURL: `https://gateway-${i}.example.test/v1` }
+            : provider === 'amazon_bedrock' ? { awsBearerToken: '••••', awsRegion: 'us-east-1' }
+              : provider === 'google_vertex' ? { vertexLocation: 'us-central1' } : {},
     }));
     const models = credentials.map((credential, i) => ({
         id: `matrix-model-${i}`, credentialId: credential.id,
@@ -42,7 +45,7 @@ function describe(config, changes = {}) {
         }, ...changes };
 }
 
-export async function testRoutingProviderMatrix({ page, web, out, hydrated }) {
+export async function testRoutingProviderMatrix({ page, context, settingsRequest, web, out, hydrated }) {
     const dir = `${out}/provider-matrix`;
     mkdirSync(dir, { recursive: true });
     const checks = [];
@@ -53,7 +56,9 @@ export async function testRoutingProviderMatrix({ page, web, out, hydrated }) {
     let disconnectOnSave = false;
     let writes = [];
     let probes = [];
+    let probeResult = { ok: true, code: 'ok', latencyMs: 1, verifiedBy: 'catalog' };
     let statusReads = 0;
+    let totalWrites = 0;
     const pattern = '**/api/proxy/api/organization-parameters/**';
     const handler = async (route) => {
         const req = route.request();
@@ -70,14 +75,15 @@ export async function testRoutingProviderMatrix({ page, web, out, hydrated }) {
             assert.equal(body.key, 'byok_config', 'Only model fixture writes are accepted in the provider matrix.');
             if (failSave) return fulfill({ message: 'QA fixture: save rejected' }, 503);
             writes.push(body);
+            ++totalWrites;
             // Keep only masked material, just as a subsequent API read would.
             config = clone(body.configValue);
-            for (const c of config.credentials) if (c.provider !== 'kodus') c.apiKey = '••••';
+            for (const c of config.credentials) if (!['kodus', 'amazon_bedrock'].includes(c.provider)) c.apiKey = '••••';
             return fulfill({});
         }
         if (url.pathname.endsWith('/test-byok-model') || url.pathname.endsWith('/test-byok')) {
             probes.push(req.postDataJSON());
-            return fulfill({ ok: true, code: 'ok', latencyMs: 1, verifiedBy: 'catalog' });
+            return fulfill(probeResult);
         }
         return route.continue();
     };
@@ -267,12 +273,37 @@ export async function testRoutingProviderMatrix({ page, web, out, hydrated }) {
         await expect(page).toHaveURL(new RegExp(`${target}#fallback$`));
         await ready(); pass('old routing URL redirects to its canonical replacement and preserves anchor');
         await shot('legacy-redirect');
+
+        await open(gateways); await hydrated(saveButton());
+        const scopesResponse = await context.request.get(`${web}/api/proxy/api/parameters/code-review-scopes?teamId=${encodeURIComponent(settingsRequest.body.organizationAndTeamData.teamId)}`);
+        assert.ok(scopesResponse.ok(), 'The QA repository scopes must be available.');
+        const scopesBody = await scopesResponse.json();
+        const repository = (scopesBody.data ?? scopesBody).find((scope) => scope.id !== 'global');
+        assert.ok(repository, 'The connected QA tenant must expose a repository scope.');
+        await page.goto(`${web}/settings/code-review/${encodeURIComponent(repository.id)}/routing`, { waitUntil: 'domcontentloaded' });
+        const scopePicker = picker('Code review model override');
+        await expect(scopePicker).toBeEnabled();
+        await scopePicker.click();
+        await page.getByRole('option', { name: /Shared Model.*gateway-1.example.test/i }).click();
+        const probeButton = page.getByRole('button', { name: 'Test model', exact: true });
+        await expect(probeButton).toBeEnabled(); await probeButton.click();
+        await page.getByText('Model available', { exact: true }).waitFor();
+        assert.deepEqual(probes.at(-1), { provider: 'openai_compatible', model: 'shared-model', credentialId: 'matrix-credential-1' });
+        await expect(page.getByText('Connection verified', { exact: true })).toHaveCount(0);
+        await shot('scoped-gateway-catalog'); pass('repository probe targets the selected gateway credential; catalog success is not called connection verification');
+        probeResult = { ok: false, code: 'auth', latencyMs: 1, message: 'Authentication failed (QA fixture)' };
+        await probeButton.click();
+        await page.getByRole('alert').filter({ hasText: 'Authentication failed (QA fixture)' }).waitFor();
+        await expect(page.getByText('Model available', { exact: true })).toHaveCount(0);
+        await shot('scoped-gateway-auth-error');
+        assert.equal(writes.length, 0, 'Probing a scope override must not persist the fixture pin.');
+        await reset(); pass('probe authentication failure replaces success; reset leaves the actual repository unchanged');
     } finally {
         await page.setViewportSize({ width: 1440, height: 1000 });
         // Reset only local draft if a failed assertion stopped the run mid-edit.
         await reset().catch(() => {});
         await page.unroute(pattern, handler);
-        writeFileSync(`${dir}/report.json`, JSON.stringify({ source: 'Full Next app and native controls; provider/status/config/write/probe HTTP fixtures only', externalProviderCalls: 0, checks, passed: checks.length === 25, statusReads, fixtureWrites: writes.length, probeCount: probes.length }, null, 2));
+        writeFileSync(`${dir}/report.json`, JSON.stringify({ source: 'Full Next app and native controls; provider/status/config/write/probe HTTP fixtures only', externalProviderCalls: 0, checks, passed: checks.length === 27, statusReads, fixtureWrites: totalWrites, probeCount: probes.length }, null, 2));
     }
     return checks;
 }
