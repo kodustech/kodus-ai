@@ -279,6 +279,10 @@ const ModelPickerPopover = ({
                 className="w-[var(--radix-popover-trigger-width)] p-0">
                 <Command
                     filter={(value, search) => {
+                        // The manual-entry row is not a model: keep it so an id
+                        // the list does not carry can still be entered.
+                        if (value === "__manual__") return 1;
+
                         const repository = models.find((r) => r.id === value);
 
                         if (!repository) return 0;

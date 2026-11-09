@@ -341,3 +341,47 @@ describe("ByokModelSelect — custom endpoint (openai_compatible)", () => {
         ).not.toBeInTheDocument();
     });
 });
+
+describe("ByokModelSelect — manual entry while searching", () => {
+    beforeAll(() => {
+        // jsdom has neither; cmdk and Radix call them once the popover opens.
+        window.HTMLElement.prototype.scrollIntoView = jest.fn();
+        (globalThis as any).ResizeObserver = class {
+            observe() {}
+            unobserve() {}
+            disconnect() {}
+        };
+    });
+
+    it("keeps the manual option for an id the endpoint does not list, and still filters the list", async () => {
+        const typed = "deepseek-ai/DeepSeek-V4.1-Flash-1017";
+        mockPreview.mockReturnValue({
+            data: [{ id: "listed/model-a", name: "Model A" }],
+            isFetching: false,
+            isError: false,
+        });
+        render(
+            <LivePickerHarness
+                credentialStored
+                defaultValues={{
+                    provider: "openai_compatible",
+                    model: "",
+                    baseURL: "https://api.together.ai/v1",
+                }}
+            />,
+        );
+
+        fireEvent.click(screen.getByRole("combobox"));
+        fireEvent.change(await screen.findByPlaceholderText(/search models/i), {
+            target: { value: typed },
+        });
+
+        const manual = await screen.findByText(`Type manually: "${typed}"`);
+        expect(screen.queryByText("Model A")).not.toBeInTheDocument();
+
+        fireEvent.click(manual);
+        expect(
+            screen.getByPlaceholderText(/type a model name/i),
+        ).toBeInTheDocument();
+    });
+});
