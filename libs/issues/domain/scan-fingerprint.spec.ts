@@ -48,6 +48,25 @@ describe('computeScanFingerprint', () => {
         ).toBe(computeScanFingerprint({ ...base, symbol: '' }));
     });
 
+    it('is one issue whether the missing check is named authentication or authorization', () => {
+        expect(computeScanFingerprint({ ...base, cwe: 'CWE-306' })).toBe(
+            computeScanFingerprint({ ...base, cwe: 'CWE-862' }),
+        );
+    });
+
+    it('keys an app-wide setting once per repository, whatever route reports it', () => {
+        const csrf = { ...base, vulnerabilityClass: 'misconfiguration', cwe: 'CWE-352' };
+        expect(
+            computeScanFingerprint({ ...csrf, filePath: 'app/routes/a.py', symbol: 'create' }),
+        ).toBe(
+            computeScanFingerprint({ ...csrf, filePath: 'app/routes/b.py', symbol: 'update' }),
+        );
+        // A route-level weakness still keeps its place.
+        expect(
+            computeScanFingerprint({ ...base, filePath: 'app/routes/a.py' }),
+        ).not.toBe(computeScanFingerprint({ ...base, filePath: 'app/routes/b.py' }));
+    });
+
     it('keeps the identity when the model names a neighbouring CWE', () => {
         expect(computeScanFingerprint({ ...base, cwe: 'CWE-862' })).toBe(
             computeScanFingerprint(base),
