@@ -3,6 +3,8 @@
 // with RECALL_DUMP) against our golden set, evals/dedup/gold-v3/golden.json.
 //
 //   node evals/gold-v3-recall/score.js --dump=<RECALL_DUMP dir> [--out=<dir>] [--concurrency=4] [--dry-run]
+//     [--gold=<dir>]  another golden set in the gold v3 layout (golden.json, judge-issues.json,
+//                     repos.json, upstream-verification.json); default evals/dedup/gold-v3
 //
 // A comment the judge matches to a golden issue is a TP; every other comment
 // is a FP (no second pass against the known FPs). Recall = golden issues
@@ -23,7 +25,7 @@ const GOLD = path.join(ROOT, 'evals/dedup/gold-v3');
 const BENCH_ROOT = process.env.BENCH_REPOS_ROOT || path.join(process.env.HOME || '', 'projects/benchmark');
 
 function parseArgs(argv) {
-    const out = { dump: '', out: '', concurrency: 4, dryRun: false, compareOrigins: [] };
+    const out = { dump: '', out: '', concurrency: 4, dryRun: false, compareOrigins: [], gold: GOLD };
     for (const arg of argv.slice(2)) {
         const m = arg.match(/^--([^=]+)(?:=(.*))?$/);
         if (!m) continue;
@@ -31,9 +33,10 @@ function parseArgs(argv) {
         else if (m[1] === 'out') out.out = m[2];
         else if (m[1] === 'concurrency') out.concurrency = Number(m[2]) || 4;
         else if (m[1] === 'dry-run') out.dryRun = true;
+        else if (m[1] === 'gold') out.gold = path.resolve(m[2]);
         else if (m[1] === 'compare-origins') out.compareOrigins = String(m[2] || '').split(',').map((s) => s.trim()).filter(Boolean);
         else {
-            console.error(`unknown flag --${m[1]}. Known: --dump --out --concurrency --dry-run --compare-origins`);
+            console.error(`unknown flag --${m[1]}. Known: --dump --out --concurrency --dry-run --compare-origins --gold`);
             process.exit(2);
         }
     }
@@ -150,11 +153,11 @@ function pool(rows, line) {
 
 async function main() {
     const args = parseArgs(process.argv);
-    const gold = JSON.parse(fs.readFileSync(path.join(GOLD, 'golden.json'), 'utf8')).prs;
-    const judgeIssues = JSON.parse(fs.readFileSync(path.join(GOLD, 'judge-issues.json'), 'utf8')).cases;
-    const repos = JSON.parse(fs.readFileSync(path.join(GOLD, 'repos.json'), 'utf8'));
+    const gold = JSON.parse(fs.readFileSync(path.join(args.gold, 'golden.json'), 'utf8')).prs;
+    const judgeIssues = JSON.parse(fs.readFileSync(path.join(args.gold, 'judge-issues.json'), 'utf8')).cases;
+    const repos = JSON.parse(fs.readFileSync(path.join(args.gold, 'repos.json'), 'utf8'));
     const upstream = Object.fromEntries(
-        Object.values(JSON.parse(fs.readFileSync(path.join(GOLD, 'upstream-verification.json'), 'utf8')).prs).flatMap((p) => Object.entries(p.tps).map(([id, v]) => [id, v.status])),
+        Object.values(JSON.parse(fs.readFileSync(path.join(args.gold, 'upstream-verification.json'), 'utf8')).prs).flatMap((p) => Object.entries(p.tps).map(([id, v]) => [id, v.status])),
     );
     if (!args.dryRun && !judgeKey()) {
         console.error(`not measured: no key for the judge ${JUDGE_MODEL} (API_ANTHROPIC_API_KEY)`);
@@ -268,7 +271,7 @@ async function main() {
     const result = {
         eval: 'gold-v3-recall',
         dump: path.resolve(args.dump),
-        gold: 'evals/dedup/gold-v3/golden.json',
+        gold: path.relative(ROOT, path.join(args.gold, 'golden.json')),
         judge: { model: JUDGE_MODEL, effort: JUDGE_EFFORT, ruleHash },
         dryRun: args.dryRun,
         cases: rows.length,
