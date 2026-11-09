@@ -40,9 +40,6 @@ import { hasPermission } from "src/core/utils/permission-map";
 
 import { formatTokenCount, isNoKnownPriceMessage } from "./format";
 
-const DEFAULT_MAX_USD = "20";
-const DEFAULT_MAX_TOKENS = "2000000";
-
 type LimitBy = "usd" | "tokens";
 
 /**
@@ -99,23 +96,24 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
 
     const [repositoryId, setRepositoryId] = useState("");
     const [limitBy, setLimitBy] = useState<LimitBy>("usd");
-    const [maxUsd, setMaxUsd] = useState(DEFAULT_MAX_USD);
-    const [maxTokens, setMaxTokens] = useState(DEFAULT_MAX_TOKENS);
+    // Both optional: left empty, the scan covers the whole repository.
+    const [maxUsd, setMaxUsd] = useState("");
+    const [maxTokens, setMaxTokens] = useState("");
     const [apiError, setApiError] = useState<string>();
     const [submitting, setSubmitting] = useState(false);
 
     const usdValue = Number(maxUsd);
     const tokensValue = Number(maxTokens);
-    const limitError =
-        limitBy === "usd"
-            ? !maxUsd.trim() || !Number.isFinite(usdValue) || usdValue < 1
-                ? "Enter at least $1."
-                : undefined
-            : !maxTokens.trim() ||
-                !Number.isInteger(tokensValue) ||
-                tokensValue < 1
-              ? "Enter a whole number of tokens."
-              : undefined;
+    const limit = limitBy === "usd" ? maxUsd.trim() : maxTokens.trim();
+    const limitError = !limit
+        ? undefined
+        : limitBy === "usd"
+          ? !Number.isFinite(usdValue) || usdValue < 1
+              ? "Enter at least $1, or leave it empty."
+              : undefined
+          : !Number.isInteger(tokensValue) || tokensValue < 1
+            ? "Enter a whole number of tokens, or leave it empty."
+            : undefined;
 
     const canSubmit = !!teamId && !!repositoryId && !limitError && !submitting;
 
@@ -129,9 +127,11 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
             await startSecurityScan({
                 teamId,
                 repositoryId,
-                ...(limitBy === "usd"
-                    ? { maxUsd: usdValue }
-                    : { maxTokens: tokensValue }),
+                ...(!limit
+                    ? {}
+                    : limitBy === "usd"
+                      ? { maxUsd: usdValue }
+                      : { maxTokens: tokensValue }),
             });
 
             await queryClient.invalidateQueries({
@@ -176,10 +176,10 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                     </DialogTitle>
                     <DialogDescription>
                         Kody reads the repository&apos;s default branch with
-                        your organization&apos;s own model and stops at the
-                        limit you set. Findings show up as Issues with the label
-                        Security. In beta: check each finding before acting on
-                        it.
+                        your organization&apos;s own model, and stops at a spend
+                        limit only if you set one. Findings show up as Issues
+                        with the label Security. In beta: check each finding
+                        before acting on it.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -233,7 +233,7 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                     {limitBy === "usd" ? (
                         <FormControl.Root>
                             <FormControl.Label htmlFor="security-scan-max-usd">
-                                Spend limit (USD)
+                                Spend limit (USD, optional)
                             </FormControl.Label>
                             <FormControl.Input>
                                 <Input
@@ -243,6 +243,7 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                                     inputMode="decimal"
                                     min={1}
                                     step="any"
+                                    placeholder="No limit"
                                     value={maxUsd}
                                     disabled={submitting}
                                     error={limitError}
@@ -256,7 +257,15 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                                     }
                                 />
                             </FormControl.Input>
-                            <FormControl.Error>{limitError}</FormControl.Error>
+                            {limitError ? (
+                                <FormControl.Error>
+                                    {limitError}
+                                </FormControl.Error>
+                            ) : (
+                                <FormControl.Helper>
+                                    Leave it empty to scan the whole repository.
+                                </FormControl.Helper>
+                            )}
                             <LimitToggle
                                 label="Limit by tokens instead"
                                 onClick={() => setLimitBy("tokens")}
@@ -265,7 +274,7 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                     ) : (
                         <FormControl.Root>
                             <FormControl.Label htmlFor="security-scan-max-tokens">
-                                Token limit
+                                Token limit (optional)
                             </FormControl.Label>
                             <FormControl.Input>
                                 <Input
@@ -275,6 +284,7 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                                     inputMode="numeric"
                                     min={1}
                                     step={1}
+                                    placeholder="No limit"
                                     value={maxTokens}
                                     disabled={submitting}
                                     error={limitError}
@@ -289,8 +299,9 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                                 </FormControl.Error>
                             ) : (
                                 <FormControl.Helper>
-                                    {formatTokenCount(tokensValue)} input and
-                                    output tokens.
+                                    {limit
+                                        ? `${formatTokenCount(tokensValue)} input and output tokens.`
+                                        : "Leave it empty to scan the whole repository."}
                                 </FormControl.Helper>
                             )}
                             <LimitToggle
