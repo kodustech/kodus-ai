@@ -73,7 +73,7 @@ describe('renderComment', () => {
             'To fix: 1 missing requirement · also open: 1 to check manually · 1 change not in the task',
         );
         expect(body).toContain(
-            '✅ **MET** | Persists per user <sub>AC #1</sub> | `settings/density.ts:14`',
+            '✅ **MET** | Persists per user <sub>AC01</sub> | `settings/density.ts:14`',
         );
         expect(body).toContain('**Do:** Change it to "comfortable".');
         expect(body).toContain(
@@ -161,6 +161,45 @@ describe('the trail of earlier commits', () => {
     });
 });
 
+describe('AC sources are labels, not issue or PR numbers', () => {
+    it('renders legacy AC sources safely in comments, CLI and met summaries', () => {
+        for (const [source, expected] of [
+            ['AC #1', 'AC01'],
+            ['AC #02', 'AC02'],
+            ['AC#10', 'AC10'],
+            ['AC #123', 'AC123'],
+        ]) {
+            const sample = outcome();
+            sample.checks[0].verdict.requirements![0].source = source;
+            const comment = renderComment(sample);
+            expect(comment).toContain(`<sub>${expected}</sub>`);
+            expect(comment).not.toContain(`<sub>${source}</sub>`);
+            expect(renderCliText(sample)).toContain(
+                `${expected} Persists per user`,
+            );
+
+            const met = outcome({ passed: true });
+            met.passed = true;
+            met.checks[0].verdict.requirements = [
+                { ...met.checks[0].verdict.requirements![0], source },
+            ];
+            met.checks[0].verdict.outOfScope = [];
+            expect(renderComment(met)).toContain(`met: ${expected}`);
+        }
+    });
+
+    it('does not rewrite unrelated labels or actual tracker references', () => {
+        for (const source of ['Description', 'Parent', 'AB#8', 'AC #2 extra']) {
+            const sample = outcome();
+            sample.checks[0].verdict.requirements![0].source = source;
+            expect(renderComment(sample)).toContain(`<sub>${source}</sub>`);
+            expect(renderCliText(sample)).toContain(
+                `${source} Persists per user`,
+            );
+        }
+    });
+});
+
 describe('renderCliText', () => {
     it('prints one line per requirement for an agent to act on (UC-41)', () => {
         const text = renderCliText(outcome());
@@ -182,7 +221,7 @@ describe('a met task', () => {
         );
         met.checks[0].verdict.outOfScope = [];
         const comment = renderComment(met);
-        expect(comment).toContain('✅ 1 of 2 met: AC #1');
+        expect(comment).toContain('✅ 1 of 2 met: AC01');
         expect(comment).not.toContain('Persists per user');
         expect(comment).toContain('CHECK MANUALLY');
     });

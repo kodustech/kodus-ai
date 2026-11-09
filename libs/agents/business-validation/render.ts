@@ -207,6 +207,16 @@ function headline(check: TaskCheck): string {
         : `To fix: ${toMerge.join(' · ')}`;
 }
 
+/**
+ * AC #N is an acceptance-criterion label, not a GitHub issue/PR number.
+ * Historical validation records retain their original source strings.
+ */
+function displayRequirementSource(source: string): string {
+    const normalized = source.trim();
+    const criterion = /^AC\s*#\s*(\d+)$/i.exec(normalized);
+    return criterion ? `AC${criterion[1].padStart(2, '0')}` : normalized;
+}
+
 function requirementRow(requirement: RequirementVerdict): string {
     const label = requirement.accepted
         ? `☑️ **${requirement.state.toUpperCase().replace('_', ' ')} · ACCEPTED**`
@@ -241,7 +251,7 @@ function requirementRow(requirement: RequirementVerdict): string {
         }
     }
     const name = requirement.source
-        ? `${requirement.requirement} <sub>${requirement.source}</sub>`
+        ? `${requirement.requirement} <sub>${displayRequirementSource(requirement.source)}</sub>`
         : requirement.requirement;
     return `| ${label} | ${cell(name)} | ${cell(detail.join(' · '))} |`;
 }
@@ -330,7 +340,7 @@ export function renderCliText(outcome: BusinessValidationOutcome): string {
                     ? ` → ${r.action}`
                     : '';
             lines.push(
-                `  ${r.state.toUpperCase().replace('_', ' ').padEnd(14)} ${r.source ? `${r.source} ` : ''}${r.requirement}${where}${why}${fix}`,
+                `  ${r.state.toUpperCase().replace('_', ' ').padEnd(14)} ${r.source ? `${displayRequirementSource(r.source)} ` : ''}${r.requirement}${where}${why}${fix}`,
             );
         }
         for (const c of check.verdict.outOfScope ?? []) {
@@ -348,7 +358,7 @@ export function renderCliText(outcome: BusinessValidationOutcome): string {
 }
 
 /**
- * A met requirement in the one-line summary: its label (`AC #2`) when that
+ * A met requirement in the one-line summary: its label (`AC02`) when that
  * names only it, else its own words, so "Parent" never stands for a row.
  */
 function metLabel(
@@ -359,9 +369,14 @@ function metLabel(
     if (
         source &&
         source !== 'Parent' &&
-        all.filter((r) => r.source?.trim() === source).length === 1
+        all.filter(
+            (r) =>
+                r.source &&
+                displayRequirementSource(r.source) ===
+                    displayRequirementSource(source),
+        ).length === 1
     ) {
-        return source;
+        return displayRequirementSource(source);
     }
     const text = requirement.requirement.trim();
     return text.length > 60 ? `${text.slice(0, 57)}…` : text;
