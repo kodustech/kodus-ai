@@ -60,6 +60,17 @@ const SyncStatusLine = ({ sync }: { sync: RepositorySyncStatus | null }) => {
         );
     }
 
+    if (sync.status === "deferred") {
+        const total = sync.total ?? 0;
+        return (
+            <p className="text-text-secondary text-sm">
+                {total > 0 &&
+                    `Set up ${sync.done ?? 0} of ${total} repositories. `}
+                {sync.error ?? "The rest continue on the next sync."}
+            </p>
+        );
+    }
+
     if (sync.status === "failed" || sync.status === "rate_limited") {
         return (
             <p className="text-warning text-sm">

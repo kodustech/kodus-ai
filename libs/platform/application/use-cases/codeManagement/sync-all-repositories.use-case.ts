@@ -57,6 +57,8 @@ export class SyncAllRepositoriesUseCase {
     static readonly BACKFILL_PER_RUN = 25;
     /** AST builds a team may have queued or running at once. */
     static readonly AST_BUILDS_PER_TEAM = 5;
+    /** Runs a pending AST build is retried before the sync gives up on it. */
+    static readonly AST_MAX_ATTEMPTS = 5;
 
     private readonly logger = createLogger(SyncAllRepositoriesUseCase.name);
 
@@ -387,6 +389,7 @@ export class SyncAllRepositoriesUseCase {
                 total: webhookTargets.length,
                 done: 0,
                 pendingAstRepositoryIds: previous?.pendingAstRepositoryIds ?? [],
+                pendingAstAttempts: previous?.pendingAstAttempts ?? {},
                 pendingBackfillRepositoryIds:
                     previous?.pendingBackfillRepositoryIds ?? [],
             };
@@ -433,11 +436,12 @@ export class SyncAllRepositoriesUseCase {
                 ]);
             }
 
-            const rateLimited = await this.setUpWebhooks(
+            const webhooks = await this.setUpWebhooks(
                 target,
                 webhookTargets,
                 state,
             );
+            const rateLimited = webhooks.stopped === 'rate_limited';
 
             const known = new Map(
                 [...current, ...added].map((repo) => [String(repo.id), repo]),
@@ -445,14 +449,16 @@ export class SyncAllRepositoriesUseCase {
             this.startBackfillBatch(target, state, known);
             await this.drainAstBuilds(target, state, known);
 
-            state.status = rateLimited ? 'rate_limited' : 'done';
+            state.status = webhooks.stopped ?? 'done';
             state.finishedAt = new Date().toISOString();
-            if (!rateLimited) {
-                state.lastSuccessAt = state.finishedAt;
-                delete state.error;
-            } else {
+            if (webhooks.stopped === 'rate_limited') {
                 state.error =
                     'The provider rate-limited this credential; the sync continues on its next run.';
+            } else if (webhooks.stopped === 'deferred') {
+                state.error = webhooks.reason;
+            } else {
+                state.lastSuccessAt = state.finishedAt;
+                delete state.error;
             }
             await this.writeState(target, state);
 
@@ -468,7 +474,7 @@ export class SyncAllRepositoriesUseCase {
                     added: added.length,
                     skipped,
                     webhookTargets: webhookTargets.length,
-                    rateLimited,
+                    stopped: webhooks.stopped,
                     pendingAst: state.pendingAstRepositoryIds.length,
                     pendingBackfill: state.pendingBackfillRepositoryIds.length,
                 },
@@ -494,12 +500,12 @@ export class SyncAllRepositoriesUseCase {
         }
     }
 
-    /** True when the provider rate-limited the run. */
+    /** Says why the run stopped before every batch, if it did. */
     private async setUpWebhooks(
         target: SyncTarget,
         repositories: Repositories[],
         state: RepositorySyncState,
-    ): Promise<boolean> {
+    ): Promise<{ stopped?: 'rate_limited' | 'deferred'; reason?: string }> {
         const { organizationAndTeamData, integrationId } = target;
         const batchSize = SyncAllRepositoriesUseCase.WEBHOOK_BATCH_SIZE;
 
@@ -517,6 +523,8 @@ export class SyncAllRepositoriesUseCase {
             // batches would wait for the same slot: stop and leave them
             // pending for the next sync.
             const stop = rateLimited || Boolean(result.deferred);
+            // Only what the provider was asked about counts as set up.
+            const attempted = batch.length - result.notAttempted.length;
             if (stop) {
                 result = {
                     ...result,
@@ -538,14 +546,16 @@ export class SyncAllRepositoriesUseCase {
                 });
             }
 
-            state.done = Math.min(offset + batch.length, repositories.length);
+            state.done = offset + Math.max(0, attempted);
             if (stop) {
-                return rateLimited;
+                return rateLimited
+                    ? { stopped: 'rate_limited' }
+                    : { stopped: 'deferred', reason: result.deferred?.reason };
             }
             await this.writeState(target, state);
         }
 
-        return false;
+        return {};
     }
 
     private startBackfillBatch(
@@ -578,7 +588,18 @@ export class SyncAllRepositoriesUseCase {
         state: RepositorySyncState,
         known: Map<string, Repositories>,
     ): Promise<void> {
-        const pending = state.pendingAstRepositoryIds ?? [];
+        const attempts = { ...(state.pendingAstAttempts ?? {}) };
+        // A repository no longer selected owes no build.
+        const pending = (state.pendingAstRepositoryIds ?? []).filter((id) =>
+            known.has(id),
+        );
+        for (const id of Object.keys(attempts)) {
+            if (!pending.includes(id)) {
+                delete attempts[id];
+            }
+        }
+        state.pendingAstRepositoryIds = pending;
+        state.pendingAstAttempts = attempts;
         if (!pending.length) {
             return;
         }
@@ -592,8 +613,27 @@ export class SyncAllRepositoriesUseCase {
             SyncAllRepositoriesUseCase.AST_BUILDS_PER_TEAM - inFlight,
         );
         const remaining = [...pending];
-        // Ids that could not be handled this run go back for the next one.
+        // Ids that could not be handled this run go back for the next one,
+        // up to AST_MAX_ATTEMPTS runs.
         const retry: string[] = [];
+        const failed = (id: string, reason: string) => {
+            attempts[id] = (attempts[id] ?? 0) + 1;
+            if (attempts[id] < SyncAllRepositoriesUseCase.AST_MAX_ATTEMPTS) {
+                retry.push(id);
+                return;
+            }
+            delete attempts[id];
+            this.logger.warn({
+                message: 'Giving up on an AST build from the sync',
+                context: SyncAllRepositoriesUseCase.name,
+                metadata: {
+                    ...target.organizationAndTeamData,
+                    repositoryId: id,
+                    reason,
+                    attempts: SyncAllRepositoriesUseCase.AST_MAX_ATTEMPTS,
+                },
+            });
+        };
         let enqueued = 0;
 
         while (enqueued < slots && remaining.length) {
@@ -606,7 +646,7 @@ export class SyncAllRepositoriesUseCase {
                         id,
                     );
                 if (!record) {
-                    retry.push(id);
+                    failed(id, 'repository record not found');
                     continue;
                 }
                 // False means the graph is ready or building: nothing owed.
@@ -619,8 +659,9 @@ export class SyncAllRepositoriesUseCase {
                 ) {
                     enqueued += 1;
                 }
+                delete attempts[id];
             } catch (error) {
-                retry.push(id);
+                failed(id, 'enqueue failed');
                 this.logger.error({
                     message: 'Failed to enqueue an AST build from the sync',
                     context: SyncAllRepositoriesUseCase.name,
@@ -634,6 +675,7 @@ export class SyncAllRepositoriesUseCase {
         }
 
         state.pendingAstRepositoryIds = [...retry, ...remaining];
+        state.pendingAstAttempts = attempts;
     }
 
     private async selectedIds(

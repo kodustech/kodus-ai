@@ -331,6 +331,8 @@ describe('SyncAllRepositoriesUseCase', () => {
             ).sort(),
         ).toEqual(['2', '3']);
         expect(t.codeManagementService.ensureRepositoryWebhooks).toHaveBeenCalledTimes(1);
+        // The 429'd repository was attempted; the one after it was not.
+        expect(t.state('team-a').done).toBe(2);
         expect(t.state('team-b')).toMatchObject({ status: 'rate_limited' });
     });
 
@@ -354,7 +356,43 @@ describe('SyncAllRepositoriesUseCase', () => {
         ) as any).failures;
         expect(Object.keys(failures)).toHaveLength(60);
         expect(failures['59'].kind).toBe('deferred');
-        expect(t.state('team-a').status).toBe('done');
+        expect(t.state('team-a')).toMatchObject({
+            status: 'deferred',
+            done: 0,
+            total: 60,
+            error: 'Another setup was running',
+        });
+        expect(t.state('team-a').lastSuccessAt).toBeUndefined();
+    });
+
+    it('keeps the last successful sync time when a later run is deferred', async () => {
+        const t = setup({
+            listing: [repo('1')],
+            teams: [
+                {
+                    orgTeam: TEAMS.a,
+                    mode: 'all',
+                    state: {
+                        status: 'done',
+                        startedAt: '2026-01-01',
+                        lastSuccessAt: '2026-01-01T00:10:00.000Z',
+                    },
+                },
+            ],
+            webhookResult: (repos) => ({
+                configured: [],
+                failed: {},
+                notAttempted: repos.map((r: any) => String(r.id)),
+                deferred: { reason: 'Another setup was running' },
+            }),
+        });
+
+        await t.useCase.syncTeam(TEAMS.a, 'cron');
+
+        expect(t.state('team-a')).toMatchObject({
+            status: 'deferred',
+            lastSuccessAt: '2026-01-01T00:10:00.000Z',
+        });
     });
 
     it('lists once for teams that share a credential', async () => {
@@ -490,6 +528,88 @@ describe('SyncAllRepositoriesUseCase', () => {
         await t.useCase.syncTeam(TEAMS.a, 'cron');
 
         expect(t.state('team-a').pendingAstRepositoryIds).toEqual(['1', '2']);
+    });
+
+    it('drops a pending AST build for a repository no longer selected', async () => {
+        const t = setup({
+            listing: [repo('1')],
+            teams: [
+                {
+                    orgTeam: TEAMS.a,
+                    mode: 'all',
+                    selected: [repo('1')],
+                    state: {
+                        status: 'done',
+                        startedAt: '2026-01-01',
+                        pendingAstRepositoryIds: ['gone', '1'],
+                        pendingAstAttempts: { gone: 2 },
+                    },
+                },
+            ],
+        });
+
+        await t.useCase.syncTeam(TEAMS.a, 'cron');
+
+        expect(
+            t.repositoryConnectionService.findRepositoryRecord,
+        ).not.toHaveBeenCalledWith(expect.anything(), 'gone');
+        expect(t.state('team-a').pendingAstRepositoryIds).toEqual([]);
+        expect(t.state('team-a').pendingAstAttempts ?? {}).toEqual({});
+    });
+
+    it('gives up on a pending AST build after a bounded number of failed attempts', async () => {
+        const t = setup({
+            listing: [repo('1')],
+            teams: [
+                {
+                    orgTeam: TEAMS.a,
+                    mode: 'all',
+                    selected: [repo('1')],
+                    state: {
+                        status: 'done',
+                        startedAt: '2026-01-01',
+                        pendingAstRepositoryIds: ['1'],
+                    },
+                },
+            ],
+        });
+        t.repositoryConnectionService.findRepositoryRecord.mockResolvedValue(null);
+        const runs = SyncAllRepositoriesUseCase.AST_MAX_ATTEMPTS;
+
+        for (let run = 1; run < runs; run += 1) {
+            await t.useCase.syncTeam(TEAMS.a, 'cron');
+            expect(t.state('team-a').pendingAstRepositoryIds).toEqual(['1']);
+            expect(t.state('team-a').pendingAstAttempts).toEqual({ '1': run });
+        }
+
+        await t.useCase.syncTeam(TEAMS.a, 'cron');
+
+        expect(t.state('team-a').pendingAstRepositoryIds).toEqual([]);
+        expect(t.state('team-a').pendingAstAttempts ?? {}).toEqual({});
+    });
+
+    it('forgets the attempt count once the AST build is enqueued', async () => {
+        const t = setup({
+            listing: [repo('1')],
+            teams: [
+                {
+                    orgTeam: TEAMS.a,
+                    mode: 'all',
+                    selected: [repo('1')],
+                    state: {
+                        status: 'done',
+                        startedAt: '2026-01-01',
+                        pendingAstRepositoryIds: ['1'],
+                        pendingAstAttempts: { '1': 2 },
+                    },
+                },
+            ],
+        });
+
+        await t.useCase.syncTeam(TEAMS.a, 'cron');
+
+        expect(t.state('team-a').pendingAstRepositoryIds).toEqual([]);
+        expect(t.state('team-a').pendingAstAttempts ?? {}).toEqual({});
     });
 
     it('holds the credential lock for the whole run instead of letting a timer release it', async () => {

@@ -24,7 +24,9 @@ const MODES: RepositorySelectionMode[] = ['manual', 'all'];
 
 export type RepositorySyncStatusView = Omit<
     RepositorySyncState,
-    'pendingAstRepositoryIds' | 'pendingBackfillRepositoryIds'
+    | 'pendingAstRepositoryIds'
+    | 'pendingBackfillRepositoryIds'
+    | 'pendingAstAttempts'
 > & { pendingAstBuilds: number; pendingBackfills: number };
 
 export interface RepositorySelectionView {
@@ -61,6 +63,7 @@ export class GetRepositorySelectionUseCase {
             const {
                 pendingAstRepositoryIds = [],
                 pendingBackfillRepositoryIds = [],
+                pendingAstAttempts: _attempts,
                 ...rest
             } = state;
             sync = {

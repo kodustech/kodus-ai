@@ -6,7 +6,7 @@ import { CODE_MANAGEMENT_API_PATHS } from "./types";
 export type RepositorySelectionMode = "manual" | "all";
 
 export type RepositorySyncStatus = {
-    status: "running" | "done" | "failed" | "rate_limited";
+    status: "running" | "done" | "failed" | "rate_limited" | "deferred";
     trigger?: "enable" | "cron" | "provider_event";
     startedAt: string;
     finishedAt?: string;

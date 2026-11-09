@@ -14,7 +14,14 @@ export interface RepositorySelectionConfig {
     updatedBy?: string;
 }
 
-export type RepositorySyncStatus = 'running' | 'done' | 'failed' | 'rate_limited';
+export type RepositorySyncStatus =
+    | 'running'
+    | 'done'
+    | 'failed'
+    | 'rate_limited'
+    // Stopped before every webhook was set up (the provider's setup slot was
+    // busy); the rest is pending and the next sync picks it up.
+    | 'deferred';
 
 /**
  * Where the sync stands for one team, plus the work it still owes. Stored as
@@ -37,6 +44,8 @@ export interface RepositorySyncState {
     error?: string;
     /** Added repositories whose AST build has not been enqueued yet. */
     pendingAstRepositoryIds?: string[];
+    /** Failed enqueue attempts per pending AST id; bounded by the sync. */
+    pendingAstAttempts?: Record<string, number>;
     /** Added repositories whose history backfill has not started yet. */
     pendingBackfillRepositoryIds?: string[];
 }
