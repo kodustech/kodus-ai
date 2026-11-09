@@ -1,7 +1,7 @@
 import { ExternalReferenceLoaderService } from './externalReferenceLoader.service';
 
 /** Build a buildContextPack result with one knowledge layer of {filePath,content}. */
-const pack = (entries: Array<{ filePath: string; content: string }>) => ({
+const pack = (entries: Array<Record<string, unknown>>) => ({
     pack: {
         layers: [{ metadata: { sourceType: 'knowledge' }, content: entries }],
     },
@@ -29,6 +29,52 @@ describe('ExternalReferenceLoaderService', () => {
             );
 
             expect(references.map((r) => r.filePath)).toEqual(['c.md']);
+        });
+
+        // Two repositories can each hold a docs/conventions.md; the judge
+        // must not take one for the other (#2508).
+        it('keeps the repository and line range each reference was read from', async () => {
+            const buildContextPack = jest.fn().mockResolvedValue(
+                pack([
+                    {
+                        filePath: 'docs/conventions.md',
+                        content: 'ours',
+                        repositoryId: 'repo-1',
+                        repositoryName: 'repo',
+                    },
+                    {
+                        filePath: 'docs/conventions.md',
+                        content: 'theirs',
+                        repositoryId: 'repo-2',
+                        repositoryName: 'design-system',
+                        lineRange: { start: 3, end: 9 },
+                        hash: 'h',
+                        tokens: 10,
+                    },
+                ]),
+            );
+            const svc = makeSvc(buildContextPack);
+
+            const { references } = await svc.loadReferences(
+                { uuid: 'r1', contextReferenceId: 'ctx' } as any,
+                {} as any,
+            );
+
+            expect(references).toEqual([
+                {
+                    filePath: 'docs/conventions.md',
+                    content: 'ours',
+                    repositoryId: 'repo-1',
+                    repositoryName: 'repo',
+                },
+                {
+                    filePath: 'docs/conventions.md',
+                    content: 'theirs',
+                    repositoryId: 'repo-2',
+                    repositoryName: 'design-system',
+                    lineRange: { start: 3, end: 9 },
+                },
+            ]);
         });
 
         it('returns empty when the rule has no contextReferenceId (no network)', async () => {
