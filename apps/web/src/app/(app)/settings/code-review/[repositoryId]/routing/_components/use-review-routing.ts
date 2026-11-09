@@ -82,7 +82,9 @@ export function useReviewRouting() {
     return {
         canConfigure: hasConnectedProvider,
         riskModelInherited:
-            status?.modelRouting?.riskAssessment.inherited !== false,
+            status?.modelRouting?.riskAssessment.inherited !== false &&
+            status?.modelRouting?.riskAssessment.modelId ===
+                status?.modelRouting?.defaultModelId,
         active,
         heavyAllowed,
         configuredDefault,

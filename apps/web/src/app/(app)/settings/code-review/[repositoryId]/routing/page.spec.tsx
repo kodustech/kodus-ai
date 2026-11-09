@@ -367,3 +367,19 @@ it("redirects a direct routing URL to General without a connected provider, pres
         "REDIRECT:/settings/code-review/repo/general?directoryId=directory",
     );
 });
+
+it("shows the effective risk model when capability fallback differs from the inherited default", () => {
+    const previous = mockStatus.modelRouting.riskAssessment;
+    mockStatus.modelRouting.riskAssessment = { modelId: "b", inherited: true };
+    try {
+        mount(true);
+        expect(
+            screen.getByText("Risk assessment").parentElement,
+        ).toHaveTextContent("Model B");
+        expect(
+            screen.queryByText("Uses default model"),
+        ).not.toBeInTheDocument();
+    } finally {
+        mockStatus.modelRouting.riskAssessment = previous;
+    }
+});
