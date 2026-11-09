@@ -201,9 +201,11 @@ export async function captureRiskRoutingStates({
         } else if (group === 'General') {
             await page
                 .locator(
-                    id === '26-general-risk-off'
-                        ? '[data-field-name="reviewMode"]'
-                        : '[data-field-name="pullRequestApprovalActive"]',
+                    id === '45-general-automated-on'
+                        ? '[data-field-name="automatedReviewActive"]'
+                        : id === '26-general-risk-off'
+                          ? '[data-field-name="reviewMode"]'
+                          : '[data-field-name="pullRequestApprovalActive"]',
                 )
                 .scrollIntoViewIfNeeded();
         }
@@ -383,6 +385,23 @@ export async function captureRiskRoutingStates({
             'General',
             'Aprovação automática desligada',
         );
+        const automatedReview = page.getByRole('switch', {
+            name: 'Automated code review',
+            exact: true,
+        });
+        await hydrated(automatedReview);
+        const automatedReviewBefore = await automatedReview.isChecked();
+        await automatedReview.setChecked(true);
+        await expect(
+            page.getByText('Review Cadence', { exact: true }),
+        ).toBeVisible();
+        await shot(
+            '45-general-automated-on',
+            'General',
+            'General com Automated code review ligado',
+            'Estado local para conferir Review Cadence; alteração não salva.',
+        );
+        await automatedReview.setChecked(automatedReviewBefore);
         await open('general', { approvalPolicies: [] });
         await shot(
             '23-approval-empty',

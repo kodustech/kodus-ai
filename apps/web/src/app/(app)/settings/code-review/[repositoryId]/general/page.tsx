@@ -221,7 +221,7 @@ export default function General() {
                 </Page.SaveActions>
             </Page.Header>
 
-            <Page.Content className="max-w-5xl min-w-0 gap-5 px-4 sm:px-8">
+            <Page.Content className="min-w-0 gap-5 px-4 sm:px-8">
                 <CentralizedConfigReadOnlyAlert />
 
                 {isGlobalGeneralView && (
