@@ -19,7 +19,8 @@ export const modeLabel = (mode: Mode) =>
 export function useReviewRouting() {
     const { control, getFieldState } = useFormContext<CodeReviewFormType>();
     const config = useCodeReviewConfig();
-    const { llmConfigStatus: status } = useCodeReviewModelData();
+    const { llmConfigStatus: status, hasConnectedProvider } =
+        useCodeReviewModelData();
     const heavyAllowed = isHeavyModePlan(useSubscriptionContext().license);
     const active =
         useWatch({ control, name: "riskAssessmentActive.value" }) ??
@@ -79,6 +80,9 @@ export function useReviewRouting() {
               : "Kodus default";
     };
     return {
+        canConfigure: hasConnectedProvider,
+        riskModelInherited:
+            status?.modelRouting?.riskAssessment.inherited !== false,
         active,
         heavyAllowed,
         configuredDefault,

@@ -217,3 +217,27 @@ it("does not allow policy mutations without settings permission", () => {
     expect(screen.getByRole("switch", { name: "Enable Docs" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Delete Docs" })).toBeDisabled();
 });
+
+it("makes human approval file restrictions explicit and edits them without opening a dialog", async () => {
+    mount();
+    const section = screen.getByRole("region", { name: "Human approval" });
+    expect(within(section).getByText("No files selected")).toBeInTheDocument();
+    fireEvent.click(
+        within(section).getByRole("button", { name: "Edit files" }),
+    );
+    const pattern = within(section).getByRole("textbox", {
+        name: "Add or search file patterns",
+    });
+    fireEvent.change(pattern, { target: { value: "src/access/**" } });
+    fireEvent.click(within(section).getByRole("button", { name: "Add" }));
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][0]).toEqual({
+        approvalSensitivePaths: ["src/access/**"],
+    });
+    expect(
+        screen.getByRole("switch", { name: "Automatic PR approval" }),
+    ).not.toBeChecked();
+});

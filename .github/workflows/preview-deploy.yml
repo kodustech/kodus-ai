@@ -135,7 +135,7 @@ jobs:
         concurrency:
             group: preview-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}
             cancel-in-progress: true
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         environment: Preview
         # two shapes come up one after the other
         timeout-minutes: 100
@@ -355,6 +355,11 @@ jobs:
                     ./scripts/preview/materialize-billing-env.sh \
                       "$RUNNER_TEMP/preview-billing.env" .env .env.billing
                   esac
+                  # Only the opted-in UI fixture enables the keyless Kodus provider.
+                  # It creates temporary model settings, never credit or inference calls.
+                  if [ "${{ inputs.risk_routing_smoke }}" = 'true' ]; then
+                    echo 'API_KODUS_PROVIDER_ALPHA_ORGS=*' >> .env
+                  fi
                   # the seed runs on the VM and reads these from the same file
                   {
                     echo "PREVIEW_SEED_EMAIL=preview@kodus.io"

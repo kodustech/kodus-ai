@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { Card } from "@components/ui/card";
 import { Link } from "@components/ui/link";
 import { Page } from "@components/ui/page";
@@ -29,11 +30,7 @@ import type { CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
 import { BYOKModelSelectorSection } from "../general/_components/byok-model-selector";
 import { confirmOffCatalogModelSave } from "../general/_components/confirm-scope-model";
-import {
-    modeLabel,
-    useReviewRouting,
-    type Mode,
-} from "./_components/use-review-routing";
+import { useReviewRouting, type Mode } from "./_components/use-review-routing";
 
 type ModeField =
     | "reviewMode.value"
@@ -44,11 +41,13 @@ function ModeRow({
     name,
     fallback,
     disabled,
+    description,
 }: {
     label: string;
     name: ModeField;
     fallback: Mode;
     disabled: boolean;
+    description?: string;
 }) {
     const form = useFormContext<CodeReviewFormType>();
     const routing = useReviewRouting();
@@ -62,34 +61,45 @@ function ModeRow({
                     field.value ?? fallback,
                 );
                 return (
-                    <div className="grid items-center gap-3 py-4 sm:grid-cols-[1fr_12rem_1fr]">
-                        <span className="text-text-primary text-sm">
-                            {label}
-                        </span>
-                        <Select
-                            value={field.value ?? fallback}
-                            onValueChange={field.onChange}
-                            disabled={disabled || field.disabled}>
-                            <SelectTrigger aria-label={label}>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="balanced">
-                                    Balanced
-                                </SelectItem>
-                                <SelectItem
-                                    value="heavy"
-                                    disabled={!routing.heavyAllowed}>
-                                    Heavy
-                                    {!routing.heavyAllowed
-                                        ? " · Teams/Enterprise"
-                                        : ""}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <span className="text-text-secondary text-xs sm:text-right">
-                            {routing.modelFor(effective)}
-                        </span>
+                    <div className="grid max-w-3xl items-start gap-4 py-5 sm:grid-cols-2">
+                        <div>
+                            <span className="text-text-primary text-sm font-medium">
+                                {label}
+                            </span>
+                            {description && (
+                                <p className="text-text-secondary mt-1 text-sm leading-6">
+                                    {description}
+                                </p>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            <Select
+                                value={field.value ?? fallback}
+                                onValueChange={field.onChange}
+                                disabled={disabled || field.disabled}>
+                                <SelectTrigger
+                                    aria-label={label}
+                                    className="max-w-48">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="balanced">
+                                        Balanced
+                                    </SelectItem>
+                                    <SelectItem
+                                        value="heavy"
+                                        disabled={!routing.heavyAllowed}>
+                                        Heavy
+                                        {!routing.heavyAllowed
+                                            ? " · Teams/Enterprise"
+                                            : ""}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-text-secondary text-sm break-words">
+                                {routing.modelFor(effective)}
+                            </p>
+                        </div>
                     </div>
                 );
             }}
@@ -172,13 +182,18 @@ function RoutingSettings() {
             });
         }
     });
+    if (!routing.canConfigure) {
+        redirect(
+            `/settings/code-review/${encodeURIComponent(repositoryId)}/general${directoryId ? `?directoryId=${encodeURIComponent(directoryId)}` : ""}`,
+        );
+    }
     return (
         <Page.Root>
             <Page.Header sticky>
                 <Page.TitleContainer>
                     <Page.Title>Routing</Page.Title>
                     <Page.Description>
-                        Review modes and models.
+                        Choose how Kody reviews each PR.
                     </Page.Description>
                 </Page.TitleContainer>
                 <Page.SaveActions
@@ -201,49 +216,60 @@ function RoutingSettings() {
                     }}
                 />
             </Page.Header>
-            <Page.Content className="gap-6">
+            <Page.Content className="max-w-5xl gap-6">
                 <CentralizedConfigReadOnlyAlert />
                 <Card color="lv1" className="px-5 py-5 sm:px-6">
-                    <div className="mb-4 flex items-center justify-between gap-4">
-                        <h2 className="text-text-primary text-sm font-semibold">
-                            Organization models
+                    <div className="mb-4 flex max-w-3xl flex-wrap items-center justify-between gap-4">
+                        <h2 className="text-text-primary text-base font-semibold">
+                            Models
                         </h2>
                         {canEditModels && (
                             <Link
                                 href="/byok?tab=routing"
-                                className="text-text-secondary inline-flex items-center gap-1 text-xs">
-                                Edit models{" "}
+                                className="text-text-secondary inline-flex items-center gap-1 text-sm">
+                                Edit in AI providers{" "}
                                 <ArrowUpRight className="size-3.5" />
                             </Link>
                         )}
                     </div>
-                    <dl className="grid gap-4 text-sm sm:grid-cols-2">
-                        <div>
-                            <dt className="text-text-secondary mb-1 text-xs">
-                                Default model
-                            </dt>
-                            <dd>{routing.defaultModel}</dd>
-                        </div>
-                        <div>
-                            <dt className="text-text-secondary mb-1 text-xs">
-                                Fallback model
-                            </dt>
-                            <dd>{routing.fallbackModel}</dd>
-                        </div>
-                        {routing.active && (
-                            <div>
-                                <dt className="text-text-secondary mb-1 text-xs">
-                                    Risk assessment model
+                    <dl className="divide-card-lv3 max-w-3xl divide-y text-sm">
+                        {[
+                            {
+                                label: "Default model",
+                                value: routing.defaultModel,
+                            },
+                            {
+                                label: "Fallback model",
+                                value: routing.fallbackModel,
+                            },
+                            ...(routing.active
+                                ? [
+                                      {
+                                          label: "Risk assessment",
+                                          value: routing.riskModelInherited
+                                              ? "Uses default model"
+                                              : routing.riskModel,
+                                      },
+                                  ]
+                                : []),
+                        ].map((model) => (
+                            <div
+                                key={model.label}
+                                className="grid gap-2 py-3 sm:grid-cols-[12rem_1fr] sm:items-center">
+                                <dt className="text-text-secondary">
+                                    {model.label}
                                 </dt>
-                                <dd>{routing.riskModel}</dd>
+                                <dd className="text-text-primary font-medium break-words">
+                                    {model.value}
+                                </dd>
                             </div>
-                        )}
+                        ))}
                     </dl>
                 </Card>
                 <Card color="lv1" className="px-5 py-5 sm:px-6">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
-                            <h2 className="text-text-primary text-sm font-semibold">
+                            <h2 className="text-text-primary text-base font-semibold">
                                 Review mode
                             </h2>
                             <OverrideIndicatorForm
@@ -256,12 +282,12 @@ function RoutingSettings() {
                         </div>
                         <Link
                             href={riskHref}
-                            className="text-text-secondary inline-flex items-center gap-1 text-xs">
+                            className="text-text-secondary inline-flex items-center gap-1 text-sm">
                             Risk assessment: {routing.active ? "On" : "Off"}{" "}
                             <ArrowUpRight className="size-3.5" />
                         </Link>
                     </div>
-                    <p className="text-text-secondary mt-2 text-xs">
+                    <p className="text-text-secondary mt-2 text-sm leading-6">
                         {routing.active
                             ? "Review mode follows the risk result."
                             : "One mode applies to all PRs."}
@@ -292,23 +318,25 @@ function RoutingSettings() {
                         )}
                     </div>
                     {routing.active && (
-                        <details className="border-card-lv3 mt-2 border-t pt-4">
-                            <summary className="text-text-secondary cursor-pointer text-xs">
-                                If risk is unavailable ·{" "}
-                                {modeLabel(routing.defaultMode)}
-                            </summary>
+                        <div className="border-card-lv3 border-t">
                             <ModeRow
-                                label="Default review mode"
+                                label="Risk assessment unavailable"
+                                description="Uses the default review mode. Automatic approval stays blocked."
                                 name="reviewMode.value"
                                 fallback="balanced"
                                 disabled={!canEdit}
                             />
-                        </details>
+                        </div>
                     )}
-                    <p className="text-text-secondary mt-4 text-xs">
-                        <code>--heavy</code> and <code>--balanced</code>{" "}
-                        override the mode.
-                    </p>
+                    <details className="border-card-lv3 border-t pt-4 text-sm">
+                        <summary className="text-text-secondary cursor-pointer">
+                            Manual commands
+                        </summary>
+                        <p className="text-text-secondary mt-3 leading-6">
+                            An explicit <code>--heavy</code> or{" "}
+                            <code>--balanced</code> command takes priority.
+                        </p>
+                    </details>
                 </Card>
                 {repositoryId !== "global" && <BYOKModelSelectorSection />}
             </Page.Content>

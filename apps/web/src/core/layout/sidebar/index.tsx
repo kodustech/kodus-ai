@@ -85,6 +85,7 @@ import {
 } from "lucide-react";
 import { useQueryState } from "nuqs";
 import { ErrorBoundary } from "react-error-boundary";
+import { useHasConnectedAIProvider } from "src/core/providers/ai-provider-connection";
 import { useAllTeams } from "src/core/providers/all-teams-context";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { TEAM_STATUS } from "src/core/types";
@@ -747,6 +748,7 @@ const pagesAt = (scope: Scope) => {
 const CODE_REVIEW_PATH = /^\/settings\/code-review\/([^/]+)(?:\/([^/?#]+))?/;
 
 const CodeReviewGroup = () => {
+    const hasConnectedProvider = useHasConnectedAIProvider();
     const pathname = usePathname();
     const [queryDirectoryId] = useQueryState("directoryId");
     const collapsed = useRail();
@@ -803,6 +805,8 @@ const CodeReviewGroup = () => {
                                     (item) => item.href === currentPage,
                                 );
                                 return page &&
+                                    (page.href !== "routing" ||
+                                        hasConnectedProvider) &&
                                     (!page.repoOnly || targetIsRepository)
                                     ? page.href
                                     : "general";
@@ -829,7 +833,9 @@ const CodeReviewGroup = () => {
                 />
             </li>
             {CODE_REVIEW_PAGES.filter(
-                (page) => !page.repoOnly || isRepositoryLevel,
+                (page) =>
+                    (!page.repoOnly || isRepositoryLevel) &&
+                    (page.href !== "routing" || hasConnectedProvider),
             ).map((page) => (
                 <SidebarItem
                     key={page.href}

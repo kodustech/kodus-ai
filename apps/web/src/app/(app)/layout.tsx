@@ -8,6 +8,7 @@ import { AppSidebar } from "src/core/layout/sidebar";
 import { SIDEBAR_COLLAPSED_COOKIE } from "src/core/layout/sidebar/collapsed-cookie";
 import { ScopeToolsProvider } from "src/core/layout/sidebar/scope-tools";
 import { UpdateAvailableTopbar } from "src/core/layout/update-available-topbar";
+import { AIProviderConnectionProvider } from "src/core/providers/ai-provider-connection";
 import { TEAM_STATUS } from "src/core/types";
 import { BYOKMissingKeyTopbar } from "src/features/ee/byok/_components/missing-key-topbar";
 import {
@@ -170,25 +171,29 @@ export default async function Layout({ children }: React.PropsWithChildren) {
                 }
                 usersWithAssignedLicense={usersWithAssignedLicense}
                 usesKodusProvider={usesKodusProvider}>
-                <ScopeToolsProvider>
-                    {/* The sidebar on the left; the banners and the page
+                <AIProviderConnectionProvider connected={hasByokKey}>
+                    <ScopeToolsProvider>
+                        {/* The sidebar on the left; the banners and the page
                         stacked in the rest of the row. */}
-                    <div className="flex min-h-0 flex-1 flex-row overflow-hidden">
-                        <AppSidebar initialCollapsed={sidebarCollapsed} />
-                        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                            <FinishedTrialModal />
-                            <CriticalNotificationBanner />
-                            <SubscriptionStatusTopbar />
-                            <UpdateAvailableTopbar
-                                isOwner={session.user.role === UserRole.OWNER}
-                            />
-                            {showBYOKMissingKeyTopbar && (
-                                <BYOKMissingKeyTopbar />
-                            )}
-                            {children}
+                        <div className="flex min-h-0 flex-1 flex-row overflow-hidden">
+                            <AppSidebar initialCollapsed={sidebarCollapsed} />
+                            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                                <FinishedTrialModal />
+                                <CriticalNotificationBanner />
+                                <SubscriptionStatusTopbar />
+                                <UpdateAvailableTopbar
+                                    isOwner={
+                                        session.user.role === UserRole.OWNER
+                                    }
+                                />
+                                {showBYOKMissingKeyTopbar && (
+                                    <BYOKMissingKeyTopbar />
+                                )}
+                                {children}
+                            </div>
                         </div>
-                    </div>
-                </ScopeToolsProvider>
+                    </ScopeToolsProvider>
+                </AIProviderConnectionProvider>
             </SubscriptionProvider>
         </Providers>
     );

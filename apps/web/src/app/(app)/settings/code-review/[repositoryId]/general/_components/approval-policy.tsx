@@ -71,7 +71,7 @@ export function ApprovalPolicySettings() {
         <section className="space-y-4 px-5 py-5 sm:px-6">
             <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
-                    <h3 className="text-text-primary text-sm font-semibold">
+                    <h3 className="text-text-primary text-base font-semibold">
                         Approval policies
                     </h3>
                     <OverrideIndicatorForm fieldName="approvalPolicies" />
@@ -88,7 +88,7 @@ export function ApprovalPolicySettings() {
             </div>
             <p
                 id="approval-policies-status"
-                className="text-text-secondary text-xs">
+                className="text-text-secondary text-sm leading-6">
                 {approvalEnabled
                     ? "A clean review and one matching policy are required."
                     : "Policies are saved. Turn on automatic approval to use them."}
@@ -118,7 +118,7 @@ export function ApprovalPolicySettings() {
                                         </Badge>
                                     )}
                                 </div>
-                                <p className="text-text-secondary mt-1 text-xs leading-5 break-words">
+                                <p className="text-text-secondary mt-2 text-sm leading-6 break-words">
                                     {approvalPolicyScope(policy)}
                                 </p>
                             </div>
@@ -203,25 +203,31 @@ export function ApprovalPolicySettings() {
                 ))}
             </ol>
             {policies.length > 1 && (
-                <p className="text-text-secondary text-xs">
+                <p className="text-text-secondary text-sm leading-6">
                     The first matching policy is used.
                 </p>
             )}
-            <details className="border-card-lv3 border-t pt-4">
-                <summary className="text-text-secondary cursor-pointer text-xs">
-                    Files requiring human approval
-                </summary>
-                <div className="mt-4">
-                    <FilePatternsField
-                        label="Always require human approval"
-                        purpose="exclude"
-                        value={sensitive.value ?? []}
-                        disabled={sensitive.disabled}
-                        onChange={sensitive.onChange}
-                        hint="These files block every approval policy."
-                    />
+            <section
+                className="border-card-lv3 space-y-4 border-t pt-5"
+                aria-label="Human approval">
+                <div>
+                    <h3 className="text-text-primary text-base font-semibold">
+                        Human approval
+                    </h3>
+                    <p className="text-text-secondary mt-1 text-sm leading-6">
+                        PRs changing these files are never approved
+                        automatically.
+                    </p>
                 </div>
-            </details>
+                <FilePatternsField
+                    label="Files"
+                    purpose="exclude"
+                    value={sensitive.value ?? []}
+                    disabled={sensitive.disabled}
+                    onChange={sensitive.onChange}
+                    emptyLabel="No files selected"
+                />
+            </section>
             {editing !== null && (
                 <ApprovalPolicyEditor
                     policy={editing === "new" ? undefined : editing}

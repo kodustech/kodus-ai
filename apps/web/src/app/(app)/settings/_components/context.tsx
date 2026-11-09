@@ -160,8 +160,13 @@ const CodeReviewModelDataContext = createContext<CodeReviewModelData>({
     byokModels: [],
 });
 
-export const useCodeReviewModelData = () =>
-    useContext(CodeReviewModelDataContext);
+export const useCodeReviewModelData = () => {
+    const data = useContext(CodeReviewModelDataContext);
+    return {
+        ...data,
+        hasConnectedProvider: data.llmConfigStatus?.byok.configured === true,
+    };
+};
 
 export const CodeReviewModelDataProvider = (
     props: React.PropsWithChildren & { value: CodeReviewModelData },

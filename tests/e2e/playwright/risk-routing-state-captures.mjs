@@ -2,6 +2,7 @@
 // Settings use the seeded QA tenant's real API and are restored in finally.
 // Only preview responses are fixtures; those images say so in the manifest.
 import assert from 'node:assert/strict';
+import { comparePolicyOverlayMotion } from './risk-overlay-motion.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect as baseExpect } from 'playwright/test';
 
@@ -23,6 +24,7 @@ export async function captureRiskRoutingStates({
     out,
     settingsRequest,
     hydrated,
+    initialCaptures = [],
 }) {
     assert.ok(
         settingsRequest?.url &&
@@ -31,7 +33,7 @@ export async function captureRiskRoutingStates({
     );
     const dir = `${out}/app-states`;
     mkdirSync(dir, { recursive: true });
-    const manifest = [];
+    const manifest = [...initialCaptures];
     const riskSwitch = page.getByRole('switch', {
         name: 'Risk assessment',
         exact: true,
@@ -192,7 +194,11 @@ export async function captureRiskRoutingStates({
         );
     }
     async function shot(id, group, title, note = '', fixture = false) {
-        if (group === 'General') {
+        if (id === '25-approval-human-files') {
+            await page
+                .getByRole('region', { name: 'Human approval', exact: true })
+                .scrollIntoViewIfNeeded();
+        } else if (group === 'General') {
             await page
                 .locator(
                     id === '26-general-risk-off'
@@ -327,13 +333,17 @@ export async function captureRiskRoutingStates({
 
         await open('routing');
         await shot('14-routing-on', 'Routing', 'Por risco: Balanced / Heavy');
-        await page
-            .getByText('If risk is unavailable · Balanced', { exact: true })
-            .click();
+        await expect(
+            page.getByRole('combobox', {
+                name: 'Risk assessment unavailable',
+                exact: true,
+            }),
+        ).toBeVisible();
+        await page.getByText('Manual commands', { exact: true }).click();
         await shot(
             '15-routing-default',
             'Routing',
-            'Modo padrão para avaliação sem resultado',
+            'Ajuda de comandos manuais',
         );
         await page
             .getByRole('combobox', { name: 'Risk found', exact: true })
@@ -386,8 +396,8 @@ export async function captureRiskRoutingStates({
             'Políticas ativas e desativadas',
         );
         await page
-            .getByText('Files requiring human approval', { exact: true })
-            .click();
+            .getByRole('region', { name: 'Human approval', exact: true })
+            .scrollIntoViewIfNeeded();
         await shot(
             '25-approval-human-files',
             'General',
@@ -426,6 +436,18 @@ export async function captureRiskRoutingStates({
             'Condições disponíveis',
         );
         await open('general');
+        await comparePolicyOverlayMotion({
+            page,
+            out,
+            open: () => editPolicy('Dependency updates'),
+            close: () =>
+                page
+                    .getByRole('button', {
+                        name: 'Close policy editor',
+                        exact: true,
+                    })
+                    .click(),
+        });
         await editPolicy('Dependency updates');
         await expect(
             page.getByRole('button', { name: 'Apply', exact: true }),
@@ -456,23 +478,27 @@ export async function captureRiskRoutingStates({
         await page
             .getByRole('button', { name: 'Edit included files', exact: true })
             .click();
-        const fileDialog = page.getByRole('dialog', {
+        const fileEditor = page.getByRole('region', {
             name: 'Included files',
             exact: true,
         });
-        await fileDialog
+        await fileEditor
             .getByLabel('Test a file', { exact: true })
             .fill('docs/api.md');
         await expect(
-            fileDialog.getByText('Matched by', { exact: false }),
+            fileEditor.getByText('Matched by', { exact: false }),
         ).toBeVisible();
+        await expect(page.getByRole('dialog')).toHaveCount(1);
         await shot(
             '42-policy-file-validator',
             'Políticas',
-            'Validação de glob no editor lateral',
+            'Validador de glob no próprio painel',
         );
-        await fileDialog
-            .getByRole('button', { name: 'Cancel', exact: true })
+        await fileEditor
+            .getByRole('button', {
+                name: 'Close included files editor',
+                exact: true,
+            })
             .click();
         await expect(
             page.getByRole('dialog', { name: 'Edit policy', exact: true }),

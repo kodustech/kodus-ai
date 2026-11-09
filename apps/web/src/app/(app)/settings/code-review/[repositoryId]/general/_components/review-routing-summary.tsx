@@ -26,26 +26,28 @@ export function ReviewRoutingSummary() {
         : [{ label: "All PRs", mode: routing.defaultMode }];
     const href = `/settings/code-review/${encodeURIComponent(repositoryId)}/routing${directoryId ? `?directoryId=${encodeURIComponent(directoryId)}` : ""}`;
     return (
-        <div className="px-5 py-4 sm:px-6">
-            <div className="mb-3 flex items-center justify-between gap-4">
-                <h2 className="text-text-primary text-sm font-medium">
+        <div className="px-5 py-5 sm:px-6">
+            <div className="mb-4 flex max-w-3xl flex-wrap items-center justify-between gap-4">
+                <h2 className="text-text-primary text-base font-semibold">
                     Review mode
                 </h2>
-                <Link
-                    href={href}
-                    className="text-text-secondary inline-flex items-center gap-1 text-xs">
-                    Configure routing <ArrowUpRight className="size-3.5" />
-                </Link>
+                {routing.canConfigure && (
+                    <Link
+                        href={href}
+                        className="text-text-secondary inline-flex items-center gap-1 text-sm">
+                        Configure routing <ArrowUpRight className="size-3.5" />
+                    </Link>
+                )}
             </div>
-            <dl className="space-y-2 text-xs">
+            <dl className="divide-card-lv3 max-w-3xl divide-y text-sm">
                 {rows.map((row) => (
                     <div
                         key={row.label}
-                        className="flex flex-wrap justify-between gap-x-4 gap-y-1">
+                        className="grid gap-2 py-3 sm:grid-cols-[12rem_1fr] sm:items-center">
                         <dt className="text-text-secondary">{row.label}</dt>
-                        <dd className="text-text-primary">
+                        <dd className="text-text-primary font-medium">
                             {modeLabel(row.mode)}{" "}
-                            <span className="text-text-secondary ml-2">
+                            <span className="text-text-secondary ml-3 font-normal">
                                 {routing.modelFor(row.mode)}
                             </span>
                         </dd>

@@ -9,6 +9,7 @@ import {
     render,
     screen,
     waitFor,
+    within,
 } from "@testing-library/react";
 import { FormProvider, useForm, type UseFormReturn } from "react-hook-form";
 
@@ -254,4 +255,36 @@ it("previews real service results in the side panel without saving or publishing
         expect.anything(),
     );
     expect(saveSettings).not.toHaveBeenCalled();
+});
+
+it("edits and validates both file filters in one sheet and discards its draft on Cancel", () => {
+    setup();
+    fireEvent.click(screen.getByRole("button", { name: "Add criterion" }));
+    const editor = screen.getByRole("dialog", { name: "Add criterion" });
+    expect(editor).toHaveAttribute("data-slot", "sheet-content");
+    for (const name of ["Included files", "Excluded files"]) {
+        const section = within(editor).getByRole("region", { name });
+        fireEvent.click(
+            within(section).getByRole("button", {
+                name: `Edit ${name.toLowerCase()}`,
+            }),
+        );
+        const pattern = within(section).getByRole("textbox", {
+            name: "Add or search file patterns",
+        });
+        fireEvent.change(pattern, { target: { value: "src/**" } });
+        fireEvent.keyDown(pattern, { key: "Enter" });
+        fireEvent.change(
+            within(section).getByRole("textbox", { name: "Test a file" }),
+            { target: { value: "src/auth.ts" } },
+        );
+        expect(within(section).getByText(/Matched by/)).toHaveTextContent(
+            "src/**",
+        );
+    }
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(currentForm.getValues("riskCriteria.value")).toEqual([]);
+    fireEvent.click(within(editor).getByRole("button", { name: "Cancel" }));
+    expect(currentForm.getValues("riskCriteria.value")).toEqual([]);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });

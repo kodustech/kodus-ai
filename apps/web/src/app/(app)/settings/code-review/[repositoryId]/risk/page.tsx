@@ -138,7 +138,7 @@ function RiskSettings() {
                     />
                 </div>
             </Page.Header>
-            <Page.Content className="gap-6">
+            <Page.Content className="max-w-5xl gap-6">
                 <CentralizedConfigReadOnlyAlert />
                 <Card color="lv1">
                     <Controller

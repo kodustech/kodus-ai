@@ -63,6 +63,7 @@ jest.mock("src/app/(app)/settings/_components/context", () => ({
     useCodeReviewConfig: () => mockConfig,
     useCodeReviewModelData: () => ({
         llmConfigStatus: mockStatus,
+        hasConnectedProvider: mockStatus.byok.configured,
         byokModels: [],
     }),
 }));
@@ -93,6 +94,9 @@ jest.mock("../../_components/override", () => ({
 }));
 jest.mock("next/navigation", () => ({
     useRouter: () => ({ push: jest.fn(), refresh: jest.fn() }),
+    redirect: (href: string) => {
+        throw new Error(`REDIRECT:${href}`);
+    },
     usePathname: () => "/settings/code-review/global/routing",
 }));
 
@@ -141,6 +145,7 @@ beforeEach(() => {
     mockOrgEdit = true;
     mockHeavy = true;
     mockStatus.byok.providerId = undefined;
+    mockStatus.byok.configured = true;
     save.mockReset().mockResolvedValue(true);
 });
 beforeAll(() => {
@@ -175,9 +180,8 @@ it("shows both risk outcomes and a separate default for unavailable assessments"
     expect(
         screen.getByRole("combobox", { name: "Risk found" }),
     ).toHaveTextContent("Heavy");
-    fireEvent.click(screen.getByText("If risk is unavailable · Balanced"));
     expect(
-        screen.getByRole("combobox", { name: "Default review mode" }),
+        screen.getByRole("combobox", { name: "Risk assessment unavailable" }),
     ).toHaveTextContent("Balanced");
     expect(screen.getByText("Risk Model")).toBeInTheDocument();
 });
@@ -342,4 +346,24 @@ it("does not turn a legacy model name into an ID when only the mode changes", as
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0][0]).toEqual({ reviewMode: "heavy" });
+});
+
+it("keeps effective review modes visible without offering routing when no provider is connected", () => {
+    mockStatus.byok.configured = false;
+    mount(true, true);
+    expect(screen.getByText("Risk found").parentElement).toHaveTextContent(
+        "Heavy Model B",
+    );
+    expect(
+        screen.queryByRole("link", { name: /Configure routing/ }),
+    ).not.toBeInTheDocument();
+});
+
+it("redirects a direct routing URL to General without a connected provider, preserving its scope", () => {
+    mockStatus.byok.configured = false;
+    mockRepo = "repo";
+    mockDirectory = "directory";
+    expect(() => mount()).toThrow(
+        "REDIRECT:/settings/code-review/repo/general?directoryId=directory",
+    );
 });
