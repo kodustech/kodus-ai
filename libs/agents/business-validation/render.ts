@@ -369,12 +369,7 @@ function metLabel(
     if (
         source &&
         source !== 'Parent' &&
-        all.filter(
-            (r) =>
-                r.source &&
-                displayRequirementSource(r.source) ===
-                    displayRequirementSource(source),
-        ).length === 1
+        all.filter((r) => r.source?.trim() === source).length === 1
     ) {
         return displayRequirementSource(source);
     }
