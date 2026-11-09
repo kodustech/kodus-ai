@@ -74,6 +74,7 @@ export function ApprovalPolicySettings() {
                     <h3 className="text-text-primary text-base font-semibold">
                         Approval policies
                     </h3>
+                    <Badge>Beta</Badge>
                     <OverrideIndicatorForm fieldName="approvalPolicies" />
                 </div>
                 <Button
