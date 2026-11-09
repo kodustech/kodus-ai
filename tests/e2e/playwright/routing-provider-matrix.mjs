@@ -61,6 +61,7 @@ export async function testRoutingProviderMatrix({ page, context, settingsRequest
     let failOverrides = false;
     let statusReads = 0;
     let totalWrites = 0;
+    let totalProbes = 0;
     const pattern = '**/api/proxy/api/organization-parameters/**';
     const handler = async (route) => {
         const req = route.request();
@@ -89,6 +90,7 @@ export async function testRoutingProviderMatrix({ page, context, settingsRequest
         }
         if (url.pathname.endsWith('/test-byok-model') || url.pathname.endsWith('/test-byok')) {
             probes.push(req.postDataJSON());
+            ++totalProbes;
             return fulfill(probeResult);
         }
         return route.continue();
@@ -132,6 +134,15 @@ export async function testRoutingProviderMatrix({ page, context, settingsRequest
             await expect.poll(() => writes.length).toBeGreaterThan(before);
             await expect(saveButton()).toBeDisabled();
         }
+    }
+    async function textFits(container) {
+        await expect.poll(() => container.evaluate((node) => {
+            const outer = node.getBoundingClientRect();
+            return [...node.querySelectorAll('p, dd, dt')].filter((element) => {
+                const bounds = element.getBoundingClientRect();
+                return bounds.width > 0 && (bounds.left < outer.left - 1 || bounds.right > outer.right + 1 || element.scrollWidth > element.clientWidth + 1);
+            }).map((element) => ({ tag: element.tagName, width: element.clientWidth, contentWidth: element.scrollWidth }));
+        })).toEqual([]);
     }
     try {
         for (const [name, transform] of [
@@ -337,6 +348,7 @@ export async function testRoutingProviderMatrix({ page, context, settingsRequest
         await page.setViewportSize({ width: 390, height: 844 });
         await expect.poll(async () => (await page.locator('aside').boundingBox())?.width ?? Infinity).toBeLessThanOrEqual(64);
         await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+        await textFits(page.getByRole('region', { name: 'Review mode', exact: true }));
         await overview.evaluate((node) => node.scrollIntoView({ block: 'start' }));
         await shot('repository-overrides-mobile');
         await page.setViewportSize({ width: 1440, height: 1000 });
@@ -344,6 +356,23 @@ export async function testRoutingProviderMatrix({ page, context, settingsRequest
         await expect(page).toHaveURL(new RegExp(`/settings/code-review/${repository.id}/routing$`));
         await expect(picker('Code review model override')).toBeEnabled();
         pass('repository overview links open scope Routing; folder targets and long model labels fit mobile');
+
+        await page.setViewportSize({ width: 390, height: 844 });
+        await expect.poll(async () => (await page.locator('aside').boundingBox())?.width ?? Infinity).toBeLessThanOrEqual(64);
+        const inheritedModels = page.getByRole('region', { name: 'Organization models', exact: true });
+        await textFits(inheritedModels);
+        await textFits(page.getByRole('region', { name: 'Review mode', exact: true }));
+        await inheritedModels.evaluate((node) => node.scrollIntoView({ block: 'center' }));
+        await shot('long-model-scoped-mobile');
+        await page.goto(`${web}/settings/code-review/global/general`, { waitUntil: 'domcontentloaded' });
+        await page.getByRole('heading', { name: 'General settings', exact: true }).waitFor();
+        const summary = page.locator('[data-field-name="reviewMode"]');
+        await expect(summary).toContainText('Longnamelongname');
+        await textFits(summary);
+        await summary.evaluate((node) => node.scrollIntoView({ block: 'center' }));
+        await shot('long-model-general-mobile');
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        pass('long model labels wrap inside Routing, inherited models and General cards on mobile');
 
         failOverrides = true;
         await open(); await ready();
@@ -362,7 +391,7 @@ export async function testRoutingProviderMatrix({ page, context, settingsRequest
         // Reset only local draft if a failed assertion stopped the run mid-edit.
         await reset().catch(() => {});
         await page.unroute(pattern, handler);
-        writeFileSync(`${dir}/report.json`, JSON.stringify({ source: 'Full Next app and native controls; provider/status/config/write/probe/override-list HTTP fixtures only', externalProviderCalls: 0, checks, passed: checks.length === 30, statusReads, fixtureWrites: totalWrites, probeCount: probes.length }, null, 2));
+        writeFileSync(`${dir}/report.json`, JSON.stringify({ source: 'Full Next app and native controls; provider/status/config/write/probe/override-list HTTP fixtures only', externalProviderCalls: 0, checks, passed: checks.length === 31, statusReads, fixtureWrites: totalWrites, probeCount: totalProbes }, null, 2));
     }
     return checks;
 }

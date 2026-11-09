@@ -88,7 +88,7 @@ function ModeRow({
                 );
                 return (
                     <div>
-                        <div className="grid max-w-3xl items-start gap-4 py-5 sm:grid-cols-[12rem_minmax(0,1fr)]">
+                        <div className="grid max-w-3xl grid-cols-1 items-start gap-4 py-5 sm:grid-cols-[12rem_minmax(0,1fr)]">
                             <div>
                                 <span className="text-text-primary text-sm font-medium">
                                     {label}
@@ -99,7 +99,7 @@ function ModeRow({
                                     </p>
                                 )}
                             </div>
-                            <div className="space-y-2">
+                            <div className="min-w-0 space-y-2">
                                 <Select
                                     value={field.value ?? fallback}
                                     onValueChange={field.onChange}
@@ -463,7 +463,10 @@ function RoutingSettings() {
                         canEdit={canEditModels}
                     />
                 ) : (
-                    <Card color="lv1">
+                    <Card
+                        color="lv1"
+                        role="region"
+                        aria-label="Organization models">
                         <CardHeader className="flex-row flex-wrap items-center justify-between gap-4">
                             <Heading variant="h3">Organization models</Heading>
                             {!globalScope && (
@@ -499,11 +502,11 @@ function RoutingSettings() {
                                 ].map((model) => (
                                     <div
                                         key={model.label}
-                                        className="grid gap-2 py-3 sm:grid-cols-[12rem_1fr] sm:items-center">
+                                        className="grid grid-cols-1 gap-2 py-3 sm:grid-cols-[12rem_minmax(0,1fr)] sm:items-center">
                                         <dt className="text-text-secondary">
                                             {model.label}
                                         </dt>
-                                        <dd className="text-text-primary font-medium break-words">
+                                        <dd className="text-text-primary min-w-0 font-medium break-words">
                                             {model.value}
                                         </dd>
                                     </div>

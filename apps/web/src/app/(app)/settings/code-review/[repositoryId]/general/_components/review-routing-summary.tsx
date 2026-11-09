@@ -41,9 +41,9 @@ export function ReviewRoutingSummary() {
                 {rows.map((row) => (
                     <div
                         key={row.label}
-                        className="grid gap-2 py-3 sm:grid-cols-[12rem_1fr] sm:items-center">
+                        className="grid grid-cols-1 gap-2 py-3 sm:grid-cols-[12rem_minmax(0,1fr)] sm:items-center">
                         <dt className="text-text-secondary">{row.label}</dt>
-                        <dd className="text-text-primary font-medium">
+                        <dd className="text-text-primary min-w-0 font-medium break-words">
                             {modeLabel(row.mode)}{" "}
                             <span className="text-text-secondary ml-3 font-normal">
                                 {routing.modelFor(row.mode)}
