@@ -194,6 +194,7 @@ export async function captureRiskRoutingStates({
         );
         if (tab === 'routing') {
             await expect(page.getByRole('combobox', { name: 'Default model', exact: true })).toBeEnabled();
+            await page.getByRole('region', { name: 'Review mode', exact: true }).evaluate((node) => node.scrollIntoView({ block: 'start' }));
         }
     }
     async function shot(id, group, title, note = '', fixture = false) {
@@ -214,6 +215,9 @@ export async function captureRiskRoutingStates({
         }
         // Let Radix enter transitions settle before preserving the image.
         await page.waitForTimeout(500);
+        if (group === 'Routing' && page.viewportSize().width < 768) {
+            await page.getByRole('region', { name: 'Review mode', exact: true }).evaluate((node) => node.scrollIntoView({ block: 'start' }));
+        }
         if (page.viewportSize().width >= 768) {
             await expect(
                 page.getByRole('link', {

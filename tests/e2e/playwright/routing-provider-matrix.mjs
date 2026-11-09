@@ -274,10 +274,15 @@ export async function testRoutingProviderMatrix({ page, context, settingsRequest
         const bounds = await options.boundingBox();
         assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 391, 'The complete model picker fits mobile.');
         await shot('mobile-model-picker'); await page.keyboard.press('Escape');
+        await expect(options).toBeHidden();
         await shot('mobile-routing'); pass('mobile: native rail, page and model picker fit without horizontal clipping');
+        await page.getByRole('region', { name: 'Review mode', exact: true }).evaluate((node) => node.scrollIntoView({ block: 'start' }));
+        await shot('mobile-review-mode');
+        await page.getByText('Manual commands', { exact: true }).scrollIntoViewIfNeeded();
+        await shot('mobile-review-mode-bottom');
         await page.setViewportSize({ width: 1440, height: 1000 });
 
-        // The server redirect is real. The new page's provider HTTP is still a fixture.
+        // Legacy navigation is real. The new page's provider HTTP is still a fixture.
         await page.goto(`${web}/byok?tab=routing#fallback`, { waitUntil: 'domcontentloaded' });
         await expect(page).toHaveURL(new RegExp(`${target}#fallback$`));
         await ready(); pass('old routing URL redirects to its canonical replacement and preserves anchor');

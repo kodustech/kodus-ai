@@ -1,6 +1,7 @@
 import { getBYOK } from "@services/organizationParameters/fetch";
 import { getSummaryTokenUsage } from "@services/usage/fetch";
 
+import { LegacyRoutingRedirect } from "./_components/legacy-routing-redirect";
 import ByokPage from "./page";
 
 jest.mock("next/navigation", () => ({
@@ -42,9 +43,10 @@ const summaryMock = getSummaryTokenUsage as jest.Mock;
 describe("ByokPage", () => {
     it("replaces the legacy Routing URL before loading provider or billing data", async () => {
         const prior = (getBYOK as jest.Mock).mock.calls.length;
-        await expect(
-            ByokPage({ searchParams: Promise.resolve({ tab: "routing" }) }),
-        ).rejects.toThrow("REDIRECT:/settings/code-review/global/routing");
+        const element = await ByokPage({
+            searchParams: Promise.resolve({ tab: "routing" }),
+        });
+        expect(element.type).toBe(LegacyRoutingRedirect);
         expect((getBYOK as jest.Mock).mock.calls.length).toBe(prior);
     });
     afterEach(() => jest.restoreAllMocks());

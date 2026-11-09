@@ -3,6 +3,7 @@ import "@testing-library/jest-dom";
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
+import { LegacyRoutingRedirect } from "./legacy-routing-redirect";
 import { ByokPageClient } from "./page.client";
 
 const mockPush = jest.fn();
@@ -90,3 +91,20 @@ it("also replaces an old client-side tab link and keeps its supported anchor", a
         ),
     );
 });
+it.each([
+    ["#fallback", "#fallback"],
+    ["#task%3AcodeReviewHeavy", "#task%3AcodeReviewHeavy"],
+    ["#%bad-encoding", ""],
+    ["#javascript:alert(1)", ""],
+])(
+    "keeps safe fragments when the old URL is opened directly: %s",
+    async (hash, expected) => {
+        window.location.hash = hash;
+        render(<LegacyRoutingRedirect />);
+        await waitFor(() =>
+            expect(mockReplace).toHaveBeenCalledWith(
+                `/settings/code-review/global/routing${expected}`,
+            ),
+        );
+    },
+);

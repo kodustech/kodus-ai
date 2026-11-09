@@ -88,7 +88,7 @@ function ModeRow({
                 );
                 return (
                     <div>
-                        <div className="grid max-w-3xl items-start gap-4 py-5 sm:grid-cols-2">
+                        <div className="grid max-w-3xl items-start gap-4 py-5 sm:grid-cols-[12rem_minmax(0,1fr)]">
                             <div>
                                 <span className="text-text-primary text-sm font-medium">
                                     {label}
@@ -512,7 +512,11 @@ function RoutingSettings() {
                         </CardContent>
                     </Card>
                 )}
-                <Card color="lv1">
+                <Card
+                    color="lv1"
+                    role="region"
+                    aria-label="Review mode"
+                    className="scroll-mt-64 md:scroll-mt-32">
                     <CardHeader>
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
