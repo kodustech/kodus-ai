@@ -245,6 +245,15 @@ export async function testRoutingProviderMatrix({ page, context, settingsRequest
         await expect(picker('Default model')).toBeEnabled(); await reset();
         pass('status failure locks writes; Retry restores the draft safely');
 
+        await open(fixture(), () => null);
+        await page.getByRole('heading', { name: 'Could not verify AI providers', exact: true }).waitFor();
+        await expect(page.getByRole('combobox')).toHaveCount(0);
+        assert.equal(writes.length, 0);
+        await shot('empty-status-error');
+        changeStatus = (status) => status;
+        await page.getByRole('button', { name: 'Retry', exact: true }).click();
+        await ready(); pass('empty status response shows a recoverable error instead of endless loading');
+
         await open(); await ready();
         await choose('Default model', /Matrix model 1 example/i);
         disconnectOnSave = true; await saveModels();
@@ -303,7 +312,7 @@ export async function testRoutingProviderMatrix({ page, context, settingsRequest
         // Reset only local draft if a failed assertion stopped the run mid-edit.
         await reset().catch(() => {});
         await page.unroute(pattern, handler);
-        writeFileSync(`${dir}/report.json`, JSON.stringify({ source: 'Full Next app and native controls; provider/status/config/write/probe HTTP fixtures only', externalProviderCalls: 0, checks, passed: checks.length === 27, statusReads, fixtureWrites: totalWrites, probeCount: probes.length }, null, 2));
+        writeFileSync(`${dir}/report.json`, JSON.stringify({ source: 'Full Next app and native controls; provider/status/config/write/probe HTTP fixtures only', externalProviderCalls: 0, checks, passed: checks.length === 28, statusReads, fixtureWrites: totalWrites, probeCount: probes.length }, null, 2));
     }
     return checks;
 }
