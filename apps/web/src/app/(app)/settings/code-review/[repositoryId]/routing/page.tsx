@@ -61,44 +61,46 @@ function ModeRow({
                     field.value ?? fallback,
                 );
                 return (
-                    <div className="grid max-w-3xl items-start gap-4 py-5 sm:grid-cols-2">
-                        <div>
-                            <span className="text-text-primary text-sm font-medium">
-                                {label}
-                            </span>
-                            {description && (
-                                <p className="text-text-secondary mt-1 text-sm leading-6">
-                                    {description}
+                    <div>
+                        <div className="grid max-w-3xl items-start gap-4 py-5 sm:grid-cols-2">
+                            <div>
+                                <span className="text-text-primary text-sm font-medium">
+                                    {label}
+                                </span>
+                                {description && (
+                                    <p className="text-text-secondary mt-1 text-sm leading-6">
+                                        {description}
+                                    </p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <Select
+                                    value={field.value ?? fallback}
+                                    onValueChange={field.onChange}
+                                    disabled={disabled || field.disabled}>
+                                    <SelectTrigger
+                                        aria-label={label}
+                                        className="max-w-48">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="balanced">
+                                            Balanced
+                                        </SelectItem>
+                                        <SelectItem
+                                            value="heavy"
+                                            disabled={!routing.heavyAllowed}>
+                                            Heavy
+                                            {!routing.heavyAllowed
+                                                ? " · Teams/Enterprise"
+                                                : ""}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-text-secondary text-sm break-words">
+                                    {routing.modelFor(effective)}
                                 </p>
-                            )}
-                        </div>
-                        <div className="space-y-2">
-                            <Select
-                                value={field.value ?? fallback}
-                                onValueChange={field.onChange}
-                                disabled={disabled || field.disabled}>
-                                <SelectTrigger
-                                    aria-label={label}
-                                    className="max-w-48">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="balanced">
-                                        Balanced
-                                    </SelectItem>
-                                    <SelectItem
-                                        value="heavy"
-                                        disabled={!routing.heavyAllowed}>
-                                        Heavy
-                                        {!routing.heavyAllowed
-                                            ? " · Teams/Enterprise"
-                                            : ""}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <p className="text-text-secondary text-sm break-words">
-                                {routing.modelFor(effective)}
-                            </p>
+                            </div>
                         </div>
                     </div>
                 );
