@@ -145,6 +145,7 @@ const TIER0 = {
     // `deepseek-flash` is DeepSeek's id for the newest V4.1 Flash snapshot.
     'deepseek-v4.1-flash': { provider: 'openai_compatible', doModel: 'deepseek-flash', keyEnvs: ['API_DEEPSEEK_API_KEY'], baseURL: 'https://api.deepseek.com' },
     'kimi-k3.1-pro': { provider: 'openai_compatible', keyEnvs: ['API_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
+    'claude-opus-5-5': { provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
     'qwen3.8-max-0902': { provider: 'openai_compatible', keyEnvs: ['QWEN_API_KEY'], baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },
     'glm-5.3@fireworks': { provider: 'openai_compatible', doModel: 'accounts/fireworks/models/glm-5p3', keyEnvs: ['API_FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
     'glm-5.3-flash@fireworks': { provider: 'openai_compatible', doModel: 'accounts/fireworks/models/glm-5p3-flash', keyEnvs: ['API_FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
