@@ -705,53 +705,14 @@ export class PermissionValidationService {
     }
 
     /**
-     * Self-hosted permission validation:
-     * - No license (Community Edition): allow everything
-     * - With license: enforce seat limits and allow auto-assign
+     * Self-hosted permission validation: every user on the install may run
+     * reviews, chat and issues — no license or seat enforcement.
      */
     private async validateSelfHostedPermissions(
-        organizationAndTeamData: OrganizationAndTeamData,
-        userGitId?: string,
-        contextName?: string,
+        _organizationAndTeamData: OrganizationAndTeamData,
+        _userGitId?: string,
+        _contextName?: string,
     ): Promise<ValidationResult> {
-        const validation =
-            await this.licenseService.validateOrganizationLicense(
-                organizationAndTeamData,
-            );
-
-        // No license or invalid → Community Edition, allow everything
-        if (!validation?.valid) {
-            return { allowed: true };
-        }
-
-        // Licensed self-hosted: enforce seat validation
-        if (!userGitId) {
-            return { allowed: true };
-        }
-
-        const users = await this.licenseService.getAllUsersWithLicense(
-            organizationAndTeamData,
-        );
-
-        const user = users?.find((u) => u?.git_id === userGitId);
-
-        if (!user) {
-            this.logger.warn({
-                message: 'Self-hosted: user not licensed',
-                context: contextName || PermissionValidationService.name,
-                metadata: { organizationAndTeamData, userGitId },
-            });
-
-            return {
-                allowed: false,
-                errorType: ValidationErrorType.USER_NOT_LICENSED,
-                metadata: {
-                    userGitId,
-                    availableUsers: users?.length || 0,
-                },
-            };
-        }
-
         return { allowed: true };
     }
 

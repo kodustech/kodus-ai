@@ -714,7 +714,7 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
             expect(result.allowed).toBe(true);
         });
 
-        it('should deny with valid license and unlicensed user', async () => {
+        it('should allow with valid license and unlicensed user (no seat enforcement)', async () => {
             const licenseService = createMockLicenseService({
                 subscriptionStatus: SubscriptionStatus.LICENSED_SELF_HOSTED,
             });
@@ -728,10 +728,10 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
                 orgData,
                 'user-123',
             );
-            expect(result.allowed).toBe(false);
-            expect(result.errorType).toBe(
-                ValidationErrorType.USER_NOT_LICENSED,
-            );
+            expect(result.allowed).toBe(true);
+            expect(
+                licenseService.getAllUsersWithLicense,
+            ).not.toHaveBeenCalled();
         });
 
         it('should allow with valid license and no userGitId', async () => {

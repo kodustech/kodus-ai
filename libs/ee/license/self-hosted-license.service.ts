@@ -25,8 +25,6 @@ const LICENSE_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAig1JYVU3PCPOY18JGKsMdcoPeDMrGRCRb5XPZeLniZc=
 -----END PUBLIC KEY-----`;
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
 type AssignedUserEntry = {
     gitId: string;
     status: 'active' | 'inactive';
@@ -43,83 +41,20 @@ function isLegacyFormat(
 export class SelfHostedLicenseService implements ILicenseService {
     private readonly logger = createLogger(SelfHostedLicenseService.name);
 
-    /**
-     * Keyed by organization: the key is stored per organization, so one
-     * organization's result says nothing about another's.
-     */
-    private readonly cache = new Map<
-        string,
-        {
-            result: OrganizationLicenseValidationResult;
-            expiresAt: number;
-        }
-    >();
-
     constructor(
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private readonly organizationParametersService: IOrganizationParametersService,
     ) {}
 
     async validateOrganizationLicense(
-        organizationAndTeamData: OrganizationAndTeamData,
+        _organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<OrganizationLicenseValidationResult> {
-        const cacheKey = organizationAndTeamData?.organizationId ?? '';
-        const cached = this.cache.get(cacheKey);
-        if (cached && Date.now() < cached.expiresAt) {
-            return cached.result;
-        }
-
-        try {
-            const token = await this.getLicenseKey(organizationAndTeamData);
-
-            if (!token) {
-                return { valid: false };
-            }
-
-            const payload = this.verifyAndDecode(token);
-
-            if (!payload) {
-                return { valid: false };
-            }
-
-            // Check expiration
-            const now = Math.floor(Date.now() / 1000);
-            if (payload.exp && payload.exp < now) {
-                this.logger.warn({
-                    message: 'Self-hosted license key has expired',
-                    context: SelfHostedLicenseService.name,
-                    metadata: {
-                        expiredAt: new Date(payload.exp * 1000).toISOString(),
-                    },
-                });
-                return {
-                    valid: false,
-                    subscriptionStatus: SubscriptionStatus.EXPIRED,
-                };
-            }
-
-            const result: OrganizationLicenseValidationResult = {
-                valid: true,
-                subscriptionStatus: SubscriptionStatus.LICENSED_SELF_HOSTED,
-                planType: payload.plan,
-                numberOfLicenses: payload.seats,
-                expiresAt: new Date(payload.exp * 1000).toISOString(),
-            };
-
-            this.cache.set(cacheKey, {
-                result,
-                expiresAt: Date.now() + CACHE_TTL_MS,
-            });
-
-            return result;
-        } catch (error) {
-            this.logger.error({
-                message: 'Error validating self-hosted license',
-                context: SelfHostedLicenseService.name,
-                error,
-            });
-            return { valid: false };
-        }
+        return {
+            valid: true,
+            subscriptionStatus: SubscriptionStatus.LICENSED_SELF_HOSTED,
+            planType: 'enterprise',
+            numberOfLicenses: 0, // 0 = unlimited seats
+        };
     }
 
     async getAllUsersWithLicense(
@@ -418,46 +353,19 @@ export class SelfHostedLicenseService implements ILicenseService {
     }
 
     /**
-     * Decode and validate the license key without checking expiration.
-     * Useful for the status endpoint that needs to show details even for expired keys.
+     * Decode and validate a license key without checking expiration.
+     * Kept for the `/license/activate` endpoint, which still accepts a key
+     * and echoes its payload; validation no longer depends on it.
      */
     decodePayload(token: string): SelfHostedLicensePayload | null {
         return this.verifyAndDecode(token);
     }
 
     /**
-     * Clear the in-memory cache (e.g., after activating a new key).
+     * No-op: validation no longer caches, but the license controller still
+     * calls this after activating a key.
      */
-    clearCache(): void {
-        this.cache.clear();
-    }
-
-    private async getLicenseKey(
-        organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<string | null> {
-        // Try DB first
-        try {
-            const param = await this.organizationParametersService.findByKey(
-                OrganizationParametersKey.LICENSE_KEY,
-                organizationAndTeamData,
-            );
-
-            if (param?.configValue) {
-                const raw =
-                    typeof param.configValue === 'string'
-                        ? param.configValue
-                        : param.configValue.key;
-                return raw ? raw.replace(/\s+/g, '') : null;
-            }
-        } catch {
-            // DB lookup failed, fall through to env var
-        }
-
-        // Fallback to env var. KODUS_LICENSE_KEY is the customer-facing
-        // name self-hosted installs use — do NOT rename it (our test
-        // provisioning must set this exact var).
-        return process.env.KODUS_LICENSE_KEY || null;
-    }
+    clearCache(): void {}
 
     private verifyAndDecode(token: string): SelfHostedLicensePayload | null {
         try {
