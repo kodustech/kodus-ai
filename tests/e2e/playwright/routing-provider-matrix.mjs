@@ -57,6 +57,8 @@ export async function testRoutingProviderMatrix({ page, context, settingsRequest
     let writes = [];
     let probes = [];
     let probeResult = { ok: true, code: 'ok', latencyMs: 1, verifiedBy: 'catalog' };
+    let modelOverrides = null;
+    let failOverrides = false;
     let statusReads = 0;
     let totalWrites = 0;
     const pattern = '**/api/proxy/api/organization-parameters/**';
@@ -70,6 +72,10 @@ export async function testRoutingProviderMatrix({ page, context, settingsRequest
         }
         if (url.pathname.endsWith('/find-by-key') && url.searchParams.get('key') === 'byok_config')
             return fulfill({ configValue: config });
+        if (url.pathname.endsWith('/model-overrides')) {
+            if (failOverrides) return fulfill({ message: 'QA fixture: overrides unavailable' }, 503);
+            if (modelOverrides) return fulfill(modelOverrides);
+        }
         if (url.pathname.endsWith('/create-or-update')) {
             const body = req.postDataJSON();
             assert.equal(body.key, 'byok_config', 'Only model fixture writes are accepted in the provider matrix.');
@@ -312,12 +318,51 @@ export async function testRoutingProviderMatrix({ page, context, settingsRequest
         await shot('scoped-gateway-auth-error');
         assert.equal(writes.length, 0, 'Probing a scope override must not persist the fixture pin.');
         await reset(); pass('probe authentication failure replaces success; reset leaves the actual repository unchanged');
+
+        const overviewConfig = fixture();
+        overviewConfig.models[0].model = `matrix-${'longname'.repeat(16)}`;
+        const directoryId = repository.directories?.[0]?.id ?? 'matrix-folder';
+        modelOverrides = { mismatchedCount: 0, overrides: [
+            { scope: 'repository', repositoryId: repository.id, repositoryName: repository.name, model: 'matrix-model-0', inCurrentProviderCatalog: true },
+            { scope: 'directory', repositoryId: repository.id, repositoryName: repository.name, directoryId, directoryName: 'Matrix folder', model: 'matrix-model-0', inCurrentProviderCatalog: true },
+        ] };
+        await open(overviewConfig); await ready();
+        const overview = page.getByRole('region', { name: 'Repository overrides', exact: true });
+        const repositoryLink = overview.getByRole('link', { name: repository.name, exact: true });
+        await expect(repositoryLink).toHaveAttribute('href', `/settings/code-review/${encodeURIComponent(repository.id)}/routing`);
+        await overview.getByRole('button', { name: 'Expand', exact: true }).click();
+        await expect(overview.getByRole('link', { name: 'Matrix folder', exact: true })).toHaveAttribute('href', `/settings/code-review/${encodeURIComponent(repository.id)}/routing?directoryId=${encodeURIComponent(directoryId)}`);
+        await overview.evaluate((node) => node.scrollIntoView({ block: 'start' }));
+        await shot('repository-overrides');
+        await page.setViewportSize({ width: 390, height: 844 });
+        await expect.poll(async () => (await page.locator('aside').boundingBox())?.width ?? Infinity).toBeLessThanOrEqual(64);
+        await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+        await overview.evaluate((node) => node.scrollIntoView({ block: 'start' }));
+        await shot('repository-overrides-mobile');
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        await repositoryLink.click();
+        await expect(page).toHaveURL(new RegExp(`/settings/code-review/${repository.id}/routing$`));
+        await expect(picker('Code review model override')).toBeEnabled();
+        pass('repository overview links open scope Routing; folder targets and long model labels fit mobile');
+
+        failOverrides = true;
+        await open(); await ready();
+        const retryOverview = page.getByRole('region', { name: 'Repository overrides', exact: true });
+        await expect(retryOverview.getByRole('alert')).toContainText('Could not load repository overrides.');
+        await expect(retryOverview.getByText(/No repository overrides/)).toHaveCount(0);
+        await retryOverview.evaluate((node) => node.scrollIntoView({ block: 'start' }));
+        await shot('repository-overrides-error');
+        failOverrides = false; modelOverrides = { overrides: [], mismatchedCount: 0 };
+        await retryOverview.getByRole('button', { name: 'Retry', exact: true }).click();
+        await expect(retryOverview.getByText(/No repository overrides/)).toBeVisible();
+        await shot('repository-overrides-empty');
+        pass('repository overview reports a load failure instead of inheritance and supports Retry');
     } finally {
         await page.setViewportSize({ width: 1440, height: 1000 });
         // Reset only local draft if a failed assertion stopped the run mid-edit.
         await reset().catch(() => {});
         await page.unroute(pattern, handler);
-        writeFileSync(`${dir}/report.json`, JSON.stringify({ source: 'Full Next app and native controls; provider/status/config/write/probe HTTP fixtures only', externalProviderCalls: 0, checks, passed: checks.length === 28, statusReads, fixtureWrites: totalWrites, probeCount: probes.length }, null, 2));
+        writeFileSync(`${dir}/report.json`, JSON.stringify({ source: 'Full Next app and native controls; provider/status/config/write/probe/override-list HTTP fixtures only', externalProviderCalls: 0, checks, passed: checks.length === 30, statusReads, fixtureWrites: totalWrites, probeCount: probes.length }, null, 2));
     }
     return checks;
 }
