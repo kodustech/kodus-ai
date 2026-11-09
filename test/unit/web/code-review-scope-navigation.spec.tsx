@@ -1,6 +1,8 @@
 /** @jest-environment jsdom */
 import '@testing-library/jest-dom';
+import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TooltipProvider } from '@components/ui/tooltip';
 
 let mockPathname = '/settings/code-review/global/general';
@@ -58,6 +60,14 @@ jest.mock('@services/parameters/hooks', () => ({
 }));
 jest.mock('@services/parameters/fetch', () => ({
     createOrUpdateCodeReviewParameter: jest.fn(),
+}));
+jest.mock('@services/organizationParameters/fetch', () => ({
+    getLLMConfigStatus: jest.fn().mockResolvedValue({
+        source: 'none',
+        models: [],
+        byok: { configured: false },
+        env: { configured: false },
+    }),
 }));
 jest.mock('@components/ui/magic-modal', () => ({
     ...jest.requireActual('@components/ui/magic-modal'),
@@ -161,23 +171,34 @@ const ConfigProbe = () => {
 
 const Harness = ({
     config = configValue,
-}: { config?: typeof configValue } = {}) => (
-    <TooltipProvider>
-        <ScopeToolsProvider>
-            <AppSidebar />
-            <SettingsLayout
-                initialTeamId="team-1"
-                initialConfigValue={config as any}
-                initialDefaultConfig={{} as any}
-                initialPlatformConfig={{ configValue: {} } as any}
-                initialParameters={{}}
-                initialModelData={{ llmConfigStatus: null, byokModels: [] }}
-            >
-                <ConfigProbe />
-            </SettingsLayout>
-        </ScopeToolsProvider>
-    </TooltipProvider>
-);
+}: { config?: typeof configValue } = {}) => {
+    const [client] = useState(
+        () =>
+            new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+    );
+    return (
+        <QueryClientProvider client={client}>
+            <TooltipProvider>
+                <ScopeToolsProvider>
+                    <AppSidebar />
+                    <SettingsLayout
+                        initialTeamId="team-1"
+                        initialConfigValue={config as any}
+                        initialDefaultConfig={{} as any}
+                        initialPlatformConfig={{ configValue: {} } as any}
+                        initialParameters={{}}
+                        initialModelData={{
+                            llmConfigStatus: null,
+                            byokModels: [],
+                        }}
+                    >
+                        <ConfigProbe />
+                    </SettingsLayout>
+                </ScopeToolsProvider>
+            </TooltipProvider>
+        </QueryClientProvider>
+    );
+};
 
 beforeAll(() => {
     Element.prototype.scrollIntoView = jest.fn();
@@ -197,6 +218,14 @@ beforeEach(() => {
     mockPathname = '/settings/code-review/global/general';
     mockDirectoryId = null;
     jest.clearAllMocks();
+});
+
+it('keeps Routing discoverable without a provider in the selected repository scope', () => {
+    mockPathname = '/settings/code-review/inherited/general';
+    render(<Harness />);
+    expect(
+        screen.getByRole('link', { name: /^Routing(?:\s|$)/ }),
+    ).toHaveAttribute('href', '/settings/code-review/inherited/routing');
 });
 
 it('lists and opens repositories inheriting Global without creating configuration', () => {

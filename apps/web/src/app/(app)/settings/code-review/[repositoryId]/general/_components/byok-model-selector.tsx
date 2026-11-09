@@ -50,8 +50,12 @@ export const BYOKModelSelectorSection = ({
         ProbeState & {
             identity?: string;
             status?: typeof llmConfigStatus;
+            checking: boolean;
         }
-    >({ state: "idle" });
+    >({ state: "idle", checking: !!isCheckingProvider });
+    if (testResult.checking !== !!isCheckingProvider) {
+        setTestResult({ state: "idle", checking: !!isCheckingProvider });
+    }
     const leaf = config?.byokModelId ?? config?.byokModel;
     const parentValue = ((leaf?.level === level
         ? leaf.overriddenValue
@@ -97,7 +101,12 @@ export const BYOKModelSelectorSection = ({
             ? testResult
             : { state: "idle" };
     const setTest = (value: ProbeState) =>
-        setTestResult({ ...value, identity, status: llmConfigStatus });
+        setTestResult({
+            ...value,
+            identity,
+            status: llmConfigStatus,
+            checking: !!isCheckingProvider,
+        });
     useEffect(() => {
         ++request.current;
         return () => {
@@ -162,7 +171,8 @@ export const BYOKModelSelectorSection = ({
                 const unknown = !!value && !modelFor(value);
                 const unavailable =
                     !!value && modelFor(value)?.resolvable === false;
-                const blocked = disabled || !!field.disabled;
+                const blocked =
+                    disabled || !!field.disabled || !!isCheckingProvider;
                 const select = (id: string) => {
                     if (blocked) return;
                     ++request.current;

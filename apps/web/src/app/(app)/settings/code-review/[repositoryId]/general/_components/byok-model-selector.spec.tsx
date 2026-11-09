@@ -102,7 +102,13 @@ const FormValuesProbe = () => {
     return <pre data-testid="form-values">{JSON.stringify(values)}</pre>;
 };
 
-const Harness = ({ config }: { config: ScopedCodeReviewConfig }) => {
+const Harness = ({
+    config,
+    checking = false,
+}: {
+    config: ScopedCodeReviewConfig;
+    checking?: boolean;
+}) => {
     const methods = useForm<CodeReviewFormType>({
         defaultValues: {} as CodeReviewFormType,
     });
@@ -110,7 +116,8 @@ const Harness = ({ config }: { config: ScopedCodeReviewConfig }) => {
         <TooltipProvider>
             <FormProvider {...methods}>
                 <ScopedCodeReviewConfigProvider config={config}>
-                    <CodeReviewModelDataProvider value={modelData}>
+                    <CodeReviewModelDataProvider
+                        value={{ ...modelData, isCheckingProvider: checking }}>
                         <BYOKModelSelectorSection />
                         <FormValuesProbe />
                     </CodeReviewModelDataProvider>
@@ -271,6 +278,27 @@ describe("BYOKModelSelectorSection — badge/text parity", () => {
 });
 
 describe("selected provider and credential identity", () => {
+    it("clears a previous connection verdict after provider status is refreshed, even when metadata is unchanged", async () => {
+        (testBYOKModel as jest.Mock).mockResolvedValue({
+            ok: true,
+            verifiedBy: "probe",
+        });
+        const config = scopedConfig({
+            byokModelId: {
+                value: "gpt-4o",
+                level: FormattedConfigLevel.REPOSITORY,
+            },
+        });
+        const view = render(<Harness config={config} />);
+        fireEvent.click(screen.getByRole("button", { name: "Test model" }));
+        await screen.findByText("Connection verified");
+        view.rerender(<Harness config={config} checking />);
+        expect(screen.getByRole("combobox")).toBeDisabled();
+        view.rerender(<Harness config={config} />);
+        expect(
+            screen.queryByText("Connection verified"),
+        ).not.toBeInTheDocument();
+    });
     it.each([
         "openai",
         "anthropic",
