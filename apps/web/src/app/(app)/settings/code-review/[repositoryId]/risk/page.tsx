@@ -184,7 +184,10 @@ function RiskSettings() {
                                         · optional
                                     </span>
                                 </Heading>
-                                <OverrideIndicatorForm fieldName="riskCriteria" />
+                                <OverrideIndicatorForm
+                                    fieldName="riskCriteria"
+                                    disabled={!active || !canConfigure}
+                                />
                             </div>
                             <p className="text-text-secondary text-sm">
                                 {active

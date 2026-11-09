@@ -10,7 +10,7 @@ import {
 } from "@components/ui/tooltip";
 import { useEffectOnce } from "@hooks/use-effect-once";
 import { Undo2 } from "lucide-react";
-import { useFormContext, useWatch } from "react-hook-form";
+import { useFormContext, useFormState, useWatch } from "react-hook-form";
 
 import {
     CodeReviewFormType,
@@ -34,12 +34,15 @@ function getNestedProperty<T>(
 type OverrideIndicatorFormProps = {
     fieldName: string;
     className?: string;
+    disabled?: boolean;
 };
 
 export const OverrideIndicatorForm = ({
     fieldName,
+    disabled = false,
 }: OverrideIndicatorFormProps) => {
     const form = useFormContext<CodeReviewFormType>();
+    const { disabled: formDisabled } = useFormState({ control: form.control });
     const config = useCodeReviewConfig();
     const currentLevel = useCurrentConfigLevel();
 
@@ -50,7 +53,7 @@ export const OverrideIndicatorForm = ({
     });
 
     const handleRevert = () => {
-        if (!initialState) return;
+        if (!initialState || disabled || formDisabled) return;
 
         const { value, level } = buildOverrideRevertState(
             initialState,
@@ -70,7 +73,7 @@ export const OverrideIndicatorForm = ({
         <OverrideIndicator
             currentValue={currentValue}
             initialState={initialState}
-            handleRevert={handleRevert}
+            handleRevert={disabled || formDisabled ? undefined : handleRevert}
         />
     );
 };

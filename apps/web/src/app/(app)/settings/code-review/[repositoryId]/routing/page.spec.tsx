@@ -1,9 +1,17 @@
 /** @jest-environment jsdom */
 import "@testing-library/jest-dom";
 
+import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+    act,
+    fireEvent,
+    render,
+    screen,
+    waitFor,
+} from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
+import type { BYOKConfig } from "src/features/ee/byok/_types";
 
 import { ReviewRoutingSummary } from "../general/_components/review-routing-summary";
 import RoutingPage from "./page";
@@ -12,14 +20,48 @@ let mockRepo = "global";
 let mockDirectory: string | undefined;
 let mockCanEdit = true;
 let mockOrgEdit = true;
+let mockOrgRead = true;
+let mockOrgUpdate = false;
+let mockProviderError = false;
+let mockProviderChecking = false;
 let mockHeavy = true;
 let mockConfig: any;
 const mockStatus: any = {
     source: "byok",
     models: [
-        { modelId: "a", model: "model-a", resolvable: true },
-        { modelId: "b", model: "model-b", resolvable: true },
-        { modelId: "c", model: "risk-model", resolvable: true },
+        {
+            modelId: "a",
+            model: "model-a",
+            providerId: "openai",
+            credentialId: "cred",
+            resolvable: true,
+            capabilities: {
+                structuredOutput: "json_schema",
+                toolCalling: "native",
+            },
+        },
+        {
+            modelId: "b",
+            model: "model-b",
+            providerId: "openai",
+            credentialId: "cred",
+            resolvable: true,
+            capabilities: {
+                structuredOutput: "json_schema",
+                toolCalling: "native",
+            },
+        },
+        {
+            modelId: "c",
+            model: "risk-model",
+            providerId: "openai",
+            credentialId: "cred",
+            resolvable: true,
+            capabilities: {
+                structuredOutput: "json_schema",
+                toolCalling: "native",
+            },
+        },
     ],
     byok: {
         configured: true,
@@ -44,6 +86,13 @@ const mockStatus: any = {
     },
 };
 const save = jest.fn();
+const saveModels = jest.fn();
+const mockReadStatus = jest.fn();
+const mockReadModels = jest.fn();
+const mockPush = jest.fn();
+const mockRefresh = jest.fn();
+const originalStatus = JSON.parse(JSON.stringify(mockStatus));
+let mockByok: BYOKConfig;
 jest.mock("src/core/utils/reactQuery", () => ({
     generateQueryKey: (path: string, options?: unknown) => [path, options],
 }));
@@ -52,8 +101,20 @@ jest.mock("@services/parameters/fetch", () => ({
 }));
 jest.mock("@services/organizationParameters/fetch", () => ({
     testBYOKModel: jest.fn(),
+    getBYOK: () => mockReadModels(),
+    getLLMConfigStatus: () => mockReadStatus(),
+    createOrUpdateOrganizationParameter: (...args: unknown[]) =>
+        saveModels(...args),
+    listModelOverrides: () =>
+        Promise.resolve({ overrides: [], mismatchedCount: 0 }),
 }));
 jest.mock("src/app/(app)/settings/_hooks", () => ({
+    useCurrentConfigLevel: () =>
+        mockDirectory
+            ? "directory"
+            : mockRepo === "global"
+              ? "global"
+              : "repository",
     useCodeReviewRouteParams: () => ({
         repositoryId: mockRepo,
         directoryId: mockDirectory,
@@ -64,12 +125,20 @@ jest.mock("src/app/(app)/settings/_components/context", () => ({
     useCodeReviewModelData: () => ({
         llmConfigStatus: mockStatus,
         hasConnectedProvider: mockStatus.byok.configured,
+        providerStatusError: mockProviderError,
+        isCheckingProvider: mockProviderChecking,
         byokModels: [],
     }),
 }));
 jest.mock("@services/permissions/hooks", () => ({
-    usePermission: (_: unknown, resource: string) =>
-        resource === "organization_settings" ? mockOrgEdit : mockCanEdit,
+    usePermission: (action: string, resource: string) =>
+        resource === "organization_settings"
+            ? action === "read"
+                ? mockOrgRead
+                : action === "create"
+                  ? mockOrgEdit
+                  : mockOrgUpdate
+            : mockCanEdit,
 }));
 jest.mock(
     "src/features/ee/subscription/_providers/subscription-context",
@@ -91,9 +160,10 @@ jest.mock("../../_components/centralized-config-readonly-alert", () => ({
 }));
 jest.mock("../../_components/override", () => ({
     OverrideIndicatorForm: () => null,
+    OverrideIndicator: () => null,
 }));
 jest.mock("next/navigation", () => ({
-    useRouter: () => ({ push: jest.fn(), refresh: jest.fn() }),
+    useRouter: () => ({ push: mockPush, refresh: mockRefresh }),
     redirect: (href: string) => {
         throw new Error(`REDIRECT:${href}`);
     },
@@ -109,7 +179,10 @@ const config = (active: boolean) => ({
 });
 const mount = (active = false, summary = false, override: any = {}) => {
     mockConfig = { ...config(active), ...override };
+    let update!: () => void;
     function Harness() {
+        const [, force] = useState(0);
+        update = () => force((value) => value + 1);
         const form = useForm<any>({
             defaultValues: mockConfig,
             disabled: !mockCanEdit,
@@ -132,20 +205,45 @@ const mount = (active = false, summary = false, override: any = {}) => {
             </FormProvider>
         );
     }
-    return render(
+    const view = render(
         <QueryClientProvider client={new QueryClient()}>
             <Harness />
         </QueryClientProvider>,
     );
+    return { ...view, refreshEnvironment: () => act(update) };
 };
 beforeEach(() => {
     mockRepo = "global";
     mockDirectory = undefined;
     mockCanEdit = true;
     mockOrgEdit = true;
+    mockOrgRead = true;
+    mockOrgUpdate = false;
+    mockProviderError = false;
+    mockProviderChecking = false;
+    Object.assign(mockStatus, JSON.parse(JSON.stringify(originalStatus)));
     mockHeavy = true;
     mockStatus.byok.providerId = undefined;
     mockStatus.byok.configured = true;
+    mockByok = {
+        version: 2,
+        credentials: [{ id: "cred", provider: "openai", apiKey: "masked-key" }],
+        models: mockStatus.models.map((model: any) => ({
+            id: model.modelId,
+            credentialId: "cred",
+            model: model.model,
+        })),
+        routing: {
+            defaultModelId: "a",
+            fallbackModelId: "b",
+            taskOverrides: { codeReviewHeavy: "b", riskAssessment: "c" },
+        },
+    };
+    saveModels.mockReset().mockResolvedValue(true);
+    mockReadStatus.mockReset().mockImplementation(async () => mockStatus);
+    mockReadModels.mockReset().mockImplementation(async () => mockByok);
+    mockPush.mockReset();
+    mockRefresh.mockReset();
     save.mockReset().mockResolvedValue(true);
 });
 beforeAll(() => {
@@ -157,8 +255,9 @@ beforeAll(() => {
     HTMLElement.prototype.scrollIntoView = jest.fn();
 });
 
-it("shows one configured mode for all PRs when risk is off, with organization defaults above it", () => {
+it("shows one configured mode for all PRs when risk is off, with organization defaults above it", async () => {
     mount(false);
+    await screen.findByRole("combobox", { name: "Default model" });
     expect(screen.getByRole("combobox", { name: "All PRs" })).toHaveTextContent(
         "Balanced",
     );
@@ -172,8 +271,9 @@ it("shows one configured mode for all PRs when risk is off, with organization de
     ).not.toBeInTheDocument();
 });
 
-it("shows both risk outcomes and a separate default for unavailable assessments", () => {
+it("shows both risk outcomes and a separate default for unavailable assessments", async () => {
     mount(true);
+    await screen.findByRole("combobox", { name: "Risk assessment model" });
     expect(
         screen.getByRole("combobox", { name: "No risk found" }),
     ).toHaveTextContent("Balanced");
@@ -364,9 +464,7 @@ it("opens a locked routing screen without a provider instead of redirecting or a
     mockRepo = "repo";
     mockDirectory = "directory";
     mount();
-    expect(
-        screen.getByRole("heading", { name: "Routing" }),
-    ).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Routing" })).toBeVisible();
     expect(
         screen.getByRole("heading", {
             name: "Connect an AI provider to use routing",
@@ -395,18 +493,141 @@ it("explains who can connect a provider when organization editing is not permitt
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 });
 
-it("shows the effective risk model when capability fallback differs from the inherited default", () => {
+it("shows the effective risk model when capability fallback differs from the inherited default", async () => {
     const previous = mockStatus.modelRouting.riskAssessment;
     mockStatus.modelRouting.riskAssessment = { modelId: "b", inherited: true };
     try {
         mount(true);
-        expect(
-            screen.getByText("Risk assessment").parentElement,
-        ).toHaveTextContent("Model B");
+        expect(await screen.findByText("Uses Model B")).toBeVisible();
         expect(
             screen.queryByText("Uses default model"),
         ).not.toBeInTheDocument();
     } finally {
         mockStatus.modelRouting.riskAssessment = previous;
     }
+});
+
+const chooseOrgModel = async (label: string, name: RegExp) => {
+    fireEvent.click(await screen.findByRole("combobox", { name: label }));
+    fireEvent.click(await screen.findByRole("option", { name }));
+};
+const saveButton = () => screen.getByRole("button", { name: "Save settings" });
+const chooseReviewMode = async (label: string, name: string) => {
+    fireEvent.click(screen.getByRole("combobox", { name: label }));
+    fireEvent.click(await screen.findByRole("option", { name }));
+};
+
+it("lets an organization-only editor save models without writing review settings", async () => {
+    mockCanEdit = false;
+    mount();
+    expect(screen.getByRole("combobox", { name: "All PRs" })).toBeDisabled();
+    await chooseOrgModel("Default model", /Model B/);
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(saveModels).toHaveBeenCalledTimes(1));
+    expect(save).not.toHaveBeenCalled();
+    expect(saveModels.mock.calls[0][1].routing.defaultModelId).toBe("b");
+});
+it("lets a review-only editor save modes without fetching or writing credential configuration", async () => {
+    mockOrgEdit = false;
+    mockOrgRead = false;
+    mount();
+    expect(
+        screen.queryByRole("combobox", { name: "Default model" }),
+    ).not.toBeInTheDocument();
+    await chooseReviewMode("All PRs", "Heavy");
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(mockReadModels).not.toHaveBeenCalled();
+    expect(saveModels).not.toHaveBeenCalled();
+});
+it("does not confuse Update permission with the API's Create permission for organization routing", async () => {
+    mockOrgEdit = false;
+    mockOrgUpdate = true;
+    mount();
+    expect(
+        await screen.findByRole("combobox", { name: "Default model" }),
+    ).toBeDisabled();
+    expect(saveModels).not.toHaveBeenCalled();
+});
+it("does not save either edit when the organization model write fails", async () => {
+    saveModels.mockRejectedValue(new Error("Fixture org save failed"));
+    mount();
+    await chooseOrgModel("Default model", /Model B/);
+    await chooseReviewMode("All PRs", "Heavy");
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(saveModels).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    expect(save).not.toHaveBeenCalled();
+    expect(
+        screen.getByRole("combobox", { name: "Default model" }),
+    ).toHaveTextContent("Model B");
+    expect(screen.getByRole("combobox", { name: "All PRs" })).toHaveTextContent(
+        "Heavy",
+    );
+});
+it("keeps the unsaved review edit after models save but the review write fails", async () => {
+    save.mockRejectedValue(new Error("Fixture review save failed"));
+    mount();
+    await chooseOrgModel("Default model", /Model B/);
+    await chooseReviewMode("All PRs", "Heavy");
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    expect(saveModels).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("combobox", { name: "All PRs" })).toHaveTextContent(
+        "Heavy",
+    );
+});
+it("rechecks provider status before saving and does not write after the last provider is removed", async () => {
+    mount();
+    await chooseReviewMode("All PRs", "Heavy");
+    mockReadStatus.mockResolvedValue({
+        source: "none",
+        models: [],
+        byok: { configured: false },
+        env: { configured: false },
+    });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(mockReadStatus).toHaveBeenCalled());
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    expect(save).not.toHaveBeenCalled();
+    expect(saveModels).not.toHaveBeenCalled();
+});
+it("lets a user discard edits and reconnect instead of trapping navigation after disconnection", async () => {
+    const view = mount();
+    await chooseReviewMode("All PRs", "Heavy");
+    mockStatus.byok.configured = false;
+    view.refreshEnvironment();
+    fireEvent.click(
+        await screen.findByRole("button", {
+            name: "Discard changes and connect",
+        }),
+    );
+    expect(mockPush).toHaveBeenCalledWith("/byok");
+    expect(save).not.toHaveBeenCalled();
+    expect(saveModels).not.toHaveBeenCalled();
+});
+it("blocks all controls while provider status is being verified and explains a verification failure", async () => {
+    mockProviderChecking = true;
+    const view = mount(true);
+    expect(screen.getByRole("combobox", { name: "Risk found" })).toBeDisabled();
+    mockProviderChecking = false;
+    mockProviderError = true;
+    view.refreshEnvironment();
+    expect(
+        screen.getByRole("heading", { name: "Could not verify AI providers" }),
+    ).toBeVisible();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();
+});
+it("one connected model does not prevent choosing review depth", async () => {
+    mockByok.models = mockByok.models.slice(0, 1);
+    mockByok.routing = { defaultModelId: "a" };
+    mount();
+    expect(
+        await screen.findByRole("combobox", { name: "Default model" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "All PRs" })).toBeEnabled();
 });

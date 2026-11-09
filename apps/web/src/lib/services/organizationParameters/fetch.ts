@@ -23,7 +23,14 @@ export const createOrUpdateOrganizationParameter = async (
     );
 };
 
-export const getBYOK = async (): Promise<BYOKConfig | undefined> => {
+const routingReadSignal = (signal?: AbortSignal) =>
+    signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(8_000)])
+        : AbortSignal.timeout(8_000);
+
+export const getBYOK = async (options?: {
+    signal?: AbortSignal;
+}): Promise<BYOKConfig | undefined> => {
     // find-by-key returns the RAW v2 blob run through maskV2ConfigSecrets, so
     // every secret is already `••••` — no new endpoint is needed (open item #5).
     const byokConfig = await getOrganizationParameterByKey<{
@@ -34,6 +41,7 @@ export const getBYOK = async (): Promise<BYOKConfig | undefined> => {
         },
         {
             cache: "no-store",
+            signal: routingReadSignal(options?.signal),
         },
     );
 
@@ -218,6 +226,8 @@ export type LLMConfigSource = "byok" | "env" | "none";
  */
 export type LLMModelStatus = {
     modelId: string;
+    credentialId?: string;
+    managed?: boolean;
     model?: string;
     providerId?: string;
     baseUrl?: string;
@@ -271,10 +281,12 @@ export type LLMConfigStatus = {
     };
 };
 
-export const getLLMConfigStatus = async (): Promise<LLMConfigStatus> => {
+export const getLLMConfigStatus = async (options?: {
+    signal?: AbortSignal;
+}): Promise<LLMConfigStatus> => {
     return await authorizedFetch<LLMConfigStatus>(
         ORGANIZATION_PARAMETERS_PATHS.GET_LLM_CONFIG_STATUS,
-        { cache: "no-store" },
+        { cache: "no-store", signal: routingReadSignal(options?.signal) },
     );
 };
 

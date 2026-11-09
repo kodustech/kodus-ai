@@ -192,6 +192,9 @@ export async function captureRiskRoutingStates({
         await hydrated(
             page.getByRole('button', { name: 'Save settings', exact: true }),
         );
+        if (tab === 'routing') {
+            await expect(page.getByRole('combobox', { name: 'Default model', exact: true })).toBeEnabled();
+        }
     }
     async function shot(id, group, title, note = '', fixture = false) {
         if (id === '25-approval-human-files') {

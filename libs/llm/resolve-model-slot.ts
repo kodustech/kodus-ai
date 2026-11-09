@@ -17,7 +17,7 @@
  *    Absence is ALWAYS `undefined` here — never `null` (one convention).
  */
 import { BYOKProvider } from '@libs/llm/model-providers';
-import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
+import { isByokSlotConfigured } from './slot-auth';
 import {
     isByokConfig,
     type BYOKConfig,
@@ -61,15 +61,17 @@ function slotFromModel(
     // builder actually consumes: an API key for key-based providers, OR Amazon
     // Bedrock's bearer token / SigV4 IAM pair (Bedrock authenticates with the aws*
     // fields, NEVER `apiKey` — requiring one here silently degraded every Bedrock
-    // slot to the managed default). Checks the material, not the provider name, so
-    // a new auth shape extends this in one place next to the field mapping below.
+    // slot to the managed default). Share the provider-aware predicate with
+    // status: another provider's auth fields cannot make this slot usable.
     // A platform-funded (`kodus`) credential carries no material by design —
     // its module reads Kodus's own upstream key at build time.
-    const hasAuth =
-        !!apiKey ||
-        !!STR(s.awsBearerToken) ||
-        (!!STR(s.awsAccessKeyId) && !!STR(s.awsSecretAccessKey)) ||
-        isPlatformFundedProvider(provider);
+    const hasAuth = isByokSlotConfigured({
+        provider: provider as BYOKProvider,
+        apiKey,
+        awsBearerToken: STR(s.awsBearerToken),
+        awsAccessKeyId: STR(s.awsAccessKeyId),
+        awsSecretAccessKey: STR(s.awsSecretAccessKey),
+    });
     if (!provider || !hasAuth || !STR(model.model)) {
         return undefined;
     } // degrade: skip

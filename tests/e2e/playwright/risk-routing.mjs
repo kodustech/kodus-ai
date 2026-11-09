@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { expect as baseExpect } from 'playwright/test';
 import { captureRiskRoutingStates } from './risk-routing-state-captures.mjs';
+import { testRoutingProviderMatrix } from './routing-provider-matrix.mjs';
 
 const expect = baseExpect.configure({ timeout: 45_000 });
 
@@ -307,6 +308,36 @@ try {
     assert.equal(await menu('Routing').count(), 1);
     pass('Risk and Routing are in the real app menu');
 
+    // Prove that Routing replaced the old org model editor using REAL writes.
+    // These are this run's keyless models, never another tenant's credentials.
+    await openMenu('Routing');
+    const defaultPicker = page.getByRole('combobox', { name: 'Default model', exact: true });
+    await expect(defaultPicker).toBeEnabled();
+    await hydrated(defaultPicker);
+    await defaultPicker.click();
+    await page.getByRole('option', { name: /GLM 5\.3/i }).click();
+    for (const label of ['Risk assessment model', 'Balanced model', 'Heavy model']) {
+        await page.getByRole('combobox', { name: label, exact: true }).click();
+        await page.getByRole('option', { name: /Deepseek V4\.1 Flash/i }).click();
+    }
+    const [modelsResponse] = await Promise.all([
+        page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/organization-parameters/create-or-update')),
+        page.getByRole('button', { name: 'Save settings', exact: true }).click(),
+    ]);
+    assert.ok(modelsResponse.ok(), 'Canonical Routing must save through the real organization API.');
+    await expect(page.getByRole('button', { name: 'Save settings', exact: true })).toBeDisabled();
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(defaultPicker).toContainText(/GLM 5\.3/);
+    const persistedModels = await llmStatus();
+    assert.equal(persistedModels.modelRouting.defaultModelId, providerModelIds[1]);
+    assert.equal(persistedModels.modelRouting.riskAssessment.modelId, providerModelIds[0]);
+    assert.equal(persistedModels.reviewModels.balanced.modelId, providerModelIds[0]);
+    assert.equal(persistedModels.reviewModels.heavy.modelId, providerModelIds[0]);
+    await screenshot('routing-models-real-persistence');
+    pass('Canonical Routing persists default, risk, Balanced and Heavy models through the real API and reload');
+    await saveProvider(providerConfig);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+
     await openMenu('Risk assessment');
     const riskToggle = page.getByRole('switch', {
         name: 'Risk assessment',
@@ -472,6 +503,8 @@ try {
         initialCaptures,
     });
     pass('Settings states are captured inside the complete application');
+    await testRoutingProviderMatrix({ page, web: WEB, out: OUT, hydrated });
+    pass('Provider HTTP fixture matrix passes in the full app without external model calls');
     assert.deepEqual(pageErrors, [], 'No uncaught app errors.');
 } catch (error) {
     await screenshot('failure').catch(() => {});

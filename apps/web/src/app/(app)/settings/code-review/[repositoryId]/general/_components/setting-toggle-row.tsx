@@ -35,7 +35,10 @@ export function SettingToggleRow({
                         {title}
                     </label>
                     {badge}
-                    <OverrideIndicatorForm fieldName={fieldName} />
+                    <OverrideIndicatorForm
+                        fieldName={fieldName}
+                        disabled={disabled}
+                    />
                 </div>
                 <p className="text-text-secondary mt-1 text-sm leading-6">
                     {description}

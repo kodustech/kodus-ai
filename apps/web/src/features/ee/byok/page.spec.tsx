@@ -1,6 +1,13 @@
+import { getBYOK } from "@services/organizationParameters/fetch";
 import { getSummaryTokenUsage } from "@services/usage/fetch";
 
 import ByokPage from "./page";
+
+jest.mock("next/navigation", () => ({
+    redirect: (href: string) => {
+        throw new Error(`REDIRECT:${href}`);
+    },
+}));
 
 jest.mock("@services/organizationParameters/fetch", () => ({
     getBYOK: jest.fn().mockResolvedValue({
@@ -33,6 +40,13 @@ jest.mock("./_components/page.client", () => ({
 const summaryMock = getSummaryTokenUsage as jest.Mock;
 
 describe("ByokPage", () => {
+    it("replaces the legacy Routing URL before loading provider or billing data", async () => {
+        const prior = (getBYOK as jest.Mock).mock.calls.length;
+        await expect(
+            ByokPage({ searchParams: Promise.resolve({ tab: "routing" }) }),
+        ).rejects.toThrow("REDIRECT:/settings/code-review/global/routing");
+        expect((getBYOK as jest.Mock).mock.calls.length).toBe(prior);
+    });
     afterEach(() => jest.restoreAllMocks());
 
     it("renders without cost chips when the usage summary never answers", async () => {
@@ -62,7 +76,11 @@ describe("ByokPage", () => {
     });
 
     it("shows no-usage only when the summary answered without that model", async () => {
-        summaryMock.mockResolvedValue({ totals: {}, totalCost: {}, byModel: [] });
+        summaryMock.mockResolvedValue({
+            totals: {},
+            totalCost: {},
+            byModel: [],
+        });
 
         const element = await ByokPage();
 

@@ -1,137 +1,150 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@components/ui/button";
 import { Card, CardContent, CardHeader } from "@components/ui/card";
-import {
-    Command,
-    CommandEmpty,
-    CommandInput,
-    CommandItem,
-    CommandList,
-} from "@components/ui/command";
 import { Heading } from "@components/ui/heading";
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@components/ui/popover";
-import {
-    testBYOKModel,
-    type TestBYOKResult,
-} from "@services/organizationParameters/fetch";
-import {
-    AlertTriangleIcon,
-    CheckCircle2Icon,
-    ChevronsUpDownIcon,
-    PlusIcon,
-    XCircleIcon,
-} from "lucide-react";
-import { Controller, useFormContext } from "react-hook-form";
+import { Link } from "@components/ui/link";
+import { testBYOKModel } from "@services/organizationParameters/fetch";
+import { usePermission } from "@services/permissions/hooks";
+import { Action, ResourceType } from "@services/permissions/types";
+import { ChevronsUpDownIcon } from "lucide-react";
+import { Controller, useFormContext, useWatch } from "react-hook-form";
 import {
     useCodeReviewConfig,
     useCodeReviewModelData,
 } from "src/app/(app)/settings/_components/context";
 import { useCurrentConfigLevel } from "src/app/(app)/settings/_hooks";
 import { OverrideIndicator } from "src/app/(app)/settings/code-review/_components/override";
-import { ArrayHelpers } from "src/core/utils/array";
+import { routingModelLabels } from "src/features/ee/byok/_components/routing/routing-state";
+import { ModelCombobox } from "src/features/ee/byok/_components/routing/task-override-grid";
+import { formatModelLabel } from "src/features/ee/byok/_data/model-label";
 
 import { FormattedConfigLevel, type CodeReviewFormType } from "../../../_types";
 
-const MANUAL_ITEM = "__manual__";
-
-/**
- * BYOK model selector for the code review General tab.
- *
- * Rendered only for repository/directory scopes that have a main BYOK provider
- * configured. The BYOK status and the provider's model catalog are both
- * server-fetched in the settings layout and read from context, so this renders
- * fully with the rest of the page — no client round-trip, no loading skeleton.
- */
-export const BYOKModelSelectorSection = () => {
+/** Scope pins and connection probes retain the selected slot's provider identity. */
+export const BYOKModelSelectorSection = ({
+    disabled = false,
+}: {
+    disabled?: boolean;
+}) => {
     const form = useFormContext<CodeReviewFormType>();
-    const router = useRouter();
     const config = useCodeReviewConfig();
-    const currentLevel = useCurrentConfigLevel();
+    const level = useCurrentConfigLevel();
+    const { llmConfigStatus, hasConnectedProvider, isCheckingProvider } =
+        useCodeReviewModelData();
+    const canTest = usePermission(
+        Action.Create,
+        ResourceType.OrganizationSettings,
+    );
+    const canReadModels = usePermission(
+        Action.Read,
+        ResourceType.OrganizationSettings,
+    );
+    const request = useRef(0);
+    type ProbeState = {
+        state: "idle" | "testing" | "success" | "error";
+        message?: string;
+    };
+    const [testResult, setTestResult] = useState<
+        ProbeState & {
+            identity?: string;
+            status?: typeof llmConfigStatus;
+        }
+    >({ state: "idle" });
+    const leaf = config?.byokModelId ?? config?.byokModel;
+    const parentValue = ((leaf?.level === level
+        ? leaf.overriddenValue
+        : leaf?.value) ?? "") as string;
+    // Legacy names must never be persisted as slot ids when restoring inheritance.
+    const inheritValue = config?.byokModelId ? parentValue : "";
+    const scope =
+        level === FormattedConfigLevel.DIRECTORY
+            ? "directory"
+            : level === FormattedConfigLevel.GLOBAL
+              ? "organization"
+              : "repository";
+    const models = (llmConfigStatus?.models ?? []).filter(
+        (model) => !model.managed,
+    );
+    const modelFor = (id: string) =>
+        models.find((model) => model.modelId === id || model.model === id);
+    const labels = routingModelLabels(models);
+    const labelOf = (id: string) => {
+        const model = modelFor(id);
+        return model
+            ? (labels.get(model.modelId) ??
+                  formatModelLabel(model.model ?? model.modelId))
+            : id;
+    };
+    const selectedId =
+        useWatch({ control: form.control, name: "byokModelId.value" }) ??
+        config?.byokModelId?.value ??
+        config?.byokModel?.value ??
+        "";
+    const selected = modelFor(selectedId);
+    const identity = JSON.stringify([
+        selectedId,
+        selected?.providerId,
+        selected?.credentialId,
+        selected?.model,
+        selected?.baseUrl,
+    ]);
+    const test: ProbeState =
+        testResult.identity === identity &&
+        testResult.status === llmConfigStatus &&
+        !isCheckingProvider
+            ? testResult
+            : { state: "idle" };
+    const setTest = (value: ProbeState) =>
+        setTestResult({ ...value, identity, status: llmConfigStatus });
+    useEffect(() => {
+        ++request.current;
+        return () => {
+            ++request.current;
+        };
+    }, [identity, isCheckingProvider]);
+    if (!hasConnectedProvider) return null;
 
-    const { llmConfigStatus } = useCodeReviewModelData();
-    const byok = llmConfigStatus?.byok;
-    const provider = byok?.configured ? byok.providerId : undefined;
-    const byokMainModel = byok?.model ?? "";
-
-    const [open, setOpen] = useState(false);
-    const [search, setSearch] = useState("");
-    const [test, setTest] = useState<
-        | { status: "idle" }
-        | { status: "testing" }
-        | { status: "success" }
-        | { status: "error"; message?: string }
-    >({ status: "idle" });
-
-    const runModelTest = async (modelId: string) => {
-        if (!provider || !modelId.trim()) return;
-        setTest({ status: "testing" });
+    const probe = async (id: string) => {
+        const model = modelFor(id);
+        if (!canTest || !model?.providerId) return;
+        const current = ++request.current;
+        setTest({ state: "testing" });
         try {
-            // Scope settings store the BYOK entry id, while the provider probe
-            // expects its actual model name. Sending the id makes every model
-            // with a generated UUID fail the test despite a working connection.
-            const providerModel =
-                llmConfigStatus?.models.find((m) => m.modelId === modelId)
-                    ?.model ?? modelId;
-            const res: TestBYOKResult = await testBYOKModel({
-                provider,
-                model: providerModel.trim(),
+            const result = await testBYOKModel({
+                provider: model.providerId,
+                model: model.model ?? model.modelId,
+                ...(model.credentialId
+                    ? { credentialId: model.credentialId }
+                    : {}),
             });
+            if (request.current !== current) return;
             setTest(
-                res.ok
-                    ? { status: "success" }
+                result.ok
+                    ? {
+                          state: "success",
+                          message:
+                              result.verifiedBy === "probe"
+                                  ? "Connection verified"
+                                  : "Model available",
+                      }
                     : {
-                          status: "error",
-                          message: res.providerMessage || res.message,
+                          state: "error",
+                          message:
+                              result.providerMessage ||
+                              result.message ||
+                              "Model test failed.",
                       },
             );
-        } catch (error) {
-            setTest({
-                status: "error",
-                message:
-                    error instanceof Error ? error.message : "Test failed",
-            });
+        } catch {
+            if (request.current === current)
+                setTest({
+                    state: "error",
+                    message: "Could not test this model. Try again.",
+                });
         }
     };
-
-    // No main BYOK provider configured — feature hidden entirely.
-    if (!provider) {
-        return null;
-    }
-
-    // Only the models the org actually CONFIGURED in BYOK — not the provider's
-    // full catalog. You can only route a review to a model you've set up, and
-    // the id we write (`byokModelId`) must reference a real config `models[]`
-    // entry so the routing resolver matches it. Mirrors the Routing tab's pool.
-    const models = (llmConfigStatus?.models ?? []).map((m) => ({
-        id: m.modelId,
-        name: m.model ?? m.modelId,
-    }));
-
-    // The value inherited from the parent scope (repository / BYOK settings),
-    // computed the same way the override indicator does. Prefer the id-based
-    // override; fall back to the legacy name leaf during the compat read window.
-    const leaf = config?.byokModelId ?? config?.byokModel;
-    const isExistingOverride = leaf?.level === currentLevel;
-    const parentValue =
-        (isExistingOverride ? leaf?.overriddenValue : leaf?.value) ?? "";
-
-    const modelName = (id: string) =>
-        models.find((m) => m.id === id)?.name ?? id;
-
-    const inheritedModelId = parentValue || byokMainModel;
-    const inheritedFromBYOKSettings = !parentValue;
-    const scopeLabel =
-        currentLevel === FormattedConfigLevel.DIRECTORY
-            ? "directory"
-            : "repository";
-
     return (
         <Controller
             name="byokModelId.value"
@@ -140,270 +153,159 @@ export const BYOKModelSelectorSection = () => {
                 config?.byokModelId?.value ?? config?.byokModel?.value ?? ""
             }
             render={({ field }) => {
-                const currentValue = field.value ?? "";
-                const isInherited = currentValue === parentValue;
-                const effectiveModelId = currentValue || byokMainModel;
-
-                // A model id that isn't in the provider catalog — either typed
-                // manually or inherited from a kodus-config.yml. We can't be
-                // certain it's invalid (the catalog isn't exhaustive), so warn
-                // rather than block.
-                // Match by id OR name: a legacy override (or one saved before the
-                // id migration) stores the model NAME, which is still a valid
-                // configured model — flagging it as "unknown" would be a false
-                // alarm. New picks write the stable id.
-                const isUnknownModel =
-                    currentValue !== "" &&
-                    models.length > 0 &&
-                    !models.some(
-                        (m) => m.id === currentValue || m.name === currentValue,
-                    );
-
-                const selectModel = (modelId: string) => {
-                    field.onChange(modelId);
-                    setTest({ status: "idle" });
-                    setOpen(false);
+                const value = field.value ?? "";
+                const inherited =
+                    value === inheritValue ||
+                    (!config?.byokModelId &&
+                        leaf?.level !== level &&
+                        value === leaf?.value);
+                const unknown = !!value && !modelFor(value);
+                const unavailable =
+                    !!value && modelFor(value)?.resolvable === false;
+                const blocked = disabled || !!field.disabled;
+                const select = (id: string) => {
+                    if (blocked) return;
+                    ++request.current;
+                    setTest({ state: "idle" });
+                    field.onChange(id);
                 };
-
                 return (
-                    <Card>
+                    <Card color="lv1">
                         <CardHeader>
-                            <div className="flex flex-row items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <Heading variant="h3">
-                                    Code review model
+                                    Code review model override
                                 </Heading>
-
-                                {/* Drive the badge from the SAME leaf and value
-                                    the description text uses (`byokModelId ??
-                                    byokModel`, plus the Controller's field
-                                    value) so the two indicators can never
-                                    disagree. The generic OverrideIndicatorForm
-                                    read only `byokModelId` via useWatch, so a
-                                    legacy `byokModel` override — or the transient
-                                    post-save window before the refetch lands —
-                                    made the badge vanish while the text still
-                                    announced the override. */}
                                 <OverrideIndicator
-                                    currentValue={currentValue}
+                                    currentValue={value}
                                     initialState={
                                         leaf ?? {
                                             value: "",
                                             level: FormattedConfigLevel.DEFAULT,
                                         }
                                     }
-                                    handleRevert={() =>
-                                        selectModel(parentValue)
+                                    handleRevert={
+                                        blocked
+                                            ? undefined
+                                            : () => select(inheritValue)
                                     }
                                 />
                             </div>
-
                             <p className="text-text-secondary text-sm">
-                                {isInherited ? (
-                                    <>
-                                        Reviews run with{" "}
-                                        <strong>
-                                            {modelName(inheritedModelId) ||
-                                                "your BYOK model"}
-                                        </strong>
-                                        , inherited from{" "}
-                                        {inheritedFromBYOKSettings
-                                            ? "BYOK settings"
-                                            : "the repository"}
-                                        . Pick a model to override it for this{" "}
-                                        {scopeLabel}.
-                                    </>
-                                ) : (
-                                    <>
-                                        Reviews for this {scopeLabel} run with{" "}
-                                        <strong>
-                                            {modelName(effectiveModelId)}
-                                        </strong>{" "}
-                                        from your main BYOK provider.
-                                    </>
-                                )}
+                                {inherited
+                                    ? parentValue
+                                        ? "Uses the inherited model override."
+                                        : "Uses the routing models."
+                                    : `Uses one model for Balanced and Heavy in this ${scope}.`}
                             </p>
                         </CardHeader>
-
-                        <CardContent className="w-full">
-                                <Popover
-                                    modal
-                                    open={open}
-                                    onOpenChange={setOpen}>
-                                    <PopoverTrigger asChild>
+                        <CardContent>
+                            <ModelCombobox
+                                models={models.map((model) => ({
+                                    id: model.modelId,
+                                    label: labelOf(model.modelId),
+                                    provider: model.providerId,
+                                    capabilities: model.capabilities,
+                                    disabled: !model.resolvable,
+                                    disabledReason:
+                                        "Reconnect this provider before using its model.",
+                                }))}
+                                value={value}
+                                gateTask="codeReview"
+                                disabled={blocked}
+                                onSelect={select}
+                                defaultOption={{
+                                    label: parentValue
+                                        ? `Use inherited model · ${labelOf(parentValue)}`
+                                        : "Use routing models",
+                                    selected: inherited,
+                                    onSelect: () => select(inheritValue),
+                                }}
+                                trigger={
+                                    <Button
+                                        type="button"
+                                        size="md"
+                                        variant="helper"
+                                        role="combobox"
+                                        aria-label="Code review model override"
+                                        id={field.name}
+                                        disabled={blocked}
+                                        className="w-full justify-between sm:max-w-96"
+                                        rightIcon={
+                                            <ChevronsUpDownIcon className="opacity-50" />
+                                        }>
+                                        <span className="truncate">
+                                            {inherited
+                                                ? parentValue
+                                                    ? `Inherited · ${labelOf(parentValue)}`
+                                                    : "Use routing models"
+                                                : unknown || unavailable
+                                                  ? "Unavailable model"
+                                                  : labelOf(value)}
+                                        </span>
+                                    </Button>
+                                }
+                            />
+                            {(unknown || unavailable) && (
+                                <div
+                                    role="note"
+                                    className="text-warning mt-3 flex flex-wrap items-center gap-3 text-sm">
+                                    <p>
+                                        {unavailable
+                                            ? "Reconnect this model’s provider or choose another model."
+                                            : "This model isn’t in the connected list."}
+                                    </p>
+                                    {!inherited && (
                                         <Button
-                                            size="lg"
+                                            type="button"
+                                            size="sm"
                                             variant="helper"
-                                            role="combobox"
-                                            id={field.name}
-                                            disabled={field.disabled}
-                                            className="w-full justify-between"
-                                            rightIcon={
-                                                <ChevronsUpDownIcon className="-mr-2 opacity-50" />
+                                            disabled={blocked}
+                                            onClick={() =>
+                                                select(inheritValue)
                                             }>
-                                            {isInherited ? (
-                                                <span className="font-normal">
-                                                    Inherited
-                                                    {effectiveModelId
-                                                        ? ` · ${modelName(effectiveModelId)}`
-                                                        : ""}
-                                                </span>
-                                            ) : (
-                                                modelName(currentValue)
-                                            )}
+                                            Reset to inherit
                                         </Button>
-                                    </PopoverTrigger>
-
-                                    <PopoverContent
-                                        align="start"
-                                        className="w-[var(--radix-popover-trigger-width)] p-0">
-                                        <Command
-                                            filter={(value, search) => {
-                                                if (value === MANUAL_ITEM) {
-                                                    return 1;
-                                                }
-                                                const model = models.find(
-                                                    (m) => m.id === value,
-                                                );
-                                                if (!model) return 0;
-                                                return model.name
-                                                    .toLowerCase()
-                                                    .includes(
-                                                        search.toLowerCase(),
-                                                    )
-                                                    ? 1
-                                                    : 0;
-                                            }}>
-                                            <CommandInput
-                                                placeholder="Search models..."
-                                                value={search}
-                                                onValueChange={setSearch}
-                                            />
-
-                                            <CommandList className="max-h-56 overflow-y-auto p-1">
-                                                <CommandEmpty>
-                                                    No model found.
-                                                </CommandEmpty>
-
-                                                {/* Just the connected models, one
-                                                    row each. Reverting to the
-                                                    inherited model is the ↺ button
-                                                    next to the "Overridden" badge —
-                                                    no separate "inherit" row that
-                                                    restates a model already listed.
-                                                    Everything keys off the stable
-                                                    model id; no name matching. */}
-                                                {ArrayHelpers.sortAlphabetically(
-                                                    models,
-                                                    "name",
-                                                ).map((model) => (
-                                                    <CommandItem
-                                                        key={model.id}
-                                                        value={model.id}
-                                                        onSelect={() =>
-                                                            selectModel(
-                                                                model.id,
-                                                            )
-                                                        }>
-                                                        {model.name}
-                                                    </CommandItem>
-                                                ))}
-
-                                                <CommandItem
-                                                    key={MANUAL_ITEM}
-                                                    value={MANUAL_ITEM}
-                                                    onSelect={() => {
-                                                        setOpen(false);
-                                                        // A model has to be
-                                                        // connected in BYOK
-                                                        // before it can be
-                                                        // routed here — send the
-                                                        // user there instead of
-                                                        // letting them type an
-                                                        // id that isn't wired up.
-                                                        router.push(
-                                                            "/byok",
-                                                        );
-                                                    }}>
-                                                    <span className="text-primary-light flex items-center gap-1.5">
-                                                        <PlusIcon className="size-3.5" />
-                                                        Manage models in BYOK
-                                                    </span>
-                                                </CommandItem>
-                                            </CommandList>
-                                        </Command>
-                                    </PopoverContent>
-                                </Popover>
-
-                            {isUnknownModel && (
-                                <div className="border-warning/30 bg-warning/5 mt-3 rounded-lg border p-3">
-                                    <div className="flex items-start gap-2">
-                                        <AlertTriangleIcon className="text-warning mt-0.5 size-4 shrink-0" />
-                                        <div className="flex-1">
-                                            <p className="text-text-primary text-sm font-medium">
-                                                This override doesn&apos;t match
-                                                your current provider
-                                            </p>
-                                            <p className="text-text-secondary mt-1 text-xs">
-                                                <code>{currentValue}</code> isn&apos;t
-                                                offered by{" "}
-                                                <strong>
-                                                    {provider ??
-                                                        "your BYOK provider"}
-                                                </strong>
-                                                . Reviews for this {scopeLabel}{" "}
-                                                will fail or fall back until it&apos;s
-                                                updated. Use{" "}
-                                                <strong>Test model</strong> to
-                                                verify it, or reset to inherit your
-                                                BYOK main model.
-                                            </p>
-                                            <Button
-                                                variant="tertiary"
-                                                size="xs"
-                                                disabled={field.disabled}
-                                                className="mt-2"
-                                                onClick={() =>
-                                                    selectModel(parentValue)
-                                                }>
-                                                Reset to inherit
-                                            </Button>
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
                             )}
-
-                            {effectiveModelId && (
-                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                            {!!value && !unknown && !unavailable && canTest && (
+                                <div className="mt-3 flex flex-wrap items-center gap-3">
                                     <Button
+                                        type="button"
+                                        size="sm"
                                         variant="helper"
-                                        size="xs"
                                         disabled={
-                                            field.disabled ||
-                                            test.status === "testing"
+                                            blocked ||
+                                            test.state === "testing" ||
+                                            !modelFor(value)?.providerId
                                         }
-                                        loading={test.status === "testing"}
-                                        onClick={() =>
-                                            runModelTest(effectiveModelId)
-                                        }>
+                                        loading={test.state === "testing"}
+                                        onClick={() => probe(value)}>
                                         Test model
                                     </Button>
-
-                                    {test.status === "success" && (
-                                        <span className="text-success flex items-center gap-1 text-xs">
-                                            <CheckCircle2Icon className="size-3.5" />
-                                            Works on your provider
+                                    {test.state === "success" && (
+                                        <span
+                                            role="status"
+                                            className="text-success text-sm">
+                                            {test.message}
                                         </span>
                                     )}
-                                    {test.status === "error" && (
-                                        <span className="text-error flex items-start gap-1 text-xs">
-                                            <XCircleIcon className="mt-0.5 size-3.5 shrink-0" />
-                                            <span>
-                                                {test.message ||
-                                                    "This model failed on your provider."}
-                                            </span>
+                                    {test.state === "error" && (
+                                        <span
+                                            role="alert"
+                                            className="text-danger text-sm">
+                                            {test.message}
                                         </span>
                                     )}
                                 </div>
+                            )}
+                            {canReadModels && (
+                                <Link
+                                    href="/byok"
+                                    className="mt-3 block text-sm">
+                                    Manage AI providers ↗
+                                </Link>
                             )}
                         </CardContent>
                     </Card>

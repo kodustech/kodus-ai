@@ -321,6 +321,7 @@ describe('describeLLMConfigStatus — effective config projection', () => {
             models: [
                 {
                     modelId: 'model-1',
+                    credentialId: 'cred-1',
                     model: 'gpt-4o',
                     providerId: 'openai',
                     baseUrl: 'https://proxy.example/v1',
@@ -432,6 +433,8 @@ describe('describeLLMConfigStatus — effective config projection', () => {
         expect(unreachable.models).toEqual([
             {
                 modelId: 'mm1',
+                credentialId: 'm1',
+                managed: true,
                 model: 'gpt-4o',
                 providerId: 'openai',
                 baseUrl: undefined,
@@ -484,6 +487,7 @@ describe('describeLLMConfigStatus — effective config projection', () => {
 
         expect(models[0]).toEqual({
             modelId: 'm1',
+            credentialId: 'c1',
             model: 'gpt-4o',
             providerId: 'openai',
             baseUrl: 'https://a/v1',
@@ -496,6 +500,7 @@ describe('describeLLMConfigStatus — effective config projection', () => {
 
         expect(models[1]).toEqual({
             modelId: 'm2',
+            credentialId: 'c2',
             model: 'claude-3-5-sonnet-20241022',
             providerId: 'anthropic',
             baseUrl: undefined, // no settings.baseURL on c2

@@ -144,12 +144,6 @@ const PAGES: Array<{
     // The page's own tabs, so "routing" and "credits" land on the panel that
     // answers them instead of the tab the page happens to open on.
     {
-        label: "AI providers · Routing",
-        href: "/byok?tab=routing",
-        icon: SparklesIcon,
-        keywords: "which model runs each task default fallback per agent",
-    },
-    {
         label: "AI providers · Budget",
         href: "/byok?tab=budget",
         icon: SparklesIcon,

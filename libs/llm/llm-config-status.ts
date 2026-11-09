@@ -1,3 +1,5 @@
+import { isByokSlotConfigured } from './slot-auth';
+export { isByokSlotConfigured } from './slot-auth';
 /**
  * The per-org LLM-config STATUS projection — pure LLM logic, no DB, no NestJS.
  * Given a stored BYOK_CONFIG blob (the org use-case fetches it), describe the
@@ -9,8 +11,6 @@
  * tested in ONE place; the organization use-case is a thin DB shell that fetches
  * the blob and calls `describeLLMConfigStatus`.
  */
-import { BYOKProvider } from './model-providers';
-import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
 import {
     isByokConfig,
     type BYOKConfig,
@@ -29,41 +29,6 @@ import { REGISTRY } from './providers';
 
 const asString = (value: unknown): string | undefined =>
     typeof value === 'string' && value.length > 0 ? value : undefined;
-
-/**
- * Whether a BYOK credential slot carries the credentials it needs to run.
- *
- * Most providers authenticate with a single `apiKey` — Google Vertex stores its
- * base64-encoded service-account JSON in that same field, so it is covered too.
- * Amazon Bedrock is the exception: it has no `apiKey` and authenticates with
- * either a bearer token (`awsBearerToken`) or static IAM credentials
- * (`awsAccessKeyId` + `awsSecretAccessKey`).
- *
- * Keep in sync with the auth paths in `bedrockModelFromCredentials`
- * (byok-to-vercel.ts) and the save-time validation in `encryptSlot`
- * (create-or-update.use-case.ts).
- */
-export function isByokSlotConfigured(
-    slot: Partial<NormalizedModel> | null | undefined,
-): boolean {
-    if (!slot) {
-        return false;
-    }
-
-    if (slot.provider === BYOKProvider.AMAZON_BEDROCK) {
-        return Boolean(
-            slot.awsBearerToken ||
-            (slot.awsAccessKeyId && slot.awsSecretAccessKey),
-        );
-    }
-
-    // Platform-funded (`kodus`): no material of its own, by design.
-    if (isPlatformFundedProvider(slot.provider)) {
-        return true;
-    }
-
-    return Boolean(slot.apiKey);
-}
 
 /**
  * Per-model resolvability for the multi-model status (05-07).
@@ -123,6 +88,9 @@ export type LLMConfigSource = 'byok' | 'env' | 'none';
  */
 export interface LLMModelStatus {
     modelId: string;
+    /** Non-secret slot identity, needed to distinguish compatible gateways. */
+    credentialId?: string;
+    managed?: boolean;
     model?: string;
     providerId?: string;
     baseUrl?: string;
@@ -247,6 +215,8 @@ function enumerateModels(
 
             return {
                 modelId: model.id,
+                credentialId: credential?.id,
+                ...(credential?.managed ? { managed: true } : {}),
                 model: model.model,
                 providerId: credential?.provider,
                 baseUrl,
@@ -332,7 +302,7 @@ export function describeLLMConfigStatus(configValue: unknown): LLMConfigStatus {
     }
 
     const reviewModelOf = (task: LlmTask) => ({
-        modelId: resolveTaskSlot(configValue, task).verdict?.modelId,
+        modelId: resolveTaskSlot(configValue, task).slot?.byokModelId,
         inherited: !configValue.routing?.taskOverrides?.[task],
     });
     const reviewModels = {
@@ -343,14 +313,12 @@ export function describeLLMConfigStatus(configValue: unknown): LLMConfigStatus {
         models.map(({ modelId }) => [
             modelId,
             {
-                balanced:
-                    resolveTaskSlot(configValue, LLM_TASK.codeReview, {
-                        ctx: overrideContext(modelId),
-                    }).verdict?.modelId ?? undefined,
-                heavy:
-                    resolveTaskSlot(configValue, LLM_TASK.codeReviewHeavy, {
-                        ctx: overrideContext(modelId),
-                    }).verdict?.modelId ?? undefined,
+                balanced: resolveTaskSlot(configValue, LLM_TASK.codeReview, {
+                    ctx: overrideContext(modelId),
+                }).slot?.byokModelId,
+                heavy: resolveTaskSlot(configValue, LLM_TASK.codeReviewHeavy, {
+                    ctx: overrideContext(modelId),
+                }).slot?.byokModelId,
             },
         ]),
     );

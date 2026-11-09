@@ -5,7 +5,12 @@ import {
     useCodeReviewConfig,
     useCodeReviewModelData,
 } from "src/app/(app)/settings/_components/context";
+import {
+    draftTaskModel,
+    routingModelLabels,
+} from "src/features/ee/byok/_components/routing/routing-state";
 import { formatModelLabel } from "src/features/ee/byok/_data/model-label";
+import type { BYOKRouting } from "src/features/ee/byok/_types";
 import { isHeavyModePlan } from "src/features/ee/heavy-mode/plan";
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
@@ -16,7 +21,7 @@ export const modeLabel = (mode: Mode) =>
     mode === "heavy" ? "Heavy" : "Balanced";
 
 /** The same effective plan fallback and scope override the review uses. */
-export function useReviewRouting() {
+export function useReviewRouting(modelDraft?: BYOKRouting) {
     const { control, getFieldState } = useFormContext<CodeReviewFormType>();
     const config = useCodeReviewConfig();
     const { llmConfigStatus: status, hasConnectedProvider } =
@@ -49,11 +54,29 @@ export function useReviewRouting() {
         );
         const name =
             model?.model ?? id ?? status?.byok.model ?? status?.env.model;
+        if (model)
+            return (
+                routingModelLabels(status?.models ?? []).get(model.modelId) ??
+                formatModelLabel(name ?? model.modelId)
+            );
         return name ? formatModelLabel(name) : "Kodus default";
     };
     const effectiveMode = (mode: string): Mode =>
         mode === "heavy" && heavyAllowed ? "heavy" : "balanced";
     const modelFor = (mode: Mode) => {
+        if (modelDraft && status) {
+            const id = draftTaskModel(
+                mode === "heavy" ? "codeReviewHeavy" : "codeReview",
+                modelDraft,
+                status,
+                scopeModel,
+            );
+            return id
+                ? labelOf(id)
+                : status.env.model
+                  ? formatModelLabel(status.env.model)
+                  : "Kodus default";
+        }
         const pin = status?.models.find(
             (model) => model.modelId === scopeModel,
         );
