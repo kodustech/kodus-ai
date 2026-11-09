@@ -365,9 +365,7 @@ describe('convention findings: HV2 path vs convention path (same findings)', () 
                 }),
             }),
         );
-        expect(JSON.stringify(call?.[0])).not.toContain(
-            LOGGING.source.quote,
-        );
+        expect(JSON.stringify(call?.[0])).not.toContain(LOGGING.source.quote);
     });
 
     it('the convention judge sees the quoted rule and its guide section; the ast-grep match skips the judge', async () => {
@@ -410,6 +408,51 @@ describe('convention findings sourced from a tool', () => {
         expect(tool.kind).toBe('bug');
         expect(tool.source).toBeUndefined();
         expect(readGuide).not.toHaveBeenCalled();
+    });
+});
+
+describe('convention findings sourced from a team system record (#2384)', () => {
+    // Production shape: the agent's prompt tells it to cite the tracker issue
+    // a finding rests on; the model marked it "convention" with the issue as
+    // its source, and the quote gate dropped it as "not a guide".
+    const RECORD = {
+        relevantFile: 'src/valves/drain-valve.handler.ts',
+        suggestionContent:
+            'TRACKER-REQ: drain now skips the zone lock that IRR-12 requires.',
+        existingCode: 'await valve.drain(zone);',
+        improvedCode: 'await withZoneLock(zone, () => valve.drain(zone));',
+        oneSentenceSummary: 'Drain skips the zone lock IRR-12 requires',
+        kind: 'convention',
+        source: {
+            file: 'Tracker issue IRR-12',
+            quote: 'Every drain takes the zone lock',
+        },
+    };
+
+    it('checks it as a bug when the agent has that system, instead of dropping it at the quote gate', async () => {
+        submitted = {
+            reasoning: 'one requirement',
+            suggestions: [RECORD, BUG],
+        };
+        const { r, readGuide } = await run(true, {
+            teamSystemTools: ['Tracker__get_issue'],
+        });
+        expect(r.droppedByQuoteCheck).toEqual([]);
+        const record = r.kept.find((f) => tagOf(f) === 'TRACKER-REQ')!;
+        expect(record.kind).toBe('bug');
+        expect(record.source).toBeUndefined();
+        expect(readGuide).not.toHaveBeenCalled();
+    });
+
+    it('still takes the quote gate without that system', async () => {
+        submitted = {
+            reasoning: 'one requirement',
+            suggestions: [RECORD, BUG],
+        };
+        const { r } = await run(true);
+        expect(r.droppedByQuoteCheck.map((q) => tagOf(q.finding))).toEqual([
+            'TRACKER-REQ',
+        ]);
     });
 });
 
