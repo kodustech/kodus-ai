@@ -1,0 +1,361 @@
+[
+  {
+    "caseId": "n8n-io/n8n#33230::project-conventions",
+    "source": "https://github.com/n8n-io/n8n/pull/33230",
+    "rule": {
+      "uuid": "project-conventions",
+      "title": "Project conventions for application code",
+      "rule": "Application code follows the conventions in AGENTS.md and CONTRIBUTING.md. Four of them are checked on every pull request, and each is its own finding:\n\n1. Configuration. Application code must not read process.env directly. Read configuration through the typed config or env module, so every value is validated once at startup, has a documented default, and can be replaced in tests without mutating the process environment.\n\n2. Logging. Never call console.log, console.error, console.warn or console.debug in application code. Use the structured logger, so every line carries the request context and reaches the log pipeline with a level and fields instead of free text.\n\n3. Errors. Do not throw the generic Error class. Throw a domain-specific error type (an existing one, or a new subclass next to the code that raises it), so callers can discriminate failures with instanceof and the API layer can map each to the right status code.\n\n4. Types. Do not use the TypeScript any type, neither as an annotation nor as an `as any` cast. Use a concrete type, or unknown with narrowing at the boundary where the value enters, so type errors surface at compile time instead of in production.\n\nTests, fixtures and generated files are out of scope. A finding names which of the four conventions the line breaks.",
+      "path": "**/*.{ts,tsx}",
+      "examples": [
+        {
+          "snippet": "const url = process.env.DATABASE_URL;",
+          "isCorrect": false
+        },
+        {
+          "snippet": "console.log('processing', item.id);",
+          "isCorrect": false
+        },
+        {
+          "snippet": "throw new Error('invalid state');",
+          "isCorrect": false
+        },
+        {
+          "snippet": "const data: any = await load();",
+          "isCorrect": false
+        },
+        {
+          "snippet": "const url = config.get('databaseUrl');",
+          "isCorrect": true
+        }
+      ],
+      "sourcePath": "AGENTS.md",
+      "contextReferenceId": "eval-ctx-n8n-33230-project-conventions",
+      "atoms": {
+        "items": [
+          {
+            "id": "project-conventions-atom-1",
+            "title": "No direct process.env reads in application code",
+            "spec": "WHAT: Application code must not read process.env directly.\nHOW: Added lines containing `process.env` property access (e.g., `process.env.PORT`, `process.env['API_KEY']`), destructuring from `process.env`, or passing `process.env` as a value, outside tests, fixtures, and generated files.",
+            "examples": [
+              {
+                "snippet": "const port = process.env.PORT;",
+                "isCorrect": false
+              },
+              {
+                "snippet": "const port = config.port;",
+                "isCorrect": true
+              }
+            ],
+            "detector": {
+              "type": "regex",
+              "pattern": "process\\s*(?:\\.\\s*env\\b|\\[\\s*['\"]env['\"]\\s*\\])",
+              "flags": "",
+              "compiledBy": "byok",
+              "reason": "A single added line containing a process.env read is itself the violation, detectable by one regex over the line's code content.",
+              "extensions": [
+                ".js",
+                ".jsx",
+                ".mjs",
+                ".cjs",
+                ".ts",
+                ".tsx",
+                ".mts",
+                ".cts",
+                ".vue",
+                ".svelte",
+                ".astro"
+              ]
+            }
+          },
+          {
+            "id": "project-conventions-atom-2",
+            "title": "No console.log/error/warn/debug calls in application code",
+            "spec": "WHAT: Never call console.log, console.error, console.warn, or console.debug in application code.\nHOW: Added lines invoking any of these console methods (e.g., `console.log(`, `console.error(`), outside tests, fixtures, and generated files.",
+            "examples": [
+              {
+                "snippet": "console.log('user created', user.id);",
+                "isCorrect": false
+              },
+              {
+                "snippet": "logger.info({ userId: user.id }, 'user created');",
+                "isCorrect": true
+              }
+            ],
+            "detector": {
+              "type": "regex",
+              "pattern": "console\\s*\\.\\s*(log|error|warn|debug)\\s*\\(",
+              "flags": "",
+              "compiledBy": "byok",
+              "reason": "A single added line invoking one of the forbidden console methods is self-evidently a violation, detectable with high precision by a one-line regex.",
+              "extensions": [
+                ".js",
+                ".jsx",
+                ".ts",
+                ".tsx",
+                ".mjs",
+                ".cjs",
+                ".vue",
+                ".svelte",
+                ".astro"
+              ]
+            }
+          },
+          {
+            "id": "project-conventions-atom-3",
+            "title": "Do not throw generic Error in application code",
+            "spec": "WHAT: Do not throw the generic Error class; throw a domain-specific error type instead.\nHOW: Added lines with `throw new Error(` or `throw Error(` outside tests, fixtures, and generated files.",
+            "examples": [
+              {
+                "snippet": "throw new Error('not found');",
+                "isCorrect": false
+              },
+              {
+                "snippet": "throw new UserNotFoundError(userId);",
+                "isCorrect": true
+              }
+            ],
+            "detector": {
+              "type": "regex",
+              "pattern": "throw\\s+(new\\s+)?Error\\s*\\(",
+              "flags": "",
+              "compiledBy": "byok",
+              "reason": "A single added line throwing the generic Error class is matched directly by `throw new Error(` / `throw Error(`; test and generated files are excluded by the engine's path scoping, not by the regex.",
+              "extensions": [
+                ".js",
+                ".jsx",
+                ".mjs",
+                ".cjs",
+                ".ts",
+                ".tsx",
+                ".mts",
+                ".cts",
+                ".vue",
+                ".svelte"
+              ]
+            }
+          },
+          {
+            "id": "project-conventions-atom-4",
+            "title": "No `any` type annotations in application code",
+            "spec": "WHAT: Do not use the TypeScript `any` type as an annotation (variable, parameter, return type, generic argument, or array element type).\nHOW: Added lines containing `: any`, `<any>`, `any[]`, `Array<any>`, or similar `any` type positions, outside tests, fixtures, and generated files.",
+            "examples": [
+              {
+                "snippet": "function parse(input: any): any {",
+                "isCorrect": false
+              },
+              {
+                "snippet": "function parse(input: unknown): unknown {",
+                "isCorrect": true
+              }
+            ],
+            "detector": {
+              "type": "regex",
+              "pattern": "(?:\\bany\\s*\\[\\s*\\]|:\\s*any\\b|<any\\s*[,>]|\\bas\\s+any\\b|\\|\\s*any\\b|\\bany\\s*\\||(?:^|[^=!<>])=\\s*any\\b)",
+              "compiledBy": "byok",
+              "reason": "A single added line carries the verdict: `: any`, `<any>`, `any[]`, `| any`, `as any`, or `= any` in a TypeScript type position is detectable with word-boundary precision, though the engine cannot encode the rule's test/fixture/generated-file exclusions.",
+              "extensions": [
+                ".ts",
+                ".tsx",
+                ".mts",
+                ".cts",
+                ".vue",
+                ".svelte"
+              ]
+            }
+          },
+          {
+            "id": "project-conventions-atom-5",
+            "title": "No `as any` casts in application code",
+            "spec": "WHAT: Do not use the TypeScript `as any` cast.\nHOW: Added lines containing `as any` outside tests, fixtures, and generated files.",
+            "examples": [
+              {
+                "snippet": "const user = data as any;",
+                "isCorrect": false
+              },
+              {
+                "snippet": "const user = data as User;",
+                "isCorrect": true
+              }
+            ],
+            "detector": {
+              "type": "regex",
+              "pattern": "\\bas\\s+any\\b",
+              "flags": "",
+              "compiledBy": "byok",
+              "reason": "A single added line containing an `as any` cast is itself the violation, so a line-level regex detects it without further context.",
+              "extensions": [
+                ".ts",
+                ".tsx",
+                ".mts",
+                ".cts",
+                ".vue",
+                ".svelte"
+              ]
+            }
+          }
+        ],
+        "sourceHash": "f0a3b5689e62b74867234702abff375f268a11c90e224c21f48bd7e7043c46d1",
+        "generatedAt": "2026-11-09T23:01:22.659Z",
+        "model": "openai_compatible:accounts/fireworks/models/deepseek-v4p1-flash"
+      }
+    },
+    "contextReferences": [
+      {
+        "uuid": "eval-ctx-n8n-33230-project-conventions",
+        "scope": "organization",
+        "entityType": "kodyRule",
+        "entityId": "project-conventions",
+        "requirements": [
+          {
+            "id": "kody_rule#project-conventions",
+            "dependencies": [
+              {
+                "type": "knowledge",
+                "id": "n8n|CONTRIBUTING.md",
+                "metadata": {
+                  "filePath": "CONTRIBUTING.md",
+                  "repositoryName": "n8n"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "pr": {
+      "repositoryFullName": "n8n-io/n8n",
+      "number": 33230,
+      "headRef": "ai-builder-dual-tenant-langsmith",
+      "headSha": "62588f9444e276ab74624541edc585c48c06bbf6",
+      "baseRef": "master",
+      "baseSha": "2a32dc7487795d2edb2a2209d948e828f72c76cf",
+      "defaultBranch": "master",
+      "title": "feat(ai-builder): Dual-tenant LangSmith reads for Instance AI evals (no-changelog)",
+      "body": "## Summary\n\nDual-tenant LangSmith **reads** for Instance AI evals, for the US→EU migration. While EU builds volume we keep sourcing seed traces from the US tenant — review them, create eval cases, and replay/run them — without disrupting EU. This is dual-tenant **reads**, single-tenant (EU) **writes**: run telemetry is untouched and stays on EU.\n\nA case selects its read tenant via a new optional `seedThread.endpoint`:\n\n- `data/workflows/schema.ts` + `harness/langsmith-seed.ts`: add `seedThread.endpoint` (+ `SeedThreadRef.endpoint`); `ambientLangSmithConfig()` → `configFor(endpoint?)` resolves `{apiUrl, apiKey}` by host — home key for the home host, `LANGSMITH_API_KEY_US` for the US host; an unknown/unkeyed host **throws** rather than silently reading EU. Discovery deps are built per ref-tenant, preserving cross-workspace auto-discovery within the chosen tenant.\n- **Omitted `endpoint` ⇒ the home (EU) tenant**, so existing cases are byte-identical and EU is zero-change. Sunset: when US drains, stop emitting the endpoint and drop the secondary key — no leftover.\n- The **write path** (`cli/index.ts` `new Client()` + builder-telemetry) is untouched → results always land on EU.\n- **No CI change**: seeded / US-sourced cases are `datasets: [\"seeded\"]`, off the PR/full suites, so CI never pulls a US trace and needs no new secret. The US key (`LANGSMITH_API_KEY_US`) is local-only (`.env.local`) for now. Home `LANGSMITH_ENDPOINT` stays explicitly EU (the SDK default endpoint is US).\n\nThe second commit folds in two unrelated cleanups from the `--source langtracer` review: the exported-case normalizer now whitelists to the schema's key set (robust vs `.strict()`), and the mcp-manifest builder reuses the canonical `ConversationTurnSchema` enum.\n\n**Cross-repo contract:** `seedThread.endpoint` is emitted by LangTracer — companion PR n8n-io/lang-tracer#25.\n\n## How to test\n\n- `pnpm --filter @n8n/instance-ai typecheck` clean; **710 eval vitest green** (`configFor` resolution, schema `endpoint` acceptance, normalizer whitelist); eslint + biome clean.\n- Live: run a seedThread case with `seedThread.endpoint: \"https://api.smith.langchain.com\"` against a real US thread, with `LANGSMITH_API_KEY_US` set in `.env.local`; the harness reconstructs from US while results write to EU. _This live US reconstruct is the remaining check before un-drafting._\n\n## Related Linear tickets, Github issues, and Community forum posts\n\nhttps://linear.app/n8n/issue/TRUST-217\n\n## Review / Merge checklist\n\n- [x] I have seen this code, I have run this code, and I take responsibility for this code.\n- [x] PR title and summary are descriptive. ([conventions](../blob/master/.github/pull_request_title_conventions.md))\n- [ ] [Docs updated](https://github.com/n8n-io/n8n-docs) or follow-up ticket created.\n- [x] Tests included.\n- [ ] PR Labeled with `Backport to Beta`, `Backport to Stable`, or `Backport to v1` (if the PR is an urgent fix that needs to be backported)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n",
+      "files": [
+        {
+          "filename": "packages/@n8n/instance-ai/evaluations/__tests__/data-workflows-schema.test.ts",
+          "sha": "fd3b0e0aac466958fb1e7a0534454f89041a6ca8",
+          "status": "modified",
+          "additions": 20,
+          "deletions": 0,
+          "changes": 20,
+          "patch": "@@ -102,6 +102,26 @@ describe('WorkflowTestCaseSchema', () => {\n \t\texpect(parsed.conversation).toHaveLength(1);\n \t});\n \n+\tit('accepts a seedThread carrying a dual-tenant endpoint (US-sourced case)', () => {\n+\t\t// Cross-repo contract (TRUST-212): LangTracer's buildExportedTestCase emits\n+\t\t// seedThread.endpoint for a US-sourced replay; the harness must retain it\n+\t\t// (the inner seedThread object isn't .strict(), so an un-modelled field\n+\t\t// would be silently stripped and the read would wrongly target home/EU).\n+\t\tconst { conversation: _omit, ...rest } = validFixture();\n+\t\tconst parsed = WorkflowTestCaseSchema.parse({\n+\t\t\t...rest,\n+\t\t\tseedThread: { threadId: 't1', endpoint: 'https://api.smith.langchain.com' },\n+\t\t});\n+\t\texpect(parsed.seedThread?.endpoint).toBe('https://api.smith.langchain.com');\n+\t});\n+\n+\tit('rejects a seedThread endpoint that is not a URL', () => {\n+\t\tconst { conversation: _omit, ...rest } = validFixture();\n+\t\texpect(() =>\n+\t\t\tWorkflowTestCaseSchema.parse({ ...rest, seedThread: { threadId: 't1', endpoint: 'us' } }),\n+\t\t).toThrow();\n+\t});\n+\n \tit('rejects seedThread combined with another seeding mode', () => {\n \t\tconst { conversation: _omit, ...rest } = validFixture();\n \t\texpect(() =>"
+        },
+        {
+          "filename": "packages/@n8n/instance-ai/evaluations/__tests__/langsmith-seed.test.ts",
+          "sha": "589812952a25836cf0f5790f2be251c0ab7d6edc",
+          "status": "modified",
+          "additions": 55,
+          "deletions": 1,
+          "changes": 56,
+          "patch": "@@ -13,7 +13,7 @@ vi.mock('../harness/parse-seed-workflow', () => ({\n \t}),\n }));\n \n-import { reconstructSeedFromThread } from '../harness/langsmith-seed';\n+import { configFor, reconstructSeedFromThread } from '../harness/langsmith-seed';\n \n // Discovery test doubles return fixed, already-resolved workspace lists.\n /* eslint-disable @typescript-eslint/promise-function-async */\n@@ -600,3 +600,57 @@ describe('reconstructSeedFromThread — workspace auto-discovery', () => {\n \t\t).rejects.toThrow(/need ≥2 to seed/);\n \t});\n });\n+\n+// Dual-tenant READS (US→EU migration): a seed ref's `endpoint` selects which\n+// LangSmith tenant to read from. Writes are unaffected (they stay on the home\n+// tenant elsewhere). The endpoint→key mapping is the cross-repo contract that\n+// LangTracer's exported `seedThread.endpoint` rides on (TRUST-212).\n+describe('configFor — dual-tenant read resolution', () => {\n+\tconst EU = 'https://eu.api.smith.langchain.com';\n+\tconst US = 'https://api.smith.langchain.com';\n+\n+\tbeforeEach(() => {\n+\t\tvi.stubEnv('LANGSMITH_ENDPOINT', EU);\n+\t\tvi.stubEnv('LANGSMITH_API_KEY', 'eu-key');\n+\t\tvi.stubEnv('LANGSMITH_ENDPOINT_US', US);\n+\t\tvi.stubEnv('LANGSMITH_API_KEY_US', 'us-key');\n+\t});\n+\tafterEach(() => vi.unstubAllEnvs());\n+\n+\tit('resolves an omitted endpoint to the home (EU) host + key', () => {\n+\t\texpect(configFor()).toEqual({ apiUrl: EU, apiKey: 'eu-key' });\n+\t});\n+\n+\tit('resolves the home endpoint to the home key', () => {\n+\t\texpect(configFor(EU)).toEqual({ apiUrl: EU, apiKey: 'eu-key' });\n+\t});\n+\n+\tit('resolves the US endpoint to the US key — never the home key', () => {\n+\t\texpect(configFor(US)).toEqual({ apiUrl: US, apiKey: 'us-key' });\n+\t});\n+\n+\tit('tolerates a trailing slash and an /api/v1 suffix on the endpoint', () => {\n+\t\texpect(configFor(`${US}/`)).toEqual({ apiUrl: US, apiKey: 'us-key' });\n+\t\texpect(configFor(`${EU}/api/v1`)).toEqual({ apiUrl: EU, apiKey: 'eu-key' });\n+\t});\n+\n+\tit('throws (does NOT fall back to the home key) when the US key is missing', () => {\n+\t\tvi.stubEnv('LANGSMITH_API_KEY_US', '');\n+\t\texpect(() => configFor(US)).toThrow(/LANGSMITH_API_KEY_US is not set/);\n+\t});\n+\n+\tit('throws on an endpoint that matches no configured tenant', () => {\n+\t\texpect(() => configFor('https://made-up.smith.langchain.com')).toThrow(\n+\t\t\t/no configured LangSmith tenant/,\n+\t\t);\n+\t});\n+\n+\tit('routes a US-endpoint ref through the US resolver (no silent home fallback)', async () => {\n+\t\t// End-to-end: the endpoint flows ref → discoveryDepsFor(ref.endpoint) →\n+\t\t// configFor, so a missing US key fails loudly instead of querying EU.\n+\t\tvi.stubEnv('LANGSMITH_API_KEY_US', '');\n+\t\tawait expect(reconstructSeedFromThread({ threadId: 't1', endpoint: US })).rejects.toThrow(\n+\t\t\t/LANGSMITH_API_KEY_US is not set/,\n+\t\t);\n+\t});\n+});"
+        },
+        {
+          "filename": "packages/@n8n/instance-ai/evaluations/__tests__/langtracer-normalize.test.ts",
+          "sha": "70f484477b8b7c6183274a6dbfece5469a734065",
+          "status": "modified",
+          "additions": 36,
+          "deletions": 0,
+          "changes": 36,
+          "patch": "@@ -46,6 +46,42 @@ describe('normalizeExportedCase', () => {\n \t\texpect('scenarios' in out).toBe(false);\n \t});\n \n+\tit('strips arbitrary export-only keys the strict schema would reject', () => {\n+\t\t// LangTracer attaches keys like id/name/suiteId/timestamps to an exported\n+\t\t// case; n8n's schema is `.strict()` and the loader aggregates errors, so a\n+\t\t// single stray key fails the whole suite. Whitelisting to the schema's keys\n+\t\t// (not blacklisting the two we happen to know) keeps the export loadable.\n+\t\tconst out = normalizeExportedCase({\n+\t\t\tconversation: [{ role: 'user', text: 'hi' }],\n+\t\t\tcomplexity: 'simple',\n+\t\t\tid: 42,\n+\t\t\tname: 'My case',\n+\t\t\tsuiteId: 7,\n+\t\t\tcreatedAt: '2026-01-01',\n+\t\t\trandomFutureKey: { nested: true },\n+\t\t}) as Record<string, unknown>;\n+\t\t// Real schema fields survive...\n+\t\texpect(out.conversation).toEqual([{ role: 'user', text: 'hi' }]);\n+\t\texpect(out.complexity).toBe('simple');\n+\t\t// ...export-only keys are gone.\n+\t\tfor (const k of ['id', 'name', 'suiteId', 'createdAt', 'randomFutureKey']) {\n+\t\t\texpect(k in out).toBe(false);\n+\t\t}\n+\t});\n+\n+\tit('keeps a real schema field (seedThread, incl. its endpoint) through the whitelist', () => {\n+\t\tconst out = normalizeExportedCase({\n+\t\t\tseedThread: { threadId: 't1', endpoint: 'https://api.smith.langchain.com' },\n+\t\t\tcomplexity: 'medium',\n+\t\t\tid: 1,\n+\t\t}) as Record<string, unknown>;\n+\t\texpect(out.seedThread).toEqual({\n+\t\t\tthreadId: 't1',\n+\t\t\tendpoint: 'https://api.smith.langchain.com',\n+\t\t});\n+\t\texpect('id' in out).toBe(false);\n+\t});\n+\n \tit('returns non-object input unchanged', () => {\n \t\texpect(normalizeExportedCase(null)).toBeNull();\n \t\texpect(normalizeExportedCase('x')).toBe('x');"
+        },
+        {
+          "filename": "packages/@n8n/instance-ai/evaluations/cli/build-mcp-manifest.ts",
+          "sha": "b7c65b216c84f8466e63085033adf14fac2778fb",
+          "status": "modified",
+          "additions": 10,
+          "deletions": 6,
+          "changes": 16,
+          "patch": "@@ -10,7 +10,7 @@ import { homedir, tmpdir } from 'os';\n import { basename, join, resolve } from 'path';\n import { z } from 'zod';\n \n-import { DEFAULT_DATASETS, conversationTurnTextSchema } from '../data/workflows/schema';\n+import { ConversationTurnSchema, DEFAULT_DATASETS } from '../data/workflows/schema';\n import { createLogger } from '../harness/logger';\n import { prebuiltManifestSchema, type PrebuiltManifest } from '../harness/prebuilt-workflows';\n import { runWithConcurrency } from '../harness/runner';\n@@ -402,11 +402,15 @@ interface BuildOutcome {\n \tdurationMs: number;\n }\n \n+/** Canonical conversation-turn type (role enum + normalized text), reused from\n+ *  the harness schema instead of a looser inline `{ role: string; text }`. */\n+type ConversationTurn = z.infer<typeof ConversationTurnSchema>;\n+\n const testCaseSchema = z\n \t.object({\n-\t\t// Reuse the canonical text normalizer so the array (multi-line) form of a\n-\t\t// turn's `text` is accepted and joined here exactly as in the eval harness.\n-\t\tconversation: z.array(z.object({ role: z.string(), text: conversationTurnTextSchema })).min(1),\n+\t\t// Reuse the canonical turn schema so `role` is the exact 'user' | 'assistant'\n+\t\t// enum and the array (multi-line) `text` form is normalized as in the harness.\n+\t\tconversation: z.array(ConversationTurnSchema).min(1),\n \t})\n \t.passthrough();\n \n@@ -440,7 +444,7 @@ async function buildOne(\n \titeration: number,\n \targs: CliArgs,\n \tmcpConfigPath: string,\n-\tconversation: Array<{ role: string; text: string }>,\n+\tconversation: ConversationTurn[],\n \tallowedTools: readonly string[],\n ): Promise<BuildOutcome> {\n \tconst projectInstruction = args.projectId\n@@ -624,7 +628,7 @@ async function main(): Promise<void> {\n \t// Resolve slug -> conversation from the chosen source. Disk reads --workflow-dir\n \t// (positional slugs or discovered), langtracer pulls a suite over MCP; both feed\n \t// the same buildOne prompt.\n-\tconst casesBySlug = new Map<string, Array<{ role: string; text: string }>>();\n+\tconst casesBySlug = new Map<string, ConversationTurn[]>();\n \tif (args.source === 'langtracer') {\n \t\tconst suite = args.suite;\n \t\tif (!suite) throw new Error('--source langtracer requires --suite <slug>');"
+        },
+        {
+          "filename": "packages/@n8n/instance-ai/evaluations/data/workflows/schema.ts",
+          "sha": "61e281e49c0aaf0d50f7ad4f23dc6a5c9b95b5f8",
+          "status": "modified",
+          "additions": 17,
+          "deletions": 2,
+          "changes": 19,
+          "patch": "@@ -15,7 +15,7 @@ export const conversationTurnTextSchema = z\n \t.union([z.string(), z.array(z.string())])\n \t.transform((t) => (Array.isArray(t) ? t.join('\\n') : t));\n \n-const ConversationTurnSchema = z.object({\n+export const ConversationTurnSchema = z.object({\n \trole: z.enum(['user', 'assistant']),\n \ttext: conversationTurnTextSchema,\n });\n@@ -88,7 +88,15 @@ const workflowTestCaseObjectSchema = z\n \t\t *  id; workspace auto-discovered. Supplies the live turn, so `conversation` is\n \t\t *  optional (continues after it). */\n \t\tseedThread: z\n-\t\t\t.object({ threadId: z.string().min(1), project: z.string().min(1).optional() })\n+\t\t\t.object({\n+\t\t\t\tthreadId: z.string().min(1),\n+\t\t\t\tproject: z.string().min(1).optional(),\n+\t\t\t\t/** LangSmith host the source trace lives on (dual-tenant reads during the\n+\t\t\t\t *  US→EU migration). Omit ⇒ the eval's home (EU) tenant, so existing cases\n+\t\t\t\t *  are unchanged. A US-sourced case carries the US host; the harness maps\n+\t\t\t\t *  host→key via env (LANGSMITH_API_KEY_US). */\n+\t\t\t\tendpoint: z.string().url().optional(),\n+\t\t\t})\n \t\t\t.optional(),\n \t\t/**\n \t\t * Logical groupings this case belongs to (e.g. `['pr', 'full']`). Used by\n@@ -102,6 +110,13 @@ const workflowTestCaseObjectSchema = z\n \t// `outcomeExpectaiton`, etc.) fails at case-load instead of being silently stripped.\n \t.strict();\n \n+/** The keys n8n's case schema accepts. Exported so non-harness emitters (the\n+ *  lang-tracer normalizer) can WHITELIST an exported case down to exactly these —\n+ *  the schema is `.strict()`, so any extra key LangTracer attaches (id, name,\n+ *  suiteId, timestamps, …) fails the whole suite load. Whitelisting the allowed\n+ *  set is robust where blacklisting the few keys we happen to know today is not. */\n+export const WORKFLOW_TEST_CASE_KEYS = Object.keys(workflowTestCaseObjectSchema.shape);\n+\n // At most one seeding mode, and a source for the live turn.\n export const WorkflowTestCaseSchema = workflowTestCaseObjectSchema\n \t.refine((c) => [c.seedFile, c.priorConversation, c.seedThread].filter(Boolean).length <= 1, {"
+        },
+        {
+          "filename": "packages/@n8n/instance-ai/evaluations/harness/langsmith-seed.ts",
+          "sha": "9d133dacb946faf69212c35d9bd27ec331ca8ff0",
+          "status": "modified",
+          "additions": 70,
+          "deletions": 22,
+          "changes": 92,
+          "patch": "@@ -61,26 +61,63 @@ export const IGNORED_WORKSPACE_TOOLS: readonly string[] = [\n // The source thread may live in a different workspace than the eval writes to\n // (e.g. seed from prod, trace to staging). A PAT spans workspaces, so we\n // enumerate them and find the one holding the thread; reads are read-only.\n+//\n+// Reads are also dual-tenant: during the US→EU migration a US-sourced case\n+// carries `seedThread.endpoint` = the US host, while results always write to the\n+// home (EU) tenant elsewhere. `configFor` maps an endpoint → host + key via env.\n+\n+/** The langsmith SDK's default endpoint is the US tenant, so an unset\n+ *  LANGSMITH_ENDPOINT silently means US. The eval env sets it to the home host. */\n+const US_DEFAULT_ENDPOINT = 'https://api.smith.langchain.com';\n+\n+/** Bare host the langsmith Client wants as `apiUrl` (it appends paths itself):\n+ *  a trailing slash and an optional `/api/v1` suffix stripped. */\n+function bareHost(raw: string): string {\n+\treturn raw.replace(/\\/+$/, '').replace(/\\/api\\/v1$/, '');\n+}\n \n-/** Ambient LangSmith host + key (the eval's own), used to enumerate workspaces. */\n-function ambientLangSmithConfig(): { apiUrl: string; apiKey: string } {\n-\tconst raw =\n-\t\tprocess.env.LANGSMITH_ENDPOINT ??\n-\t\tprocess.env.LANGCHAIN_ENDPOINT ??\n-\t\t'https://api.smith.langchain.com';\n-\tconst host = raw.replace(/\\/$/, '');\n-\tconst apiUrl = host.endsWith('/api/v1') ? host : `${host}/api/v1`;\n-\tconst apiKey = process.env.LANGSMITH_API_KEY ?? process.env.LANGCHAIN_API_KEY ?? '';\n-\treturn { apiUrl, apiKey };\n+/**\n+ * Resolve the LangSmith host + key to READ a seed trace from, by endpoint.\n+ * Omitted ⇒ the eval's home tenant (its own env), so existing cases are\n+ * unchanged. The home host uses the home key; the secondary (US) host uses\n+ * LANGSMITH_API_KEY_US. A non-home host with no configured key THROWS rather\n+ * than silently read with the home key — which would query the wrong tenant and\n+ * report the thread as missing. Writes never go through here; they stay home.\n+ */\n+export function configFor(endpoint?: string): { apiUrl: string; apiKey: string } {\n+\tconst homeHost = bareHost(\n+\t\tprocess.env.LANGSMITH_ENDPOINT ?? process.env.LANGCHAIN_ENDPOINT ?? US_DEFAULT_ENDPOINT,\n+\t);\n+\tconst homeKey = process.env.LANGSMITH_API_KEY ?? process.env.LANGCHAIN_API_KEY ?? '';\n+\tif (!endpoint) return { apiUrl: homeHost, apiKey: homeKey };\n+\n+\tconst host = bareHost(endpoint);\n+\tif (host === homeHost) return { apiUrl: host, apiKey: homeKey };\n+\n+\tconst usHost = bareHost(process.env.LANGSMITH_ENDPOINT_US ?? US_DEFAULT_ENDPOINT);\n+\tif (host === usHost) {\n+\t\tconst usKey = process.env.LANGSMITH_API_KEY_US ?? '';\n+\t\tif (!usKey) {\n+\t\t\tthrow new Error(\n+\t\t\t\t`seedThread.endpoint \"${endpoint}\" is the secondary (US) tenant but LANGSMITH_API_KEY_US is not set — refusing to read it with the home key. Set LANGSMITH_API_KEY_US.`,\n+\t\t\t);\n+\t\t}\n+\t\treturn { apiUrl: usHost, apiKey: usKey };\n+\t}\n+\tthrow new Error(\n+\t\t`seedThread.endpoint \"${endpoint}\" matches no configured LangSmith tenant (home: ${homeHost}; secondary: ${usHost}). Set LANGSMITH_ENDPOINT_US + LANGSMITH_API_KEY_US, or omit endpoint to use the home tenant.`,\n+\t);\n }\n \n-/** Workspaces the ambient key can access. Returns [] on any failure so the\n+/** Workspaces a key can access on a host. Returns [] on any failure so the\n  *  caller falls back to the key's default workspace. */\n-async function listAccessibleWorkspaces(): Promise<Array<{ id: string; name: string }>> {\n-\tconst { apiUrl, apiKey } = ambientLangSmithConfig();\n+async function listAccessibleWorkspaces(\n+\tapiUrl: string,\n+\tapiKey: string,\n+): Promise<Array<{ id: string; name: string }>> {\n \tif (!apiKey) return [];\n \ttry {\n-\t\tconst res = await fetch(`${apiUrl}/workspaces`, { headers: { 'x-api-key': apiKey } });\n+\t\tconst res = await fetch(`${apiUrl}/api/v1/workspaces`, { headers: { 'x-api-key': apiKey } });\n \t\tif (!res.ok) return [];\n \t\tconst data: unknown = await res.json();\n \t\tif (!Array.isArray(data)) return [];\n@@ -103,11 +140,17 @@ export interface SeedDiscoveryDeps {\n \tambientClient: () => Client;\n }\n \n-const realDiscoveryDeps: SeedDiscoveryDeps = {\n-\tlistWorkspaces: listAccessibleWorkspaces,\n-\tclientForWorkspace: (workspaceId) => new Client({ workspaceId }),\n-\tambientClient: () => new Client(),\n-};\n+/** Build discovery deps bound to one tenant (host + key resolved from the seed\n+ *  ref's endpoint). All three seams target that host, so cross-workspace\n+ *  discovery stays within the chosen tenant. */\n+function discoveryDepsFor(endpoint?: string): SeedDiscoveryDeps {\n+\tconst { apiUrl, apiKey } = configFor(endpoint);\n+\treturn {\n+\t\tlistWorkspaces: async () => await listAccessibleWorkspaces(apiUrl, apiKey),\n+\t\tclientForWorkspace: (workspaceId) => new Client({ apiUrl, apiKey, workspaceId }),\n+\t\tambientClient: () => new Client({ apiUrl, apiKey }),\n+\t};\n+}\n \n /** Thrown when a thread has no runs in the queried (workspace, project) — used\n  *  as control flow during discovery to advance to the next workspace. */\n@@ -117,6 +160,10 @@ export interface SeedThreadRef {\n \tthreadId: string;\n \t/** Override the LangSmith project to read the source trace from. */\n \tproject?: string;\n+\t/** LangSmith host the source trace lives on. Omit ⇒ the eval's home tenant.\n+\t *  Maps host→key via env (home key for the home host, LANGSMITH_API_KEY_US for\n+\t *  the US host); an unknown/unkeyed host throws rather than read the wrong tenant. */\n+\tendpoint?: string;\n }\n \n export interface ReconstructedSeed {\n@@ -210,12 +257,13 @@ interface ToolCallBlock {\n export async function reconstructSeedFromThread(\n \tref: SeedThreadRef,\n \tclient?: Client,\n-\tdeps: SeedDiscoveryDeps = realDiscoveryDeps,\n+\tdeps?: SeedDiscoveryDeps,\n ): Promise<ReconstructedSeed> {\n \tconst project = ref.project ?? DEFAULT_SOURCE_PROJECT;\n-\t// An explicit client (tests) reads that one source; otherwise auto-discover.\n+\t// An explicit client (tests) reads that one source; otherwise auto-discover\n+\t// within the ref's tenant. Explicit deps (tests) override tenant resolution.\n \tif (client) return await reconstructWithClient(ref, client, project);\n-\treturn await discoverAndReconstruct(ref, project, deps);\n+\treturn await discoverAndReconstruct(ref, project, deps ?? discoveryDepsFor(ref.endpoint));\n }\n \n /** Find the workspace holding the thread and reconstruct from it. Falls back to"
+        },
+        {
+          "filename": "packages/@n8n/instance-ai/evaluations/langtracer/normalize.ts",
+          "sha": "99a47fe7b0725da58016a4f34588a093e57511ee",
+          "status": "modified",
+          "additions": 15,
+          "deletions": 5,
+          "changes": 20,
+          "patch": "@@ -1,3 +1,8 @@\n+import { WORKFLOW_TEST_CASE_KEYS } from '../data/workflows/schema';\n+\n+/** Keys n8n's `.strict()` case schema accepts — anything else must be stripped. */\n+const ALLOWED_KEYS = new Set(WORKFLOW_TEST_CASE_KEYS);\n+\n /** Fold lang-tracer's legacy `buildExpectations` into `outcomeExpectations` (the key\n  *  n8n's schema forbids). Outcome runs in every build mode. No-ops post-split. */\n export function normalizeExportedCase(raw: unknown): unknown {\n@@ -15,9 +20,14 @@ export function normalizeExportedCase(raw: unknown): unknown {\n \t\tdelete obj.buildExpectations;\n \t}\n \n-\t// drop dispatch-only keys (not part of n8n's schema)\n-\tdelete obj.prompt;\n-\tdelete obj.scenarios;\n-\n-\treturn obj;\n+\t// Whitelist to the schema's accepted keys. LangTracer attaches export-only keys\n+\t// (id, name, suiteId, timestamps, the dispatch-only prompt/scenarios, …); n8n's\n+\t// schema is `.strict()` and the loader aggregates errors, so a single stray key\n+\t// fails the whole suite. Stripping to the allowed set is robust where deleting\n+\t// the two keys we happen to know today is not.\n+\tconst cleaned: Record<string, unknown> = {};\n+\tfor (const [key, value] of Object.entries(obj)) {\n+\t\tif (ALLOWED_KEYS.has(key)) cleaned[key] = value;\n+\t}\n+\treturn cleaned;\n }"
+        }
+      ],
+      "commits": [
+        {
+          "sha": "e1d2da68ba2238c269285eb3e3b08c33fe1c3086",
+          "commit": {
+            "message": "feat(ai-builder): Dual-tenant LangSmith seed reads for evals (no-changelog)\n\nRead a seed trace from either the home (EU) tenant or a secondary (US) source\nduring the US->EU migration, selected per case by a new `seedThread.endpoint`.\n`configFor(endpoint?)` maps host->key via env (home key for the home host,\nLANGSMITH_API_KEY_US for the US host) and throws on an unknown/unkeyed host\nrather than silently reading the wrong tenant. Discovery deps are built per\nref-tenant, preserving cross-workspace auto-discovery within the chosen tenant.\nThe write path (run telemetry) is untouched and stays on EU.\n\nRelates to https://linear.app/n8n/issue/TRUST-217\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+            "author": {
+              "date": "2026-06-29T13:24:00Z"
+            }
+          }
+        },
+        {
+          "sha": "62588f9444e276ab74624541edc585c48c06bbf6",
+          "commit": {
+            "message": "refactor(ai-builder): Harden langtracer case normalize + mcp-manifest types (no-changelog)\n\nTwo follow-ups from the --source langtracer review:\n\n- normalize.ts now whitelists an exported case to the schema's accepted keys\n  (WORKFLOW_TEST_CASE_KEYS) instead of blacklisting prompt/scenarios. n8n's\n  schema is `.strict()` and the loader aggregates errors, so any stray key\n  LangTracer attaches (id, name, suiteId, timestamps, ...) fails the whole\n  suite load; whitelisting the allowed set is robust where blacklisting is not.\n- build-mcp-manifest.ts reuses the canonical `ConversationTurnSchema` (the\n  'user' | 'assistant' enum) at testCaseSchema + a `ConversationTurn` type at\n  buildOne/casesBySlug, instead of a looser inline { role: string; text }.\n\nRelates to https://linear.app/n8n/issue/TRUST-217\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+            "author": {
+              "date": "2026-06-29T13:24:15Z"
+            }
+          }
+        }
+      ]
+    },
+    "title": "feat(ai-builder): Dual-tenant LangSmith reads for Instance AI evals (no-changelog)",
+    "body": "## Summary\n\nDual-tenant LangSmith **reads** for Instance AI evals, for the US→EU migration. While EU builds volume we keep sourcing seed traces from the US tenant — review them, create eval cases, and replay/run them — without disrupting EU. This is dual-tenant **reads**, single-tenant (EU) **writes**: run telemetry is untouched and stays on EU.\n\nA case selects its read tenant via a new optional `seedThread.endpoint`:\n\n- `data/workflows/schema.ts` + `harness/langsmith-seed.ts`: add `seedThread.endpoint` (+ `SeedThreadRef.endpoint`); `ambientLangSmithConfig()` → `configFor(endpoint?)` resolves `{apiUrl, apiKey}` by host — home key for the home host, `LANGSMITH_API_KEY_US` for the US host; an unknown/unkeyed host **throws** rather than silently reading EU. Discovery deps are built per ref-tenant, preserving cross-workspace auto-discovery within the chosen tenant.\n- **Omitted `endpoint` ⇒ the home (EU) tenant**, so existing cases are byte-identical and EU is zero-change. Sunset: when US drains, stop emitting the endpoint and drop the secondary key — no leftover.\n- The **write path** (`cli/index.ts` `new Client()` + builder-telemetry) is untouched → results always land on EU.\n- **No CI change**: seeded / US-sourced cases are `datasets: [\"seeded\"]`, off the PR/full suites, so CI never pulls a US trace and needs no new secret. The US key (`LANGSMITH_API_KEY_US`) is local-only (`.env.local`) for now. Home `LANGSMITH_ENDPOINT` stays explicitly EU (the SDK default endpoint is US).\n\nThe second commit folds in two unrelated cleanups from the `--source langtracer` review: the exported-case normalizer now whitelists to the schema's key set (robust vs `.strict()`), and the mcp-manifest builder reuses the canonical `ConversationTurnSchema` enum.\n\n**Cross-repo contract:** `seedThread.endpoint` is emitted by LangTracer — companion PR n8n-io/lang-tracer#25.\n\n## How to test\n\n- `pnpm --filter @n8n/instance-ai typecheck` clean; **710 eval vitest green** (`configFor` resolution, schema `endpoint` acceptance, normalizer whitelist); eslint + biome clean.\n- Live: run a seedThread case with `seedThread.endpoint: \"https://api.smith.langchain.com\"` against a real US thread, with `LANGSMITH_API_KEY_US` set in `.env.local`; the harness reconstructs from US while results write to EU. _This live US reconstruct is the remaining check before un-drafting._\n\n## Related Linear tickets, Github issues, and Community forum posts\n\nhttps://linear.app/n8n/issue/TRUST-217\n\n## Review / Merge checklist\n\n- [x] I have seen this code, I have run this code, and I take responsibility for this code.\n- [x] PR title and summary are descriptive. ([conventions](../blob/master/.github/pull_request_title_conventions.md))\n- [ ] [Docs updated](https://github.com/n8n-io/n8n-docs) or follow-up ticket created.\n- [x] Tests included.\n- [ ] PR Labeled with `Backport to Beta`, `Backport to Stable`, or `Backport to v1` (if the PR is an urgent fix that needs to be backported)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n",
+    "groundTruth": {
+      "packages/@n8n/instance-ai/evaluations/harness/langsmith-seed.ts": [
+        {
+          "line": 89,
+          "code": "process.env.LANGSMITH_ENDPOINT ?? process.env.LANGCHAIN_ENDPOINT ?? US_DEFAULT_E"
+        },
+        {
+          "line": 91,
+          "code": "const homeKey = process.env.LANGSMITH_API_KEY ?? process.env.LANGCHAIN_API_KEY ?"
+        },
+        {
+          "line": 97,
+          "code": "const usHost = bareHost(process.env.LANGSMITH_ENDPOINT_US ?? US_DEFAULT_ENDPOINT"
+        },
+        {
+          "line": 99,
+          "code": "const usKey = process.env.LANGSMITH_API_KEY_US ?? '';"
+        },
+        {
+          "line": 101,
+          "code": "throw new Error("
+        },
+        {
+          "line": 107,
+          "code": "throw new Error("
+        }
+      ]
+    },
+    "violatingFiles": [
+      "packages/@n8n/instance-ai/evaluations/harness/langsmith-seed.ts"
+    ],
+    "cleanFiles": [
+      "packages/@n8n/instance-ai/evaluations/cli/build-mcp-manifest.ts",
+      "packages/@n8n/instance-ai/evaluations/data/workflows/schema.ts",
+      "packages/@n8n/instance-ai/evaluations/langtracer/normalize.ts"
+    ]
+  }
+]

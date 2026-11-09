@@ -55,6 +55,17 @@ set is the ground truth. No judge, no circular labeling.
   should be commented on; the metric is specificity (`--dataset=polyglot-cases`).
   Ruby sources are not scored.
 
+- **`reference-cases.json`** (committed) — a long rule that production
+  decomposes into atoms and that points at files: its own `sourcePath`
+  (`AGENTS.md`, read at the PR head) and a Context OS reference
+  (`CONTRIBUTING.md`, the case's `contextReferences`, read at the recorded base
+  commit). The rule is `COMPOUND_PATTERNS['project-conventions']` in
+  `patterns.js`: four conditions, and its ground truth is their union. Its atoms
+  are recorded with the rule (`freeze-atoms.js`), as production stores them, so
+  every run judges the same atoms. It measures what the shard prompt carries for
+  such a rule: compare `TOKENS` and occurrence recall across two versions of the
+  code (`--dataset=reference-cases`).
+
 ## Run
 
 ```bash
@@ -63,6 +74,8 @@ yarn eval:kody-rules:gate            # same, but exit non-zero if below baseline
 yarn eval:kody-rules:harvest         # refresh github-cases.json from live GitHub
 node evals/kody-rules/materialize-cases.js   # record each PR as the code host answers it
 node evals/kody-rules/real-agent.js --dataset=polyglot-cases   # the negative control
+node evals/kody-rules/real-agent.js --dataset=reference-cases   # a decomposed rule with referenced files
+node evals/kody-rules/freeze-atoms.js --dataset=reference-cases # record the atoms after editing its rule
 ```
 
 Flags: `--model=<tier-0 id>`, `--runs=`, `--cases=<caseId,...>`, `--limit=`,
