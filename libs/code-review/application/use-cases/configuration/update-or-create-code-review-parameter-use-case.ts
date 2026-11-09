@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
 import {
     BadRequestException,
@@ -175,6 +176,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     > {
         try {
             const { organizationAndTeamData, configValue, repositoryId } = body;
+            // An empty ID explicitly requests inheritance; pairing it with a
+            // legacy model name is still a contradictory write.
             if (
                 configValue.byokModelId !== undefined &&
                 configValue.byokModel
@@ -1110,13 +1113,11 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     : []),
                 ...(level === ConfigLevel.DIRECTORY ? [newDelta] : []),
             );
-            const approvalChanged =
-                actor?.source !== 'sync' &&
-                ['approvalPolicies', 'approvalLabels', 'approvalAuthors'].some(
-                    (key) =>
-                        JSON.stringify(oldConfig[key]) !==
-                        JSON.stringify(newDelta[key]),
-                );
+            const approvalChanged = [
+                'approvalPolicies',
+                'approvalLabels',
+                'approvalAuthors',
+            ].some((key) => !isDeepStrictEqual(oldConfig[key], newDelta[key]));
             const repositoriesToValidate = !approvalChanged
                 ? []
                 : level === ConfigLevel.GLOBAL

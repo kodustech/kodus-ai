@@ -1961,7 +1961,7 @@ it('refuses an explicit legacy model name together with a slot id before any wri
 });
 
 it.each(['sync', 'web'])(
-    'validates the changed sync layer without rejecting stale child aliases during %s',
+    'refuses a parent policy that would orphan child filters during %s',
     async (source) => {
         const saved = {
             configs: {},
@@ -2029,14 +2029,49 @@ it.each(['sync', 'web'])(
                 approvalPolicies: [{ id: 'docs', name: 'Docs', enabled: true }],
             },
         } as any);
-        if (source === 'sync') {
-            await expect(operation).resolves.toBeTruthy();
-            expect(write.execute).toHaveBeenCalled();
-        } else {
-            await expect(operation).rejects.toThrow(
-                'Legacy approval filters cannot scope named policies',
-            );
-            expect(write.execute).not.toHaveBeenCalled();
-        }
+        await expect(operation).rejects.toThrow(
+            'Legacy approval filters cannot scope named policies',
+        );
+        expect(write.execute).not.toHaveBeenCalled();
+        // Canonicalizing the child at its own source preserves its restriction
+        // and makes the subsequent parent edit safe for both web and sync.
+        saved.repositories[0].configs = {
+            approvalPolicies: [
+                {
+                    id: 'legacy-approval',
+                    name: 'Existing approval policy',
+                    enabled: true,
+                    labels: ['ready'],
+                },
+            ],
+        } as any;
+        await expect(
+            useCase.execute({
+                actor: { source },
+                skipAuthorization: true,
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                configValue: {
+                    approvalPolicies: [
+                        { id: 'docs', name: 'Docs', enabled: true },
+                    ],
+                },
+            } as any),
+        ).resolves.toBeTruthy();
+        expect(write.execute).toHaveBeenCalled();
     },
 );
+
+it('rejects a request to inherit a slot ID and set a legacy model at the same time', async () => {
+    const useCase = new (UpdateOrCreateCodeReviewParameterUseCase as any)(
+        ...Array.from({ length: 13 }, () => ({})),
+    );
+    await expect(
+        useCase.execute({
+            configValue: { byokModelId: '', byokModel: 'legacy-name' },
+            organizationAndTeamData: { organizationId: 'org', teamId: 'team' },
+        }),
+    ).rejects.toThrow('Use byokModelId or byokModel, not both.');
+});

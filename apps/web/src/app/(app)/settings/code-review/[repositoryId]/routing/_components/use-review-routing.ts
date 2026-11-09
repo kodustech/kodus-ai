@@ -106,8 +106,8 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
     return {
         canConfigure: hasConnectedProvider,
         riskModelInherited:
-            status?.modelRouting?.riskAssessment.inherited !== false &&
-            status?.modelRouting?.riskAssessment.modelId ===
+            status?.modelRouting?.riskAssessment?.inherited !== false &&
+            status?.modelRouting?.riskAssessment?.modelId ===
                 status?.modelRouting?.defaultModelId,
         active,
         heavyAllowed,
@@ -123,8 +123,8 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
         fallbackModel: status?.modelRouting?.fallbackModelId
             ? labelOf(status.modelRouting.fallbackModelId)
             : "None",
-        riskModel: status?.modelRouting?.riskAssessment.modelId
-            ? labelOf(status.modelRouting.riskAssessment.modelId)
+        riskModel: status?.modelRouting?.riskAssessment?.modelId
+            ? labelOf(status.modelRouting.riskAssessment?.modelId)
             : status?.env.model
               ? formatModelLabel(status.env.model)
               : "Kodus default",

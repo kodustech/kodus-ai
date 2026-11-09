@@ -475,6 +475,13 @@ try {
     await save();
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', {name: 'General settings', exact: true}).waitFor();
+    await hydrated(page.getByRole('button', { name: 'Add policy', exact: true }));
+    const storedParameter = await context.request.get(`${WEB}/api/proxy/api/parameters/find-by-key?key=code_review_config&teamId=${encodeURIComponent(settingsRequest.body.organizationAndTeamData.teamId)}`);
+    assert.ok(storedParameter.ok(), 'Read the saved policy configuration after deletion.');
+    const storedBody = await storedParameter.json();
+    const storedPolicies = (storedBody.data ?? storedBody).configValue?.configs?.approvalPolicies;
+    assert.ok(Array.isArray(storedPolicies), 'The saved policy list must be explicit, including an empty list.');
+    assert.ok(!storedPolicies.some((policy) => policy.name === policyName), 'The deleted policy must be absent from stored settings.');
     await expect(page.getByRole('heading', {name: policyName, exact: true})).toHaveCount(0);
     pass('Deleted approval policy stays deleted after save and reload');
     await openMenu('Risk assessment');

@@ -113,6 +113,18 @@ async function main() {
             [organizationId, repositoryId, Number(number), since],
         );
         const execution = rows[0] ?? null;
+        if (process.argv.includes('--approval-only')) {
+            console.log(
+                'RISK_E2E_JSON=' +
+                    JSON.stringify({
+                        execution: executionEvidence(execution),
+                        stages: [],
+                        agents: [],
+                        models: [],
+                    }),
+            );
+            return;
+        }
         const relatedExecutions = (
             await sql.query(
                 `
@@ -136,18 +148,6 @@ async function main() {
                   )
               ).rows
             : [];
-        if (process.argv.includes('--approval-only')) {
-            console.log(
-                'RISK_E2E_JSON=' +
-                    JSON.stringify({
-                        execution: executionEvidence(execution),
-                        stages: [],
-                        agents: [],
-                        models: [],
-                    }),
-            );
-            return;
-        }
         mongo = await mongoMigrationClient();
         const agents = await mongo.db
             .collection('customAgentRuns')

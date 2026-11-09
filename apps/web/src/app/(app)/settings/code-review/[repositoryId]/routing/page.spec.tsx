@@ -86,6 +86,10 @@ const mockStatus: any = {
         riskAssessment: { modelId: "c", inherited: false },
     },
 };
+const mockToast = jest.fn();
+jest.mock("@components/ui/toaster/use-toast", () => ({
+    toast: (...args: unknown[]) => mockToast(...args),
+}));
 const save = jest.fn();
 const saveModels = jest.fn();
 const mockReadStatus = jest.fn();
@@ -220,6 +224,7 @@ const mount = (
     return { ...view, queryClient, refreshEnvironment: () => act(update) };
 };
 beforeEach(() => {
+    mockToast.mockClear();
     mockTeam = "team";
     mockRepo = "global";
     mockDirectory = undefined;
@@ -676,11 +681,50 @@ it("refreshes the seeded team's provider cache and replaces a cached overview af
     ).toBeUndefined();
 });
 
-it("shows the environment fallback when no BYOK slot satisfies risk capabilities", async () => {
-    mockRepo = "repo";
-    mockStatus.modelRouting.riskAssessment = { modelId: null, inherited: true };
-    mockStatus.env = { configured: true, model: "environment-risk-model" };
-    mount(true);
-    expect(await screen.findByText("Environment Risk Model")).toBeVisible();
-    expect(screen.queryByText("Uses default model")).not.toBeInTheDocument();
-});
+it.each([null, undefined, "missing"])(
+    "shows the environment fallback for unresolved risk model %s",
+    async (modelId) => {
+        mockRepo = "repo";
+        mockStatus.modelRouting.riskAssessment =
+            modelId === "missing" ? undefined : { modelId, inherited: true };
+        mockStatus.env = { configured: true, model: "environment-risk-model" };
+        mount(true);
+        expect(await screen.findByText("Environment Risk Model")).toBeVisible();
+        expect(
+            screen.queryByText("Uses default model"),
+        ).not.toBeInTheDocument();
+    },
+);
+
+it.each([
+    [
+        { error: 409 },
+        "These settings changed. Reload the page before saving again.",
+    ],
+    [
+        { error: 400, messages: ["private-provider-token-canary"] },
+        "Some review settings are invalid. Check your changes before saving again.",
+    ],
+])(
+    "explains a refused settings save without exposing upstream text: %j",
+    async (result, message) => {
+        save.mockResolvedValue(result);
+        mount();
+        await chooseReviewMode("All PRs", "Heavy");
+        fireEvent.click(saveButton());
+        await waitFor(() =>
+            expect(mockToast).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    description: message,
+                    variant: "danger",
+                }),
+            ),
+        );
+        expect(JSON.stringify(mockToast.mock.calls)).not.toContain(
+            "private-provider-token-canary",
+        );
+        expect(
+            screen.getByRole("combobox", { name: "All PRs" }),
+        ).toHaveTextContent("Heavy");
+    },
+);

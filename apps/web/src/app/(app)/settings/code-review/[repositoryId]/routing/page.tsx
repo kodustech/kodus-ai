@@ -47,6 +47,7 @@ import { OverrideIndicatorForm } from "../../_components/override";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import type { CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
+import { reviewSettingsSaveErrorMessage } from "../../_utils/settings-save-conflict";
 import { BYOKModelSelectorSection } from "../general/_components/byok-model-selector";
 import { confirmOffCatalogModelSave } from "../general/_components/confirm-scope-model";
 import {
@@ -324,6 +325,7 @@ function RoutingSettings() {
                       },
             );
         } catch (error) {
+            const reviewError = reviewSettingsSaveErrorMessage(error);
             toast({
                 description: modelsSaved
                     ? providerDisconnected
@@ -334,10 +336,10 @@ function RoutingSettings() {
                           ? reviewDirty
                               ? "Models saved. Could not verify provider status. Review settings are still unsaved."
                               : "Models saved. Refresh provider status to continue."
-                          : "Models saved. Review settings could not be saved. Try again."
+                          : `Models saved. ${reviewError ?? "Review settings could not be saved. Try again."}`
                     : error instanceof RoutingSettingsError
                       ? error.message
-                      : "Could not save routing. Try again.",
+                      : (reviewError ?? "Could not save routing. Try again."),
                 variant: "danger",
             });
         } finally {
