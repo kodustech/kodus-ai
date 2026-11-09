@@ -593,8 +593,9 @@ export class SyncAllRepositoriesUseCase {
         const pending = (state.pendingAstRepositoryIds ?? []).filter((id) =>
             known.has(id),
         );
+        const pendingSet = new Set(pending);
         for (const id of Object.keys(attempts)) {
-            if (!pending.includes(id)) {
+            if (!pendingSet.has(id)) {
                 delete attempts[id];
             }
         }

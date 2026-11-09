@@ -588,7 +588,7 @@ describe('SyncAllRepositoriesUseCase', () => {
         expect(t.state('team-a').pendingAstAttempts ?? {}).toEqual({});
     });
 
-    it('forgets the attempt count once the AST build is enqueued', async () => {
+    it('counts a failed AST attempt and forgets it once the build is enqueued', async () => {
         const t = setup({
             listing: [repo('1')],
             teams: [
@@ -600,16 +600,24 @@ describe('SyncAllRepositoriesUseCase', () => {
                         status: 'done',
                         startedAt: '2026-01-01',
                         pendingAstRepositoryIds: ['1'],
-                        pendingAstAttempts: { '1': 2 },
                     },
                 },
             ],
         });
+        t.repositoryConnectionService.findRepositoryRecord.mockResolvedValueOnce(
+            null,
+        );
 
         await t.useCase.syncTeam(TEAMS.a, 'cron');
 
+        expect(t.state('team-a').pendingAstRepositoryIds).toEqual(['1']);
+        expect(t.state('team-a').pendingAstAttempts).toEqual({ '1': 1 });
+
+        await t.useCase.syncTeam(TEAMS.a, 'cron');
+
+        expect(t.repositoryConnectionService.enqueueAstBuild).toHaveBeenCalledTimes(1);
         expect(t.state('team-a').pendingAstRepositoryIds).toEqual([]);
-        expect(t.state('team-a').pendingAstAttempts ?? {}).toEqual({});
+        expect(t.state('team-a').pendingAstAttempts).toEqual({});
     });
 
     it('holds the credential lock for the whole run instead of letting a timer release it', async () => {
