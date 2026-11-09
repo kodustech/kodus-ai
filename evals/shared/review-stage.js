@@ -643,6 +643,23 @@ const E2B_EVAL_STAGE = 'eval-recall';
 // Tags this run's sandboxes, so two runs side by side never kill each other's.
 const E2B_EVAL_RUN = `${process.pid}-${Date.now()}`;
 const liveE2B = new Map();
+// A private repository (the real-PR set's mirror) clones with the `gh` login's
+// token, which production's sandbox passes through git's env and never writes
+// to disk; a public one clones with none, as before.
+const repoTokens = new Map();
+function privateRepoToken(repo) {
+    if (!repoTokens.has(repo)) {
+        const { execFileSync } = require('child_process');
+        let token = '';
+        try {
+            if (execFileSync('gh', ['api', `repos/${repo}`, '--jq', '.private'], { encoding: 'utf8' }).trim() === 'true') {
+                token = execFileSync('gh', ['auth', 'token'], { encoding: 'utf8' }).trim();
+            }
+        } catch {}
+        repoTokens.set(repo, token);
+    }
+    return repoTokens.get(repo);
+}
 async function checkoutE2B(repository) {
     const fs = require('fs');
     const env = (() => {
@@ -658,7 +675,7 @@ async function checkoutE2B(repository) {
     const { E2BSandboxService } = lib('sandbox/infrastructure/providers/e2b-sandbox.service.ts');
     const sandbox = await new E2BSandboxService({ get: (k) => cfg[k] }).createSandboxWithRepo({
         cloneUrl: `https://github.com/${repository.repo}.git`,
-        authToken: '',
+        authToken: privateRepoToken(repository.repo),
         branch: repository.branch,
         baseBranch: repository.baseBranch,
         platform: 'github',

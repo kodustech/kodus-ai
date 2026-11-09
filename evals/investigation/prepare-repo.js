@@ -35,6 +35,8 @@ const REPO_DIRS = {
     // name-suffix fallback below ("sentry-greptile" != "sentry") would have
     // dropped them to replay for no reason.
     'ai-code-review-evaluation/sentry-greptile': 'sentry',
+    // The real-PR set: kodus-ai's own PRs replayed on a private mirror.
+    'kodustech/kodus-ai-mirror': 'kodus-ai',
 };
 
 function repoDirFor(repositoryFullName) {
