@@ -190,7 +190,7 @@ it("keeps criteria optional and saves only risk configuration", async () => {
     setup();
     expect(
         screen.getByText(
-            "No team criteria. Kody uses the PR diff and code context.",
+            "Kody uses the PR diff and code context. Add criteria to include your team’s context.",
         ),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("switch", { name: "Risk assessment" }));

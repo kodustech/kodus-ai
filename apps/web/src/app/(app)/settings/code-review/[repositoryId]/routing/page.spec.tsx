@@ -348,24 +348,51 @@ it("does not turn a legacy model name into an ID when only the mode changes", as
     expect(save.mock.calls[0][0]).toEqual({ reviewMode: "heavy" });
 });
 
-it("keeps effective review modes visible without offering routing when no provider is connected", () => {
+it("keeps the summary and its routing link visible without a connected provider", () => {
     mockStatus.byok.configured = false;
     mount(true, true);
     expect(screen.getByText("Risk found").parentElement).toHaveTextContent(
         "Heavy Model B",
     );
     expect(
-        screen.queryByRole("link", { name: /Configure routing/ }),
-    ).not.toBeInTheDocument();
+        screen.getByRole("link", { name: /Configure routing/ }),
+    ).toHaveAttribute("href", "/settings/code-review/global/routing");
 });
 
-it("redirects a direct routing URL to General without a connected provider, preserving its scope", () => {
+it("opens a locked routing screen without a provider instead of redirecting or allowing edits", () => {
     mockStatus.byok.configured = false;
     mockRepo = "repo";
     mockDirectory = "directory";
-    expect(() => mount()).toThrow(
-        "REDIRECT:/settings/code-review/repo/general?directoryId=directory",
-    );
+    mount();
+    expect(
+        screen.getByRole("heading", { name: "Routing" }),
+    ).toBeVisible();
+    expect(
+        screen.getByRole("heading", {
+            name: "Connect an AI provider to use routing",
+        }),
+    ).toBeVisible();
+    expect(
+        screen.getByRole("link", { name: "Connect AI provider" }),
+    ).toHaveAttribute("href", "/byok");
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(
+        screen.queryByRole("button", { name: "Save settings" }),
+    ).not.toBeInTheDocument();
+    expect(save).not.toHaveBeenCalled();
+});
+
+it("explains who can connect a provider when organization editing is not permitted", () => {
+    mockStatus.byok.configured = false;
+    mockOrgEdit = false;
+    mount();
+    expect(
+        screen.getByText("Ask an organization admin to connect a provider."),
+    ).toBeVisible();
+    expect(
+        screen.queryByRole("link", { name: "Connect AI provider" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 });
 
 it("shows the effective risk model when capability fallback differs from the inherited default", () => {

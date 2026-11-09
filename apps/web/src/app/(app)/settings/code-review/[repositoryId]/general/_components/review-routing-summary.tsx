@@ -31,13 +31,11 @@ export function ReviewRoutingSummary() {
                 <h2 className="text-text-primary text-base font-semibold">
                     Review mode
                 </h2>
-                {routing.canConfigure && (
-                    <Link
-                        href={href}
-                        className="text-text-secondary inline-flex items-center gap-1 text-sm">
-                        Configure routing <ArrowUpRight className="size-3.5" />
-                    </Link>
-                )}
+                <Link
+                    href={href}
+                    className="text-text-secondary inline-flex items-center gap-1 text-sm">
+                    Configure routing <ArrowUpRight className="size-3.5" />
+                </Link>
             </div>
             <dl className="divide-card-lv3 divide-y text-sm">
                 {rows.map((row) => (

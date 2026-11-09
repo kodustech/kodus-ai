@@ -241,32 +241,22 @@ try {
         false,
         'Use the isolated QA tenant with no saved provider; never replace an existing credential.',
     );
-    await expect(menu('Routing')).toHaveCount(0);
+    await expect(menu('Routing')).toBeVisible();
     await expect(
         page.getByRole('link', { name: /Configure routing/ }),
-    ).toHaveCount(0);
-    await page.goto(`${WEB}/settings/code-review/global/routing`, {
-        waitUntil: 'domcontentloaded',
-    });
+    ).toBeVisible();
+    await openMenu('Routing');
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await page
-        .getByRole('heading', { name: 'General settings', exact: true })
+        .getByRole('heading', { name: 'Connect an AI provider to use routing', exact: true })
         .waitFor();
     assert.ok(
-        page.url().includes('/general'),
-        'Direct Routing URL must return to General without a provider.',
+        page.url().includes('/routing'),
+        'Routing must stay accessible without a provider.',
     );
-    await page
-        .getByRole('heading', { name: 'Approval policies', exact: true })
-        .waitFor();
-    await hydrated(
-        page.getByRole('switch', { name: 'Show status feedback', exact: true }),
-    );
-    await hydrated(
-        page.getByRole('switch', {
-            name: 'Request changes on critical issues',
-            exact: true,
-        }),
-    );
+    await expect(page.getByRole('link', { name: 'Connect AI provider', exact: true })).toHaveAttribute('href', '/byok');
+    await expect(page.getByRole('combobox')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Save settings', exact: true })).toHaveCount(0);
     mkdirSync(`${OUT}/app-states`, { recursive: true });
     await page.screenshot({
         path: `${OUT}/app-states/00-no-provider.png`,
@@ -275,15 +265,30 @@ try {
     initialCaptures.push({
         id: '00-no-provider',
         file: '00-no-provider.png',
-        group: 'General',
-        title: 'Sem provider: Routing oculto',
+        group: 'Routing',
+        title: 'Sem provider: Routing bloqueado',
         note: '',
         fixture: false,
         source: 'App completo no Runo · configuração real do tenant de QA',
         url: page.url(),
     });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByRole('link', { name: 'Connect AI provider', exact: true })).toBeVisible();
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Locked Routing must fit a mobile viewport.');
+    await page.screenshot({ path: `${OUT}/app-states/00b-no-provider-mobile.png`, fullPage: true });
+    initialCaptures.push({
+        id: '00b-no-provider-mobile',
+        file: '00b-no-provider-mobile.png',
+        group: 'Routing',
+        title: 'Sem provider: Routing bloqueado no celular',
+        note: '',
+        fixture: false,
+        source: 'App completo no Runo · configuração real do tenant de QA',
+        url: page.url(),
+    });
+    await page.setViewportSize({ width: 1440, height: 1000 });
     pass(
-        'Without a provider, Routing is hidden and its direct URL returns to General',
+        'Without a provider, Routing stays in navigation and explains how to unlock configuration',
     );
     // Store a real, keyless Kodus provider configuration through the normal API.
     // The opted-in preview allows this alpha fixture. No model is called.

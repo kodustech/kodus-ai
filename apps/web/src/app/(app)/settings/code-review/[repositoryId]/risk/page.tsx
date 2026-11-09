@@ -3,7 +3,8 @@
 import { Suspense, useState } from "react";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
-import { Card } from "@components/ui/card";
+import { Card, CardContent, CardHeader } from "@components/ui/card";
+import { Heading } from "@components/ui/heading";
 import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
 import { Switch } from "@components/ui/switch";
@@ -11,6 +12,7 @@ import { toast } from "@components/ui/toaster/use-toast";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import type { RiskCriterion } from "@services/risk-assessment/types";
+import { PlusIcon } from "lucide-react";
 import {
     Controller,
     useController,
@@ -177,143 +179,185 @@ function RiskSettings() {
                         )}
                     />
                 </Card>
-                <section className="flex flex-col gap-4">
-                    <div className="flex items-start justify-between gap-4">
-                        <div>
+                <Card color="lv1" aria-labelledby="team-criteria-title">
+                    <CardHeader className="flex-row flex-wrap items-start justify-between gap-4">
+                        <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-2">
-                                <h2 className="text-sm font-semibold">
+                                <Heading variant="h3" id="team-criteria-title">
                                     Team criteria{" "}
                                     <span className="text-text-secondary font-normal">
                                         · optional
                                     </span>
-                                </h2>
+                                </Heading>
                                 <OverrideIndicatorForm fieldName="riskCriteria" />
                             </div>
-                            <p className="text-text-secondary mt-1 text-sm">
+                            <p className="text-text-secondary text-sm">
                                 {active
                                     ? "Add context to Kody’s assessment."
                                     : "Saved criteria are not used while assessment is off."}
                             </p>
                         </div>
-                        <Button
-                            type="button"
-                            size="md"
-                            variant="primary"
-                            disabled={
-                                !active ||
-                                !canConfigure ||
-                                criteria.length >= 50
-                            }
-                            onClick={() => setEditing("new")}>
-                            Add criterion
-                        </Button>
-                    </div>
-                    {criteria.length === 0 && (
-                        <p className="text-text-secondary text-sm">
-                            {active
-                                ? "No team criteria. Kody uses the PR diff and code context."
-                                : "No team criteria."}
-                        </p>
-                    )}
-                    {criteria.map((criterion) => (
-                        <Card
-                            key={criterion.id}
-                            color="lv1"
-                            className="flex flex-col gap-3 p-5">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div className="flex items-center gap-2">
-                                    <h3 className="text-sm font-semibold">
-                                        {criterion.name}
-                                    </h3>
-                                    {(!active || !criterion.enabled) && (
-                                        <Badge variant="helper">
-                                            {criterion.enabled
-                                                ? "Paused"
-                                                : "Off"}
-                                        </Badge>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <Switch
-                                        aria-label={`Enable ${criterion.name}`}
-                                        checked={criterion.enabled}
-                                        disabled={!active || !canConfigure}
-                                        onCheckedChange={(enabled) =>
-                                            updateCriteria(
-                                                criteria.map((item) =>
-                                                    item.id === criterion.id
-                                                        ? { ...item, enabled }
-                                                        : item,
-                                                ),
-                                            )
-                                        }
-                                    />
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="cancel"
-                                        disabled={!active || !canConfigure}
-                                        aria-label={`Edit ${criterion.name}`}
-                                        onClick={() => setEditing(criterion)}>
-                                        Edit
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="cancel"
-                                        disabled={!active || !canConfigure}
-                                        aria-label={`Delete ${criterion.name}`}
-                                        onClick={() =>
-                                            updateCriteria(
-                                                criteria.filter(
-                                                    (item) =>
-                                                        item.id !==
-                                                        criterion.id,
-                                                ),
-                                            )
-                                        }>
-                                        Delete
-                                    </Button>
-                                </div>
+                        {criteria.length > 0 && (
+                            <Button
+                                type="button"
+                                size="md"
+                                variant="primary"
+                                leftIcon={<PlusIcon />}
+                                disabled={
+                                    !active ||
+                                    !canConfigure ||
+                                    criteria.length >= 50
+                                }
+                                onClick={() => setEditing("new")}>
+                                Add criterion
+                            </Button>
+                        )}
+                    </CardHeader>
+                    <CardContent>
+                        {criteria.length === 0 && (
+                            <div className="border-card-lv3/60 flex flex-col items-center gap-3 rounded-xl border border-dashed px-4 py-10 text-center">
+                                <p className="text-text-primary text-sm font-medium">
+                                    No team criteria yet
+                                </p>
+                                <p className="text-text-secondary max-w-md text-sm">
+                                    {active
+                                        ? "Kody uses the PR diff and code context. Add criteria to include your team’s context."
+                                        : "Add team context when risk assessment is on."}
+                                </p>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="primary"
+                                    leftIcon={<PlusIcon />}
+                                    disabled={!active || !canConfigure}
+                                    onClick={() => setEditing("new")}>
+                                    Add criterion
+                                </Button>
                             </div>
-                            <p className="text-text-secondary text-sm leading-6 whitespace-pre-wrap">
-                                {criterion.instructions}
-                            </p>
-                            {!!(
-                                criterion.includedFiles?.length ||
-                                criterion.excludedFiles?.length
-                            ) && (
-                                <details className="border-card-lv3 border-t pt-3 text-xs">
-                                    <summary className="text-text-secondary cursor-pointer">
-                                        File filters
-                                    </summary>
-                                    <div className="mt-3 flex flex-col gap-2">
-                                        {!!criterion.includedFiles?.length && (
-                                            <p>
-                                                Included:{" "}
-                                                <code>
-                                                    {criterion.includedFiles.join(
-                                                        ", ",
+                        )}
+                        {criteria.length > 0 && (
+                            <ul
+                                aria-label="Team criteria"
+                                className="border-card-lv3/60 divide-card-lv3/60 flex flex-col divide-y overflow-hidden rounded-xl border">
+                                {criteria.map((criterion) => (
+                                    <li
+                                        key={criterion.id}
+                                        className="flex flex-col gap-3 p-5">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="text-sm font-semibold">
+                                                    {criterion.name}
+                                                </h3>
+                                                {(!active ||
+                                                    !criterion.enabled) && (
+                                                    <Badge variant="helper">
+                                                        {criterion.enabled
+                                                            ? "Paused"
+                                                            : "Off"}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <Switch
+                                                    aria-label={`Enable ${criterion.name}`}
+                                                    checked={criterion.enabled}
+                                                    disabled={
+                                                        !active || !canConfigure
+                                                    }
+                                                    onCheckedChange={(
+                                                        enabled,
+                                                    ) =>
+                                                        updateCriteria(
+                                                            criteria.map(
+                                                                (item) =>
+                                                                    item.id ===
+                                                                    criterion.id
+                                                                        ? {
+                                                                              ...item,
+                                                                              enabled,
+                                                                          }
+                                                                        : item,
+                                                            ),
+                                                        )
+                                                    }
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="cancel"
+                                                    disabled={
+                                                        !active || !canConfigure
+                                                    }
+                                                    aria-label={`Edit ${criterion.name}`}
+                                                    onClick={() =>
+                                                        setEditing(criterion)
+                                                    }>
+                                                    Edit
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="cancel"
+                                                    disabled={
+                                                        !active || !canConfigure
+                                                    }
+                                                    aria-label={`Delete ${criterion.name}`}
+                                                    onClick={() =>
+                                                        updateCriteria(
+                                                            criteria.filter(
+                                                                (item) =>
+                                                                    item.id !==
+                                                                    criterion.id,
+                                                            ),
+                                                        )
+                                                    }>
+                                                    Delete
+                                                </Button>
+                                            </div>
+                                        </div>
+                                        <p className="text-text-secondary text-sm leading-6 whitespace-pre-wrap">
+                                            {criterion.instructions}
+                                        </p>
+                                        {!!(
+                                            criterion.includedFiles?.length ||
+                                            criterion.excludedFiles?.length
+                                        ) && (
+                                            <details className="border-card-lv3 border-t pt-3 text-xs">
+                                                <summary className="text-text-secondary cursor-pointer">
+                                                    File filters
+                                                </summary>
+                                                <div className="mt-3 flex flex-col gap-2">
+                                                    {!!criterion.includedFiles
+                                                        ?.length && (
+                                                        <p>
+                                                            Included:{" "}
+                                                            <code>
+                                                                {criterion.includedFiles.join(
+                                                                    ", ",
+                                                                )}
+                                                            </code>
+                                                        </p>
                                                     )}
-                                                </code>
-                                            </p>
-                                        )}
-                                        {!!criterion.excludedFiles?.length && (
-                                            <p>
-                                                Excluded:{" "}
-                                                <code>
-                                                    {criterion.excludedFiles.join(
-                                                        ", ",
+                                                    {!!criterion.excludedFiles
+                                                        ?.length && (
+                                                        <p>
+                                                            Excluded:{" "}
+                                                            <code>
+                                                                {criterion.excludedFiles.join(
+                                                                    ", ",
+                                                                )}
+                                                            </code>
+                                                        </p>
                                                     )}
-                                                </code>
-                                            </p>
+                                                </div>
+                                            </details>
                                         )}
-                                    </div>
-                                </details>
-                            )}
-                        </Card>
-                    ))}
-                </section>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </CardContent>
+                </Card>
             </Page.Content>
             {editing && (
                 <CriterionDialog

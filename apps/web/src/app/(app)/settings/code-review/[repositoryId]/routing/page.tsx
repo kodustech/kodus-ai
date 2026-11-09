@@ -1,8 +1,9 @@
 "use client";
 
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
-import { Card } from "@components/ui/card";
+import { Button } from "@components/ui/button";
+import { Card, CardContent, CardHeader } from "@components/ui/card";
+import { Heading } from "@components/ui/heading";
 import { Link } from "@components/ui/link";
 import { Page } from "@components/ui/page";
 import {
@@ -16,7 +17,7 @@ import { Spinner } from "@components/ui/spinner";
 import { toast } from "@components/ui/toaster/use-toast";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, LockKeyholeIcon } from "lucide-react";
 import { Controller, useFormContext, useFormState } from "react-hook-form";
 import { useCodeReviewModelData } from "src/app/(app)/settings/_components/context";
 import { useCodeReviewRouteParams } from "src/app/(app)/settings/_hooks";
@@ -185,8 +186,50 @@ function RoutingSettings() {
         }
     });
     if (!routing.canConfigure) {
-        redirect(
-            `/settings/code-review/${encodeURIComponent(repositoryId)}/general${directoryId ? `?directoryId=${encodeURIComponent(directoryId)}` : ""}`,
+        return (
+            <Page.Root>
+                <Page.Header>
+                    <Page.TitleContainer>
+                        <Page.Title>Routing</Page.Title>
+                        <Page.Description>
+                            Choose how Kody reviews each PR.
+                        </Page.Description>
+                    </Page.TitleContainer>
+                </Page.Header>
+                <Page.Content>
+                    <Card color="lv1">
+                        <CardHeader className="flex-row items-start gap-3">
+                            <LockKeyholeIcon
+                                aria-hidden
+                                className="text-text-secondary mt-0.5 size-5 shrink-0"
+                            />
+                            <div className="flex flex-col gap-1">
+                                <Heading variant="h3">
+                                    Connect an AI provider to use routing
+                                </Heading>
+                                <p className="text-text-secondary text-sm">
+                                    A connected provider is required to
+                                    configure review modes and models.
+                                </p>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            {canEditModels ? (
+                                <Link href="/byok" noHoverUnderline>
+                                    <Button variant="primary" size="md">
+                                        Connect AI provider
+                                    </Button>
+                                </Link>
+                            ) : (
+                                <p className="text-text-secondary text-sm">
+                                    Ask an organization admin to connect a
+                                    provider.
+                                </p>
+                            )}
+                        </CardContent>
+                    </Card>
+                </Page.Content>
+            </Page.Root>
         );
     }
     return (

@@ -48,7 +48,6 @@ import {
     TerminalIcon,
     TriangleAlertIcon,
 } from "lucide-react";
-import { useHasConnectedAIProvider } from "src/core/providers/ai-provider-connection";
 import { useAuth } from "src/core/providers/auth.provider";
 import { usePermissions } from "src/core/providers/permissions.provider";
 import {
@@ -341,7 +340,6 @@ export const CommandPalette = ({
     const [query, setQuery] = useState("");
     const router = useRouter();
     const gates = useFeatureGates();
-    const hasConnectedProvider = useHasConnectedAIProvider();
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -540,11 +538,7 @@ export const CommandPalette = ({
                             <CommandSeparator />
 
                             <CommandGroup heading="Code review settings · Global">
-                                {SETTINGS_TABS.filter(
-                                    (tab) =>
-                                        tab.href !== "routing" ||
-                                        hasConnectedProvider,
-                                ).map((tab) => (
+                                {SETTINGS_TABS.map((tab) => (
                                     <CommandItem
                                         key={tab.href}
                                         value={`global ${tab.label} ${tab.keywords}`}
