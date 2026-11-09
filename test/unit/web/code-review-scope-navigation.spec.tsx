@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import '@testing-library/jest-dom';
 import { useState } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TooltipProvider } from '@components/ui/tooltip';
 
@@ -137,7 +137,11 @@ const {
 } = require('../../../apps/web/src/app/(app)/settings/_components/_layout');
 const {
     useCodeReviewConfig,
+    useCodeReviewModelData,
 } = require('../../../apps/web/src/app/(app)/settings/_components/context');
+const {
+    getLLMConfigStatus,
+} = require('@services/organizationParameters/fetch');
 const { AppSidebar } = require('../../../apps/web/src/core/layout/sidebar');
 const {
     ScopeToolsProvider,
@@ -168,6 +172,17 @@ const ConfigProbe = () => {
         </output>
     );
 };
+const ProviderStateProbe = () => {
+    const state = useCodeReviewModelData();
+    return (
+        <output data-testid="provider-state">
+            {JSON.stringify({
+                connected: state.hasConnectedProvider,
+                error: state.providerStatusError,
+            })}
+        </output>
+    );
+};
 
 const Harness = ({
     config = configValue,
@@ -193,6 +208,7 @@ const Harness = ({
                         }}
                     >
                         <ConfigProbe />
+                        <ProviderStateProbe />
                     </SettingsLayout>
                 </ScopeToolsProvider>
             </TooltipProvider>
@@ -218,6 +234,27 @@ beforeEach(() => {
     mockPathname = '/settings/code-review/global/general';
     mockDirectoryId = null;
     jest.clearAllMocks();
+    getLLMConfigStatus
+        .mockReset()
+        .mockResolvedValue({
+            source: 'none',
+            models: [],
+            byok: { configured: false },
+            env: { configured: false },
+        });
+});
+
+it('treats an empty provider-status response as unavailable instead of leaving Routing loading forever', async () => {
+    getLLMConfigStatus.mockResolvedValueOnce(null);
+    render(<Harness />);
+    await waitFor(() =>
+        expect(screen.getByTestId('provider-state')).toHaveTextContent(
+            '"error":true',
+        ),
+    );
+    expect(screen.getByTestId('provider-state')).toHaveTextContent(
+        '"connected":false',
+    );
 });
 
 it('keeps Routing discoverable without a provider in the selected repository scope', () => {

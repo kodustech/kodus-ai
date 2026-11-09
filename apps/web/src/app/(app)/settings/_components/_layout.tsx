@@ -147,7 +147,9 @@ export const SettingsLayout = ({
                 ...initialModelData,
                 llmConfigStatus: modelStatus.data ?? null,
                 isCheckingProvider: modelStatus.isFetching,
-                providerStatusError: modelStatus.isError,
+                providerStatusError:
+                    modelStatus.isError ||
+                    (modelStatus.isSuccess && !modelStatus.data),
             }}>
             <CodeReviewConfigFetchStateProvider
                 value={{
