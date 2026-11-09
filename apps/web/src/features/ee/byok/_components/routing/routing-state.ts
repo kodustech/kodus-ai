@@ -8,45 +8,72 @@ import { capabilityGate } from "./capability-gate";
 
 /** Repeated names identify the connection without displaying URL credentials. */
 export function routingModelLabels(models: LLMConfigStatus["models"]) {
+    const hostOf = (url?: string) => {
+        try {
+            return url ? new URL(url).host : undefined;
+        } catch {
+            return undefined;
+        }
+    };
+    const groups = new Map<
+        string,
+        Map<string | undefined, { count: number; hosts: Map<string, number> }>
+    >();
     const entries = models.map((model) => ({
         ...model,
         label: formatModelLabel(model.model ?? model.modelId) || model.modelId,
+        host: hostOf(model.baseUrl),
     }));
+    const labelCounts = new Map<string, number>();
+    const ordinals = new Map<string, number>();
+    for (const model of entries) {
+        if (model.managed) continue;
+        labelCounts.set(model.label, (labelCounts.get(model.label) ?? 0) + 1);
+        let providers = groups.get(model.label);
+        if (!providers) groups.set(model.label, (providers = new Map()));
+        let group = providers.get(model.providerId);
+        if (!group)
+            providers.set(
+                model.providerId,
+                (group = { count: 0, hosts: new Map() }),
+            );
+        ordinals.set(model.modelId, ++group.count);
+        if (model.host)
+            group.hosts.set(model.host, (group.hosts.get(model.host) ?? 0) + 1);
+    }
     return new Map<string, string>(
         entries.map((model): [string, string] => {
-            const peers = entries.filter(
-                (entry) => !entry.managed && entry.label === model.label,
-            );
-            if (model.managed || peers.length < 2)
+            if (model.managed || (labelCounts.get(model.label) ?? 0) < 2)
                 return [model.modelId, model.label];
-            const sameProvider = peers.filter(
-                (entry) => entry.providerId === model.providerId,
-            );
+            const group = groups.get(model.label)!.get(model.providerId)!;
             const provider =
                 PROVIDER_LABELS[model.providerId ?? ""] ??
                 model.providerId ??
                 "Connection";
-            const hostOf = (url?: string) => {
-                try {
-                    return url ? new URL(url).host : undefined;
-                } catch {
-                    return undefined;
-                }
-            };
-            const host = hostOf(model.baseUrl);
             const identity =
-                sameProvider.length === 1
+                group.count === 1
                     ? provider
-                    : host &&
-                        sameProvider.filter(
-                            (entry) => hostOf(entry.baseUrl) === host,
-                        ).length === 1
-                      ? host
-                      : `${provider} ${sameProvider.findIndex((entry) => entry.modelId === model.modelId) + 1}`;
+                    : model.host && group.hosts.get(model.host) === 1
+                      ? model.host
+                      : `${provider} ${ordinals.get(model.modelId)}`;
             return [model.modelId, `${model.label} · ${identity}`];
         }),
     );
 }
+
+/** Exact slot IDs win. Legacy names resolve only when they identify one slot. */
+export function indexRoutingModels(models: LLMConfigStatus["models"]) {
+    const byId = new Map(models.map((model) => [model.modelId, model]));
+    const byName = new Map<string, (typeof models)[number] | null>();
+    for (const model of models) {
+        if (model.model)
+            byName.set(model.model, byName.has(model.model) ? null : model);
+    }
+    return (id?: string) =>
+        id ? (byId.get(id) ?? byName.get(id) ?? undefined) : undefined;
+}
+
+export class RoutingSettingsError extends Error {}
 
 export const GLOBAL_ROUTING_HREF = "/settings/code-review/global/routing";
 export const routingStatusQueryKey = (teamId?: string) =>
@@ -78,6 +105,23 @@ export function normalizeRouting(routing: BYOKRouting = {}): BYOKRouting {
                 .sort(([a], [b]) => a.localeCompare(b)),
         ),
     };
+}
+
+export function sameRouting(a: BYOKRouting, b: BYOKRouting): boolean {
+    return (
+        a.defaultModelId === b.defaultModelId &&
+        a.fallbackModelId === b.fallbackModelId &&
+        [
+            ...new Set([
+                ...Object.keys(a.taskOverrides ?? {}),
+                ...Object.keys(b.taskOverrides ?? {}),
+            ]),
+        ].every(
+            (task) =>
+                a.taskOverrides?.[task as LlmTask] ===
+                b.taskOverrides?.[task as LlmTask],
+        )
+    );
 }
 
 /** Only apply fields edited here; preserve another editor's other task routes. */
@@ -120,8 +164,11 @@ export function draftTaskModel(
         routing.defaultModelId,
         routing.fallbackModelId,
     ];
+    const models = new Map(
+        status.models.map((model) => [model.modelId, model]),
+    );
     const candidate = candidates.find((id) => {
-        const model = status.models.find((entry) => entry.modelId === id);
+        const model = id ? models.get(id) : undefined;
         return (
             model &&
             !model.managed &&
@@ -129,8 +176,7 @@ export function draftTaskModel(
             capabilityGate(task, model.capabilities).ok
         );
     });
-    return status.models.find((model) => model.modelId === candidate)
-        ?.resolvable
+    return (candidate ? models.get(candidate) : undefined)?.resolvable
         ? candidate
         : undefined;
 }

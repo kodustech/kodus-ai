@@ -17,6 +17,7 @@ import { ReviewRoutingSummary } from "../general/_components/review-routing-summ
 import RoutingPage from "./page";
 
 let mockRepo = "global";
+let mockTeam: string | undefined = "team";
 let mockDirectory: string | undefined;
 let mockCanEdit = true;
 let mockOrgEdit = true;
@@ -122,6 +123,7 @@ jest.mock("src/app/(app)/settings/_hooks", () => ({
 }));
 jest.mock("src/app/(app)/settings/_components/context", () => ({
     useCodeReviewConfig: () => mockConfig,
+    useInitialTeamId: () => "team",
     useCodeReviewModelData: () => ({
         llmConfigStatus: mockStatus,
         hasConnectedProvider: mockStatus.byok.configured,
@@ -153,7 +155,7 @@ jest.mock(
     }),
 );
 jest.mock("src/core/providers/selected-team-context", () => ({
-    useSelectedTeamId: () => ({ teamId: "team" }),
+    useSelectedTeamId: () => ({ teamId: mockTeam }),
 }));
 jest.mock("../../_components/centralized-config-readonly-alert", () => ({
     CentralizedConfigReadOnlyAlert: () => null,
@@ -177,7 +179,12 @@ const config = (active: boolean) => ({
     riskReviewRouting: { noRisk: leaf("balanced"), riskFound: leaf("heavy") },
     byokModelId: leaf(""),
 });
-const mount = (active = false, summary = false, override: any = {}) => {
+const mount = (
+    active = false,
+    summary = false,
+    override: any = {},
+    queryClient = new QueryClient(),
+) => {
     mockConfig = { ...config(active), ...override };
     let update!: () => void;
     function Harness() {
@@ -206,13 +213,14 @@ const mount = (active = false, summary = false, override: any = {}) => {
         );
     }
     const view = render(
-        <QueryClientProvider client={new QueryClient()}>
+        <QueryClientProvider client={queryClient}>
             <Harness />
         </QueryClientProvider>,
     );
-    return { ...view, refreshEnvironment: () => act(update) };
+    return { ...view, queryClient, refreshEnvironment: () => act(update) };
 };
 beforeEach(() => {
+    mockTeam = "team";
     mockRepo = "global";
     mockDirectory = undefined;
     mockCanEdit = true;
@@ -630,4 +638,49 @@ it("one connected model does not prevent choosing review depth", async () => {
         await screen.findByRole("combobox", { name: "Default model" }),
     ).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "All PRs" })).toBeEnabled();
+});
+
+it("refreshes the seeded team's provider cache and replaces a cached overview after saving a scope pin", async () => {
+    mockTeam = undefined;
+    mockRepo = "stale";
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(["routing-model-overrides", "team"], {
+        overrides: [
+            {
+                scope: "repository",
+                repositoryId: "stale",
+                repositoryName: "acme/stale",
+                model: "a",
+            },
+        ],
+        mismatchedCount: 0,
+    });
+    const view = mount(false, false, {}, queryClient);
+    fireEvent.click(
+        screen.getByRole("combobox", { name: "Code review model override" }),
+    );
+    fireEvent.click(await screen.findByRole("option", { name: /Model B/ }));
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+    view.unmount();
+    mockRepo = "global";
+    mount(false, false, {}, queryClient);
+    await screen.findByText(/No repository overrides/);
+    expect(screen.queryByText("acme/stale")).not.toBeInTheDocument();
+    expect(queryClient.getQueryData(["llm-config-status", "team"])).toEqual(
+        mockStatus,
+    );
+    expect(
+        queryClient.getQueryData(["llm-config-status", undefined]),
+    ).toBeUndefined();
+});
+
+it("shows the environment fallback when no BYOK slot satisfies risk capabilities", async () => {
+    mockRepo = "repo";
+    mockStatus.modelRouting.riskAssessment = { modelId: null, inherited: true };
+    mockStatus.env = { configured: true, model: "environment-risk-model" };
+    mount(true);
+    expect(await screen.findByText("Environment Risk Model")).toBeVisible();
+    expect(screen.queryByText("Uses default model")).not.toBeInTheDocument();
 });

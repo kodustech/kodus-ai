@@ -50,6 +50,7 @@ async function inspect(
     repo: ProviderRepoRef,
     pr: OpenedPR,
     since: string,
+    approvalOnly = false,
 ): Promise<Evidence> {
     const [bin, entry] = (process.env.RUNO ?? '').split(' ');
     ctx.assert(
@@ -61,7 +62,7 @@ async function inspect(
             /^[a-z0-9_-]+$/i.test(String(repo.id)),
         'Invalid evidence identity',
     );
-    const command = `docker exec -e PREVIEW_RISK_ROUTING_QA=true kodus_api node scripts/preview/inspect-risk-routing-e2e.cjs ${session.organizationId} ${repo.id} ${pr.number} ${since}`;
+    const command = `docker exec -e PREVIEW_RISK_ROUTING_QA=true kodus_api node scripts/preview/inspect-risk-routing-e2e.cjs ${session.organizationId} ${repo.id} ${pr.number} ${since}${approvalOnly ? ' --approval-only' : ''}`;
     const { stdout } = await execute(
         bin,
         [
@@ -220,8 +221,9 @@ async function waitForApproval(
                     comment.body.includes(policyName),
             )
         ) {
+            const full = await inspect(ctx, session, repo, pr, since);
             const verified = {
-                ...data,
+                ...full,
                 providerApproval: {
                     headSha: state.headSha,
                     policyName,
@@ -247,7 +249,7 @@ async function waitForApproval(
             `PR #${pr.number} approval was not confirmed: ${data.execution?.decision?.reason ?? 'no decision'}`,
         );
         await settle(8_000);
-        data = await inspect(ctx, session, repo, pr, since);
+        data = await inspect(ctx, session, repo, pr, since, true);
         ctx.assert(
             data.execution?.uuid === initial.execution?.uuid &&
                 data.execution?.status === 'success',
@@ -344,10 +346,51 @@ export const riskRoutingPipeline: Scenario = {
             ),
             'A separate isolated policy tenant is required to respect trial review limits',
         );
-        const prepareTenant = async (session: KodusSession) => {
+        const prepareTenant = async (
+            session: KodusSession,
+            fullOnboarding = true,
+        ) => {
             await ctx.kodus.registerIntegration(session);
             const repo = await ctx.kodus.registerRepo(session);
-            await ctx.kodus.finishOnboarding(session, repo);
+            if (fullOnboarding) {
+                await ctx.kodus.finishOnboarding(session, repo);
+            } else {
+                // The policy phase needs its own normal trial allowance, not
+                // another repository-wide Kody Rules import/backfill.
+                const platform = await request(
+                    ctx,
+                    session,
+                    `/parameters/find-by-key?key=platform_configs&teamId=${encodeURIComponent(session.teamId)}`,
+                );
+                await request(ctx, session, '/parameters/create-or-update', {
+                    key: 'platform_configs',
+                    organizationAndTeamData: { teamId: session.teamId },
+                    configValue: {
+                        ...platform.configValue,
+                        finishOnboard: true,
+                    },
+                });
+                const trial = await http(
+                    `${ctx.target.webBaseUrl}/api/proxy/billing/trial`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${session.accessToken}`,
+                        },
+                        body: {
+                            organizationId: session.organizationId,
+                            teamId: session.teamId,
+                            byok: false,
+                        },
+                    },
+                );
+                ctx.assert(
+                    (trial.status >= 200 && trial.status < 300) ||
+                        trial.status === 409,
+                    'Could not provision the policy QA tenant’s normal trial.',
+                );
+                await settle(10_000);
+            }
             const seat = await http<any>(
                 `${ctx.target.webBaseUrl}/api/proxy/billing/assign-license`,
                 {
@@ -378,6 +421,19 @@ export const riskRoutingPipeline: Scenario = {
         };
         let session = await ctx.kodus.login(ctx.tenant!);
         const repo = await prepareTenant(session);
+        const disconnect = async (owner: KodusSession) => {
+            const result = await http(
+                `${ctx.target.apiBaseUrl}/code-management/delete-integration?teamId=${encodeURIComponent(owner.teamId)}`,
+                {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${owner.accessToken}` },
+                },
+            );
+            ctx.assert(
+                result.status >= 200 && result.status < 300,
+                'Could not disconnect the isolated QA tenant.',
+            );
+        };
         const results: Array<Record<string, unknown>> = [];
         const record = (name: string, pr: OpenedPR, data: Evidence) => {
             results.push({ name, pr: pr.url, ...data });
@@ -402,6 +458,12 @@ export const riskRoutingPipeline: Scenario = {
                 suggestedFix: 'never',
             },
         });
+        const disarmed = {
+            pullRequestApprovalActive: false,
+            automatedReviewActive: false,
+            riskAssessmentActive: false,
+            customAgents: [],
+        };
         const configure = async (changes: Record<string, unknown> = {}) => {
             await request(
                 ctx,
@@ -698,17 +760,15 @@ export const riskRoutingPipeline: Scenario = {
 
             // The core group consumes the normal six managed trial reviews.
             // Continue with a separately seeded QA tenant, preserving the gate.
-            await configure({
-                pullRequestApprovalActive: false,
-                automatedReviewActive: false,
-                riskAssessmentActive: false,
-                customAgents: [],
-            });
+            await configure(disarmed);
+            // getContext resolves by repository: remove our old ownership
+            // before registering the policy tenant against that repository.
+            await disconnect(session);
             session = await ctx.kodus.login({
                 email: process.env.CLOUD_RISK_POLICY_TENANT_EMAIL!,
                 password: ctx.tenant!.password,
             });
-            const policyRepo = await prepareTenant(session);
+            const policyRepo = await prepareTenant(session, false);
             ctx.assert(
                 policyRepo.id === repo.id,
                 'Policy tenant selected a different QA repository',
@@ -902,12 +962,8 @@ export const riskRoutingPipeline: Scenario = {
             return { provider: ctx.provider.name, cases: results };
         } finally {
             if (active) await ctx.provider.closePR(active);
-            await configure({
-                pullRequestApprovalActive: false,
-                automatedReviewActive: false,
-                riskAssessmentActive: false,
-                customAgents: [],
-            });
+            await configure(disarmed);
+            await disconnect(session);
             if (createdLabel)
                 await http(
                     `https://api.github.com/repos/${repo.full_name}/labels/${encodeURIComponent(label)}`,

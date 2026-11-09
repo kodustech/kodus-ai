@@ -65,8 +65,6 @@ export function resolveReviewSettings(
         if (own(source, 'riskCriteria'))
             criteria = riskCriteriaSchema.parse(layer.riskCriteria);
         else if (own(source, 'approvalRiskInstructions')) {
-            if (!Array.isArray(criteria))
-                throw new Error('Invalid risk criteria.');
             criteria = criteria.filter(
                 (criterion) => criterion.id !== 'legacy-risk',
             );
@@ -88,8 +86,6 @@ export function resolveReviewSettings(
             own(source, 'approvalLabels') ||
             own(source, 'approvalAuthors')
         ) {
-            if (!Array.isArray(policies))
-                throw new Error('Invalid approval policies.');
             const legacy = policies.findIndex(
                 (policy) => policy.id === 'legacy-approval',
             );

@@ -287,4 +287,9 @@ it("edits and validates both file filters in one sheet and discards its draft on
     fireEvent.click(within(editor).getByRole("button", { name: "Cancel" }));
     expect(currentForm.getValues("riskCriteria.value")).toEqual([]);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add criterion" }));
+    const reopened = screen.getByRole("dialog");
+    for (const input of within(reopened).getAllByRole("textbox"))
+        expect(input).toHaveValue("");
+    expect(within(reopened).queryByText("src/**")).not.toBeInTheDocument();
 });

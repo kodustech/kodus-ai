@@ -97,7 +97,17 @@ describe("PerRepositoryPanel", () => {
     it("does not claim repositories inherit models when the list fails, and supports Retry", async () => {
         (listModelOverrides as jest.Mock)
             .mockRejectedValueOnce(new Error("network fixture"))
-            .mockResolvedValueOnce({ overrides: [], mismatchedCount: 0 });
+            .mockResolvedValueOnce({
+                overrides: [
+                    {
+                        scope: "repository",
+                        repositoryId: "repo one",
+                        repositoryName: "acme/retry",
+                        model: "model-kimi",
+                    },
+                ],
+                mismatchedCount: 0,
+            });
         mount();
         await screen.findByText("Could not load repository overrides.");
         expect(
@@ -105,7 +115,8 @@ describe("PerRepositoryPanel", () => {
         ).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", { name: "Retry" }));
         expect(
-            await screen.findByText(/No repository overrides/),
-        ).toBeVisible();
+            await screen.findByRole("link", { name: "acme/retry" }),
+        ).toHaveAttribute("href", "/settings/code-review/repo%20one/routing");
+        expect(screen.getByText("Kimi K2.7 Code")).toBeVisible();
     });
 });

@@ -53,7 +53,7 @@ export const OverrideIndicatorForm = ({
     });
 
     const handleRevert = () => {
-        if (!initialState || disabled || formDisabled) return;
+        if (!initialState) return;
 
         const { value, level } = buildOverrideRevertState(
             initialState,

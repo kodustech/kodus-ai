@@ -7,16 +7,6 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect as baseExpect } from 'playwright/test';
 
 const expect = baseExpect.configure({ timeout: 30_000 });
-const fields = [
-    'riskAssessmentActive',
-    'riskCriteria',
-    'reviewMode',
-    'riskReviewRouting',
-    'pullRequestApprovalActive',
-    'approvalPolicies',
-    'approvalSensitivePaths',
-];
-
 export async function captureRiskRoutingStates({
     page,
     context,
@@ -39,44 +29,11 @@ export async function captureRiskRoutingStates({
         exact: true,
     });
     await hydrated(riskSwitch);
-    const snapshot = await riskSwitch.evaluate((node, fields) => {
-        let fiber =
-            node[
-                Object.keys(node).find((key) => key.startsWith('__reactFiber$'))
-            ];
-        while (fiber) {
-            const props = fiber.memoizedProps;
-            const control = props?.control ?? props?.value?.control;
-            if (control?._formValues) {
-                const values = control._formValues;
-                return Object.fromEntries(
-                    fields.map((key) => [
-                        key,
-                        key === 'riskReviewRouting'
-                            ? {
-                                  noRisk:
-                                      values[key]?.noRisk?.value ?? 'balanced',
-                                  riskFound:
-                                      values[key]?.riskFound?.value ?? 'heavy',
-                              }
-                            : values[key]?.value,
-                    ]),
-                );
-            }
-            fiber = fiber.return;
-        }
-        return null;
-    }, fields);
-    assert.ok(snapshot, 'The real settings form must be loaded.');
-    const restore = {
-        ...snapshot,
-        riskAssessmentActive: snapshot.riskAssessmentActive ?? false,
-        riskCriteria: snapshot.riskCriteria ?? [],
-        reviewMode: snapshot.reviewMode ?? 'balanced',
-        pullRequestApprovalActive: snapshot.pullRequestApprovalActive ?? false,
-        approvalPolicies: snapshot.approvalPolicies ?? [],
-        approvalSensitivePaths: snapshot.approvalSensitivePaths ?? [],
-    };
+    assert.equal(
+        process.env.PREVIEW_QA_SETTINGS_SNAPSHOT,
+        'true',
+        'Capture states only inside the workflow’s exact database snapshot/restore guard.',
+    );
     const criteria = [
         {
             id: 'screenshot-access',
@@ -141,14 +98,19 @@ export async function captureRiskRoutingStates({
                     'Connect a code provider before adding label or team conditions.',
                 ) &&
                 configValue.approvalPolicies?.some(
-                    (policy) => policy.labels?.length,
+                    (policy) =>
+                        policy.labels?.length || policy.authorTeams?.length,
                 )
             ) {
-                for (const policy of policies) delete policy.labels;
+                for (const policy of policies) {
+                    delete policy.labels;
+                    delete policy.authorTeams;
+                }
                 return configure({
                     ...configValue,
                     approvalPolicies: configValue.approvalPolicies.map(
-                        ({ labels: _labels, ...policy }) => policy,
+                        ({ labels: _labels, authorTeams: _teams, ...policy }) =>
+                            policy,
                     ),
                 });
             }
@@ -193,8 +155,15 @@ export async function captureRiskRoutingStates({
             page.getByRole('button', { name: 'Save settings', exact: true }),
         );
         if (tab === 'routing') {
-            await expect(page.getByRole('combobox', { name: 'Default model', exact: true })).toBeEnabled();
-            await page.getByRole('region', { name: 'Review mode', exact: true }).evaluate((node) => node.scrollIntoView({ block: 'start' }));
+            await expect(
+                page.getByRole('combobox', {
+                    name: 'Default model',
+                    exact: true,
+                }),
+            ).toBeEnabled();
+            await page
+                .getByRole('region', { name: 'Review mode', exact: true })
+                .evaluate((node) => node.scrollIntoView({ block: 'start' }));
         }
     }
     async function shot(id, group, title, note = '', fixture = false) {
@@ -216,7 +185,9 @@ export async function captureRiskRoutingStates({
         // Let Radix enter transitions settle before preserving the image.
         await page.waitForTimeout(500);
         if (group === 'Routing' && page.viewportSize().width < 768) {
-            await page.getByRole('region', { name: 'Review mode', exact: true }).evaluate((node) => node.scrollIntoView({ block: 'start' }));
+            await page
+                .getByRole('region', { name: 'Review mode', exact: true })
+                .evaluate((node) => node.scrollIntoView({ block: 'start' }));
         }
         if (page.viewportSize().width >= 768) {
             await expect(
@@ -402,6 +373,9 @@ export async function captureRiskRoutingStates({
         await expect(
             page.getByText('Review Cadence', { exact: true }),
         ).toBeVisible();
+        await expect(page.getByText('No risk found', { exact: true }).locator('..')).toContainText('Balanced');
+        await expect(page.getByText('Risk found', { exact: true }).locator('..')).toContainText('Heavy');
+        await expect(page.getByRole('link', { name: 'Configure routing' })).toHaveAttribute('href', '/settings/code-review/global/routing');
         await shot(
             '45-general-automated-on',
             'General',
@@ -485,11 +459,17 @@ export async function captureRiskRoutingStates({
                 ? 'Label, autor, linhas e instrução'
                 : 'Autor, linhas e instrução',
         );
-        await page
+        const desktopScroll = await page
             .getByRole('region', { name: 'Policy settings', exact: true })
             .evaluate((node) => {
+                const before = node.scrollTop;
                 node.scrollTop = node.scrollHeight;
+                return { before, after: node.scrollTop };
             });
+        assert.ok(
+            desktopScroll.after > desktopScroll.before,
+            'Policy conditions must actually scroll inside the editor.',
+        );
         await expect(
             page.getByRole('button', { name: 'Apply', exact: true }),
         ).toBeInViewport();
@@ -632,7 +612,7 @@ export async function captureRiskRoutingStates({
         await shot('40-routing-mobile', 'Mobile', 'Routing no mobile');
         await open('general');
         await shot('41-general-mobile', 'Mobile', 'General no mobile');
-        await editPolicy('Dependency updates');
+        await editPolicy('Documentation');
         const apply = page.getByRole('button', { name: 'Apply', exact: true });
         await expect(apply).toBeInViewport();
         const before = await apply.boundingBox();
@@ -641,15 +621,25 @@ export async function captureRiskRoutingStates({
             'Mobile',
             'Editor de política com ações fixas',
         );
-        await page
+        const scrolled = await page
             .getByRole('region', { name: 'Policy settings', exact: true })
             .evaluate((node) => {
+                const before = node.scrollTop;
                 node.scrollTop = node.scrollHeight;
+                return { before, after: node.scrollTop };
             });
+        assert.ok(
+            scrolled.after > scrolled.before,
+            'Policy conditions must actually scroll on mobile.',
+        );
         await expect(apply).toBeInViewport();
         const after = await apply.boundingBox();
         assert.ok(
-            before && after && Math.abs(before.y - after.y) <= 2,
+            before &&
+                after &&
+                Math.abs(before.y - after.y) <= 2 &&
+                after.y >= 0 &&
+                after.y + after.height <= page.viewportSize().height,
             'Policy actions must stay fixed while conditions scroll.',
         );
         await shot(
@@ -657,6 +647,7 @@ export async function captureRiskRoutingStates({
             'Mobile',
             'Ações permanecem visíveis após rolagem',
         );
+        await expect(apply).toBeEnabled();
         await apply.click();
         await expect(
             page.getByRole('dialog', { name: 'Edit policy', exact: true }),
@@ -665,7 +656,8 @@ export async function captureRiskRoutingStates({
         releasePreview?.();
         await page.unroute(previewPath);
         await page.unroute(repositoriesPath);
-        await configure(restore);
+        // The workflow EXIT trap restores the exact stored QA scope tree,
+        // including absent keys, even if Playwright fails or this process exits.
         await page.setViewportSize({ width: 1440, height: 1000 });
         writeFileSync(
             `${dir}/manifest.json`,

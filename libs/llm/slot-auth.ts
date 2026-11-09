@@ -2,37 +2,32 @@ import { BYOKProvider } from './model-providers';
 import { isPlatformFundedProvider } from './platform-funded-provider';
 import type { NormalizedModel } from './byok-config';
 
-/**
- * Whether a BYOK credential slot carries the credentials it needs to run.
- *
- * Most providers authenticate with a single `apiKey` — Google Vertex stores its
- * base64-encoded service-account JSON in that same field, so it is covered too.
- * Amazon Bedrock is the exception: it has no `apiKey` and authenticates with
- * either a bearer token (`awsBearerToken`) or static IAM credentials
- * (`awsAccessKeyId` + `awsSecretAccessKey`).
- *
- * Keep in sync with the auth paths in `bedrockModelFromCredentials`
- * (byok-to-vercel.ts) and the save-time validation in `encryptSlot`
- * (create-or-update.use-case.ts).
- */
+type AuthMaterial = {
+    apiKey?: unknown;
+    awsBearerToken?: unknown;
+    awsAccessKeyId?: unknown;
+    awsSecretAccessKey?: unknown;
+};
+
+/** Shared credential presence and Bedrock auth priority; accepts ciphertext too. */
+export function byokAuthKind(
+    provider: string | undefined,
+    material: AuthMaterial | null | undefined,
+): 'platform' | 'api-key' | 'bedrock-bearer' | 'bedrock-iam' | undefined {
+    const has = (value: unknown) =>
+        typeof value === 'string' && value.trim().length > 0;
+    if (isPlatformFundedProvider(provider)) return 'platform';
+    if (provider === BYOKProvider.AMAZON_BEDROCK) {
+        if (has(material?.awsBearerToken)) return 'bedrock-bearer';
+        if (has(material?.awsAccessKeyId) && has(material?.awsSecretAccessKey))
+            return 'bedrock-iam';
+        return undefined;
+    }
+    return has(material?.apiKey) ? 'api-key' : undefined;
+}
+
 export function isByokSlotConfigured(
     slot: Partial<NormalizedModel> | null | undefined,
 ): boolean {
-    if (!slot) {
-        return false;
-    }
-
-    if (slot.provider === BYOKProvider.AMAZON_BEDROCK) {
-        return Boolean(
-            slot.awsBearerToken ||
-            (slot.awsAccessKeyId && slot.awsSecretAccessKey),
-        );
-    }
-
-    // Platform-funded (`kodus`): no material of its own, by design.
-    if (isPlatformFundedProvider(slot.provider)) {
-        return true;
-    }
-
-    return Boolean(slot.apiKey);
+    return !!slot && byokAuthKind(slot.provider, slot) !== undefined;
 }

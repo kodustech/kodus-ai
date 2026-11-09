@@ -16,6 +16,8 @@ import {
     mergeRoutingEdits,
     normalizeRouting,
     routingModelLabels,
+    RoutingSettingsError,
+    sameRouting,
 } from "src/features/ee/byok/_components/routing/routing-state";
 import type { PoolModel } from "src/features/ee/byok/_components/routing/task-override-grid";
 import { formatModelLabel } from "src/features/ee/byok/_data/model-label";
@@ -52,8 +54,7 @@ export function useOrganizationRouting({
     const [edit, setEdit] = useState<Edit | null>(null);
     const saved = normalizeRouting(query.data?.routing);
     const routing = edit?.routing ?? saved;
-    const dirty =
-        !!edit && JSON.stringify(edit.baseline) !== JSON.stringify(routing);
+    const dirty = !!edit && !sameRouting(edit.baseline, routing);
     const labels = routingModelLabels(status?.models ?? []);
     const pool: PoolModel[] = groupModelsByProvider(
         enabled ? query.data : undefined,
@@ -81,7 +82,7 @@ export function useOrganizationRouting({
         setEdit((current) => {
             const baseline = current?.baseline ?? saved;
             const next = normalizeRouting(update(current?.routing ?? saved));
-            return JSON.stringify(next) === JSON.stringify(baseline)
+            return sameRouting(next, baseline)
                 ? null
                 : { baseline, routing: next };
         });
@@ -123,13 +124,18 @@ export function useOrganizationRouting({
 
     const save = async (currentStatus: LLMConfigStatus | null = status) => {
         if (!dirty || !edit) return false;
-        if (!canEdit) throw new Error("You cannot edit organization models.");
-        if (validationError) throw new Error(validationError);
+        if (!canEdit)
+            throw new RoutingSettingsError(
+                "You cannot edit organization models.",
+            );
+        if (validationError) throw new RoutingSettingsError(validationError);
         // Re-read: a model added or credential rotated in another tab must survive.
         const fresh = await getBYOK();
         queryClient.setQueryData(queryKey, fresh ?? null);
         if (!fresh || !hasVisibleModels(fresh))
-            throw new Error("Connect an AI provider before changing routing.");
+            throw new RoutingSettingsError(
+                "Connect an AI provider before changing routing.",
+            );
         const next = mergeRoutingEdits(
             edit.baseline,
             edit.routing,
@@ -154,7 +160,7 @@ export function useOrganizationRouting({
                 (id) => !fresh.models.some((model) => model.id === id),
             )
         )
-            throw new Error(
+            throw new RoutingSettingsError(
                 "A selected model was removed. Refresh and choose a connected model.",
             );
         if (
@@ -168,7 +174,7 @@ export function useOrganizationRouting({
                     ),
             )
         )
-            throw new Error(
+            throw new RoutingSettingsError(
                 "A selected provider is unavailable. Reconnect it or choose another model.",
             );
         await createOrUpdateOrganizationParameter(

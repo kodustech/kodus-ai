@@ -16,7 +16,10 @@ import {
 } from "src/app/(app)/settings/_components/context";
 import { useCurrentConfigLevel } from "src/app/(app)/settings/_hooks";
 import { OverrideIndicator } from "src/app/(app)/settings/code-review/_components/override";
-import { routingModelLabels } from "src/features/ee/byok/_components/routing/routing-state";
+import {
+    indexRoutingModels,
+    routingModelLabels,
+} from "src/features/ee/byok/_components/routing/routing-state";
 import { ModelCombobox } from "src/features/ee/byok/_components/routing/task-override-grid";
 import { formatModelLabel } from "src/features/ee/byok/_data/model-label";
 
@@ -71,8 +74,7 @@ export const BYOKModelSelectorSection = ({
     const models = (llmConfigStatus?.models ?? []).filter(
         (model) => !model.managed,
     );
-    const modelFor = (id: string) =>
-        models.find((model) => model.modelId === id || model.model === id);
+    const modelFor = indexRoutingModels(models);
     const labels = routingModelLabels(models);
     const labelOf = (id: string) => {
         const model = modelFor(id);

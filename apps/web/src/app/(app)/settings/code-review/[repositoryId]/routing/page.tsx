@@ -27,7 +27,10 @@ import {
     useFormState,
     useWatch,
 } from "react-hook-form";
-import { useCodeReviewModelData } from "src/app/(app)/settings/_components/context";
+import {
+    useCodeReviewModelData,
+    useInitialTeamId,
+} from "src/app/(app)/settings/_components/context";
 import { useCodeReviewRouteParams } from "src/app/(app)/settings/_hooks";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
@@ -35,6 +38,7 @@ import { PerRepositoryPanel } from "src/features/ee/byok/_components/per-reposit
 import {
     hasRoutingProvider,
     routingHref,
+    RoutingSettingsError,
     routingStatusQueryKey,
 } from "src/features/ee/byok/_components/routing/routing-state";
 
@@ -146,7 +150,9 @@ function ModeRow({
 
 function RoutingSettings() {
     const { repositoryId, directoryId } = useCodeReviewRouteParams();
-    const { teamId } = useSelectedTeamId();
+    const { teamId: selectedTeamId } = useSelectedTeamId();
+    const initialTeamId = useInitialTeamId();
+    const teamId = selectedTeamId ?? initialTeamId;
     const router = useRouter();
     const queryClient = useQueryClient();
     const [saving, setSaving] = useState(false);
@@ -244,6 +250,7 @@ function RoutingSettings() {
     const save = async (data: CodeReviewFormType) => {
         let modelsSaved = false;
         let checkingSavedModels = false;
+        let providerDisconnected = false;
         setSaving(true);
         try {
             const freshStatus = await refreshStatus();
@@ -256,7 +263,9 @@ function RoutingSettings() {
                 return;
             }
             if (reviewDirty && !canEdit)
-                throw new Error("You cannot edit review settings.");
+                throw new RoutingSettingsError(
+                    "You cannot edit review settings.",
+                );
             const model = data.byokModelId?.value;
             const models = freshStatus.models;
             if (
@@ -273,24 +282,20 @@ function RoutingSettings() {
             if (modelsSaved) {
                 checkingSavedModels = true;
                 const savedStatus = await refreshStatus();
-                if (!hasRoutingProvider(savedStatus))
-                    throw new Error(
+                checkingSavedModels = false;
+                if (!hasRoutingProvider(savedStatus)) {
+                    providerDisconnected = true;
+                    throw new RoutingSettingsError(
                         "Connect an AI provider before changing routing.",
                     );
-                checkingSavedModels = false;
+                }
             }
             const result = reviewDirty
                 ? await saveSettings(data, {
                       prepare: (current) => {
                           const config = unformatConfig(current);
-                          const { byokModelId: _pin, ...withoutSyntheticPin } =
-                              current;
                           return {
-                              savedFormData:
-                                  !dirtyFields.byokModelId &&
-                                  !form.formState.defaultValues?.byokModelId
-                                      ? withoutSyntheticPin
-                                      : current,
+                              savedFormData: current,
                               codeReviewConfig: {
                                   reviewMode: config.reviewMode ?? "balanced",
                                   riskReviewRouting: config.riskReviewRouting,
@@ -302,6 +307,11 @@ function RoutingSettings() {
                       },
                   })
                 : undefined;
+            if (reviewDirty && !result?.centralizedPr) {
+                await queryClient.invalidateQueries({
+                    queryKey: ["routing-model-overrides", teamId],
+                });
+            }
             toast(
                 result?.centralizedPr
                     ? getCentralizedPrToastPayload(
@@ -316,12 +326,16 @@ function RoutingSettings() {
         } catch (error) {
             toast({
                 description: modelsSaved
-                    ? checkingSavedModels
+                    ? providerDisconnected
                         ? reviewDirty
-                            ? "Models saved. Could not verify provider status. Review settings are still unsaved."
-                            : "Models saved. Refresh provider status to continue."
-                        : "Models saved. Review settings could not be saved. Try again."
-                    : error instanceof Error
+                            ? "Models saved. Connect an AI provider to save review settings."
+                            : "Models saved. Connect an AI provider to continue."
+                        : checkingSavedModels
+                          ? reviewDirty
+                              ? "Models saved. Could not verify provider status. Review settings are still unsaved."
+                              : "Models saved. Refresh provider status to continue."
+                          : "Models saved. Review settings could not be saved. Try again."
+                    : error instanceof RoutingSettingsError
                       ? error.message
                       : "Could not save routing. Try again.",
                 variant: "danger",

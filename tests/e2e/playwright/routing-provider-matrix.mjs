@@ -45,7 +45,7 @@ function describe(config, changes = {}) {
         }, ...changes };
 }
 
-export async function testRoutingProviderMatrix({ page, context, settingsRequest, web, out, hydrated }) {
+export async function testRoutingProviderMatrix({ page, context, teamId, web, out, hydrated }) {
     const dir = `${out}/provider-matrix`;
     mkdirSync(dir, { recursive: true });
     const checks = [];
@@ -306,7 +306,7 @@ export async function testRoutingProviderMatrix({ page, context, settingsRequest
         await shot('legacy-redirect');
 
         await open(gateways); await hydrated(saveButton());
-        const scopesResponse = await context.request.get(`${web}/api/proxy/api/parameters/code-review-scopes?teamId=${encodeURIComponent(settingsRequest.body.organizationAndTeamData.teamId)}`);
+        const scopesResponse = await context.request.get(`${web}/api/proxy/api/parameters/code-review-scopes?teamId=${encodeURIComponent(teamId)}`);
         assert.ok(scopesResponse.ok(), 'The QA repository scopes must be available.');
         const scopesBody = await scopesResponse.json();
         const repository = (scopesBody.data ?? scopesBody).find((scope) => scope.id !== 'global');

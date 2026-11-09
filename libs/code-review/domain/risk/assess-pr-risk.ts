@@ -92,17 +92,10 @@ export async function assessPrRisk(
     }
     // Providers can omit large/binary patches while retaining the file and its
     // line counts. An absent patch must not turn a partial diff into a judgment.
-    // A pure rename has no textual patch; both paths still reach the assessor.
+    // Zero counters cannot prove a pure rename: adapters can default missing counts to zero.
     if (
         input.files.some(
-            (file) =>
-                (typeof file.patch !== 'string' || !file.patch.trim()) &&
-                !(
-                    file.status === 'renamed' &&
-                    file.previous_filename &&
-                    file.additions === 0 &&
-                    file.deletions === 0
-                ),
+            (file) => typeof file.patch !== 'string' || !file.patch.trim(),
         )
     ) {
         return unavailable('Kody could not verify the complete PR diff.');

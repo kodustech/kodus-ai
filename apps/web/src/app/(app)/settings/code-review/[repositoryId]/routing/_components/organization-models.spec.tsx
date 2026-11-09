@@ -393,7 +393,7 @@ it("keeps Heavy locked by plan while keeping its saved route intact", async () =
         "c",
     );
 });
-it("disables unsupported review picks before save and exposes the reason", async () => {
+it("disables unsupported review picks before save", async () => {
     status.models[2].capabilities = {
         structuredOutput: "none",
         toolCalling: "none",

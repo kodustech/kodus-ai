@@ -372,45 +372,6 @@ jobs:
                   } >> .env
                   chmod 600 .env
 
-            - name: Recover existing preview webhooks
-              if: steps.env.outputs.configured == 'true' && inputs.recover_webhooks
-              env:
-                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
-                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
-                  HEAD_REF: ${{ steps.target.outputs.branch }}
-                  PROFILES: ${{ steps.decide.outputs.profiles }}
-              run: |
-                  set -euo pipefail
-                  for profile in $PROFILES; do
-                    name=$($RUNO environments | jq -er --arg b "$HEAD_REF" --arg p "$profile" \
-                      '[.[] | select(.repo == "kodus-ai" and .branch == $b and .profile == $p)] | if length == 1 then .[0].envName else error("Expected one matching preview") end')
-                    $RUNO attach "$name"
-                    url=$($RUNO url --branch "$HEAD_REF" --profile "$profile" | head -n 1)
-                    case "$url" in
-                      https://*.sslip.io) webhook_url="https://webhooks.${url#https://}" ;;
-                      *) echo '::error::Webhook recovery requires an existing sslip.io preview'; exit 1 ;;
-                    esac
-                    # Print state and a known error category, never raw request logs.
-                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
-                      "docker inspect --format '{{.Name}} status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} restarts={{.RestartCount}}' kodus_webhooks"
-                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
-                      "docker logs --tail 250 kodus_webhooks 2>&1 | grep -q 'heap out of memory' && echo 'webhooks: heap exhaustion detected' || true"
-                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- 'docker restart kodus_webhooks'
-                    recovered=false
-                    for attempt in $(seq 1 60); do
-                      if curl --fail --silent --max-time 3 "$webhook_url/health/ready" >/dev/null; then
-                        recovered=true
-                        break
-                      fi
-                      sleep 5
-                    done
-                    if [ "$recovered" != true ]; then
-                      echo '::error::The preview webhook service did not recover'
-                      exit 1
-                    fi
-                    echo "Webhook readiness restored for $profile"
-                  done
-
             - name: Bring the environment up
               id: up
               if: steps.env.outputs.configured == 'true'
@@ -478,6 +439,45 @@ jobs:
                   done
                   echo "urls=${urls% }" >> "$GITHUB_OUTPUT"
 
+            - name: Recover existing preview webhooks
+              if: steps.up.outcome == 'success' && steps.env.outputs.configured == 'true' && inputs.recover_webhooks
+              env:
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
+                  PROFILES: ${{ steps.decide.outputs.profiles }}
+              run: |
+                  set -euo pipefail
+                  for profile in $PROFILES; do
+                    name=$($RUNO environments | jq -er --arg b "$HEAD_REF" --arg p "$profile" \
+                      '[.[] | select(.repo == "kodus-ai" and .branch == $b and .profile == $p)] | if length == 1 then .[0].envName else error("Expected one matching preview") end')
+                    $RUNO attach "$name"
+                    url=$($RUNO url --branch "$HEAD_REF" --profile "$profile" | head -n 1)
+                    case "$url" in
+                      https://*.sslip.io) webhook_url="https://webhooks.${url#https://}" ;;
+                      *) echo '::error::Webhook recovery requires an existing sslip.io preview'; exit 1 ;;
+                    esac
+                    # Print state and a known error category, never raw request logs.
+                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
+                      "docker inspect --format '{{.Name}} status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} restarts={{.RestartCount}}' kodus_webhooks"
+                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
+                      "docker logs --tail 250 kodus_webhooks 2>&1 | grep -q 'heap out of memory' && echo 'webhooks: heap exhaustion detected' || true"
+                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- 'docker restart kodus_webhooks'
+                    recovered=false
+                    for attempt in $(seq 1 60); do
+                      if curl --fail --silent --max-time 3 "$webhook_url/health/ready" >/dev/null; then
+                        recovered=true
+                        break
+                      fi
+                      sleep 5
+                    done
+                    if [ "$recovered" != true ]; then
+                      echo '::error::The preview webhook service did not recover'
+                      exit 1
+                    fi
+                    echo "Webhook readiness restored for $profile"
+                  done
+
             - name: Report container status
               if: always() && steps.env.outputs.configured == 'true'
               env:
@@ -542,7 +542,14 @@ jobs:
                     "PREVIEW_RISK_ROUTING_QA=true PREVIEW_SEED_EMAIL=$TEST_USER_EMAIL node scripts/preview/prepare-risk-routing-qa.cjs"
                   npm ci --prefix tests/e2e
                   (cd tests/e2e && npx playwright install --with-deps chromium)
-                  node tests/e2e/playwright/risk-routing.mjs
+                  $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                    "PREVIEW_RISK_ROUTING_QA=true PREVIEW_SEED_EMAIL=$TEST_USER_EMAIL PREVIEW_QA_SETTINGS_MODE=snapshot PREVIEW_QA_SNAPSHOT_KEY=${{ github.run_id }}${{ github.run_attempt }} node scripts/preview/prepare-risk-routing-qa.cjs"
+                  restore_ui_settings() {
+                    $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                      "PREVIEW_RISK_ROUTING_QA=true PREVIEW_SEED_EMAIL=$TEST_USER_EMAIL PREVIEW_QA_SETTINGS_MODE=restore PREVIEW_QA_SNAPSHOT_KEY=${{ github.run_id }}${{ github.run_attempt }} node scripts/preview/prepare-risk-routing-qa.cjs"
+                  }
+                  trap 'restore_ui_settings || exit 1' EXIT
+                  PREVIEW_QA_SETTINGS_SNAPSHOT=true node tests/e2e/playwright/risk-routing.mjs
 
             - name: Upload Risk and Routing UI evidence
               if: always() && inputs.risk_routing_smoke == true

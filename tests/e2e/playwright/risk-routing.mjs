@@ -473,6 +473,10 @@ try {
     ).toHaveCount(0);
     await toggle(approval, false);
     await save();
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.getByRole('heading', {name: 'General settings', exact: true}).waitFor();
+    await expect(page.getByRole('heading', {name: policyName, exact: true})).toHaveCount(0);
+    pass('Deleted approval policy stays deleted after save and reload');
     await openMenu('Risk assessment');
     const deleteCriterion = page.getByRole('button', {
         name: `Delete ${criterionName}`,
@@ -503,7 +507,7 @@ try {
         initialCaptures,
     });
     pass('Settings states are captured inside the complete application');
-    await testRoutingProviderMatrix({ page, context, settingsRequest, web: WEB, out: OUT, hydrated });
+    await testRoutingProviderMatrix({ page, context, teamId: settingsRequest.body.organizationAndTeamData.teamId, web: WEB, out: OUT, hydrated });
     pass('Provider HTTP fixture matrix passes in the full app without external model calls');
     assert.deepEqual(pageErrors, [], 'No uncaught app errors.');
 } catch (error) {

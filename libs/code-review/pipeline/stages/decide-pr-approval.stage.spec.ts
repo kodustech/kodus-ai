@@ -22,6 +22,7 @@ const stage = new DecidePrApprovalStage(
     codeManagement as unknown as CodeManagementService,
     areaMaps as unknown as CodeAreaRiskMapService,
     conditionalApprovalAccess as any,
+    { evaluate: jest.fn() } as any,
 );
 
 const context = (

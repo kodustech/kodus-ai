@@ -175,6 +175,14 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     > {
         try {
             const { organizationAndTeamData, configValue, repositoryId } = body;
+            if (
+                configValue.byokModelId !== undefined &&
+                configValue.byokModel
+            ) {
+                throw new BadRequestException(
+                    'Use byokModelId or byokModel, not both.',
+                );
+            }
             let directoryPath = body.directoryPath;
             let directoryId = body.directoryId;
             let previousFolders: Array<{ path: string }> | undefined;
@@ -1090,12 +1098,31 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 ? newDelta
                 : (codeReviewConfigs.configs ?? {});
         try {
-            resolveReviewSettings(defaults, globalDelta);
-            for (const childRepo of level === ConfigLevel.GLOBAL
-                ? (codeReviewConfigs.repositories ?? [])
-                : repository
-                  ? [repository]
-                  : []) {
+            resolveReviewSettings(
+                defaults,
+                globalDelta,
+                ...(level !== ConfigLevel.GLOBAL
+                    ? [
+                          level === ConfigLevel.REPOSITORY
+                              ? newDelta
+                              : (repository!.configs ?? {}),
+                      ]
+                    : []),
+                ...(level === ConfigLevel.DIRECTORY ? [newDelta] : []),
+            );
+            const approvalChanged =
+                actor?.source !== 'sync' &&
+                ['approvalPolicies', 'approvalLabels', 'approvalAuthors'].some(
+                    (key) =>
+                        JSON.stringify(oldConfig[key]) !==
+                        JSON.stringify(newDelta[key]),
+                );
+            const repositoriesToValidate = !approvalChanged
+                ? []
+                : level === ConfigLevel.GLOBAL
+                  ? (codeReviewConfigs.repositories ?? [])
+                  : [repository!];
+            for (const childRepo of repositoriesToValidate) {
                 const repoDelta =
                     level === ConfigLevel.REPOSITORY
                         ? newDelta

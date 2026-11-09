@@ -23,7 +23,7 @@ const input: AssessPrRiskInput = {
             status: 'renamed',
             additions: 0,
             deletions: 0,
-            patch: '',
+            patch: '@@ -0,0 +1 @@\n+export const renamed = true;',
         },
     ] as any,
 };
@@ -305,7 +305,7 @@ it.each([
     },
 );
 
-it('still assesses a pure rename without a textual patch', async () => {
+it('keeps a patch-less rename unknown even when normalized counters are zero', async () => {
     jest.mocked(LLM.run).mockResolvedValue({
         level: 'low',
         reason: 'The rename preserves behavior.',
@@ -313,10 +313,19 @@ it('still assesses a pure rename without a textual patch', async () => {
     expect(
         await assessPrRisk({
             ...input,
-            files: [{ ...input.files[0], patch: undefined }],
+            files: [
+                {
+                    ...input.files[0],
+                    status: 'renamed',
+                    previous_filename: 'old.ts',
+                    additions: 0,
+                    deletions: 0,
+                    patch: undefined,
+                },
+            ],
         }),
-    ).toMatchObject({ status: 'assessed', riskIdentified: false });
-    expect(LLM.run).toHaveBeenCalledTimes(1);
+    ).toMatchObject({ status: 'unavailable' });
+    expect(LLM.run).not.toHaveBeenCalled();
 });
 
 it('invalidates identity when guidance, model, history, PR data or the diff changes', () => {

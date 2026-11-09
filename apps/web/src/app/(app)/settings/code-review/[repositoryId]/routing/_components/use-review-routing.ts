@@ -7,6 +7,7 @@ import {
 } from "src/app/(app)/settings/_components/context";
 import {
     draftTaskModel,
+    indexRoutingModels,
     routingModelLabels,
 } from "src/features/ee/byok/_components/routing/routing-state";
 import { formatModelLabel } from "src/features/ee/byok/_data/model-label";
@@ -48,15 +49,15 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
         selectedScope !== undefined
             ? selectedScope
             : (config?.byokModelId?.value ?? config?.byokModel?.value);
+    const modelForId = indexRoutingModels(status?.models ?? []);
+    const labels = routingModelLabels(status?.models ?? []);
     const labelOf = (id?: string) => {
-        const model = status?.models.find(
-            (model) => model.modelId === id || model.model === id,
-        );
+        const model = modelForId(id);
         const name =
             model?.model ?? id ?? status?.byok.model ?? status?.env.model;
         if (model)
             return (
-                routingModelLabels(status?.models ?? []).get(model.modelId) ??
+                labels.get(model.modelId) ??
                 formatModelLabel(name ?? model.modelId)
             );
         return name ? formatModelLabel(name) : "Kodus default";
@@ -122,6 +123,10 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
         fallbackModel: status?.modelRouting?.fallbackModelId
             ? labelOf(status.modelRouting.fallbackModelId)
             : "None",
-        riskModel: labelOf(status?.modelRouting?.riskAssessment.modelId),
+        riskModel: status?.modelRouting?.riskAssessment.modelId
+            ? labelOf(status.modelRouting.riskAssessment.modelId)
+            : status?.env.model
+              ? formatModelLabel(status.env.model)
+              : "Kodus default",
     };
 }

@@ -149,6 +149,15 @@ it.each([{ byokModelId: 'pinned' }, { byokModel: 'gpt-4o-mini' }])(
         expect(cron.eligibility).toEqual(pipeline.eligibility);
         expect(LLM.run).not.toHaveBeenCalled();
         expect(permissions.gateKodusCreditsForSlot).not.toHaveBeenCalled();
+        const changed = await service().evaluate(
+            request({
+                config: { ...request().config, byokModelId: 'default' },
+                previousEligibility: pipeline.eligibility,
+            }),
+        );
+        expect(changed.decision.kind).toBe('approve');
+        expect(LLM.run).toHaveBeenCalledTimes(1);
+        expect(changed.eligibility).not.toEqual(pipeline.eligibility);
     },
 );
 

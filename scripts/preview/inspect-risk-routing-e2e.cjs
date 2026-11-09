@@ -1,31 +1,83 @@
 // Read-only evidence from the same databases the Runo worker writes.
-require('dotenv/config');
-require('ts-node/register/transpile-only');
-require('tsconfig-paths/register');
-const { Client } = require('pg');
-const {
-    mongoMigrationClient,
-} = require('../../libs/core/infrastructure/database/mongo/mongo-migration-client');
+const { createHash } = require('node:crypto');
+const hash = (value) =>
+    typeof value === 'string'
+        ? createHash('sha256').update(value).digest('hex')
+        : undefined;
+const oneOf = (value, allowed) => (allowed.includes(value) ? value : undefined);
+const id = (value) =>
+    typeof value === 'string' && /^[a-f0-9-]{8,64}$/i.test(value)
+        ? value
+        : undefined;
 
-const secretValues = Object.entries(process.env)
-    .filter(
-        ([key, value]) =>
-            /key|token|secret|password/i.test(key) && value?.length >= 8,
-    )
-    .map(([, value]) => value);
-const safeText = (value) => {
-    if (typeof value !== 'string') return undefined;
-    let text = value;
-    for (const secret of secretValues)
-        text = text.split(secret).join('[redacted]');
-    return text
-        .replace(/\b(Bearer|Basic)\s+[^\s,;]+/gi, '$1 [redacted]')
-        .replace(/([?&](?:token|key|api_key|code)=)[^\s&]+/gi, '$1[redacted]')
-        .replace(/\b(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]+\b/g, '[redacted]')
-        .slice(0, 1500);
-};
+// Evidence exports machine decisions and opaque identities, never model prose,
+// prompts, tool outputs, credential material or free-form error messages.
+function executionEvidence(row) {
+    if (!row) return null;
+    return {
+        uuid: id(row.uuid),
+        status: oneOf(row.status, [
+            'pending',
+            'in_progress',
+            'queued',
+            'success',
+            'error',
+            'partial_error',
+            'skipped',
+        ]),
+        createdAt: row.createdAt,
+        heavy: row.heavy === true,
+        risk: row.risk
+            ? {
+                  status: oneOf(row.risk.status, [
+                      'assessed',
+                      'unavailable',
+                      'disabled',
+                  ]),
+                  ...(typeof row.risk.riskIdentified === 'boolean'
+                      ? { riskIdentified: row.risk.riskIdentified }
+                      : {}),
+              }
+            : undefined,
+        decision: row.decision
+            ? {
+                  kind: oneOf(row.decision.kind, [
+                      'approve',
+                      'hold',
+                      'out-of-scope',
+                  ]),
+                  reviewedHeadSha: id(row.decision.reviewedHeadSha),
+              }
+            : undefined,
+        eligibility: Object.fromEntries(
+            Object.entries(row.eligibility ?? {}).map(([key, value]) => [
+                hash(key),
+                {
+                    key: hash(value.key),
+                    status: oneOf(value.status, [
+                        'eligible',
+                        'ineligible',
+                        'unavailable',
+                    ]),
+                },
+            ]),
+        ),
+        agentSkips: (row.agentSkips ?? []).map((skip) => ({
+            id: skip.id === 'qa-risk-watch' ? skip.id : hash(skip.id),
+            reason: 'Risk condition not met.',
+        })),
+    };
+}
 
 async function main() {
+    require('dotenv/config');
+    require('ts-node/register/transpile-only');
+    require('tsconfig-paths/register');
+    const { Client } = require('pg');
+    const {
+        mongoMigrationClient,
+    } = require('../../libs/core/infrastructure/database/mongo/mongo-migration-client');
+
     if (process.env.PREVIEW_RISK_ROUTING_QA !== 'true')
         throw new Error('Preview QA opt-in required');
     const [organizationId, repositoryId, number, since] = process.argv.slice(2);
@@ -84,11 +136,17 @@ async function main() {
                   )
               ).rows
             : [];
-        if (execution)
-            execution.errorMessage = safeText(execution.errorMessage);
-        for (const stage of stages) {
-            stage.message = safeText(stage.message);
-            stage.errorMessage = safeText(stage.errorMessage);
+        if (process.argv.includes('--approval-only')) {
+            console.log(
+                'RISK_E2E_JSON=' +
+                    JSON.stringify({
+                        execution: executionEvidence(execution),
+                        stages: [],
+                        agents: [],
+                        models: [],
+                    }),
+            );
+            return;
         }
         mongo = await mongoMigrationClient();
         const agents = await mongo.db
@@ -162,10 +220,6 @@ async function main() {
                             ? [
                                   { executionId: execution.uuid },
                                   { correlationId: execution.uuid },
-                                  {
-                                      'attributes.automationExecutionId':
-                                          execution.uuid,
-                                  },
                               ]
                             : []),
                     ],
@@ -187,19 +241,71 @@ async function main() {
             .sort({ timestamp: -1 })
             .limit(80)
             .toArray();
-        for (const log of logs) {
-            log.message = safeText(log.message);
-            if (log.error) log.error.message = safeText(log.error.message);
-        }
         console.log(
             'RISK_E2E_JSON=' +
                 JSON.stringify({
-                    execution,
-                    relatedExecutions,
-                    stages,
-                    agents,
-                    models,
-                    logs,
+                    execution: executionEvidence(execution),
+                    relatedExecutions: relatedExecutions.map((row) => ({
+                        uuid: id(row.uuid),
+                        status: oneOf(row.status, [
+                            'pending',
+                            'in_progress',
+                            'success',
+                            'error',
+                            'skipped',
+                        ]),
+                    })),
+                    stages: stages.map((stage) => ({
+                        name: /^[A-Za-z]+Stage$/.test(stage.name)
+                            ? stage.name
+                            : 'UnknownStage',
+                        status: oneOf(stage.status, [
+                            'success',
+                            'error',
+                            'skipped',
+                            'in_progress',
+                            'completed',
+                            'pending',
+                        ]),
+                    })),
+                    agents: agents.map((agent) => ({
+                        agentId:
+                            agent.agentId === 'qa-risk-watch'
+                                ? agent.agentId
+                                : hash(agent.agentId),
+                        status: oneOf(agent.status, [
+                            'ran',
+                            'skipped',
+                            'failed',
+                        ]),
+                    })),
+                    models: models.map((model) => ({
+                        task: oneOf(model.task, [
+                            'riskAssessment',
+                            'codeReview',
+                            'codeReviewHeavy',
+                            'customAgent',
+                            'prSummary',
+                            'businessValidation',
+                            'kodyRulesReview',
+                        ]),
+                        model: hash(model.model),
+                        runName: oneOf(model.runName, [
+                            'pr-risk-assessment',
+                            'approval-policy-eligibility',
+                        ]),
+                        calls: model.calls,
+                        tokens: model.tokens,
+                    })),
+                    logs: logs.map((log) => ({
+                        timestamp: log.timestamp,
+                        level: oneOf(log.level, [
+                            'info',
+                            'warn',
+                            'error',
+                            'debug',
+                        ]),
+                    })),
                 }),
         );
     } finally {
@@ -207,7 +313,9 @@ async function main() {
         if (mongo) await mongo.close();
     }
 }
-main().catch(() => {
-    console.error('Could not read scoped preview execution evidence');
-    process.exit(1);
-});
+module.exports = { executionEvidence };
+if (require.main === module)
+    main().catch(() => {
+        console.error('Could not read scoped preview execution evidence');
+        process.exit(1);
+    });

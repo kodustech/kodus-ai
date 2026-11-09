@@ -6,7 +6,13 @@ import {
     testBYOKModel,
     type LLMConfigStatus,
 } from "@services/organizationParameters/fetch";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+    act,
+    fireEvent,
+    render,
+    screen,
+    waitFor,
+} from "@testing-library/react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import type { ScopedCodeReviewConfig } from "src/app/(app)/settings/_components/code-review-config-scope";
 import {
@@ -419,7 +425,10 @@ describe("selected provider and credential identity", () => {
         fireEvent.click(
             await screen.findByRole("option", { name: "GPT Legacy" }),
         );
-        finish({ ok: true, verifiedBy: "probe" });
+        await act(async () => {
+            finish({ ok: true, verifiedBy: "probe" });
+            await Promise.resolve();
+        });
         await waitFor(() =>
             expect(formValues().byokModelId?.value).toBe("gpt-legacy"),
         );
@@ -469,4 +478,65 @@ describe("selected provider and credential identity", () => {
         );
         expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
+});
+
+it("does not probe an ambiguous legacy name and resolves an exact ID before another slot’s name", async () => {
+    modelData.llmConfigStatus.models = [
+        {
+            modelId: "one",
+            model: "shared",
+            credentialId: "c-one",
+            providerId: "openai_compatible",
+            resolvable: true,
+        },
+        {
+            modelId: "shared",
+            model: "another",
+            credentialId: "c-two",
+            providerId: "openai_compatible",
+            resolvable: true,
+        },
+        {
+            modelId: "three",
+            model: "shared",
+            credentialId: "c-three",
+            providerId: "openai_compatible",
+            resolvable: true,
+        },
+    ];
+    const view = render(
+        <Harness
+            config={scopedConfig({
+                byokModelId: {
+                    value: "shared",
+                    level: FormattedConfigLevel.REPOSITORY,
+                },
+            })}
+        />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Test model" }));
+    await waitFor(() =>
+        expect(testBYOKModel).toHaveBeenCalledWith({
+            provider: "openai_compatible",
+            model: "another",
+            credentialId: "c-two",
+        }),
+    );
+    view.unmount();
+    (testBYOKModel as jest.Mock).mockClear();
+    modelData.llmConfigStatus.models[1].modelId = "two";
+    render(
+        <Harness
+            config={scopedConfig({
+                byokModelId: {
+                    value: "shared",
+                    level: FormattedConfigLevel.REPOSITORY,
+                },
+            })}
+        />,
+    );
+    expect(
+        screen.queryByRole("button", { name: "Test model" }),
+    ).not.toBeInTheDocument();
+    expect(testBYOKModel).not.toHaveBeenCalled();
 });

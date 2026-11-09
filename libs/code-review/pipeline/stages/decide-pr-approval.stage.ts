@@ -43,7 +43,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         private readonly areaMaps: ICodeAreaRiskMapService,
         @Inject(CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN)
         private readonly conditionalApprovalAccess: IConditionalApprovalAccessService,
-        private readonly approvalPolicies?: ApprovalPoliciesService,
+        private readonly approvalPolicies: ApprovalPoliciesService,
     ) {
         super();
     }
@@ -66,30 +66,22 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
             return context;
         }
         if (config.approvalPolicies !== undefined) {
-            const result = this.approvalPolicies
-                ? await this.approvalPolicies.evaluate({
-                      organizationAndTeamData: context.organizationAndTeamData,
-                      repository: context.repository,
-                      pullRequest: context.pullRequest,
-                      config,
-                      platformType: context.platformType,
-                      reviewClean:
-                          (context.lineComments?.length ?? 0) === 0 &&
-                          (context.prLevelCommentResults?.length ?? 0) === 0 &&
-                          !hasBlockingFailure,
-                      risk: context.riskAssessment,
-                      fullPrFiles: context.fullPrFiles,
-                      heavy: context.heavy,
-                      previousEligibility:
-                          context.lastExecution?.approvalPolicyEligibility,
-                  })
-                : {
-                      decision: {
-                          kind: 'hold' as const,
-                          reason: 'Approval policies are unavailable.',
-                      },
-                      eligibility: {},
-                  };
+            const result = await this.approvalPolicies.evaluate({
+                organizationAndTeamData: context.organizationAndTeamData,
+                repository: context.repository,
+                pullRequest: context.pullRequest,
+                config,
+                platformType: context.platformType,
+                reviewClean:
+                    (context.lineComments?.length ?? 0) === 0 &&
+                    (context.prLevelCommentResults?.length ?? 0) === 0 &&
+                    !hasBlockingFailure,
+                risk: context.riskAssessment,
+                fullPrFiles: context.fullPrFiles,
+                heavy: context.heavy,
+                previousEligibility:
+                    context.lastExecution?.approvalPolicyEligibility,
+            });
             return this.updateContext(context, (draft) => {
                 draft.approvalDecision = result.decision;
                 draft.approvalPolicyEligibility = result.eligibility;

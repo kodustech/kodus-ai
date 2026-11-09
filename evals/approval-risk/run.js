@@ -34,6 +34,12 @@ const {
 } = require('../../libs/feature-gate/application/feature-gate.service.ts');
 const { LicenseService } = require('../../libs/ee/license/license.service.ts');
 const {
+    ApprovalPoliciesService,
+} = require('../../libs/code-review/pipeline/services/approval-policies.service.ts');
+const {
+    PermissionValidationService,
+} = require('../../libs/ee/shared/services/permissionValidation.service.ts');
+const {
     OrganizationService,
 } = require('../../libs/organization/infrastructure/adapters/services/organization.service.ts');
 const {
@@ -232,7 +238,20 @@ async function runCase(item, slot, withMap = true) {
         organizationService,
         licenseService,
     );
-    const stage = new DecidePrApprovalStage(host, maps, access);
+    const parameters = {
+        findByKey: async () => ({ configValue: route.storedConfig }),
+    };
+    const stage = new DecidePrApprovalStage(
+        host,
+        maps,
+        access,
+        new ApprovalPoliciesService(
+            host,
+            parameters,
+            access,
+            new PermissionValidationService(licenseService, parameters),
+        ),
+    );
     const context = {
         organizationAndTeamData: {
             organizationId,
