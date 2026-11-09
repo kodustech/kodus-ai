@@ -255,6 +255,12 @@ try {
         page.url().includes('/general'),
         'Direct Routing URL must return to General without a provider.',
     );
+    await page
+        .getByRole('heading', { name: 'Approval policies', exact: true })
+        .waitFor();
+    await hydrated(
+        page.getByRole('switch', { name: 'Show status feedback', exact: true }),
+    );
     mkdirSync(`${OUT}/app-states`, { recursive: true });
     await page.screenshot({
         path: `${OUT}/app-states/00-no-provider.png`,
