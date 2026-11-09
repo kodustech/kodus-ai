@@ -455,6 +455,12 @@ async function main() {
             args: ['evals/implementation-check/run.js', '--model=eval-fake', '--limit=3'],
         },
         {
+            name: 'reference-detection',
+            result: 'shared',
+            model: true,
+            args: ['evals/reference-detection/run.js', '--model=eval-fake'],
+        },
+        {
             name: 'reply-addressing',
             result: 'shared',
             model: true,

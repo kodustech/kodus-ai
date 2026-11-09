@@ -38,9 +38,11 @@ every PR.
 | P3 scope | Nothing is posted on a file outside the agent's globs | this eval: 3 checks (a real model), 3 dispatch checks; `custom-agent-scope.spec.ts`, `review-orchestrator.custom-agents.spec.ts` |
 | P4 explicit glob reaches an ignored file (#37) | An include glob with a literal segment whose last segment says more than `*` or `**` (`db/migrations/**/*.ts`, not `db/migrations/**`) reaches a file the team's ignorePaths set aside; a secret file (`.env*`, `*.pem`, `*.key`, ...) never | this eval: 2 flags, 1 control (a real model), 3 dispatch checks; `custom-agent-scope.spec.ts`, `review-orchestrator.custom-agents.spec.ts`, `fetch-changed-files.stage.spec.ts`, `agent-review.stage.custom-agents.spec.ts` |
 | P5 floor → cap → dedup | The agent's severity floor and comment limit apply before dedup, so a finding they drop never takes a native one with it | `agent-review.stage.custom-agents.spec.ts` |
-| P6 quote gate | A convention finding quotes only a guide linked to the agent or the agent's instructions | `convention-check.spec.ts` |
+| P6 quote gate | A convention finding quotes only a guide linked to the agent or the agent's instructions; one resting on a tool's output or on a record in a team system the agent reads (`Tracker issue IRR-12`) is checked as a bug instead (#2384) | `convention-check.spec.ts`, `convention-second-pass.spec.ts` |
 | P7 disabled | A disabled agent, or one a directory turns off with `enabled: false`, does not run | this eval: 1 dispatch check; `agent-review.stage.custom-agents.spec.ts`, `directory-custom-agents-cascade.spec.ts` |
 | P8 rules repository (#2329) | A guide linked from another repository (`owner/repo:path`) is read at that repository's configured ref or default branch, never one the PR controls, and a finding quoting it passes the quote gate however the model spells the path, when that names one linked guide. Such a guide is for custom agents only: the main review never reads it | `other-repository-knowledge.spec.ts`, `convention-check.other-repository.spec.ts`, `review-knowledge.spec.ts` |
+| P9 a finished run reads as finished (#2384) | An agent that delivered a whole result, in its first pass or in the synthesis rescue, is not reported as "ended without submitting a result"; one that ran out of steps or had its turn cut still is | `incomplete-and-unverified.spec.ts` |
+| P10 prose recovery takes `null` (#2384) | An answer that sets a recovery field to `null` is read as that field absent: one call, the findings kept | `finder.recovery-nulls.spec.ts` |
 
 A finding on a file outside the agent's files is also dropped by the mapper
 every agent shares (`finding-mapper.ts`, "relevantFile not in changedFiles";
@@ -80,6 +82,8 @@ clean after each one.
 | P8 | `P8-loose-citation-not-matched.patch`: a citation as `repo/path` or the bare path is no longer matched to the linked guide | `convention-check.other-repository.spec.ts` | red: 4 of 10 failed |
 | P8 | `P8-pinned-ref-ignored.patch`: a pinned branch or tag is ignored and the default branch is read | `other-repository-knowledge.spec.ts` | red: 2 of 23 failed |
 | P8 | `P8-main-review-reads-other-repository.patch`: a guide of another repository linked to the main review reaches the built-in agents | `review-knowledge.spec.ts` | red: 3 of 5 failed |
+| P9 | `P9-first-pass-only-result.patch`: only the first pass can deliver the result | `incomplete-and-unverified.spec.ts` | red: 2 of 30 failed, both rescue cases (2026-11-04, `fix/custom-agents-whole-run-result`) |
+| P10 | `P10-recovery-null-required.patch`: prose recovery requires the label key again | `finder.recovery-nulls.spec.ts` | red: 2 of 5 failed, a second call on both routes |
 
 P5 was not falsifiable at first: with the floor and cap moved after dedup, the
 stage spec stayed green (20 of 20). Its two ordering tests scripted the dedup
