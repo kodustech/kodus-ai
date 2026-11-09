@@ -71,7 +71,7 @@ export type ImplementationUnmeasuredReason =
     | 'invalid_output'
     /** The model answered for other suggestions but not this one. */
     | 'omitted'
-    /** The file's patch alone does not fit the model's context window. */
+    /** The file's prompt (its patch and what each suggestion asked) does not fit the model's context window. */
     | 'diff_too_large'
     /** Only the whole PR's diff (or no patch) was available, not the changes since the last review. */
     | 'diff_unavailable';
