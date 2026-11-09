@@ -29,8 +29,9 @@ const CWE_FAMILIES: Record<string, number[]> = {
     ssrf: [441, 918],
     query: [90, 91, 643],
     header: [93, 113],
-    authentication: [287, 306, 307],
-    access: [284, 285, 566, 639, 862, 863, 915],
+    // A missing login check and a missing permission check on one route are
+    // one gap to the developer, whichever of the two a model names.
+    access: [284, 285, 287, 306, 307, 566, 639, 862, 863, 915],
     secret: [259, 321, 547, 798],
     password: [256, 257, 261, 312, 916],
     crypto: [326, 327, 328, 330, 331, 337, 338],
@@ -42,6 +43,8 @@ const CWE_FAMILIES: Record<string, number[]> = {
     debug: [11, 16, 489, 693],
     cors: [346, 942],
 };
+
+const APP_WIDE_FAMILIES = new Set(['csrf', 'cookie', 'debug', 'cors']);
 
 const FAMILY_OF = new Map<number, string>(
     Object.entries(CWE_FAMILIES).flatMap(([family, ids]) =>
@@ -67,12 +70,16 @@ export function cweFamily(cwe?: string): string {
  * family is part of it, so two kinds of bug in one function are two issues.
  */
 export function computeScanFingerprint(input: ScanFingerprintInput): string {
+    const family = cweFamily(input.cwe);
+    // A setting the whole app shares (CSRF off, cookie flags, debug, CORS) is
+    // one issue for the repository, not one per route that inherits it.
+    const appWide = APP_WIDE_FAMILIES.has(family);
     const parts = [
         input.repositoryId,
         input.vulnerabilityClass.trim().toLowerCase(),
-        normalizeScanPath(input.filePath),
-        (input.symbol ?? '').trim(),
-        cweFamily(input.cwe),
+        appWide ? '' : normalizeScanPath(input.filePath),
+        appWide ? '' : (input.symbol ?? '').trim(),
+        family,
     ];
 
     return createHash('sha256').update(parts.join('\u0000')).digest('hex');
