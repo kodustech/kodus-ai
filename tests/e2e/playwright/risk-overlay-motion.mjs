@@ -22,11 +22,13 @@ export async function comparePolicyOverlayMotion({ page, out, open, close }) {
         for (const previous of [true, false, false, true]) {
             // Reproduce the former blur, shadow, transition and compositing hint. Content,
             // app build, browser, CPU throttle and interactions stay identical.
+            // Compiled state-specific duration-500 sets both animation and transition;
+            // the current base duration-200 loses to state animate-in (150ms).
             const style = previous
                 ? await page.addStyleTag({
                       content: `
                 [data-slot="sheet-overlay"] { backdrop-filter: blur(4px) !important; }
-                [data-slot="sheet-content"] { animation-duration: 150ms !important; transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, translate, scale, rotate, filter, backdrop-filter !important; transition-duration: 500ms !important; transition-timing-function: ease-in-out !important; animation-timing-function: ease-in-out !important; will-change: auto !important; box-shadow: -24px 0 32px rgba(0,0,0,.5) !important; }
+                [data-slot="sheet-content"] { animation-duration: 500ms !important; transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, translate, scale, rotate, filter, backdrop-filter !important; transition-duration: 500ms !important; transition-timing-function: ease-in-out !important; animation-timing-function: ease-in-out !important; will-change: auto !important; box-shadow: -24px 0 32px rgba(0,0,0,.5) !important; }
             `,
                   })
                 : null;

@@ -261,6 +261,12 @@ try {
     await hydrated(
         page.getByRole('switch', { name: 'Show status feedback', exact: true }),
     );
+    await hydrated(
+        page.getByRole('switch', {
+            name: 'Request changes on critical issues',
+            exact: true,
+        }),
+    );
     mkdirSync(`${OUT}/app-states`, { recursive: true });
     await page.screenshot({
         path: `${OUT}/app-states/00-no-provider.png`,
