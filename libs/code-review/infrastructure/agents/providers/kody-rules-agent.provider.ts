@@ -356,13 +356,18 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // uuid and references (#2508). Best-effort: any failure leaves the
             // rule judged on its text alone.
             const rulesForJudge = judgeRules;
-            const references = mergeRuleReferences(
-                await loadRuleSourceReferences(
+            const loaded = await Promise.allSettled([
+                loadRuleSourceReferences(
                     judgeRules,
                     input.remoteCommands?.read?.bind(input.remoteCommands),
                     this.shardLogger,
                 ),
-                await this.loadContextOsReferences(judgeRules, input),
+                this.loadContextOsReferences(judgeRules, input),
+            ]);
+            const references = mergeRuleReferences(
+                ...loaded.map((result) =>
+                    result.status === 'fulfilled' ? result.value : new Map(),
+                ),
             );
 
             // ── issue #1826, step 1: the file shard carries its file whole ──
