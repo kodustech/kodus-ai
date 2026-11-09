@@ -273,7 +273,14 @@ try {
         url: page.url(),
     });
     await page.setViewportSize({ width: 390, height: 844 });
+    // The sidebar follows matchMedia after React processes the resize.
+    // A visible button can still be clipped by the previous desktop layout.
+    await expect.poll(async () => (await page.locator('aside').boundingBox())?.width ?? Infinity).toBeLessThanOrEqual(64);
     await expect(page.getByRole('link', { name: 'Connect AI provider', exact: true })).toBeVisible();
+    const connectButton = page.getByRole('link', { name: 'Connect AI provider', exact: true });
+    await expect(connectButton).toBeInViewport({ ratio: 1 });
+    const connectBounds = await connectButton.boundingBox();
+    assert.ok(connectBounds && connectBounds.x >= 0 && connectBounds.x + connectBounds.width <= 390, 'The full provider action must fit the mobile viewport.');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Locked Routing must fit a mobile viewport.');
     await page.screenshot({ path: `${OUT}/app-states/00b-no-provider-mobile.png`, fullPage: true });
     initialCaptures.push({
