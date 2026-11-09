@@ -43,6 +43,12 @@ import type { RetrievedSlice } from '@libs/code-review/infrastructure/agents/col
 import { needOf } from '@libs/code-review/infrastructure/agents/collaborators/rule-context.retriever';
 import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
+import {
+    buildReferenceSection,
+    type LoadedRuleReference,
+    type ReferenceSection,
+    type RuleReferenceIndex,
+} from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-references';
 // Value import, and safe: finder.agent.ts imports nothing from this module.
 
 /**
@@ -351,7 +357,16 @@ export interface ShardedJudgeInput {
     /** Errored shards degrade to zero findings; log WHY so a systemic
      *  failure (e.g. a provider rejecting the response schema) is visible
      *  in the worker logs instead of only as an `N errored` counter. */
-    logger?: { warn: (entry: any) => void };
+    logger?: { warn: (entry: any) => void; log?: (entry: any) => void };
+    /**
+     * The files each rule points at, keyed by rule uuid (issue #2508). Every
+     * shard prints them once, in a `<References>` block its rules link to by
+     * id, however many atoms of one rule the shard carries.
+     *
+     * Absent, or no entry for any rule in a shard, leaves that shard's prompts
+     * byte-identical to before this existed.
+     */
+    references?: RuleReferenceIndex;
     /**
      * Human-readable language label (e.g. "Portuguese (Brazil)"), already
      * resolved via `resolveLanguageLabel` in prompt-builder.ts — the SAME
@@ -442,10 +457,28 @@ Rules of engagement:
 
 export const SHARD_PR_SYSTEM_PROMPT = `You evaluate PULL-REQUEST-level team rules against a PR: its title, description, the list of changed files, and the FULL DIFF of every changed file. Judge the PR as a whole — cross-file conditions (e.g. "one migration = one logical change", "index added to a table that already existed before this PR") are exactly what these rules are about, so reason across the whole diff. Identify each violated rule by its number — the [n] shown before each rule — and put that number in "ruleId"; never invent one. Return only real violations. If a <PreviousReviewDecisions> block is present: do not flag the reverse of an entry whose outcome is "implemented"/"partially_implemented" — unless the diff shows concrete evidence that specific decision was reverted or is still wrong. Report every violation you see, also one an entry already flagged: a later step compares your findings with those entries and drops what is already on the pull request.`;
 
-function ruleBlock(rules: Array<Partial<IKodyRule>>): string {
+/**
+ * Appended to a shard's system prompt only when its rules link to a
+ * `<References>` block, so a shard without references keeps the same system
+ * prompt.
+ */
+export const SHARD_REFERENCES_SYSTEM_LINE = `A rule may list "references:" ids. Each id names an entry in the <References> block: the file that rule points at, the authoritative convention to judge that rule by. A reference is NOT part of the pull request; never report a violation located in it.`;
+
+function withReferencesLine(system: string, section: ReferenceSection) {
+    return section.lines.length
+        ? `${system}\n${SHARD_REFERENCES_SYSTEM_LINE}`
+        : system;
+}
+
+function ruleBlock(
+    rules: Array<Partial<IKodyRule>>,
+    referenceIds?: string[][],
+): string {
     return rules
         .map((r, i) => {
             const parts = [`[${i + 1}] ${r.title}`, `  description: ${r.rule}`];
+            const ids = referenceIds?.[i];
+            if (ids?.length) parts.push(`  references: ${ids.join(', ')}`);
             if (r.examples?.length) {
                 parts.push(`  examples:`);
                 for (const ex of r.examples) {
@@ -733,6 +766,7 @@ function fileShardUser(
     fileContents?: Map<string, string>,
     previousDecisions?: PrDecisionRecord[],
     ruleTitleByUuid?: ReadonlyMap<string, string>,
+    referenceSection?: ReferenceSection,
 ): string {
     const diff = (file as any).patchWithLinesStr ?? file.patch ?? '';
     // The PR's whole history (capped upstream at MAX_PR_DECISIONS), not only
@@ -745,9 +779,10 @@ function fileShardUser(
     );
     return [
         `<Rules>`,
-        ruleBlock(rules),
+        ruleBlock(rules, referenceSection?.idsByRule),
         `</Rules>`,
         ``,
+        ...(referenceSection?.lines ?? []),
         ...intentLines(prTitle, prBody),
         // The whole file BEFORE the diff: the reader needs the world before
         // the change to it.
@@ -817,6 +852,7 @@ function prShardUser(
     languageLabel?: string | null,
     previousDecisions?: PrDecisionRecord[],
     ruleTitleByUuid?: ReadonlyMap<string, string>,
+    referenceSection?: ReferenceSection,
 ): string {
     // Full list — file-level AND PR-level — since this shard reasons across
     // the whole PR anyway, unlike the per-file shard's file-scoped filter.
@@ -845,9 +881,10 @@ function prShardUser(
     }
     return [
         `<Rules>`,
-        ruleBlock(rules),
+        ruleBlock(rules, referenceSection?.idsByRule),
         `</Rules>`,
         ``,
+        ...(referenceSection?.lines ?? []),
         `<PR title=${JSON.stringify(prTitle || '')}>`,
         `Description: ${prBody ? prBody.slice(0, 1000) : '(empty)'}`,
         `Changed files (${files.length}):`,
@@ -978,137 +1015,14 @@ async function mapLimit<T, R>(
 }
 
 /**
- * T2 reference-inline (pure): for each rule that points at a repo file
- * (`sourcePath`), fetch that file via the injected `read` and append its
- * content to the rule text so the judge sees the full convention. Deterministic
- * (code follows `sourcePath`; the model never decides what to open). Missing
- * file / read error / no sandbox all degrade to the rule text alone — never
- * worse than not having the reference. Extracted here (not on the provider) so
- * it is unit-testable without the provider's heavy import graph.
- *
- * NOTE: this handles `sourcePath` only (the rule's own source file, IDE-sync /
- * centralized-config). The `@file:` citations authors write in the rule BODY
- * are resolved through the Context OS (`contextReferenceId`) — see
- * `inlineLoadedReferences`.
- */
-export async function inlineRuleReferences(
-    rules: Array<Partial<IKodyRule>>,
-    read:
-        | ((path: string, start: number, end: number) => Promise<string>)
-        | undefined,
-    logger?: { warn: (entry: any) => void },
-    maxRefChars = 6000,
-): Promise<Array<Partial<IKodyRule>>> {
-    if (!read) return rules;
-    return Promise.all(
-        rules.map(async (rule) => {
-            const sourcePath = rule.sourcePath?.trim();
-            if (!sourcePath) return rule;
-            try {
-                const content = await read(sourcePath, 1, 100000);
-                if (!content || content.trim().length === 0) return rule;
-                const anchor = rule.sourceAnchor
-                    ? ` (section: ${rule.sourceAnchor})`
-                    : '';
-                return {
-                    ...rule,
-                    rule: `${rule.rule}\n\n[Authoritative convention referenced by this rule — from \`${sourcePath}\`${anchor}]:\n${content.slice(0, maxRefChars)}`,
-                };
-            } catch (err) {
-                logger?.warn({
-                    message: `kody-rules reference load failed for ${sourcePath} (rule ${rule.uuid}); judging without it`,
-                    // context required or SimpleLogger.shouldSkipLog drops it
-                    context: 'kody-rules-sharded',
-                    metadata: { ruleUuid: rule.uuid, sourcePath, err },
-                });
-                return rule;
-            }
-        }),
-    );
-}
-
-/** One resolved reference from the Context OS (shape from `LoadedReference`). */
-export interface LoadedRuleReference {
-    filePath?: string;
-    content?: string;
-    description?: string;
-}
-
-/**
- * Inline references resolved from the Context OS into the rule text. Pure.
- *
- * `referencesMap` (rule uuid -> resolved references WITH content) comes from
- * `ExternalReferenceLoaderService.loadReferencesForRules` — the SAME resolver
- * the PR-level path uses — which follows each rule's `contextReferenceId` and
- * fetches the file content (same or cross repo, via `getRepositoryContentFile`).
- *
- * This is the current-architecture path: `@file:` citations are stored as a
- * `contextReferenceId` on the rule ("context-os-only"), NOT as an inline
- * `externalReferences` array, and the code-review path reads rules raw (no UI
- * enrichment). So the sharded judge saw the bare "@file:X" marker and judged
- * blind — the root cause of the recall miss. With the loaded content appended,
- * the judge sees the authoritative convention instead of the marker.
- *
- * Empty/absent map entries and empty content degrade to the rule text alone.
- * `maxRefChars` bounds the TOTAL appended text PER RULE (not per reference) —
- * the augmented rule is re-embedded in every shard, so the budget caps the
- * token multiplication across changed files.
- */
-export function inlineLoadedReferences(
-    rules: Array<Partial<IKodyRule>>,
-    referencesMap: Map<string, LoadedRuleReference[]> | undefined,
-    logger?: { warn: (entry: any) => void; log?: (entry: any) => void },
-    maxRefChars = 6000,
-): Array<Partial<IKodyRule>> {
-    if (!referencesMap || referencesMap.size === 0) return rules;
-    return rules.map((rule) => {
-        const refs = rule.uuid ? referencesMap.get(rule.uuid) : undefined;
-        if (!refs || refs.length === 0) return rule;
-
-        let augmented = rule.rule ?? '';
-        const baseLen = (rule.rule ?? '').length;
-        const inlined: string[] = [];
-        for (const ref of refs) {
-            const content = ref?.content;
-            if (!content || content.trim().length === 0) continue;
-            // Per-rule TOTAL budget, not per-ref: this augmented text is
-            // re-embedded into EVERY file shard's rule block (and the PR shard's,
-            // which only budgets diffs), so an unbounded rule multiplies the LLM
-            // input by the changed-file count and can overflow the context /
-            // fail every shard. Stop once the appended text hits maxRefChars.
-            const remaining = maxRefChars - (augmented.length - baseLen);
-            if (remaining <= 0) break;
-            const filePath = ref?.filePath?.trim() || 'referenced file';
-            augmented += `\n\n[Authoritative convention referenced by this rule — from \`${filePath}\`]:\n${content.slice(0, remaining)}`;
-            inlined.push(filePath);
-        }
-        if (inlined.length === 0) return rule;
-
-        // Success is otherwise silent; log it so a reference actually reaching
-        // the shard prompt is visible in the worker logs.
-        logger?.log?.({
-            message: `[kody-rules-shard] inlined ${inlined.length} reference file(s) for rule ${rule.uuid}: ${inlined.join(', ')}`,
-            context: 'kody-rules-sharded',
-            metadata: {
-                ruleUuid: rule.uuid,
-                ruleTitle: rule.title,
-                inlinedRefs: inlined,
-                addedChars: augmented.length - (rule.rule ?? '').length,
-            },
-        });
-        return { ...rule, rule: augmented };
-    });
-}
-
-/**
  * Rules that declare a `contextReferenceId` but for which the loader resolved
  * nothing usable — the file citation failed to resolve (fetch error, missing
  * branch, a reference that no longer exists) OR resolved only empty/whitespace
  * content. The judge runs these WITHOUT their referenced file, so callers
  * should surface it: otherwise the judge-blind degradation is silent, since
- * `inlineLoadedReferences` logs only on success.
+ * `collectLoadedReferences` logs only on success.
  *
- * "Resolved" here MUST match what `inlineLoadedReferences` actually inlines
+ * "Resolved" here MUST match what `collectLoadedReferences` actually keeps
  * (`content.trim()` non-empty) — a map entry can exist yet hold only whitespace
  * (a whitespace-only reference file passes the loader's `typeof === 'string'`
  * guard), which inlines nothing. Checking only `map.has(uuid)` would miss that.
@@ -1288,6 +1202,7 @@ export async function judgeKodyRulesSharded(
         unmetRules,
         fileContents,
         previousDecisions,
+        references,
     } = input;
     const concurrency = input.concurrency ?? SHARD_CONCURRENCY_DEFAULT;
 
@@ -1315,6 +1230,22 @@ export async function judgeKodyRulesSharded(
     let shardsRun = 0;
     let shardsErrored = 0;
     const violations: ShardViolation[] = [];
+    const referenceStats = {
+        shards: 0,
+        entries: 0,
+        chars: 0,
+        perUnitCopies: 0,
+    };
+    const referenceSectionFor = (rulesInShard: Array<Partial<IKodyRule>>) => {
+        const section = buildReferenceSection(rulesInShard, references);
+        if (section.lines.length) {
+            referenceStats.shards++;
+            referenceStats.entries += section.stats.entries;
+            referenceStats.chars += section.stats.chars;
+            referenceStats.perUnitCopies += section.stats.perUnitCopies;
+        }
+        return section;
+    };
 
     // ── file-scope shards: one per changed file that has applicable rules ────
     const fileShards = changedFiles
@@ -1335,9 +1266,13 @@ export async function judgeKodyRulesSharded(
             // maps to applicable[N-1]); keep '' holes rather than filtering so
             // the indices don't shift.
             const ruleUuids = applicable.map((r) => r.uuid ?? '');
+            const referenceSection = referenceSectionFor(applicable);
             try {
                 const vs = await runJudge({
-                    system: SHARD_SYSTEM_PROMPT,
+                    system: withReferencesLine(
+                        SHARD_SYSTEM_PROMPT,
+                        referenceSection,
+                    ),
                     user: fileShardUser(
                         file,
                         applicable,
@@ -1349,6 +1284,7 @@ export async function judgeKodyRulesSharded(
                         fileContents,
                         previousDecisions,
                         ruleTitleByUuid,
+                        referenceSection,
                     ),
                     filename: file.filename,
                     ruleUuids,
@@ -1406,9 +1342,13 @@ export async function judgeKodyRulesSharded(
     if (prRules.length > 0) {
         shardsRun++;
         const ruleUuids = prRules.map((r) => r.uuid ?? '');
+        const referenceSection = referenceSectionFor(prRules);
         try {
             const vs = await runJudge({
-                system: SHARD_PR_SYSTEM_PROMPT,
+                system: withReferencesLine(
+                    SHARD_PR_SYSTEM_PROMPT,
+                    referenceSection,
+                ),
                 user: prShardUser(
                     changedFiles,
                     prRules,
@@ -1417,6 +1357,7 @@ export async function judgeKodyRulesSharded(
                     languageLabel,
                     previousDecisions,
                     ruleTitleByUuid,
+                    referenceSection,
                 ),
                 filename: null,
                 ruleUuids,
@@ -1432,6 +1373,14 @@ export async function judgeKodyRulesSharded(
                 metadata: { err },
             });
         }
+    }
+
+    if (referenceStats.shards > 0) {
+        logger?.log?.({
+            message: `[kody-rules-shard] printed ${referenceStats.entries} reference file(s) across ${referenceStats.shards} shard(s); per-rule inlining would have printed ${referenceStats.perUnitCopies}`,
+            context: 'kody-rules-sharded',
+            metadata: referenceStats,
+        });
     }
 
     return { violations, shardsRun, shardsErrored };
