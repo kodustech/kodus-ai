@@ -156,6 +156,7 @@ const FINDER_PATH = 'code-review/infrastructure/agents/core/finder.agent.ts';
 const VERIFY_PASS_PATH = 'agent-harness/infrastructure/orchestration/verification-pass.ts';
 const FORMATTER_PATH = 'code-review/infrastructure/agents/engine/format-and-shape-suggestions.ts';
 const HEAVY_PASSES_PATH = 'ee/heavy-mode/heavy-lens-passes.ts';
+const BUG_HISTORY_PATH = 'ee/heavy-mode/bug-history.ts';
 const CONSUMERS = ['code-review/infrastructure/agents/core/core-agent-loop.adapter.ts', 'code-review/pipeline/stages/agent-review.stage.ts'];
 const finderRun = new AsyncLocalStorage();
 let finderObserved = false;
@@ -189,6 +190,21 @@ function observeFinderPasses() {
         return;
     }
     const { inStage } = require('./eval-kit');
+
+    // RECALL_BUG_HISTORY=<file>: the bug-history pass gets, for the case under
+    // review, the past bugs of its repository created before the PR opened and
+    // not by the PR itself ({ cases: { caseId: { pr, opened } }, pool: [...] }).
+    if (process.env.RECALL_BUG_HISTORY) {
+        const history = JSON.parse(require('fs').readFileSync(process.env.RECALL_BUG_HISTORY, 'utf8'));
+        swapExports(BUG_HISTORY_PATH, () => ({
+            pastBugsFor: () => {
+                const caseId = global.__EVAL_CASE_ALS?.getStore()?.caseId;
+                const at = history.cases[caseId];
+                if (!at) throw new Error(`RECALL_BUG_HISTORY has no entry for ${caseId}`);
+                return history.pool.filter((b) => b.pr !== at.pr && b.createdAt < at.opened);
+            },
+        }));
+    }
 
     swapExports(VERIFY_PASS_PATH, (real) => ({
         runVerificationPass: async (args, ctx) => {

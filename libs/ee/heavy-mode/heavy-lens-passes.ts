@@ -42,6 +42,7 @@ import {
     buildRunSnippetTool,
     gapAgentMaxSteps,
 } from './gap-agents';
+import { bugHistoryLens, pastBugsFor, selectPastBugs } from './bug-history';
 import {
     HEAVY_LENS_MAX_FINDINGS,
     HEAVY_LENS_MAX_STEPS,
@@ -136,7 +137,45 @@ export function buildHeavyLensPasses(
             providerOptions: env.providerOptions,
             acceptsRevisions: !!input.previousDecisions?.length,
         }),
-    })), ...buildGapAgentPasses(env, lensDiff)];
+    })), ...buildGapAgentPasses(env, lensDiff), ...buildBugHistoryPasses(env, lensDiff)];
+}
+
+/**
+ * The bug-history experiment (bug-history.ts): the past bugs closest to this
+ * diff, once with their full text and once with the one-sentence summary, as
+ * two passes so one run measures both. None when the repository has no
+ * history.
+ */
+function buildBugHistoryPasses(env: HeavyLensEnvironment, lensDiff: string): HeavyLensPass[] {
+    const { input } = env;
+    if (input.allowedLabels && !input.allowedLabels.includes('bug')) return [];
+    const bugs = selectPastBugs(pastBugsFor(input), lensDiff);
+    if (!bugs.length) return [];
+    const maxSteps = gapAgentMaxSteps((input.changedFiles ?? []).length);
+    return (['full', 'summary'] as const).map((format) => {
+        const lens = bugHistoryLens(bugs, format);
+        return {
+            label: `lens-${lens.id}`,
+            findingLabel: lens.label,
+            maxFindings: GAP_AGENT_MAX_FINDINGS,
+            prompt: buildHeavyLensPrompt(lens, lensDiff, env.claudeWording, env.isSelfContained, input.lensBatch),
+            spec: buildFinderAgentSpec({
+                systemPrompt: env.isSelfContained ? HEAVY_LENS_SELF_CONTAINED_SYSTEM_PROMPT : HEAVY_LENS_SYSTEM_PROMPT,
+                modelId: env.modelId,
+                fallbackModelId: env.fallbackModelId,
+                usageRunName: input.usageRunName,
+                agentName: input.agentName,
+                tools: env.tools,
+                labels: [lens.label],
+                compressor: env.contextWindowTokens
+                    ? new ContextWindowCompressor(env.contextWindowTokens, { overheadTokens: env.overheadTokens })
+                    : undefined,
+                maxSteps,
+                providerOptions: env.providerOptions,
+                acceptsRevisions: !!input.previousDecisions?.length,
+            }),
+        };
+    });
 }
 
 /**
