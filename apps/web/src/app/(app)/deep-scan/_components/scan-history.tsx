@@ -44,7 +44,7 @@ export const ScanHistory = ({ scans }: { scans: SecurityScan[] }) => {
     if (scans.length === 0) return null;
 
     return (
-        <Collapsible className="border-card-lv3/60 bg-card-lv1 shrink-0 rounded-xl border">
+        <Collapsible className="border-card-lv3/60 bg-card-lv1 rounded-xl border">
             <CollapsibleTrigger asChild>
                 <button
                     type="button"
@@ -58,7 +58,7 @@ export const ScanHistory = ({ scans }: { scans: SecurityScan[] }) => {
             </CollapsibleTrigger>
 
             <CollapsibleContent className="pb-0">
-                <ul className="divide-card-lv3/60 border-card-lv3/60 max-h-72 divide-y overflow-y-auto border-t">
+                <ul className="divide-card-lv3/60 border-card-lv3/60 divide-y border-t">
                     {scans.map((scan) => (
                         <li
                             key={scan.uuid}

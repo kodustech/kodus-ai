@@ -63,7 +63,7 @@ export const FindingsList = ({
             .filter((f) => value === "all" || f.status === value).length;
 
     return (
-        <section className="flex min-h-0 flex-col gap-3">
+        <section className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-base font-semibold">Findings</h2>
 
@@ -91,7 +91,7 @@ export const FindingsList = ({
                 </div>
             </div>
 
-            <div className="border-card-lv3/60 bg-card-lv1 min-h-0 overflow-y-auto rounded-xl border">
+            <div className="border-card-lv3/60 bg-card-lv1 overflow-hidden rounded-xl border">
                 {loading ? (
                     <p className="text-text-secondary px-4 py-6 text-sm">
                         Loading findings…

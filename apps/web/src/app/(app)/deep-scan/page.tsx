@@ -55,7 +55,7 @@ export default function DeepScanPage() {
     );
 
     return (
-        <Page.Root className="overflow-hidden pb-0">
+        <Page.Root>
             <Page.Header>
                 <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2">
@@ -79,7 +79,7 @@ export default function DeepScanPage() {
                 <RunSecurityScanButton />
             </Page.Header>
 
-            <Page.Content className="min-h-0 gap-5">
+            <Page.Content>
                 <ScanStatusBanner scans={scans} />
 
                 <SeveritySummary
