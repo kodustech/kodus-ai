@@ -1,7 +1,6 @@
 import {
     BadRequestException,
     ConflictException,
-    ForbiddenException,
     Inject,
     Injectable,
     NotFoundException,
@@ -20,14 +19,6 @@ import {
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 import { HandlerType } from '@libs/core/workflow/domain/enums/handler-type.enum';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
-import {
-    ILicenseService,
-    LICENSE_SERVICE_TOKEN,
-} from '@libs/ee/license/interfaces/license.interface';
-import {
-    heavyModePlansRequired,
-    isHeavyModePlanAllowed,
-} from '@libs/ee/heavy-mode/heavy-mode-plan';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { PricingResolver } from '@libs/analytics/application/use-cases/usage/pricing-resolver';
@@ -45,11 +36,6 @@ import {
     ISecurityScanRepository,
     SECURITY_SCAN_REPOSITORY_TOKEN,
 } from '../infrastructure/security-scan.repository';
-
-/** Same plans as heavy mode until Product decides the security tier (#2451). */
-export const SECURITY_SCAN_PLAN_REQUIRED = heavyModePlansRequired(
-    'Security scans are',
-);
 
 const ALREADY_RUNNING =
     'A security scan of this repository is already running.';
@@ -78,25 +64,15 @@ export class StartSecurityScanUseCase {
         private readonly jobQueue: IJobQueueService,
         @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
         private readonly integrationConfigService: IIntegrationConfigService,
-        @Inject(LICENSE_SERVICE_TOKEN)
-        private readonly licenseService: ILicenseService,
         private readonly permissionValidationService: PermissionValidationService,
         private readonly codeManagementService: CodeManagementService,
         private readonly pricingResolver: PricingResolver,
         private readonly spendLimitConfig: SpendLimitConfigService,
     ) {}
 
+    /** Open to every plan, free included, while the scan is in beta (#2451). */
     async execute(input: StartSecurityScanInput): Promise<SecurityScanRecord> {
         const orgTeam = input.organizationAndTeamData;
-
-        const allowed = await isHeavyModePlanAllowed(
-            this.licenseService,
-            orgTeam,
-            StartSecurityScanUseCase.name,
-        );
-        if (!allowed) {
-            throw new ForbiddenException(SECURITY_SCAN_PLAN_REQUIRED);
-        }
 
         const repositories =
             (await this.integrationConfigService.findIntegrationConfigFormatted<

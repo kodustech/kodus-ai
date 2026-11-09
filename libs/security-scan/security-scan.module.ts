@@ -9,7 +9,6 @@ import { PermissionValidationModule } from '@libs/ee/shared/permission-validatio
 import { AnalyticsModule } from '@libs/analytics/modules/analytics.module';
 import { SpendLimitModule } from '@libs/analytics/modules/spend-limit.module';
 import { IssuesModule } from '@libs/issues/issues.module';
-import { LicenseModule } from '@libs/ee/license/license.module';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 
 import {
@@ -35,7 +34,6 @@ import { GetSecurityScansUseCase } from './application/get-security-scans.use-ca
         AnalyticsModule,
         SpendLimitModule,
         forwardRef(() => IssuesModule),
-        forwardRef(() => LicenseModule),
         forwardRef(() => IntegrationConfigModule),
     ],
     providers: [
