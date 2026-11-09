@@ -85,19 +85,16 @@ describe("reproductionStatus", () => {
         ).toBe("Reproduced in an isolated sandbox");
     });
 
-    it("gives the exit code when the test ran and did not reproduce", () => {
+    it("offers a test that did not reproduce here as one to run, not as a verdict", () => {
         expect(
             reproductionStatus({
                 executed: true,
                 reproduced: false,
-                exitCode: 0,
-            }).label,
-        ).toBe("Ran, did not reproduce (exit 0)");
-    });
-
-    it("says the test was not run when it was not executed", () => {
+                exitCode: 1,
+            }),
+        ).toEqual({ label: "Reproduction test to run", tone: "neutral" });
         expect(reproductionStatus({ executed: false }).label).toBe(
-            "Not run in this environment",
+            "Reproduction test to run",
         );
     });
 });

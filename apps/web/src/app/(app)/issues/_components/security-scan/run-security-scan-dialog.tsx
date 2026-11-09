@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Alert, AlertDescription } from "@components/ui/alert";
+import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import {
     Dialog,
@@ -170,12 +171,15 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
         <Dialog open onOpenChange={(next) => !next && onClose()}>
             <DialogContent className="max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>Run deep scan</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                        Run deep scan <Badge>Beta</Badge>
+                    </DialogTitle>
                     <DialogDescription>
                         Kody reads the repository&apos;s default branch with
                         your organization&apos;s own model and stops at the
                         limit you set. Findings show up as Issues with the label
-                        Security.
+                        Security. In beta: check each finding before acting on
+                        it.
                     </DialogDescription>
                 </DialogHeader>
 

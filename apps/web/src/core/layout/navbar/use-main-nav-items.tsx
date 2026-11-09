@@ -18,6 +18,12 @@ import { useKodusCreditBalance } from "src/features/ee/byok/_hooks/use-kodus-cre
 import { isCockpitTierAllowed } from "src/features/ee/cockpit/_helpers/tier-policy";
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
+const BETA_BADGE = (
+    <span className="bg-secondary-light/15 text-secondary-light rounded-full px-1.5 py-px text-[10px] font-semibold tracking-wide uppercase">
+        Beta
+    </span>
+);
+
 export type MainNavItem = {
     id:
         | "reviews"
@@ -110,6 +116,7 @@ export const useMainNavItems = () => {
                 icon: ShieldCheckIcon,
                 href: "/deep-scan",
                 visible: canReadSecurityScans,
+                badge: BETA_BADGE,
                 matcher: (path) => path.startsWith("/deep-scan"),
             },
             {
@@ -165,11 +172,7 @@ export const useMainNavItems = () => {
                 icon: BlocksIcon,
                 href: "/settings/plugins",
                 visible: canReadPlugins && isMCPAvailable,
-                badge: (
-                    <span className="bg-secondary-light/15 text-secondary-light rounded-full px-1.5 py-px text-[10px] font-semibold tracking-wide uppercase">
-                        Beta
-                    </span>
-                ),
+                badge: BETA_BADGE,
             },
         ];
 

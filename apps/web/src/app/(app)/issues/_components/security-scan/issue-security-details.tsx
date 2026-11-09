@@ -163,7 +163,9 @@ export const IssueSecurityEvidence = ({
                         </CodeCollapsible>
                     )}
 
-                    {reproduction.output && (
+                    {/* The output of a run that did not reproduce is the
+                        sandbox's limits, not the finding's: not shown. */}
+                    {reproduction.reproduced && reproduction.output && (
                         <CodeCollapsible title="Output" language="text">
                             {reproduction.output}
                         </CodeCollapsible>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Badge } from "@components/ui/badge";
 import { Page } from "@components/ui/page";
 import { useIssues } from "@services/issues/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
@@ -57,12 +58,21 @@ export default function DeepScanPage() {
         <Page.Root className="overflow-hidden pb-0">
             <Page.Header>
                 <div className="flex flex-col gap-1">
-                    <Page.Title>Deep scan</Page.Title>
+                    <div className="flex items-center gap-2">
+                        <Page.Title>Deep scan</Page.Title>
+                        <Badge>Beta</Badge>
+                    </div>
                     <p className="text-text-secondary max-w-2xl text-sm">
-                        Finds broken access control, injection, SSRF, data
-                        exposure and leaked secrets in a repository&apos;s
-                        default branch, with your organization&apos;s model,
-                        within the spend limit you set.
+                        Finds broken access control, injection, XSS, SSRF, data
+                        exposure, leaked secrets and unsafe settings in a
+                        repository&apos;s default branch, with your
+                        organization&apos;s model, within the spend limit you
+                        set.
+                    </p>
+                    <p className="text-text-tertiary max-w-2xl text-xs">
+                        Deep scan is in beta and free on every plan while it is.
+                        Expect some findings that are not exploitable: check
+                        each before acting on it.
                     </p>
                 </div>
 
