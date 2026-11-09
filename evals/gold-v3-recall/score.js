@@ -25,7 +25,7 @@ const GOLD = path.join(ROOT, 'evals/dedup/gold-v3');
 const BENCH_ROOT = process.env.BENCH_REPOS_ROOT || path.join(process.env.HOME || '', 'projects/benchmark');
 
 function parseArgs(argv) {
-    const out = { dump: '', out: '', concurrency: 4, dryRun: false, compareOrigins: [], gold: GOLD };
+    const out = { dump: '', out: '', concurrency: 4, dryRun: false, compareOrigins: [], gold: GOLD, anchor: false, excludeIssues: '' };
     for (const arg of argv.slice(2)) {
         const m = arg.match(/^--([^=]+)(?:=(.*))?$/);
         if (!m) continue;
@@ -34,9 +34,11 @@ function parseArgs(argv) {
         else if (m[1] === 'concurrency') out.concurrency = Number(m[2]) || 4;
         else if (m[1] === 'dry-run') out.dryRun = true;
         else if (m[1] === 'gold') out.gold = path.resolve(m[2]);
+        else if (m[1] === 'anchor') out.anchor = true;
+        else if (m[1] === 'exclude-issues') out.excludeIssues = path.resolve(m[2]);
         else if (m[1] === 'compare-origins') out.compareOrigins = String(m[2] || '').split(',').map((s) => s.trim()).filter(Boolean);
         else {
-            console.error(`unknown flag --${m[1]}. Known: --dump --out --concurrency --dry-run --compare-origins --gold`);
+            console.error(`unknown flag --${m[1]}. Known: --dump --out --concurrency --dry-run --compare-origins --gold --anchor --exclude-issues`);
             process.exit(2);
         }
     }
@@ -86,6 +88,16 @@ function loadDump(dir) {
         const output = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
         return { caseId: output.caseId || path.basename(f, '.raw.txt'), output };
     });
+}
+
+// agent-review.stage.ts anchorSuggestionsToDiff: a finding on a file the PR
+// does not change is dropped, and so is one whose cited lines overlap no hunk.
+// A finding with no lines is snapped onto the first hunk and ships.
+function anchorSurvives(c, caseHunks) {
+    const ranges = caseHunks[c.file];
+    if (!ranges) return false;
+    if (!ranges.length || !c.start || !c.end) return true;
+    return ranges.some(([s, e]) => c.start <= e && c.end >= s);
 }
 
 const pct = (n, d) => (d ? n / d : null);
@@ -173,6 +185,8 @@ async function main() {
         process.exit(2);
     }
     const ruleHash = crypto.createHash('sha256').update(RULE + JUDGE_MODEL + JUDGE_EFFORT).digest('hex').slice(0, 12);
+    const excluded = new Set(args.excludeIssues ? JSON.parse(fs.readFileSync(args.excludeIssues, 'utf8')) : []);
+    const hunks = args.anchor ? JSON.parse(fs.readFileSync(path.join(args.gold, 'hunks.json'), 'utf8')) : null;
     const rows = [];
     const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0, ms: 0 };
     let unscored = 0;
@@ -224,6 +238,17 @@ async function main() {
             }
         }
         const valid = validIssues(gold[caseId], upstream);
+        // --exclude-issues: those gold issues leave the ruler, and a comment that
+        // matched one leaves the line too (neither a TP nor a FP).
+        // --anchor: a comment production's anchoring would drop never ships.
+        for (const id of excluded) valid.delete(id);
+        const caseHunks = hunks?.[caseId];
+        const ships = (c) => {
+            if (excluded.has(answers.get(c.id)?.match)) return false;
+            if (!caseHunks) return true;
+            return anchorSurvives(c, caseHunks);
+        };
+        for (const line of Object.keys(lines)) lines[line] = lines[line].filter(ships);
         const scored = Object.fromEntries(Object.entries(lines).map(([line, list]) => [line, scoreLine(list, answers, valid)]));
         // --compare-origins: the same run read without some passes (`base`),
         // and with each of them added back, from the same judgments. Only the
