@@ -422,6 +422,30 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
         ]);
     });
 
+    it('counts what the prompt carries for each suggestion, not just the patch, against the context window', async () => {
+        permissionValidationService.resolveTaskSlot.mockResolvedValue({
+            provider: 'openai',
+            model: 'gpt-x',
+            maxInputTokens: 1000,
+        });
+        // The patch alone fits (500 of 750 tokens); twenty suggestions do not.
+        const suggestions = Array.from({ length: 20 }, (_, i) =>
+            sent(`s-${i}`, 'app/a.rb', { existingCode: 'y'.repeat(200) }),
+        );
+
+        const result = await check(suggestions, [
+            { filename: 'app/a.rb', patch: 'x'.repeat(1_500) },
+        ]);
+
+        expect(
+            aiAnalysisService.checkSuggestionImplementation,
+        ).not.toHaveBeenCalled();
+        expect(result.unmeasured).toHaveLength(20);
+        expect(
+            result.unmeasured.every((u) => u.reason === 'diff_too_large'),
+        ).toBe(true);
+    });
+
     it('keeps the last decided verdict when a later check cannot decide', async () => {
         aiAnalysisService.checkSuggestionImplementation.mockResolvedValue({
             verdicts: [],

@@ -51,11 +51,15 @@ import {
     statusesAtOrAbove,
 } from '@libs/platformData/domain/pullRequests/implementation-status';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
+import {
+    prompt_checkSuggestionImplementation,
+    type ImplementationCheckSuggestion,
+} from '@libs/common/utils/prompts';
 import type { ChangedFilesSource } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import pLimit from 'p-limit';
 
-/** Share of the model's context window one file's patch may take. */
-const IMPLEMENTATION_CHECK_PATCH_SHARE = 0.75;
+/** Share of the model's context window one file's prompt may take. */
+const IMPLEMENTATION_CHECK_PROMPT_SHARE = 0.75;
 /** Files of one PR checked at the same time. */
 const IMPLEMENTATION_CHECK_CONCURRENCY = 4;
 /** Suggestion writes of one check in flight at the same time. */
@@ -164,18 +168,37 @@ export class SuggestionService implements ISuggestionService {
                     organizationAndTeamData,
                     LLM_TASK.codeReview,
                 );
-            const maxPatchTokens = Math.floor(
+            const maxPromptTokens = Math.floor(
                 resolveContextWindow({
                     byokMaxInputTokens: byokConfig?.maxInputTokens,
                     modelName: byokConfig?.model || '',
-                }) * IMPLEMENTATION_CHECK_PATCH_SHARE,
+                }) * IMPLEMENTATION_CHECK_PROMPT_SHARE,
             );
 
-            const files = [...byFile].filter(([filename, suggestions]) => {
-                const patch = patches.get(filename);
-                // ~3 characters per token: generous for code, so a patch that
+            const requests = [...byFile].map(([filename, suggestions]) => ({
+                suggestions,
+                file: { filename, patch: patches.get(filename) },
+                asked: suggestions.map((s): ImplementationCheckSuggestion => ({
+                    id: s.id,
+                    relevantLinesStart: s.relevantLinesStart,
+                    relevantLinesEnd: s.relevantLinesEnd,
+                    // What the developer read in the comment.
+                    problem: s.suggestionContent || s.fullExplanation || '',
+                    existingCode: s.existingCode,
+                    improvedCode: s.improvedCode,
+                })),
+            }));
+
+            const files = requests.filter(({ file, asked, suggestions }) => {
+                const prompt = prompt_checkSuggestionImplementation({
+                    file,
+                    suggestions: asked,
+                });
+                // ~3 characters per token: generous for code, so a prompt that
                 // fits here fits the model.
-                if (Math.ceil(patch.length / 3) <= maxPatchTokens) return true;
+                if (Math.ceil(prompt.length / 3) <= maxPromptTokens) {
+                    return true;
+                }
                 for (const s of suggestions) {
                     unmeasured.push({ id: s.id, reason: 'diff_too_large' });
                 }
@@ -184,32 +207,24 @@ export class SuggestionService implements ISuggestionService {
 
             const limit = pLimit(IMPLEMENTATION_CHECK_CONCURRENCY);
             const settled = await Promise.allSettled(
-                files.map(([filename, suggestions]) =>
+                files.map(({ file, asked }) =>
                     limit(() =>
                         this.aiAnalysisService.checkSuggestionImplementation({
                             organizationAndTeamData,
                             prNumber,
                             byokConfig,
-                            file: { filename, patch: patches.get(filename) },
-                            suggestions: suggestions.map((s) => ({
-                                id: s.id,
-                                relevantLinesStart: s.relevantLinesStart,
-                                relevantLinesEnd: s.relevantLinesEnd,
-                                // What the developer read in the comment.
-                                problem:
-                                    s.suggestionContent ||
-                                    s.fullExplanation ||
-                                    '',
-                                existingCode: s.existingCode,
-                                improvedCode: s.improvedCode,
-                            })),
+                            file,
+                            suggestions: asked,
                         }),
                     ),
                 ),
             );
 
             settled.forEach((outcome, i) => {
-                const [filename, suggestions] = files[i];
+                const {
+                    file: { filename },
+                    suggestions,
+                } = files[i];
                 if (outcome.status === 'fulfilled') {
                     verdicts.push(...outcome.value.verdicts);
                     unmeasured.push(...outcome.value.unmeasured);
