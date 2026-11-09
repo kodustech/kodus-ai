@@ -11,7 +11,7 @@
  *
  * Idempotent: a canonical value never matches. Run by hand, off-peak
  * (`pnpm mongo:migrate suggestion-implementation-status [--dry-run]`), not on
- * boot: `distinct` and each `updateMany` scan the whole pullRequests
+ * boot: the read and each `updateMany` scan the whole pullRequests
  * collection, which must not hold API startup.
  */
 import { Db } from 'mongodb';
@@ -42,13 +42,23 @@ export async function normalizeSuggestionImplementationStatus(
     const collection = db.collection('pullRequests');
     const path = 'files.suggestions.implementationStatus';
 
-    const stored = await collection.distinct(path);
+    // Not `distinct`: it answers in one BSON document capped at 16MB, and the
+    // stored values include free text. A cursor has no cap.
+    const stored = collection.aggregate<{ _id: unknown }>(
+        [
+            { $unwind: '$files' },
+            { $unwind: '$files.suggestions' },
+            { $match: { [path]: { $type: 'string' } } },
+            { $group: { _id: `$${path}` } },
+        ],
+        { allowDiskUse: true },
+    );
     const result: NormalizeImplementationStatusResult = {
         rewritten: {},
         leftAlone: [],
     };
 
-    for (const value of stored) {
+    for await (const { _id: value } of stored) {
         if (typeof value !== 'string' || isImplementationStatus(value))
             continue;
         const status = normalizeImplementationStatus(value);

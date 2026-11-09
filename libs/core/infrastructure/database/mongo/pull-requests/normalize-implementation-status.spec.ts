@@ -6,7 +6,16 @@ function fakeDb(distinct: unknown[], counts: Record<string, number> = {}) {
             counts[filter['files.suggestions.implementationStatus']] ?? 1,
     }));
     const collection = {
-        distinct: jest.fn().mockResolvedValue(distinct),
+        // `distinct` answers in one BSON document, capped at 16MB; the stored
+        // values include free text, so the cleanup must not depend on it.
+        distinct: jest
+            .fn()
+            .mockRejectedValue(new Error('distinct too big, 16mb cap')),
+        aggregate: jest.fn(() => ({
+            async *[Symbol.asyncIterator]() {
+                for (const value of distinct) yield { _id: value };
+            },
+        })),
         countDocuments: jest.fn().mockResolvedValue(5),
         updateMany,
     };
