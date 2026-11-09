@@ -115,6 +115,11 @@ const TIER0 = {
     // gpt-6-sol pela API da OpenAI.
     'gpt-6-sol@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6-sol', keyEnvs: ['MATRIX_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'] },
     'gpt-6.1-sol@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6.1-sol', keyEnvs: ['MATRIX_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'] },
+    // gpt-6.1-sol on a ChatGPT subscription, for research runs: the OpenAI route
+    // pointed at evals/investigation/codex-sub-proxy.js, which must be running.
+    // The proxy authenticates with the Codex login under CODEX_HOME; the slot's
+    // key is never sent upstream, so CODEX_HOME stands in for it.
+    'gpt-6.1-sol@sub': { provider: 'openai', byokNative: true, doModel: 'gpt-6.1-sol', keyEnvs: ['CODEX_HOME'], baseURL: 'http://127.0.0.1:8789/v1' },
     'gpt-6-luna@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6-luna', keyEnvs: ['MATRIX_OPENAI_API_KEY'] },
     'claude-sonnet-5.5@api': { provider: 'anthropic', byokNative: true, doModel: 'claude-sonnet-5-5', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'] },
     'claude-opus-5.5@api': { provider: 'anthropic', byokNative: true, doModel: 'claude-opus-5-5', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'] },
