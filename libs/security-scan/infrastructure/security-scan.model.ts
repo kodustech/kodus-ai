@@ -37,7 +37,8 @@ export class SecurityScanModel extends CoreDocument {
     })
     public status: SecurityScanStatus;
 
-    @Prop({ type: Object, required: true })
+    /** Empty when the scan runs without a limit. */
+    @Prop({ type: Object, default: {} })
     public budget: SecurityScanBudget;
 
     @Prop({ type: Object, required: true })

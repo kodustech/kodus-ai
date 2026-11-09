@@ -115,7 +115,8 @@ export class ScanBudgetMeter implements UsageMeter {
 }
 
 /**
- * A USD cap needs a price; a model without one (and no manual price on the
+ * A limit is optional: without one the scan covers the whole repository. A
+ * USD cap needs a price; a model without one (and no manual price on the
  * BYOK config) can only be capped in tokens.
  */
 export function validateBudget(
@@ -124,9 +125,6 @@ export function validateBudget(
 ): string | null {
     const hasUsd = typeof budget.maxUsd === 'number';
     const hasTokens = typeof budget.maxTokens === 'number';
-    if (!hasUsd && !hasTokens) {
-        return 'Set a spend limit for the scan, in USD or in tokens.';
-    }
     if (hasUsd && !(budget.maxUsd > 0)) {
         return 'The USD limit must be greater than zero.';
     }
