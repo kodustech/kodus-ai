@@ -92,11 +92,20 @@ describe('ScanBudgetMeter', () => {
         });
         expect(meter.isExhausted()).toBe(true);
     });
+
+    it('never stops a scan without a limit, but still counts its spend', () => {
+        const meter = new ScanBudgetMeter({}, RATES);
+
+        meter.record(request(50_000_000, 10_000_000));
+        expect(meter.isExhausted()).toBe(false);
+        expect(meter.snapshot().usd).toBe(70);
+    });
 });
 
 describe('validateBudget', () => {
-    it('requires a limit', () => {
-        expect(validateBudget({}, true)).toMatch(/spend limit/);
+    it('accepts no limit, priced or not', () => {
+        expect(validateBudget({}, true)).toBeNull();
+        expect(validateBudget({}, false)).toBeNull();
     });
 
     it('refuses a USD cap for a model without a price', () => {

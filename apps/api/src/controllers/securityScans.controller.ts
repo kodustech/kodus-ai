@@ -54,7 +54,10 @@ export class StartSecurityScanDto {
     @IsString()
     repositoryId: string;
 
-    @ApiPropertyOptional({ description: 'Spend limit for this scan, in USD.' })
+    @ApiPropertyOptional({
+        description:
+            'Spend limit for this scan, in USD. Without a limit the scan covers the whole repository.',
+    })
     @IsOptional()
     @Type(() => Number)
     @IsNumber()
