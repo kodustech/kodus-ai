@@ -27,7 +27,7 @@ export function ReviewRoutingSummary() {
     const href = `/settings/code-review/${encodeURIComponent(repositoryId)}/routing${directoryId ? `?directoryId=${encodeURIComponent(directoryId)}` : ""}`;
     return (
         <div className="px-5 py-5 sm:px-6">
-            <div className="mb-4 flex max-w-3xl flex-wrap items-center justify-between gap-4">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
                 <h2 className="text-text-primary text-base font-semibold">
                     Review mode
                 </h2>
@@ -39,7 +39,7 @@ export function ReviewRoutingSummary() {
                     </Link>
                 )}
             </div>
-            <dl className="divide-card-lv3 max-w-3xl divide-y text-sm">
+            <dl className="divide-card-lv3 divide-y text-sm">
                 {rows.map((row) => (
                     <div
                         key={row.label}
