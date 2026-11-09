@@ -24,12 +24,16 @@ export const PullRequestApprovalActive = ({
                         title="Automatic PR approval"
                         fieldName="pullRequestApprovalActive"
                         badge={
-                            <Badge
-                                variant={
-                                    field.value ? "primary-dark" : "helper"
-                                }>
-                                {field.value ? "On" : "Off"}
-                            </Badge>
+                            conditionalApprovalEnabled ? (
+                                <Badge>Beta</Badge>
+                            ) : (
+                                <Badge
+                                    variant={
+                                        field.value ? "primary-dark" : "helper"
+                                    }>
+                                    {field.value ? "On" : "Off"}
+                                </Badge>
+                            )
                         }
                         description={
                             !field.value
