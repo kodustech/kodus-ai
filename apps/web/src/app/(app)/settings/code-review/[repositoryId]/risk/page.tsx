@@ -152,12 +152,7 @@ function RiskSettings() {
                                 title="Risk assessment"
                                 fieldName="riskAssessmentActive"
                                 badge={
-                                    <Badge
-                                        variant={
-                                            active ? "primary-dark" : "helper"
-                                        }>
-                                        {active ? "On" : "Off"}
-                                    </Badge>
+                                    <Badge variant="primary-dark">Beta</Badge>
                                 }
                                 description={
                                     !available
