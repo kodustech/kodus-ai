@@ -216,10 +216,10 @@ function RoutingSettings() {
                     }}
                 />
             </Page.Header>
-            <Page.Content className="max-w-5xl gap-6">
+            <Page.Content className="gap-6">
                 <CentralizedConfigReadOnlyAlert />
                 <Card color="lv1" className="px-5 py-5 sm:px-6">
-                    <div className="mb-4 flex max-w-3xl flex-wrap items-center justify-between gap-4">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
                         <h2 className="text-text-primary text-base font-semibold">
                             Models
                         </h2>
@@ -232,7 +232,7 @@ function RoutingSettings() {
                             </Link>
                         )}
                     </div>
-                    <dl className="divide-card-lv3 max-w-3xl divide-y text-sm">
+                    <dl className="divide-card-lv3 divide-y text-sm">
                         {[
                             {
                                 label: "Default model",
