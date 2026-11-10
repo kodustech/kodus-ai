@@ -354,6 +354,13 @@ function observeFinderPasses() {
             for (const p of [...run.passes].sort((a, b) => (b.label === 'generalist') - (a.label === 'generalist'))) {
                 for (const key of (p.recovered || p.findings).map(findingKey)) if (!originOf.has(key)) originOf.set(key, p.label);
             }
+            // The verify can see a finding with its lines re-anchored, so the key misses;
+            // the text still names the pass.
+            const originOfText = new Map();
+            for (const p of run.passes) for (const f of p.recovered || p.findings) {
+                const text = String(f.suggestionContent || '').slice(0, 120);
+                if (!originOfText.has(text)) originOfText.set(text, p.label);
+            }
             const first = run.verify.find((p) => p.pass === 'verify');
             run.candidates = (first?.candidates || []).map((key, index) => {
                 const v = first;
@@ -365,7 +372,7 @@ function observeFinderPasses() {
                     index,
                     // A pass of several runs (the debate) is not one runner call:
                     // its findings name it in producedBy.
-                    origin: originOf.get(key) || first.items?.[index]?.producedBy || 'synthesis-rescue',
+                    origin: originOf.get(key) || first.items?.[index]?.producedBy || originOfText.get(String(first.items?.[index]?.suggestionContent || '').slice(0, 120)) || 'synthesis-rescue',
                     verify: v.skipped ? 'not-run' : dropped ? 'dropped' : gateDrop ? 'dropped-by-evidence-gate' : 'kept',
                     rationale: dropped?.rationale ?? gateDrop?.rationale ?? null,
                 };
