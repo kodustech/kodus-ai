@@ -1,5 +1,6 @@
 import { assessApprovalRisk } from '../approval/assess-approval-risk';
 import { LLM } from '@libs/llm/llm';
+import { riskApprovalVeto } from './risk-assessment';
 import {
     applicableRiskCriteria,
     assessPrRisk,
@@ -81,6 +82,28 @@ it('sends both rename paths and removed files, never just the latest incremental
     expect(data.diff).toContain('docs/auth.ts (renamed from src/auth.ts)');
     expect(data.diff).toContain('src/guard.ts (removed; +0/-1)\n-guard()');
     expect(data.historyCoverage).toBeNull();
+});
+
+it('keeps ambiguous lexical evidence unavailable and prevents approval', async () => {
+    jest.mocked(LLM.run).mockResolvedValue({
+        level: 'low',
+        reason: 'Behavior unchanged.',
+    } as any);
+    const result = await assessPrRisk({
+        ...input,
+        files: [
+            {
+                filename: 'src/status.tsx',
+                status: 'modified',
+                additions: 3,
+                deletions: 0,
+                patch: "+const title = <p>don't change it</p>;\n+return authorize();\n+const footer = <p>don't change it</p>;",
+            },
+        ] as any,
+    });
+    expect(result.status).toBe('unavailable');
+    expect(riskApprovalVeto(true, result, input.headSha)).toBeDefined();
+    expect(LLM.run).toHaveBeenCalledTimes(1);
 });
 
 it('applies optional guidance to both rename paths and respects exclusions and disabled criteria', () => {

@@ -35,28 +35,39 @@ const SOURCE_FILE = /\.(?:ts|tsx|js|jsx|py|go|java|cs|rs)$/i;
 const TEST_FILE =
     /(?:^|\/)(?:__tests__|tests?|specs?)(?:\/|\.|$)|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java))$/i;
 const ADDED_CONTROL_FLOW = /\b(?:if\s*\(|return\b|throw\b)/;
+const POSSIBLE_ADDED_CONTROL_FLOW = new RegExp(
+    `^\\+(?!\\+).*${ADDED_CONTROL_FLOW.source}`,
+    'm',
+);
 
-function hasUntestedControlFlowChange(files: FileChange[]): boolean {
-    const codeByFile = new Map(
-        files.map((file) => [
-            file,
-            addedCodeLines(file.patch ?? '', file.filename),
-        ]),
-    );
-    return (
-        !files.some(
+function controlFlowEvidence(
+    files: FileChange[],
+): 'none' | 'untested' | 'unverifiable' {
+    if (
+        files.some(
             (file) =>
                 file.status !== 'removed' &&
                 TEST_FILE.test(file.filename) &&
-                /\S/.test(codeByFile.get(file)!),
-        ) &&
-        files.some(
-            (file) =>
-                SOURCE_FILE.test(file.filename) &&
-                !TEST_FILE.test(file.filename) &&
-                ADDED_CONTROL_FLOW.test(codeByFile.get(file)!),
+                /\S/.test(
+                    addedCodeLines(file.patch ?? '', file.filename) ?? '',
+                ),
         )
-    );
+    )
+        return 'none';
+    let unverifiable = false;
+    for (const file of files) {
+        if (
+            file.status === 'removed' ||
+            !SOURCE_FILE.test(file.filename) ||
+            TEST_FILE.test(file.filename)
+        )
+            continue;
+        if (!POSSIBLE_ADDED_CONTROL_FLOW.test(file.patch ?? '')) continue;
+        const code = addedCodeLines(file.patch ?? '', file.filename);
+        if (code === undefined) unverifiable = true;
+        else if (ADDED_CONTROL_FLOW.test(code)) return 'untested';
+    }
+    return unverifiable ? 'unverifiable' : 'none';
 }
 
 export function buildChangeRiskDiff(files: FileChange[]): string {
@@ -177,10 +188,16 @@ export async function assessChangeRisk(input: {
         ) {
             throw new Error('Empty approval risk judgment');
         }
-        if (
-            result.level === 'low' &&
-            hasUntestedControlFlowChange(input.files)
-        ) {
+        const flow =
+            result.level === 'low' ? controlFlowEvidence(input.files) : 'none';
+        if (flow === 'unverifiable')
+            return {
+                level: 'unknown',
+                reason: 'Kody could not verify control-flow and test evidence in this diff.',
+                reviewedHeadSha: input.headSha,
+                areaMapVersion: input.areaMap?.version,
+            };
+        if (flow === 'untested') {
             return {
                 level: 'medium',
                 reason: input.language?.toLowerCase().startsWith('pt')

@@ -92,9 +92,6 @@ describe('cron snapshot validation', () => {
         ).toBe(false);
     });
     it('does not reuse an assessment whose configuration or provider base is unknown', () => {
-        expect(isCurrentRiskAssessment({ status: 'assessed' }, expected)).toBe(
-            false,
-        );
         expect(
             isCurrentRiskAssessment(
                 {

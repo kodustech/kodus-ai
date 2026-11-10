@@ -165,7 +165,6 @@ it.each([
     ['src/status.ts', '+const note = `if (disabled) return null`;'],
     ['src/status.ts', '+const note = /return\\s+null/;'],
     ['src/status.py', '+# return None'],
-    ['src/status.py', '+"""\n+if (disabled) return None\n+"""'],
 ])(
     'does not treat prose or literals in %s as control flow: %s',
     async (filename, patch) => {
@@ -206,6 +205,34 @@ it.each(['+// added test coverage', '+/* tests go here */', '+   '])(
                             status: 'modified',
                             patch,
                         },
+                    ] as any,
+                })
+            ).level,
+        ).toBe('medium');
+    },
+);
+
+it.each([
+    ['tests/StatusTests.cs', '+var fixture = @"test fixture";'],
+    ['tests/status_test.rs', '+let fixture = r#"return test fixture"#;'],
+])(
+    'does not accept unverifiable %s text as test evidence',
+    async (filename, patch) => {
+        (LLM.run as jest.Mock).mockResolvedValue({
+            level: 'low',
+            reason: 'Behavior unchanged.',
+        });
+        expect(
+            (
+                await assessApprovalRisk({
+                    ...input,
+                    files: [
+                        {
+                            filename: 'src/status.ts',
+                            status: 'modified',
+                            patch: '+return authorize();',
+                        },
+                        { filename, status: 'modified', patch },
                     ] as any,
                 })
             ).level,
@@ -257,8 +284,6 @@ it.each([
 it.each([
     ['src/status.py', '+count //= 2; return authorize()'],
     ['src/status.go', '+text := `ends with a backslash\\`; return authorize()'],
-    ['src/status.cs', '+var text = @"path\\"; return Authorize();'],
-    ['src/status.rs', "+fn authorize<'a>() { return true; }"],
 ])('keeps executable code visible in %s fragments', async (filename, patch) => {
     (LLM.run as jest.Mock).mockResolvedValue({
         level: 'low',
@@ -274,6 +299,32 @@ it.each([
     ).toBe('medium');
 });
 
+it.each([
+    ['src/status.cs', '+var text = @"path\\"; return Authorize();'],
+    ['src/status.rs', "+fn authorize<'a>() { return true; }"],
+    ['src/status.py', '+"""\n+if (disabled) return None\n+"""'],
+    [
+        'src/status.tsx',
+        "+const title = <p>don't</p>; return authorize(); const footer = <p>don't</p>;",
+    ],
+])(
+    'keeps unverifiable %s fragments unknown rather than asserting a code signal',
+    async (filename, patch) => {
+        (LLM.run as jest.Mock).mockResolvedValue({
+            level: 'low',
+            reason: 'Behavior unchanged.',
+        });
+        expect(
+            (
+                await assessApprovalRisk({
+                    ...input,
+                    files: [{ filename, status: 'modified', patch }] as any,
+                })
+            ).level,
+        ).toBe('unknown');
+    },
+);
+
 it('returns unknown when the model fails, so approval cannot proceed', async () => {
     (LLM.run as jest.Mock).mockRejectedValue(new Error('timeout'));
 
@@ -281,6 +332,24 @@ it('returns unknown when the model fails, so approval cannot proceed', async () 
         level: 'unknown',
         reviewedHeadSha: 'abc123',
     });
+});
+
+it('keeps ambiguous JSX quotes unknown instead of masking executable control flow', async () => {
+    (LLM.run as jest.Mock).mockResolvedValue({
+        level: 'low',
+        reason: 'Behavior unchanged.',
+    });
+    const result = await assessApprovalRisk({
+        ...input,
+        files: [
+            {
+                filename: 'src/status.tsx',
+                status: 'modified',
+                patch: "+const title = <p>don't change it</p>;\n+return authorize();\n+const footer = <p>don't change it</p>;",
+            } as any,
+        ],
+    });
+    expect(result.level).toBe('unknown');
 });
 
 it.each([
