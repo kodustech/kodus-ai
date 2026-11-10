@@ -64,7 +64,13 @@ set is the ground truth. No judge, no circular labeling.
   are recorded with the rule (`freeze-atoms.js`), as production stores them, so
   every run judges the same atoms. It measures what the shard prompt carries for
   such a rule: compare `TOKENS` and occurrence recall across two versions of the
-  code (`--dataset=reference-cases`).
+  code (`--dataset=reference-cases`). That rule spells its conventions out, so
+  its recall does not show whether the reference reached the judge. The two
+  `env-registry-*` cases do: one rule, one diff and one set of atoms, and a
+  Context OS reference (`docs/environment-variables.md`, supplied by the case's
+  `referenceFiles`) that only says which variables are registered or retired.
+  Each registry makes a different pair of lines the violations, so a missing
+  reference, or one linked to the other case's rule, misses every site.
 
 ## Run
 

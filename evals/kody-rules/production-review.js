@@ -97,9 +97,11 @@ function contextReferenceStore(references = []) {
  * the GitHub contents API returns. Production reads references at the base
  * branch; the eval reads them at the base commit the case recorded, so the
  * case does not move as the branch does. The checkout is shallow and holds
- * the branch's current tip, so that one commit is fetched on first use.
+ * the branch's current tip, so that one commit is fetched on first use. A
+ * case's `referenceFiles` ({ path: text }) stand in for the repository's
+ * files, so two cases can differ only in what a reference says.
  */
-function repositoryFileAtRef(pr, repoDir) {
+function repositoryFileAtRef(pr, repoDir, files = {}) {
     const shaOf = { [pr.headRef]: pr.headSha, [pr.baseRef]: pr.baseSha };
     const ownName = pr.repositoryFullName.split('/')[1];
     const git = (...a) => execFileSync('git', ['-C', repoDir, ...a], { maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
@@ -116,6 +118,9 @@ function repositoryFileAtRef(pr, repoDir) {
     return {
         getRepositoryContentFile: async ({ repository, file, pullRequest }) => {
             if (repository?.name && repository.name !== ownName && repository.name !== pr.repositoryFullName) return null;
+            if (typeof files[file.filename] === 'string') {
+                return { data: { content: Buffer.from(files[file.filename]).toString('base64'), encoding: 'base64' } };
+            }
             const sha = shaOf[pullRequest?.head?.ref ?? pullRequest?.base?.ref];
             if (!sha) return null;
             try {
@@ -132,7 +137,7 @@ function repositoryFileAtRef(pr, repoDir) {
 function referenceLoader(c, repoDir) {
     const { ExternalReferenceLoaderService } = lib('kodyRules/infrastructure/adapters/services/externalReferenceLoader.service.ts');
     const { CodeReviewContextPackService } = lib('ai-engine/infrastructure/adapters/services/context/code-review-context-pack.service.ts');
-    return new ExternalReferenceLoaderService(new CodeReviewContextPackService(contextReferenceStore(c.contextReferences), repositoryFileAtRef(c.pr, repoDir)));
+    return new ExternalReferenceLoaderService(new CodeReviewContextPackService(contextReferenceStore(c.contextReferences), repositoryFileAtRef(c.pr, repoDir, c.referenceFiles)));
 }
 
 /** Where production writes the review's execution log. Kept, never read back. */
