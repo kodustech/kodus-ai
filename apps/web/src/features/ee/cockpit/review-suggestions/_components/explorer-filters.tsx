@@ -35,6 +35,7 @@ const STATUSES = [
     { value: "implemented", label: "Implemented" },
     { value: "partially_implemented", label: "Partially implemented" },
     { value: "not_implemented", label: "Not implemented" },
+    { value: "not_measured", label: "Not measured" },
 ];
 
 const selectClassName =

@@ -29,13 +29,19 @@ import {
     ISuggestionByPR,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import type { ImplementationUnmeasuredReason } from '@libs/platformData/domain/pullRequests/implementation-status';
+import type { ChangedFilesSource } from './PullRequestManagerService.contract';
 
 /** What one implementation check did: why it stopped early, how many
  *  suggestions it had to check, and what it persisted. */
 export type ImplementationCheckResult = {
-    skipped?: 'NO_SUGGESTIONS' | 'NO_RELEVANT_CHANGES' | 'NO_PATCH';
+    skipped?: 'NO_SUGGESTIONS' | 'NO_RELEVANT_CHANGES';
     checked: number;
+    /** Suggestions the model gave a verdict for. */
+    decided: number;
+    /** Suggestions whose stored status this check raised. */
     persisted: Partial<CodeSuggestion>[];
+    unmeasured: { id: string; reason: ImplementationUnmeasuredReason }[];
 };
 
 /**
@@ -48,17 +54,8 @@ export interface ISuggestionService {
         prNumber: number;
         changedFiles: Pick<FileChange, 'filename' | 'patch'>[];
         savedSuggestions: Partial<ISuggestion>[];
+        diffSource?: ChangedFilesSource;
     }): Promise<ImplementationCheckResult>;
-
-    /**
-     * Validates if suggestions have been implemented by analyzing code patches
-     */
-    validateImplementedSuggestions(
-        organizationAndTeamData: OrganizationAndTeamData,
-        codePatch: string,
-        savedSuggestions: Partial<CodeSuggestion>[],
-        prNumber?: number,
-    ): Promise<any>;
 
 
     /**
@@ -223,11 +220,6 @@ export interface ISuggestionService {
      * Normalizes suggestion labels to handle variations
      */
     normalizeLabel(label: string): string;
-
-    /**
-     * Filters suggestion properties to prepare for analysis
-     */
-    filterSuggestionProperties(suggestions: Partial<CodeSuggestion>[]): any[];
 
     /**
      * Filters suggestions by severity level

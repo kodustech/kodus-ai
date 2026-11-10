@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
+import { APPLIED_SQL, undecidedSql } from './implementation-rate.sql';
 import { DataSource } from 'typeorm';
 
 import { ANALYTICS_DATA_SOURCE } from '@libs/ee/analytics-warehouse';
@@ -250,6 +251,8 @@ export class CockpitCodeHealthService implements ICockpitCodeHealthService {
         }
 
         const rows = (await this.ds.query(
+            // Rated on what the implementation check decided, like every other
+            // implementation-rate chart (implementation-rate.sql.ts).
             `WITH sv AS (
                 SELECT s.*
                   FROM "analytics"."suggestions_mv" s
@@ -262,12 +265,13 @@ export class CockpitCodeHealthService implements ICockpitCodeHealthService {
             )
             SELECT
                 COUNT(*)::int AS suggestions_sent,
-                SUM(CASE WHEN sv."suggestionImplementationStatus" IN ('implemented','partially_implemented') THEN 1 ELSE 0 END)::int AS suggestions_implemented,
+                COUNT(*) FILTER (WHERE sv."suggestionImplementationStatus" ${APPLIED_SQL})::int AS suggestions_implemented,
                 CASE WHEN COUNT(*) = 0 THEN 0
-                     ELSE SUM(CASE WHEN sv."suggestionImplementationStatus" IN ('implemented','partially_implemented') THEN 1 ELSE 0 END)::numeric / COUNT(*)
+                     ELSE COUNT(*) FILTER (WHERE sv."suggestionImplementationStatus" ${APPLIED_SQL})::numeric / COUNT(*)
                 END AS implementation_rate
               FROM sv
-              JOIN pr ON sv."pullRequestId" = pr."_id"`,
+              JOIN pr ON sv."pullRequestId" = pr."_id"
+             WHERE NOT ${undecidedSql('sv')}`,
             params,
         )) as Array<{
             suggestions_sent: number;

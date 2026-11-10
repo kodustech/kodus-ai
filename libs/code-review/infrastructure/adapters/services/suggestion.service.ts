@@ -25,7 +25,6 @@ import {
     CommentResult,
     FileChange,
     GroupingModeSuggestions,
-    ImplementedSuggestionsToAnalyze,
     LimitationType,
     ReviewModeResponse,
     ReviewOptions,
@@ -43,6 +42,28 @@ import {
     ISuggestion,
     ISuggestionByPR,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import {
+    countByReason,
+    ImplementationCheckRecord,
+    normalizeImplementationStatus,
+    raisesImplementationStatus,
+    resolvesSuggestionThread,
+    statusesAtOrAbove,
+} from '@libs/platformData/domain/pullRequests/implementation-status';
+import { resolveContextWindow } from '@libs/llm/model-context-window';
+import {
+    prompt_checkSuggestionImplementation,
+    type ImplementationCheckSuggestion,
+} from '@libs/common/utils/prompts';
+import type { ChangedFilesSource } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
+import pLimit from 'p-limit';
+
+/** Share of the model's context window one file's prompt may take. */
+const IMPLEMENTATION_CHECK_PROMPT_SHARE = 0.75;
+/** Files of one PR checked at the same time. */
+const IMPLEMENTATION_CHECK_CONCURRENCY = 4;
+/** Suggestion writes of one check in flight at the same time. */
+const IMPLEMENTATION_CHECK_WRITE_CONCURRENCY = 5;
 
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
@@ -76,173 +97,252 @@ export class SuggestionService implements ISuggestionService {
     ) {}
 
     /**
-     * Prepares suggestion properties for validation
-     */
-    public filterSuggestionProperties(
-        suggestions: Partial<CodeSuggestion>[],
-    ): ImplementedSuggestionsToAnalyze[] {
-        return suggestions.map((suggestion) => ({
-            id: suggestion.id,
-            relevantFile: suggestion.relevantFile,
-            language: suggestion.language,
-            improvedCode: suggestion.improvedCode,
-            existingCode: suggestion.existingCode,
-        }));
-    }
-
-    /**
-     * The implementation check after a push: picks the delivered suggestions
-     * not yet implemented whose file changed, asks the model which of them the
-     * patch implements, and persists the answers. The processor and the
-     * implementation-check eval both enter here.
+     * The implementation check after a push: for each delivered suggestion not
+     * yet implemented whose file changed, asks the model (one call per file,
+     * on that file's patch) whether the push made the change it asked for. A
+     * verdict only ever raises the stored status; a suggestion the check could
+     * not decide is recorded as unmeasured, never as not implemented. The
+     * processor and the implementation-check eval both enter here.
      */
     public async checkImplementedSuggestions({
         organizationAndTeamData,
         prNumber,
         changedFiles,
         savedSuggestions,
+        diffSource = 'incremental',
     }: {
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
         changedFiles: Pick<FileChange, 'filename' | 'patch'>[];
         savedSuggestions: Partial<ISuggestion>[];
+        diffSource?: ChangedFilesSource;
     }): Promise<ImplementationCheckResult> {
         const candidates = savedSuggestions.filter(
             (s) =>
+                s.id &&
                 s.deliveryStatus === DeliveryStatus.SENT &&
-                s.implementationStatus !== ImplementationStatus.IMPLEMENTED,
+                normalizeImplementationStatus(s.implementationStatus) !==
+                    ImplementationStatus.IMPLEMENTED,
         );
+        const empty = { persisted: [], decided: 0, unmeasured: [] };
 
         if (!candidates.length) {
-            return { skipped: 'NO_SUGGESTIONS', checked: 0, persisted: [] };
+            return { skipped: 'NO_SUGGESTIONS', checked: 0, ...empty };
         }
 
-        const changedFilenames = new Set(changedFiles.map((f) => f.filename));
-        const toValidate = candidates
-            .filter(
-                (s) => s.relevantFile && changedFilenames.has(s.relevantFile),
-            )
-            .map((s) => ({
-                id: s.id,
-                relevantFile: s.relevantFile,
-                language: s.language,
-                existingCode: s.existingCode,
-                improvedCode: s.improvedCode,
-                label: s.label,
-                severity: s.severity,
-            }));
+        const patches = new Map(changedFiles.map((f) => [f.filename, f.patch]));
+        const onChangedFiles = candidates.filter(
+            (s) => s.relevantFile && patches.has(s.relevantFile),
+        );
 
-        if (!toValidate.length) {
+        if (!onChangedFiles.length) {
             return {
                 skipped: 'NO_RELEVANT_CHANGES',
                 checked: candidates.length,
-                persisted: [],
+                ...empty,
             };
         }
 
-        const codePatch = changedFiles
-            .filter((f) => f.patch)
-            .map((f) => `File: ${f.filename}\n${f.patch}`)
-            .join('\n\n');
+        const unmeasured: ImplementationCheckResult['unmeasured'] = [];
+        const verdicts: { id: string; status: ImplementationStatus }[] = [];
+        const byFile = new Map<string, Partial<ISuggestion>[]>();
 
-        if (!codePatch) {
-            this.logger.warn({
-                message: `No code patch found for PR #${prNumber}`,
-                context: SuggestionService.name,
-                metadata: { prNumber },
-            });
-            return {
-                skipped: 'NO_PATCH',
-                checked: candidates.length,
-                persisted: [],
-            };
+        for (const s of onChangedFiles) {
+            // Only the changes since the last review say what the developer
+            // did; the whole PR's diff holds the code the suggestion was about.
+            if (diffSource === 'full' || diffSource === 'none') {
+                unmeasured.push({ id: s.id, reason: 'diff_unavailable' });
+            } else if (!patches.get(s.relevantFile)) {
+                unmeasured.push({ id: s.id, reason: 'diff_unavailable' });
+            } else {
+                byFile.set(s.relevantFile, [
+                    ...(byFile.get(s.relevantFile) || []),
+                    s,
+                ]);
+            }
         }
 
-        const persisted =
-            (await this.validateImplementedSuggestions(
-                organizationAndTeamData,
-                codePatch,
-                toValidate,
-                prNumber,
-            )) || [];
-
-        return { checked: candidates.length, persisted };
-    }
-
-    /**
-     * Validates if suggestions have been implemented by analyzing code patches
-     */
-    public async validateImplementedSuggestions(
-        organizationAndTeamData: OrganizationAndTeamData,
-        codePatch: string,
-        savedSuggestions: Partial<CodeSuggestion>[],
-        prNumber?: number,
-    ) {
-        try {
-            const filteredSuggestions =
-                this.filterSuggestionProperties(savedSuggestions);
-
-            // Routed through the org's own BYOK slot (falls back to the managed
-            // default when the org has none configured for this task) — this used
-            // BYOK, a leftover of the REQ-NOLC-01 migration off LangChain.
+        if (byFile.size) {
             const byokConfig =
                 await this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
                     LLM_TASK.codeReview,
                 );
+            const maxPromptTokens = Math.floor(
+                resolveContextWindow({
+                    byokMaxInputTokens: byokConfig?.maxInputTokens,
+                    modelName: byokConfig?.model || '',
+                }) * IMPLEMENTATION_CHECK_PROMPT_SHARE,
+            );
 
-            const implementedSuggestions =
-                await this.aiAnalysisService.validateImplementedSuggestions(
-                    organizationAndTeamData,
-                    prNumber,
-                    byokConfig,
-                    codePatch,
-                    filteredSuggestions,
-                );
+            const requests = [...byFile].map(([filename, suggestions]) => ({
+                suggestions,
+                file: { filename, patch: patches.get(filename) },
+                asked: suggestions.map((s): ImplementationCheckSuggestion => ({
+                    id: s.id,
+                    relevantLinesStart: s.relevantLinesStart,
+                    relevantLinesEnd: s.relevantLinesEnd,
+                    // What the developer read in the comment.
+                    problem: s.suggestionContent || s.fullExplanation || '',
+                    existingCode: s.existingCode,
+                    improvedCode: s.improvedCode,
+                })),
+            }));
 
-            if (implementedSuggestions && implementedSuggestions?.length > 0) {
-                // Create lookup map for O(1) access instead of O(n) find per iteration
-                const savedSuggestionsMap = new Map(
-                    savedSuggestions?.map((s) => [s.id, s]) ?? [],
-                );
-
-                const persistedSuggestions = [];
-
-                for (const suggestion of implementedSuggestions) {
-                    const savedSuggestion = savedSuggestionsMap.get(
-                        suggestion.id,
-                    );
-
-                    if (savedSuggestion) {
-                        await this.pullRequestService.updateSuggestion(
-                            savedSuggestion.id,
-                            {
-                                implementationStatus:
-                                    suggestion.implementationStatus,
-                                updatedAt: new Date().toISOString(),
-                            },
-                            organizationAndTeamData,
-                        );
-
-                        persistedSuggestions.push(suggestion);
-                    }
+            const files = requests.filter(({ file, asked, suggestions }) => {
+                const prompt = prompt_checkSuggestionImplementation({
+                    file,
+                    suggestions: asked,
+                });
+                // ~3 characters per token: generous for code, so a prompt that
+                // fits here fits the model.
+                if (Math.ceil(prompt.length / 3) <= maxPromptTokens) {
+                    return true;
                 }
+                for (const s of suggestions) {
+                    unmeasured.push({ id: s.id, reason: 'diff_too_large' });
+                }
+                return false;
+            });
 
-                return persistedSuggestions;
-            }
+            const limit = pLimit(IMPLEMENTATION_CHECK_CONCURRENCY);
+            const settled = await Promise.allSettled(
+                files.map(({ file, asked }) =>
+                    limit(() =>
+                        this.aiAnalysisService.checkSuggestionImplementation({
+                            organizationAndTeamData,
+                            prNumber,
+                            byokConfig,
+                            file,
+                            suggestions: asked,
+                        }),
+                    ),
+                ),
+            );
 
-            return [];
-        } catch (error) {
-            this.logger.log({
-                message: `Error when trying to validate implemented suggestions for PR#${prNumber}`,
-                error: error,
-                context: SuggestionService.name,
-                metadata: {
-                    organizationAndTeamData,
-                    prNumber: prNumber,
-                },
+            settled.forEach((outcome, i) => {
+                const {
+                    file: { filename },
+                    suggestions,
+                } = files[i];
+                if (outcome.status === 'fulfilled') {
+                    verdicts.push(...outcome.value.verdicts);
+                    unmeasured.push(...outcome.value.unmeasured);
+                    return;
+                }
+                this.logger.error({
+                    message: `Implementation check call failed for a file of PR#${prNumber}`,
+                    context: SuggestionService.name,
+                    error: outcome.reason,
+                    metadata: {
+                        organizationAndTeamData,
+                        prNumber,
+                        file: filename,
+                        suggestions: suggestions.length,
+                    },
+                });
+                for (const s of suggestions) {
+                    unmeasured.push({ id: s.id, reason: 'llm_error' });
+                }
             });
         }
+
+        const byId = new Map(onChangedFiles.map((s) => [s.id, s]));
+        const checkedAt = new Date().toISOString();
+        const persisted: Partial<CodeSuggestion>[] = [];
+        // Only whether a write matched matters here, never the PR document.
+        const write = (
+            id: string,
+            data: Partial<ISuggestion>,
+            condition?: { implementationStatusNotIn: ImplementationStatus[] },
+        ) =>
+            this.pullRequestService.updateSuggestion(
+                id,
+                data,
+                organizationAndTeamData,
+                { ...condition, returnDocument: false },
+            );
+        const writes = pLimit(IMPLEMENTATION_CHECK_WRITE_CONCURRENCY);
+
+        await Promise.all([
+            ...verdicts.map(({ id, status }) =>
+                writes(async () => {
+                    const record: ImplementationCheckRecord = {
+                        checkedAt,
+                        outcome: 'decided',
+                        verdict: status,
+                    };
+                    if (
+                        raisesImplementationStatus(
+                            byId.get(id)?.implementationStatus,
+                            status,
+                        )
+                    ) {
+                        const raised = await write(
+                            id,
+                            {
+                                implementationStatus: status,
+                                implementationCheck: record,
+                                updatedAt: checkedAt,
+                            },
+                            {
+                                implementationStatusNotIn:
+                                    statusesAtOrAbove(status),
+                            },
+                        );
+                        if (raised) {
+                            persisted.push({
+                                id,
+                                implementationStatus: status,
+                            });
+                            return;
+                        }
+                    }
+                    await write(id, { implementationCheck: record });
+                }),
+            ),
+            ...unmeasured.map(({ id, reason }) =>
+                writes(() => {
+                    const last = byId.get(id)?.implementationCheck?.verdict;
+                    return write(id, {
+                        implementationCheck: {
+                            checkedAt,
+                            outcome: 'unmeasured',
+                            reason,
+                            ...(last ? { verdict: last } : {}),
+                        },
+                    });
+                }),
+            ),
+        ]);
+
+        const tally = (values: string[]) =>
+            values.reduce<Record<string, number>>(
+                (acc, v) => ({ ...acc, [v]: (acc[v] || 0) + 1 }),
+                {},
+            );
+        this.logger.log({
+            message: `Implementation check for PR#${prNumber}: ${verdicts.length} decided, ${persisted.length} raised, ${unmeasured.length} unmeasured`,
+            context: SuggestionService.name,
+            metadata: {
+                organizationAndTeamData,
+                prNumber,
+                diffSource,
+                candidates: candidates.length,
+                onChangedFiles: onChangedFiles.length,
+                files: byFile.size,
+                decided: tally(verdicts.map((v) => v.status)),
+                raised: persisted.length,
+                unmeasured: countByReason(unmeasured),
+            },
+        });
+
+        return {
+            checked: candidates.length,
+            decided: verdicts.length,
+            persisted,
+            unmeasured,
+        };
     }
 
     /**
@@ -2334,8 +2434,9 @@ export class SuggestionService implements ISuggestionService {
                     ?.filter(
                         (suggestion) =>
                             suggestion.comment &&
-                            suggestion.implementationStatus !==
-                                ImplementationStatus.NOT_IMPLEMENTED &&
+                            resolvesSuggestionThread(
+                                suggestion.implementationStatus,
+                            ) &&
                             suggestion.deliveryStatus === DeliveryStatus.SENT,
                     )
                     .forEach((filteredSuggestion) => {
