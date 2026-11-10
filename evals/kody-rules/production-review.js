@@ -118,7 +118,7 @@ function repositoryFileAtRef(pr, repoDir, files = {}) {
     return {
         getRepositoryContentFile: async ({ repository, file, pullRequest }) => {
             if (repository?.name && repository.name !== ownName && repository.name !== pr.repositoryFullName) return null;
-            if (typeof files[file.filename] === 'string') {
+            if (typeof files?.[file.filename] === 'string') {
                 return { data: { content: Buffer.from(files[file.filename]).toString('base64'), encoding: 'base64' } };
             }
             const sha = shaOf[pullRequest?.head?.ref ?? pullRequest?.base?.ref];
