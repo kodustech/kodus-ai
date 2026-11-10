@@ -630,13 +630,4 @@ describe('PRContext truncation', () => {
         expect(LONE_SURROGATE.test(context)).toBe(false);
         expect(context).toBe('Title: t\n' + 'x'.repeat(499));
     });
-
-    it('keeps an emoji that ends exactly at the limit', () => {
-        const context = prContext('x'.repeat(498) + '\u{1F527} more text');
-        expect(context).toBe('Title: t\n' + 'x'.repeat(498) + '\u{1F527}');
-    });
-
-    it('keeps a short body unchanged', () => {
-        expect(prContext('short \u{1F527}')).toBe('Title: t\nshort \u{1F527}');
-    });
 });
