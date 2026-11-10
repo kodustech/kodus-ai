@@ -60,7 +60,8 @@ async function main() {
 main().then(
     (code) => process.exit(code),
     (err) => {
-        console.error(err);
+        // Only the text: an HTTP error object carries its request, with the key.
+        console.error(err instanceof Error ? err.stack || err.message : String(err));
         process.exit(1);
     },
 );

@@ -546,13 +546,15 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
 
     // #2508: a rule decomposed into atoms reaches the provider as one unit per
     // atom, all carrying the parent's uuid and sourcePath.
-    it('judges without references and warns with the review when loading them fails', async () => {
+    it('keeps the references that loaded and warns with the review when the other source fails', async () => {
         const { provider } = makeProvider([{ violations: [] }]);
         const warn = jest.fn();
         (provider as any).shardLogger = { warn, log: jest.fn() };
-        // A read that answers with something other than text makes the
-        // source-file load reject.
-        const read = jest.fn().mockResolvedValue(42);
+        jest.spyOn(
+            provider as any,
+            'loadContextOsReferences',
+        ).mockRejectedValue(new Error('boom'));
+        const read = jest.fn().mockResolvedValue('# the convention');
 
         await provider.execute(
             input({
@@ -572,10 +574,13 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
 
         const lastCall =
             mockJudge.mock.calls[mockJudge.mock.calls.length - 1][0];
-        expect(lastCall.references.size).toBe(0);
+        // The source file still reaches the judge; only the failed half is lost.
+        expect([...lastCall.references.keys()]).toEqual(['r1']);
         expect(warn).toHaveBeenCalledWith(
             expect.objectContaining({
-                message: expect.stringContaining('reference load failed'),
+                message: expect.stringContaining(
+                    'Context OS reference load failed',
+                ),
                 metadata: expect.objectContaining({
                     organizationAndTeamData: input().organizationAndTeamData,
                     prNumber: 1,

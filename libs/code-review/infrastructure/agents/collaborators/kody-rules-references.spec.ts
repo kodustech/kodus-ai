@@ -111,6 +111,23 @@ describe('loadRuleSourceReferences', () => {
         );
     });
 
+    it('treats a read that answers with something other than text as a failed read of that path only', async () => {
+        const logger = { warn: jest.fn() };
+        const index = await loadRuleSourceReferences(
+            [
+                { uuid: 'r1', rule: 'a', sourcePath: 'odd.md' },
+                { uuid: 'r2', rule: 'b', sourcePath: 'fine.md' },
+            ],
+            async (path) => (path === 'odd.md' ? (42 as any) : 'fine'),
+            { logger },
+        );
+
+        expect(index.has('r1')).toBe(false);
+        expect(index.get('r2')![0].content).toBe('fine');
+        expect(logger.warn).toHaveBeenCalledTimes(1);
+        expect(logger.warn.mock.calls[0][0].metadata.sourcePath).toBe('odd.md');
+    });
+
     it('skips rules without a sourcePath, empty files, and a missing sandbox', async () => {
         const read = jest.fn().mockResolvedValue('   ');
         expect(
@@ -200,7 +217,7 @@ describe('collectLoadedReferences', () => {
 
     // The budget is per rule, across its files, and counts each file's
     // header as the inlined text always did.
-    it('caps the total text per rule at maxRefChars across files', () => {
+    it('caps the total text per rule at maxRefChars across files, counting each file header', () => {
         const index = collectLoadedReferences(
             new Map([
                 [
@@ -213,12 +230,11 @@ describe('collectLoadedReferences', () => {
             ]),
             { maxRefChars: 120 },
         );
-        const chars = index
-            .get('r1')!
-            .map((r) => r.content)
-            .join('');
-        expect(chars.length).toBeLessThanOrEqual(120);
-        expect(chars.length).toBeGreaterThan(0);
+        // a.md's header plus its 100 characters already pass 120, so b.md
+        // gets nothing: the cut points of the text appended to rules before.
+        expect(index.get('r1')!.map((r) => r.content)).toEqual([
+            'X'.repeat(100),
+        ]);
     });
 
     it('skips empty content and returns an empty index for an empty or absent map', () => {
