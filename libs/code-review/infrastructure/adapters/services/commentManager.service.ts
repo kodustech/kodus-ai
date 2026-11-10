@@ -48,7 +48,10 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
-import { ICommentManagerService } from '@libs/code-review/domain/contracts/CommentManagerService.contract';
+import {
+    ICommentManagerService,
+    type ApprovalReasonOptions,
+} from '@libs/code-review/domain/contracts/CommentManagerService.contract';
 import { LLMResponseProcessor } from '@libs/ai-engine/infrastructure/adapters/services/llmResponseProcessor.transform';
 import {
     MessageTemplateProcessor,
@@ -131,6 +134,57 @@ export class CommentManagerService implements ICommentManagerService {
     }
 
     async postApprovalReason(
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+        repository: { name: string; id: string },
+        reason: string,
+        kind: 'approve' | 'hold',
+        options?: ApprovalReasonOptions,
+    ): Promise<void> {
+        try {
+            await this.publishApprovalReason(
+                organizationAndTeamData,
+                prNumber,
+                repository,
+                reason,
+                kind,
+                options,
+            );
+        } catch (error) {
+            const confirmed = options?.confirmedApproval;
+            if (kind === 'approve' && confirmed?.headSha && confirmed.baseSha) {
+                try {
+                    await this.pullRequestsService.setApprovalReasonDeliveryFailure(
+                        organizationAndTeamData.organizationId,
+                        repository.id,
+                        prNumber,
+                        {
+                            decision: 'approve',
+                            reason,
+                            occurredAt: new Date().toISOString(),
+                            reviewedHeadSha: confirmed.headSha,
+                            reviewedBaseSha: confirmed.baseSha,
+                        },
+                    );
+                } catch (persistenceError) {
+                    this.logger.warn({
+                        message:
+                            'Could not record approval reason delivery failure',
+                        context: CommentManagerService.name,
+                        error: persistenceError,
+                        metadata: {
+                            organizationAndTeamData,
+                            repositoryId: repository.id,
+                            prNumber,
+                        },
+                    });
+                }
+            }
+            throw error;
+        }
+    }
+
+    private async publishApprovalReason(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
         repository: { name: string; id: string },

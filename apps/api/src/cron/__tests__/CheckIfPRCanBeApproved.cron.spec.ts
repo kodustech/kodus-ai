@@ -1,3 +1,6 @@
+import { frozenContext } from '../../../../../test/fixtures/frozen-pipeline-context';
+import { RequestChangesOrApproveStage } from '@libs/code-review/pipeline/stages/finish-process-review.stage';
+import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
@@ -283,6 +286,95 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             deps.codeManagementService.createIssueComment,
         ).not.toHaveBeenCalled();
     });
+
+    it.each(['same', 'head', 'base'])(
+        'recovers pipeline-origin reason delivery only on the confirmed snapshot: %s',
+        async (snapshot) => {
+            const { deps, input, reviewed, live, execution, run } =
+                namedPolicyCase();
+            deps.pullRequestService.setApprovalReasonDeliveryFailure.mockImplementation(
+                async (_org, _repo, _number, failure) => {
+                    (input.pr as any).approvalReasonDeliveryFailure = failure;
+                    return true;
+                },
+            );
+            deps.codeManagementService.createIssueComment
+                .mockRejectedValueOnce(
+                    new Error('Transient publication failure'),
+                )
+                .mockResolvedValue({ id: 42 });
+            const manager = new CommentManagerService(
+                {} as any,
+                {} as any,
+                {} as any,
+                {} as any,
+                deps.codeManagementService,
+                deps.pullRequestService,
+            );
+            const stage = new RequestChangesOrApproveStage(
+                deps.codeManagementService,
+                { emit: jest.fn() } as any,
+                { resolve: async () => null } as any,
+                manager,
+            );
+            const result = await stage.execute(
+                frozenContext({
+                    organizationAndTeamData: input.organizationAndTeamData,
+                    repository: input.pr.repository,
+                    pullRequest: structuredClone({
+                        number: input.pr.number,
+                        ...live,
+                    }),
+                    lineComments: [],
+                    codeReviewConfig: input.codeReviewConfig,
+                    approvalDecision: reviewed,
+                    platformType: PlatformType.GITLAB,
+                }) as any,
+            );
+            expect(result.errors).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        substage: 'approval-reason-publication',
+                    }),
+                ]),
+            );
+            expect(
+                deps.codeManagementService.approvePullRequest,
+            ).toHaveBeenCalledTimes(1);
+            // The cron must repair delivery even though the review ended partial.
+            execution.status = AutomationStatus.PARTIAL_ERROR;
+            if (snapshot !== 'same') live[snapshot].sha = 'new-sha';
+            expect(await run()).toBe(false);
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalledTimes(snapshot === 'same' ? 2 : 1);
+            expect(
+                deps.codeManagementService.approvePullRequest,
+            ).toHaveBeenCalledTimes(1);
+            expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+            if (snapshot === 'same') {
+                expect(
+                    (input.pr as any).approvalReasonDeliveryFailure,
+                ).toBeNull();
+                expect(
+                    deps.codeManagementService.createIssueComment.mock
+                        .calls[1][0].body,
+                ).toContain(reviewed.reason);
+                await run();
+                expect(
+                    deps.codeManagementService.createIssueComment,
+                ).toHaveBeenCalledTimes(2);
+            } else {
+                expect(
+                    (input.pr as any).approvalReasonDeliveryFailure,
+                ).toMatchObject({
+                    decision: 'approve',
+                    reviewedHeadSha: 'head',
+                    reviewedBaseSha: 'base',
+                });
+            }
+        },
+    );
 
     it('retries a failed named-policy reason on the next cron pass without approving twice', async () => {
         const { deps, input, execution, run } = namedPolicyCase();

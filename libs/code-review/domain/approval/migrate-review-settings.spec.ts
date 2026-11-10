@@ -173,3 +173,22 @@ it('does not erase a repository-file label when deriving a directory author over
         expect.objectContaining({ labels: ['ready'], authors: ['bot'] }),
     ]);
 });
+
+it('inherits canonical routes independently of the scope default mode', () => {
+    const legacy = { reviewMode: 'heavy' as const };
+    expect(
+        resolveReviewSettings(defaults, legacy).riskReviewRouting.noRisk,
+    ).toBe('heavy');
+    const canonical = { ...legacy, riskReviewRouting: {} };
+    expect(resolveReviewSettings(defaults, canonical)).toMatchObject({
+        reviewMode: 'heavy',
+        riskReviewRouting: { noRisk: 'balanced', riskFound: 'heavy' },
+    });
+    expect(
+        resolveReviewSettings(
+            defaults,
+            { riskReviewRouting: { noRisk: 'heavy' } },
+            canonical,
+        ).riskReviewRouting.noRisk,
+    ).toBe('heavy');
+});

@@ -231,6 +231,19 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                         repository,
                         context.approvalDecision.reason,
                         'approve',
+                        context.approvalDecision.reviewedHeadSha &&
+                            context.approvalDecision.reviewedBaseSha
+                            ? {
+                                  confirmedApproval: {
+                                      headSha:
+                                          context.approvalDecision
+                                              .reviewedHeadSha,
+                                      baseSha:
+                                          context.approvalDecision
+                                              .reviewedBaseSha,
+                                  },
+                              }
+                            : undefined,
                     );
                 } catch (error) {
                     this.logger.warn({

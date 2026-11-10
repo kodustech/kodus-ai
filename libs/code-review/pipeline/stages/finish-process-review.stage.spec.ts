@@ -170,6 +170,7 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
             expect.anything(),
             expect.stringContaining('All clean PRs'),
             'approve',
+            { confirmedApproval: { headSha: 'head', baseSha: 'base' } },
         );
     });
 
@@ -313,6 +314,7 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
             expect.objectContaining({ id: 'repo-1' }),
             'Clean review.\nPlease deploy now.',
             'approve',
+            undefined,
         );
     });
 

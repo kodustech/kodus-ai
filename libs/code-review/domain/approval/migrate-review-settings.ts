@@ -46,6 +46,7 @@ export function resolveReviewSettings(
         },
     ]);
     let criteria: RiskCriterion[] = [];
+    let legacyRoutingMode = defaults.reviewMode;
     for (const source of sources) {
         const layer = source as Partial<CodeReviewConfig>;
         if (own(source, 'riskAssessmentActive')) {
@@ -60,8 +61,13 @@ export function resolveReviewSettings(
                 independent: false,
                 active: !!layer.approvalRiskActive,
             };
-        if (own(source, 'riskReviewRouting'))
+        if (own(source, 'riskReviewRouting')) {
             riskReviewRoutingSchema.parse(layer.riskReviewRouting);
+        } else if (own(source, 'reviewMode')) {
+            // Once this source uses canonical routing, its default review mode
+            // no longer owns a route. An empty object means inherit the routes.
+            legacyRoutingMode = layer.reviewMode;
+        }
         if (own(source, 'riskCriteria'))
             criteria = riskCriteriaSchema.parse(layer.riskCriteria);
         else if (own(source, 'approvalRiskInstructions')) {
@@ -119,7 +125,7 @@ export function resolveReviewSettings(
         riskCriteria: criteria,
         approvalPolicies: policies,
         riskReviewRouting: {
-            noRisk: effective.reviewMode === 'heavy' ? 'heavy' : 'balanced',
+            noRisk: legacyRoutingMode === 'heavy' ? 'heavy' : 'balanced',
             riskFound: 'heavy',
             ...saved.riskReviewRouting,
         },

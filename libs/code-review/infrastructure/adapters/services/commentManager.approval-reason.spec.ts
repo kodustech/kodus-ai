@@ -310,3 +310,102 @@ it.each([
         expect(codeManagement.createIssueComment).toHaveBeenCalledTimes(creates);
     },
 );
+
+it.each(['lookup', 'create', 'update'])(
+    'records confirmed approval delivery failure during %s and preserves the original error',
+    async (operation) => {
+        const error = new Error('Provider unavailable');
+        const code = {
+            getAllCommentsInPullRequest: jest
+                .fn()
+                .mockResolvedValue(
+                    operation === 'update'
+                        ? [
+                              {
+                                  id: 42,
+                                  body: formatApprovalReasonComment(
+                                      'hold',
+                                      'Earlier hold',
+                                  ),
+                              },
+                          ]
+                        : [],
+                ),
+            createIssueComment: jest.fn().mockResolvedValue({ id: 42 }),
+            updateIssueComment: jest.fn().mockResolvedValue({ id: 42 }),
+        };
+        code[
+            operation === 'lookup'
+                ? 'getAllCommentsInPullRequest'
+                : operation === 'create'
+                  ? 'createIssueComment'
+                  : 'updateIssueComment'
+        ].mockRejectedValueOnce(error);
+        const pullRequests = {
+            setApprovalReasonDeliveryFailure: jest.fn().mockResolvedValue(true),
+        };
+        const manager = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            code as any,
+            pullRequests as any,
+        );
+        await expect(
+            manager.postApprovalReason(
+                { organizationId: 'org', teamId: 'team' },
+                1,
+                { id: 'repo', name: 'api' },
+                'Approved by policy “Docs”.',
+                'approve',
+                { confirmedApproval: { headSha: 'head', baseSha: 'base' } },
+            ),
+        ).rejects.toBe(error);
+        expect(
+            pullRequests.setApprovalReasonDeliveryFailure,
+        ).toHaveBeenCalledWith(
+            'org',
+            'repo',
+            1,
+            expect.objectContaining({
+                decision: 'approve',
+                reason: 'Approved by policy “Docs”.',
+                reviewedHeadSha: 'head',
+                reviewedBaseSha: 'base',
+            }),
+        );
+    },
+);
+
+it.each(['hold', 'approve'] as const)(
+    'does not bind an unconfirmed %s comment failure to an approval',
+    async (kind) => {
+        const code = {
+            getAllCommentsInPullRequest: jest
+                .fn()
+                .mockRejectedValue(new Error('Lookup failed')),
+        };
+        const pullRequests = { setApprovalReasonDeliveryFailure: jest.fn() };
+        const manager = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            code as any,
+            pullRequests as any,
+        );
+        await expect(
+            manager.postApprovalReason(
+                { organizationId: 'org', teamId: 'team' },
+                1,
+                { id: 'repo', name: 'api' },
+                'Reason',
+                kind,
+            ),
+        ).rejects.toThrow('Lookup failed');
+        expect(
+            pullRequests.setApprovalReasonDeliveryFailure,
+        ).not.toHaveBeenCalled();
+    },
+);

@@ -1,6 +1,8 @@
+import { GetCodeReviewParameterUseCase } from '../get-code-review-parameter.use-case';
 import { UpdateOrCreateCodeReviewParameterUseCase } from '../update-or-create-code-review-parameter-use-case';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { resolveReviewSettings } from '@libs/code-review/domain/approval/migrate-review-settings';
+import { ApprovalPoliciesService } from '@libs/code-review/pipeline/services/approval-policies.service';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 
 function setup(approvalActive: boolean, provider = PlatformType.GITHUB) {
@@ -36,12 +38,10 @@ function setup(approvalActive: boolean, provider = PlatformType.GITHUB) {
     const centralized = {
         getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue(null),
         getScopedKodusConfigFileContent: jest.fn().mockResolvedValue(null),
-        createMutationPullRequestIfEnabled: jest
-            .fn()
-            .mockResolvedValue({
-                mode: 'centralized-pr',
-                prUrl: 'https://example.test/pr/1',
-            }),
+        createMutationPullRequestIfEnabled: jest.fn().mockResolvedValue({
+            mode: 'centralized-pr',
+            prUrl: 'https://example.test/pr/1',
+        }),
         buildCentralizedPath: ({ repositoryFolder, relativePath }) =>
             `${repositoryFolder}/${relativePath}`,
     };
@@ -332,5 +332,148 @@ it.each([PlatformType.BITBUCKET, PlatformType.FORGEJO])(
         expect(authorization.ensure).toHaveBeenCalled();
         expect(code.getTypeIntegration).toHaveBeenCalled();
         expect(save).not.toHaveBeenCalled();
+    },
+);
+
+it.each([
+    { repositoryId: 'repo' },
+    { repositoryId: 'repo', directoryId: 'dir' },
+])(
+    'preserves canonical choices equal to the parent over legacy settings at %j',
+    async (scope) => {
+        const { run, save, stored } = setup(true);
+        const policy = {
+            id: 'legacy-approval',
+            name: 'Bots',
+            enabled: true,
+            authors: ['new-bot'],
+        };
+        Object.assign(stored.configs, {
+            approvalPolicies: [policy],
+            riskAssessmentActive: true,
+        });
+        stored.repositories[0].directories[0].configs = {} as any;
+        const target = () =>
+            'directoryId' in scope
+                ? stored.repositories[0].directories[0].configs
+                : stored.repositories[0].configs;
+        Object.assign(target(), {
+            approvalAuthors: ['old-bot'],
+            approvalRiskActive: false,
+        });
+        save.mockImplementation(async (_org, value) => {
+            Object.assign(stored, structuredClone(value));
+            return true;
+        });
+        const read = () =>
+            resolveReviewSettings(
+                getDefaultKodusConfigFile(),
+                stored.configs,
+                stored.repositories[0].configs,
+                ...('directoryId' in scope ? [target()] : []),
+            );
+        await run(
+            { approvalPolicies: [policy], riskAssessmentActive: true },
+            scope,
+        );
+        expect(read().riskAssessmentActive).toBe(true);
+        expect(read().approvalPolicies).toEqual([policy]);
+        await run({ runOnDraft: false }, scope);
+        expect(read().riskAssessmentActive).toBe(true);
+        expect(read().approvalPolicies).toEqual([policy]);
+        const live = {
+            head: { sha: 'head' },
+            base: { sha: 'base' },
+            user: { login: 'old-bot' },
+            labels: [],
+        };
+        const service = new ApprovalPoliciesService(
+            { getPullRequest: async () => live } as any,
+            { findByKey: async () => undefined } as any,
+            { isEnabled: async () => true } as any,
+            {} as any,
+        );
+        const result = await service.evaluate({
+            organizationAndTeamData: { organizationId: 'org', teamId: 'team' },
+            repository: { id: 'repo', name: 'api' },
+            pullRequest: { number: 1, ...live },
+            config: { ...read(), riskAssessmentActive: false },
+            platformType: PlatformType.GITHUB,
+            reviewClean: true,
+            fullPrFiles: [],
+        });
+        expect(result.decision.kind).not.toBe('approve');
+    },
+);
+
+it.each([false, true])(
+    'saves Balanced routing over a legacy Heavy default (Undo: %p)',
+    async (undo) => {
+        const { run, save, stored } = setup(true);
+        stored.repositories[0].configs = { reviewMode: 'heavy' };
+        stored.repositories[0].directories[0].configs = {} as any;
+        save.mockImplementation(async (_org, value) => {
+            Object.assign(stored, structuredClone(value));
+            return true;
+        });
+        const scope = {
+            repositoryId: 'repo',
+            ...(undo ? { inheritFields: ['riskReviewRouting.noRisk'] } : {}),
+        };
+        // Routing sends its default mode alongside the per-risk settings.
+        await run(
+            {
+                reviewMode: 'heavy',
+                riskReviewRouting: { noRisk: 'balanced', riskFound: 'heavy' },
+            },
+            scope,
+        );
+        const read = () =>
+            resolveReviewSettings(
+                getDefaultKodusConfigFile(),
+                stored.configs,
+                stored.repositories[0].configs,
+            );
+        expect(read().riskReviewRouting.noRisk).toBe('balanced');
+        expect(read().reviewMode).toBe('heavy');
+        await run({ runOnDraft: false }, { repositoryId: 'repo' });
+        expect(read().riskReviewRouting.noRisk).toBe('balanced');
+        expect(read().reviewMode).toBe('heavy');
+        if (undo) {
+            expect(
+                stored.repositories[0].configs.riskReviewRouting,
+            ).not.toHaveProperty('noRisk');
+            const get = new GetCodeReviewParameterUseCase(
+                {
+                    findByKey: async () => ({
+                        toObject: () => ({
+                            configValue: stored,
+                            createdAt: new Date('2026-01-01'),
+                        }),
+                    }),
+                } as any,
+                {} as any,
+                {} as any,
+                {
+                    buildConfigKey: () => 'key',
+                    getReference: async () => null,
+                    getMultipleReferences: async () => new Map(),
+                } as any,
+            );
+            const view = await get.execute(
+                { organization: { uuid: 'org' } } as any,
+                'team',
+                { skipAuthorization: true },
+            );
+            expect(
+                view.configValue.repositories[0].configs.riskReviewRouting
+                    .noRisk,
+            ).toMatchObject({
+                value: 'balanced',
+                level: 'default',
+            });
+            await run({ riskReviewRouting: { noRisk: 'heavy' } });
+            expect(read().riskReviewRouting.noRisk).toBe('heavy');
+        }
     },
 );
