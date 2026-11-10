@@ -153,6 +153,8 @@ export class BusinessLogicRecheckService {
                         organizationAndTeamData,
                         repository,
                         prNumber: run.pullRequestNumber!,
+                        headSha: pr.head?.sha,
+                        baseSha: pr.base?.sha,
                     }),
                 ),
         };

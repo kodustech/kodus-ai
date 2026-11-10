@@ -2038,7 +2038,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         expect(
             deps.codeManagementService.getFilesByPullRequestId,
         ).toHaveBeenCalledWith(
-            expect.not.objectContaining({ headSha: expect.anything() }),
+            expect.objectContaining({
+                headSha: 'same-sha',
+                baseSha: undefined,
+            }),
             expect.anything(),
         );
         expect(
@@ -2591,7 +2594,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 deps.codeManagementService.getFilesByPullRequestId,
             ).toHaveBeenNthCalledWith(
                 2,
-                expect.not.objectContaining({ headSha: expect.anything() }),
+                expect.objectContaining({
+                    headSha: 'head-1',
+                    baseSha: 'base-2',
+                }),
                 expect.anything(),
             );
             expect(

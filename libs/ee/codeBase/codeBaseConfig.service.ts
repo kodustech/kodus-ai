@@ -494,7 +494,6 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             this.logger.warn({
                 message: 'Invalid risk or approval settings',
                 context: CodeBaseConfigService.name,
-                error: new Error(merged.reviewSettingsError),
                 metadata: {
                     organizationAndTeamData,
                     repositoryId: repository.id,

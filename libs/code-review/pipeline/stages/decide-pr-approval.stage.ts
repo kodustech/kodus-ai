@@ -203,6 +203,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                   repository,
                   prNumber: pullRequest.number,
                   headSha,
+                  baseSha: pullRequest.base?.sha,
               })))
             : [];
         if (

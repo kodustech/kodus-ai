@@ -679,9 +679,14 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                                 },
                                                                 prNumber:
                                                                     pr.number,
-                                                                // The GitHub adapter caches by head only.
-                                                                // A new base can change this diff, so a
-                                                                // directory-policy miss must fetch live files.
+                                                                headSha:
+                                                                    currentPullRequest
+                                                                        ?.head
+                                                                        ?.sha,
+                                                                baseSha:
+                                                                    currentPullRequest
+                                                                        ?.base
+                                                                        ?.sha,
                                                             },
                                                             pr.provider as PlatformType,
                                                         ),
@@ -1418,6 +1423,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                             this.codeManagementService.getFilesByPullRequestId(
                                 {
                                     ...codeManagementRequestData,
+                                    headSha: currentPullRequest?.head?.sha,
+                                    baseSha: currentPullRequest?.base?.sha,
                                 },
                                 platformType,
                             ),

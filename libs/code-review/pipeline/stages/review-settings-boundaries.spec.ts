@@ -1,3 +1,5 @@
+import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
+import { prRiskDescriptionKey } from '@libs/code-review/domain/risk/risk-configuration';
 import type { RiskAssessmentResult } from '@libs/code-review/domain/risk/risk-assessment';
 import * as yaml from 'js-yaml';
 import CodeBaseConfigService from '@libs/ee/codeBase/codeBaseConfig.service';
@@ -553,12 +555,19 @@ it('binds migrated conditional approvals to the same reviewed head, base and met
 });
 
 it.each([
-    [BehaviourForExistingDescription.CONCATENATE, false],
-    [BehaviourForExistingDescription.REPLACE, false],
-    [BehaviourForExistingDescription.REPLACE, true],
+    [BehaviourForExistingDescription.CONCATENATE, 'none', 'normal'],
+    [BehaviourForExistingDescription.REPLACE, 'none', 'normal'],
+    [BehaviourForExistingDescription.REPLACE, 'body', 'normal'],
+    [BehaviourForExistingDescription.REPLACE, 'head', 'normal'],
+    [BehaviourForExistingDescription.REPLACE, 'base', 'normal'],
+    [BehaviourForExistingDescription.REPLACE, 'after-body', 'normal'],
+    [BehaviourForExistingDescription.REPLACE, 'after-head', 'normal'],
+    [BehaviourForExistingDescription.REPLACE, 'after-base', 'normal'],
+    [BehaviourForExistingDescription.REPLACE, 'none', 'skipped'],
+    [BehaviourForExistingDescription.REPLACE, 'none', 'truncated'],
 ])(
-    'binds the real summary write only while the assessed context is current (%s, author edit=%s)',
-    async (behaviour, authorEdit) => {
+    'only rebinds a confirmed summary write (%s, concurrent edit=%s, output=%s)',
+    async (behaviour, edit, output) => {
         const s = setup({
             riskAssessmentActive: true,
             approvalPolicies: [policy],
@@ -568,34 +577,45 @@ it.each([
             },
         });
         let live = { ...livePr, body: 'Human-authored context. Closes #12' };
+        const changeLive = (field: string) => {
+            if (field === 'body')
+                live = { ...live, body: 'New human context.' };
+            if (field === 'head') live = { ...live, head: { sha: 'new-head' } };
+            if (field === 'base') live = { ...live, base: { sha: 'new-base' } };
+        };
         s.context.pullRequest = live;
         s.context.initialCommentData = { commentId: 1 };
         s.host.getPullRequest.mockImplementation(async () => live);
         s.host.getPullRequestByNumber.mockImplementation(async () => live);
+        const publish = jest.fn(async ({ summary }) => {
+            live = {
+                ...live,
+                body: fitPRDescription(summary, PlatformType.GITHUB),
+            };
+            if (edit.startsWith('after-')) changeLive(edit.slice(6));
+        });
         const writer = new CommentManagerService(
             {} as any,
             {} as any,
             {} as any,
             { resolveTaskSlot: async () => undefined } as any,
-            {
-                ...s.host,
-                updateDescriptionInPullRequest: async ({ summary }) => {
-                    live = { ...live, body: summary };
-                },
-            } as any,
+            { ...s.host, updateDescriptionInPullRequest: publish } as any,
             {} as any,
         );
-        // Script the model output; use production summary formatting and host writing.
-        jest.spyOn(writer as any, 'runSummaryPromptV5').mockImplementation(
-            async () => {
-                if (authorEdit)
-                    live = {
-                        ...live,
-                        body: 'New human context while the model was running.',
-                    };
-                return '## Summary\nUpdated the constant.';
-            },
-        );
+        // Keep production formatting, chunk-limit no-op and host size fitting.
+        const model = jest
+            .spyOn(writer as any, 'runSummaryPromptV5')
+            .mockImplementation(async () => {
+                changeLive(edit);
+                return output === 'truncated'
+                    ? '## Summary\n' + 'Change details. '.repeat(5000)
+                    : '## Summary\nUpdated the constant.';
+            });
+        if (output === 'skipped')
+            jest.spyOn(
+                writer as any,
+                'chunkChangedFilesForSummary',
+            ).mockReturnValue(null);
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             writer,
             s.metadata as any,
@@ -613,24 +633,33 @@ it.each([
                 },
             } as any),
         );
-        expect(live.body).not.toBe(s.context.pullRequest.body);
         expect(result.approvalDecision.kind).toBe(
-            authorEdit ? 'hold' : 'approve',
+            edit === 'none' ? 'approve' : 'hold',
         );
-        if (authorEdit) {
-            expect(live.body).toBe(
-                'New human context while the model was running.',
-            );
-            expect(snapshotOf(result.riskAssessment).descriptionKey).toBe(
+        expect(publish).toHaveBeenCalledTimes(
+            ['body', 'head', 'base'].includes(edit) || output === 'skipped'
+                ? 0
+                : 1,
+        );
+        const descriptionKey = snapshotOf(result.riskAssessment).descriptionKey;
+        if (edit !== 'none' || output === 'skipped')
+            expect(descriptionKey).toBe(
                 snapshotOf(assessed.riskAssessment).descriptionKey,
             );
-        } else
-            expect(snapshotOf(result.riskAssessment).descriptionKey).not.toBe(
+        else {
+            expect(descriptionKey).toBe(prRiskDescriptionKey(live));
+            expect(descriptionKey).not.toBe(
                 snapshotOf(assessed.riskAssessment).descriptionKey,
             );
+        }
+        if (output === 'skipped') expect(model).not.toHaveBeenCalled();
+        if (output === 'truncated') {
+            expect(live.body.length).toBe(65536);
+            expect(live.body).toContain('truncated by Kody');
+        }
         await s.finish.execute(result);
         expect(s.host.approvePullRequest).toHaveBeenCalledTimes(
-            authorEdit ? 0 : 1,
+            edit === 'none' ? 1 : 0,
         );
     },
 );
@@ -660,11 +689,12 @@ it('keeps parser details private and logs the actual configuration scope', async
             'hold',
         );
         expect(warn).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify(warn.mock.calls)).not.toContain(
+            'Legacy approval filters',
+        );
+        expect(warn.mock.calls[0][0]).not.toHaveProperty('error');
         expect(warn).toHaveBeenCalledWith(
             expect.objectContaining({
-                error: expect.objectContaining({
-                    message: expect.stringContaining('Legacy approval filters'),
-                }),
                 metadata: expect.objectContaining({
                     organizationAndTeamData: org,
                     repositoryId: 'repo',

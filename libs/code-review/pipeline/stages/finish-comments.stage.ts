@@ -33,6 +33,7 @@ import { PostTracePrCommentUseCase } from '@libs/cli-review/application/use-case
 import { resolveBusinessLogicSettings } from '@libs/agents/business-validation/settings';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { retryWithBackoff } from '@libs/common/utils/polling';
+import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import {
     is429Error,
     isTransientFetchError,
@@ -264,12 +265,18 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 // summary keeps or replaces it. Read here, not inside the model
                 // call, so a code-host failure is reported as one.
                 const currentPR = await retryWithBackoff(
-                    () =>
-                        this.codeManagementService.getPullRequestByNumber({
+                    () => {
+                        const request = {
                             organizationAndTeamData,
                             repository,
                             prNumber: pullRequest.number,
-                        }),
+                        };
+                        return context.riskAssessment?.status === 'assessed'
+                            ? this.codeManagementService.getPullRequest(request)
+                            : this.codeManagementService.getPullRequestByNumber(
+                                  request,
+                              );
+                    },
                     {
                         maxAttempts: 3,
                         shouldRetry: isTransientCodeHostError,
@@ -310,8 +317,9 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 // that known transformation only if the assessed human context
                 // and both commits are still current immediately before it.
                 const risk = context.riskAssessment;
-                let publishedDescriptionKey: string | undefined;
+                let expectedPublishedBody: string | undefined;
                 if (
+                    summaryPR &&
                     risk?.status === 'assessed' &&
                     currentPR &&
                     risk.snapshot.descriptionKey ===
@@ -335,10 +343,10 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                         prRiskDescriptionKey(beforePublish) ===
                             risk.snapshot.descriptionKey
                     ) {
-                        publishedDescriptionKey = prRiskDescriptionKey({
-                            title: beforePublish.title,
-                            body: summaryPR,
-                        });
+                        expectedPublishedBody = fitPRDescription(
+                            summaryPR,
+                            platformType,
+                        );
                     } else {
                         throw new Error(
                             'The PR changed while Kody was generating its summary.',
@@ -352,12 +360,39 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     repository,
                     summaryPR,
                 );
-                if (publishedDescriptionKey)
-                    context = this.updateContext(context, (draft) => {
-                        if (draft.riskAssessment?.status === 'assessed')
-                            draft.riskAssessment.snapshot.descriptionKey =
-                                publishedDescriptionKey;
-                    });
+                if (
+                    expectedPublishedBody !== undefined &&
+                    risk?.status === 'assessed'
+                ) {
+                    // Hosts may trim descriptions. Confirm the exact write and
+                    // both refs before treating it as Kody's own transformation.
+                    const published = await retryWithBackoff(
+                        () =>
+                            this.codeManagementService.getPullRequest({
+                                organizationAndTeamData,
+                                repository,
+                                prNumber: pullRequest.number,
+                            }),
+                        {
+                            maxAttempts: 3,
+                            shouldRetry: isTransientCodeHostError,
+                        },
+                    );
+                    if (
+                        published?.head?.sha === risk.snapshot.headSha &&
+                        published?.base?.sha === risk.snapshot.baseSha &&
+                        published.title === currentPR.title &&
+                        published.body === expectedPublishedBody
+                    ) {
+                        const publishedDescriptionKey =
+                            prRiskDescriptionKey(published);
+                        context = this.updateContext(context, (draft) => {
+                            if (draft.riskAssessment?.status === 'assessed')
+                                draft.riskAssessment.snapshot.descriptionKey =
+                                    publishedDescriptionKey;
+                        });
+                    }
+                }
             } catch (error) {
                 // Terminal BYOK (suspended key / no credit) on the model call →
                 // warn: user's provider config, not a Kodus fault. A git
