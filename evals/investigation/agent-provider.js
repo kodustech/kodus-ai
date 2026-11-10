@@ -3,10 +3,8 @@ require('tsconfig-paths/register');
 
 const fs = require('fs');
 const path = require('path');
-const dotenv = require('dotenv');
 
-dotenv.config({ path: path.join(__dirname, '../../.env') });
-dotenv.config({ path: path.join(__dirname, '../../.env.local'), override: true });
+require('../shared/load-env').loadEnv();
 
 // The current review stack imports BYOK helpers that eagerly load the crypto util.
 // The investigation eval does not decrypt org secrets, so a deterministic dummy

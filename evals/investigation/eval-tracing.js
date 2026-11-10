@@ -17,10 +17,8 @@
  * spans pendentes junto — o processador exporta em lote.
  */
 const path = require('path');
-const dotenv = require('dotenv');
 
-dotenv.config({ path: path.join(__dirname, '../../.env') });
-dotenv.config({ path: path.join(__dirname, '../../.env.local'), override: true });
+require('../shared/load-env').loadEnv();
 
 let lf = null;
 const lfMod = () => lf || (lf = require(path.join(__dirname, '../../libs/core/log/langfuse.ts')));
