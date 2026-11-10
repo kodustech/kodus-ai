@@ -18,9 +18,9 @@
  *   psql "$PROD_REPLICA_URL" -At -f scripts/sql/byok-prod-shapes.sql > dump.json
  *
  * It filters to organizations that still have an ACTIVE auth_integration, so a
- * churned customer's config stops driving the matrix. The credential fields are
- * redacted there too; this script strips them again and refuses to write a
- * fixture that still contains one.
+ * churned customer's config stops driving the matrix. It selects the slot fields
+ * by name and never reads a credential; this script refuses a dump that carries
+ * one, and refuses to write a fixture that still contains one.
  *
  * ── USAGE ────────────────────────────────────────────────────────────────────
  *   node scripts/refresh-byok-prod-shapes.mjs <dump.json>           # write
@@ -147,33 +147,55 @@ function cleanSlot(slot) {
 const raw = JSON.parse(readFileSync(dumpPath, 'utf8'));
 const rows = Array.isArray(raw) ? raw : (raw.rows ?? []);
 
-/** shape signature -> { slot, orgs } — orgs is a COUNT, never an id. */
+// The query selects fields by name and never reads a credential. A dump that
+// still carries one came from another query, and it is refused before anything
+// is parsed rather than trusted to be stripped below.
+const credentialKeysInDump = (value, found = new Set()) => {
+    if (Array.isArray(value)) {
+        for (const v of value) credentialKeysInDump(v, found);
+    } else if (value && typeof value === 'object') {
+        for (const [k, v] of Object.entries(value)) {
+            if (CREDENTIAL_FIELDS.has(k)) found.add(k);
+            credentialKeysInDump(v, found);
+        }
+    }
+    return found;
+};
+const dumpLeaks = credentialKeysInDump(rows);
+if (dumpLeaks.size) {
+    console.error(
+        `refusing the dump — it carries credential fields (${[...dumpLeaks].join(', ')}). ` +
+            'Produce it with scripts/sql/byok-prod-shapes.sql and delete this file.',
+    );
+    process.exit(1);
+}
+
+/** shape signature -> slot, plus the orgs that run it. Only the COUNT of orgs
+ *  is written, never an id. */
 const byShape = new Map();
 let slotCount = 0;
 for (const row of rows) {
-    const cv = row?.configValue;
-    if (!cv || typeof cv !== 'object') continue;
-    for (const position of ['main', 'fallback']) {
-        const slot = cv[position];
-        if (!slot || typeof slot !== 'object') continue;
-        slotCount++;
-        const clean = cleanSlot(slot);
-        if (!clean.provider || !clean.model) continue;
-        // Sorted keys so two equal configs written in a different order are ONE
-        // shape; every surviving field is part of the signature, so a config
-        // that differs only in maxConcurrentRequests stays a distinct case.
-        const sig = JSON.stringify(
-            Object.fromEntries(Object.entries(clean).sort(([a], [b]) => a.localeCompare(b))),
-        );
-        const hit = byShape.get(sig);
-        if (hit) hit.orgs++;
-        else byShape.set(sig, { ...clean, orgs: 1 });
-    }
+    if (!row || typeof row !== 'object') continue;
+    const { organization_id: orgId, ...slot } = row;
+    slotCount++;
+    const clean = cleanSlot(slot);
+    if (!clean.provider || !clean.model) continue;
+    // Sorted keys so two equal configs written in a different order are ONE
+    // shape; every surviving field is part of the signature, so a config
+    // that differs only in maxConcurrentRequests stays a distinct case.
+    const sig = JSON.stringify(
+        Object.fromEntries(Object.entries(clean).sort(([a], [b]) => a.localeCompare(b))),
+    );
+    const hit = byShape.get(sig);
+    if (hit) hit.orgIds.add(orgId);
+    else byShape.set(sig, { slot: clean, orgIds: new Set([orgId]) });
 }
 
-const shapes = [...byShape.values()].sort((a, b) =>
-    `${a.provider}${a.model}`.localeCompare(`${b.provider}${b.model}`),
-);
+const shapes = [...byShape.values()]
+    .map(({ slot, orgIds }) => ({ ...slot, orgs: orgIds.size }))
+    .sort((a, b) =>
+        `${a.provider}${a.model}`.localeCompare(`${b.provider}${b.model}`),
+    );
 
 // Refuse to emit anything that still looks like a credential or an org id.
 const blob = JSON.stringify(shapes);
