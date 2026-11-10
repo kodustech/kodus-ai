@@ -7,11 +7,36 @@ import picomatch from 'picomatch';
  * Solution: Cache compiled matchers by pattern string
  *
  * The cache is bounded by MAX_CACHE_SIZE to prevent memory leaks.
- * Uses simple Map with LRU-like eviction (clear when full).
+ *
+ * Sizing: every team's default `ignorePaths` carries ~1,100 patterns since
+ * the global ignore list moved into the setting (migration
+ * 2026082700000000-BackfillIgnorePathsFromGlobalList). The previous bound
+ * was 500 with a clear-all eviction: walking a 1,100-pattern list filled
+ * the cache, wiped it, and refilled it on every file, so no lookup ever
+ * hit and every pattern was recompiled for every file. On a 970-file PR
+ * that blocked the worker event loop for ~30s in production.
+ *
+ * The bound now holds the default list plus team-specific patterns, and
+ * eviction drops only the oldest-inserted slice, so a working set below
+ * the bound is never wiped.
  */
 const MATCHER_CACHE_CASE_SENSITIVE = new Map<string, picomatch.Matcher>();
 const MATCHER_CACHE_CASE_INSENSITIVE = new Map<string, picomatch.Matcher>();
-const MAX_CACHE_SIZE = 500; // Reasonable limit for glob patterns
+const MAX_CACHE_SIZE = 5_000;
+/** Share of the cache dropped when it is full (oldest-inserted first). */
+const EVICTION_BATCH = Math.ceil(MAX_CACHE_SIZE / 10);
+
+function evictOldest(cache: Map<string, picomatch.Matcher>): void {
+    // Map iterates in insertion order, so the first keys are the oldest.
+    let removed = 0;
+    for (const key of cache.keys()) {
+        if (removed >= EVICTION_BATCH) {
+            break;
+        }
+        cache.delete(key);
+        removed++;
+    }
+}
 
 /**
  * Gets or creates a cached matcher for a pattern.
@@ -32,10 +57,9 @@ function getCachedMatcher(
         return matcher;
     }
 
-    // Evict cache if too large (simple strategy: clear all)
-    // In practice, patterns are reused heavily so this rarely triggers
+    // Never clear-all: see the cache sizing note above.
     if (cache.size >= MAX_CACHE_SIZE) {
-        cache.clear();
+        evictOldest(cache);
     }
 
     matcher = picomatch(pattern, {
