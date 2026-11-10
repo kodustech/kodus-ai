@@ -1,4 +1,4 @@
-import { createThrowawayRepo, deleteRepo } from '../lib/github-repos.js';
+import { createThrowawayRepo } from '../lib/github-repos.js';
 import { registerIntegration, registerRepo } from '../lib/onboarding.js';
 import { runSlug } from '../lib/trial-provision.js';
 import { makeProvider } from '../providers/index.js';
@@ -1031,9 +1031,29 @@ export const riskRoutingPipeline: Scenario = {
             };
             return await riskRoutingPipelineOnRepo.run(isolated);
         } finally {
+            // Keep the private PR evidence reachable while disabling further activity.
+            const cleanup = await http<{ archived: boolean }>(
+                `https://api.github.com/repos/${fullName}`,
+                {
+                    method: 'PATCH',
+                    headers: {
+                        Authorization: `Bearer ${process.env.GH_REPO_ADMIN_TOKEN || ctx.provider.authToken()}`,
+                        Accept: 'application/vnd.github+json',
+                    },
+                    body: { archived: true },
+                },
+            );
             ctx.assert(
-                await deleteRepo(fullName),
-                'Could not delete this run’s isolated risk QA repository.',
+                cleanup.status === 200 && cleanup.body.archived,
+                'Could not archive this run’s private risk QA repository.',
+            );
+            writeFileSync(
+                join(ctx.artifactDir, 'qa-repository-cleanup.json'),
+                JSON.stringify(
+                    { repository: fullName, private: true, archived: true },
+                    null,
+                    2,
+                ),
             );
         }
     },
