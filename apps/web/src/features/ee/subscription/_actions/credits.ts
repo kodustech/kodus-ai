@@ -118,7 +118,18 @@ export const updateCreditAutoTopUpAction = async (params: {
 }) => {
     await assertCanManageCredits();
     try {
-        const result = await updateCreditAutoTopUp(params);
+        let result = await updateCreditAutoTopUp(params);
+        // A successful mutation may return only the saved fields. Recover
+        // the budget from its read endpoint before deciding this save failed.
+        if (
+            params.monthlyLimitUsd !== undefined &&
+            result?.monthlyLimitUsd === params.monthlyLimitUsd &&
+            result.monthlyPurchasedUsd === undefined
+        ) {
+            const balance = await getCreditBalance({ teamId: params.teamId });
+            if (balance?.autoTopUp)
+                result = { ...result, ...balance.autoTopUp };
+        }
         // During a rolling deploy an older billing instance can ignore new
         // fields. Never claim a spending cap was saved without its response.
         if (
