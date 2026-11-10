@@ -1,0 +1,2 @@
+version: 1
+fakes: { stripe: { image: stripe-mock, env: { SAME: a } }, email: { image: mailpit, env: { SAME: b } } }

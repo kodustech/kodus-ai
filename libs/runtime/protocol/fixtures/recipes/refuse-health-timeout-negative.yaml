@@ -1,0 +1,9 @@
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    public: web
+    health: /health
+    health_timeout: -30
+  expose:
+    - { service: web, port: 8080, kind: http }

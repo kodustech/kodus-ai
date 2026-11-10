@@ -1,0 +1,13 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Sid": "Describe", "Effect": "Allow", "Action": "ec2:DescribeInstances", "Resource": "*" },
+    {
+      "Sid": "TerminateOnlyThisCell",
+      "Effect": "Allow",
+      "Action": "ec2:TerminateInstances",
+      "Resource": "arn:aws:ec2:${Region}:${Account}:instance/*",
+      "Condition": { "StringEquals": { "ec2:ResourceTag/kodus:cell": "${CellId}" } }
+    }
+  ]
+}

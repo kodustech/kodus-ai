@@ -1,0 +1,44 @@
+{
+  "name": "hello-features",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "type": "hello",
+    "body": {
+      "versions": [
+        1
+      ],
+      "driver": "aws-ec2",
+      "isolation": "vm",
+      "regions": [
+        "us-east-1"
+      ],
+      "owner": "kodus",
+      "features": [
+        "seedsCache",
+        "claimSize",
+        "egressAllow",
+        "poolMachineSize",
+        "authoredFiles",
+        "readyBuildSteps",
+        "cellMemory",
+        "timedRequests",
+        "serviceLogs",
+        "dbEffects",
+        "outboundCalls",
+        "execCast",
+        "browser",
+        "canaries"
+      ],
+      "maxClaimSize": {
+        "memoryMb": 16384,
+        "cpus": 8
+      }
+    }
+  },
+  "expect": {
+    "ok": true,
+    "type": "hello"
+  }
+}

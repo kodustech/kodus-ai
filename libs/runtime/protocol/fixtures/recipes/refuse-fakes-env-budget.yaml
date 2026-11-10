@@ -1,0 +1,38 @@
+version: 1
+fakes:
+  stripe:
+    image: stripe-mock
+    env:
+      ENV_0: value
+      ENV_1: value
+      ENV_2: value
+      ENV_3: value
+      ENV_4: value
+      ENV_5: value
+      ENV_6: value
+      ENV_7: value
+      ENV_8: value
+      ENV_9: value
+      ENV_10: value
+      ENV_11: value
+      ENV_12: value
+      ENV_13: value
+      ENV_14: value
+      ENV_15: value
+      ENV_16: value
+      ENV_17: value
+      ENV_18: value
+      ENV_19: value
+      ENV_20: value
+      ENV_21: value
+      ENV_22: value
+      ENV_23: value
+      ENV_24: value
+      ENV_25: value
+      ENV_26: value
+      ENV_27: value
+      ENV_28: value
+      ENV_29: value
+      ENV_30: value
+      ENV_31: value
+      ENV_32: value

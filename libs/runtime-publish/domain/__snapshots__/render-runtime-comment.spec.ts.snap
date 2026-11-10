@@ -1,0 +1,53 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`browser probe paths (ADR-071) renders the kr-shop comment 1`] = `
+"### Kody Runtime · 2 regressions
+
+Booted in 1m 48s · 2 probe outcomes · 2 regressions
+Ran because: this pull request was opened or updated
+
+**Findings**
+
+- **Regression** \`GET /\` (reaches \`public/app.js\`): browser steps 4/4 passed on main, 3/4 on this PR; step 4 \`expectText #orders\` fails on this PR; 1.3% of the screen changed. [Screenshots and video](https://app.kodus.test/runtime/runs/0b9f4c1e-8d2a-4f6b-9a3c-1e2d3f4a5b6c)
+- **Regression** \`GET /\` (reaches \`public/index.html\`): browser steps 3/3 passed on main, 3/3 on this PR; step 2 \`getAttribute #place\` differs. [Screenshots and video](https://app.kodus.test/runtime/runs/0b9f4c1e-8d2a-4f6b-9a3c-1e2d3f4a5b6c)
+
+<details><summary>Probe outcomes (2)</summary>
+
+| Path | main | this PR | Result |
+|---|---|---|---|
+| \`GET /\` (reaches \`public/app.js\`) | 4/4 steps | 3/4 steps | Regression |
+| \`GET /\` (reaches \`public/index.html\`) | 3/3 steps | 3/3 steps | Regression |
+
+</details>
+
+---
+Last run on \`a1b2c3d\` · [Open in Kodus](https://app.kodus.test/runtime/runs/0b9f4c1e-8d2a-4f6b-9a3c-1e2d3f4a5b6c) · [Run again](https://app.kodus.test/runtime/runs/0b9f4c1e-8d2a-4f6b-9a3c-1e2d3f4a5b6c#run-again) · 14 commands · machine destroyed"
+`;
+
+exports[`renderReportComment (screen 7) renders findings, what could not be tested, probe outcomes and the footer 1`] = `
+"### Kody Runtime · 1 regression
+
+Booted in 1m 48s · 2 probe outcomes · 1 regression
+Ran because: this pull request was opened or updated
+
+**Findings**
+
+- Confirmed 1 review suggestion: \`POST /orders\`.
+- **Regression** \`POST /orders\`: 400 on main, 500 on this PR. [Command and output](https://app.kodus.test/runtime/runs/0b9f4c1e-8d2a-4f6b-9a3c-1e2d3f4a5b6c)
+
+**Could not test**
+
+- \`POST /payments\`: missing \`STRIPE_TEST_KEY\`. [Add it](https://app.kodus.test/settings/code-review/repo-1/kody-runtime)
+
+<details><summary>Probe outcomes (2)</summary>
+
+| Path | main | this PR | Result |
+|---|---|---|---|
+| \`POST /orders\` | 400 | 500 | Regression |
+| \`GET /orders\` | 200 | 200 | Same on main and PR |
+
+</details>
+
+---
+Last run on \`a1b2c3d\` · [Open in Kodus](https://app.kodus.test/runtime/runs/0b9f4c1e-8d2a-4f6b-9a3c-1e2d3f4a5b6c) · [Run again](https://app.kodus.test/runtime/runs/0b9f4c1e-8d2a-4f6b-9a3c-1e2d3f4a5b6c#run-again) · 14 commands · machine destroyed"
+`;

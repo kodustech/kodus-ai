@@ -1,0 +1,18 @@
+# Smoke fixture for the local-docker driver: a busybox httpd and a postgres
+# with a seed. No secrets: postgres trusts local connections.
+services:
+  web:
+    image: busybox:1.36
+    command: ["sh", "-c", "mkdir -p /www && echo kody-smoke-ok > /www/index.html && echo ok > /www/health && exec httpd -f -p ${WEB_PORT} -h /www"]
+    ports: ["0.0.0.0:8080:8080"]
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-h", "127.0.0.1", "-U", "postgres"]
+      interval: 1s
+      retries: 60
+    volumes: [dbdata:/var/lib/postgresql/data]
+volumes:
+  dbdata: {}

@@ -1,0 +1,326 @@
+{
+    "$comment": "ENV-08: what the cell (apps/runtime-cell/internal/recipe), the worker (libs/runtime/protocol/recipe.ts, held to the cell's verdict) and Runo's parseRecipe say about each recipe. A path is from the repository root. A verdict is accept, or refuse: <text the error contains>. why says what a difference between the two is for. healthTimeoutSeconds, when set, is the wait an accepted recipe resolves to in the cell and the worker (health_timeout, capped at 900 s). healthTimeoutDefault, when true, says the recipe sets no wait of its own (health_timeout: 0 is not set): the cell waits its default and the worker leaves the wait out. unapplied lists the keys an accepted recipe sets that no cell acts on yet (recipe.Unapplied, the worker's recipe.unapplied); absent means none.",
+    "recipes": {
+        "experiments/kody-runtime/sample-app/app/.kodus/workspace.yaml": {
+            "cell": "accept",
+            "runo": "accept"
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-kr-grafana.yaml": {
+            "cell": "accept",
+            "runo": "accept"
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-compose-minimal.yaml": {
+            "cell": "accept",
+            "runo": "accept",
+            "healthTimeoutSeconds": 300
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-env-fix.yaml": {
+            "cell": "accept",
+            "runo": "accept"
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-seed-sql.yaml": {
+            "cell": "accept",
+            "runo": "accept",
+            "healthTimeoutSeconds": 120
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-no-services.yaml": {
+            "cell": "accept",
+            "runo": "refuse: \"services\" section missing",
+            "why": "a cell boots the checkout's default compose file without being told; Runo wants the services named"
+        },
+        "libs/runtime/protocol/fixtures/recipes/runo-init-compose.yaml": {
+            "cell": "accept",
+            "runo": "accept"
+        },
+        "libs/runtime/protocol/fixtures/recipes/runo-compose-file-string.yaml": {
+            "cell": "accept",
+            "runo": "accept"
+        },
+        "libs/runtime/protocol/fixtures/recipes/runo-public-list.yaml": {
+            "cell": "accept",
+            "runo": "accept"
+        },
+        "libs/runtime/protocol/fixtures/recipes/runo-profiles.yaml": {
+            "cell": "accept",
+            "runo": "accept"
+        },
+        "libs/runtime/protocol/fixtures/recipes/runo-preview-shape.yaml": {
+            "cell": "accept",
+            "runo": "accept",
+            "healthTimeoutSeconds": 900,
+            "unapplied": [
+                "limits.instance",
+                "limits.idle_suspend",
+                "limits.idle_activity"
+            ],
+            "size": {
+                "diskGb": 100
+            }
+        },
+        "libs/runtime/protocol/fixtures/recipes/runo-unapplied-fields.yaml": {
+            "cell": "accept",
+            "runo": "accept",
+            "unapplied": [
+                "flags",
+                "llm",
+                "ui",
+                "limits.instance"
+            ],
+            "size": {
+                "cpus": 8,
+                "memoryMb": 16384
+            },
+            "egressAllow": [
+                "api.stripe.com"
+            ]
+        },
+        "libs/runtime/protocol/fixtures/recipes/runo-services-mode.yaml": {
+            "cell": "refuse: Runo's services mode",
+            "runo": "accept",
+            "why": "a cell boots a compose project only; Runo also runs images and host commands on its VM"
+        },
+        ".kodus/workspace.runtime.yaml": {
+            "cell": "accept",
+            "runo": "accept",
+            "healthTimeoutSeconds": 900
+        },
+        ".kodus/workspace.yaml": {
+            "cell": "refuse: files.copy",
+            "runo": "accept",
+            "why": "Kodus's own dev recipe copies the developer's .env: right on their VM, never on a cell (ADR-008)"
+        },
+        ".kodus/workspace.preview.yaml": {
+            "cell": "refuse: files.copy",
+            "runo": "accept",
+            "why": "the PR preview copies .env from CI secrets: a Runo VM holds them, a cell never does"
+        },
+        ".kodus/workspace.selfhosted.yaml": {
+            "cell": "refuse: files.copy",
+            "runo": "accept",
+            "why": "same as the dev recipe"
+        },
+        ".kodus/workspace.preview.selfhosted.yaml": {
+            "cell": "refuse: files.copy",
+            "runo": "accept",
+            "why": "same as the cloud preview"
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-files-copy.yaml": {
+            "cell": "refuse: files.copy",
+            "runo": "accept",
+            "why": "env files never go to a cell's machine; on a developer's own VM they may"
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-secret.yaml": {
+            "cell": "refuse: looks like a secret",
+            "runo": "accept",
+            "why": "a cell never takes a secret from the recipe; Runo does not read values"
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-control-env.yaml": {
+            "cell": "refuse: changes what runs",
+            "runo": "accept",
+            "why": "the cell decides how the program starts; on a developer's VM the developer does"
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-compose-outside.yaml": {
+            "cell": "refuse: inside the repo",
+            "runo": "accept",
+            "why": "a cell has only the checkout; a developer's machine has their other repositories"
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-unknown-key.yaml": {
+            "cell": "refuse: helth",
+            "runo": "accept",
+            "why": "a cell refuses a key it does not know, so a typo never boots quietly; Runo ignores it"
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-health-timeout-negative.yaml": {
+            "cell": "refuse: bad duration",
+            "runo": "refuse: health_timeout",
+            "why": "both refuse a negative wait; only the wording differs"
+        },
+        "libs/runtime/protocol/fixtures/recipes/health-timeout-zero.yaml": {
+            "cell": "accept",
+            "runo": "accept",
+            "healthTimeoutDefault": true
+        },
+        "libs/runtime/protocol/fixtures/recipes/health-timeout-zero-seconds.yaml": {
+            "cell": "accept",
+            "runo": "accept",
+            "healthTimeoutDefault": true
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-version2.yaml": {
+            "cell": "refuse: version",
+            "runo": "refuse: version"
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-file-and-files.yaml": {
+            "cell": "refuse: file and files",
+            "runo": "refuse: file and files"
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-public-port-with-list.yaml": {
+            "cell": "refuse: public_port",
+            "runo": "refuse: public_port"
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-size-egress.yaml": {
+            "cell": "accept",
+            "size": {
+                "cpus": 4,
+                "memoryMb": 8192
+            },
+            "egressAllow": [
+                "api.example.com",
+                "api.stripe.com"
+            ],
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing only; Runo execution was not rerun. Disk acceptance parses a requirement and does not claim enforcement."
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-size-disk-requirement.yaml": {
+            "cell": "accept",
+            "size": {
+                "cpus": 4,
+                "memoryMb": 8192,
+                "diskGb": 100
+            },
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing only; Runo execution was not rerun. Disk acceptance parses a requirement and does not claim enforcement."
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-limits-size.yaml": {
+            "cell": "accept",
+            "size": {
+                "cpus": 2,
+                "memoryMb": 4096
+            },
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing only; Runo execution was not rerun. Disk acceptance parses a requirement and does not claim enforcement."
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-size-preset.yaml": {
+            "cell": "accept",
+            "size": {
+                "cpus": 4,
+                "memoryMb": 8192
+            },
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing only; Runo execution was not rerun. Disk acceptance parses a requirement and does not claim enforcement."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-size-conflict.yaml": {
+            "cell": "refuse: size and limits resource fields together",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing only; Runo execution was not rerun. Disk acceptance parses a requirement and does not claim enforcement."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-size-memory-only.yaml": {
+            "cell": "refuse: cpu and memory must be declared together",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing only; Runo execution was not rerun. Disk acceptance parses a requirement and does not claim enforcement."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-egress-wildcard.yaml": {
+            "cell": "refuse: egress.allow",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing only; Runo execution was not rerun. Disk acceptance parses a requirement and does not claim enforcement."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-egress-ip.yaml": {
+            "cell": "refuse: egress.allow",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing only; Runo execution was not rerun. Disk acceptance parses a requirement and does not claim enforcement."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-size-fractional-cpu.yaml": {
+            "cell": "refuse: size",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing only; Runo execution was not rerun. Disk acceptance parses a requirement and does not claim enforcement."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-egress-unknown.yaml": {
+            "cell": "refuse: typo",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing only; Runo execution was not rerun. Disk acceptance parses a requirement and does not claim enforcement."
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-fakes-pinned.yaml": {
+            "cell": "accept",
+            "runo": "unvalidated",
+            "why": "Kodus typed local fakes; immutable-image execution and legacy pin-required blockers are cell behavior. Runo was not executed.",
+            "fakes": [
+                {
+                    "kind": "email",
+                    "service": "mailpit",
+                    "image": "axllent/mailpit@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "env": {}
+                },
+                {
+                    "kind": "stripe",
+                    "service": "stripe-mock",
+                    "image": "stripe/stripe-mock@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "env": {
+                        "STRIPE_API_BASE": "http://stripe-mock:12111"
+                    }
+                }
+            ]
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-fakes-alias.yaml": {
+            "cell": "accept",
+            "runo": "unvalidated",
+            "why": "Kodus typed local fakes; immutable-image execution and legacy pin-required blockers are cell behavior. Runo was not executed.",
+            "fakes": [
+                {
+                    "kind": "email",
+                    "service": "mailpit",
+                    "image": "mailpit",
+                    "env": {}
+                },
+                {
+                    "kind": "stripe",
+                    "service": "stripe-mock",
+                    "image": "stripe-mock",
+                    "env": {}
+                }
+            ]
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-fakes-kind.yaml": {
+            "cell": "refuse: fakes",
+            "runo": "unvalidated",
+            "why": "Closed fake declaration rejects capabilities, mutable/unapproved images and unsafe environment; Runo not executed."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-fakes-image.yaml": {
+            "cell": "refuse: fakes",
+            "runo": "unvalidated",
+            "why": "Closed fake declaration rejects capabilities, mutable/unapproved images and unsafe environment; Runo not executed."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-fakes-latest.yaml": {
+            "cell": "refuse: fakes",
+            "runo": "unvalidated",
+            "why": "Closed fake declaration rejects capabilities, mutable/unapproved images and unsafe environment; Runo not executed."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-fakes-option.yaml": {
+            "cell": "refuse: fakes",
+            "runo": "unvalidated",
+            "why": "Closed fake declaration rejects capabilities, mutable/unapproved images and unsafe environment; Runo not executed."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-fakes-control-env.yaml": {
+            "cell": "refuse: fakes",
+            "runo": "unvalidated",
+            "why": "Closed fake declaration rejects capabilities, mutable/unapproved images and unsafe environment; Runo not executed."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-fakes-secret-env.yaml": {
+            "cell": "refuse: fakes",
+            "runo": "unvalidated",
+            "why": "Closed fake declaration rejects capabilities, mutable/unapproved images and unsafe environment; Runo not executed."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-fakes-env-conflict.yaml": {
+            "cell": "refuse: fakes",
+            "runo": "unvalidated",
+            "why": "Closed fake declaration rejects capabilities, mutable/unapproved images and unsafe environment; Runo not executed."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-fakes-number-env.yaml": {
+            "cell": "refuse: fakes",
+            "runo": "unvalidated",
+            "why": "Closed fake declaration rejects capabilities, mutable/unapproved images and unsafe environment; Runo not executed."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-fakes-env-budget.yaml": {
+            "cell": "refuse: fakes",
+            "runo": "unvalidated",
+            "why": "Closed fake declaration rejects capabilities, mutable/unapproved images and unsafe environment; Runo not executed."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-fakes-prototype-env.yaml": {
+            "cell": "refuse: fakes",
+            "runo": "unvalidated",
+            "why": "Fake environment is bounded in UTF-8 bytes and refuses prototype-control keys in both parsers; Runo not executed."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-fakes-env-utf8-budget.yaml": {
+            "cell": "refuse: fakes",
+            "runo": "unvalidated",
+            "why": "Fake environment is bounded in UTF-8 bytes and refuses prototype-control keys in both parsers; Runo not executed."
+        }
+    }
+}

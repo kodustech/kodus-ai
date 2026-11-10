@@ -1,0 +1,96 @@
+{
+  "name": "step-result-probe-evidence",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-1",
+    "type": "step.result",
+    "body": {
+      "stepId": "0b9c8d7e-6f50-4a1b-9c2d-3e4f5a6b7c8d",
+      "executor": "observer",
+      "imageId": "img-1",
+      "vmHealth": "ok",
+      "probe": {
+        "stepId": "0b9c8d7e-6f50-4a1b-9c2d-3e4f5a6b7c8d",
+        "executor": "observer",
+        "imageId": "img-1",
+        "http": {
+          "status": 200,
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": "[]"
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "route": "/orders",
+            "status": 200,
+            "at": 3
+          }
+        ],
+        "durationMs": 12,
+        "transport": "ok",
+        "evidence": {
+          "t0": "2026-11-06T12:00:00.000Z",
+          "windowMs": 40,
+          "refs": [
+            {
+              "type": "logs",
+              "bytes": 512,
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "truncated": false,
+              "redactions": 1
+            }
+          ],
+          "logs": {
+            "lines": 2,
+            "truncated": false,
+            "tail": [
+              {
+                "at": 5,
+                "service": "api",
+                "text": "GET /orders 200"
+              },
+              {
+                "at": 9,
+                "service": "worker",
+                "text": "job queued"
+              }
+            ]
+          },
+          "db": {
+            "engine": "postgres",
+            "service": "db",
+            "tables": [
+              {
+                "table": "public.orders",
+                "inserted": 1,
+                "updated": 0,
+                "deleted": 0,
+                "rows": 1
+              }
+            ],
+            "truncated": false
+          },
+          "outbound": {
+            "calls": [
+              {
+                "at": 12,
+                "host": "api.stripe.com",
+                "port": 443,
+                "allowed": false
+              }
+            ],
+            "truncated": false
+          }
+        }
+      }
+    }
+  },
+  "expect": {
+    "ok": true,
+    "type": "step.result"
+  }
+}

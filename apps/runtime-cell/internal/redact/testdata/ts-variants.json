@@ -1,0 +1,139 @@
+{
+  "generatedBy": "secretVariants/maskSecrets in libs/code-review/infrastructure/agents/custom-agent-cli/cli-output-mask.ts",
+  "cases": [
+    {
+      "secret": "ghs_DownloadToken0123456789abcdef",
+      "variants": [
+        "67 68 73 5F 44 6F 77 6E 6C 6F 61 64 54 6F 6B 65 6E 30 31 32 33 34 35 36 37 38 39 61 62 63 64 65 66",
+        "67 68 73 5f 44 6f 77 6e 6c 6f 61 64 54 6f 6b 65 6e 30 31 32 33 34 35 36 37 38 39 61 62 63 64 65 66",
+        "6768735F446F776E6C6F6164546F6B656E30313233343536373839616263646566",
+        "6768735f446f776e6c6f6164546f6b656e30313233343536373839616263646566",
+        "Z2hzX0Rvd25sb2FkVG9rZW4wMTIzNDU2Nzg5YWJjZGVm",
+        "doc19Eb3dubG9hZFRva2VuMDEyMzQ1Njc4OWFiY2RlZ",
+        "ghs_DownloadToken0123456789abcdef",
+        "naHNfRG93bmxvYWRUb2tlbjAxMjM0NTY3ODlhYmNkZW"
+      ]
+    },
+    {
+      "secret": "p@ss w/rd+&<>'\"!~*()",
+      "variants": [
+        "70 40 73 73 20 77 2F 72 64 2B 26 3C 3E 27 22 21 7E 2A 28 29",
+        "70 40 73 73 20 77 2f 72 64 2b 26 3c 3e 27 22 21 7e 2a 28 29",
+        "7040737320772F72642B263C3E2722217E2A2829",
+        "7040737320772f72642b263c3e2722217e2a2829",
+        "BAc3Mgdy9yZCsmPD4nIiF+Kigp",
+        "BAc3Mgdy9yZCsmPD4nIiF-Kigp",
+        "cEBzcyB3L3JkKyY8PiciIX4qKC",
+        "cEBzcyB3L3JkKyY8PiciIX4qKCk",
+        "cEBzcyB3L3JkKyY8PiciIX4qKCk=",
+        "p%40ss%20w%2Frd%2B%26%3C%3E'%22!~*()",
+        "p%40ss%20w%2frd%2b%26%3c%3e'%22!~*()",
+        "p@ss w/rd+&<>'\"!~*()",
+        "p@ss w/rd+&<>'\\\"!~*()",
+        "p@ss w\\u002frd+\\u0026\\u003c\\u003e\\u0027\\u0022!~*()",
+        "p@ss w_rd-&<>'\"!~*()",
+        "wQHNzIHcvcmQrJjw+JyIhfiooK",
+        "wQHNzIHcvcmQrJjw-JyIhfiooK"
+      ]
+    },
+    {
+      "secret": "ünïcødé-sëcret",
+      "variants": [
+        "%C3%BCn%C3%AFc%C3%B8d%C3%A9-s%C3%ABcret",
+        "%c3%bcn%c3%afc%c3%b8d%c3%a9-s%c3%abcret",
+        "C3 BC 6E C3 AF 63 C3 B8 64 C3 A9 2D 73 C3 AB 63 72 65 74",
+        "C3BC6EC3AF63C3B864C3A92D73C3AB63726574",
+        "DvG7Dr2PDuGTDqS1zw6tjcmV0",
+        "O8bsOvY8O4ZMOpLXPDq2NyZX",
+        "\\u00fcn\\u00efc\\u00f8d\\u00e9-s\\u00ebcret",
+        "c3 bc 6e c3 af 63 c3 b8 64 c3 a9 2d 73 c3 ab 63 72 65 74",
+        "c3bc6ec3af63c3b864c3a92d73c3ab63726574",
+        "w7xuw69jw7hkw6ktc8OrY3Jld",
+        "w7xuw69jw7hkw6ktc8OrY3JldA",
+        "w7xuw69jw7hkw6ktc8OrY3JldA==",
+        "ünïcødé-sëcret"
+      ]
+    },
+    {
+      "secret": "emoji😀key-1234",
+      "variants": [
+        "65 6D 6F 6A 69 F0 9F 98 80 6B 65 79 2D 31 32 33 34",
+        "65 6d 6f 6a 69 f0 9f 98 80 6b 65 79 2d 31 32 33 34",
+        "656D6F6A69F09F98806B65792D31323334",
+        "656d6f6a69f09f98806b65792d31323334",
+        "Vtb2pp8J+YgGtleS0xMjM0",
+        "Vtb2pp8J-YgGtleS0xMjM0",
+        "ZW1vamnwn5iAa2V5LTEyMz",
+        "ZW1vamnwn5iAa2V5LTEyMzQ",
+        "ZW1vamnwn5iAa2V5LTEyMzQ=",
+        "emoji%F0%9F%98%80key-1234",
+        "emoji%f0%9f%98%80key-1234",
+        "emoji\\ud83d\\ude00key-1234",
+        "emoji😀key-1234",
+        "lbW9qafCfmIBrZXktMTIzN"
+      ]
+    },
+    {
+      "secret": "line\nbreak\ttab\u0001ctl",
+      "variants": [
+        "6C 69 6E 65 0A 62 72 65 61 6B 09 74 61 62 01 63 74 6C",
+        "6C696E650A627265616B097461620163746C",
+        "6c 69 6e 65 0a 62 72 65 61 6b 09 74 61 62 01 63 74 6c",
+        "6c696e650a627265616b097461620163746c",
+        "bGluZQpicmVhawl0YWIBY3Rs",
+        "line\nbreak\ttab\u0001ctl",
+        "line%0Abreak%09tab%01ctl",
+        "line%0abreak%09tab%01ctl",
+        "line\\nbreak\\ttab\\u0001ctl",
+        "line\\u000abreak\\u0009tab\\u0001ctl",
+        "saW5lCmJyZWFrCXRhYgFjdG",
+        "xpbmUKYnJlYWsJdGFiAWN0b"
+      ]
+    },
+    {
+      "secret": "short",
+      "variants": [
+        "73 68 6F 72 74",
+        "73 68 6f 72 74",
+        "73686F7274",
+        "73686f7274",
+        "c2hvcnQ",
+        "c2hvcnQ=",
+        "short"
+      ]
+    },
+    {
+      "secret": "ab",
+      "variants": [
+        "61 62",
+        "6162",
+        "YWI",
+        "YWI=",
+        "ab"
+      ]
+    },
+    {
+      "secret": "x",
+      "variants": [
+        "78",
+        "eA",
+        "eA==",
+        "x"
+      ]
+    }
+  ],
+  "mask": {
+    "text": "[ghs_DownloadToken0123456789abcdef] b64=Z2hzX0Rvd25sb2FkVG9rZW4wMTIzNDU2Nzg5YWJjZGVm pct=ghs_DownloadToken0123456789abcdef json=\"ghs_DownloadToken0123456789abcdef\"\n[p@ss w/rd+&<>'\"!~*()] b64=cEBzcyB3L3JkKyY8PiciIX4qKCk= pct=p%40ss%20w%2Frd%2B%26%3C%3E'%22!~*() json=\"p@ss w/rd+&<>'\\\"!~*()\"\n[ünïcødé-sëcret] b64=w7xuw69jw7hkw6ktc8OrY3JldA== pct=%C3%BCn%C3%AFc%C3%B8d%C3%A9-s%C3%ABcret json=\"ünïcødé-sëcret\"\n[emoji😀key-1234] b64=ZW1vamnwn5iAa2V5LTEyMzQ= pct=emoji%F0%9F%98%80key-1234 json=\"emoji😀key-1234\"\n[line\nbreak\ttab\u0001ctl] b64=bGluZQpicmVhawl0YWIBY3Rs pct=line%0Abreak%09tab%01ctl json=\"line\\nbreak\\ttab\\u0001ctl\"\n[short] b64=c2hvcnQ= pct=short json=\"short\"\n[ab] b64=YWI= pct=ab json=\"ab\"\n[x] b64=eA== pct=x json=\"x\"",
+    "secrets": [
+      "ghs_DownloadToken0123456789abcdef",
+      "p@ss w/rd+&<>'\"!~*()",
+      "ünïcødé-sëcret",
+      "emoji😀key-1234",
+      "line\nbreak\ttab\u0001ctl",
+      "short",
+      "ab",
+      "x"
+    ],
+    "masked": "[***] b64=*** pct=*** json=\"***\"\n[***] b64=*** pct=*** json=\"***\"\n[***] b64=*** pct=*** json=\"***\"\n[***] b64=*** pct=*** json=\"***\"\n[***] b64=*** pct=*** json=\"***\"\n[***] b64=*** pct=*** json=\"***\"\n[***] b64=*** pct=*** json=\"***\"\n[***] b64=*** pct=*** json=\"***\""
+  }
+}

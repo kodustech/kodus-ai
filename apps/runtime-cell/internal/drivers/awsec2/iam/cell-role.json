@@ -1,0 +1,270 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LaunchOnlyThroughTheTemplate",
+      "Effect": "Allow",
+      "Action": "ec2:RunInstances",
+      "Resource": "arn:aws:ec2:${Region}:${Account}:instance/*",
+      "Condition": {
+        "ArnEquals": {
+          "ec2:LaunchTemplate": "arn:aws:ec2:${Region}:${Account}:launch-template/${LaunchTemplateId}"
+        },
+        "Bool": {
+          "ec2:IsLaunchTemplateResource": "true"
+        },
+        "StringEquals": {
+          "aws:RequestTag/kodus:cell": "${CellId}"
+        }
+      }
+    },
+    {
+      "Sid": "LaunchOnlyFixedImageAndSubnets",
+      "Effect": "Allow",
+      "Action": "ec2:RunInstances",
+      "Resource": [
+        "arn:aws:ec2:${Region}::image/*",
+        "arn:aws:ec2:${Region}:${Account}:subnet/${WorkloadSubnetId}",
+        "arn:aws:ec2:${Region}:${Account}:subnet/${ObserverSubnetId}",
+        "arn:aws:ec2:${Region}:${Account}:network-interface/*",
+        "arn:aws:ec2:${Region}:${Account}:volume/*",
+        "arn:aws:ec2:${Region}:${Account}:launch-template/${LaunchTemplateId}"
+      ],
+      "Condition": {
+        "StringEqualsIfExists": {
+          "ec2:Owner": "${Account}"
+        }
+      }
+    },
+    {
+      "Sid": "LaunchOnlyIntoThisCellsClaimGroups",
+      "Effect": "Allow",
+      "Action": "ec2:RunInstances",
+      "Resource": "arn:aws:ec2:${Region}:${Account}:security-group/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/kodus:cell": "${CellId}",
+          "ec2:Vpc": "arn:aws:ec2:${Region}:${Account}:vpc/${VpcId}"
+        }
+      }
+    },
+    {
+      "Sid": "TagOnlyAtCreation",
+      "Effect": "Allow",
+      "Action": "ec2:CreateTags",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "ec2:CreateAction": [
+            "RunInstances",
+            "CreateSecurityGroup",
+            "CreateReplaceRootVolumeTask"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "RenewExpiresOnOwnMachines",
+      "Effect": "Allow",
+      "Action": "ec2:CreateTags",
+      "Resource": "arn:aws:ec2:${Region}:${Account}:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/kodus:cell": "${CellId}"
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": [
+            "kodus:expires"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "HardExpiresIsImmutable",
+      "Effect": "Deny",
+      "Action": [
+        "ec2:CreateTags",
+        "ec2:DeleteTags"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "ForAnyValue:StringEquals": {
+          "aws:TagKeys": [
+            "kodus:hard-expires"
+          ]
+        },
+        "StringNotEquals": {
+          "ec2:CreateAction": "RunInstances"
+        }
+      }
+    },
+    {
+      "Sid": "LifecycleOnOwnMachines",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:StartInstances",
+        "ec2:StopInstances",
+        "ec2:TerminateInstances",
+        "ec2:CreateReplaceRootVolumeTask"
+      ],
+      "Resource": "arn:aws:ec2:${Region}:${Account}:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/kodus:cell": "${CellId}"
+        }
+      }
+    },
+    {
+      "Sid": "ReplaceRootOnlyFromOwnSnapshots",
+      "Effect": "Allow",
+      "Action": "ec2:CreateReplaceRootVolumeTask",
+      "Resource": [
+        "arn:aws:ec2:${Region}::snapshot/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/kodus:cell": "${CellId}"
+        }
+      }
+    },
+    {
+      "Sid": "CreateClaimGroupsTaggedForThisCell",
+      "Effect": "Allow",
+      "Action": "ec2:CreateSecurityGroup",
+      "Resource": [
+        "arn:aws:ec2:${Region}:${Account}:security-group/*",
+        "arn:aws:ec2:${Region}:${Account}:vpc/${VpcId}"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/kodus:cell": "${CellId}"
+        }
+      }
+    },
+    {
+      "Sid": "ManageOnlyThisCellsGroups",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DeleteSecurityGroup",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupEgress"
+      ],
+      "Resource": "arn:aws:ec2:${Region}:${Account}:security-group/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/kodus:cell": "${CellId}"
+        }
+      }
+    },
+    {
+      "Sid": "Describe",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeInstances",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSnapshots",
+        "ec2:DescribeReplaceRootVolumeTasks"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NoPassRoleNoProfile",
+      "Effect": "Deny",
+      "Action": [
+        "iam:PassRole",
+        "ec2:AssociateIamInstanceProfile",
+        "ec2:ReplaceIamInstanceProfileAssociation",
+        "ec2:ModifyInstanceMetadataOptions"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "RecordOriginalRootOnce",
+      "Effect": "Allow",
+      "Action": "ec2:CreateTags",
+      "Resource": "arn:aws:ec2:${Region}:${Account}:instance/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/kodus:cell": "${CellId}"
+        },
+        "Null": {
+          "aws:ResourceTag/kodus:original-root-volume": "true",
+          "aws:RequestTag/kodus:original-root-volume": "false"
+        },
+        "ForAllValues:StringEquals": {
+          "aws:TagKeys": [
+            "kodus:original-root-volume"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "OriginalRootCannotBeOverwritten",
+      "Effect": "Deny",
+      "Action": "ec2:CreateTags",
+      "Resource": "*",
+      "Condition": {
+        "Null": {
+          "aws:ResourceTag/kodus:original-root-volume": "false"
+        },
+        "ForAnyValue:StringEquals": {
+          "aws:TagKeys": [
+            "kodus:original-root-volume"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "OriginalRootCannotBeDeleted",
+      "Effect": "Deny",
+      "Action": "ec2:DeleteTags",
+      "Resource": "*",
+      "Condition": {
+        "ForAnyValue:StringEquals": {
+          "aws:TagKeys": [
+            "kodus:original-root-volume"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "OriginalRootCannotBeSuppliedAtLaunch",
+      "Effect": "Deny",
+      "Action": "ec2:CreateTags",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "ec2:CreateAction": "RunInstances"
+        },
+        "ForAnyValue:StringEquals": {
+          "aws:TagKeys": [
+            "kodus:original-root-volume"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "CreateTaggedRootReplacementTask",
+      "Effect": "Allow",
+      "Action": "ec2:CreateReplaceRootVolumeTask",
+      "Resource": "arn:aws:ec2:${Region}:${Account}:replace-root-volume-task/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/kodus:cell": "${CellId}"
+        },
+        "Null": {
+          "aws:RequestTag/kodus:org": "false",
+          "aws:RequestTag/kodus:claim": "false"
+        }
+      }
+    },
+    {
+      "Sid": "RootReplacementVolumeAuthorization",
+      "Effect": "Allow",
+      "Action": "ec2:CreateReplaceRootVolumeTask",
+      "Resource": "arn:aws:ec2:${Region}:${Account}:volume/*"
+    }
+  ]
+}

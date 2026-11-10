@@ -1,0 +1,5 @@
+version: 1
+services:
+  compose:
+    file: docker-compose.yml
+    public: web

@@ -1,0 +1,6 @@
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    public: web
+    env: { SESSION_SECRET: kodus-test-value, PAYMENTS_URL: "http://kodus-fake.invalid" }

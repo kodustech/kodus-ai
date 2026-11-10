@@ -1,0 +1,74 @@
+# The cell agent manages claim namespaces, their pods and policies; it
+# cannot touch the admission policy or the RuntimeClass.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: runtime-cell
+  namespace: {{ .Values.namespaces.cell }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kodus-runtime-cell
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["create", "delete", "get", "list"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "delete", "get", "list", "patch"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["create", "delete", "get"]
+  - apiGroups: ["node.k8s.io"]
+    resources: ["runtimeclasses"]
+    verbs: ["get"]
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingadmissionpolicies"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kodus-runtime-cell
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kodus-runtime-cell
+subjects:
+  - kind: ServiceAccount
+    name: runtime-cell
+    namespace: {{ .Values.namespaces.cell }}
+---
+# The reaper has its own identity: list, read and delete claim pods, nothing
+# else (it reads a pod's labels before deleting it: only this cell's go).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: runtime-cell-reaper
+  namespace: {{ .Values.namespaces.cell }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kodus-runtime-cell-reaper
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kodus-runtime-cell-reaper
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kodus-runtime-cell-reaper
+subjects:
+  - kind: ServiceAccount
+    name: runtime-cell-reaper
+    namespace: {{ .Values.namespaces.cell }}

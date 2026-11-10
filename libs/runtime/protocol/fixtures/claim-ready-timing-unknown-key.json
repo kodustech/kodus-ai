@@ -1,0 +1,41 @@
+{
+  "name": "claim-ready-timing-unknown-key",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-1",
+    "type": "claim.ready",
+    "body": {
+      "manifest": {
+        "services": [
+          {
+            "name": "api",
+            "health": "ok"
+          }
+        ],
+        "expose": [
+          {
+            "service": "api",
+            "port": 3000,
+            "kind": "http"
+          }
+        ],
+        "imageId": "img-1",
+        "seedSha": "none"
+      },
+      "observer": {
+        "id": "claim-1-observer",
+        "state": "ready"
+      },
+      "timing": {
+        "prepareMs": 10,
+        "pullMs": 3
+      }
+    }
+  },
+  "expect": {
+    "ok": false,
+    "code": "invalid_body"
+  }
+}

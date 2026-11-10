@@ -1,0 +1,21 @@
+{
+  "name": "step-result-negative-redactions",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "type": "step.result",
+    "body": {
+      "stepId": "7a1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+      "executor": "vm",
+      "imageId": "img-1",
+      "vmHealth": "ok",
+      "redactions": -1
+    },
+    "claimId": "claim-1"
+  },
+  "expect": {
+    "ok": false,
+    "code": "invalid_body"
+  }
+}

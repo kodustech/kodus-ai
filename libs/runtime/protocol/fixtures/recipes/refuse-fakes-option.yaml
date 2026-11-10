@@ -1,0 +1,2 @@
+version: 1
+fakes: { email: { image: mailpit, volumes: [/etc:/etc] } }

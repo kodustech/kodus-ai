@@ -1,0 +1,50 @@
+# Every pod in a claim namespace (label kodus.io/claim) must run on the
+# isolated RuntimeClass, without host namespaces, host paths, privilege,
+# added capabilities or a service account token (S-10). The cell refuses to
+# start if this policy is missing.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: kodus-runtime-cell-sandbox
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods", "pods/ephemeralcontainers"]
+  validations:
+    - expression: "has(object.spec.runtimeClassName) && object.spec.runtimeClassName == '{{ .Values.runtimeClass.name }}'"
+      message: "claim pods run on the isolated RuntimeClass"
+    - expression: "!has(object.spec.hostNetwork) || object.spec.hostNetwork == false"
+      message: "no hostNetwork"
+    - expression: "!has(object.spec.hostPID) || object.spec.hostPID == false"
+      message: "no hostPID"
+    - expression: "!has(object.spec.hostIPC) || object.spec.hostIPC == false"
+      message: "no hostIPC"
+    - expression: "has(object.spec.automountServiceAccountToken) && object.spec.automountServiceAccountToken == false"
+      message: "no service account token"
+    - expression: "!has(object.spec.volumes) || object.spec.volumes.all(v, !has(v.hostPath))"
+      message: "no hostPath volumes"
+    - expression: "object.spec.containers.all(c, !has(c.securityContext) || !has(c.securityContext.privileged) || c.securityContext.privileged == false)"
+      message: "no privileged containers"
+    - expression: "object.spec.containers.all(c, !has(c.securityContext) || !has(c.securityContext.capabilities) || !has(c.securityContext.capabilities.add) || size(c.securityContext.capabilities.add) == 0)"
+      message: "no added capabilities"
+    - expression: "object.spec.containers.all(c, has(c.securityContext) && has(c.securityContext.allowPrivilegeEscalation) && c.securityContext.allowPrivilegeEscalation == false)"
+      message: "no privilege escalation"
+    - expression: "!has(object.spec.ephemeralContainers) || size(object.spec.ephemeralContainers) == 0"
+      message: "no ephemeral containers"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: kodus-runtime-cell-sandbox
+spec:
+  policyName: kodus-runtime-cell-sandbox
+  validationActions: ["Deny"]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kodus.io/claim
+          operator: Exists
