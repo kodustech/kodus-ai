@@ -61,10 +61,17 @@ const SUMMARY_STEP_FAILURE: Record<SummaryStep, string> = {
     publish: 'Failed to publish summary to the pull request',
 };
 
+class SummaryPrUnavailableError extends Error {
+    constructor() {
+        super('The current pull request could not be read for the summary.');
+    }
+}
+
 /** A 429, a 5xx or a dropped connection: the same read may succeed a moment later. */
 function isTransientCodeHostError(error: unknown): boolean {
     const status = extractHttpStatus(error);
     return (
+        error instanceof SummaryPrUnavailableError ||
         is429Error(error) ||
         (status !== undefined && status >= 500) ||
         isTransientFetchError(error)
@@ -123,6 +130,26 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 outcome,
             },
         });
+    }
+
+    private readSummaryPullRequest(
+        request: Parameters<CodeManagementService['getPullRequestByNumber']>[0],
+        normalized: boolean,
+    ) {
+        return retryWithBackoff(
+            async () => {
+                const pr = normalized
+                    ? await this.codeManagementService.getPullRequest(request)
+                    : await this.codeManagementService.getPullRequestByNumber(
+                          request,
+                      );
+                // Normalized adapters return null for transport failures too.
+                // Retry without confusing an unreadable PR with a changed PR.
+                if (normalized && !pr) throw new SummaryPrUnavailableError();
+                return pr;
+            },
+            { maxAttempts: 3, shouldRetry: isTransientCodeHostError },
+        );
     }
 
     protected async executeStage(
@@ -264,23 +291,14 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 // The description may have changed since the webhook, and the
                 // summary keeps or replaces it. Read here, not inside the model
                 // call, so a code-host failure is reported as one.
-                const currentPR = await retryWithBackoff(
-                    () => {
-                        const request = {
-                            organizationAndTeamData,
-                            repository,
-                            prNumber: pullRequest.number,
-                        };
-                        return context.riskAssessment?.status === 'assessed'
-                            ? this.codeManagementService.getPullRequest(request)
-                            : this.codeManagementService.getPullRequestByNumber(
-                                  request,
-                              );
-                    },
-                    {
-                        maxAttempts: 3,
-                        shouldRetry: isTransientCodeHostError,
-                    },
+                const summaryRequest = {
+                    organizationAndTeamData,
+                    repository,
+                    prNumber: pullRequest.number,
+                };
+                const currentPR = await this.readSummaryPullRequest(
+                    summaryRequest,
+                    context.riskAssessment?.status === 'assessed',
                 );
 
                 summaryStep = 'generate';
@@ -317,7 +335,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 // that known transformation only if the assessed human context
                 // and both commits are still current immediately before it.
                 const risk = context.riskAssessment;
-                let expectedPublishedBody: string | undefined;
+                let expectedPublishedBodies: string[] | undefined;
                 if (
                     summaryPR &&
                     risk?.status === 'assessed' &&
@@ -325,17 +343,9 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     risk.snapshot.descriptionKey ===
                         prRiskDescriptionKey(currentPR)
                 ) {
-                    const beforePublish = await retryWithBackoff(
-                        () =>
-                            this.codeManagementService.getPullRequest({
-                                organizationAndTeamData,
-                                repository,
-                                prNumber: pullRequest.number,
-                            }),
-                        {
-                            maxAttempts: 3,
-                            shouldRetry: isTransientCodeHostError,
-                        },
+                    const beforePublish = await this.readSummaryPullRequest(
+                        summaryRequest,
+                        true,
                     );
                     if (
                         beforePublish?.head?.sha === risk.snapshot.headSha &&
@@ -343,10 +353,12 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                         prRiskDescriptionKey(beforePublish) ===
                             risk.snapshot.descriptionKey
                     ) {
-                        expectedPublishedBody = fitPRDescription(
+                        // Data Center preserves the body; other adapters may
+                        // apply the shared size limit. Trust only these exact writes.
+                        expectedPublishedBodies = [
                             summaryPR,
-                            platformType,
-                        );
+                            fitPRDescription(summaryPR, platformType),
+                        ];
                     } else {
                         throw new Error(
                             'The PR changed while Kody was generating its summary.',
@@ -361,28 +373,20 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     summaryPR,
                 );
                 if (
-                    expectedPublishedBody !== undefined &&
+                    expectedPublishedBodies !== undefined &&
                     risk?.status === 'assessed'
                 ) {
                     // Hosts may trim descriptions. Confirm the exact write and
                     // both refs before treating it as Kody's own transformation.
-                    const published = await retryWithBackoff(
-                        () =>
-                            this.codeManagementService.getPullRequest({
-                                organizationAndTeamData,
-                                repository,
-                                prNumber: pullRequest.number,
-                            }),
-                        {
-                            maxAttempts: 3,
-                            shouldRetry: isTransientCodeHostError,
-                        },
+                    const published = await this.readSummaryPullRequest(
+                        summaryRequest,
+                        true,
                     );
                     if (
                         published?.head?.sha === risk.snapshot.headSha &&
                         published?.base?.sha === risk.snapshot.baseSha &&
                         published.title === currentPR.title &&
-                        published.body === expectedPublishedBody
+                        expectedPublishedBodies.includes(published.body)
                     ) {
                         const publishedDescriptionKey =
                             prRiskDescriptionKey(published);

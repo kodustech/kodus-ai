@@ -1,3 +1,4 @@
+import { BitbucketDataCenterService } from '@libs/platform/infrastructure/adapters/services/bitbucket/bitbucket-data-center.service';
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { prRiskDescriptionKey } from '@libs/code-review/domain/risk/risk-configuration';
 import type { RiskAssessmentResult } from '@libs/code-review/domain/risk/risk-assessment';
@@ -558,13 +559,20 @@ it.each([
     [BehaviourForExistingDescription.CONCATENATE, 'none', 'normal'],
     [BehaviourForExistingDescription.REPLACE, 'none', 'normal'],
     [BehaviourForExistingDescription.REPLACE, 'body', 'normal'],
+    [BehaviourForExistingDescription.REPLACE, 'title', 'normal'],
     [BehaviourForExistingDescription.REPLACE, 'head', 'normal'],
     [BehaviourForExistingDescription.REPLACE, 'base', 'normal'],
     [BehaviourForExistingDescription.REPLACE, 'after-body', 'normal'],
+    [BehaviourForExistingDescription.REPLACE, 'after-title', 'normal'],
     [BehaviourForExistingDescription.REPLACE, 'after-head', 'normal'],
     [BehaviourForExistingDescription.REPLACE, 'after-base', 'normal'],
     [BehaviourForExistingDescription.REPLACE, 'none', 'skipped'],
     [BehaviourForExistingDescription.REPLACE, 'none', 'truncated'],
+    [BehaviourForExistingDescription.REPLACE, 'none', 'raw-data-center'],
+    [BehaviourForExistingDescription.REPLACE, 'none', 'retry-collect'],
+    [BehaviourForExistingDescription.REPLACE, 'none', 'retry-before'],
+    [BehaviourForExistingDescription.REPLACE, 'none', 'retry-after'],
+    [BehaviourForExistingDescription.REPLACE, 'none', 'unavailable-after'],
 ])(
     'only rebinds a confirmed summary write (%s, concurrent edit=%s, output=%s)',
     async (behaviour, edit, output) => {
@@ -580,6 +588,7 @@ it.each([
         const changeLive = (field: string) => {
             if (field === 'body')
                 live = { ...live, body: 'New human context.' };
+            if (field === 'title') live = { ...live, title: 'New human title' };
             if (field === 'head') live = { ...live, head: { sha: 'new-head' } };
             if (field === 'base') live = { ...live, base: { sha: 'new-base' } };
         };
@@ -587,11 +596,35 @@ it.each([
         s.context.initialCommentData = { commentId: 1 };
         s.host.getPullRequest.mockImplementation(async () => live);
         s.host.getPullRequestByNumber.mockImplementation(async () => live);
-        const publish = jest.fn(async ({ summary }) => {
-            live = {
-                ...live,
-                body: fitPRDescription(summary, PlatformType.GITHUB),
-            };
+        const dc = Object.assign(
+            Object.create(BitbucketDataCenterService.prototype),
+            {
+                getAuthDetails: async () => ({}),
+                getRepoConfig: async () => ({ workspaceId: 'QA', name: 'api' }),
+                getAxiosInstance: () => ({
+                    get: async () => ({
+                        data: { title: live.title, version: 1 },
+                    }),
+                    put: async (_path, data) => {
+                        live = { ...live, body: data.description };
+                        return { data };
+                    },
+                }),
+            },
+        );
+        if (output === 'raw-data-center')
+            s.context.platformType = PlatformType.BITBUCKET;
+        const publish = jest.fn(async (request) => {
+            if (output === 'raw-data-center')
+                await dc.updateDescriptionInPullRequest(request);
+            else
+                live = {
+                    ...live,
+                    body: fitPRDescription(
+                        request.summary,
+                        PlatformType.GITHUB,
+                    ),
+                };
             if (edit.startsWith('after-')) changeLive(edit.slice(6));
         });
         const writer = new CommentManagerService(
@@ -607,7 +640,7 @@ it.each([
             .spyOn(writer as any, 'runSummaryPromptV5')
             .mockImplementation(async () => {
                 changeLive(edit);
-                return output === 'truncated'
+                return ['truncated', 'raw-data-center'].includes(output)
                     ? '## Summary\n' + 'Change details. '.repeat(5000)
                     : '## Summary\nUpdated the constant.';
             });
@@ -625,24 +658,56 @@ it.each([
         const assessed = await s.fetch.execute(
             await s.risk.execute(await s.resolve.execute(s.context)),
         );
-        const result = await s.decide.execute(
-            await stage.execute({
+        const retryCase =
+            output.startsWith('retry-') || output === 'unavailable-after';
+        let summaryReads = 0;
+        if (retryCase) {
+            const failAt = {
+                'retry-collect': 1,
+                'retry-before': 2,
+                'retry-after': 3,
+            }[output];
+            s.host.getPullRequest.mockImplementation(async () => {
+                summaryReads++;
+                return summaryReads === failAt ||
+                    (output === 'unavailable-after' && summaryReads >= 3)
+                    ? null
+                    : live;
+            });
+            jest.useFakeTimers();
+        }
+        let afterSummary;
+        try {
+            const pending = stage.execute({
                 ...assessed,
                 pullRequestMessagesConfig: {
                     endReviewMessage: { status: PullRequestMessageStatus.OFF },
                 },
-            } as any),
-        );
-        expect(result.approvalDecision.kind).toBe(
-            edit === 'none' ? 'approve' : 'hold',
-        );
+            } as any);
+            if (retryCase) await jest.runAllTimersAsync();
+            afterSummary = await pending;
+        } finally {
+            if (retryCase) jest.useRealTimers();
+        }
+        if (output.startsWith('retry-')) expect(summaryReads).toBe(4);
+        if (output === 'unavailable-after') {
+            expect(summaryReads).toBe(5);
+            expect(afterSummary.errors.at(-1).error.message).toBe(
+                'The current pull request could not be read for the summary.',
+            );
+        }
+        s.host.getPullRequest.mockImplementation(async () => live);
+        const result = await s.decide.execute(afterSummary);
+        const held = edit !== 'none' || output === 'unavailable-after';
+        expect(result.approvalDecision.kind).toBe(held ? 'hold' : 'approve');
         expect(publish).toHaveBeenCalledTimes(
-            ['body', 'head', 'base'].includes(edit) || output === 'skipped'
+            ['body', 'title', 'head', 'base'].includes(edit) ||
+                output === 'skipped'
                 ? 0
                 : 1,
         );
         const descriptionKey = snapshotOf(result.riskAssessment).descriptionKey;
-        if (edit !== 'none' || output === 'skipped')
+        if (held || output === 'skipped')
             expect(descriptionKey).toBe(
                 snapshotOf(assessed.riskAssessment).descriptionKey,
             );
@@ -657,10 +722,12 @@ it.each([
             expect(live.body.length).toBe(65536);
             expect(live.body).toContain('truncated by Kody');
         }
+        if (output === 'raw-data-center') {
+            expect(live.body.length).toBeGreaterThan(32768);
+            expect(live.body).not.toContain('truncated by Kody');
+        }
         await s.finish.execute(result);
-        expect(s.host.approvePullRequest).toHaveBeenCalledTimes(
-            edit === 'none' ? 1 : 0,
-        );
+        expect(s.host.approvePullRequest).toHaveBeenCalledTimes(held ? 0 : 1);
     },
 );
 

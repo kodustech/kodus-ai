@@ -2012,6 +2012,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             .fn()
             .mockResolvedValue({
                 head: { sha: 'same-sha' },
+                base: { sha: 'base-1' },
                 user: { login: 'alice' },
             });
         deps.codeManagementService.getFilesByPullRequestId = jest
@@ -2040,7 +2041,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).toHaveBeenCalledWith(
             expect.objectContaining({
                 headSha: 'same-sha',
-                baseSha: undefined,
+                baseSha: 'base-1',
             }),
             expect.anything(),
         );
