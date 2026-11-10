@@ -74,14 +74,17 @@ describe('loadRuleSourceReferences', () => {
         const index = await loadRuleSourceReferences(
             [{ uuid: 'r1', rule: 'r', sourcePath: 'big.md' }],
             async () => 'Z'.repeat(10_000),
-            undefined,
-            100,
+            { maxRefChars: 100 },
         );
         expect(index.get('r1')![0].content).toBe('Z'.repeat(100));
     });
 
-    it('skips a rule whose read throws, and warns once per path', async () => {
+    it('skips a rule whose read throws, and warns once per path with the review it belongs to', async () => {
         const logger = { warn: jest.fn() };
+        const logMetadata = {
+            organizationAndTeamData: { organizationId: 'org-1', teamId: 't-1' },
+            prNumber: 7,
+        };
         const index = await loadRuleSourceReferences(
             [
                 { uuid: 'r1', rule: 'a', sourcePath: 'missing.md' },
@@ -91,7 +94,7 @@ describe('loadRuleSourceReferences', () => {
             async () => {
                 throw new Error('file not found');
             },
-            logger,
+            { logger, logMetadata },
         );
 
         expect(index.size).toBe(0);
@@ -100,6 +103,7 @@ describe('loadRuleSourceReferences', () => {
             expect.objectContaining({
                 context: 'kody-rules-sharded',
                 metadata: expect.objectContaining({
+                    ...logMetadata,
                     sourcePath: 'missing.md',
                     ruleUuids: ['r1', 'r2'],
                 }),
@@ -227,17 +231,18 @@ describe('collectLoadedReferences', () => {
         expect(collectLoadedReferences(undefined).size).toBe(0);
     });
 
-    it('logs what it collected, once per rule', () => {
+    it('logs what it collected, once per rule, with the review it belongs to', () => {
         const logger = { warn: jest.fn(), log: jest.fn() };
         collectLoadedReferences(
             new Map([['r1', [{ filePath: 'CLAUDE.md', content: 'c' }]]]),
-            { logger },
+            { logger, logMetadata: { prNumber: 7 } },
         );
         expect(logger.log).toHaveBeenCalledTimes(1);
         expect(logger.log.mock.calls[0][0]).toEqual(
             expect.objectContaining({
                 context: 'kody-rules-sharded',
                 metadata: expect.objectContaining({
+                    prNumber: 7,
                     ruleUuid: 'r1',
                     inlinedRefs: ['CLAUDE.md'],
                 }),
@@ -419,13 +424,35 @@ describe('buildReferenceSection', () => {
         expect(text).toContain('before this PR');
     });
 
-    it('wraps the entries in a References block and names the source section', () => {
+    it('wraps the entries in a References block', () => {
         const section = buildReferenceSection(
             [{ uuid: 'r1', rule: 'r' }],
-            new Map([['r1', [sourceRef({ anchor: 'Testing' })]]]),
+            new Map([['r1', [sourceRef()]]]),
         );
         expect(section.lines[0]).toBe('<References>');
         expect(section.lines).toContain('</References>');
-        expect(section.lines.join('\n')).toContain('(section: Testing)');
+    });
+
+    // Rules synced from one file each point at their own section of it: the
+    // file is printed once, and each rule's link names its section.
+    it('prints a file once for rules on different sections of it, naming each section on the link', () => {
+        const section = buildReferenceSection(
+            [
+                { uuid: 'a', rule: 'a' },
+                { uuid: 'b', rule: 'b' },
+            ],
+            new Map([
+                ['a', [sourceRef({ anchor: 'Testing' })]],
+                ['b', [sourceRef({ anchor: 'Logging' })]],
+            ]),
+        );
+        const text = section.lines.join('\n');
+
+        expect(section.idsByRule).toEqual([
+            ['R1 (section: Testing)'],
+            ['R1 (section: Logging)'],
+        ]);
+        expect(text.split('the convention').length - 1).toBe(1);
+        expect(text).not.toContain('section:');
     });
 });

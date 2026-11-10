@@ -546,6 +546,44 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
 
     // #2508: a rule decomposed into atoms reaches the provider as one unit per
     // atom, all carrying the parent's uuid and sourcePath.
+    it('judges without references and warns with the review when loading them fails', async () => {
+        const { provider } = makeProvider([{ violations: [] }]);
+        const warn = jest.fn();
+        (provider as any).shardLogger = { warn, log: jest.fn() };
+        // A read that answers with something other than text makes the
+        // source-file load reject.
+        const read = jest.fn().mockResolvedValue(42);
+
+        await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        uuid: 'r1',
+                        title: 't',
+                        rule: 'r',
+                        status: 'active',
+                        path: '**/*.ts',
+                        sourcePath: 'CLAUDE.md',
+                    },
+                ],
+                remoteCommands: { read },
+            }) as any,
+        );
+
+        const lastCall =
+            mockJudge.mock.calls[mockJudge.mock.calls.length - 1][0];
+        expect(lastCall.references.size).toBe(0);
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('reference load failed'),
+                metadata: expect.objectContaining({
+                    organizationAndTeamData: input().organizationAndTeamData,
+                    prNumber: 1,
+                }),
+            }),
+        );
+    });
+
     it('reads a rule source file once and hands it to the judge as a reference, not as rule text', async () => {
         const { provider } = makeProvider([{ violations: [] }]);
         const read = jest.fn().mockResolvedValue('# the convention');

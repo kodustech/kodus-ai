@@ -50,6 +50,9 @@ interface ReferenceLogger {
     log?: (entry: any) => void;
 }
 
+/** What identifies the review in every log line: organization, team, PR. */
+type LogMetadata = Record<string, unknown>;
+
 const LOG_CONTEXT = 'kody-rules-sharded';
 const DEFAULT_MAX_REF_CHARS = 6000;
 
@@ -64,9 +67,14 @@ export async function loadRuleSourceReferences(
     read:
         | ((path: string, start: number, end: number) => Promise<string>)
         | undefined,
-    logger?: ReferenceLogger,
-    maxRefChars = DEFAULT_MAX_REF_CHARS,
+    options: {
+        logger?: ReferenceLogger;
+        logMetadata?: LogMetadata;
+        maxRefChars?: number;
+    } = {},
 ): Promise<RuleReferenceIndex> {
+    const { logger, logMetadata } = options;
+    const maxRefChars = options.maxRefChars ?? DEFAULT_MAX_REF_CHARS;
     const index: RuleReferenceIndex = new Map();
     if (!read) return index;
 
@@ -89,6 +97,7 @@ export async function loadRuleSourceReferences(
                     message: `kody-rules reference load failed for ${sourcePath}; judging ${byUuid.size} rule(s) without it`,
                     context: LOG_CONTEXT,
                     metadata: {
+                        ...logMetadata,
                         sourcePath,
                         ruleUuids: [...byUuid.keys()],
                         err,
@@ -125,6 +134,7 @@ export function collectLoadedReferences(
     options: {
         prRepository?: { id?: string; name?: string; fullName?: string };
         logger?: ReferenceLogger;
+        logMetadata?: LogMetadata;
         maxRefChars?: number;
     } = {},
 ): RuleReferenceIndex {
@@ -158,6 +168,7 @@ export function collectLoadedReferences(
             message: `[kody-rules-shard] loaded ${refs.length} reference file(s) for rule ${uuid}: ${refs.map((r) => r.filePath).join(', ')}`,
             context: LOG_CONTEXT,
             metadata: {
+                ...options.logMetadata,
                 ruleUuid: uuid,
                 inlinedRefs: refs.map((r) => r.filePath),
                 crossRepository: refs
@@ -197,7 +208,10 @@ export function buildReferenceSection(
     rules: Array<Partial<IKodyRule>>,
     references: RuleReferenceIndex | undefined,
 ): ReferenceSection {
-    const entries: Array<{ key: string; ref: RuleReference }> = [];
+    const entries: RuleReference[] = [];
+    // Identity → the entries printed under it: more than one only when their
+    // texts conflict.
+    const byIdentity = new Map<string, number[]>();
     let perUnitCopies = 0;
 
     const idsByRule = rules.map((rule) => {
@@ -206,16 +220,21 @@ export function buildReferenceSection(
         const ids: string[] = [];
         for (const ref of refs) {
             const key = identityOf(ref);
-            let at = entries.findIndex(
-                (e) => e.key === key && compatible(e.ref.content, ref.content),
+            const candidates = byIdentity.get(key) ?? [];
+            let at = candidates.find((i) =>
+                compatible(entries[i].content, ref.content),
             );
-            if (at === -1) {
-                entries.push({ key, ref });
-                at = entries.length - 1;
-            } else if (ref.content.length > entries[at].ref.content.length) {
-                entries[at] = { key, ref };
+            if (at === undefined) {
+                at = entries.push(ref) - 1;
+                byIdentity.set(key, [...candidates, at]);
+            } else if (ref.content.length > entries[at].content.length) {
+                entries[at] = ref;
             }
-            const id = `R${at + 1}`;
+            // The section a rule points at is the rule's, not the file's:
+            // rules on different sections of one file share its entry.
+            const id = ref.anchor
+                ? `R${at + 1} (section: ${ref.anchor})`
+                : `R${at + 1}`;
             if (!ids.includes(id)) ids.push(id);
         }
         return ids;
@@ -230,7 +249,7 @@ export function buildReferenceSection(
     }
 
     const lines = ['<References>'];
-    entries.forEach(({ ref }, i) => {
+    entries.forEach((ref, i) => {
         lines.push(`[R${i + 1}] ${headerOf(ref)}`, ref.content, '');
     });
     lines.push('</References>', '');
@@ -239,7 +258,7 @@ export function buildReferenceSection(
         idsByRule,
         stats: {
             entries: entries.length,
-            chars: entries.reduce((n, e) => n + e.ref.content.length, 0),
+            chars: entries.reduce((n, ref) => n + ref.content.length, 0),
             perUnitCopies,
         },
     };
@@ -263,7 +282,6 @@ function headerOf(ref: RuleReference): string {
     if (ref.lineRange) {
         parts.push(`lines ${ref.lineRange.start}-${ref.lineRange.end}`);
     }
-    if (ref.anchor) parts.push(`(section: ${ref.anchor})`);
     const origin =
         ref.source === 'rule-source'
             ? "the rule's source file, read at this pull request's head"

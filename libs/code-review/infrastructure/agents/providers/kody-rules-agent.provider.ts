@@ -356,18 +356,29 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // uuid and references (#2508). Best-effort: any failure leaves the
             // rule judged on its text alone.
             const rulesForJudge = judgeRules;
+            const logMetadata = {
+                organizationAndTeamData: input.organizationAndTeamData,
+                prNumber: input.prNumber,
+            };
             const loaded = await Promise.allSettled([
                 loadRuleSourceReferences(
                     judgeRules,
                     input.remoteCommands?.read?.bind(input.remoteCommands),
-                    this.shardLogger,
+                    { logger: this.shardLogger, logMetadata },
                 ),
                 this.loadContextOsReferences(judgeRules, input),
             ]);
             const references = mergeRuleReferences(
-                ...loaded.map((result) =>
-                    result.status === 'fulfilled' ? result.value : new Map(),
-                ),
+                ...loaded.map((result, i) => {
+                    if (result.status === 'fulfilled') return result.value;
+                    const source = i === 0 ? 'rule source file' : 'Context OS';
+                    this.shardLogger.warn({
+                        message: `[kody-rules-shard] ${source} reference load failed for PR#${input.prNumber}; judging without those references: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
+                        context: this.getIdentity().name,
+                        metadata: { ...logMetadata, err: result.reason },
+                    });
+                    return new Map();
+                }),
             );
 
             // ── issue #1826, step 1: the file shard carries its file whole ──
@@ -1083,6 +1094,10 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
                     fullName: input.repositoryFullName,
                 },
                 logger: this.shardLogger,
+                logMetadata: {
+                    organizationAndTeamData: input.organizationAndTeamData,
+                    prNumber: input.prNumber,
+                },
             });
         } catch (err) {
             this.shardLogger.warn({
