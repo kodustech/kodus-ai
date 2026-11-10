@@ -285,6 +285,9 @@ it('keeps code after a JS private member visible to the control-flow guard', asy
 it.each([
     '+const text = `value: ${(() => { return authorize(); })()}`;',
     '+const ratio = "value" / count; return authorize();',
+    '@@ -1 +1,2 @@\n+if\n+(authorize());',
+    '@@ -1 +1,2 @@\n+if /* permission check */\n+(authorize());',
+    '@@ -1 +1,3 @@\n+if\n+/* permission check */\n+(authorize());',
     '++value; return authorize();',
     '+++value; return authorize();',
     '@@ -1 +1 @@\n+++ value; return authorize();',
@@ -333,6 +336,10 @@ it.each([
     ['src/return.ts', '--- a/return.ts\n+++ b/return.ts\n'],
     ['src/return.ts', '+++ b/return.ts\n'],
     ['src/status.ts', '+++ value; return authorize();'],
+    [
+        'src/status.ts',
+        'diff --git a/status.ts b/status.ts\nold mode 100644\nnew mode 100755\n',
+    ],
     ['src/status.py', '+"""\n+if (disabled) return None\n+"""'],
     [
         'src/status.tsx',

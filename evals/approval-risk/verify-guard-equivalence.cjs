@@ -5,6 +5,7 @@ const fs = require('fs'),
     crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const swc = require('@swc/core');
+const { toJSONSchema } = require('zod');
 // Usage: node evals/approval-risk/verify-guard-equivalence.cjs <previous-commit>
 // Compares real production code on the frozen corpus without new model calls.
 if (!process.argv[2]) throw Error('Pass the previous commit to compare.');
@@ -50,8 +51,10 @@ function engine(ref) {
         '@libs/llm/llm': {
             LLM: {
                 async run(input) {
-                    request = { ...input };
-                    delete request.schema;
+                    request = {
+                        ...input,
+                        schema: toJSONSchema(input.schema),
+                    };
                     return judgment;
                 },
             },
@@ -79,7 +82,8 @@ function engine(ref) {
                 !result.failure,
                 'Equivalence exercised a failure instead of a valid model judgment',
             );
-            return JSON.stringify({ result, request });
+            // Preserve undefined fields and normalize objects from the VM.
+            return structuredClone({ result, request });
         },
     };
 }
@@ -111,7 +115,7 @@ function engine(ref) {
             areaMap: item.areaMap,
         };
         for (const level of ['low', 'medium', 'high']) {
-            assert.equal(
+            assert.deepStrictEqual(
                 await current.run(input, level),
                 await old.run(input, level),
                 `Production judgment/model-input drift: ${item.id} ${level}`,
@@ -132,7 +136,9 @@ function engine(ref) {
         files,
         modelVerdictsCompared: comparisons,
         productionCalls: comparisons * 2,
-        equalModelInputs: true,
+        equalModelRequestData: true,
+        equalOutputJSONSchemas: true,
+        preservesUndefinedFields: true,
         equalProductionJudgments: true,
         networkModelCalls: 0,
         note: 'Executes old and current production assessChangeRisk with the same low/medium/high model outputs on every frozen snapshot; no mirrored decision implementation. New metadata regressions are tested separately.',

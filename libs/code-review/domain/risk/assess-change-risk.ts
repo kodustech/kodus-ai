@@ -35,6 +35,8 @@ const SOURCE_FILE = /\.(?:ts|tsx|js|jsx|py|go|java|cs|rs)$/i;
 const TEST_FILE =
     /(?:^|\/)(?:__tests__|tests?|specs?)(?:\/|\.|$)|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java))$/i;
 const ADDED_CONTROL_FLOW = /\b(?:if\s*\(|return\b|throw\b)/;
+// Parentheses may follow newlines or comments that only the lexer can mask.
+const POSSIBLE_ADDED_CONTROL_FLOW = /\b(?:if|return|throw)\b/;
 
 function controlFlowEvidence(
     files: FileChange[],
@@ -61,7 +63,7 @@ function controlFlowEvidence(
         const code = addedCodeLines(
             file.patch ?? '',
             file.filename,
-            ADDED_CONTROL_FLOW,
+            POSSIBLE_ADDED_CONTROL_FLOW,
         );
         if (code === undefined) unverifiable = true;
         else if (ADDED_CONTROL_FLOW.test(code)) return 'untested';
