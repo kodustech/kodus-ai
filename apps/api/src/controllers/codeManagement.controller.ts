@@ -6,6 +6,7 @@ import {
     Get,
     Inject,
     Post,
+    Put,
     Query,
     UseGuards,
 } from '@nestjs/common';
@@ -39,6 +40,11 @@ import { GetRepositoryTreeByDirectoryUseCase } from '@libs/platform/application/
 import { GetPRsByRepoUseCase } from '@libs/platform/application/use-cases/codeManagement/get-prs-repo.use-case';
 import { GetWebhookStatusUseCase } from '@libs/platform/application/use-cases/codeManagement/get-webhook-status.use-case';
 import { GetWebhookCreationFailuresUseCase } from '@libs/platform/application/use-cases/codeManagement/get-webhook-creation-failures.use-case';
+import {
+    GetRepositorySelectionUseCase,
+    PreviewAllRepositoriesUseCase,
+    SetRepositorySelectionUseCase,
+} from '@libs/platform/application/use-cases/codeManagement/repository-selection.use-cases';
 import { SearchCodeManagementUsersUseCase } from '@libs/platform/application/use-cases/codeManagement/search-code-management-users.use-case';
 import { GetCurrentCodeManagementUserUseCase } from '@libs/platform/application/use-cases/codeManagement/get-current-code-management-user.use-case';
 import { FinishOnboardingDTO } from '@libs/platform/dtos/finish-onboarding.dto';
@@ -92,6 +98,9 @@ export class CodeManagementController {
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
+        private readonly getRepositorySelectionUseCase: GetRepositorySelectionUseCase,
+        private readonly setRepositorySelectionUseCase: SetRepositorySelectionUseCase,
+        private readonly previewAllRepositoriesUseCase: PreviewAllRepositoriesUseCase,
     ) {}
 
     @Get('/area-risk-map')
@@ -226,6 +235,88 @@ export class CodeManagementController {
         },
     ) {
         return this.createRepositoriesUseCase.execute(body);
+    }
+
+    @Get('/repository-selection')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Get the repository selection mode',
+        description:
+            'Whether the team picks repositories by hand or reviews every repository its git integration can see, and the progress of the automatic sync.',
+    })
+    @ApiQuery({ name: 'teamId', required: true })
+    public async getRepositorySelection(@Query() query: { teamId: string }) {
+        return this.getRepositorySelectionUseCase.execute({
+            organizationAndTeamData: {
+                organizationId: this.request?.user?.organization?.uuid,
+                teamId: query.teamId,
+            },
+        });
+    }
+
+    @Get('/repository-selection/preview')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Create,
+            resource: ResourceType.GitSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Preview reviewing every repository',
+        description:
+            'How many repositories turning on "review every repository" would add, without changing anything.',
+    })
+    @ApiQuery({ name: 'teamId', required: true })
+    @ApiQuery({ name: 'includeForksAndMirrors', required: false, type: Boolean })
+    public async previewRepositorySelection(
+        @Query() query: { teamId: string; includeForksAndMirrors?: string },
+    ) {
+        return this.previewAllRepositoriesUseCase.execute({
+            organizationAndTeamData: {
+                organizationId: this.request?.user?.organization?.uuid,
+                teamId: query.teamId,
+            },
+            includeForksAndMirrors: query.includeForksAndMirrors === 'true',
+        });
+    }
+
+    @Put('/repository-selection')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Create,
+            resource: ResourceType.GitSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Set the repository selection mode',
+        description:
+            'Switches between manual selection and reviewing every repository the git integration can see. Turning it on starts the first sync in the background.',
+    })
+    public async setRepositorySelection(
+        @Body()
+        body: {
+            teamId: string;
+            mode: 'manual' | 'all';
+            includeForksAndMirrors?: boolean;
+        },
+    ) {
+        return this.setRepositorySelectionUseCase.execute({
+            organizationAndTeamData: {
+                organizationId: this.request?.user?.organization?.uuid,
+                teamId: body.teamId,
+            },
+            mode: body.mode,
+            includeForksAndMirrors: body.includeForksAndMirrors,
+            actorUserId: this.request?.user?.uuid,
+        });
     }
 
     @Get('/organization-members')

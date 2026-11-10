@@ -62,6 +62,11 @@ export const CODE_MANAGEMENT_API_PATHS = {
     GET_WEBHOOK_CREATION_FAILURES: pathToApiUrl(
         "/code-management/hook-failures",
     ),
+
+    REPOSITORY_SELECTION: pathToApiUrl("/code-management/repository-selection"),
+    REPOSITORY_SELECTION_PREVIEW: pathToApiUrl(
+        "/code-management/repository-selection/preview",
+    ),
 } as const;
 
 export type RepositoryUploadResult = {

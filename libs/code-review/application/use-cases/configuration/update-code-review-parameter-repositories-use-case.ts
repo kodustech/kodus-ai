@@ -1,6 +1,5 @@
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
-import { REQUEST } from '@nestjs/core';
 
 import { createLogger } from '@libs/core/log/logger';
 import {
@@ -52,15 +51,6 @@ export class UpdateCodeReviewParameterRepositoriesUseCase {
         private readonly integrationConfigService: IIntegrationConfigService,
 
         private readonly eventEmitter: EventEmitter2,
-
-        @Inject(REQUEST)
-        private readonly request: Request & {
-            user: {
-                organization: { uuid: string };
-                uuid: string;
-                email: string;
-            };
-        },
 
         private readonly telemetry: TelemetryService,
     ) {}
@@ -217,7 +207,7 @@ export class UpdateCodeReviewParameterRepositoriesUseCase {
             void this.telemetry.codeReviewSettingsUpdated({
                 organizationId: organizationAndTeamData.organizationId,
                 teamId: organizationAndTeamData.teamId,
-                actorUserId: body.actor?.userId ?? this.request?.user?.uuid,
+                actorUserId: body.actor?.userId,
                 configLevel: ConfigLevel.REPOSITORY,
             });
 
@@ -270,26 +260,31 @@ export class UpdateCodeReviewParameterRepositoriesUseCase {
         userId?: string;
         userEmail?: string;
     }) {
-        if (actor?.source === 'cli') {
-            const organizationId =
-                actor.organizationId ?? this.request?.user?.organization?.uuid;
-
-            if (!organizationId) {
+        if (actor?.source === 'cli' || actor?.source === 'sync') {
+            if (!actor.organizationId) {
                 return null;
             }
 
+            const fallback =
+                actor.source === 'cli'
+                    ? { userId: 'cli-key', userEmail: 'CLI key' }
+                    : {
+                          userId: 'repository-sync',
+                          userEmail: 'Automatic repository sync',
+                      };
+
             return {
-                organizationId,
-                userId: actor.userId ?? 'cli-key',
-                userEmail: actor.userEmail ?? 'CLI key',
+                organizationId: actor.organizationId,
+                userId: actor.userId ?? fallback.userId,
+                userEmail: actor.userEmail ?? fallback.userEmail,
             };
         }
 
-        const resolvedActor = actor ?? {
-            organizationId: this.request?.user?.organization?.uuid,
-            userId: this.request?.user?.uuid,
-            userEmail: this.request?.user?.email,
-        };
+        const resolvedActor: {
+            organizationId?: string;
+            userId?: string;
+            userEmail?: string;
+        } = actor ?? {};
 
         if (
             !resolvedActor.organizationId ||

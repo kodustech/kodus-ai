@@ -40,9 +40,29 @@ export class AzureReposRequestHelper {
         token: string;
     }): Promise<AzureReposProject[]> {
         const instance = await this.azureRequest(params);
-        const { data } = await instance.get('/_apis/projects?api-version=7.1');
+        const projects: AzureReposProject[] = [];
+        let continuationToken: string | undefined;
 
-        return data?.value;
+        // The endpoint returns one page (100 projects by default) and a
+        // continuation token header while more remain.
+        do {
+            const query = continuationToken
+                ? `&continuationToken=${encodeURIComponent(continuationToken)}`
+                : '';
+            const response = await instance.get(
+                `/_apis/projects?api-version=7.1&$top=500${query}`,
+            );
+
+            projects.push(...(response?.data?.value ?? []));
+
+            const next = response?.headers?.['x-ms-continuationtoken'];
+            continuationToken =
+                typeof next === 'string' && next && next !== continuationToken
+                    ? next
+                    : undefined;
+        } while (continuationToken);
+
+        return projects;
     }
 
     /**
