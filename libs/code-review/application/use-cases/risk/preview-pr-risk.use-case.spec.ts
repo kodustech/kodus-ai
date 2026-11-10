@@ -3,7 +3,7 @@ import { ParametersKey } from '@libs/core/domain/enums';
 import { PreviewPrRiskUseCase } from './preview-pr-risk.use-case';
 
 const parameters = { findByKey: jest.fn() };
-const host = { getPullRequestByNumber: jest.fn() };
+const host = { getPullRequest: jest.fn() };
 const risk = { assess: jest.fn() };
 const useCase = new PreviewPrRiskUseCase(
     parameters as any,
@@ -28,7 +28,7 @@ beforeEach(() => {
                   }
                 : 'en-US',
     }));
-    host.getPullRequestByNumber.mockResolvedValue({
+    host.getPullRequest.mockResolvedValue({
         number: 8,
         title: 'Change',
         base: { sha: 'base' },
@@ -61,7 +61,7 @@ it('previews draft criteria on the real shared assessment service without approv
             },
         }),
     );
-    expect(host.getPullRequestByNumber).toHaveBeenCalledWith(
+    expect(host.getPullRequest).toHaveBeenCalledWith(
         expect.objectContaining({
             organizationAndTeamData: input.organizationAndTeamData,
             prNumber: 8,
@@ -73,7 +73,7 @@ it('rejects a repository outside the caller team before reading its PR', async (
     await expect(
         useCase.execute({ ...input, repositoryId: 'another-team-repo' }),
     ).rejects.toBeInstanceOf(NotFoundException);
-    expect(host.getPullRequestByNumber).not.toHaveBeenCalled();
+    expect(host.getPullRequest).not.toHaveBeenCalled();
     expect(risk.assess).not.toHaveBeenCalled();
 });
 

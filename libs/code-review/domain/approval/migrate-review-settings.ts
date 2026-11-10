@@ -36,6 +36,7 @@ export function resolveReviewSettings(
     const effective = deepMerge(defaults, ...sources) as CodeReviewConfig;
     const saved = deepMerge(...sources) as Partial<CodeReviewConfig>;
     let riskChoice: { independent: boolean; active: boolean } | undefined;
+    let approvalPolicySource: 'legacy' | 'named' = 'legacy';
     let policies: NamedApprovalPolicy[] = approvalPoliciesSchema.parse([
         {
             id: 'legacy-approval',
@@ -86,9 +87,10 @@ export function resolveReviewSettings(
                     },
                 ];
         }
-        if (own(source, 'approvalPolicies'))
+        if (own(source, 'approvalPolicies')) {
+            approvalPolicySource = 'named';
             policies = approvalPoliciesSchema.parse(layer.approvalPolicies);
-        else if (
+        } else if (
             own(source, 'approvalLabels') ||
             own(source, 'approvalAuthors')
         ) {
@@ -117,6 +119,7 @@ export function resolveReviewSettings(
     }
     return {
         ...effective,
+        approvalPolicySource,
         riskAssessmentActive: riskChoice
             ? riskChoice.active &&
               (riskChoice.independent || !!effective.pullRequestApprovalActive)
@@ -130,6 +133,14 @@ export function resolveReviewSettings(
             ...saved.riskReviewRouting,
         },
     };
+}
+
+/** Migration exposes policies in settings without changing legacy execution semantics. */
+export function usesNamedApprovalPolicies(config?: Partial<CodeReviewConfig>) {
+    return (
+        config?.approvalPolicies !== undefined &&
+        config.approvalPolicySource !== 'legacy'
+    );
 }
 
 /** Used when a caller already has an effective legacy configuration and its raw saved delta. */

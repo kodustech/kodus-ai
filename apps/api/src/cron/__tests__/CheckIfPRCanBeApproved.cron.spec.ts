@@ -1,3 +1,5 @@
+import CodeBaseConfigService from '@libs/ee/codeBase/codeBaseConfig.service';
+import { ApprovalPoliciesService } from '@libs/code-review/pipeline/services/approval-policies.service';
 import { frozenContext } from '../../../../../test/fixtures/frozen-pipeline-context';
 import { RequestChangesOrApproveStage } from '@libs/code-review/pipeline/stages/finish-process-review.stage';
 import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
@@ -2729,5 +2731,202 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         expect(
             deps.codeManagementService.checkIfPullRequestShouldBeApproved,
         ).not.toHaveBeenCalled();
+    });
+    function useRealConfig(
+        deps: ReturnType<typeof makeCron>['deps'],
+        configs: object,
+        directories: any[] = [],
+    ) {
+        const stored = {
+            configs,
+            repositories: [
+                {
+                    id: 'repo-a',
+                    name: 'Repo A',
+                    configs: { kodusConfigFileOverridesWebPreferences: false },
+                    directories,
+                },
+            ],
+        };
+        deps.parametersService.findOne.mockResolvedValue({
+            team: { uuid: 'team-1' },
+            configValue: stored,
+        });
+        Object.assign(deps.codeManagementService, {
+            verifyConnection: async () => ({
+                hasConnection: true,
+                isSetupComplete: true,
+            }),
+            getDefaultBranch: async () => 'main',
+        });
+        deps.parametersService.findByKey = jest.fn(async () => null);
+        const base = new CodeBaseConfigService(
+            {} as any,
+            {} as any,
+            {} as any,
+            deps.parametersService,
+            {
+                findByOrganizationId: async () => null,
+                syncRulesWithPlanLimit: async () => null,
+            } as any,
+            {} as any,
+            deps.codeManagementService,
+            {
+                filterKodyRules: () => ({ standardRules: [], memoryRules: [] }),
+            } as any,
+            { shouldLimitResources: async () => false } as any,
+            {} as any,
+        );
+        deps.codeBaseConfigService.getConfig.mockImplementation(
+            base.getConfig.bind(base),
+        );
+        return base;
+    }
+
+    it('continues a pre-deploy legacy execution after delivered threads are resolved using real migrated config', async () => {
+        const { cron, deps } = makeCron();
+        const base = useRealConfig(deps, { pullRequestApprovalActive: true });
+        const config = await base.getConfig(
+            { organizationId: 'org-1', teamId: 'team-1' },
+            { id: 'repo-a', name: 'Repo A' },
+            [],
+        );
+        expect(config.approvalPolicies).toHaveLength(1);
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            {
+                status: AutomationStatus.SUCCESS,
+                dataExecution: { lastAnalyzedCommit: { sha: 'head' } },
+            },
+        );
+        deps.codeManagementService.getPullRequest.mockResolvedValue({
+            head: { sha: 'head' },
+        });
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            [{ id: 'c1', isResolved: true }],
+        );
+        expect(
+            await (cron as any).shouldApprovePR({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                pr: {
+                    ...makeOpenPr(1, 'repo-a'),
+                    suggestions: [{ comment: { id: 'c1' } }],
+                },
+                codeReviewConfig: config,
+                teamAutomationId: 'team-automation-1',
+            }),
+        ).toBe(true);
+        expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+    });
+
+    it('never approves a saved risk hold after a rename leaves its risk-enabled directory', async () => {
+        const { cron, deps } = makeCron();
+        useRealConfig(
+            deps,
+            {
+                pullRequestApprovalActive: true,
+                riskAssessmentActive: false,
+                approvalPolicies: [
+                    { id: 'clean', name: 'Clean', enabled: true },
+                ],
+            },
+            [
+                {
+                    id: 'payments',
+                    path: 'services/payments',
+                    configs: { riskAssessmentActive: true },
+                },
+            ],
+        );
+        const live = {
+            number: 1,
+            head: { sha: 'head' },
+            base: { sha: 'base' },
+            title: 'Move payment code',
+            labels: [],
+            user: { login: 'dev' },
+        };
+        const reviewed = {
+            kind: 'hold',
+            reason: 'Risk was identified in this PR.',
+            reviewedHeadSha: 'head',
+            reviewedBaseSha: 'base',
+        };
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            {
+                uuid: 'review',
+                status: AutomationStatus.SUCCESS,
+                dataExecution: {
+                    lastAnalyzedCommit: { sha: 'head' },
+                    approvalDecision: reviewed,
+                    approvalReviewSummary: {
+                        complete: true,
+                        lineFindings: 0,
+                        prFindings: 0,
+                    },
+                    riskAssessment: {
+                        status: 'assessed',
+                        riskIdentified: true,
+                        reason: 'Payment code changed.',
+                        snapshot: {
+                            organizationId: 'org-1',
+                            repositoryId: 'repo-a',
+                            prNumber: 1,
+                            headSha: 'head',
+                            baseSha: 'base',
+                            assessmentKey: 'key',
+                            configurationKey: prRiskConfigurationKey({}),
+                        },
+                    },
+                },
+            },
+        );
+        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+            [{ repositoryId: 'repo-a', pullRequestNumber: 1 }],
+        );
+        deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [makeOpenPr(1, 'repo-a')],
+        );
+        deps.codeManagementService.getPullRequest.mockResolvedValue(live);
+        deps.codeManagementService.getReviewStatusByPullRequest.mockResolvedValue(
+            PullRequestReviewState.PENDING,
+        );
+        deps.codeManagementService.getFilesByPullRequestId.mockResolvedValue([
+            {
+                filename: 'lib/payment.ts',
+                previous_filename: 'services/payments/payment.ts',
+            },
+        ]);
+        (cron as any).approvalPolicies = new ApprovalPoliciesService(
+            deps.codeManagementService,
+            deps.organizationParameters as any,
+            deps.conditionalApprovalAccess,
+            { gateKodusCreditsForSlot: async () => null } as any,
+        );
+        const shouldApprove = jest.spyOn(cron as any, 'shouldApprovePR');
+        await cron.handleCron();
+        expect(shouldApprove).toHaveBeenCalledWith(
+            expect.objectContaining({
+                codeReviewConfig: expect.objectContaining({
+                    riskAssessmentActive: true,
+                }),
+            }),
+        );
+        expect(
+            deps.codeManagementService.approvePullRequest,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining('Risk was identified'),
+            }),
+            PlatformType.GITLAB,
+        );
     });
 });

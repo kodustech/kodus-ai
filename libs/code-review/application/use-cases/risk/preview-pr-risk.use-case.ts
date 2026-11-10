@@ -47,7 +47,7 @@ export class PreviewPrRiskUseCase {
         if (!saved || saved.isSelected === false)
             throw new NotFoundException('Repository not found in this team.');
         const repository = { id: saved.id, name: saved.name };
-        const pullRequest = await this.codeManagement.getPullRequestByNumber({
+        const pullRequest = await this.codeManagement.getPullRequest({
             organizationAndTeamData: input.organizationAndTeamData,
             repository,
             prNumber: input.prNumber,

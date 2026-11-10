@@ -1,3 +1,4 @@
+import { usesNamedApprovalPolicies } from '@libs/code-review/domain/approval/migrate-review-settings';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { Injectable } from '@nestjs/common';
@@ -69,7 +70,7 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         ) {
             try {
                 const policyNoMatch =
-                    codeReviewConfig.approvalPolicies !== undefined &&
+                    usesNamedApprovalPolicies(codeReviewConfig) &&
                     context.approvalDecision.kind === 'out-of-scope';
                 const dismissed = policyNoMatch
                     ? 0
@@ -103,8 +104,9 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                             'hold',
                             {
                                 onlyIfPresent:
-                                    codeReviewConfig.approvalPolicies ===
-                                        undefined && dismissed === 0,
+                                    !usesNamedApprovalPolicies(
+                                        codeReviewConfig,
+                                    ) && dismissed === 0,
                             },
                         );
                     } catch (error) {
@@ -197,7 +199,8 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
             context.platformType,
         );
         const requiresConditionalDecision = !!(
-            codeReviewConfig.approvalPolicies !== undefined ||
+            usesNamedApprovalPolicies(codeReviewConfig) ||
+            !!codeReviewConfig.reviewSettingsError ||
             approvalPolicy.labels?.length ||
             approvalPolicy.authors?.length ||
             approvalPolicy.assessRisk ||

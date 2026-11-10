@@ -1,3 +1,4 @@
+import { usesNamedApprovalPolicies } from '@libs/code-review/domain/approval/migrate-review-settings';
 import { Inject, Injectable } from '@nestjs/common';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
@@ -65,7 +66,15 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         ) {
             return context;
         }
-        if (config.approvalPolicies !== undefined) {
+        if (config.reviewSettingsError) {
+            return this.updateContext(context, (draft) => {
+                draft.approvalDecision = {
+                    kind: 'hold',
+                    reason: config.reviewSettingsError,
+                };
+            });
+        }
+        if (usesNamedApprovalPolicies(config)) {
             const result = await this.approvalPolicies.evaluate({
                 organizationAndTeamData: context.organizationAndTeamData,
                 repository: context.repository,

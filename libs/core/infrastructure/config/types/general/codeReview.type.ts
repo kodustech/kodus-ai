@@ -877,6 +877,11 @@ export type CodeReviewConfig = {
     riskAssessmentActive?: boolean;
     riskCriteria?: RiskCriterion[];
     riskReviewRouting?: RiskReviewRouting;
+    /** Runtime metadata; never a saved configuration choice. */
+    riskAssessmentMayBeActive?: boolean;
+    approvalSettingsMayVaryByDirectory?: boolean;
+    reviewSettingsError?: string;
+    approvalPolicySource?: 'legacy' | 'named';
     reviewOptions: ReviewOptions;
 
     /** How the PR is checked against the task it references (Business Logic). */

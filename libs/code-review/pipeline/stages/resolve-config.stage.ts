@@ -60,6 +60,43 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
         try {
+            // Webhooks (notably GitLab) do not always carry the target SHA.
+            // Fill missing refs from the normalized host contract, but never
+            // replace a webhook head with a newer, unreviewed head.
+            let pullRequest = context.pullRequest;
+            if (
+                context.origin !== 'cli' &&
+                (!pullRequest.head?.sha || !pullRequest.base?.sha)
+            ) {
+                try {
+                    const live =
+                        await this.pullRequestHandlerService.getPullRequestDetails(
+                            context.organizationAndTeamData,
+                            context.repository,
+                            pullRequest.number,
+                        );
+                    if (
+                        live?.head?.sha &&
+                        live?.base?.sha &&
+                        (!pullRequest.head?.sha ||
+                            live.head.sha === pullRequest.head.sha) &&
+                        (!pullRequest.base?.sha ||
+                            live.base.sha === pullRequest.base.sha)
+                    ) {
+                        pullRequest = {
+                            ...pullRequest,
+                            head: { ...pullRequest.head, sha: live.head.sha },
+                            base: { ...pullRequest.base, sha: live.base.sha },
+                        };
+                    }
+                } catch (error) {
+                    this.logger.warn({
+                        message: 'Could not hydrate the reviewed PR snapshot',
+                        context: this.stageName,
+                        error,
+                    });
+                }
+            }
             const forceFullRerun = Boolean(
                 context.pipelineMetadata?.forceFullRerun,
             );
@@ -75,7 +112,7 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                 (await this.pullRequestHandlerService.getChangedFilesMetadata(
                     context.organizationAndTeamData,
                     context.repository,
-                    context.pullRequest,
+                    pullRequest,
                     baseCommit,
                     context.lastExecution?.reviewedBaseBranch,
                 ));
@@ -110,60 +147,73 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                 preliminaryFiles,
             );
 
-            // Review settings follow the incremental diff. Risk is a PR-wide
-            // decision and must include scopes touched before this push, too.
+            // Review files stay incremental; risk and approval use every path
+            // in the current PR, including paths changed before this push.
             let fullPrFiles: FileChange[] | undefined;
             let riskConfigurationUnavailable = false;
+            const riskMayBeActive = config.riskAssessmentMayBeActive ?? true;
+            const approvalMayVary =
+                config.approvalSettingsMayVaryByDirectory === true;
             try {
-                fullPrFiles =
-                    baseCommit || context.rebaseInterdiffFiles
-                        ? await this.pullRequestHandlerService.getChangedFilesMetadata(
-                              context.organizationAndTeamData,
-                              context.repository,
-                              context.pullRequest,
-                              undefined,
-                              undefined,
-                          )
-                        : preliminaryFiles;
-                if (
-                    !fullPrFiles?.length ||
-                    fullPrFiles.some((file) => !file.filename) ||
-                    (context.pullRequest.stats?.total_files > 0 &&
-                        fullPrFiles.length !==
-                            context.pullRequest.stats.total_files)
-                ) {
-                    throw new Error('The complete PR file list is unavailable');
+                const needsPrWideSettings = riskMayBeActive || approvalMayVary;
+                if (!baseCommit && !context.rebaseInterdiffFiles) {
+                    fullPrFiles = preliminaryFiles;
+                } else if (needsPrWideSettings) {
+                    fullPrFiles =
+                        await this.pullRequestHandlerService.getChangedFilesMetadata(
+                            context.organizationAndTeamData,
+                            context.repository,
+                            pullRequest,
+                            undefined,
+                            undefined,
+                        );
                 }
-                const riskScopeFiles = fullPrFiles.flatMap((file) =>
-                    file.previous_filename &&
-                    file.previous_filename !== file.filename
-                        ? [file, { ...file, filename: file.previous_filename }]
-                        : [file],
-                );
-                const riskConfig =
-                    fullPrFiles === preliminaryFiles &&
-                    riskScopeFiles.length === preliminaryFiles.length
-                        ? config
-                        : await this.codeBaseConfigService.getConfig(
-                              context.organizationAndTeamData,
-                              context.repository,
-                              riskScopeFiles,
-                          );
-                for (const key of [
-                    'riskAssessmentActive',
-                    'riskCriteria',
-                    'riskReviewRouting',
-                ] as const) {
-                    if (riskConfig[key] !== undefined)
-                        config = { ...config, [key]: riskConfig[key] };
-                }
-                if (riskConfig.riskAssessmentActive === true) {
-                    config = { ...config, reviewMode: riskConfig.reviewMode };
+                // Without PR-wide settings, approval file conditions fetch a
+                // complete diff only if they need it after the review.
+                if (fullPrFiles || needsPrWideSettings) {
+                    if (
+                        !fullPrFiles?.length ||
+                        fullPrFiles.some((file) => !file.filename)
+                    ) {
+                        throw new Error(
+                            'The complete PR file list is unavailable',
+                        );
+                    }
+                    const prWideConfig =
+                        fullPrFiles === preliminaryFiles
+                            ? config
+                            : await this.codeBaseConfigService.getConfig(
+                                  context.organizationAndTeamData,
+                                  context.repository,
+                                  fullPrFiles,
+                              );
+                    for (const key of [
+                        'riskAssessmentActive',
+                        'riskCriteria',
+                        'riskReviewRouting',
+                        'reviewSettingsError',
+                        'pullRequestApprovalActive',
+                        'approvalPolicies',
+                        'approvalPolicySource',
+                        'approvalLabels',
+                        'approvalAuthors',
+                        'approvalSensitivePaths',
+                        'approvalRiskActive',
+                        'approvalRiskInstructions',
+                    ] as const) {
+                        config = { ...config, [key]: prWideConfig[key] };
+                    }
+                    if (prWideConfig.riskAssessmentActive === true) {
+                        config = {
+                            ...config,
+                            reviewMode: prWideConfig.reviewMode,
+                        };
+                    }
                 }
             } catch (error) {
-                if (is429Error(error)) throw error;
                 this.logger.warn({
-                    message: 'Could not resolve PR-wide risk settings',
+                    message:
+                        'Could not resolve PR-wide risk and approval settings',
                     context: this.stageName,
                     error,
                     metadata: {
@@ -175,8 +225,16 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                 });
                 // An unreadable scope may contain an enabled risk override.
                 // Continue the review in its default mode, but veto approval.
-                config = { ...config, riskAssessmentActive: true };
-                riskConfigurationUnavailable = true;
+                if (riskMayBeActive) {
+                    config = { ...config, riskAssessmentActive: true };
+                    riskConfigurationUnavailable = true;
+                }
+                if (approvalMayVary)
+                    config = {
+                        ...config,
+                        reviewSettingsError:
+                            'Kody could not resolve PR-wide approval settings.',
+                    };
             }
 
             const pullRequestMessagesConfig =
@@ -184,11 +242,13 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
 
             return this.updateContext(context, (draft) => {
                 draft.codeReviewConfig = config;
+                draft.pullRequest = pullRequest;
                 draft.pullRequestMessagesConfig = pullRequestMessagesConfig;
                 draft.preliminaryFiles = preliminaryFiles;
                 draft.fullPrFiles = fullPrFiles;
                 draft.riskConfigurationUnavailable =
-                    riskConfigurationUnavailable;
+                    riskConfigurationUnavailable ||
+                    !!config.reviewSettingsError;
             });
         } catch (error) {
             // Not a configuration problem. Set here: a thrown error would be

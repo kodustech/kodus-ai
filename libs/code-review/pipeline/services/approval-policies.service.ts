@@ -90,6 +90,8 @@ export class ApprovalPoliciesService {
                 },
                 eligibility,
             };
+        if (input.config.reviewSettingsError)
+            return hold(input.config.reviewSettingsError);
         if (!input.reviewClean)
             return hold('The review is not clean or did not complete.');
         const riskVeto = riskApprovalVeto(
@@ -162,12 +164,11 @@ export class ApprovalPoliciesService {
                       headSha,
                   })))
                 : [];
+            // The host's file API must return a complete listing. Pipeline
+            // stats count analysed files after ignore/deletion filtering.
             if (
                 needsFiles &&
-                (!files?.length ||
-                    files.some((file) => !file.filename) ||
-                    (input.pullRequest.stats?.total_files > 0 &&
-                        files.length !== input.pullRequest.stats.total_files))
+                (!files?.length || files.some((file) => !file.filename))
             )
                 return hold('The complete PR file list could not be verified.');
             let modelLoaded = false;

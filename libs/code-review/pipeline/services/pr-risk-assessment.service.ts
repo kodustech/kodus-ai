@@ -124,12 +124,7 @@ export class PrRiskAssessmentService {
                     prNumber: pullRequest.number,
                     headSha,
                 }));
-            if (
-                !files?.length ||
-                files.some((file) => !file.filename) ||
-                (pullRequest.stats?.total_files > 0 &&
-                    files.length !== pullRequest.stats.total_files)
-            ) {
+            if (!files?.length || files.some((file) => !file.filename)) {
                 return unavailable(
                     'Kody could not verify the complete PR diff.',
                 );

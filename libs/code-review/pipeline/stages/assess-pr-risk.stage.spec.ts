@@ -133,9 +133,11 @@ it.each([
     },
 );
 
-it('does not score a partial provider file listing', async () => {
+it('does not score when the provider rejects an incomplete file listing', async () => {
     const ctx = context();
-    ctx.pullRequest.stats.total_files = 2;
+    management.getFilesByPullRequestId.mockRejectedValueOnce(
+        new Error('Truncated provider diff'),
+    );
     expect((await stage.execute(ctx)).riskAssessment).toMatchObject({
         status: 'unavailable',
     });

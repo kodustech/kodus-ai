@@ -1,3 +1,4 @@
+import { usesNamedApprovalPolicies } from '@libs/code-review/domain/approval/migrate-review-settings';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
@@ -1166,7 +1167,19 @@ export class CheckIfPRCanBeApprovedCronProvider {
         currentPullRequest?: PullRequest | null;
         directoryChangedPaths?: string[];
     }): Promise<boolean> {
-        if (codeReviewConfig?.approvalPolicies !== undefined)
+        if (codeReviewConfig?.reviewSettingsError) {
+            await this.postConditionalApprovalReason(
+                {
+                    organizationAndTeamData,
+                    repository: pr.repository,
+                    prNumber: pr.number,
+                },
+                pr.provider as PlatformType,
+                { kind: 'hold', reason: codeReviewConfig.reviewSettingsError },
+            );
+            return false;
+        }
+        if (usesNamedApprovalPolicies(codeReviewConfig))
             return this.approveByNamedPolicy({
                 organizationAndTeamData,
                 pr,
