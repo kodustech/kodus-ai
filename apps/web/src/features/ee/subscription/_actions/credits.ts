@@ -114,10 +114,20 @@ export const updateCreditAutoTopUpAction = async (params: {
     enabled: boolean;
     thresholdUsd?: number;
     amountUsd?: number;
+    monthlyLimitUsd?: number | null;
 }) => {
     await assertCanManageCredits();
     try {
-        return await updateCreditAutoTopUp(params);
+        const result = await updateCreditAutoTopUp(params);
+        // During a rolling deploy an older billing instance can ignore new
+        // fields. Never claim a spending cap was saved without its response.
+        if (
+            params.monthlyLimitUsd !== undefined &&
+            result?.monthlyLimitUsd !== params.monthlyLimitUsd
+        ) {
+            throw new Error("Monthly auto top-up limit was not saved");
+        }
+        return result;
     } catch (error) {
         console.error("Failed to update auto top-up:", error);
         // Billing answers 409 NO_PAYMENT_METHOD when no card is saved and
