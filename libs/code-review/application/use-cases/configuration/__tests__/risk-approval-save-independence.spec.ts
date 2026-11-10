@@ -441,7 +441,8 @@ it.each([false, true])(
         expect(read().reviewMode).toBe('heavy');
         if (undo) {
             expect(
-                stored.repositories[0].configs.riskReviewRouting,
+                save.mock.calls.at(-1)[1].repositories[0].configs
+                    .riskReviewRouting,
             ).not.toHaveProperty('noRisk');
             const get = new GetCodeReviewParameterUseCase(
                 {
@@ -477,3 +478,44 @@ it.each([false, true])(
         }
     },
 );
+
+it('restores only the requested route and preserves the other legacy Heavy route', async () => {
+    const { run, save, stored } = setup(true);
+    stored.repositories[0].configs = { reviewMode: 'heavy' };
+    await run(
+        {},
+        {
+            repositoryId: 'repo',
+            inheritFields: ['riskReviewRouting.riskFound'],
+        },
+    );
+    const saved = save.mock.calls[0][1].repositories[0].configs;
+    const resolved = resolveReviewSettings(
+        getDefaultKodusConfigFile(),
+        stored.configs,
+        saved,
+    );
+    expect(resolved.riskReviewRouting.noRisk).toBe('heavy');
+    expect(resolved.reviewMode).toBe('heavy');
+    expect(saved.riskReviewRouting).not.toHaveProperty('riskFound');
+});
+
+it('preserves the other legacy route when only one canonical route is edited', async () => {
+    const { run, save, stored } = setup(true);
+    stored.repositories[0].configs = { reviewMode: 'heavy' };
+    await run(
+        { riskReviewRouting: { riskFound: 'balanced' } },
+        { repositoryId: 'repo' },
+    );
+    const saved = save.mock.calls[0][1].repositories[0].configs;
+    expect(
+        resolveReviewSettings(
+            getDefaultKodusConfigFile(),
+            stored.configs,
+            saved,
+        ),
+    ).toMatchObject({
+        reviewMode: 'heavy',
+        riskReviewRouting: { noRisk: 'heavy', riskFound: 'balanced' },
+    });
+});

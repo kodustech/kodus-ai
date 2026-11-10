@@ -1015,7 +1015,14 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     // equal the raw parent. Only explicit inheritance removes ownership.
     private preserveCanonicalReviewChoices(
         delta: ConfigDelta,
-        owned: ConfigDelta,
+        owned: Pick<
+            ConfigDelta,
+            | 'riskAssessmentActive'
+            | 'approvalPolicies'
+            | 'riskCriteria'
+            | 'riskReviewRouting'
+            | 'reviewMode'
+        >,
     ) {
         for (const key of [
             'riskAssessmentActive',
@@ -1143,8 +1150,30 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         // we ignore the previous database state and rebuild the resolved config
         // from the file content plus the parent defaults. This ensures that
         // properties removed from the file are also removed from the database.
+        // Split the legacy default/mode mapping before editing either route.
+        // Restoring or editing one route must leave the other route unchanged.
+        const ownsLegacyMode =
+            oldConfig.reviewMode !== undefined &&
+            oldConfig.riskReviewRouting === undefined;
+        const editsRouting =
+            sanitizedIncomingConfig.riskReviewRouting !== undefined ||
+            inheritFields.some((field) =>
+                field.startsWith('riskReviewRouting.'),
+            );
+        const oldReviewConfig =
+            ownsLegacyMode && editsRouting
+                ? {
+                      ...oldConfig,
+                      riskReviewRouting: {
+                          noRisk:
+                              oldConfig.reviewMode === 'heavy'
+                                  ? ('heavy' as const)
+                                  : ('balanced' as const),
+                      },
+                  }
+                : oldConfig;
         const mergeOldConfig = this.withoutInheritedReviewOverrides(
-            oldConfig,
+            oldReviewConfig,
             inheritFields,
         );
         const mergeIncomingConfig = this.withoutInheritedReviewOverrides(
