@@ -1,3 +1,4 @@
+import { prRiskDescriptionKey } from '@libs/code-review/domain/risk/risk-configuration';
 import { LLM } from '@libs/llm/llm';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -94,6 +95,7 @@ it.each([true, false])(
                     baseSha: 'base',
                     headSha: 'head-1',
                     assessmentKey: 'key',
+                    descriptionKey: prRiskDescriptionKey({}),
                 },
             },
         };

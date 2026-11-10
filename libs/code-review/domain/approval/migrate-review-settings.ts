@@ -37,6 +37,7 @@ export function resolveReviewSettings(
     const saved = deepMerge(...sources) as Partial<CodeReviewConfig>;
     let riskChoice: { independent: boolean; active: boolean } | undefined;
     let approvalPolicySource: 'legacy' | 'named' = 'legacy';
+    let riskAssessmentSource: 'legacy' | 'independent' = 'legacy';
     let policies: NamedApprovalPolicy[] = approvalPoliciesSchema.parse([
         {
             id: 'legacy-approval',
@@ -50,6 +51,8 @@ export function resolveReviewSettings(
     let legacyRoutingMode = defaults.reviewMode;
     for (const source of sources) {
         const layer = source as Partial<CodeReviewConfig>;
+        if (own(source, 'riskAssessmentActive') || own(source, 'riskCriteria'))
+            riskAssessmentSource = 'independent';
         if (own(source, 'riskAssessmentActive')) {
             if (typeof layer.riskAssessmentActive !== 'boolean')
                 throw new Error('Invalid risk assessment setting.');
@@ -120,6 +123,7 @@ export function resolveReviewSettings(
     return {
         ...effective,
         approvalPolicySource,
+        riskAssessmentSource,
         riskAssessmentActive: riskChoice
             ? riskChoice.active &&
               (riskChoice.independent || !!effective.pullRequestApprovalActive)

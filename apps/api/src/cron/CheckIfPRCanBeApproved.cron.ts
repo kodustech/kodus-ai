@@ -8,9 +8,13 @@ import {
 import { OrganizationParametersKey } from '@libs/core/domain/enums/organization-parameters-key.enum';
 import {
     isCurrentRiskAssessment,
+    riskApprovalVeto,
     type RiskAssessmentResult,
 } from '@libs/code-review/domain/risk/risk-assessment';
-import { prRiskConfigurationKey } from '@libs/code-review/domain/risk/risk-configuration';
+import {
+    prRiskConfigurationKey,
+    prRiskDescriptionKey,
+} from '@libs/code-review/domain/risk/risk-configuration';
 import { ApprovalPoliciesService } from '@libs/code-review/pipeline/services/approval-policies.service';
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 import { isByokConfig, LLM_TASK } from '@libs/llm/byok-config';
@@ -213,6 +217,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     language: input.config.languageResultPrompt,
                     modelSlot: slot,
                 }),
+                descriptionKey: prRiskDescriptionKey(input.pullRequest),
             });
         } catch (error) {
             this.logger.warn({
@@ -1257,6 +1262,12 @@ export class CheckIfPRCanBeApprovedCronProvider {
         );
         let changedPaths: string[] = directoryChangedPaths ?? [];
         const reviewedDecision = lastExecution?.dataExecution?.approvalDecision;
+        // Only pre-deploy legacy judgments may use the old head-bound result.
+        // Independent choices and every new shared result require its snapshot.
+        const needsSharedRisk =
+            codeReviewConfig?.riskAssessmentActive === true &&
+            (codeReviewConfig.riskAssessmentSource !== 'legacy' ||
+                !!lastExecution?.dataExecution?.riskAssessment);
         if (
             allowNoComments &&
             (!['approve', 'hold', 'out-of-scope'].includes(
@@ -1310,6 +1321,21 @@ export class CheckIfPRCanBeApprovedCronProvider {
             }
 
             if (policyActive) {
+                if (
+                    reviewedDecision?.reviewedBaseSha &&
+                    currentPullRequest?.base?.sha !==
+                        reviewedDecision.reviewedBaseSha
+                ) {
+                    await this.postConditionalApprovalReason(
+                        codeManagementRequestData,
+                        platformType,
+                        {
+                            kind: 'hold',
+                            reason: 'The target branch changed after this PR was reviewed.',
+                        },
+                    );
+                    return false;
+                }
                 // A conditional approval must have a saved successful review
                 // and a live head. Do not infer either from a missing response.
                 if (
@@ -1466,7 +1492,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         return null;
                     })) === PullRequestReviewState.APPROVED;
                 if (
-                    codeReviewConfig?.riskAssessmentActive === true &&
+                    needsSharedRisk &&
                     !approvedOnHost &&
                     !(await this.sharedRiskIsCurrent({
                         organizationAndTeamData,
@@ -1481,6 +1507,21 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         codeManagementRequestData,
                         platformType,
                         { kind: 'hold', reason: SHARED_RISK_STALE_REASON },
+                    );
+                    return false;
+                }
+                const sharedVeto = lastExecution.dataExecution?.riskAssessment
+                    ? riskApprovalVeto(
+                          codeReviewConfig?.riskAssessmentActive === true,
+                          lastExecution.dataExecution.riskAssessment,
+                          currentHeadSha,
+                      )
+                    : undefined;
+                if (sharedVeto) {
+                    await this.postConditionalApprovalReason(
+                        codeManagementRequestData,
+                        platformType,
+                        { kind: 'hold', reason: sharedVeto },
                     );
                     return false;
                 }
@@ -1745,9 +1786,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         (latestPullRequest as any)?.headSha ||
                         (latestPullRequest as any)?.head?.commit?.sha;
                     const directoryPolicyBaseSha =
+                        reviewedDecision?.reviewedBaseSha ??
                         preloadedPullRequest?.base?.sha;
                     const directoryBaseChanged =
-                        !!preloadedPullRequest &&
+                        (!!preloadedPullRequest ||
+                            !!reviewedDecision?.reviewedBaseSha) &&
                         (!directoryPolicyBaseSha ||
                             latestPullRequest?.base?.sha !==
                                 directoryPolicyBaseSha);
@@ -1770,7 +1813,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         return false;
                     }
                     if (
-                        codeReviewConfig?.riskAssessmentActive === true &&
+                        needsSharedRisk &&
                         !(await this.sharedRiskIsCurrent({
                             organizationAndTeamData,
                             repositoryId: repository.id,
@@ -1787,17 +1830,23 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         );
                         return false;
                     }
-                    conditionalDecision = evaluateReviewedHeadApproval({
-                        approvalActive: true,
-                        reviewedDecision,
-                        policy,
-                        author: latestPullRequest?.user?.login,
-                        labels: latestPullRequest?.labels,
-                        changedPaths,
-                        reviewClean: true,
-                        risk: lastExecution?.dataExecution?.approvalRisk,
-                        currentHeadSha: latestHeadSha,
-                    });
+                    conditionalDecision = {
+                        ...evaluateReviewedHeadApproval({
+                            approvalActive: true,
+                            reviewedDecision,
+                            policy,
+                            author: latestPullRequest?.user?.login,
+                            labels: latestPullRequest?.labels,
+                            changedPaths,
+                            reviewClean: true,
+                            risk: lastExecution?.dataExecution?.approvalRisk,
+                            currentHeadSha: latestHeadSha,
+                        }),
+                        reviewedHeadSha: latestHeadSha,
+                        reviewedBaseSha: latestPullRequest?.base?.sha,
+                        reviewedMetadataKey:
+                            approvalPrMetadataKey(latestPullRequest),
+                    };
                     if (conditionalDecision.kind !== 'approve') {
                         if (conditionalDecision.kind === 'hold') {
                             await this.postConditionalApprovalReason(
@@ -1810,6 +1859,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     }
                 }
 
+                const approvalAttemptAt = new Date().toISOString();
                 await this.codeManagementService.checkIfPullRequestShouldBeApproved(
                     {
                         organizationAndTeamData,
@@ -1833,6 +1883,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         codeManagementRequestData,
                         platformType,
                         conditionalDecision,
+                        undefined,
+                        approvalAttemptAt,
                     );
                 }
                 return true;

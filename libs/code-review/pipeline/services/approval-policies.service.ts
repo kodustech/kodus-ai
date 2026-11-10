@@ -148,6 +148,13 @@ export class ApprovalPoliciesService {
             });
             if (live?.head?.sha !== headSha || live?.base?.sha !== baseSha)
                 return hold('The PR changed after it was reviewed.');
+            const currentRiskVeto = riskApprovalVeto(
+                input.config.riskAssessmentActive === true,
+                input.risk,
+                headSha,
+                live,
+            );
+            if (currentRiskVeto) return hold(currentRiskVeto);
             const needsFiles =
                 policies.some(
                     (policy) =>

@@ -28,6 +28,7 @@ import {
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { ApprovalPoliciesService } from '../services/approval-policies.service';
 import { SUMMARY_GENERATION_FAILED_REASON } from '../constants/error-reasons';
+import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 
 @Injectable()
 export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -163,6 +164,8 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         if (
             !livePr ||
             (headSha && livePr.head?.sha !== headSha) ||
+            (pullRequest.base?.sha &&
+                livePr.base?.sha !== pullRequest.base.sha) ||
             (policy.labels?.length && !livePr.labels)
         ) {
             return this.updateContext(context, (draft) => {
@@ -294,7 +297,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         }
         const sharedVeto =
             config.riskAssessmentActive === true
-                ? riskApprovalVeto(true, sharedRisk, headSha)
+                ? riskApprovalVeto(true, sharedRisk, headSha, livePr)
                 : undefined;
         const decision = sharedVeto
             ? { kind: 'hold' as const, reason: sharedVeto }
@@ -313,7 +316,16 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
               });
         return this.updateContext(context, (draft) => {
             draft.approvalRisk = risk;
-            draft.approvalDecision = decision;
+            draft.approvalDecision = {
+                ...decision,
+                ...(headSha && pullRequest.base?.sha
+                    ? {
+                          reviewedHeadSha: headSha,
+                          reviewedBaseSha: pullRequest.base.sha,
+                          reviewedMetadataKey: approvalPrMetadataKey(livePr),
+                      }
+                    : {}),
+            };
             if (risk?.level === 'unknown') {
                 draft.errors ??= [];
                 draft.errors.push({

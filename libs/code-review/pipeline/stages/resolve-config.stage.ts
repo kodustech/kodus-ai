@@ -189,6 +189,7 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                               );
                     for (const key of [
                         'riskAssessmentActive',
+                        'riskAssessmentSource',
                         'riskCriteria',
                         'riskReviewRouting',
                         'reviewSettingsError',

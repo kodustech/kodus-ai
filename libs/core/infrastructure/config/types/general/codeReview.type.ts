@@ -882,6 +882,7 @@ export type CodeReviewConfig = {
     approvalSettingsMayVaryByDirectory?: boolean;
     reviewSettingsError?: string;
     approvalPolicySource?: 'legacy' | 'named';
+    riskAssessmentSource?: 'legacy' | 'independent';
     reviewOptions: ReviewOptions;
 
     /** How the PR is checked against the task it references (Business Logic). */

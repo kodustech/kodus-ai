@@ -383,6 +383,48 @@ it('does not approve a clean legacy PR when independent risk confirms risk', asy
     expect(s.host.approvePullRequest).not.toHaveBeenCalled();
 });
 
+it('binds migrated conditional approvals to the same reviewed head, base and metadata', async () => {
+    const s = setup({ approvalRiskActive: true });
+    const assessed = await s.risk.execute(await s.resolve.execute(s.context));
+    const result = await s.decide.execute(await s.fetch.execute(assessed));
+    expect(result.approvalDecision).toMatchObject({
+        kind: 'approve',
+        reviewedHeadSha: 'head',
+        reviewedBaseSha: 'base',
+        reviewedMetadataKey: expect.any(String),
+    });
+    s.host.getPullRequest.mockResolvedValue({
+        ...livePr,
+        base: { sha: 'moved-base' },
+    });
+    const stale = await s.decide.execute(await s.fetch.execute(assessed));
+    expect(stale.approvalDecision.kind).toBe('hold');
+    await s.finish.execute(result);
+    expect(s.host.approvePullRequest).not.toHaveBeenCalled();
+});
+
+it.each([false, true])(
+    'holds an assessment when its PR description changes before approval (named=%s)',
+    async (named) => {
+        const s = setup({
+            riskAssessmentActive: true,
+            ...(named ? { approvalPolicies: [policy] } : {}),
+        });
+        const assessed = await s.risk.execute(
+            await s.resolve.execute(s.context),
+        );
+        s.host.getPullRequest.mockResolvedValue({
+            ...livePr,
+            title: 'Changed context after assessment',
+        });
+        const result = await s.decide.execute(await s.fetch.execute(assessed));
+        expect(result.riskAssessment.status).toBe('assessed');
+        expect(result.approvalDecision.kind).toBe('hold');
+        await s.finish.execute(result);
+        expect(s.host.approvePullRequest).not.toHaveBeenCalled();
+    },
+);
+
 it.each([
     {
         file: {

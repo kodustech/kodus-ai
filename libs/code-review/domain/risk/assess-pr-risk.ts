@@ -1,4 +1,7 @@
-import { prRiskConfigurationKey } from './risk-configuration';
+import {
+    prRiskConfigurationKey,
+    prRiskDescriptionKey,
+} from './risk-configuration';
 import { createHash } from 'node:crypto';
 import type { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import type { RiskCriterion } from '@libs/core/infrastructure/config/types/general/risk-assessment';
@@ -56,6 +59,7 @@ export function prRiskSnapshot(input: AssessPrRiskInput): RiskSnapshot {
         baseSha: input.baseSha,
         headSha: input.headSha,
         configurationKey,
+        descriptionKey: prRiskDescriptionKey(input),
         assessmentKey: createHash('sha256')
             .update(
                 JSON.stringify({

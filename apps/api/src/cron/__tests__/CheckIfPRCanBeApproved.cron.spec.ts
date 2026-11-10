@@ -10,7 +10,10 @@ import { ReviewCadenceType } from '@libs/core/infrastructure/config/types/genera
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { formatApprovalReasonComment } from '@libs/code-review/infrastructure/approval/approval-reason-comment';
 import { CheckIfPRCanBeApprovedCronProvider } from '../CheckIfPRCanBeApproved.cron';
-import { prRiskConfigurationKey } from '@libs/code-review/domain/risk/risk-configuration';
+import {
+    prRiskConfigurationKey,
+    prRiskDescriptionKey,
+} from '@libs/code-review/domain/risk/risk-configuration';
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 
 jest.mock('@libs/core/log/logger', () => ({
@@ -890,6 +893,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                                 headSha: 'same-sha',
                                 assessmentKey: 'key',
                                 configurationKey: prRiskConfigurationKey({}),
+                                descriptionKey: prRiskDescriptionKey({}),
                             },
                         },
                     },
@@ -2821,6 +2825,199 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
     });
 
+    async function legacyRiskCase(level: string, independent: boolean) {
+        const { cron, deps } = makeCron();
+        const base = useRealConfig(deps, {
+            pullRequestApprovalActive: true,
+            approvalRiskActive: true,
+            ...(independent ? { riskAssessmentActive: true } : {}),
+        });
+        const config = await base.getConfig(
+            { organizationId: 'org-1', teamId: 'team-1' },
+            { id: 'repo-a', name: 'Repo A' },
+            [],
+        );
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            {
+                status: AutomationStatus.SUCCESS,
+                dataExecution: {
+                    lastAnalyzedCommit: { sha: 'head' },
+                    approvalRisk: {
+                        level,
+                        reviewedHeadSha: 'head',
+                        reason: 'Old risk judgment.',
+                    },
+                },
+            },
+        );
+        deps.codeManagementService.getPullRequest.mockResolvedValue({
+            head: { sha: 'head' },
+            base: { sha: 'base' },
+        });
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            [{ id: 'c1', isResolved: true }],
+        );
+        deps.codeManagementService.getReviewStatusByPullRequest
+            .mockResolvedValueOnce(PullRequestReviewState.PENDING)
+            .mockResolvedValue(PullRequestReviewState.APPROVED);
+        const input = {
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: {
+                ...makeOpenPr(1, 'repo-a'),
+                suggestions: [{ comment: { id: 'c1' } }],
+            },
+            codeReviewConfig: config,
+            teamAutomationId: 'team-automation-1',
+        };
+        return {
+            cron,
+            deps,
+            input,
+            run: () => (cron as any).shouldApprovePR(input),
+        };
+    }
+
+    it.each([
+        ['low', false, true],
+        ['high', false, false],
+        ['unknown', false, false],
+        ['low', true, false],
+    ])(
+        'preserves old risk judgments only for unchanged legacy activation (%s, independent=%s)',
+        async (level, independent, expected) => {
+            const { run } = await legacyRiskCase(
+                level as string,
+                independent as boolean,
+            );
+            expect(await run()).toBe(expected);
+        },
+    );
+
+    it('rejects a target-branch change during the final legacy approval check', async () => {
+        const { deps, run } = await legacyRiskCase('low', false);
+        const execution =
+            await deps.automationExecutionService.findLatestExecutionByFilters();
+        execution.dataExecution.approvalDecision = {
+            kind: 'approve',
+            reviewedHeadSha: 'head',
+            reviewedBaseSha: 'base',
+        };
+        deps.codeManagementService.getPullRequest
+            .mockResolvedValueOnce({
+                head: { sha: 'head' },
+                base: { sha: 'base' },
+            })
+            .mockResolvedValue({
+                head: { sha: 'head' },
+                base: { sha: 'moved-base' },
+            });
+        expect(await run()).toBe(false);
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('records a legacy approval notice failure against the confirmed snapshot and pre-I/O attempt time', async () => {
+        const startedAt = '2026-11-10T19:00:00.000Z';
+        jest.useFakeTimers({ now: new Date(startedAt) });
+        try {
+            const { deps, run } = await legacyRiskCase('low', false);
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved.mockImplementation(
+                async () => {
+                    jest.setSystemTime(new Date('2026-11-10T19:00:10.000Z'));
+                },
+            );
+            deps.codeManagementService.createIssueComment.mockRejectedValue(
+                new Error('Notice failed'),
+            );
+            await run();
+            expect(
+                deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                deps.pullRequestService.setApprovalReasonDeliveryFailure,
+            ).toHaveBeenCalledWith(
+                expect.anything(),
+                'repo-a',
+                1,
+                expect.objectContaining({
+                    decision: 'approve',
+                    occurredAt: startedAt,
+                    reviewedHeadSha: 'head',
+                    reviewedBaseSha: 'base',
+                }),
+                { notAfter: startedAt },
+            );
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('uses a shared risk veto even if an older compatibility projection says low risk', async () => {
+        const { deps, run } = await legacyRiskCase('low', false);
+        const execution =
+            await deps.automationExecutionService.findLatestExecutionByFilters();
+        execution.dataExecution.riskAssessment = {
+            status: 'assessed',
+            riskIdentified: true,
+            reason: 'Shared risk found.',
+            snapshot: {
+                organizationId: 'org-1',
+                repositoryId: 'repo-a',
+                prNumber: 1,
+                headSha: 'head',
+                baseSha: 'base',
+                assessmentKey: 'key',
+                configurationKey: prRiskConfigurationKey({}),
+                descriptionKey: prRiskDescriptionKey({}),
+            },
+        };
+        expect(await run()).toBe(false);
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining('Risk was identified'),
+            }),
+            PlatformType.GITLAB,
+        );
+    });
+
+    it.each(['title', 'body'])(
+        'invalidates shared risk after a PR %s edit before cron approval',
+        async (field) => {
+            const { deps, run, input, execution, live } = namedPolicyCase();
+            input.codeReviewConfig.riskAssessmentActive = true;
+            (execution.dataExecution as any).riskAssessment = {
+                status: 'assessed',
+                riskIdentified: false,
+                reason: 'No risk.',
+                snapshot: {
+                    organizationId: 'org-1',
+                    repositoryId: 'repo-a',
+                    prNumber: 1,
+                    headSha: 'head',
+                    baseSha: 'base',
+                    assessmentKey: 'key',
+                    configurationKey: prRiskConfigurationKey({}),
+                    descriptionKey: prRiskDescriptionKey(live),
+                },
+            };
+            live[field] = 'Changed context after assessment';
+            expect(await run()).toBe(false);
+            expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.approvePullRequest,
+            ).not.toHaveBeenCalled();
+        },
+    );
+
     it('never approves a saved risk hold after a rename leaves its risk-enabled directory', async () => {
         const { cron, deps } = makeCron();
         useRealConfig(
@@ -2878,6 +3075,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                             baseSha: 'base',
                             assessmentKey: 'key',
                             configurationKey: prRiskConfigurationKey({}),
+                            descriptionKey: prRiskDescriptionKey(live),
                         },
                     },
                 },

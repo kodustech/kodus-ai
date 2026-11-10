@@ -9,6 +9,18 @@ import {
     type NormalizedModel,
 } from '@libs/llm/byok-config';
 
+/** The assessment reads title/body as well as code; edits invalidate its reuse. */
+export function prRiskDescriptionKey(input: { title?: string; body?: string }) {
+    return createHash('sha256')
+        .update(
+            JSON.stringify({
+                title: input.title ?? '',
+                body: input.body ?? '',
+            }),
+        )
+        .digest('hex');
+}
+
 export function prRiskConfigurationKey(input: {
     criteria?: RiskCriterion[];
     language?: string;

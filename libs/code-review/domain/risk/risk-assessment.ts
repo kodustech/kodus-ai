@@ -1,3 +1,5 @@
+import { prRiskDescriptionKey } from './risk-configuration';
+
 /** A risk judgment belongs to one repository, PR, diff and configuration. */
 export interface RiskSnapshot {
     organizationId: string;
@@ -9,6 +11,7 @@ export interface RiskSnapshot {
     assessmentKey: string;
     /** Separate from diff/history identity, for live configuration checks in the approval cron. */
     configurationKey?: string;
+    descriptionKey?: string;
 }
 
 export type RiskAssessmentResult =
@@ -85,12 +88,16 @@ export function riskApprovalVeto(
     riskEnabled: boolean,
     risk: RiskAssessmentResult | undefined,
     currentHeadSha: string,
+    currentDescription?: { title?: string; body?: string },
 ): string | undefined {
     if (!riskEnabled) return undefined;
     if (
         risk?.status !== 'assessed' ||
         !currentHeadSha ||
-        risk.snapshot.headSha !== currentHeadSha
+        risk.snapshot.headSha !== currentHeadSha ||
+        (currentDescription &&
+            risk.snapshot.descriptionKey !==
+                prRiskDescriptionKey(currentDescription))
     ) {
         return 'Risk assessment is unavailable for the current PR head.';
     }

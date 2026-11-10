@@ -20,6 +20,7 @@ knowledge:
 
 function service(fileContent: string | null) {
     const svc = Object.create(CodeBaseConfigService.prototype) as any;
+    svc.logger = { warn: jest.fn() };
     svc.DEFAULT_CONFIG = {
         automatedReviewActive: true,
         kodusConfigFileOverridesWebPreferences: false,
@@ -176,7 +177,7 @@ describe('kodus-config.yml with app-only keys', () => {
         },
     );
 
-    it('fails visibly when a legacy YAML restriction cannot be assigned to the new named policies', async () => {
+    it('keeps review available with an explicit approval hold when legacy YAML conflicts with named policies', async () => {
         await expect(
             resolve(
                 { approvalLabels: ['ready'] },
@@ -186,7 +187,11 @@ describe('kodus-config.yml with app-only keys', () => {
                     ],
                 },
             ),
-        ).rejects.toThrow('Legacy approval filters');
+        ).resolves.toMatchObject({
+            reviewSettingsError: expect.stringContaining(
+                'Legacy approval filters',
+            ),
+        });
     });
 
     it('loads risk and named policies from the production YAML entry point', async () => {
@@ -237,11 +242,26 @@ describe('kodus-config.yml with app-only keys', () => {
         { riskReviewRouting: { riskFound: 'light' } },
         { riskAssessmentActive: 'true' },
     ])(
-        'rejects invalid YAML contracts before a review can run: %j',
+        'keeps code review available while invalid risk/approval YAML blocks approval: %j',
         async (config) => {
-            await expect(merge(service(yaml.dump(config)))).rejects.toThrow(
-                'Invalid code review settings',
-            );
+            const svc = service(yaml.dump(config));
+            await expect(merge(svc)).resolves.toMatchObject({
+                automatedReviewActive: true,
+                reviewSettingsError: expect.stringContaining(
+                    'Invalid code review settings',
+                ),
+            });
+            // Editing/validation reads remain strict and identify the bad field.
+            await expect(
+                svc.getKodusConfigFile({
+                    organizationAndTeamData: {
+                        organizationId: 'org-1',
+                        teamId: 'team-1',
+                    },
+                    repository: { id: 'repo-1', name: 'hive-inventory' },
+                    defaultBranch: 'main',
+                }),
+            ).rejects.toThrow('Invalid code review settings');
         },
     );
 
@@ -396,23 +416,19 @@ describe('CodeBaseConfigService.getConfig — plan-limit reconciliation', () => 
                 toObject: () => ({ rules: [unlockedRule] }),
             }),
         };
-        const filterKodyRules = jest
-            .fn()
-            .mockReturnValue({
-                standardRules: [unlockedRule],
-                memoryRules: [],
-            });
+        const filterKodyRules = jest.fn().mockReturnValue({
+            standardRules: [unlockedRule],
+            memoryRules: [],
+        });
         const kodyRulesValidationService = { filterKodyRules };
         const permissionValidationService = {
             shouldLimitResources: jest.fn().mockResolvedValue(limited),
         };
         const codeManagementService = {
-            verifyConnection: jest
-                .fn()
-                .mockResolvedValue({
-                    hasConnection: true,
-                    isSetupComplete: true,
-                }),
+            verifyConnection: jest.fn().mockResolvedValue({
+                hasConnection: true,
+                isSetupComplete: true,
+            }),
         };
 
         const service = new CodeBaseConfigService(
