@@ -286,6 +286,46 @@ describe('collectLoadedReferences', () => {
         expect(section.stats.entries).toBe(2);
     });
 
+    it('keeps two other repositories with one name apart by id', () => {
+        const index = collectLoadedReferences(
+            new Map([
+                [
+                    'a',
+                    [
+                        {
+                            filePath: 'docs/policy.md',
+                            content: 'policy',
+                            repositoryId: 'repo-2',
+                            repositoryName: 'api',
+                        },
+                    ],
+                ],
+                [
+                    'b',
+                    [
+                        {
+                            filePath: 'docs/policy.md',
+                            content: 'policy, and more',
+                            repositoryId: 'repo-3',
+                            repositoryName: 'api',
+                        },
+                    ],
+                ],
+            ]),
+            { prRepository: { id: 'repo-1', name: 'web' } },
+        );
+        const section = buildReferenceSection(
+            [
+                { uuid: 'a', rule: 'a' },
+                { uuid: 'b', rule: 'b' },
+            ],
+            index,
+        );
+
+        expect(section.idsByRule).toEqual([['R1'], ['R2']]);
+        expect(section.lines.join('\n')).toContain('policy, and more');
+    });
+
     // The budget is per rule, across its files, and counts each file's
     // header as the inlined text always did.
     it('caps the total text per rule at maxRefChars across files, counting each file header', () => {
