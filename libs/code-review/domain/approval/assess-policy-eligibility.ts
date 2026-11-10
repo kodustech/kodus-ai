@@ -44,6 +44,7 @@ const evidenceFiles = (files: readonly ApprovalChangedFile[]) =>
         deletions: file.deletions,
         patch: file.patch,
         isBinary: file.isBinary,
+        lineCountVerified: file.lineCountVerified,
     }));
 
 export function policyEligibilityKey(input: PolicyEligibilityInput): string {

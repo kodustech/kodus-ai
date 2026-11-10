@@ -161,6 +161,88 @@ it('refuses a parent policy change that would leave legacy child restrictions am
     expect(save).not.toHaveBeenCalled();
 });
 
+it.each([
+    { repositoryId: 'repo' },
+    { repositoryId: 'repo', directoryId: 'dir' },
+])(
+    'restores inheritance without pinning false or empty review settings at %j',
+    async (scope) => {
+        const { run, save, stored } = setup(true);
+        Object.assign(stored.configs, {
+            riskAssessmentActive: false,
+            riskCriteria: [],
+            approvalPolicies: [],
+        });
+        stored.repositories[0].directories[0].configs = {} as any;
+        const own = {
+            riskAssessmentActive: true,
+            approvalRiskActive: true,
+            riskCriteria: [
+                {
+                    id: 'old',
+                    name: 'Old',
+                    enabled: true,
+                    instructions: 'Old risk.',
+                },
+            ],
+            approvalRiskInstructions: 'Old risk.',
+            approvalPolicies: [{ id: 'old', name: 'Old', enabled: true }],
+            approvalAuthors: ['old-bot'],
+        };
+        if ('directoryId' in scope)
+            stored.repositories[0].directories[0].configs = own as any;
+        else stored.repositories[0].configs = own;
+        save.mockImplementation(async (_org, value) => {
+            Object.assign(stored, structuredClone(value));
+            return true;
+        });
+        const target = () =>
+            'directoryId' in scope
+                ? stored.repositories[0].directories[0].configs
+                : stored.repositories[0].configs;
+        await run(
+            {
+                riskAssessmentActive: false,
+                riskCriteria: [],
+                approvalPolicies: [],
+            },
+            {
+                ...scope,
+                inheritFields: [
+                    'riskAssessmentActive',
+                    'riskCriteria',
+                    'approvalPolicies',
+                ],
+            },
+        );
+        for (const key of [...Object.keys(own)])
+            expect(target()).not.toHaveProperty(key);
+        await run({ runOnDraft: false }, scope);
+        const parent = {
+            riskAssessmentActive: true,
+            riskCriteria: [
+                {
+                    id: 'new',
+                    name: 'New',
+                    enabled: true,
+                    instructions: 'New risk.',
+                },
+            ],
+            approvalPolicies: [{ id: 'new', name: 'New', enabled: true }],
+        };
+        await run(parent);
+        const resolved = resolveReviewSettings(
+            getDefaultKodusConfigFile(),
+            stored.configs,
+            stored.repositories[0].configs,
+            ...('directoryId' in scope
+                ? [stored.repositories[0].directories[0].configs]
+                : []),
+        );
+        expect(resolved).toMatchObject(parent);
+    },
+);
+
 it('clears the old model-name alias when the canonical scope override is cleared', async () => {
     const { run, save, stored } = setup(true);
     (stored.repositories[0].configs as any).byokModel = 'old-scope-model';

@@ -33,6 +33,19 @@ const input: PolicyEligibilityInput = {
 };
 beforeEach(() => jest.resetAllMocks());
 
+it('retains explicit line-count verification in policy evidence identity', () => {
+    const verified = {
+        ...input,
+        files: [{ ...input.files[0], lineCountVerified: true }],
+    };
+    expect(policyEligibilityKey(verified)).not.toBe(
+        policyEligibilityKey({
+            ...verified,
+            files: [{ ...verified.files[0], lineCountVerified: false }],
+        }),
+    );
+});
+
 it.each([
     'eligible',
     'ineligible',

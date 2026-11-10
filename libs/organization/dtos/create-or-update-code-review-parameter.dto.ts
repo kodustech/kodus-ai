@@ -6,6 +6,7 @@ import {
 import {
     riskCriteriaSchema,
     riskReviewRoutingSchema,
+    REVIEW_SETTINGS_INHERITABLE_FIELDS,
     type RiskCriterion,
     type RiskReviewRouting,
 } from '@libs/core/infrastructure/config/types/general/risk-assessment';
@@ -1151,6 +1152,16 @@ export class ExpectedCustomAgentsRevisionsDto {
 }
 
 export class CreateOrUpdateCodeReviewParameterDto {
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(REVIEW_SETTINGS_INHERITABLE_FIELDS.length)
+    @IsIn(REVIEW_SETTINGS_INHERITABLE_FIELDS, { each: true })
+    @ApiPropertyOptional({
+        type: [String],
+        description: 'Scoped review settings to restore from the parent.',
+    })
+    inheritFields?: string[];
+
     @IsObject()
     @ApiProperty({
         type: OrganizationAndTeamDataDto,

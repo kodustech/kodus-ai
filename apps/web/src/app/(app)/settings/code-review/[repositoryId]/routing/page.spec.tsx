@@ -357,6 +357,9 @@ it("restores each routing override independently with the native indicator", asy
     expect(save.mock.calls[0][0]).toEqual({
         riskReviewRouting: { noRisk: "balanced" },
     });
+    expect(save.mock.calls[0][5]).toEqual({
+        inheritFields: ["riskReviewRouting.noRisk"],
+    });
 });
 
 it("does not change the inactive risk mappings when a fixed mode changes", async () => {

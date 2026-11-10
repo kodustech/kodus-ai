@@ -12,6 +12,41 @@ import {
 
 export type ChangedConfigMask = { [key: string]: true | ChangedConfigMask };
 
+// Keep restore intent outside config values: false/[] can also be deliberate overrides.
+export function getInheritedReviewFields(
+    current: unknown,
+    baseline: unknown,
+    level: string,
+): string[] {
+    if (level === "global") return [];
+    const at = (value: unknown, field: string): unknown =>
+        field
+            .split(".")
+            .reduce<unknown>(
+                (node, key) => (isPlainObject(node) ? node[key] : undefined),
+                value,
+            );
+    return [
+        "riskAssessmentActive",
+        "riskCriteria",
+        "approvalPolicies",
+        "reviewMode",
+        "riskReviewRouting.noRisk",
+        "riskReviewRouting.riskFound",
+    ].filter((field) => {
+        const before = at(baseline, field);
+        const after = at(current, field);
+        return (
+            isFormattedProperty(before) &&
+            isFormattedProperty(after) &&
+            before.level === level &&
+            typeof after.level === "string" &&
+            after.level !== level &&
+            isDeepEqual(after.value, before.overriddenValue)
+        );
+    });
+}
+
 type UnknownRecord = Record<string, unknown>;
 
 const isPlainObject = (value: unknown): value is UnknownRecord =>

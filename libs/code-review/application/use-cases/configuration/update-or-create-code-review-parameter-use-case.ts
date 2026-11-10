@@ -129,6 +129,7 @@ import {
     resolveReviewSettings,
 } from '@libs/code-review/domain/approval/migrate-review-settings';
 import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/general/approval-policies';
+import { REVIEW_SETTINGS_INHERITABLE_FIELDS } from '@libs/core/infrastructure/config/types/general/risk-assessment';
 
 @Injectable()
 export class UpdateOrCreateCodeReviewParameterUseCase {
@@ -176,6 +177,23 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     > {
         try {
             const { organizationAndTeamData, configValue, repositoryId } = body;
+            if (
+                body.inheritFields !== undefined &&
+                (!Array.isArray(body.inheritFields) ||
+                    (body.inheritFields.length &&
+                        (!repositoryId || repositoryId === 'global')) ||
+                    body.inheritFields.length >
+                        REVIEW_SETTINGS_INHERITABLE_FIELDS.length ||
+                    body.inheritFields.some(
+                        (field) =>
+                            !(
+                                REVIEW_SETTINGS_INHERITABLE_FIELDS as readonly string[]
+                            ).includes(field),
+                    ))
+            )
+                throw new BadRequestException(
+                    'Invalid scoped review settings to inherit.',
+                );
             // An empty ID explicitly requests inheritance; pairing it with a
             // legacy model name is still a contradictory write.
             if (
@@ -661,6 +679,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 body.requestUser,
                 previousFolders,
                 previousRulesFileNames,
+                body.inheritFields,
             );
 
             if (!directoryId) {
@@ -987,6 +1006,28 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         }
     }
 
+    private withoutInheritedReviewOverrides(
+        config: object,
+        fields: string[],
+    ): ConfigDelta {
+        const next = { ...config };
+        const legacy = {
+            riskAssessmentActive: ['approvalRiskActive'],
+            riskCriteria: ['approvalRiskInstructions'],
+            approvalPolicies: ['approvalLabels', 'approvalAuthors'],
+        };
+        for (const field of fields) {
+            const [key, leaf] = field.split('.');
+            if (leaf) {
+                next[key] = { ...next[key] };
+                delete next[key][leaf];
+                if (!Object.keys(next[key]).length) delete next[key];
+            } else delete next[key];
+            for (const alias of legacy[field] ?? []) delete next[alias];
+        }
+        return next;
+    }
+
     /** A prompt sent back unchanged is not stored as the team's own text; record when that happens. */
     private logAlignedPromptOverrides(
         alignedPaths: string[],
@@ -1025,6 +1066,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             review?: Array<{ fileName: string; content: string }>;
             memories?: Array<{ fileName: string; content: string }>;
         },
+        inheritFields: string[] = [],
     ) {
         const resolver = new ConfigResolver(codeReviewConfigs);
 
@@ -1076,10 +1118,18 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         // we ignore the previous database state and rebuild the resolved config
         // from the file content plus the parent defaults. This ensures that
         // properties removed from the file are also removed from the database.
+        const mergeOldConfig = this.withoutInheritedReviewOverrides(
+            oldConfig,
+            inheritFields,
+        );
+        const mergeIncomingConfig = this.withoutInheritedReviewOverrides(
+            sanitizedIncomingConfig,
+            inheritFields,
+        );
         const newResolvedConfig = this.stripCustomMessagesFromConfig(
             actor?.source === 'sync'
-                ? deepMerge(parentConfig, sanitizedIncomingConfig)
-                : deepMerge(parentConfig, oldConfig, sanitizedIncomingConfig),
+                ? deepMerge(parentConfig, mergeIncomingConfig)
+                : deepMerge(parentConfig, mergeOldConfig, mergeIncomingConfig),
         );
 
         const newDelta = this.stripCustomMessagesFromConfig(
@@ -1088,17 +1138,17 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         this.preserveCanonicalReviewResets(
             newDelta,
             actor?.source === 'sync'
-                ? sanitizedIncomingConfig
+                ? mergeIncomingConfig
                 : {
                       riskAssessmentActive:
-                          sanitizedIncomingConfig.riskAssessmentActive ??
-                          oldConfig.riskAssessmentActive,
+                          mergeIncomingConfig.riskAssessmentActive ??
+                          mergeOldConfig.riskAssessmentActive,
                       approvalPolicies:
-                          sanitizedIncomingConfig.approvalPolicies ??
-                          oldConfig.approvalPolicies,
+                          mergeIncomingConfig.approvalPolicies ??
+                          mergeOldConfig.approvalPolicies,
                       riskCriteria:
-                          sanitizedIncomingConfig.riskCriteria ??
-                          oldConfig.riskCriteria,
+                          mergeIncomingConfig.riskCriteria ??
+                          mergeOldConfig.riskCriteria,
                   },
         );
 
@@ -1119,6 +1169,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         // Keep even an explicit false: diffing against an old default could otherwise erase it.
         if (
             actor?.source !== 'sync' &&
+            !inheritFields.includes('riskAssessmentActive') &&
             sanitizedIncomingConfig.pullRequestApprovalActive !== undefined &&
             sanitizedIncomingConfig.riskAssessmentActive === undefined
         ) {

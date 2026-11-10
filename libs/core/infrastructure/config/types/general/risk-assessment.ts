@@ -1,6 +1,16 @@
 import { z } from 'zod';
 import { filePatternListSchema } from './file-pattern-schema';
 
+/** Request metadata for restoring a scoped setting, never stored in config. */
+export const REVIEW_SETTINGS_INHERITABLE_FIELDS = [
+    'riskAssessmentActive',
+    'riskCriteria',
+    'approvalPolicies',
+    'reviewMode',
+    'riskReviewRouting.noRisk',
+    'riskReviewRouting.riskFound',
+] as const;
+
 /** Team guidance supplements Kody's assessment; file filters scope guidance. */
 export const riskCriterionSchema = z.object({
     id: z.string().trim().min(1).max(100),

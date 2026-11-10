@@ -20,6 +20,7 @@ import {
 } from "../_types";
 import {
     getChangedConfigMask,
+    getInheritedReviewFields,
     pickChangedConfig,
 } from "../_utils/changed-config";
 import {
@@ -151,10 +152,22 @@ export const useCodeReviewSettingsMutation = (params: {
             prepared.codeReviewConfig,
             getChangedConfigMask(formattedConfig, form.control._defaultValues),
         );
+        const inheritFields = getInheritedReviewFields(
+            formattedConfig,
+            form.control._defaultValues,
+            directoryId
+                ? "directory"
+                : repositoryId && repositoryId !== "global"
+                  ? "repository"
+                  : "global",
+        );
 
         // Nothing in the code-review config changed (e.g. only the language,
         // which `prepare` already saved).
-        if (Object.keys(changedConfig).length === 0) {
+        if (
+            Object.keys(changedConfig).length === 0 &&
+            inheritFields.length === 0
+        ) {
             form.reset(withoutListRevisions(prepared.savedFormData));
             invalidateRelatedQueries();
             return {};
@@ -167,9 +180,13 @@ export const useCodeReviewSettingsMutation = (params: {
             formattedConfig,
             changedConfig,
         );
+        const requestOptions = {
+            ...(expectedRevisions === undefined ? {} : { expectedRevisions }),
+            ...(inheritFields.length ? { inheritFields } : {}),
+        };
 
         // A save that writes neither list calls exactly as before.
-        const result = await (expectedRevisions === undefined
+        const result = await (Object.keys(requestOptions).length === 0
             ? createOrUpdateCodeReviewParameter(
                   changedConfig,
                   teamId,
@@ -182,7 +199,7 @@ export const useCodeReviewSettingsMutation = (params: {
                   repositoryId,
                   directoryId,
                   undefined,
-                  { expectedRevisions },
+                  requestOptions,
               ));
 
         // Someone else saved the lists this save was made from: nothing was

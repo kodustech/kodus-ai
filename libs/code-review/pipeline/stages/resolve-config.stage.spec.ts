@@ -148,6 +148,21 @@ describe('ResolveConfigStage — input contract', () => {
         expect(result.preliminaryFiles).toBe(FILES);
     });
 
+    it('preserves the provider rate-limit skip when only the complete risk diff read is limited', async () => {
+        prManager.getChangedFilesMetadata
+            .mockResolvedValueOnce(FILES)
+            .mockRejectedValueOnce({ status: 429 });
+        const result = await stage.execute(
+            buildContext({
+                lastExecution: { lastAnalyzedCommit: 'previous' },
+            } as any),
+        );
+        expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+        expect(result.statusInfo?.message).toContain(
+            PipelineReasons.COMMITS.PROVIDER_RATE_LIMITED.message,
+        );
+    });
+
     it('forceFullRerun drops the base commit (re-reads the whole PR)', async () => {
         const context = buildContext({
             lastExecution: { lastAnalyzedCommit: 'sha-prev' },

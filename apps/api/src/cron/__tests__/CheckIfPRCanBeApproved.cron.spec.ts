@@ -329,7 +329,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         'does not attribute an existing approval to a stale or unrelated failed reason (%s)',
         async (mismatch) => {
             const { deps, input, run } = namedPolicyCase();
-            (input.pr as any).approvalReasonDeliveryFailure = {
+            const failure = {
                 decision: mismatch === 'hold' ? 'hold' : 'approve',
                 reason: 'Approved by policy “Docs”.',
                 occurredAt: new Date().toISOString(),
@@ -341,10 +341,25 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                           : 'head',
                 reviewedBaseSha: mismatch === 'base' ? 'old' : 'base',
             };
+            (input.pr as any).approvalReasonDeliveryFailure = failure;
             deps.codeManagementService.getReviewStatusByPullRequest
                 .mockReset()
                 .mockResolvedValue(PullRequestReviewState.APPROVED);
             expect(await run()).toBe(false);
+            if (mismatch === 'head' || mismatch === 'base')
+                expect(
+                    deps.codeManagementService.getPullRequest,
+                ).toHaveBeenCalled();
+            else
+                expect(
+                    deps.codeManagementService.getPullRequest,
+                ).not.toHaveBeenCalled();
+            expect((input.pr as any).approvalReasonDeliveryFailure).toBe(
+                failure,
+            );
+            expect(
+                deps.pullRequestService.setApprovalReasonDeliveryFailure,
+            ).not.toHaveBeenCalled();
             expect(
                 deps.codeManagementService.approvePullRequest,
             ).not.toHaveBeenCalled();
@@ -371,6 +386,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             new Error('Provider unavailable'),
         );
         expect(await run()).toBe(false);
+        expect(deps.codeManagementService.getPullRequest).toHaveBeenCalled();
         expect(
             deps.codeManagementService.createIssueComment,
         ).not.toHaveBeenCalled();

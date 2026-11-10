@@ -5,6 +5,30 @@ import { ValidationPipe } from '@nestjs/common';
 
 import { CreateOrUpdateCodeReviewParameterDto } from './create-or-update-code-review-parameter.dto';
 
+it.each([
+    [['riskAssessmentActive', 'riskReviewRouting.noRisk'], true],
+    [['__proto__.polluted'], false],
+    [['byokModelId'], false],
+    ['riskAssessmentActive', false],
+])(
+    'validates scoped inheritance paths (%j)',
+    async (inheritFields, accepted) => {
+        const pipe = new ValidationPipe({ transform: true, whitelist: true });
+        const result = pipe.transform(
+            {
+                organizationAndTeamData: { teamId: 'team' },
+                configValue: {},
+                repositoryId: 'repo',
+                inheritFields,
+            },
+            { type: 'body', metatype: CreateOrUpdateCodeReviewParameterDto },
+        );
+        if (accepted)
+            expect((await result).inheritFields).toEqual(inheritFields);
+        else await expect(result).rejects.toThrow();
+    },
+);
+
 /**
  * Phase 4, plan 04-02 — byokModelId (id-based BYOK override) round-trips through
  * DTO validation as an optional string ALONGSIDE the legacy byokModel NAME

@@ -161,6 +161,7 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                     config = { ...config, reviewMode: riskConfig.reviewMode };
                 }
             } catch (error) {
+                if (is429Error(error)) throw error;
                 this.logger.warn({
                     message: 'Could not resolve PR-wide risk settings',
                     context: this.stageName,

@@ -158,7 +158,100 @@ async function save() {
     }
     await page.getByText('Settings saved', { exact: true }).last().waitFor();
     await expect(button).not.toHaveAttribute('data-loading', 'true');
+    return response.request().postDataJSON();
 }
+async function verifyRiskInheritance() {
+    const globalUrl = page.url();
+    const read = async () => {
+        const response = await context.request.get(
+            `${WEB}/api/proxy/api/parameters/find-by-key?key=code_review_config&teamId=${encodeURIComponent(settingsRequest.teamId)}`,
+        );
+        assert.ok(response.ok(), 'Read the actual QA scope tree.');
+        const body = await response.json();
+        return (body.data ?? body).configValue;
+    };
+    const config = await read();
+    const repo =
+        config.repositories.find((entry) => entry.isSelected) ??
+        config.repositories[0];
+    assert.ok(repo?.id, 'Inheritance requires the connected QA repository.');
+    const configure = async (configValue, repositoryId) => {
+        const response = await context.request.post(settingsRequest.url, {
+            data: {
+                organizationAndTeamData: { teamId: settingsRequest.teamId },
+                configValue,
+                ...(repositoryId ? { repositoryId } : {}),
+            },
+        });
+        assert.ok(
+            response.ok(),
+            `Prepare risk inheritance: HTTP ${response.status()}.`,
+        );
+    };
+    await configure({ riskAssessmentActive: false });
+    await configure({ riskAssessmentActive: true }, repo.id);
+    await page.goto(
+        `${WEB}/settings/code-review/${encodeURIComponent(repo.id)}/risk`,
+        { waitUntil: 'domcontentloaded' },
+    );
+    const toggle = page.getByRole('switch', {
+        name: 'Risk assessment',
+        exact: true,
+    });
+    await hydrated(toggle);
+    const row = toggle.locator('..');
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+    const indicator = row
+        .locator('[data-decorative]')
+        .filter({ hasText: 'Overridden' });
+    await expect(indicator).toHaveCount(1);
+    await page.screenshot({
+        path: `${OUT}/app-states/00c-risk-inheritance.png`,
+        fullPage: true,
+    });
+    initialCaptures.push({
+        id: '00c-risk-inheritance',
+        file: '00c-risk-inheritance.png',
+        group: 'Risk',
+        title: 'Override de risco por repositório',
+        note: 'Configuração real; restaurar herança remove o override e acompanha alterações do pai.',
+        fixture: false,
+        source: 'App completo no Runo · configuração real do tenant de QA',
+        url: page.url(),
+    });
+    const undo = indicator.locator('..').locator('svg').locator('..');
+    await hydrated(undo);
+    await undo.click();
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    const request = await save();
+    assert.deepEqual(
+        request.inheritFields,
+        ['riskAssessmentActive'],
+        'The real UI must transmit restore intent.',
+    );
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await hydrated(toggle);
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    assert.ok(
+        !Object.hasOwn(
+            (await read()).repositories.find((entry) => entry.id === repo.id)
+                .configs,
+            'riskAssessmentActive',
+        ),
+        'Restoring inheritance must remove the stored override.',
+    );
+    await configure({ riskAssessmentActive: true });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await hydrated(toggle);
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+    await expect(row.getByText('Overridden', { exact: true })).toHaveCount(0);
+    await page.goto(globalUrl, { waitUntil: 'domcontentloaded' });
+    await hydrated(
+        page.getByRole('switch', { name: 'Risk assessment', exact: true }),
+    );
+    pass('Native risk inheritance persists and follows later parent changes');
+}
+
 async function openMenu(name, heading = name) {
     await hydrated(menu(name));
     await menu(name).click();
@@ -504,6 +597,7 @@ try {
         page.getByRole('heading', { name: criterionName, exact: true }),
     ).toHaveCount(0);
     pass('Only this run’s policy and criterion are removed after verification');
+    await verifyRiskInheritance();
     await captureRiskRoutingStates({
         page,
         context,

@@ -71,3 +71,22 @@ it("sends explicit risk-off and empty lists rather than silently retaining saved
         }),
     );
 });
+
+it("keeps restore intent outside the saved config payload", async () => {
+    await createOrUpdateCodeReviewParameter(
+        { riskAssessmentActive: false },
+        "team",
+        "repo",
+        undefined,
+        undefined,
+        { inheritFields: ["riskAssessmentActive"] },
+    );
+    expect(post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+            configValue: { riskAssessmentActive: false },
+            inheritFields: ["riskAssessmentActive"],
+            repositoryId: "repo",
+        }),
+    );
+});
