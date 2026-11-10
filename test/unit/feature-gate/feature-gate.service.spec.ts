@@ -420,12 +420,17 @@ describe('FeatureGateService', () => {
             const svc = new FeatureGateService(fakePostHog() as never);
 
             for (const [value, expected] of [
+                // `undefined` is the case #2193 broke: before #2425 a
+                // non-release-track beta was enabled with the env unset, so
+                // this row alone fails on the pre-fix revision.
+                [undefined, false],
                 ['true', true],
                 ['1', true],
                 ['0', false],
                 ['false', false],
             ] as const) {
-                process.env.BETA_FEATURES = value;
+                if (value === undefined) delete process.env.BETA_FEATURES;
+                else process.env.BETA_FEATURES = value;
 
                 await expect(
                     svc.isEnabled(FEATURE_KEYS.githubEnterpriseServerPat, orgCtx),
