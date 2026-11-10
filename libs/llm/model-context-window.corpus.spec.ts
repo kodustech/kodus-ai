@@ -45,6 +45,10 @@ describe('production models resolve to a real context window', () => {
         // keys before upstream republishes a window, this is what says so.
         ['gemini-2.0-flash', 1_048_576],
         ['gemini-2.0-flash-001', 1_048_576],
+        // Missing from the mirror until 2026-11 while running in production.
+        ['gpt-6.1-sol', 922_000],
+        ['gpt-6.1-terra', 922_000],
+        ['claude-haiku-5-5', 1_000_000],
     ])('%s → %i tokens', (model, expected) => {
         expect(getModelContextWindow(model as string)).toBe(expected);
     });
@@ -65,6 +69,9 @@ describe('production models resolve to a real context window', () => {
         // the chain below — it reads the same corpus and gets a different answer.
         // Until the two share one resolver, trust this one: it is the code that
         // actually decides a chunk size.
+        //
+        // Raised to 690 with the 2026-11 refresh: the corpus was regenerated
+        // (733 shapes) and 695 of them resolve.
         expect({
             covered: known.length,
             total: MODELS.length,
@@ -72,7 +79,7 @@ describe('production models resolve to a real context window', () => {
             covered: expect.any(Number),
             total: MODELS.length,
         });
-        expect(known.length).toBeGreaterThanOrEqual(280);
+        expect(known.length).toBeGreaterThanOrEqual(690);
     });
 
     it('no production model resolves to something absurd', () => {
