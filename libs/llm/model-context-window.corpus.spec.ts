@@ -49,6 +49,13 @@ describe('production models resolve to a real context window', () => {
         ['gpt-6.1-sol', 922_000],
         ['gpt-6.1-terra', 922_000],
         ['claude-haiku-5-5', 1_000_000],
+        // Short ids the reverse substring step sends to an unrelated, smaller
+        // row. MANUAL_OVERRIDES holds them; gateway aliases stay at the default.
+        ['openrouter/auto', 128_000],
+        ['auto', 128_000],
+        ['coder', 128_000],
+        ['glm-4.7-flash', 200_000],
+        ['meta/llama-3.3-70b-instruct', 128_000],
     ])('%s → %i tokens', (model, expected) => {
         expect(getModelContextWindow(model as string)).toBe(expected);
     });
@@ -70,8 +77,9 @@ describe('production models resolve to a real context window', () => {
         // Until the two share one resolver, trust this one: it is the code that
         // actually decides a chunk size.
         //
-        // Raised to 690 with the 2026-11 refresh: the corpus was regenerated
-        // (733 shapes) and 695 of them resolve.
+        // Raised to 685 with the 2026-11 refresh: the corpus was regenerated
+        // (733 shapes) and 689 of them resolve. The gateway aliases (`auto`,
+        // `coder`) and the floored models.dev rows sit at the default on purpose.
         expect({
             covered: known.length,
             total: MODELS.length,
@@ -79,7 +87,7 @@ describe('production models resolve to a real context window', () => {
             covered: expect.any(Number),
             total: MODELS.length,
         });
-        expect(known.length).toBeGreaterThanOrEqual(690);
+        expect(known.length).toBeGreaterThanOrEqual(685);
     });
 
     it('no production model resolves to something absurd', () => {

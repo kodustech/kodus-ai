@@ -75,6 +75,16 @@ const MANUAL_OVERRIDES: Record<string, number> = {
     // Alibaba Qwen
     'qwen35': 262_144,
     'qwen3coder': 262_144,
+    // Short ids that step 4 sends to the longest key CONTAINING them, the least
+    // related row: `auto` lands on an autoglm phone model (65,536), `coder` on a
+    // 32k Qwen coder, `glm-4.7-flash` on a Cloudflare row (131,072, against
+    // Z.ai's 200,000), `meta/llama-3.3-70b-instruct` on a Cloudflare fp8 row
+    // (24,000). Gateway aliases (`auto`, `openrouter/auto`, `coder`) route to
+    // models we cannot know, so they keep the default.
+    'auto': DEFAULT_CONTEXT_WINDOW_TOKENS,
+    'coder': DEFAULT_CONTEXT_WINDOW_TOKENS,
+    'glm47flash': 200_000,
+    'metallama3370binstruct': 128_000,
 };
 
 /**
