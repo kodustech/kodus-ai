@@ -1,3 +1,7 @@
+import { createThrowawayRepo, deleteRepo } from '../lib/github-repos.js';
+import { registerIntegration, registerRepo } from '../lib/onboarding.js';
+import { runSlug } from '../lib/trial-provision.js';
+import { makeProvider } from '../providers/index.js';
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
@@ -332,7 +336,7 @@ async function realPreview(
     }
 }
 
-export const riskRoutingPipeline: Scenario = {
+const riskRoutingPipelineOnRepo: Scenario = {
     id: 'risk-routing-pipeline',
     title: 'Real webhook, risk, review mode/model, conditional agents, preview and provider approval',
     priority: 'P0',
@@ -974,6 +978,63 @@ export const riskRoutingPipeline: Scenario = {
                         },
                     },
                 );
+        }
+    },
+};
+// A shared QA repo has hooks in other environments. Their summaries and
+// approvals race this pipeline and cannot be accepted as this run's evidence.
+export const riskRoutingPipeline: Scenario = {
+    ...riskRoutingPipelineOnRepo,
+    async run(ctx: RunContext) {
+        const baseRepo = await ctx.provider.repoRef();
+        const fullName = await createThrowawayRepo(
+            baseRepo.full_name,
+            `tiny-url-risk-e2e-${runSlug(ctx.runId)}`,
+        );
+        try {
+            const provider = makeProvider(
+                'github',
+                'cloud',
+                fullName,
+                ctx.provider.authToken(),
+            );
+            const isolated: RunContext = {
+                ...ctx,
+                provider,
+                kodus: {
+                    ...ctx.kodus,
+                    registerIntegration: (session) =>
+                        registerIntegration(ctx.target, provider, session),
+                    registerRepo: async (session, opts) => {
+                        // A newly created repository can take time to appear in GitHub's list.
+                        for (let attempt = 1; ; attempt++) {
+                            try {
+                                return await registerRepo(
+                                    ctx.target,
+                                    provider,
+                                    session,
+                                    opts,
+                                );
+                            } catch (error) {
+                                if (
+                                    attempt >= 8 ||
+                                    !/not in integration's available list/.test(
+                                        (error as Error).message,
+                                    )
+                                )
+                                    throw error;
+                                await settle(15_000);
+                            }
+                        }
+                    },
+                },
+            };
+            return await riskRoutingPipelineOnRepo.run(isolated);
+        } finally {
+            ctx.assert(
+                await deleteRepo(fullName),
+                'Could not delete this run’s isolated risk QA repository.',
+            );
         }
     },
 };

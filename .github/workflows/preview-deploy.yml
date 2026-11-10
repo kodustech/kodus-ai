@@ -569,6 +569,7 @@ jobs:
                   HEAD_REF: ${{ steps.target.outputs.branch }}
                   GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
                   GH_INTEGRATION_TOKEN: ${{ secrets.GH_INTEGRATION_TOKEN_PAID }}
+                  GH_REPO_ADMIN_TOKEN: ${{ secrets.GH_REPO_ADMIN_TOKEN || secrets.GH_INTEGRATION_TOKEN_PAID }}
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
                   GH_TEST_REPO_CLOUD: ${{ secrets.GH_TEST_REPO_CLOUD }}
                   RISK_INSPECT: ${{ inputs.risk_pipeline_inspect }}
