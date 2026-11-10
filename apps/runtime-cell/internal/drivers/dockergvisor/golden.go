@@ -170,29 +170,11 @@ func planGolden(canonical, composeFile []byte, projectDir string, rec *recipe.Re
 			ownKeys[k] = true
 		}
 	}
-	seed := recipe.Seed{}
-	if rec != nil {
-		switch {
-		case rec.ResetStrategy() != recipe.ResetRecreate:
-			return nil, "data.reset " + rec.ResetStrategy()
-		case len(rec.Setup) > 0:
-			return nil, "setup runs in the app"
-		case rec.Data.Migrate != "":
-			return nil, "data.migrate runs in the app"
-		}
-		seed = rec.Data.Seed
+	seed, preAppSeed, why := goldenSeed(rec, seedAtInit)
+	if why != "" {
+		return nil, why
 	}
-	preAppSeed := false
-	if !seed.IsZero() && !seedAtInit {
-		if seed.Service == "" || seed.SQL == "" {
-			return nil, "data.seed is a command"
-		}
-		preAppSeed = true
-	}
-	var doc struct {
-		Services map[string]canonicalService `json:"services"`
-		Volumes  map[string]any              `json:"volumes"`
-	}
+	var doc canonicalProject
 	if err := json.Unmarshal(canonical, &doc); err != nil {
 		return nil, "compose config: " + err.Error()
 	}
@@ -201,7 +183,58 @@ func planGolden(canonical, composeFile []byte, projectDir string, rec *recipe.Re
 			return nil, "the file declares a volume " + k
 		}
 	}
-	copied := map[string]bool{}
+	copied, why := goldenServices(doc, seed, rec)
+	if why != "" {
+		return nil, why
+	}
+	if why := onlyDatabasesStart(doc, copied); why != "" {
+		return nil, why
+	}
+	p, binds := newGoldenPlan(doc, copied, ownKeys, preAppSeed)
+	sum, err := goldenSum(composeFile, projectDir, seed.SQL, binds)
+	if err != nil {
+		return nil, "inputs: " + err.Error()
+	}
+	p.sum = sum
+	return p, ""
+}
+
+// canonicalProject is what the plan reads of compose's canonical output.
+type canonicalProject struct {
+	Services map[string]canonicalService `json:"services"`
+	Volumes  map[string]any              `json:"volumes"`
+}
+
+// goldenSeed is the recipe's seed when a golden copy can hold it, and
+// whether it runs before the app (a SQL seed that does not run at init). A
+// recipe whose data the app itself writes (another reset strategy, a setup,
+// a migrate, a seed that is a command) has no golden copy: why says which.
+func goldenSeed(rec *recipe.Recipe, seedAtInit bool) (seed recipe.Seed, preAppSeed bool, why string) {
+	if rec != nil {
+		switch {
+		case rec.ResetStrategy() != recipe.ResetRecreate:
+			return seed, false, "data.reset " + rec.ResetStrategy()
+		case len(rec.Setup) > 0:
+			return seed, false, "setup runs in the app"
+		case rec.Data.Migrate != "":
+			return seed, false, "data.migrate runs in the app"
+		}
+		seed = rec.Data.Seed
+	}
+	if !seed.IsZero() && !seedAtInit {
+		if seed.Service == "" || seed.SQL == "" {
+			return seed, false, "data.seed is a command"
+		}
+		preAppSeed = true
+	}
+	return seed, preAppSeed, ""
+}
+
+// goldenServices are the services whose data is copied: every postgres, and
+// the seed's. None, a seed that names no service, or a database that is the
+// project's public service leaves no golden copy.
+func goldenServices(doc canonicalProject, seed recipe.Seed, rec *recipe.Recipe) (copied map[string]bool, why string) {
+	copied = map[string]bool{}
 	for name, s := range doc.Services {
 		if postgresImages[imageName(s.Image)] {
 			copied[name] = true
@@ -223,7 +256,12 @@ func planGolden(canonical, composeFile []byte, projectDir string, rec *recipe.Re
 			}
 		}
 	}
-	// Up of the copied services starts what they depend on: databases only.
+	return copied, ""
+}
+
+// onlyDatabasesStart checks that bringing the copied services up starts
+// nothing but databases: what they depend on, all the way down.
+func onlyDatabasesStart(doc canonicalProject, copied map[string]bool) (why string) {
 	seen := map[string]bool{}
 	queue := sortedSet(copied)
 	for len(queue) > 0 {
@@ -235,15 +273,21 @@ func planGolden(canonical, composeFile []byte, projectDir string, rec *recipe.Re
 		seen[name] = true
 		s, ok := doc.Services[name]
 		if !ok {
-			return nil, "depends on " + name + ", not a service"
+			return "depends on " + name + ", not a service"
 		}
 		if !copied[name] && !databaseImages[imageName(s.Image)] && !postgresImages[imageName(s.Image)] {
-			return nil, "a database depends on " + name
+			return "a database depends on " + name
 		}
 		for dep := range s.DependsOn {
 			queue = append(queue, dep)
 		}
 	}
+	return ""
+}
+
+// newGoldenPlan names, for each copied service, its database user and its
+// named volumes, and collects the bind mounts the copy's identity covers.
+func newGoldenPlan(doc canonicalProject, copied, ownKeys map[string]bool, preAppSeed bool) (*goldenPlan, []string) {
 	p := &goldenPlan{services: sortedSet(copied), user: map[string]string{}, named: map[string]map[string]string{}, seed: preAppSeed}
 	var binds []string
 	for _, name := range p.services {
@@ -264,12 +308,7 @@ func planGolden(canonical, composeFile []byte, projectDir string, rec *recipe.Re
 			}
 		}
 	}
-	sum, err := goldenSum(composeFile, projectDir, seed.SQL, binds)
-	if err != nil {
-		return nil, "inputs: " + err.Error()
-	}
-	p.sum = sum
-	return p, ""
+	return p, binds
 }
 
 // goldenSum hashes what the copy is made from: the compose file, the

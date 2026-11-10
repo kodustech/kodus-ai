@@ -1,4 +1,4 @@
-import { PR_ADMISSION_STORE, type PrAdmissionStore, type RunDeliveryContext } from '../../shared/pr-admission-store';
+import { PR_ADMISSION_STORE, type PrAdmissionStore, type RunDeliveryContext } from '../../shared/admission/pr-admission-store';
 import { MessageHandlerErrorBehavior, Nack, RabbitPayload, RabbitRequest, RabbitSubscribe } from '@golevelup/nestjs-rabbitmq';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { ConsumeMessage } from 'amqplib';
@@ -7,8 +7,8 @@ import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from '@libs/core/workflow/infrastructure
 import { RUNTIME_CONTROL_BINDING, RUNTIME_CONTROL_QUEUE, RUNTIME_EXCHANGE, RUNTIME_RUN_BINDING, RUNTIME_RUN_QUEUE, RuntimeEventName, RunProjectionStore } from '@libs/runtime/run';
 
 import { COMMAND_STORE, RUNTIME_CONFIG, type WorkerConfig } from '../../shared/config';
-import { DistributedLocks, InMemoryDistributedLocks } from '../../shared/locks';
-import type { CommandStore } from '../../shared/pg-command-store';
+import { DistributedLocks, InMemoryDistributedLocks } from '../../shared/persistence/locks';
+import type { CommandStore } from '../../shared/persistence/pg-command-store';
 import {
     CellRevokeRequestedHandler,
     CellTokenIssuedHandler,

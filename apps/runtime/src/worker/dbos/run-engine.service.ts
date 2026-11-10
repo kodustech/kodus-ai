@@ -8,9 +8,9 @@ import { isForkApprovalRequired, isTerminal, RunProjectionStore, RuntimeRunProje
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
 import { COMMAND_STORE, RUNTIME_CONFIG, WorkerConfig } from '../../shared/config';
-import type { DistributedLocks } from '../../shared/locks';
-import type { CommandStore } from '../../shared/pg-command-store';
-import { ADMISSION_WAIT_MS, type AdmissionReason, type AdmissionRecord, type AdmissionRef } from '../../shared/admission-contract';
+import type { DistributedLocks } from '../../shared/persistence/locks';
+import type { CommandStore } from '../../shared/persistence/pg-command-store';
+import { ADMISSION_WAIT_MS, type AdmissionReason, type AdmissionRecord, type AdmissionRef } from '../../shared/admission/admission-contract';
 import { awaitForkApproval, finalizeStoppedRun, QUEUE_TIMEOUT_MS, RUN_TIMEOUT_MS, RunOptions, runRuntimeRun } from '../run/run-orchestrator';
 import type { ForkApprovalMessage, RunDeps } from '../run/ports';
 import { ENVIRONMENT_SETUP_SERVICE, EnvironmentSetupService } from '../setup/environment-setup.service';

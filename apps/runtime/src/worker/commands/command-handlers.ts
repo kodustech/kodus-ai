@@ -1,4 +1,4 @@
-import type { RunDeliveryContext } from '../../shared/pr-admission-store';
+import type { RunDeliveryContext } from '../../shared/admission/pr-admission-store';
 import { Logger } from '@nestjs/common';
 
 import {
@@ -16,7 +16,7 @@ import {
 import type { MachineSize } from '@libs/runtime/contracts/machine-size';
 import type { RunProjectionStore } from '@libs/runtime/run';
 
-import type { CommandStore } from '../../shared/pg-command-store';
+import type { CommandStore } from '../../shared/persistence/pg-command-store';
 import type { SealedSecretOpener } from '../secrets/sealed-tokens';
 import type { LessonStore } from '../setup/lesson.store';
 import { sealedForInput, setupTokenBinding } from '../secrets/sealed-tokens';

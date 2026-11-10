@@ -276,20 +276,60 @@ type ClaimNetwork struct {
 //     networks.
 //   - What Capabilities says the driver cannot do fails with ErrUnsupported.
 type MachineDriver interface {
+	Describer
+	ClaimNetworker
+	MachineCreator
+	MachineKeeper
+	MachinePauser
+	MachineResetter
+	Baker
+}
+
+// The driver's contract, by what a caller needs of it. A package that uses
+// part of a driver asks for that part (lease.Machines), not the whole.
+
+// Describer says what the driver is and what it can do.
+type Describer interface {
 	Kind() string
 	Capabilities() Capabilities
-	Bake(ctx context.Context, spec BakeSpec) (ImageRef, error)
+}
+
+// ClaimNetworker makes and releases a claim's network.
+type ClaimNetworker interface {
 	PrepareClaim(ctx context.Context, spec ClaimNetworkSpec) (ClaimNetwork, error)
 	ReleaseClaim(ctx context.Context, net ClaimNetwork) error
+}
+
+// MachineCreator creates a machine.
+type MachineCreator interface {
 	Create(ctx context.Context, spec MachineSpec) (MachineRef, error)
-	Suspend(ctx context.Context, ref MachineRef, mode SuspendMode) error
-	Resume(ctx context.Context, ref MachineRef) error
-	Reset(ctx context.Context, ref MachineRef, snap SnapshotRef) error
+}
+
+// MachineKeeper is what keeping a machine alive, finding it and ending it
+// needs: the lease, the sweep and the reaper.
+type MachineKeeper interface {
 	Destroy(ctx context.Context, ref MachineRef) error
 	List(ctx context.Context, selector map[string]string) ([]MachineRef, error)
 	// SetExpiry moves kodus:expires with claim.renew. It never touches
 	// kodus:hard-expires.
 	SetExpiry(ctx context.Context, ref MachineRef, expiresAt time.Time) error
+}
+
+// MachinePauser suspends and resumes a machine. Nothing in the cell calls it
+// yet: the hibernated pool (ADR-004) will.
+type MachinePauser interface {
+	Suspend(ctx context.Context, ref MachineRef, mode SuspendMode) error
+	Resume(ctx context.Context, ref MachineRef) error
+}
+
+// MachineResetter brings a machine back to a snapshot between rounds.
+type MachineResetter interface {
+	Reset(ctx context.Context, ref MachineRef, snap SnapshotRef) error
+}
+
+// Baker makes an environment image.
+type Baker interface {
+	Bake(ctx context.Context, spec BakeSpec) (ImageRef, error)
 }
 
 const (

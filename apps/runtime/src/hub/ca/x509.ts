@@ -237,4 +237,4 @@ export function createCsr(key: KeyObject, commonName = 'pending'): string {
 /** Upper-case hex without leading zeros: Node and openssl print serials differently. */
 export const normalizeSerial = (s: string) => s.replace(/[^0-9a-f]/gi, '').replace(/^0+(?=.)/, '').toUpperCase();
 
-export { peerIdentity } from '../../shared/tls-identity';
+export { peerIdentity } from '../../shared/identity/tls-identity';

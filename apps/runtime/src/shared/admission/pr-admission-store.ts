@@ -1,4 +1,4 @@
-import { LockScopedPg } from './lock-scoped-pg';
+import { LockScopedPg } from '../persistence/lock-scoped-pg';
 import type { Pool, PoolClient } from 'pg';
 
 export const PR_ADMISSION_STORE = Symbol('PR_ADMISSION_STORE');

@@ -7,7 +7,7 @@ import { ProbeSchema } from '@libs/runtime/probe';
 import { CANARY_SLOTS, ClaimCanarySchema, ClaimRecipeSchema, EvidenceRequestSchema, MachineSizeSchema, RepoRefSchema } from '@libs/runtime/protocol';
 import { ExposeSchema, RUN_STREAM_EVENT_TYPES } from '@libs/runtime/run';
 
-import { WorkerAuthGuard } from '../../shared/internal-auth.guard';
+import { WorkerAuthGuard } from '../../shared/identity/internal-auth.guard';
 import { CellHub } from '../cell-hub';
 import { CellUnavailableError, ClaimRef, ClaimScopeError } from '../hub-types';
 import { parseBody } from './parse-body';

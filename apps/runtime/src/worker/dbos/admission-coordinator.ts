@@ -1,5 +1,5 @@
 import { CellUnavailableError, HubRefused, MemberCleanupPendingError } from '../../shared/errors';
-import type { AdmissionCleanupResult, AdmissionFinishResult, AdmissionIdentity, AdmissionLease, AdmissionLimits, AdmissionReason, AdmissionRecord, AdmissionRef, AdmissionStore, AdmissionTransition, PhysicalAdmissionClient, PhysicalAdmissionRequest, PhysicalAdmissionResult, PhysicalAdmissionTicket } from '../../shared/admission-contract';
+import type { AdmissionCleanupResult, AdmissionFinishResult, AdmissionIdentity, AdmissionLease, AdmissionLimits, AdmissionReason, AdmissionRecord, AdmissionRef, AdmissionStore, AdmissionTransition, PhysicalAdmissionClient, PhysicalAdmissionRequest, PhysicalAdmissionResult, PhysicalAdmissionTicket } from '../../shared/admission/admission-contract';
 import type { StepRunner } from '../run/ports';
 import { isCancellation } from '../workflow-cancellation';
 

@@ -5,7 +5,7 @@ import type { RuntimeRunRequested } from '@libs/runtime/run';
 
 import { shopRunRequest } from '../../e2e/fixtures';
 import { SCENARIOS } from '../../fake-cell/scenarios';
-import { ensureDatabase } from '../../shared/runtime-schema';
+import { ensureDatabase } from '../../shared/persistence/runtime-schema';
 import { inMemoryRunDeps } from '../run/in-memory-deps';
 import { finalizeStoppedRun, runRuntimeRun } from '../run/run-orchestrator';
 

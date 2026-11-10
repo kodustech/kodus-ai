@@ -5,13 +5,13 @@ import { FileRunStreamStore } from '@libs/runtime/run/adapters/file-run-stream.s
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
 import { loadRuntimeConfig, RUNTIME_CONFIG, RUNTIME_PG_POOL, RuntimeConfig } from '../shared/config';
-import { pgTransaction } from '../shared/cell-directory';
-import { PgAdmissionStore } from '../shared/pg-admission-store';
-import { PgPhysicalAdmissionDirectory } from '../shared/physical-admission-directory';
-import { WorkerAuthGuard } from '../shared/internal-auth.guard';
-import { RuntimeLogger } from '../shared/logger';
-import { PgRunStreamStore } from '../shared/pg-run-stream-store';
-import { ensureDatabase, ensureRuntimeSchema } from '../shared/runtime-schema';
+import { pgTransaction } from '../shared/persistence/cell-directory';
+import { PgAdmissionStore } from '../shared/admission/pg-admission-store';
+import { PgPhysicalAdmissionDirectory } from '../shared/admission/physical-admission-directory';
+import { WorkerAuthGuard } from '../shared/identity/internal-auth.guard';
+import { RuntimeLogger } from '../shared/observability/logger';
+import { PgRunStreamStore } from '../shared/persistence/pg-run-stream-store';
+import { ensureDatabase, ensureRuntimeSchema } from '../shared/persistence/runtime-schema';
 import { createCa } from './ca/x509';
 import { CellGatewayService } from './cell-gateway.service';
 import { CellHub } from './cell-hub';

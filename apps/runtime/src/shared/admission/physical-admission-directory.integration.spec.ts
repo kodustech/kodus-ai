@@ -1,14 +1,14 @@
 import { randomUUID } from 'crypto';
 import { Pool } from 'pg';
-import { PgHubStore } from '../hub/hub-store';
-import { PgCellDirectory, pgTransaction } from './cell-directory';
-import { claimIdFor } from './claim-id';
+import { PgHubStore } from '../../hub/hub-store';
+import { PgCellDirectory, pgTransaction } from '../persistence/cell-directory';
+import { claimIdFor } from '../claim-id';
 import type {
     PhysicalAdmissionRequest,
     PhysicalAdmissionTicket,
 } from './admission-contract';
 import { PgPhysicalAdmissionDirectory } from './physical-admission-directory';
-import { ensureRuntimeSchema } from './runtime-schema';
+import { ensureRuntimeSchema } from '../persistence/runtime-schema';
 
 const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
 (!url || process.env.SKIP_INTEGRATION === 'true' ? describe.skip : describe)(

@@ -5,8 +5,8 @@ import type { RepoRef } from '@libs/runtime/protocol';
 import type { RunProjectionStore, RuntimeRunRequested } from '@libs/runtime/run';
 import type { RuntimeMetrics } from '@libs/runtime/telemetry';
 
-import type { EvidenceStore } from '../../shared/file-evidence-store';
-import type { PhysicalAdmissionTicket } from '../../shared/admission-contract';
+import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
+import type { PhysicalAdmissionTicket } from '../../shared/admission/admission-contract';
 import type { EvidenceUploads } from '../run/run-evidence';
 import { LlmGateway, RecordedTurn } from '../agent/llm-gateway';
 import { CanaryGuardedRunPlanClient, type RunPlanClient } from '../agent/http-run-plan';

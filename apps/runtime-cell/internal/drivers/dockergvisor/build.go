@@ -168,6 +168,78 @@ func (d *Driver) hasBuilt(machine, service, fp string) bool {
 	return false
 }
 
+// buildRun is how one service's build runs: the builder's limits and
+// address on the claim network, and the build's args. It also returns the
+// memory limit, for the error of a build that passed it.
+func (d *Driver) buildRun(ctx context.Context, ref driver.MachineRef, b sandbox.Build, tag, network, resolv string, subnet netip.Prefix, out string) (dockercli.BuildRun, string, error) {
+	// The mirror's address goes to every build; the project's own value wins.
+	args := maps.Clone(b.Args)
+	if d.cfg.MirrorGoProxy != "" {
+		if args == nil {
+			args = map[string]string{}
+		}
+		if _, set := args["GOPROXY"]; !set {
+			args["GOPROXY"] = d.cfg.MirrorGoProxy
+		}
+	}
+	parent, err := d.parentFor(ctx, ref)
+	if err != nil {
+		return dockercli.BuildRun{}, "", err
+	}
+	mem, cpus := d.limits(ref.MachineID)
+	run := dockercli.BuildRun{
+		CgroupParent: parent,
+		Image:        d.cfg.BuilderImage, Runtime: d.cfg.Runtime, Network: network, Address: builderAddress(subnet).String(), Resolv: resolv,
+		Context: b.Context, Dockerfile: b.Dockerfile, Target: b.Target, Args: args, Tag: tag, Out: out,
+		PidsLimit: d.cfg.PidsLimit, MemLimit: mem, CPUs: cpus, RegistryMirror: d.cfg.MirrorRegistry,
+		Labels: toLabels(map[string]string{driver.TagCell: d.cfg.CellID, driver.TagClaim: ref.Tags[driver.TagClaim], driver.TagHardExpires: ref.Tags[driver.TagHardExpires]}),
+	}
+	return run, mem, nil
+}
+
+// buildCacheInput picks what the build starts from and sets it on run: the
+// environment's BuildKit state when the cell keeps one and the build may
+// hold it, else the environment's exported cache (and, for a setup, a cache
+// of its own to write). release gives back what it holds, after the build.
+func (d *Driver) buildCacheInput(ctx context.Context, ref driver.MachineRef, b sandbox.Build, run *dockercli.BuildRun) (seeds bool, cacheInput string, release func(), err error) {
+	m := d.peek(ref.MachineID)
+	setup := m.setup
+	seeds = m.seeds
+	// The environment's BuildKit state, when the cell keeps one: the build
+	// finds its layers and cache mounts there, and needs no exported cache.
+	// The exported cache is then only the fallback of a build that cannot
+	// mount the state: exporting it too would cost the seeding setup minutes.
+	req := buildstate.Request{Machine: ref.MachineID, Service: b.Service, Org: ref.Tags[driver.TagOrg], Env: ref.Tags[driver.TagEnv], Seeds: setup && seeds}
+	cacheInput = "cold"
+	if st, ok := d.states.Acquire(ctx, req); ok {
+		release = func() { d.states.Release(st) }
+		run.StateDir, run.GCKeepStorage = st.Dir, d.cfg.BuildStateKeep
+		cacheInput = "state_overlay"
+		if st.Mode == buildstate.ModeSeed {
+			cacheInput = "state_seed"
+		}
+		d.log().Info("build.state", "machine", ref.MachineID, "service", b.Service, "mode", st.Mode)
+	} else {
+		// Held for the whole build: a promotion meanwhile adds a generation
+		// and leaves this one where the builder mounted it.
+		gen, releaseCache := d.caches.Acquire(d.envCacheDir(ref.Tags[driver.TagOrg], ref.Tags[driver.TagEnv], b.Service))
+		release = releaseCache
+		run.CacheFrom = gen
+		if gen != "" {
+			cacheInput = "exported"
+		}
+		if setup {
+			dir, err := d.writableCache(ref.MachineID, b.Service)
+			if err != nil {
+				release()
+				return false, "", nil, err
+			}
+			run.CacheTo = dir
+		}
+	}
+	return seeds, cacheInput, release, nil
+}
+
 // runBuild runs one build section in the sandbox and loads its image as
 // tag. It reads the environment's build cache, and a setup machine's build
 // writes its own (returned), for a bake to make the environment's.
@@ -183,61 +255,16 @@ func (d *Driver) runBuild(ctx context.Context, ref driver.MachineRef, b sandbox.
 	if err := d.dirs.builderDir(out); err != nil {
 		return "", none, err
 	}
-	// The mirror's address goes to every build; the project's own value wins.
-	args := maps.Clone(b.Args)
-	if d.cfg.MirrorGoProxy != "" {
-		if args == nil {
-			args = map[string]string{}
-		}
-		if _, set := args["GOPROXY"]; !set {
-			args["GOPROXY"] = d.cfg.MirrorGoProxy
-		}
-	}
-	parent, err := d.parentFor(ctx, ref)
+	run, mem, err := d.buildRun(ctx, ref, b, tag, network, resolv, subnet, out)
 	if err != nil {
 		return "", none, err
 	}
-	mem, cpus := d.limits(ref.MachineID)
-	run := dockercli.BuildRun{
-		CgroupParent: parent,
-		Image:        d.cfg.BuilderImage, Runtime: d.cfg.Runtime, Network: network, Address: builderAddress(subnet).String(), Resolv: resolv,
-		Context: b.Context, Dockerfile: b.Dockerfile, Target: b.Target, Args: args, Tag: tag, Out: out,
-		PidsLimit: d.cfg.PidsLimit, MemLimit: mem, CPUs: cpus, RegistryMirror: d.cfg.MirrorRegistry,
-		Labels: toLabels(map[string]string{driver.TagCell: d.cfg.CellID, driver.TagClaim: ref.Tags[driver.TagClaim], driver.TagHardExpires: ref.Tags[driver.TagHardExpires]}),
+	// Held for the whole build, whichever it is.
+	seeds, cacheInput, release, err := d.buildCacheInput(ctx, ref, b, &run)
+	if err != nil {
+		return "", none, err
 	}
-	m := d.peek(ref.MachineID)
-	setup, seeds := m.setup, m.seeds
-	// The environment's BuildKit state, when the cell keeps one: the build
-	// finds its layers and cache mounts there, and needs no exported cache.
-	// The exported cache is then only the fallback of a build that cannot
-	// mount the state: exporting it too would cost the seeding setup minutes.
-	req := buildstate.Request{Machine: ref.MachineID, Service: b.Service, Org: ref.Tags[driver.TagOrg], Env: ref.Tags[driver.TagEnv], Seeds: setup && seeds}
-	cacheInput := "cold"
-	if st, ok := d.states.Acquire(ctx, req); ok {
-		defer d.states.Release(st)
-		run.StateDir, run.GCKeepStorage = st.Dir, d.cfg.BuildStateKeep
-		cacheInput = "state_overlay"
-		if st.Mode == buildstate.ModeSeed {
-			cacheInput = "state_seed"
-		}
-		d.log().Info("build.state", "machine", ref.MachineID, "service", b.Service, "mode", st.Mode)
-	} else {
-		// Held for the whole build: a promotion meanwhile adds a generation
-		// and leaves this one where the builder mounted it.
-		gen, release := d.caches.Acquire(d.envCacheDir(ref.Tags[driver.TagOrg], ref.Tags[driver.TagEnv], b.Service))
-		defer release()
-		run.CacheFrom = gen
-		if gen != "" {
-			cacheInput = "exported"
-		}
-		if setup {
-			dir, err := d.writableCache(ref.MachineID, b.Service)
-			if err != nil {
-				return "", none, err
-			}
-			run.CacheTo = dir
-		}
-	}
+	defer release()
 	// A cache input need not contain a matching layer or compiler cache.
 	// BuildKit's reported layer hits remain in build.steps.cached.
 	d.log().Info("build.cache.input", "machine", ref.MachineID, "service", b.Service, "mode", cacheInput)

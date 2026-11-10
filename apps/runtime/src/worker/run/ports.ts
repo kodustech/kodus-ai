@@ -2,7 +2,7 @@ import type { EnvironmentRuntime } from '@libs/runtime/environment';
 import type { RunProjectionStore, RunStreamEvent, RuntimePublishRequested } from '@libs/runtime/run';
 import type { RuntimeMetrics } from '@libs/runtime/telemetry';
 
-import type { EvidenceStore } from '../../shared/file-evidence-store';
+import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
 import type { RuntimeAgent } from '../agent/runtime-agent';
 import type { CanaryVault } from '../canary/canary';
 import type { FindingIntentClassifier } from '../intent/intent-classifier';

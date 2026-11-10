@@ -3,7 +3,7 @@ import type { HeartbeatMemory } from '@libs/runtime/protocol';
 import type {
     PhysicalAdmissionTicket,
     PhysicalAdmissionResult,
-} from '../../shared/admission-contract';
+} from '../../shared/admission/admission-contract';
 import { claimIdFor } from '../../shared/claim-id';
 
 // Memory admission on the hub (ADR-070). A cell whose claims share its host

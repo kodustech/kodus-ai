@@ -2,7 +2,7 @@ import type { Server } from 'http';
 
 import { Inject, Injectable, Logger, OnApplicationShutdown, OnModuleInit, Optional } from '@nestjs/common';
 
-import { type EvidenceStore, FileEvidenceStore } from '../../shared/file-evidence-store';
+import { type EvidenceStore, FileEvidenceStore } from '../../shared/evidence/file-evidence-store';
 import { startEvidenceServer } from './evidence-server';
 import { safeFailure } from '@libs/runtime/telemetry/failure';
 

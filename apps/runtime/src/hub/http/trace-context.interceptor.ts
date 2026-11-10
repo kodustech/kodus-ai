@@ -2,7 +2,7 @@ import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nes
 import { context } from '@opentelemetry/api';
 import { Observable } from 'rxjs';
 
-import { contextFromHeaders } from '../../shared/tracing';
+import { contextFromHeaders } from '../../shared/observability/tracing';
 
 /** Runs the handler inside the trace the worker sent (W3C traceparent), so hub spans join the Run's trace. */
 @Injectable()

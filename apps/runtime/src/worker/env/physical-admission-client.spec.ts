@@ -1,5 +1,5 @@
 import { CellUnavailableError } from '../../shared/errors';
-import type { PhysicalAdmissionRequest } from '../../shared/admission-contract';
+import type { PhysicalAdmissionRequest } from '../../shared/admission/admission-contract';
 import { HubPhysicalAdmissionClient } from './physical-admission-client';
 const req: PhysicalAdmissionRequest = {
     organizationId: 'org',

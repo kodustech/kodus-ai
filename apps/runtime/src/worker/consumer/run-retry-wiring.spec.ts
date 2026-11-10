@@ -1,8 +1,8 @@
-import { LOCK_SCOPED_PG } from '../../shared/lock-scoped-pg';
-import { PR_ADMISSION_STORE } from '../../shared/pr-admission-store';
+import { LOCK_SCOPED_PG } from '../../shared/persistence/lock-scoped-pg';
+import { PR_ADMISSION_STORE } from '../../shared/admission/pr-admission-store';
 import { RUNTIME_PG_POOL, COMMAND_STORE } from '../../shared/config';
 import { ADMISSION_COORDINATOR } from '../dbos/admission-coordinator';
-import { InMemoryPrAdmissionStore } from '../../shared/pr-admission-store';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
 import {
     AmqpConnection,
     Nack,
@@ -14,7 +14,7 @@ import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { RuntimeCommandName } from '@libs/runtime/contracts/runtime-commands';
 
 import { loadWorkerConfig } from '../../shared/config';
-import { InMemoryCommandStore } from '../../shared/pg-command-store';
+import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
 import { DEV_SECRET_SEAL_KEY_HEX } from '../../testing/dev-seal-key';
 import { shopRunRequest } from '../../e2e/fixtures';
 import { RuntimeCommandConsumer } from './run-request.consumer';

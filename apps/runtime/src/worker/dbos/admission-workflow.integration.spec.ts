@@ -6,11 +6,11 @@ import type { EnvironmentSetupRecord, RuntimeRunRequested } from '@libs/runtime/
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
 import { shopRunRequest } from '../../e2e/fixtures';
-import { ADMISSION_WAIT_MS, type AdmissionRef, type PhysicalAdmissionClient } from '../../shared/admission-contract';
-import { PgAdmissionStore } from '../../shared/pg-admission-store';
-import { InMemoryDistributedLocks } from '../../shared/locks';
-import { InMemoryCommandStore } from '../../shared/pg-command-store';
-import { ensureDatabase, ensureRuntimeSchema } from '../../shared/runtime-schema';
+import { ADMISSION_WAIT_MS, type AdmissionRef, type PhysicalAdmissionClient } from '../../shared/admission/admission-contract';
+import { PgAdmissionStore } from '../../shared/admission/pg-admission-store';
+import { InMemoryDistributedLocks } from '../../shared/persistence/locks';
+import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
+import { ensureDatabase, ensureRuntimeSchema } from '../../shared/persistence/runtime-schema';
 import { inMemoryRunDeps } from '../run/in-memory-deps';
 import { AdmissionCoordinator } from './admission-coordinator';
 import { ADMISSION_QUEUE, EXECUTION_QUEUE, RunEngineService, admissionAttemptWorkflowId, approvedRunWorkflowId, setupWorkflowId } from './run-engine.service';

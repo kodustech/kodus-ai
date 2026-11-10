@@ -5,12 +5,12 @@ import type {
     PhysicalAdmissionResult,
     PhysicalAdmissionTicket,
 } from './admission-contract';
-import { claimIdFor } from './claim-id';
+import { claimIdFor } from '../claim-id';
 import {
     DEFAULT_ORG_SHARED_CLAIM_CAP,
     type CellLocation,
     type InTransaction,
-} from './cell-directory';
+} from '../persistence/cell-directory';
 
 export interface PhysicalAdmissionDirectory {
     reserve(

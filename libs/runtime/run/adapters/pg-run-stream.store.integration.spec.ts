@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 
 import { Pool, type PoolClient } from 'pg';
 
-import { ensureRuntimeSchema } from '../../../../apps/runtime/src/shared/runtime-schema';
+import { ensureRuntimeSchema } from '../../../../apps/runtime/src/shared/persistence/runtime-schema';
 
 import type { RunStreamEvent } from '../run-stream';
 import { decodePgStreamOffset, PgRunStreamStore } from './pg-run-stream.store';

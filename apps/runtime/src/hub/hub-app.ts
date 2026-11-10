@@ -5,7 +5,7 @@ import type { INestApplication, LoggerService } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
 import type { RuntimeConfig } from '../shared/config';
-import { RuntimeLogger } from '../shared/logger';
+import { RuntimeLogger } from '../shared/observability/logger';
 import { RuntimeHubModule } from './runtime-hub.module';
 
 /**

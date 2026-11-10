@@ -1,5 +1,5 @@
 import type { WorkerConfig } from '../shared/config';
-import { FileEvidenceStore } from '../shared/file-evidence-store';
+import { FileEvidenceStore } from '../shared/evidence/file-evidence-store';
 import { RuntimeEvidenceService } from './evidence/evidence.service';
 import { EnvSessionListener } from './env-session/env-session.listener';
 import { startEnvSessionServer } from './env-session/env-session-server';

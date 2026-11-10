@@ -1,6 +1,6 @@
 import { claimIdFor } from '../../shared/claim-id';
 import { isCapacityWait } from '@libs/runtime/environment';
-import type { PhysicalAdmissionTicket } from '../../shared/admission-contract';
+import type { PhysicalAdmissionTicket } from '../../shared/admission/admission-contract';
 import { HubClient, HubEnvironmentClient } from './hub-environment-runtime';
 
 const key = 'run-ticket:base:1';

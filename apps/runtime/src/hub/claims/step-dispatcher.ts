@@ -9,7 +9,7 @@ import { type Envelope, type EvidenceRequest, evidenceRequestFor, type MessageBo
 import type { RunStreamEvent } from '@libs/runtime/run';
 import type { RuntimeMetrics } from '@libs/runtime/telemetry';
 
-import { inSpan } from '../../shared/tracing';
+import { inSpan } from '../../shared/observability/tracing';
 import type { CellConnection, CellConnectionRegistry } from '../gateway/cell-connections';
 import type { StepRepository } from '../hub-store';
 import type { ClaimRef, HubLog, HubMetrics, StepOutcome } from '../hub-types';

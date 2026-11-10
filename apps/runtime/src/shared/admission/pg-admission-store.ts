@@ -1,4 +1,4 @@
-import { LockScopedPg } from './lock-scoped-pg';
+import { LockScopedPg } from '../persistence/lock-scoped-pg';
 import { createHash } from 'crypto';
 
 import type { Pool } from 'pg';

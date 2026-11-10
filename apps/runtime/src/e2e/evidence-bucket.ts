@@ -1,6 +1,6 @@
 import { loadS3EvidenceConfig } from '@libs/runtime/contracts/evidence-s3';
 
-import { S3ObjectClient } from '../shared/s3-object-client';
+import { S3ObjectClient } from '../shared/evidence/s3-object-client';
 
 // Creates the evidence bucket (when missing) and sets its lifecycle rule: the
 // evidence prefix expires after 30 days, its staging prefix after one. Reads

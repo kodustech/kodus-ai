@@ -1,5 +1,5 @@
 import { CellUnavailableError, HubRefused, MemberCleanupPendingError } from '../../shared/errors';
-import type { AdmissionLease, AdmissionRecord, AdmissionStore, PhysicalAdmissionClient, PhysicalAdmissionTicket } from '../../shared/admission-contract';
+import type { AdmissionLease, AdmissionRecord, AdmissionStore, PhysicalAdmissionClient, PhysicalAdmissionTicket } from '../../shared/admission/admission-contract';
 import { shopRunRequest } from '../../e2e/fixtures';
 import { AdmissionCoordinator, type AdmissionScheduling } from './admission-coordinator';
 

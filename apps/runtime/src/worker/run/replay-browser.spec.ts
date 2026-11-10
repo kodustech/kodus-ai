@@ -7,7 +7,7 @@ import { checkOf, renderReportComment } from '@libs/runtime-publish/domain/rende
 import { VISUAL_CHANGE_ONLY_REASON } from '@libs/runtime/contracts/enums';
 
 import { SCENARIOS } from '../../fake-cell/scenarios';
-import { InMemoryEvidenceStore } from '../../shared/file-evidence-store';
+import { InMemoryEvidenceStore } from '../../shared/evidence/file-evidence-store';
 import { HmacCanaryVault } from '../canary/canary';
 import type { StepRunner } from './ports';
 import { BROWSER_DEFAULT_CLOCK, replayProbe } from './replay';

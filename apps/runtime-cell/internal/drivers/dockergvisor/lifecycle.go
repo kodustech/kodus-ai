@@ -18,55 +18,75 @@ func machineName(spec driver.MachineSpec) string {
 	return fmt.Sprintf("kodus-%s-%s", strings.ToLower(spec.ClaimID), spec.Role)
 }
 
-func (d *Driver) Create(ctx context.Context, spec driver.MachineSpec) (driver.MachineRef, error) {
+// checkMachineSpec refuses a spec this driver cannot make, one of another
+// cell, and one that names a network that is not its claim's: the holder
+// joins its own claim's network only.
+func (d *Driver) checkMachineSpec(spec driver.MachineSpec) error {
 	if err := spec.ValidateFor(d.Capabilities()); err != nil {
-		return driver.MachineRef{}, err
+		return err
 	}
 	if err := driver.ValidateClaimID(spec.ClaimID); err != nil {
-		return driver.MachineRef{}, err
+		return err
 	}
 	if spec.CellID != d.cfg.CellID {
-		return driver.MachineRef{}, fmt.Errorf("%w: spec for cell %s", driver.ErrNotOwned, spec.CellID)
+		return fmt.Errorf("%w: spec for cell %s", driver.ErrNotOwned, spec.CellID)
 	}
-	// The holder joins this claim's network only: a spec naming another
-	// claim's network is refused.
 	if spec.ClaimGroupID != d.claimNetwork(spec.ClaimID) {
-		return driver.MachineRef{}, fmt.Errorf("%w: network %s is not claim %s's", driver.ErrNotOwned, spec.ClaimGroupID, spec.ClaimID)
+		return fmt.Errorf("%w: network %s is not claim %s's", driver.ErrNotOwned, spec.ClaimGroupID, spec.ClaimID)
+	}
+	return nil
+}
+
+// retainGeneration holds the baked generation a workload boots from for as
+// long as the machine lives (Destroy gives it back), so a newer bake never
+// removes it under the machine. drop undoes that, for a machine that was
+// not created after all; it does nothing when the spec names no bake.
+func (d *Driver) retainGeneration(ctx context.Context, spec driver.MachineSpec, name string, tags map[string]string) (drop func(), err error) {
+	if !strings.HasPrefix(spec.ImageID, "kodus-bake/") || spec.Role == driver.RoleObserver {
+		return func() {}, nil
+	}
+	_, release, err := d.holdGeneration(ctx, driver.MachineRef{ImageID: spec.ImageID, Tags: tags})
+	if err != nil {
+		return nil, err
+	}
+	d.mu.Lock()
+	if d.generationHolds == nil {
+		d.generationHolds = map[string]func(){}
+	}
+	if d.generationHolds[name] != nil {
+		d.mu.Unlock()
+		release()
+		return nil, errors.New("dockergvisor: machine already retains a generation")
+	}
+	d.generationHolds[name] = release
+	d.mu.Unlock()
+	return func() {
+		d.mu.Lock()
+		delete(d.generationHolds, name)
+		d.mu.Unlock()
+		release()
+	}, nil
+}
+
+func (d *Driver) Create(ctx context.Context, spec driver.MachineSpec) (driver.MachineRef, error) {
+	if err := d.checkMachineSpec(spec); err != nil {
+		return driver.MachineRef{}, err
 	}
 	tags := spec.AllTags()
 	name := machineName(spec)
-	keepGeneration := false
-	if strings.HasPrefix(spec.ImageID, "kodus-bake/") && spec.Role != driver.RoleObserver {
-		_, release, err := d.holdGeneration(ctx, driver.MachineRef{ImageID: spec.ImageID, Tags: tags})
-		if err != nil {
-			return driver.MachineRef{}, err
-		}
-		defer func() {
-			if !keepGeneration {
-				release()
-			}
-		}()
-		d.mu.Lock()
-		if d.generationHolds == nil {
-			d.generationHolds = map[string]func(){}
-		}
-		if d.generationHolds[name] != nil {
-			d.mu.Unlock()
-			return driver.MachineRef{}, errors.New("dockergvisor: machine already retains a generation")
-		}
-		d.generationHolds[name] = release
-		d.mu.Unlock()
-		defer func() {
-			if !keepGeneration {
-				d.mu.Lock()
-				delete(d.generationHolds, name)
-				d.mu.Unlock()
-			}
-		}()
+	// Until the machine exists, a failure gives the generation back.
+	dropGeneration, err := d.retainGeneration(ctx, spec, name, tags)
+	if err != nil {
+		return driver.MachineRef{}, err
 	}
+	created := false
+	defer func() {
+		if !created {
+			dropGeneration()
+		}
+	}()
 	labels := toLabels(tags)
 	var g limitGroup
-	var err error
 	if spec.Role == driver.RoleObserver {
 		g, err = d.observerGroup(ctx, spec.ClaimGroupID, spec.OrgID)
 	} else {
@@ -116,7 +136,7 @@ func (d *Driver) Create(ctx context.Context, spec driver.MachineSpec) (driver.Ma
 	m.expires, m.size = spec.ExpiresAt, spec.ClaimSize
 	m.setup, m.seeds = spec.Setup, spec.Setup && spec.SeedsCache
 	d.mu.Unlock()
-	keepGeneration = true
+	created = true
 	return driver.MachineRef{MachineID: name, DriverRef: c.ID, PrivateAddress: address, ImageID: spec.ImageID, Tags: tags}, nil
 }
 

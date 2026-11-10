@@ -4,7 +4,7 @@ import { evidenceKey } from '@libs/runtime/contracts/evidence';
 import { loadS3EvidenceConfig, presignEvidenceRead } from '@libs/runtime/contracts/evidence-s3';
 import type { EvidenceRef } from '@libs/runtime/probe';
 
-import { checkUploadedRefs, evidenceRequestOf, type RunEvidence } from '../worker/run/run-evidence';
+import { checkUploadedRefs, evidenceRequestOf, type RunEvidence } from '../../worker/run/run-evidence';
 import { S3EvidenceStore } from './s3-evidence-store';
 import { S3ObjectClient } from './s3-object-client';
 

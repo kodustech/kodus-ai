@@ -1,4 +1,4 @@
-import { InMemoryPrAdmissionStore } from '../../shared/pr-admission-store';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
 import { randomBytes, randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -24,7 +24,7 @@ import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { RuntimeCommandName } from '@libs/runtime/contracts/runtime-commands';
 import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from '@libs/core/workflow/infrastructure/workflow-queue-arguments';
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryCommandStore } from '../../shared/pg-command-store';
+import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
 import { RuntimeCommandConsumer } from './run-request.consumer';
 import { RuntimeRunRetry } from './runtime-run-retry';
 

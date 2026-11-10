@@ -4,7 +4,7 @@ import { ProbeSchema } from '@libs/runtime/probe';
 import type { EvidenceRequest } from '@libs/runtime/protocol';
 
 import { SCENARIOS } from '../../fake-cell/scenarios';
-import { InMemoryEvidenceStore } from '../../shared/file-evidence-store';
+import { InMemoryEvidenceStore } from '../../shared/evidence/file-evidence-store';
 import { HmacCanaryVault } from '../canary/canary';
 import type { StepRunner } from './ports';
 import { replayProbe } from './replay';

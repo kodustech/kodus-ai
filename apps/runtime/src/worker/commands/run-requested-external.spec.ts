@@ -1,8 +1,8 @@
-import { InMemoryPrAdmissionStore } from '../../shared/pr-admission-store';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
 import { randomUUID } from 'crypto';
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryDistributedLocks } from '../../shared/locks';
+import { InMemoryDistributedLocks } from '../../shared/persistence/locks';
 import { RunRequestedHandler } from './run-requested.handler';
 
 const request = () => {

@@ -1,6 +1,6 @@
 import type { TLSSocket } from 'tls';
 
-import { peerIdentity } from '../../shared/tls-identity';
+import { peerIdentity } from '../../shared/identity/tls-identity';
 import type { PeerCert } from '../hub-types';
 
 /** The verified client certificate of a TLS socket, as the hub reads it; null on a plain socket. */

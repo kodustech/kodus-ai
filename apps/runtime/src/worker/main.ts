@@ -3,8 +3,8 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 
 import { loadWorkerConfig } from '../shared/config';
-import { RuntimeLogger } from '../shared/logger';
-import { setupRuntimeOtel } from '../shared/otel';
+import { RuntimeLogger } from '../shared/observability/logger';
+import { setupRuntimeOtel } from '../shared/observability/otel';
 import { RuntimeWorkerModule } from './runtime-worker.module';
 
 async function bootstrap() {

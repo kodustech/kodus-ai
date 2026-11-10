@@ -4,12 +4,12 @@ import { Pool, type PoolClient } from 'pg';
 
 import { generateCellRegistrationToken } from '@libs/runtime/api/domain/cell-token';
 
-import { type CellLocation, type CellRefusal, type InTransaction, PgCellDirectory, pgTransaction } from '../shared/cell-directory';
-import { PgDistributedLocks } from '../shared/locks';
+import { type CellLocation, type CellRefusal, type InTransaction, PgCellDirectory, pgTransaction } from '../shared/persistence/cell-directory';
+import { PgDistributedLocks } from '../shared/persistence/locks';
 import { PgRunClaims } from '../worker/persistence/pg-run-claims';
-import { PgCommandStore } from '../shared/pg-command-store';
-import { PgRunStreamStore } from '../shared/pg-run-stream-store';
-import { applyRetention, ensureRuntimeSchema } from '../shared/runtime-schema';
+import { PgCommandStore } from '../shared/persistence/pg-command-store';
+import { PgRunStreamStore } from '../shared/persistence/pg-run-stream-store';
+import { applyRetention, ensureRuntimeSchema } from '../shared/persistence/runtime-schema';
 import { PgRuntimeRunStreamReader } from '@libs/runtime/api/infrastructure/pg-runtime-run-stream.reader';
 import { PgRuntimeClaimUsageReader } from '@libs/runtime/api/infrastructure/pg-runtime-claim-usage.reader';
 import { PgHubStore, type ClaimState } from './hub-store';

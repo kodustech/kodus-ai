@@ -15,7 +15,7 @@ import { RECIPE_PATH } from '@libs/runtime/protocol/recipe';
 import type { RecipeAuthorClient, RecipeAuthorOutcome } from '../agent/http-recipe-author';
 import { acquireWaitingForRoom } from '../env/capacity-wait';
 import { AdmissionCapacityLostError } from '../env/admission-errors';
-import type { PhysicalAdmissionTicket } from '../../shared/admission-contract';
+import type { PhysicalAdmissionTicket } from '../../shared/admission/admission-contract';
 import { checkClaimLease, ClaimLeaseUnavailableError, throwClaimLeaseFailure, type ClaimLeaseFailed } from '../env/claim-liveness';
 import { DEFAULT_HEALTH_TIMEOUT_SECONDS, HEALTH_RETRY_INTERVAL_SECONDS, notAnsweringYet, readyProbe, readyTarget } from '../env/ready-check';
 import { stableStepId } from '../run/step-id';

@@ -12,11 +12,11 @@ import { traceHeaders } from '@libs/runtime/telemetry';
 
 import { describeMachineSize } from '@libs/runtime/contracts/machine-size';
 
-import { type CellDirectory, type CellRefusal, type CellWant, isCellRefusal } from '../../shared/cell-directory';
+import { type CellDirectory, type CellRefusal, type CellWant, isCellRefusal } from '../../shared/persistence/cell-directory';
 import { claimIdFor } from '../../shared/claim-id';
 import { CellUnavailableError, HubRefused, MemberCleanupPendingError } from '../../shared/errors';
 export { HubRefused } from '../../shared/errors';
-import type { PhysicalAdmissionTicket } from '../../shared/admission-contract';
+import type { PhysicalAdmissionTicket } from '../../shared/admission/admission-contract';
 import type { ClaimReleaser, RunEventSink } from '../run/ports';
 import type { SecretOpener } from '../secrets/sealed-tokens';
 

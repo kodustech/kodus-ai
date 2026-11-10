@@ -1,11 +1,11 @@
-import { InMemoryPrAdmissionStore } from '../../shared/pr-admission-store';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
 import { randomUUID } from 'crypto';
 import { Nack } from '@golevelup/nestjs-rabbitmq';
 import type { ConsumeMessage } from 'amqplib';
 import { RuntimeEventName } from '@libs/runtime/run';
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryCommandStore } from '../../shared/pg-command-store';
+import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
 import { RuntimeCommandConsumer } from './run-request.consumer';
 import { RuntimeRunRetry } from './runtime-run-retry';
 

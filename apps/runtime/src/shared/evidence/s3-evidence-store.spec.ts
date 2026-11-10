@@ -5,8 +5,8 @@ import { loadS3EvidenceConfig } from '@libs/runtime/contracts/evidence-s3';
 import { presignUrl } from '@libs/runtime/contracts/sigv4';
 import type { EvidenceRef } from '@libs/runtime/probe';
 
-import { HmacCanaryVault } from '../worker/canary/canary';
-import { checkUploadedRefs, evidenceRequestOf, type RunEvidence } from '../worker/run/run-evidence';
+import { HmacCanaryVault } from '../../worker/canary/canary';
+import { checkUploadedRefs, evidenceRequestOf, type RunEvidence } from '../../worker/run/run-evidence';
 import { S3EvidenceStore } from './s3-evidence-store';
 import { S3ObjectClient } from './s3-object-client';
 

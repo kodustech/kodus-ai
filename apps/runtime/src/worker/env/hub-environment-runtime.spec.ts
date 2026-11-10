@@ -1,5 +1,5 @@
 import { CellUnavailableError, MemberCleanupPendingError } from '../../shared/errors';
-import type { CellWant } from '../../shared/cell-directory';
+import type { CellWant } from '../../shared/persistence/cell-directory';
 import { claimIdFor } from '../../shared/claim-id';
 import { devSealKey } from '../../testing/dev-seal-key';
 import { hubEnvironments, poolCellOf } from '../dbos/run-deps.factory';

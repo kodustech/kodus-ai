@@ -5,10 +5,10 @@ import type { RuntimeRunRequested } from '@libs/runtime/run';
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryAdmissionStore } from '../../shared/admission-store';
-import type { AdmissionRef, PhysicalAdmissionClient, PhysicalAdmissionTicket } from '../../shared/admission-contract';
-import { InMemoryDistributedLocks } from '../../shared/locks';
-import { InMemoryCommandStore } from '../../shared/pg-command-store';
+import { InMemoryAdmissionStore } from '../../shared/admission/admission-store';
+import type { AdmissionRef, PhysicalAdmissionClient, PhysicalAdmissionTicket } from '../../shared/admission/admission-contract';
+import { InMemoryDistributedLocks } from '../../shared/persistence/locks';
+import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
 import { AdmissionCoordinator } from './admission-coordinator';
 import { RunEngineService } from './run-engine.service';
 import { inMemoryRunDeps } from '../run/in-memory-deps';

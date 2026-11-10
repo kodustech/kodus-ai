@@ -7,8 +7,8 @@ import {
 } from '@libs/runtime/run/run-messages';
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing/in-memory-run-projection.store';
 import { shopRunRequest } from '../../../../apps/runtime/src/e2e/fixtures';
-import { InMemoryDistributedLocks } from '../../../../apps/runtime/src/shared/locks';
-import { InMemoryPrAdmissionStore } from '../../../../apps/runtime/src/shared/pr-admission-store';
+import { InMemoryDistributedLocks } from '../../../../apps/runtime/src/shared/persistence/locks';
+import { InMemoryPrAdmissionStore } from '../../../../apps/runtime/src/shared/admission/pr-admission-store';
 import { RunRequestedHandler } from '../../../../apps/runtime/src/worker/commands/run-requested.handler';
 
 import { RuntimeRunAccessService } from '../application/run-access.service';

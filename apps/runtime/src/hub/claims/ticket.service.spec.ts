@@ -2,7 +2,7 @@ import { claimIdFor } from '../../shared/claim-id';
 import type {
     PhysicalAdmissionRequest,
     PhysicalAdmissionTicket,
-} from '../../shared/admission-contract';
+} from '../../shared/admission/admission-contract';
 import { CellMemoryBook } from './cell-memory';
 import { TicketService } from './ticket.service';
 import { PhysicalAdmissionRequestSchema } from '../http/admission.schema';

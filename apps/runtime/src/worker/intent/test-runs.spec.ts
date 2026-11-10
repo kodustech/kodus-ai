@@ -2,7 +2,7 @@ import { evidenceKey, verifyUploadGrant } from '@libs/runtime/api/domain/evidenc
 import { FakeEnvironmentRuntime, type ExecRequest } from '@libs/runtime/environment';
 
 import { SCENARIOS } from '../../fake-cell/scenarios';
-import { InMemoryEvidenceStore } from '../../shared/file-evidence-store';
+import { InMemoryEvidenceStore } from '../../shared/evidence/file-evidence-store';
 import { HmacCanaryVault } from '../canary/canary';
 import type { StepRunner } from '../run/ports';
 import { runPlannedTests } from './test-runs';

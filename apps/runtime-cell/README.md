@@ -23,7 +23,7 @@ The cell is Go (`go.mod` here); the hub and the gate are TypeScript (`apps/runti
 
 Control side (the agent and what it talks to):
 
-- `agent`: the orchestrator. `handle.go` maps each hub frame to a handler and never does I/O on the read loop. A claim's life: `acquire.go` admits the frame, `prepare.go` runs the preparation as named steps (network, machines, code, upload, compose, egress, recipe, observer SQL), `settle.go` tells the hub ready or failed, `steps.go` runs its steps and `release.go` ends it. `blocker.go` is a prepare failure's kind and signature. `egress_sync.go`, `image_policy.go` (S-52 taint, bake, pool), `hold.go`, `bundle.go`, `redaction.go` and `alerts.go` cover the rest.
+- `agent`: the orchestrator. `handle.go` maps each hub frame to a handler and never does I/O on the read loop. A claim's life: `acquire.go` admits the frame, `prepare.go` runs the preparation as named steps (network, machines, code, upload, compose, egress, recipe, observer SQL), `settle.go` tells the hub ready or failed, `steps.go` runs its steps and `release.go` ends it. `blocker.go` is a prepare failure's kind and signature. `config.go` is what the agent is given (its ports and optional capabilities) and its checked defaults; `agent.go` only builds the agent from it. `egress_sync.go`, `image_policy.go` (S-52 taint, bake, pool), `hold.go`, `bundle.go`, `redaction.go` and `alerts.go` cover the rest.
 - `agent/claims`: each claim's state machine (acquiring, ready, failed, held, released), behind the claim's lock, and the registry that bounds how many claims a cell holds. Claim ids are validated here (`id.go`).
 - `agent/outbox`: claim frames (`claim.ready`, `claim.failed`, `step.result`, `blocked`) resent until the hub acks them.
 - `agent/admission`: the memory ledger (ADR-070): megabytes per claim id, what fits, what asynchronous work still holds. It knows no driver, claim or hub.
@@ -73,6 +73,7 @@ Environment (how a checkout boots):
 - `drivers/dockergvisor/buildcache`: the exported build cache as generations, so a promotion never changes files under a running build.
 - `buildfingerprint`: the identity of one image build (context BuildKit would send, Dockerfile, target, args, builder image). A driver that reuses a baked image compares fingerprints; the package knows no backend.
 - `drivers/*`: the drivers below; `drivers/dockercli` is the one adapter to the docker binary.
+- `drivers/dockergvisor`: by file, `driver.go` (configuration and construction), `network.go` (the claim's network), `lifecycle.go` (create, suspend, reset, destroy, list, expiry), `up.go` (a project's boot as six steps), `build.go` (one build: its specification, its cache input, its run), then bake, data, golden data and limits.
 - `archrules`: the package boundaries of `AGENTS.md` as a test over the import graph.
 - `buildprogress`: reads BuildKit's plain progress into per-step durations (`build.steps`: the slowest steps, cached and failed counts). Names are redacted and bounded; no step output is kept.
 

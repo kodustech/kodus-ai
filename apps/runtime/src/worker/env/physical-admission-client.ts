@@ -4,8 +4,8 @@ import type {
     PhysicalAdmissionRequest,
     PhysicalAdmissionResult,
     PhysicalAdmissionTicket,
-} from '../../shared/admission-contract';
-import type { PhysicalAdmissionDirectory } from '../../shared/physical-admission-directory';
+} from '../../shared/admission/admission-contract';
+import type { PhysicalAdmissionDirectory } from '../../shared/admission/physical-admission-directory';
 import { claimIdFor } from '../../shared/claim-id';
 import { CellUnavailableError } from '../../shared/errors';
 import type { HubClient } from './hub-environment-runtime';

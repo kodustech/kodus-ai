@@ -98,17 +98,8 @@ func (d *Driver) Bake(ctx context.Context, spec driver.BakeSpec) (driver.ImageRe
 		}
 	}()
 
-	switch {
-	case spec.CellID != d.cfg.CellID:
-		return driver.ImageRef{}, fmt.Errorf("%w: bake for cell %s", driver.ErrNotOwned, spec.CellID)
-	// The machine must be the environment's: the agent checked the claim,
-	// and the machine's own tags must say the same.
-	case spec.Source.Tags[driver.TagOrg] != spec.OrgID || spec.Source.Tags[driver.TagEnv] != spec.EnvironmentID:
-		return driver.ImageRef{}, fmt.Errorf("%w: machine %s is not of org %s environment %s", driver.ErrNotOwned, src, spec.OrgID, spec.EnvironmentID)
-	}
-	_, ok = bakeRepo(spec.CellID, spec.OrgID, spec.EnvironmentID)
-	if !ok {
-		return driver.ImageRef{}, fmt.Errorf("dockergvisor: cell, org or environment id cannot name an image repository")
+	if err := d.checkBakeSpec(spec); err != nil {
+		return driver.ImageRef{}, err
 	}
 
 	if _, err := d.catalogFor(ctx); err != nil {
@@ -117,22 +108,9 @@ func (d *Driver) Bake(ctx context.Context, spec driver.BakeSpec) (driver.ImageRe
 	if err := d.pruneGenerations(ctx); err != nil {
 		return driver.ImageRef{}, err
 	}
-	var nonce [12]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
+	g, err := d.newGeneration(spec, pin)
+	if err != nil {
 		return driver.ImageRef{}, err
-	}
-	g := bakecatalog.Generation{Cell: spec.CellID, Org: spec.OrgID, Environment: spec.EnvironmentID, SHA: spec.SHA, RecipeSHA: spec.RecipeSHA, Nonce: hex.EncodeToString(nonce[:]), Images: map[string]string{}, Volumes: map[string]string{}}
-	g.ID = generationID(g.Cell, g.Org, g.Environment, g.SHA, g.Nonce)
-	for _, image := range pin.images {
-		if image.fp != "" {
-			g.Images[image.fp] = generationImage(g, image.fp)
-		}
-	}
-	for _, key := range pin.volumes {
-		g.Volumes[key] = generationVolume(g, key)
-	}
-	if len(pin.images) > maxBakeArtifacts || len(pin.volumes) > maxBakeArtifacts || !validGeneration(g, d.cfg.CellID) {
-		return driver.ImageRef{}, ErrBakeDataUnavailable
 	}
 	release, err := d.stageGeneration(ctx, g)
 	if err != nil {
@@ -146,28 +124,10 @@ func (d *Driver) Bake(ctx context.Context, spec driver.BakeSpec) (driver.ImageRe
 			d.log().Warn("bake.cleanup.pending", "alarm", true, "err", err)
 		}
 	}()
-	for _, img := range pin.images {
-		if img.fp == "" {
-			d.log().Warn("bake.service.skipped", "env", spec.EnvironmentID, "service", img.service, "reason", "no_fingerprint")
-			continue
-		}
-		name := generationImage(g, img.fp)
-		if err := d.d.TagImage(ctx, img.tag, name); err != nil {
-			return driver.ImageRef{}, fmt.Errorf("dockergvisor: bake %s: %w", img.service, err)
-		}
+	if err := d.tagBakedImages(ctx, spec, pin, g); err != nil {
+		return driver.ImageRef{}, err
 	}
-	// The build cache: only a setup machine's builds wrote one.
-	caches := 0
-	for _, img := range pin.images {
-		if img.cache == "" {
-			continue
-		}
-		if err := d.promoteCache(img.cache, spec.OrgID, spec.EnvironmentID, img.service); err != nil {
-			d.log().Warn("bake.cache.failed", "env", spec.EnvironmentID, "service", img.service, "err", err)
-			continue
-		}
-		caches++
-	}
+	caches := d.promoteBakedCaches(spec, pin)
 	volumes, err := d.bakeData(ctx, spec, pin.volumes, &g)
 	if err != nil {
 		return driver.ImageRef{}, err
@@ -185,4 +145,79 @@ func (d *Driver) Bake(ctx context.Context, spec driver.BakeSpec) (driver.ImageRe
 	sort.Strings(names)
 	d.log().Info("bake.named", "env", spec.EnvironmentID, "sha", spec.SHA, "images", len(names), "skipped", len(pin.images)-len(names), "volumes", volumes, "caches", caches)
 	return driver.ImageRef{ImageID: g.ID, DriverRef: strings.Join(names, ",")}, nil
+}
+
+// checkBakeSpec refuses a bake of another cell, of a machine that is not the
+// environment's (the agent checked the claim, and the machine's own tags must
+// say the same), and of ids that cannot name an image repository.
+func (d *Driver) checkBakeSpec(spec driver.BakeSpec) error {
+	src := spec.Source.MachineID
+	switch {
+	case spec.CellID != d.cfg.CellID:
+		return fmt.Errorf("%w: bake for cell %s", driver.ErrNotOwned, spec.CellID)
+	case spec.Source.Tags[driver.TagOrg] != spec.OrgID || spec.Source.Tags[driver.TagEnv] != spec.EnvironmentID:
+		return fmt.Errorf("%w: machine %s is not of org %s environment %s", driver.ErrNotOwned, src, spec.OrgID, spec.EnvironmentID)
+	}
+	_, ok := bakeRepo(spec.CellID, spec.OrgID, spec.EnvironmentID)
+	if !ok {
+		return fmt.Errorf("dockergvisor: cell, org or environment id cannot name an image repository")
+	}
+	return nil
+}
+
+// newGeneration is the generation this bake will be: a fresh nonce, and the
+// exact name of every image and volume it will hold. Named before any is
+// made, so the catalog can stage them.
+func (d *Driver) newGeneration(spec driver.BakeSpec, pin *pinnedOutput) (bakecatalog.Generation, error) {
+	var nonce [12]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return bakecatalog.Generation{}, err
+	}
+	g := bakecatalog.Generation{Cell: spec.CellID, Org: spec.OrgID, Environment: spec.EnvironmentID, SHA: spec.SHA, RecipeSHA: spec.RecipeSHA, Nonce: hex.EncodeToString(nonce[:]), Images: map[string]string{}, Volumes: map[string]string{}}
+	g.ID = generationID(g.Cell, g.Org, g.Environment, g.SHA, g.Nonce)
+	for _, image := range pin.images {
+		if image.fp != "" {
+			g.Images[image.fp] = generationImage(g, image.fp)
+		}
+	}
+	for _, key := range pin.volumes {
+		g.Volumes[key] = generationVolume(g, key)
+	}
+	if len(pin.images) > maxBakeArtifacts || len(pin.volumes) > maxBakeArtifacts || !validGeneration(g, d.cfg.CellID) {
+		return bakecatalog.Generation{}, ErrBakeDataUnavailable
+	}
+	return g, nil
+}
+
+// tagBakedImages names the setup machine's images as the generation's. A
+// build with no fingerprint has no name a later claim could match: skipped.
+func (d *Driver) tagBakedImages(ctx context.Context, spec driver.BakeSpec, pin *pinnedOutput, g bakecatalog.Generation) error {
+	for _, img := range pin.images {
+		if img.fp == "" {
+			d.log().Warn("bake.service.skipped", "env", spec.EnvironmentID, "service", img.service, "reason", "no_fingerprint")
+			continue
+		}
+		name := generationImage(g, img.fp)
+		if err := d.d.TagImage(ctx, img.tag, name); err != nil {
+			return fmt.Errorf("dockergvisor: bake %s: %w", img.service, err)
+		}
+	}
+	return nil
+}
+
+// promoteBakedCaches makes the setup machine's build caches the
+// environment's (only a setup machine's builds wrote one) and counts them.
+func (d *Driver) promoteBakedCaches(spec driver.BakeSpec, pin *pinnedOutput) int {
+	caches := 0
+	for _, img := range pin.images {
+		if img.cache == "" {
+			continue
+		}
+		if err := d.promoteCache(img.cache, spec.OrgID, spec.EnvironmentID, img.service); err != nil {
+			d.log().Warn("bake.cache.failed", "env", spec.EnvironmentID, "service", img.service, "err", err)
+			continue
+		}
+		caches++
+	}
+	return caches
 }

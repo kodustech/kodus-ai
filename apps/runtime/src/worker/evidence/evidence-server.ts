@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 
 import { InvalidEvidenceKeyError, isEvidenceContentType, verifyEvidenceSignature, verifyUploadGrant } from '@libs/runtime/api/domain/evidence';
 
-import { canonicalEvidenceKey, type EvidenceStore } from '../../shared/file-evidence-store';
+import { canonicalEvidenceKey, type EvidenceStore } from '../../shared/evidence/file-evidence-store';
 
 // The evidence server (§8, RT-16): its own origin, no cookie, no session.
 // It serves one exact key for a URL the API signed after the per-object

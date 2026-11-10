@@ -6,10 +6,10 @@ import { sealSecret } from '@libs/runtime/run';
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
-import { InMemoryDistributedLocks } from '../../shared/locks';
-import { InMemoryCommandStore } from '../../shared/pg-command-store';
+import { InMemoryDistributedLocks } from '../../shared/persistence/locks';
+import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
 import { devSealKey } from '../../testing/dev-seal-key';
-import { ensureDatabase } from '../../shared/runtime-schema';
+import { ensureDatabase } from '../../shared/persistence/runtime-schema';
 import { EnvironmentSetupService, InMemoryEnvironmentSetupStore } from '../setup/environment-setup.service';
 import { RunEngineService, SETUP_WORKFLOW, setupWorkflowId } from './run-engine.service';
 

@@ -1,11 +1,11 @@
-import { InMemoryPrAdmissionStore } from '../../shared/pr-admission-store';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
 import { Nack } from '@golevelup/nestjs-rabbitmq';
 
 import { RuntimeEventName, runtimeEnvelope } from '@libs/runtime/run';
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryCommandStore } from '../../shared/pg-command-store';
+import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
 import { InMemoryEnvironmentSetupStore } from '../setup/environment-setup.service';
 import { RunRequestConsumer } from './run-request.consumer';
 import { RuntimeCommandName } from '@libs/runtime/api/domain/runtime-commands';

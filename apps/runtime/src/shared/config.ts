@@ -7,8 +7,8 @@ import { sealingKeyFrom } from '@libs/runtime/run';
 import { signUploadGrant } from '@libs/runtime/contracts/evidence';
 import { UploadGrantSchema } from '@libs/runtime/protocol/messages';
 
-import { DEFAULT_ORG_SHARED_CLAIM_CAP } from './cell-directory';
-import { ADMISSION_BYTE_LIMITS, type AdmissionLimits } from './admission-contract';
+import { DEFAULT_ORG_SHARED_CLAIM_CAP } from './persistence/cell-directory';
+import { ADMISSION_BYTE_LIMITS, type AdmissionLimits } from './admission/admission-contract';
 
 // Runtime configuration, read and validated once at boot (fail fast). The
 // Runtime has its own Postgres database, its own broker user and no Git or

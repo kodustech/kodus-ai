@@ -488,7 +488,7 @@ async function estimatesFor(deps: RunDeps, req: RuntimeRunRequested): Promise<Ph
 export interface RunOptions {
     /** Internal admission wrapper only: already granted resources must not wait in execution. */
     noCapacityWait?: boolean;
-    admissionRef?: import('../../shared/admission-contract').AdmissionRef;
+    admissionRef?: import('../../shared/admission/admission-contract').AdmissionRef;
     /**
      * A fork PR runs only after a maintainer approved its head (ADR-030): the
      * approval gate workflow (RunEngineService) waits off the queue and sets this.

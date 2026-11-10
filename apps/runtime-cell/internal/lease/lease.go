@@ -38,16 +38,23 @@ type entry struct {
 	renewMu sync.Mutex
 }
 
+// Machines is what the leases need of the driver: to find this cell's
+// machines, move their expiry, and end them and their claim's network.
+type Machines interface {
+	driver.MachineKeeper
+	ReleaseClaim(ctx context.Context, net driver.ClaimNetwork) error
+}
+
 type Manager struct {
 	mu     sync.Mutex
 	cellID string
-	drv    driver.MachineDriver
+	drv    Machines
 	now    func() time.Time
 	log    *slog.Logger
 	leases map[string]*entry
 }
 
-func NewManager(cellID string, drv driver.MachineDriver, now func() time.Time, log *slog.Logger) *Manager {
+func NewManager(cellID string, drv Machines, now func() time.Time, log *slog.Logger) *Manager {
 	if now == nil {
 		now = time.Now
 	}

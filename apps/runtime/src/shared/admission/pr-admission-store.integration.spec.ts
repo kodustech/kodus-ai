@@ -1,18 +1,18 @@
-import { LockScopedPg } from './lock-scoped-pg';
-import { PgCommandStore } from './pg-command-store';
+import { LockScopedPg } from '../persistence/lock-scoped-pg';
+import { PgCommandStore } from '../persistence/pg-command-store';
 import { PgAdmissionStore } from './pg-admission-store';
 import { PgPhysicalAdmissionDirectory } from './physical-admission-directory';
-import { RuntimeCommandConsumer } from '../worker/consumer/run-request.consumer';
-import { RuntimeRunRetry } from '../worker/consumer/runtime-run-retry';
-import { PgDistributedLocks } from './locks';
+import { RuntimeCommandConsumer } from '../../worker/consumer/run-request.consumer';
+import { RuntimeRunRetry } from '../../worker/consumer/runtime-run-retry';
+import { PgDistributedLocks } from '../persistence/locks';
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
-import { shopRunRequest } from '../e2e/fixtures';
+import { shopRunRequest } from '../../e2e/fixtures';
 import { RuntimeEventName } from '@libs/runtime/run';
 import type { ConsumeMessage } from 'amqplib';
 import { randomUUID } from 'crypto';
 import { Pool } from 'pg';
 import { PgPrAdmissionStore } from './pr-admission-store';
-import { ensureRuntimeSchema } from './runtime-schema';
+import { ensureRuntimeSchema } from '../persistence/runtime-schema';
 const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
 (!url || process.env.SKIP_INTEGRATION === 'true' ? describe.skip : describe)(
     'PR generation authority (real Postgres)',

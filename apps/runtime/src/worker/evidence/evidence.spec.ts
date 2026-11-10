@@ -11,7 +11,7 @@ import { loadRuntimeApiConfig } from '@libs/runtime/api/infrastructure/runtime-a
 import { realAuthorization, run, storeWith, user } from '@libs/runtime/api/__tests__/fixtures';
 
 import { shopRunRequest } from '../../e2e/fixtures';
-import { FileEvidenceStore, InMemoryEvidenceStore } from '../../shared/file-evidence-store';
+import { FileEvidenceStore, InMemoryEvidenceStore } from '../../shared/evidence/file-evidence-store';
 import { inMemoryRunDeps } from '../run/in-memory-deps';
 import { runRuntimeRun } from '../run/run-orchestrator';
 import { startEvidenceServer } from './evidence-server';

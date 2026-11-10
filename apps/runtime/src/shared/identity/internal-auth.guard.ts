@@ -3,7 +3,7 @@ import type { TLSSocket } from 'tls';
 
 import { CanActivate, ExecutionContext, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 
-import { RUNTIME_CONFIG, RuntimeConfig } from './config';
+import { RUNTIME_CONFIG, RuntimeConfig } from '../config';
 import { peerIdentity } from './tls-identity';
 
 const h = (s: string) => createHash('sha256').update(s).digest();

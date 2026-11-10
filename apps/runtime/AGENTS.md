@@ -4,18 +4,18 @@ Read `README.md` first for how the hub and the worker fit together.
 
 ## Layering
 
-- `src/shared/` (config, stores both apps use, locks, logger, tracing, migrations) imports only `libs/*` and itself. Never `hub/` or `worker/`.
+- `src/shared/` is what both apps use, by concern: `admission/` (memory admission stores and contract), `evidence/` (evidence stores, S3 client), `persistence/` (locks, schema and migrations, command and stream stores, cell directory), `observability/` (logger, tracing, OTel), `identity/` (TLS identity, the internal auth guard); `config.ts`, `errors.ts` and `claim-id.ts` stay at its root. A new shared file goes into the folder of its concern, never loose at the root. It imports only `libs/*` and itself. Never `hub/` or `worker/`.
 - `src/hub/` imports `shared/` and `libs/*`. Never `worker/`.
-- `src/worker/` imports `shared/` and `libs/*`. Never `hub/`. It reaches the hub over HTTP (`worker/env/hub-environment-runtime.ts`) and finds cells through `CellDirectory` (`shared/cell-directory.ts`).
+- `src/worker/` imports `shared/` and `libs/*`. Never `hub/`. It reaches the hub over HTTP (`worker/env/hub-environment-runtime.ts`) and finds cells through `CellDirectory` (`shared/persistence/cell-directory.ts`).
 - `src/fake-cell/`, `src/testing/` and `src/e2e/` are test and dev code. Production code imports them only behind the dev-only fake driver (`fakeEnvironments` in `worker/runtime-worker.module.ts`), which the production image refuses. The test wiring `worker/run/in-memory-deps.ts` is the other importer; keep it out of production modules.
 - Domain rules (protocol, gate, run state, sealed secrets, metrics names) belong in `libs/runtime`. Do not copy them here.
-- Read the process environment only in `shared/config.ts` (the standard `OTEL_*` variables in `shared/otel.ts` are the one exception). Add new settings to `RuntimeConfig` / `WorkerConfig` with validation, and to the README table.
+- Read the process environment only in `shared/config.ts` (the standard `OTEL_*` variables in `shared/observability/otel.ts` are the one exception). Add new settings to `RuntimeConfig` / `WorkerConfig` with validation, and to the README table.
 
 ## Claims
 
 - Change a claim's state only with `transitionClaim(claimId, from, to, cause)` or `rebindClaim` (`hub/hub-store.ts`); in `ClaimService`, through `move`, which also counts and logs it. Name the states the claim may leave; act only when the call returns true. Never write `runtime_claims.state` any other way.
 - A cause is a `ClaimReason` (a closed set: dashboards and alerts match on it) and, when the cell gave one, its own code as `detail`. A new way for a claim to move gets a new reason, never free text in the reason.
-- The hub is the writer of `runtime_claims`. The worker only reads it (`worker/persistence/pg-run-claims.ts`) and releases through the hub (`HubClaimReleaser`). The one other write is the revocation transaction in `shared/pg-command-store.ts`.
+- The hub is the writer of `runtime_claims`. The worker only reads it (`worker/persistence/pg-run-claims.ts`) and releases through the hub (`HubClaimReleaser`). The one other write is the revocation transaction in `shared/persistence/pg-command-store.ts`.
 - Keep the in-memory store (`InMemoryHubStore`) in step with the Pg store. Every new store method gets the same semantics in both, plus a case in `hub/pg-hub-store.integration.spec.ts`.
 
 ## Tenant scope
@@ -37,12 +37,12 @@ Read `README.md` first for how the hub and the worker fit together.
 - Start steps that run concurrently in a fixed order (see `bootBoth`).
 - A step must be safe to run twice: give events a key, give publications their `publishKey`, and make cell steps idempotent by stepId.
 - Never make a broker handler wait for a workflow's result. Start it and return (`RunEngineService.stop`).
-- Work that must run once per cluster takes a `DistributedLocks` lock (`shared/locks.ts`). It does not run on every replica.
+- Work that must run once per cluster takes a `DistributedLocks` lock (`shared/persistence/locks.ts`). It does not run on every replica.
 
 ## Protocol and schema
 
 - Change hub ↔ cell messages in `libs/runtime/protocol` first; the Go cell implements the same schema. The hub may only send frames that `decodeFrame` accepts: claim-scoped types carry `claimId`, and replies carry `re`.
-- Change the Runtime database only with a new entry in `RUNTIME_MIGRATIONS` (`shared/runtime-schema.ts`).
+- Change the Runtime database only with a new entry in `RUNTIME_MIGRATIONS` (`shared/persistence/runtime-schema.ts`).
 
 ## Tests
 

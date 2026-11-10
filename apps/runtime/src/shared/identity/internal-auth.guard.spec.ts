@@ -1,6 +1,6 @@
 import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 
-import { loadRuntimeConfig, RuntimeConfig } from './config';
+import { loadRuntimeConfig, RuntimeConfig } from '../config';
 import { WorkerAuthGuard } from './internal-auth.guard';
 
 const ctx = (req: unknown) => ({ switchToHttp: () => ({ getRequest: () => req }) }) as any;

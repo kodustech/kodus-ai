@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import type { RuntimeEnvironmentSetupRequested } from '@libs/runtime/contracts/runtime-commands';
 import { sealSecret } from '@libs/runtime/run/sealed-secret';
 
-import { shopRunRequest } from '../e2e/fixtures';
+import { shopRunRequest } from '../../e2e/fixtures';
 import type {
     AdmissionIdentity,
     AdmissionLease,

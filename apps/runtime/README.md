@@ -53,7 +53,7 @@ The CA is `hub/ca/x509.ts`. It signs cell certificates (OU=cell, CN=cellId) and 
 **Listeners** (`hub/hub-app.ts`):
 
 - **Public**, `RUNTIME_HUB_PORT` (3410). Serves `/cells` (WebSocket, `hub/cell-gateway.service.ts`), `/cells/register`, `/cells/renew` and `/health` (`hub/http/public-cell.controller.ts`). `/health` lists no cells. The handshake asks for a client certificate but does not require one, because registration has none yet. A certificate that is presented must chain to the CA, must not be revoked, and must be the pinned serial.
-- **Internal**, `RUNTIME_HUB_INTERNAL_PORT` (3411, private network only). Serves `/internal/*` (`hub/http/internal.controller.ts`). It requires a client certificate from the worker CA at the handshake. `WorkerAuthGuard` (`shared/internal-auth.guard.ts`) then checks OU=worker and, when `RUNTIME_WORKER_ALLOWED_CNS` is set, the CN.
+- **Internal**, `RUNTIME_HUB_INTERNAL_PORT` (3411, private network only). Serves `/internal/*` (`hub/http/internal.controller.ts`). It requires a client certificate from the worker CA at the handshake. `WorkerAuthGuard` (`shared/identity/internal-auth.guard.ts`) then checks OU=worker and, when `RUNTIME_WORKER_ALLOWED_CNS` is set, the CN.
 
 Each listener answers 404 to the other's routes.
 
@@ -103,7 +103,7 @@ They do not bound incoming message queues or total process connections.
   - **publish**: always the structured report; the publisher refuses free text.
   - A fork PR boots only with `forkApproved`, which only the gate sets.
   - A `security_violation` on either side halts the Run as a failing check (`Security violation · …`), with `securityEvent` (kind `exfiltration`, side, signature) on the projection and `securityViolation` in the report. It comes from three places: a boot blocker, a step result (`SecurityViolationError`, `worker/run/security-violation.ts`), or a blocker the hub recorded between steps (read in the `egress` step).
-- **Cell choice**: `shared/cell-directory.ts` reserves a slot on the best eligible cell (the org's own first, then the cells where the org holds fewer live claims, then the most free slots). A Run's acquire passes the cell of its environment's last setup as `prefer` (`poolCellOf`, only from a record of the same org): that cell holds the warm pool, so it goes first while it is eligible and has a slot. A failure finding it is no preference.
+- **Cell choice**: `shared/persistence/cell-directory.ts` reserves a slot on the best eligible cell (the org's own first, then the cells where the org holds fewer live claims, then the most free slots). A Run's acquire passes the cell of its environment's last setup as `prefer` (`poolCellOf`, only from a record of the same org): that cell holds the warm pool, so it goes first while it is eligible and has a slot. A failure finding it is no preference.
   - An org holds at most `RUNTIME_ORG_SHARED_CLAIM_CAP` live claims (pending, bound, held) on shared (kodus-owned) cells; its own cells are not capped. Past the cap, and with no free slot on any eligible cell, the acquire is blocked (kind `resources`, signature `org_capacity` or `no_capacity`) before anything is sent to a cell; both have a card in `libs/runtime/blockers/catalog.ts`. No connected cell at all is still `cell_unavailable`.
   - The cap counts the claim rows the hub wrote, so acquires of one org in flight together may pass it by their number (the DBOS org partition bounds them). A new round of a claim never counts against itself.
 - **Setup**: `worker/setup/environment-setup.service.ts` boots the default-branch head with the recipe the product read, checks the app answers, and asks for an image bake. When the bake is accepted and the command carries `poolSize`, the `pool` step sends `pool.target` with `imageId: latest` to the cell that baked, before the release; the cell fills the pool from that bake once it is done (S-52). The record lives in `environment-setup.store.ts`.
@@ -121,17 +121,17 @@ not cancel work already in flight or reacquire machines behind a recorded round.
 **Transport and machine facts** (#2466). `cell_unavailable` and `transport_lost`
 do not assert guest failure. Only explicit VM-health observations can support
 `pr_destabilizes_machine`; repeated missing control links remain inconclusive.
-- **Maintenance**: `RunEngineService.maintenanceTick` runs every 15 s. The replica that takes the maintenance advisory lock sweeps stuck Runs, reaps claims past their hard expiry through the hub, and, once an hour, applies 30-day retention (`applyRetention` in `shared/runtime-schema.ts`; the Run stream in batches of 5,000).
+- **Maintenance**: `RunEngineService.maintenanceTick` runs every 15 s. The replica that takes the maintenance advisory lock sweeps stuck Runs, reaps claims past their hard expiry through the hub, and, once an hour, applies 30-day retention (`applyRetention` in `shared/persistence/runtime-schema.ts`; the Run stream in batches of 5,000).
 - **Evidence**: see [Evidence](#evidence).
 
 ## Stores and who writes them
 
-The Runtime has its own Postgres database, migrated by `ensureRuntimeSchema` (`shared/runtime-schema.ts`). Migrations are versioned in `runtime.schema_migrations`. Each one runs once, under an advisory lock. Add a migration; never edit an applied one.
+The Runtime has its own Postgres database, migrated by `ensureRuntimeSchema` (`shared/persistence/runtime-schema.ts`). Migrations are versioned in `runtime.schema_migrations`. Each one runs once, under an advisory lock. Add a migration; never edit an applied one.
 
 | Table | Written by |
 |---|---|
-| `runtime_claims` | Hub (`hub/hub-store.ts`), only through `transitionClaim` / `rebindClaim`. One exception: `revokeCell` (`shared/pg-command-store.ts`) terminates a revoked cell's claims in the revocation's transaction. Each row keeps why it is in its state (`reason`, a `ClaimReason`; `reason_detail`, the cell's own code) and since when (`state_changed_at`). |
-| `runtime_cell_sessions` | Hub. Exception: the worker's `PgCellDirectory` (`shared/cell-directory.ts`) decrements `free_slots` when it reserves a cell; the next heartbeat overwrites it. |
+| `runtime_claims` | Hub (`hub/hub-store.ts`), only through `transitionClaim` / `rebindClaim`. One exception: `revokeCell` (`shared/persistence/pg-command-store.ts`) terminates a revoked cell's claims in the revocation's transaction. Each row keeps why it is in its state (`reason`, a `ClaimReason`; `reason_detail`, the cell's own code) and since when (`state_changed_at`). |
+| `runtime_cell_sessions` | Hub. Exception: the worker's `PgCellDirectory` (`shared/persistence/cell-directory.ts`) decrements `free_slots` when it reserves a cell; the next heartbeat overwrites it. |
 | `runtime_cells` | Hub (sessions, registration, pins); worker on revocation. |
 | `runtime_steps_index`, `runtime_egress_events`, `runtime_claim_blockers` | Hub. The worker reads blockers for its Run (`PgRunClaims.securityViolations`). |
 | `runtime_cell_tokens` | Worker inserts (token issued); hub consumes on registration, in the same transaction as the cell row. |
@@ -164,7 +164,7 @@ A Run's evidence (§8, `experiments/kody-runtime/EVIDENCE-CAPTURE-DESIGN.md`) li
 
 | | `file` (default) | `s3` |
 |---|---|---|
-| Where | `RUNTIME_EVIDENCE_DIR` on the worker (`shared/file-evidence-store.ts`) | a bucket of any S3-compatible store (`shared/s3-evidence-store.ts`) |
+| Where | `RUNTIME_EVIDENCE_DIR` on the worker (`shared/evidence/file-evidence-store.ts`) | a bucket of any S3-compatible store (`shared/evidence/s3-evidence-store.ts`) |
 | Cell upload | PUT to the worker's evidence server (`worker/evidence`, `RUNTIME_EVIDENCE_PORT`, `RUNTIME_EVIDENCE_UPLOAD_URL`), HMAC grant: exact key, type, byte ceiling, nonce (single use) | presigned PUT to the staging key `{prefix}.uploads/{key}`, `content-type` signed |
 | Browser read | URL the API signs with `RUNTIME_EVIDENCE_SIGNING_SECRET`, served by the evidence server | presigned GET the API signs, with `response-content-type`, `response-content-disposition: attachment`, `response-cache-control: private, no-store` |
 | Retention | hourly sweep, 30 days | the bucket's lifecycle rule (below) |
@@ -219,7 +219,7 @@ All config is read in one place, `shared/config.ts`:
 
 - `loadRuntimeConfig` is the hub's loader; `loadWorkerConfig` adds the worker's settings.
 - Both validate at boot. A bad number, bad JSON, or a missing seal key stops the process.
-- Only the standard `OTEL_*` variables are read elsewhere, in `shared/otel.ts`.
+- Only the standard `OTEL_*` variables are read elsewhere, in `shared/observability/otel.ts`.
 
 | Variable | Default (dev) | Notes |
 |---|---|---|
@@ -261,7 +261,7 @@ Setup capacity waits read the current DBOS cancellation signal inside their exis
 
 ## Observability
 
-- **Logs**: one JSON line per event, from `RuntimeLogger` (`shared/logger.ts`). Each line carries `service`, `context`, `msg`, and the active `traceId`/`spanId`. Nest's loggers write through it. Hub lines carry `replicaId`, `cellId`, `claimId`, `runId` and `stepId`.
+- **Logs**: one JSON line per event, from `RuntimeLogger` (`shared/observability/logger.ts`). Each line carries `service`, `context`, `msg`, and the active `traceId`/`spanId`. Nest's loggers write through it. Hub lines carry `replicaId`, `cellId`, `claimId`, `runId` and `stepId`.
 - **Spans**:
   - Worker: `runtime.run.requested`, `runtime.run`, `runtime.run.boot`, `.agent`, `.replay`, `.intent`.
   - Hub: `runtime.hub.claim.acquire` and `runtime.hub.step`. They join the worker's trace through the W3C `traceparent` the worker sends (`hub/http/trace-context.interceptor.ts`).
@@ -273,7 +273,7 @@ Setup capacity waits read the current DBOS cancellation signal inside their exis
 ## Run it locally
 
 1. Write the dev CA and certificates: `scripts/runtime/dev-ca.sh .runtime-certs cell-dev-1`. Optionally, create the least-privilege Postgres, Mongo and RabbitMQ users with `scripts/runtime/dev-runtime-users.sh`.
-2. Start the services: `docker compose -f docker-compose.dev.yml up runtime-hub runtime-worker`. They create the `kodus_runtime` database on boot when it is missing (`ensureDatabase` in `src/shared/runtime-schema.ts`).
+2. Start the services: `docker compose -f docker-compose.dev.yml up runtime-hub runtime-worker`. They create the `kodus_runtime` database on boot when it is missing (`ensureDatabase` in `src/shared/persistence/runtime-schema.ts`).
    - The worker's dev seal key equals the product's dev default in the same file.
    - The hub's public port is published on 127.0.0.1:3410. The internal port is not published.
 3. Run one Run end to end with the Go cell on the host: `ENV_FILE=.env experiments/kody-runtime/sample-app/run-e2e.sh`. Its header lists the variables it takes.
@@ -287,7 +287,7 @@ For the isolated stack with the TS fake cell (`src/fake-cell`), use `docker-comp
   `RUNTIME_IT_DATABASE_URL=postgres://… API_NODE_ENV=test npx jest apps/runtime --runInBand`.
   - Covers the guarded claim transitions, replica-scoped disconnect, slot reservation, registration atomicity, revocation, the keyed run stream (and the API's read-only read of it, and its batched retention), the advisory locks, migrations, and the run and setup workflows.
   - Use `--runInBand`: two DBOS launches on a fresh database race.
-- **S3 evidence** (opt-in): `RUNTIME_IT_S3_ENDPOINT=http://localhost:9000 API_NODE_ENV=test npx jest apps/runtime/src/shared/s3-evidence-store.integration.spec.ts` against the dev MinIO (keys `RUNTIME_IT_S3_ACCESS_KEY_ID`/`_SECRET_ACCESS_KEY`). A cell's PUT with a grant, a refused content type, the take, an oversized upload, an expired grant, the presigned read.
+- **S3 evidence** (opt-in): `RUNTIME_IT_S3_ENDPOINT=http://localhost:9000 API_NODE_ENV=test npx jest apps/runtime/src/shared/evidence/s3-evidence-store.integration.spec.ts` against the dev MinIO (keys `RUNTIME_IT_S3_ACCESS_KEY_ID`/`_SECRET_ACCESS_KEY`). A cell's PUT with a grant, a refused content type, the take, an oversized upload, an expired grant, the presigned read.
 - **Go cell ↔ hub over mTLS**: `src/hub/go-cell-hub.integration.spec.ts`.
   - Runs when `go`, `docker` and `openssl` are present.
   - Builds `apps/runtime-cell` and starts a throwaway Postgres.

@@ -4,8 +4,8 @@ import { CellTokenLedger, InMemoryCellTokenStore, type RedeemResult } from '@lib
 import type { Consumer } from '@libs/runtime/environment';
 import { knownCellFeatures } from '@libs/runtime/protocol';
 
-import { reserveCellRow } from '../shared/cell-directory';
-import { PgCommandStore } from '../shared/pg-command-store';
+import { reserveCellRow } from '../shared/persistence/cell-directory';
+import { PgCommandStore } from '../shared/persistence/pg-command-store';
 import type { CellCapabilities } from './cell-capabilities';
 
 // What the hub keeps in the Runtime Postgres (docs §1b, §8): which replica

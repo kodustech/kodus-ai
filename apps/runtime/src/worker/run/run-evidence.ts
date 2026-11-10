@@ -17,8 +17,8 @@ import type { BaselineScreenshot, EvidenceRequest } from '@libs/runtime/protocol
 import type { ExploredCommand } from '@libs/runtime/run';
 import { redactPatterns } from '@libs/runtime/redaction';
 
-import type { EvidenceStore } from '../../shared/file-evidence-store';
-import type { EvidencePresigner } from '../../shared/s3-evidence-store';
+import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
+import type { EvidencePresigner } from '../../shared/evidence/s3-evidence-store';
 import { type Canary, containsCanary, redactCanaries } from '../canary/canary';
 
 // A Run step's output evidence (§8): one JSON object per step at

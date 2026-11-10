@@ -1,4 +1,4 @@
-import { InMemoryPrAdmissionStore } from '../../shared/pr-admission-store';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
 import {
     AmqpConnection,
     MessageHandlerErrorBehavior,
@@ -18,7 +18,7 @@ import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { RuntimeCommandName } from '@libs/runtime/contracts/runtime-commands';
 
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryCommandStore } from '../../shared/pg-command-store';
+import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
 import { RuntimeCommandConsumer } from './run-request.consumer';
 import {
     RuntimeRunRetry,

@@ -11,11 +11,11 @@ import {
 } from '@libs/runtime/run';
 import { withRunSpan } from '@libs/runtime/telemetry';
 
-import type { PrAdmissionStore, PrAdmissionDecision, RunDeliveryContext } from '../../shared/pr-admission-store';
-import type { DistributedLocks } from '../../shared/locks';
+import type { PrAdmissionStore, PrAdmissionDecision, RunDeliveryContext } from '../../shared/admission/pr-admission-store';
+import type { DistributedLocks } from '../../shared/persistence/locks';
 import { readyTarget } from '../env/ready-check';
 import { recipeChangedInPr } from '../run/recipe-change';
-import type { CommandStore } from '../../shared/pg-command-store';
+import type { CommandStore } from '../../shared/persistence/pg-command-store';
 import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
 import type { CommandHandler, HandlerResult } from './command-handlers';
 import type { RunEngine } from './run-engine.port';

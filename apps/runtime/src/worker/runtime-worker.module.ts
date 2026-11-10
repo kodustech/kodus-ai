@@ -1,5 +1,5 @@
-import { LOCK_SCOPED_PG, LockScopedPg } from '../shared/lock-scoped-pg';
-import { PR_ADMISSION_STORE, PgPrAdmissionStore } from '../shared/pr-admission-store';
+import { LOCK_SCOPED_PG, LockScopedPg } from '../shared/persistence/lock-scoped-pg';
+import { PR_ADMISSION_STORE, PgPrAdmissionStore } from '../shared/admission/pr-admission-store';
 import { AmqpConnection, RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
 import { DynamicModule, Inject, Logger, Module, OnApplicationShutdown } from '@nestjs/common';
 import { MongoClient } from 'mongodb';
@@ -11,15 +11,15 @@ import { MongoRunProjectionStore } from '@libs/runtime/run/adapters/mongo-run-pr
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
-import { PgCellDirectory, pgTransaction } from '../shared/cell-directory';
-import { PgAdmissionStore } from '../shared/pg-admission-store';
-import { PgPhysicalAdmissionDirectory } from '../shared/physical-admission-directory';
+import { PgCellDirectory, pgTransaction } from '../shared/persistence/cell-directory';
+import { PgAdmissionStore } from '../shared/admission/pg-admission-store';
+import { PgPhysicalAdmissionDirectory } from '../shared/admission/physical-admission-directory';
 import { COMMAND_STORE, RUNTIME_CONFIG, RUNTIME_PG_POOL, WorkerConfig } from '../shared/config';
-import { type EvidenceStore, FileEvidenceStore } from '../shared/file-evidence-store';
-import { S3EvidenceStore } from '../shared/s3-evidence-store';
-import { PgDistributedLocks } from '../shared/locks';
-import { PgCommandStore } from '../shared/pg-command-store';
-import { applyRetention, ensureDatabase, ensureRuntimeSchema } from '../shared/runtime-schema';
+import { type EvidenceStore, FileEvidenceStore } from '../shared/evidence/file-evidence-store';
+import { S3EvidenceStore } from '../shared/evidence/s3-evidence-store';
+import { PgDistributedLocks } from '../shared/persistence/locks';
+import { PgCommandStore } from '../shared/persistence/pg-command-store';
+import { applyRetention, ensureDatabase, ensureRuntimeSchema } from '../shared/persistence/runtime-schema';
 import { HttpLlmGateway } from './agent/http-llm-gateway';
 import { HttpRecipeAuthorClient } from './agent/http-recipe-author';
 import { HttpRunPlanClient } from './agent/http-run-plan';

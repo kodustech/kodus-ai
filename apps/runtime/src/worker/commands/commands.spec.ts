@@ -1,11 +1,11 @@
-import { InMemoryPrAdmissionStore } from '../../shared/pr-admission-store';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
 import { RUNTIME_CONTROL_BINDING, RUNTIME_CONTROL_ROUTING_KEY, RUNTIME_RUN_ROUTING_KEY, RuntimeEventName, runtimeEnvelope, runtimeOutboxMessage } from '@libs/runtime/run';
 import { RuntimeCommandName, runtimeCommandOutboxMessage, runtimeCommandRoute } from '@libs/runtime/api/domain/runtime-commands';
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryDistributedLocks } from '../../shared/locks';
-import { InMemoryCommandStore } from '../../shared/pg-command-store';
+import { InMemoryDistributedLocks } from '../../shared/persistence/locks';
+import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
 import { RuntimeCommandConsumer } from '../consumer/run-request.consumer';
 import { EnvironmentPoolRequestedHandler } from './command-handlers';
 import { AmqpPublishRequester, PUBLISH_CONFIRM_TIMEOUT_MS } from '../publish/amqp-publish-requester';

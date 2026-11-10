@@ -5,14 +5,14 @@ import { bootOutputOf } from '@libs/runtime/run/boot-failure';
 import type { RuntimeMetrics } from '@libs/runtime/telemetry';
 
 import { claimIdFor } from '../../shared/claim-id';
-import { inSpan } from '../../shared/tracing';
+import { inSpan } from '../../shared/observability/tracing';
 import { authoredFilesUnsupported, grantsSize, recipeCapabilityBlocker, sizeUnavailable, supports } from '../cell-capabilities';
 import type { CellConnection, CellConnectionRegistry } from '../gateway/cell-connections';
 import { ClaimCause, ClaimMetering, ClaimRow, ClaimState, HubStore, isFinalClaimState, LIVE_CLAIM_STATES, OPEN_CLAIM_STATES } from '../hub-store';
 import { CellUnavailableError, ClaimRef, ClaimScopeError, HubLog, HubLogLine, HubMetrics, ReadyOutcome } from '../hub-types';
 import { type ClaimDeadlines, freshDeadlines, readyWaitMs, retryDeadlines } from './claim-deadlines';
 import { CellMemoryBook, type MemoryAdmission, siblingKeysOf } from './cell-memory';
-import type { PhysicalAdmissionTicket } from '../../shared/admission-contract';
+import type { PhysicalAdmissionTicket } from '../../shared/admission/admission-contract';
 import type { TicketService } from './ticket.service';
 
 // The claim lifecycle on the hub (ADR-051, §1b): acquire (with rebind on a

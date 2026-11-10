@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 
 import { loadRuntimeConfig } from '../shared/config';
-import { RuntimeLogger } from '../shared/logger';
-import { setupRuntimeOtel } from '../shared/otel';
+import { RuntimeLogger } from '../shared/observability/logger';
+import { setupRuntimeOtel } from '../shared/observability/otel';
 import { createRuntimeHubApp, listenRuntimeHub } from './hub-app';
 
 async function bootstrap() {

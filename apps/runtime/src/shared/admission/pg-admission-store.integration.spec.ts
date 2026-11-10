@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 
 import type { RuntimeEnvironmentSetupRequested } from '@libs/runtime/contracts/runtime-commands';
 
-import { shopRunRequest } from '../e2e/fixtures';
+import { shopRunRequest } from '../../e2e/fixtures';
 import type {
     AdmissionIdentity,
     AdmissionLease,
@@ -15,7 +15,7 @@ import type {
     PhysicalAdmissionTicket,
 } from './admission-contract';
 import { PgAdmissionStore } from './pg-admission-store';
-import { applyRetention, ensureRuntimeSchema } from './runtime-schema';
+import { applyRetention, ensureRuntimeSchema } from '../persistence/runtime-schema';
 
 const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
 const skip = !url || process.env.SKIP_INTEGRATION === 'true';
