@@ -1117,6 +1117,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 return hold(
                     'The PR changed while approval conditions were evaluated.',
                 );
+            const approvalAttemptAt = new Date().toISOString();
             await this.codeManagementService.approvePullRequest(
                 { ...request, headSha: decision.reviewedHeadSha },
                 platformType,
@@ -1131,6 +1132,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 request,
                 platformType,
                 decision,
+                undefined,
+                approvalAttemptAt,
             );
             return true;
         } catch (error) {
@@ -1850,8 +1853,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
         platformType: PlatformType,
         decision: ApprovalDecision,
         expectedFailure?: IApprovalReasonDeliveryFailure,
+        publicationAttemptAt?: string,
     ): Promise<void> {
-        const occurredAt = new Date().toISOString();
+        const occurredAt = publicationAttemptAt ?? new Date().toISOString();
         const guard = {
             notAfter: occurredAt,
             ...(expectedFailure ? { expectedFailure } : {}),

@@ -230,6 +230,29 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         };
     };
 
+    it('timestamps a cron approval before provider I/O so a delayed failure stays older', async () => {
+        const startedAt = '2026-11-10T10:00:00.000Z';
+        jest.useFakeTimers({ now: new Date(startedAt) });
+        try {
+            const { deps, run } = namedPolicyCase();
+            deps.codeManagementService.approvePullRequest.mockImplementation(
+                async () => {
+                    jest.setSystemTime(new Date('2026-11-10T10:00:02.000Z'));
+                },
+            );
+            deps.codeManagementService.createIssueComment.mockRejectedValue(
+                new Error('Provider failed'),
+            );
+            expect(await run()).toBe(true);
+            expect(
+                deps.pullRequestService.setApprovalReasonDeliveryFailure.mock
+                    .calls[0][3].occurredAt,
+            ).toBe(startedAt);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
     it('approves a new named policy on its exact reviewed head and publishes the policy name', async () => {
         const { deps, run } = namedPolicyCase();
         expect(await run()).toBe(true);
