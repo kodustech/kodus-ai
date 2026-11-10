@@ -275,6 +275,8 @@ describe("monthly cap server action", () => {
         },
     );
 
+    // Regression: this exact case fails against 860ec139d (undefined !== null)
+    // and passes after normalization; monthlyPurchasedUsd: 0 is usage, not cap.
     it("confirms a cleared cap when balance omits the unset limit", async () => {
         updateMock.mockResolvedValue({ enabled: true, monthlyLimitUsd: null });
         balanceMock.mockResolvedValue({
@@ -301,13 +303,44 @@ describe("monthly cap server action", () => {
                 monthlyLimitUsd: null,
             });
             balanceMock.mockResolvedValue(balance);
+            const errorSpy = jest.spyOn(console, "error").mockImplementation();
+            try {
+                await expect(
+                    updateCreditAutoTopUpAction({
+                        teamId: "team-1",
+                        enabled: true,
+                        monthlyLimitUsd: null,
+                    }),
+                ).rejects.toThrow("Failed to update auto top-up");
+                expect(balanceMock).toHaveBeenCalledWith({ teamId: "team-1" });
+                expect(errorSpy).toHaveBeenCalledWith(
+                    "Failed to update auto top-up:",
+                    new Error(
+                        "Monthly auto top-up limit could not be confirmed",
+                    ),
+                );
+            } finally {
+                errorSpy.mockRestore();
+            }
+        },
+    );
+
+    it.each(["NO_PAYMENT_METHOD", "INVALID_MONTHLY_LIMIT"])(
+        "preserves the structured %s code alongside a readable error",
+        async (code) => {
+            updateMock.mockRejectedValue(
+                new BillingHttpError(409, {
+                    code,
+                    error: "A readable message",
+                }),
+            );
             await expect(
                 updateCreditAutoTopUpAction({
                     teamId: "team-1",
                     enabled: true,
-                    monthlyLimitUsd: null,
+                    monthlyLimitUsd: 100,
                 }),
-            ).rejects.toThrow("Failed to update auto top-up");
+            ).rejects.toThrow(code);
         },
     );
 

@@ -14,15 +14,13 @@ import {
 } from "../_services/billing/fetch";
 import { BillingHttpError } from "../_services/billing/utils";
 
-// New billing uses {code, error: readableMessage}; older error envelopes
-// put the machine code in error. Neither format reaches the UI verbatim.
-const isAutoTopUpPending = (error: unknown): boolean => {
-    if (!(error instanceof BillingHttpError)) return false;
+// Current pending responses use {code, error: readableMessage}; legacy
+// responses put the machine code in error. Preserve both envelope formats.
+const billingErrorCode = (error: unknown): string | undefined => {
+    if (!(error instanceof BillingHttpError)) return undefined;
     const body = error.body as { code?: unknown; error?: unknown } | null;
-    return (
-        body?.code === "AUTO_TOP_UP_PENDING" ||
-        body?.error === "AUTO_TOP_UP_PENDING"
-    );
+    if (typeof body?.code === "string") return body.code;
+    return typeof body?.error === "string" ? body.error : undefined;
 };
 const autoTopUpPendingResult = {
     saveError: "Resolve the previous charge before changing its amount or card",
@@ -177,12 +175,13 @@ export const updateCreditAutoTopUpAction = async (params: {
         }
         return result;
     } catch (error) {
-        if (isAutoTopUpPending(error)) return autoTopUpPendingResult;
+        if (billingErrorCode(error) === "AUTO_TOP_UP_PENDING")
+            return autoTopUpPendingResult;
         console.error("Failed to update auto top-up:", error);
         // Billing answers 409 NO_PAYMENT_METHOD when no card is saved and
         // 400 INVALID_* for a bad pair; surface the code so the UI can react.
         if (error instanceof BillingHttpError) {
-            const code = (error.body as { error?: string } | null)?.error;
+            const code = billingErrorCode(error);
             if (code === "NO_PAYMENT_METHOD")
                 throw new Error("NO_PAYMENT_METHOD");
             if (code) throw new Error(code);
@@ -212,7 +211,8 @@ export const removeCreditPaymentMethodAction = async (params: {
     try {
         return await removeCreditPaymentMethod(params);
     } catch (error) {
-        if (isAutoTopUpPending(error)) return autoTopUpPendingResult;
+        if (billingErrorCode(error) === "AUTO_TOP_UP_PENDING")
+            return autoTopUpPendingResult;
         console.error("Failed to remove the card:", error);
         throw new Error("Failed to remove the card");
     }
