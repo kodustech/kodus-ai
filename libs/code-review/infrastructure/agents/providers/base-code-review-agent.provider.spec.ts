@@ -539,6 +539,24 @@ describe('request assembly + byokConfig threading', () => {
         expect(loopParams.contextWindowTokens).toBe(200_000);
     });
 
+    it('sizes the context window by the bare model id, not the provider-prefixed label', async () => {
+        // `openai:gpt-6.1-sol` misses the mirror's exact and normalized keys
+        // and resolves by substring to `bedrock_mantle/openai.gpt-6.1-sol`
+        // (1,000,000); the model itself holds 922,000.
+        resolveModelMock.mockResolvedValue(
+            makeModel({
+                main: {
+                    modelName: 'openai:gpt-6.1-sol',
+                    modelId: 'gpt-6.1-sol',
+                    maxInputTokens: undefined,
+                },
+            }),
+        );
+        await newAgent().execute(makeInput());
+        const [loopParams] = runLoopMock.mock.calls[0];
+        expect(loopParams.contextWindowTokens).toBe(922_000);
+    });
+
     it('wires byokErrorReporter → ByokErrorCounter.record when the counter is injected', async () => {
         const counter = { record: jest.fn() };
         await newAgent(counter).execute(makeInput());

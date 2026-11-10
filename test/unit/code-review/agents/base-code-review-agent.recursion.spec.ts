@@ -48,6 +48,7 @@ jest.mock(
     () => ({
         buildModelFromSlot: jest.fn(() => ({ id: 'fake-model' })),
         getModelName: jest.fn(() => 'fake-model'),
+        getModelId: jest.fn(() => 'fake-model'),
     }),
 );
 
@@ -55,6 +56,7 @@ jest.mock(
     '@libs/llm/model-context-window',
     () => ({
         resolveContextWindow: jest.fn(() => 200_000),
+        lookupModelContextWindow: jest.fn(() => 200_000),
     }),
 );
 

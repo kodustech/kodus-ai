@@ -742,3 +742,27 @@ export function getModelName(
 
     return defaultModelOverride || DEFAULT_MODEL.model;
 }
+
+/**
+ * The bare model id `getModelName` labels, without its `provider:` prefix — the
+ * name the context-window mirror is keyed by. The label cannot stand in for it:
+ * `openai:gpt-6.1-sol` misses the exact and normalized lookups and lands on
+ * whichever substring row is longest.
+ */
+export function getModelId(
+    slot?: NormalizedModel,
+    defaultModelOverride?: string,
+): string {
+    if (slot) {
+        return slot.model;
+    }
+
+    const env = resolveEnvProvider();
+    if (env) {
+        return env.kind === 'invalid'
+            ? process.env.API_LLM_PROVIDER_MODEL?.trim() || 'auto'
+            : (env.model ?? process.env.API_LLM_PROVIDER_MODEL ?? '');
+    }
+
+    return defaultModelOverride || DEFAULT_MODEL.model;
+}
