@@ -48,7 +48,10 @@ func TestABakedImageBootsALaterClaimWithoutBuilding(t *testing.T) {
 	}
 	compose := []byte("services:\n  api:\n    build: ./app\n")
 
-	claim := func(t *testing.T, d *dockergvisor.Driver, id string) (driver.MachineRef, driver.ClaimNetwork) {
+	// image is the bake the claim boots from, as the agent names it at
+	// acquire (the environment's last generation); none for a setup. A claim
+	// reuses a baked image only when it names its generation.
+	claim := func(t *testing.T, d *dockergvisor.Driver, id string, image ...string) (driver.MachineRef, driver.ClaimNetwork) {
 		t.Helper()
 		n, err := d.PrepareClaim(ctx, driver.ClaimNetworkSpec{CellID: cell, OrgID: org, ClaimID: id})
 		if err != nil {
@@ -57,6 +60,9 @@ func TestABakedImageBootsALaterClaimWithoutBuilding(t *testing.T) {
 		t.Cleanup(func() { _ = d.ReleaseClaim(context.Background(), n) })
 		spec := drivertest.BaseSpec(cell, id, n)
 		spec.OrgID, spec.EnvironmentID, spec.ExpiresAt, spec.HardExpiresAt = org, env, time.Now().Add(10*time.Minute), time.Now().Add(time.Hour)
+		if len(image) > 0 {
+			spec.ImageID, spec.ImageRef = image[0], image[0]
+		}
 		ref, err := d.Create(ctx, spec)
 		if err != nil {
 			t.Fatal(err)
@@ -122,7 +128,7 @@ func TestABakedImageBootsALaterClaimWithoutBuilding(t *testing.T) {
 	}
 
 	// A base-side claim at the same input: no policy, no builder, the bake.
-	base, _ := claim(t, d, "claim-base")
+	base, _ := claim(t, d, "claim-base", img.ImageID)
 	start = time.Now()
 	if _, err := d.Up(ctx, base, compose, project); err != nil {
 		t.Fatalf("a claim at the baked input did not boot from the bake: %v", err)
