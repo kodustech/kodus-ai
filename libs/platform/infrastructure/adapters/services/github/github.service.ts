@@ -5565,9 +5565,13 @@ This is an experimental feature that generates committable changes. Review the d
                     throw error;
                 }
 
+                // A rate limit on the head read arms the gate here, so the
+                // next files wait even when the base read below recovers.
+                contentRateLimitGate.record(rateLimitKey, error);
+
                 // Primary bucket empty: the base read hits the same exhausted
-                // bucket. A secondary (burst) limit still tries the base, as
-                // before. The outer catch records the window either way.
+                // bucket. A secondary (burst) limit still tries the base for
+                // this one file, as before.
                 if (contentRateLimitGate.isBucketExhausted(error)) {
                     throw error;
                 }

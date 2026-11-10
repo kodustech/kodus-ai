@@ -135,16 +135,21 @@ describe('GithubService.getRepositoryContentFile — rate-limit gate', () => {
         expect(getContent).toHaveBeenCalledTimes(1);
     });
 
-    it('still tries the base ref after a secondary (burst) limit on the head, as before', async () => {
+    it('after a secondary limit on the head, still reads this file from the base but gates the next files', async () => {
         const getContent = jest
             .fn()
             .mockRejectedValueOnce(secondaryRateLimit(60))
-            .mockResolvedValueOnce(ok);
+            .mockResolvedValue(ok);
         const { service } = makeService(getContent);
 
-        await expect(read(service)).resolves.toEqual(ok);
+        // This file: the base read recovers it, as before.
+        await expect(read(service, 'src/a.ts')).resolves.toEqual(ok);
         expect(getContent).toHaveBeenCalledTimes(2);
         expect(getContent.mock.calls[1][0].ref).toBe('main');
+
+        // The next file waits out the retry-after window instead of calling.
+        await expect(read(service, 'src/b.ts')).resolves.toBeUndefined();
+        expect(getContent).toHaveBeenCalledTimes(2);
     });
 
     it('never gates when the credential cannot be identified', async () => {
