@@ -1,4 +1,6 @@
 import { prRiskConfigurationKey } from './risk-configuration';
+import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
+import { LLM_TASK, type BYOKConfig } from '@libs/llm/byok-config';
 import {
     isCurrentRiskAssessment,
     type RiskAssessmentResult,
@@ -9,6 +11,60 @@ it('normalizes optional criteria and language defaults for configuration identit
         prRiskConfigurationKey({ criteria: [], language: 'en-US' }),
     );
 });
+
+it.each(['primary', 'fallback'] as const)(
+    'invalidates stable IDs when the %s endpoint or inference settings change',
+    (target) => {
+        const stored: BYOKConfig = {
+            version: 2,
+            credentials: [
+                {
+                    id: 'p',
+                    provider: 'openai',
+                    apiKey: 'encrypted-p',
+                    settings: { baseURL: 'https://primary.example/v1' },
+                },
+                {
+                    id: 'f',
+                    provider: 'openai',
+                    apiKey: 'encrypted-f',
+                    settings: { baseURL: 'https://fallback.example/v1' },
+                },
+            ],
+            models: [
+                {
+                    id: 'primary',
+                    credentialId: 'p',
+                    model: 'gpt-4o',
+                    temperature: 0.1,
+                },
+                {
+                    id: 'fallback',
+                    credentialId: 'f',
+                    model: 'gpt-4o-mini',
+                    temperature: 0.1,
+                },
+            ],
+            routing: { defaultModelId: 'primary', fallbackModelId: 'fallback' },
+        };
+        const key = () =>
+            prRiskConfigurationKey({
+                modelSlot: resolveTaskSlot(stored, LLM_TASK.riskAssessment)
+                    .slot,
+            });
+        const before = key();
+        const index = target === 'primary' ? 0 : 1;
+        stored.credentials[index].settings.baseURL =
+            'https://edited.example/v1';
+        expect(key()).not.toBe(before);
+        stored.credentials[index].settings.baseURL =
+            index === 0
+                ? 'https://primary.example/v1'
+                : 'https://fallback.example/v1';
+        stored.models[index].temperature = 0.8;
+        expect(key()).not.toBe(before);
+    },
+);
 
 it('invalidates changed criteria, model and fallback without storing credentials in the identity', () => {
     const slot = {

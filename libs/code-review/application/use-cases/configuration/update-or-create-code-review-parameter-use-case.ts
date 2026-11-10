@@ -913,6 +913,10 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         const updatedConfigValue = this.stripCustomMessagesFromConfig(
             deepDifference(defaultConfig, sanitizedConfigValue),
         );
+        this.preserveCanonicalReviewResets(
+            updatedConfigValue,
+            sanitizedConfigValue,
+        );
 
         const centralizedPr = await this.createCentralizedMutationIfEnabled({
             organizationAndTeamData,
@@ -964,6 +968,23 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         ];
 
         codeReviewConfigs.repositories = updatedRepositories;
+    }
+
+    // False/empty canonical values suppress legacy aliases. Diffing them away
+    // can restore a policy or risk setting on the next read or unrelated save.
+    private preserveCanonicalReviewResets(
+        delta: ConfigDelta,
+        owned: Pick<
+            ConfigDelta,
+            'riskAssessmentActive' | 'approvalPolicies' | 'riskCriteria'
+        >,
+    ) {
+        if (owned.riskAssessmentActive === false)
+            delta.riskAssessmentActive = false;
+        for (const key of ['approvalPolicies', 'riskCriteria'] as const) {
+            if (Array.isArray(owned[key]) && owned[key].length === 0)
+                delta[key] = [];
+        }
     }
 
     /** A prompt sent back unchanged is not stored as the team's own text; record when that happens. */
@@ -1063,6 +1084,22 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
 
         const newDelta = this.stripCustomMessagesFromConfig(
             deepDifference(parentConfig, newResolvedConfig),
+        );
+        this.preserveCanonicalReviewResets(
+            newDelta,
+            actor?.source === 'sync'
+                ? sanitizedIncomingConfig
+                : {
+                      riskAssessmentActive:
+                          sanitizedIncomingConfig.riskAssessmentActive ??
+                          oldConfig.riskAssessmentActive,
+                      approvalPolicies:
+                          sanitizedIncomingConfig.approvalPolicies ??
+                          oldConfig.approvalPolicies,
+                      riskCriteria:
+                          sanitizedIncomingConfig.riskCriteria ??
+                          oldConfig.riskCriteria,
+                  },
         );
 
         // An empty byok model override means "inherit" — it must never be stored

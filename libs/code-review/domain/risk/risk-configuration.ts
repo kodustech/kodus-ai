@@ -4,26 +4,33 @@ import {
     riskCriteriaSchema,
     type RiskCriterion,
 } from '@libs/core/infrastructure/config/types/general/risk-assessment';
-import type { NormalizedModel } from '@libs/llm/byok-config';
+import {
+    BYOK_SECRET_SETTINGS,
+    type NormalizedModel,
+} from '@libs/llm/byok-config';
 
 export function prRiskConfigurationKey(input: {
     criteria?: RiskCriterion[];
     language?: string;
     modelSlot?: NormalizedModel;
 }): string {
-    const identity = (slot: NormalizedModel | undefined) =>
-        slot
-            ? {
-                  id: slot.byokModelId,
-                  credentialId: slot.credentialId,
-                  provider: slot.provider,
-                  model: slot.model,
-              }
-            : null;
+    const identity = (slot: NormalizedModel | undefined) => {
+        if (!slot) return null;
+        const settings: Partial<NormalizedModel> = { ...slot };
+        for (const key of [
+            'apiKey',
+            ...BYOK_SECRET_SETTINGS,
+            'fallback',
+            'route',
+            'usedFallback',
+        ] as const)
+            delete settings[key];
+        return settings;
+    };
     return createHash('sha256')
         .update(
             JSON.stringify({
-                version: 9,
+                version: 10,
                 prompt: CHANGE_RISK_PROMPT,
                 criteria: riskCriteriaSchema.parse(input.criteria ?? []),
                 language: input.language ?? 'en-US',

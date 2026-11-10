@@ -32,6 +32,7 @@ import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessag
 import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import type { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 @Injectable()
 export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -103,11 +104,79 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                 context.organizationAndTeamData,
             );
 
-            const config = await this.codeBaseConfigService.getConfig(
+            let config = await this.codeBaseConfigService.getConfig(
                 context.organizationAndTeamData,
                 context.repository,
                 preliminaryFiles,
             );
+
+            // Review settings follow the incremental diff. Risk is a PR-wide
+            // decision and must include scopes touched before this push, too.
+            let fullPrFiles: FileChange[] | undefined;
+            let riskConfigurationUnavailable = false;
+            try {
+                fullPrFiles =
+                    baseCommit || context.rebaseInterdiffFiles
+                        ? await this.pullRequestHandlerService.getChangedFilesMetadata(
+                              context.organizationAndTeamData,
+                              context.repository,
+                              context.pullRequest,
+                              undefined,
+                              undefined,
+                          )
+                        : preliminaryFiles;
+                if (
+                    !fullPrFiles?.length ||
+                    fullPrFiles.some((file) => !file.filename) ||
+                    (context.pullRequest.stats?.total_files > 0 &&
+                        fullPrFiles.length !==
+                            context.pullRequest.stats.total_files)
+                ) {
+                    throw new Error('The complete PR file list is unavailable');
+                }
+                const riskScopeFiles = fullPrFiles.flatMap((file) =>
+                    file.previous_filename &&
+                    file.previous_filename !== file.filename
+                        ? [file, { ...file, filename: file.previous_filename }]
+                        : [file],
+                );
+                const riskConfig =
+                    fullPrFiles === preliminaryFiles &&
+                    riskScopeFiles.length === preliminaryFiles.length
+                        ? config
+                        : await this.codeBaseConfigService.getConfig(
+                              context.organizationAndTeamData,
+                              context.repository,
+                              riskScopeFiles,
+                          );
+                for (const key of [
+                    'riskAssessmentActive',
+                    'riskCriteria',
+                    'riskReviewRouting',
+                ] as const) {
+                    if (riskConfig[key] !== undefined)
+                        config = { ...config, [key]: riskConfig[key] };
+                }
+                if (riskConfig.riskAssessmentActive === true) {
+                    config = { ...config, reviewMode: riskConfig.reviewMode };
+                }
+            } catch (error) {
+                this.logger.warn({
+                    message: 'Could not resolve PR-wide risk settings',
+                    context: this.stageName,
+                    error,
+                    metadata: {
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
+                        repositoryId: context.repository.id,
+                        prNumber: context.pullRequest.number,
+                    },
+                });
+                // An unreadable scope may contain an enabled risk override.
+                // Continue the review in its default mode, but veto approval.
+                config = { ...config, riskAssessmentActive: true };
+                riskConfigurationUnavailable = true;
+            }
 
             const pullRequestMessagesConfig =
                 await this.setPullRequestMessagesConfig(context);
@@ -116,6 +185,9 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                 draft.codeReviewConfig = config;
                 draft.pullRequestMessagesConfig = pullRequestMessagesConfig;
                 draft.preliminaryFiles = preliminaryFiles;
+                draft.fullPrFiles = fullPrFiles;
+                draft.riskConfigurationUnavailable =
+                    riskConfigurationUnavailable;
             });
         } catch (error) {
             // Not a configuration problem. Set here: a thrown error would be

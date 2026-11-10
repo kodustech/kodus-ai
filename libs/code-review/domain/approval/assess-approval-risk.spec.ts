@@ -332,6 +332,10 @@ it.each([
 
 it.each([
     ['src/status.cs', '+var text = @"path\\"; return Authorize();'],
+    [
+        'src/AuthService.cs',
+        '+var response = $"Authorized: {new Func<bool>(() => { return Authorize(user); })()}";',
+    ],
     ['src/status.rs', "+fn authorize<'a>() { return true; }"],
     ['src/return.ts', '--- a/return.ts\n+++ b/return.ts\n'],
     ['src/return.ts', '+++ b/return.ts\n'],

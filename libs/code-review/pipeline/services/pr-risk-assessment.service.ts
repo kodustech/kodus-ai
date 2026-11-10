@@ -49,6 +49,8 @@ export interface PrRiskAssessmentRequest {
     >;
     origin: string;
     lastExecution?: { riskAssessment?: RiskAssessmentResult };
+    fullPrFiles?: FileChange[];
+    riskConfigurationUnavailable?: boolean;
 }
 
 export interface PrRiskAssessmentResponse {
@@ -75,16 +77,18 @@ export class PrRiskAssessmentService {
     async assess(
         context: PrRiskAssessmentRequest,
     ): Promise<PrRiskAssessmentResponse> {
-        // Absent is a legacy configuration, handled by the existing approval
-        // path until the scope migration explicitly enables shared assessment.
-        if (context.codeReviewConfig?.riskAssessmentActive !== true) {
-            return { assessment: { status: 'disabled' } };
-        }
-        let fullPrFiles: FileChange[] | undefined;
+        let fullPrFiles = context.fullPrFiles;
         const unavailable = (reason: string): PrRiskAssessmentResponse => ({
             assessment: { status: 'unavailable', reason },
             fullPrFiles,
         });
+        if (context.riskConfigurationUnavailable)
+            return unavailable('Kody could not resolve PR-wide risk settings.');
+        // Absent is a legacy configuration, handled by the existing approval
+        // path until the scope migration explicitly enables shared assessment.
+        if (context.codeReviewConfig?.riskAssessmentActive !== true) {
+            return { assessment: { status: 'disabled' }, fullPrFiles };
+        }
         if (context.origin === 'cli')
             return unavailable(
                 'PR risk assessment requires a provider PR snapshot.',
@@ -112,12 +116,14 @@ export class PrRiskAssessmentService {
             }
             // Full provider diff, not preliminaryFiles (which may be incremental),
             // and no ignorePaths filtering: removals and old rename paths matter.
-            const files = await this.codeManagement.getFilesByPullRequestId({
-                organizationAndTeamData,
-                repository,
-                prNumber: pullRequest.number,
-                headSha,
-            });
+            const files =
+                fullPrFiles ??
+                (await this.codeManagement.getFilesByPullRequestId({
+                    organizationAndTeamData,
+                    repository,
+                    prNumber: pullRequest.number,
+                    headSha,
+                }));
             if (
                 !files?.length ||
                 files.some((file) => !file.filename) ||

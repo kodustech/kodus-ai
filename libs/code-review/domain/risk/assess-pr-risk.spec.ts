@@ -84,27 +84,39 @@ it('sends both rename paths and removed files, never just the latest incremental
     expect(data.historyCoverage).toBeNull();
 });
 
-it('keeps ambiguous lexical evidence unavailable and prevents approval', async () => {
-    jest.mocked(LLM.run).mockResolvedValue({
-        level: 'low',
-        reason: 'Behavior unchanged.',
-    } as any);
-    const result = await assessPrRisk({
-        ...input,
-        files: [
-            {
-                filename: 'src/status.tsx',
-                status: 'modified',
-                additions: 3,
-                deletions: 0,
-                patch: "+const title = <p>don't change it</p>;\n+return authorize();\n+const footer = <p>don't change it</p>;",
-            },
-        ] as any,
-    });
-    expect(result.status).toBe('unavailable');
-    expect(riskApprovalVeto(true, result, input.headSha)).toBeDefined();
-    expect(LLM.run).toHaveBeenCalledTimes(1);
-});
+it.each([
+    [
+        'src/status.tsx',
+        "+const title = <p>don't change it</p>;\n+return authorize();\n+const footer = <p>don't change it</p>;",
+    ],
+    [
+        'src/AuthService.cs',
+        '+var response = $"Authorized: {new Func<bool>(() => { return Authorize(user); })()}";',
+    ],
+])(
+    'keeps ambiguous lexical evidence unavailable and prevents approval (%s)',
+    async (filename, patch) => {
+        jest.mocked(LLM.run).mockResolvedValue({
+            level: 'low',
+            reason: 'Behavior unchanged.',
+        } as any);
+        const result = await assessPrRisk({
+            ...input,
+            files: [
+                {
+                    filename,
+                    status: 'modified',
+                    additions: 3,
+                    deletions: 0,
+                    patch,
+                },
+            ] as any,
+        });
+        expect(result.status).toBe('unavailable');
+        expect(riskApprovalVeto(true, result, input.headSha)).toBeDefined();
+        expect(LLM.run).toHaveBeenCalledTimes(1);
+    },
+);
 
 it('applies optional guidance to both rename paths and respects exclusions and disabled criteria', () => {
     expect(

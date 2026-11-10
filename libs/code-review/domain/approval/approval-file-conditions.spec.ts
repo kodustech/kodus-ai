@@ -107,3 +107,31 @@ it('keeps brace globs intact as array elements', () => {
 it('does not require provider file data for a policy with no file condition', () => {
     expect(evaluate({}, undefined)).toEqual({ matches: true });
 });
+
+it.each([
+    [undefined, undefined, false],
+    [false, undefined, false],
+    [true, true, false],
+    [true, false, true],
+])(
+    'requires verified text evidence for a patchless zero-count rename (verified=%s, binary=%s)',
+    (lineCountVerified, isBinary, matches) => {
+        expect(
+            evaluate({ maxChangedLines: 10 }, [
+                {
+                    filename: 'assets/new.bin',
+                    previous_filename: 'assets/old.bin',
+                    status: 'renamed',
+                    additions: 0,
+                    deletions: 0,
+                    lineCountVerified,
+                    isBinary,
+                },
+            ]),
+        ).toMatchObject(
+            matches
+                ? { matches: true, countedLines: 0 }
+                : { matches: false, code: 'line-count-unavailable' },
+        );
+    },
+);

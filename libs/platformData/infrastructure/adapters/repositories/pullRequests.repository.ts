@@ -61,7 +61,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             {
                 organizationId,
                 'repository.id': repositoryId,
-                number: prNumber,
+                'number': prNumber,
                 // Clearing a notice that does not exist should leave the PR
                 // untouched, including its updatedAt timestamp.
                 ...(failure === null
@@ -1367,6 +1367,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         'files.suggestions.id': 1,
                         'files.suggestions.deliveryStatus': 1,
                         'files.suggestions.comment': 1,
+                        'approvalReasonDeliveryFailure': 1,
                     },
                 },
                 {
@@ -1395,6 +1396,9 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         repositoryId: { $first: '$repository.id' },
                         repositoryName: { $first: '$repository.name' },
                         provider: { $first: '$provider' },
+                        approvalReasonDeliveryFailure: {
+                            $first: '$approvalReasonDeliveryFailure',
+                        },
                         suggestions: {
                             $push: {
                                 id: '$files.suggestions.id',
@@ -1417,6 +1421,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         },
                         provider: 1,
                         suggestions: 1,
+                        approvalReasonDeliveryFailure: 1,
                     },
                 },
             ])
@@ -1490,6 +1495,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         'provider': 1,
                         'repository.id': 1,
                         'repository.name': 1,
+                        'approvalReasonDeliveryFailure': 1,
                     },
                 )
                 .sort({ _id: 1 })
@@ -1504,6 +1510,8 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     organizationId: doc.organizationId,
                     status: doc.status,
                     provider: doc.provider,
+                    approvalReasonDeliveryFailure:
+                        doc.approvalReasonDeliveryFailure,
                     repository: {
                         id: doc.repository.id,
                         name: doc.repository.name,

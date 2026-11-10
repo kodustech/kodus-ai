@@ -900,8 +900,55 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 FINAL_PROVIDER_TIMEOUT_MS,
                 'policy approval status',
             );
-            // Policy edits never withdraw or rewrite an approval already on the host.
-            if (status === PullRequestReviewState.APPROVED) return false;
+            // Policy edits never rewrite an existing approval. Only repair an
+            // explanation whose delivery failed after our confirmed approval.
+            if (status === PullRequestReviewState.APPROVED) {
+                const failure = pr.approvalReasonDeliveryFailure;
+                if (
+                    failure?.decision === 'approve' &&
+                    failure.reviewedHeadSha &&
+                    failure.reviewedBaseSha
+                ) {
+                    try {
+                        const live = await runWithBoundedTimeout(
+                            this.codeManagementService.getPullRequest(
+                                request,
+                                platformType,
+                            ),
+                            FINAL_PROVIDER_TIMEOUT_MS,
+                            'approval reason retry snapshot',
+                        );
+                        if (
+                            live?.head?.sha === failure.reviewedHeadSha &&
+                            live?.base?.sha === failure.reviewedBaseSha
+                        ) {
+                            await this.postConditionalApprovalReason(
+                                request,
+                                platformType,
+                                {
+                                    kind: 'approve',
+                                    reason: failure.reason,
+                                    reviewedHeadSha: failure.reviewedHeadSha,
+                                    reviewedBaseSha: failure.reviewedBaseSha,
+                                },
+                            );
+                        }
+                    } catch (error) {
+                        this.logger.warn({
+                            message:
+                                'Could not retry a confirmed approval reason',
+                            context: CheckIfPRCanBeApprovedCronProvider.name,
+                            error,
+                            metadata: {
+                                organizationAndTeamData,
+                                repositoryId: pr.repository.id,
+                                prNumber: pr.number,
+                            },
+                        });
+                    }
+                }
+                return false;
+            }
             if (status == null || !this.approvalPolicies)
                 return hold('Approval conditions could not be verified.');
             const latest =
@@ -1892,6 +1939,14 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 decision: decision.kind === 'approve' ? 'approve' : 'hold',
                 reason: decision.reason,
                 occurredAt: new Date().toISOString(),
+                ...(decision.kind === 'approve' &&
+                decision.reviewedHeadSha &&
+                decision.reviewedBaseSha
+                    ? {
+                          reviewedHeadSha: decision.reviewedHeadSha,
+                          reviewedBaseSha: decision.reviewedBaseSha,
+                      }
+                    : {}),
             });
         }
     }

@@ -84,6 +84,36 @@ it('uses the complete PR diff and persists explicit eligibility on the reviewed 
     expect(LLM.run).toHaveBeenCalledTimes(1);
 });
 
+it('holds a line-limited policy for a modified binary renamed without a verified line count', async () => {
+    code.getFilesByPullRequestId.mockResolvedValue([
+        {
+            filename: 'assets/new.bin',
+            previous_filename: 'assets/old.bin',
+            status: 'renamed',
+            additions: 0,
+            deletions: 0,
+        },
+    ]);
+    const result = await service().evaluate(
+        request({
+            config: {
+                ...request().config,
+                approvalPolicies: [
+                    {
+                        id: 'small',
+                        name: 'Small changes',
+                        enabled: true,
+                        maxChangedLines: 10,
+                    },
+                ],
+            } as any,
+        }),
+    );
+    expect(result.decision.kind).not.toBe('approve');
+    expect(JSON.stringify(result.decision)).toContain('line-count-unavailable');
+    expect(LLM.run).not.toHaveBeenCalled();
+});
+
 it.each([
     { reviewClean: false },
     {

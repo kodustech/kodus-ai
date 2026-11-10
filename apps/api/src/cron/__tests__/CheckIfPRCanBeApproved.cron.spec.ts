@@ -284,6 +284,102 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it('retries a failed named-policy reason on the next cron pass without approving twice', async () => {
+        const { deps, input, execution, run } = namedPolicyCase();
+        deps.pullRequestService.setApprovalReasonDeliveryFailure.mockImplementation(
+            async (_org, _repo, _number, failure) => {
+                (input.pr as any).approvalReasonDeliveryFailure = failure;
+                return true;
+            },
+        );
+        deps.codeManagementService.createIssueComment
+            .mockRejectedValueOnce(
+                new Error('Provider temporarily unavailable'),
+            )
+            .mockResolvedValue({ id: 42 });
+        expect(await run()).toBe(true);
+        expect((input.pr as any).approvalReasonDeliveryFailure).toMatchObject({
+            decision: 'approve',
+            reviewedHeadSha: 'head',
+            reviewedBaseSha: 'base',
+        });
+        // A cron approval may use a policy edited after the saved review.
+        // Retry its original reason, rather than attributing another policy.
+        execution.dataExecution.approvalDecision.reason =
+            'A different saved review decision.';
+        expect(await run()).toBe(false);
+        expect(
+            deps.codeManagementService.approvePullRequest,
+        ).toHaveBeenCalledTimes(1);
+        expect(deps.approvalPolicies.evaluate).toHaveBeenCalledTimes(1);
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledTimes(2);
+        expect((input.pr as any).approvalReasonDeliveryFailure).toBeNull();
+        expect(
+            deps.codeManagementService.createIssueComment.mock.calls[1][0].body,
+        ).toContain('Approved by policy “Docs”.');
+        await run();
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledTimes(2);
+    });
+
+    it.each(['head', 'base', 'unbound', 'hold'])(
+        'does not attribute an existing approval to a stale or unrelated failed reason (%s)',
+        async (mismatch) => {
+            const { deps, input, run } = namedPolicyCase();
+            (input.pr as any).approvalReasonDeliveryFailure = {
+                decision: mismatch === 'hold' ? 'hold' : 'approve',
+                reason: 'Approved by policy “Docs”.',
+                occurredAt: new Date().toISOString(),
+                reviewedHeadSha:
+                    mismatch === 'head'
+                        ? 'old'
+                        : mismatch === 'unbound'
+                          ? undefined
+                          : 'head',
+                reviewedBaseSha: mismatch === 'base' ? 'old' : 'base',
+            };
+            deps.codeManagementService.getReviewStatusByPullRequest
+                .mockReset()
+                .mockResolvedValue(PullRequestReviewState.APPROVED);
+            expect(await run()).toBe(false);
+            expect(
+                deps.codeManagementService.approvePullRequest,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).not.toHaveBeenCalled();
+        },
+    );
+
+    it('keeps a failed approval reason pending when its retry snapshot cannot be read', async () => {
+        const { deps, input, reviewed, run } = namedPolicyCase();
+        const failure = {
+            decision: 'approve',
+            reason: reviewed.reason,
+            occurredAt: new Date().toISOString(),
+            reviewedHeadSha: 'head',
+            reviewedBaseSha: 'base',
+        };
+        (input.pr as any).approvalReasonDeliveryFailure = failure;
+        deps.codeManagementService.getReviewStatusByPullRequest
+            .mockReset()
+            .mockResolvedValue(PullRequestReviewState.APPROVED);
+        deps.codeManagementService.getPullRequest.mockRejectedValue(
+            new Error('Provider unavailable'),
+        );
+        expect(await run()).toBe(false);
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.pullRequestService.setApprovalReasonDeliveryFailure,
+        ).not.toHaveBeenCalled();
+        expect((input.pr as any).approvalReasonDeliveryFailure).toBe(failure);
+    });
+
     it('publishes no-match outcomes and never falls back to the old generic approval path', async () => {
         const { deps, input, run } = namedPolicyCase();
         input.codeReviewConfig.approvalPolicies = [];

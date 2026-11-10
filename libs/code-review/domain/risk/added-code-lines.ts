@@ -6,6 +6,7 @@ export function addedCodeLines(
 ): string | undefined {
     const hashComments = filename.toLowerCase().endsWith('.py');
     const rustLiterals = /\.rs$/i.test(filename);
+    const csharp = /\.cs$/i.test(filename);
     const templateExpressions = /\.[cm]?[jt]sx?$/i.test(filename);
     const hunks = patch.split(/^@@.*@@.*$/m);
     // A full unified diff has a preamble before its first hunk. Inside a
@@ -40,7 +41,7 @@ export function addedCodeLines(
         // Missing language context cannot certify a lexical signal;
         // callers keep the judgment unknown rather than treating it as safe.
         if (
-            (/\.cs$/i.test(filename) && /@\$?"|"{3,}/.test(source)) ||
+            (csharp && /@\$?"|"{3,}/.test(source)) ||
             (/\.rs$/i.test(filename) &&
                 /\b(?:br|r)#*"|'\p{ID_Start}\p{ID_Continue}*(?![\p{ID_Continue}'])/u.test(
                     source,
@@ -167,6 +168,10 @@ export function addedCodeLines(
                 continue;
             }
             if (char === '"' || char === "'" || char === '`') {
+                // C# interpolation can contain executable expressions. Until
+                // parsed, it cannot certify an absence of control flow.
+                if (csharp && char === '"' && source[index - 1] === '$')
+                    return undefined;
                 const precededByIdentifier = /\p{ID_Continue}/u.test(
                     source[index - 1] ?? '',
                 );

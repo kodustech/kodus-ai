@@ -173,7 +173,13 @@ describe('ResolveConfigStage — input contract', () => {
 
         const result = await stage.execute(context);
 
-        expect(prManager.getChangedFilesMetadata).not.toHaveBeenCalled();
+        expect(prManager.getChangedFilesMetadata).toHaveBeenCalledWith(
+            ORG,
+            REPO,
+            PR,
+            undefined,
+            undefined,
+        );
         expect(codeBaseConfig.getConfig).toHaveBeenCalledWith(
             ORG,
             REPO,

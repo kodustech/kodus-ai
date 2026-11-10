@@ -281,6 +281,8 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     customAgentRiskSkips?: Array<{ id: string; reason: string }>;
     /** Complete base-to-head diff; never filtered for incremental review or ignorePaths. */
     fullPrFiles?: FileChange[];
+    /** A partial diff could not establish which risk configuration applies. */
+    riskConfigurationUnavailable?: boolean;
 
     // Resultados dos comentários de nível de PR
     prLevelCommentResults?: Array<CommentResult>;

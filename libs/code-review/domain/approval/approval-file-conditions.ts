@@ -95,8 +95,9 @@ export function evaluateApprovalFileConditions(
         if (
             file.isBinary ||
             file.lineCountVerified === false ||
-            (file.status &&
-                file.status !== 'renamed' &&
+            // Providers also report 0/0 for modified binary renames.
+            // A patchless zero count needs independent verification.
+            (file.lineCountVerified !== true &&
                 !file.patch &&
                 file.additions === 0 &&
                 file.deletions === 0)

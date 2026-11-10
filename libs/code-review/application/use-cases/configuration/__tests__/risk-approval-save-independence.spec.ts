@@ -1,5 +1,7 @@
 import { UpdateOrCreateCodeReviewParameterUseCase } from '../update-or-create-code-review-parameter-use-case';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { resolveReviewSettings } from '@libs/code-review/domain/approval/migrate-review-settings';
+import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 
 function setup(approvalActive: boolean, provider = PlatformType.GITHUB) {
     const stored = {
@@ -92,6 +94,62 @@ it('does not write inherited policy arrays into untouched directory scopes on an
     expect(dir.configs).toEqual({ approvalAuthors: ['build-bot'] });
     expect(dir.configs).not.toHaveProperty('approvalPolicies');
 });
+
+it.each([
+    {},
+    { repositoryId: 'repo' },
+    { repositoryId: 'repo', directoryId: 'dir' },
+])(
+    'keeps explicit legacy resets after save, resolve and an unrelated save at %j',
+    async (scope) => {
+        const { run, save, stored } = setup(true);
+        (stored.configs as any).approvalRiskInstructions =
+            'Check account isolation.';
+        stored.repositories[0].directories[0].configs = {} as any;
+        save.mockImplementation(async (_org, value) => {
+            Object.assign(stored, structuredClone(value));
+            return true;
+        });
+        const read = () =>
+            resolveReviewSettings(
+                getDefaultKodusConfigFile(),
+                stored.configs,
+                ...('repositoryId' in scope
+                    ? [stored.repositories[0].configs]
+                    : []),
+                ...('directoryId' in scope
+                    ? [stored.repositories[0].directories[0].configs]
+                    : []),
+            );
+        await run(
+            {
+                approvalPolicies: [],
+                riskAssessmentActive: false,
+                riskCriteria: [],
+            },
+            scope,
+        );
+        expect(read()).toMatchObject({
+            approvalPolicies: [],
+            riskAssessmentActive: false,
+            riskCriteria: [],
+        });
+        await run(
+            {
+                runOnDraft: false,
+                riskAssessmentActive: undefined,
+                approvalPolicies: undefined,
+                riskCriteria: undefined,
+            },
+            scope,
+        );
+        expect(read()).toMatchObject({
+            approvalPolicies: [],
+            riskAssessmentActive: false,
+            riskCriteria: [],
+        });
+    },
+);
 
 it('refuses a parent policy change that would leave legacy child restrictions ambiguous', async () => {
     const { run, save } = setup(true);

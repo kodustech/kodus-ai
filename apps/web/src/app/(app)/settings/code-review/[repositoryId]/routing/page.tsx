@@ -92,12 +92,18 @@ function ModeRow({
                     field.value ?? fallback,
                 );
                 return (
-                    <div>
+                    <div role="group" aria-label={label}>
                         <div className="grid max-w-3xl grid-cols-1 items-start gap-4 py-5 sm:grid-cols-[12rem_minmax(0,1fr)]">
                             <div>
-                                <span className="text-text-primary text-sm font-medium">
-                                    {label}
-                                </span>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-text-primary text-sm font-medium">
+                                        {label}
+                                    </span>
+                                    <OverrideIndicatorForm
+                                        fieldName={name.replace(/\.value$/, "")}
+                                        disabled={disabled || field.disabled}
+                                    />
+                                </div>
                                 {description && (
                                     <p className="text-text-secondary mt-1 text-sm leading-6">
                                         {description}
@@ -540,18 +546,6 @@ function RoutingSettings() {
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                                 <Heading variant="h3">Review mode</Heading>
-                                <OverrideIndicatorForm
-                                    disabled={
-                                        !canEdit ||
-                                        !!isCheckingProvider ||
-                                        saving
-                                    }
-                                    fieldName={
-                                        routing.active
-                                            ? "riskReviewRouting"
-                                            : "reviewMode"
-                                    }
-                                />
                             </div>
                             <Link
                                 href={riskHref}

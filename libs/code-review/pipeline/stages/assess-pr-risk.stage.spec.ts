@@ -264,3 +264,61 @@ it('reuses an exact saved snapshot without another model call and reassesses cha
     });
     expect(assessPrRisk).toHaveBeenCalledTimes(2);
 });
+
+it.each([0, 1])(
+    'reassesses after a stable-ID endpoint edit on model %s',
+    async (edited) => {
+        const stored = {
+            version: 2,
+            credentials: ['primary', 'fallback'].map((id) => ({
+                id,
+                provider: 'openai',
+                apiKey: 'encrypted',
+                settings: { baseURL: `https://${id}.example/v1` },
+            })),
+            models: [
+                { id: 'primary', credentialId: 'primary', model: 'gpt-4o' },
+                {
+                    id: 'fallback',
+                    credentialId: 'fallback',
+                    model: 'gpt-4o-mini',
+                },
+            ],
+            routing: { defaultModelId: 'primary', fallbackModelId: 'fallback' },
+        };
+        parameters.findByKey.mockResolvedValue({ configValue: stored });
+        jest.mocked(assessPrRisk).mockImplementation(async (input) => ({
+            status: 'assessed',
+            riskIdentified: false,
+            reason: 'No material exposure.',
+            snapshot: prRiskSnapshot(input),
+        }));
+        const first = await stage.execute(context());
+        const ctx = {
+            ...context(),
+            lastExecution: { riskAssessment: first.riskAssessment },
+        };
+        await stage.execute(ctx);
+        expect(assessPrRisk).toHaveBeenCalledTimes(1);
+        stored.credentials[edited].settings.baseURL =
+            'https://edited.example/v1';
+        const changed = await stage.execute(ctx);
+        expect(assessPrRisk).toHaveBeenCalledTimes(2);
+        if (
+            changed.riskAssessment.status !== 'assessed' ||
+            first.riskAssessment.status !== 'assessed'
+        )
+            throw new Error(
+                'Both model configurations must produce assessed snapshots.',
+            );
+        expect(changed.riskAssessment.snapshot.configurationKey).not.toBe(
+            first.riskAssessment.snapshot.configurationKey,
+        );
+        stored.credentials[edited].apiKey = 'rotated-secret';
+        await stage.execute({
+            ...ctx,
+            lastExecution: { riskAssessment: changed.riskAssessment },
+        });
+        expect(assessPrRisk).toHaveBeenCalledTimes(2);
+    },
+);

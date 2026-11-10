@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom";
 
 import { useState } from "react";
+import { TooltipProvider } from "@components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
     act,
@@ -165,10 +166,6 @@ jest.mock("src/core/providers/selected-team-context", () => ({
 jest.mock("../../_components/centralized-config-readonly-alert", () => ({
     CentralizedConfigReadOnlyAlert: () => null,
 }));
-jest.mock("../../_components/override", () => ({
-    OverrideIndicatorForm: () => null,
-    OverrideIndicator: () => null,
-}));
 jest.mock("next/navigation", () => ({
     useRouter: () => ({ push: mockPush, refresh: mockRefresh }),
     redirect: (href: string) => {
@@ -219,7 +216,9 @@ const mount = (
     }
     const view = render(
         <QueryClientProvider client={queryClient}>
-            <Harness />
+            <TooltipProvider>
+                <Harness />
+            </TooltipProvider>
         </QueryClientProvider>,
     );
     return { ...view, queryClient, refreshEnvironment: () => act(update) };
@@ -315,6 +314,48 @@ it("saves only the changed outcome and retains the inherited other outcome", asy
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0][0]).toEqual({
         riskReviewRouting: { noRisk: "heavy" },
+    });
+});
+
+it("restores each routing override independently with the native indicator", async () => {
+    mockRepo = "repo";
+    mount(true, false, {
+        riskReviewRouting: {
+            noRisk: {
+                value: "heavy",
+                level: "repository",
+                overriddenValue: "balanced",
+                overriddenLevel: "global",
+            },
+            riskFound: {
+                value: "balanced",
+                level: "repository",
+                overriddenValue: "heavy",
+                overriddenLevel: "global",
+            },
+        },
+    });
+    const noRisk = screen.getByRole("group", { name: "No risk found" });
+    const riskFound = screen.getByRole("group", { name: "Risk found" });
+    const noRiskBadge = within(noRisk).getByText("Overridden");
+    expect(within(riskFound).getByText("Overridden")).toBeInTheDocument();
+    fireEvent.click(
+        noRiskBadge
+            .closest("[data-decorative]")!
+            .parentElement!.querySelector("svg")!,
+    );
+    expect(within(noRisk).getByRole("combobox")).toHaveTextContent("Balanced");
+    expect(within(noRisk).queryByText("Overridden")).not.toBeInTheDocument();
+    expect(within(riskFound).getByText("Overridden")).toBeInTheDocument();
+    await waitFor(() =>
+        expect(
+            screen.getByRole("button", { name: "Save settings" }),
+        ).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][0]).toEqual({
+        riskReviewRouting: { noRisk: "balanced" },
     });
 });
 
