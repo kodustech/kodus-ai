@@ -26,7 +26,11 @@ const CLASS_BRIEF: Record<VulnClass, { name: string; hunt: string; notIt: string
         hunt: `- A handler that loads, changes or deletes a record by an id the caller sends (path, query, body, header) without checking the record belongs to the caller or that the caller's role allows it.
 - A route or resolver that is missing the guard, decorator or middleware its siblings use, so an unauthenticated or lower-privileged caller reaches it.
 - A check done on the wrong object (checks the parent but loads the child by another id), on client-controlled data (a role or tenant id taken from the request body), or only in the UI.
-- Mass assignment: a request body copied into a record so the caller can set owner, role, tenant or price fields.`,
+- Mass assignment: a request body copied into a record so the caller can set owner, role, tenant or price fields.
+- A grant, role, membership, API key or permission row that is looked up or changed without the tenant it belongs to (by user id alone, by "the first row", across organizations), so a grant made in one tenant acts in another.
+- A check that allows when its list or id is empty or missing ("no repositories given" read as "all of them"), or that reads the id from one place (query) while the handler acts on another (body).
+- Every door to the same account or operation: password login, OAuth, SSO, password reset, CLI or device login, API keys. A policy an organization sets (SSO only, 2FA required, an IP allow-list) that one door enforces and another skips, or that only the browser enforces.
+- Access that outlives its removal: a removed member, a deactivated or unconfirmed user, a revoked key or a downgraded role whose sessions, tokens or cached permissions keep working.`,
         notIt: 'A route that is public by design (login, health, a public listing) is not a finding. "Add rate limiting" or "add an authorization layer" with no concrete record or route the caller can reach is not a finding.',
     },
     injection: {
@@ -61,7 +65,12 @@ const CLASS_BRIEF: Record<VulnClass, { name: string; hunt: string; notIt: string
 - Tokens, session ids, reset codes or keys generated with a non-cryptographic random source (random, Math.random, rand).
 - Weak or broken cryptography protecting data: DES, RC4, ECB mode, a static IV, MD5 or SHA-1 for signatures or integrity.
 - JWT or signature verification that is disabled, accepts the "none" algorithm, or skips the signature.
-- Identity checks that compare case-insensitively or after normalization in one place and not the other.`,
+- Identity checks that compare case-insensitively or after normalization in one place and not the other, or that resolve the user by a mutable attribute (email) instead of the token's subject.
+- A token issued for one purpose accepted for another: a login session token accepted as an email-confirmation, password-reset, invite or device-login token, because the verification checks the signature but not the token's type, purpose or audience.
+- Recovery that can be replayed or outlives its use: a reset or confirmation token that is not single-use, does not expire, or leaves earlier tokens valid; a password reset or change that leaves existing sessions and refresh tokens working.
+- Sessions that are not rotated on login or privilege change, stay valid after logout, or whose logout revokes a session other than the caller's.
+- Federated login that trusts what it should verify: an OAuth or OIDC token accepted without checking it was issued to this application (audience, issuer), a callback without a state bound to the session, or an external identity linked to an existing account by email alone, so an attacker who registered that email first, or controls it at the provider, owns the account.
+- A device or CLI login flow where the code shown to the user, or the handle polled for the result, lets someone other than the approving user collect the session.`,
         notIt: 'A placeholder value in an example or a test file, or a secret read from the environment, is not a finding.',
     },
     misconfiguration: {
