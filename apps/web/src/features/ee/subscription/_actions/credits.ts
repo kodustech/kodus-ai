@@ -123,7 +123,10 @@ export const updateCreditAutoTopUpAction = async (params: {
         // fields. Never claim a spending cap was saved without its response.
         if (
             params.monthlyLimitUsd !== undefined &&
-            result?.monthlyLimitUsd !== params.monthlyLimitUsd
+            (result?.monthlyLimitUsd !== params.monthlyLimitUsd ||
+                typeof result?.monthlyPurchasedUsd !== "number" ||
+                !Number.isFinite(result.monthlyPurchasedUsd) ||
+                result.monthlyPurchasedUsd < 0)
         ) {
             throw new Error("Monthly auto top-up limit was not saved");
         }

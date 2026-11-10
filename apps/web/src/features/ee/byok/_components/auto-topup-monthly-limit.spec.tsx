@@ -75,13 +75,26 @@ describe("monthly auto top-up limit", () => {
     );
 
     it("disables editing while saving or without permission", () => {
-        render(
-            <AutoTopUpMonthlyLimit auto={auto} disabled onSave={jest.fn()} />,
+        const save = jest.fn();
+        const { rerender } = render(
+            <AutoTopUpMonthlyLimit
+                auto={auto}
+                disabled={false}
+                onSave={save}
+            />,
         );
-        expect(screen.getByRole("spinbutton")).toBeDisabled();
+        fireEvent.change(screen.getByRole("spinbutton"), {
+            target: { value: "200" },
+        });
         expect(
             screen.getByRole("button", { name: "Save limit" }),
-        ).toBeDisabled();
+        ).toBeEnabled();
+        rerender(<AutoTopUpMonthlyLimit auto={auto} disabled onSave={save} />);
+        expect(screen.getByRole("spinbutton")).toBeDisabled();
+        const button = screen.getByRole("button", { name: "Save limit" });
+        expect(button).toBeDisabled();
+        fireEvent.click(button);
+        expect(save).not.toHaveBeenCalled();
     });
 
     it("shows confirmed usage, pending capacity and the UTC reset when the next pack is blocked", () => {

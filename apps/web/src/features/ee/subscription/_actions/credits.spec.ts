@@ -35,10 +35,15 @@ describe("monthly cap server action", () => {
         "preserves limit %p and checks billing update permission",
         async (monthlyLimitUsd) => {
             const params = { teamId: "team-1", enabled: true, monthlyLimitUsd };
-            updateMock.mockResolvedValue({ enabled: true, monthlyLimitUsd });
+            updateMock.mockResolvedValue({
+                enabled: true,
+                monthlyLimitUsd,
+                monthlyPurchasedUsd: 0,
+            });
             expect(await updateCreditAutoTopUpAction(params)).toEqual({
                 enabled: true,
                 monthlyLimitUsd,
+                monthlyPurchasedUsd: 0,
             });
             expect(canAccessMock).toHaveBeenCalledWith(
                 ResourceType.Billing,
@@ -70,6 +75,24 @@ describe("monthly cap server action", () => {
             }),
         ).rejects.toThrow("Failed to update auto top-up");
     });
+
+    it.each([undefined, NaN, -1, "0"])(
+        "rejects an echoed cap with invalid enforcement data %p",
+        async (monthlyPurchasedUsd) => {
+            updateMock.mockResolvedValue({
+                enabled: true,
+                monthlyLimitUsd: 100,
+                monthlyPurchasedUsd,
+            });
+            await expect(
+                updateCreditAutoTopUpAction({
+                    teamId: "team-1",
+                    enabled: true,
+                    monthlyLimitUsd: 100,
+                }),
+            ).rejects.toThrow("Failed to update auto top-up");
+        },
+    );
 
     it("surfaces validation failures instead of claiming the cap was saved", async () => {
         updateMock.mockRejectedValue(
