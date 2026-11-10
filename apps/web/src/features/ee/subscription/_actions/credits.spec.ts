@@ -223,13 +223,39 @@ describe("monthly cap server action", () => {
         });
     });
 
-    it.each(["settings", "card"])(
-        "returns a readable pending-charge result for %s without claiming success",
-        async (operation) => {
-            const error = new BillingHttpError(409, {
+    // Regression baseline: 6694fb0d3, before pending-charge handling was added.
+    // Both actions threw there; these cases require a serializable warning.
+    it.each([
+        {
+            operation: "settings",
+            envelope: "current",
+            body: {
                 code: "AUTO_TOP_UP_PENDING",
                 error: "Resolve the previous charge before changing its amount or card",
-            });
+            },
+        },
+        {
+            operation: "card",
+            envelope: "current",
+            body: {
+                code: "AUTO_TOP_UP_PENDING",
+                error: "Resolve the previous charge before changing its amount or card",
+            },
+        },
+        {
+            operation: "settings",
+            envelope: "legacy",
+            body: { error: "AUTO_TOP_UP_PENDING" },
+        },
+        {
+            operation: "card",
+            envelope: "legacy",
+            body: { error: "AUTO_TOP_UP_PENDING" },
+        },
+    ])(
+        "returns a readable pending-charge result for $operation ($envelope) without claiming success",
+        async ({ operation, body }) => {
+            const error = new BillingHttpError(409, body);
             updateMock.mockRejectedValue(error);
             removeMock.mockRejectedValue(error);
             const response =
@@ -246,6 +272,42 @@ describe("monthly cap server action", () => {
                 saveError:
                     "Resolve the previous charge before changing its amount or card",
             });
+        },
+    );
+
+    it("confirms a cleared cap when balance omits the unset limit", async () => {
+        updateMock.mockResolvedValue({ enabled: true, monthlyLimitUsd: null });
+        balanceMock.mockResolvedValue({
+            autoTopUp: { enabled: true, monthlyPurchasedUsd: 0 },
+        });
+        await expect(
+            updateCreditAutoTopUpAction({
+                teamId: "team-1",
+                enabled: true,
+                monthlyLimitUsd: null,
+            }),
+        ).resolves.toEqual({
+            enabled: true,
+            monthlyLimitUsd: null,
+            monthlyPurchasedUsd: 0,
+        });
+    });
+
+    it.each([null, { autoTopUp: null }])(
+        "does not treat missing balance %p as confirmation of an unlimited cap",
+        async (balance) => {
+            updateMock.mockResolvedValue({
+                enabled: true,
+                monthlyLimitUsd: null,
+            });
+            balanceMock.mockResolvedValue(balance);
+            await expect(
+                updateCreditAutoTopUpAction({
+                    teamId: "team-1",
+                    enabled: true,
+                    monthlyLimitUsd: null,
+                }),
+            ).rejects.toThrow("Failed to update auto top-up");
         },
     );
 

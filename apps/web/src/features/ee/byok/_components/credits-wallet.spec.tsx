@@ -114,9 +114,7 @@ describe("wallet pending-charge feedback", () => {
 
     it("does not announce card removal while the provider attempt is pending", async () => {
         const client = wallet();
-        fireEvent.click(
-            screen.getByRole("button", { name: /^Remove$/ }),
-        );
+        fireEvent.click(screen.getByRole("button", { name: /^Remove$/ }));
         await waitFor(() =>
             expect(toast).toHaveBeenCalledWith({
                 variant: "warning",

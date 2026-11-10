@@ -14,6 +14,20 @@ import {
 } from "../_services/billing/fetch";
 import { BillingHttpError } from "../_services/billing/utils";
 
+// New billing uses {code, error: readableMessage}; older error envelopes
+// put the machine code in error. Neither format reaches the UI verbatim.
+const isAutoTopUpPending = (error: unknown): boolean => {
+    if (!(error instanceof BillingHttpError)) return false;
+    const body = error.body as { code?: unknown; error?: unknown } | null;
+    return (
+        body?.code === "AUTO_TOP_UP_PENDING" ||
+        body?.error === "AUTO_TOP_UP_PENDING"
+    );
+};
+const autoTopUpPendingResult = {
+    saveError: "Resolve the previous charge before changing its amount or card",
+} as const;
+
 /** Balance + commercial parameters; null when billing has none / is down. */
 export const getCreditBalanceAction = async ({
     teamId,
@@ -129,7 +143,9 @@ export const updateCreditAutoTopUpAction = async (params: {
             await assertCanReadCredits();
             const balance = await getCreditBalance({ teamId: params.teamId });
             if (
-                balance?.autoTopUp?.monthlyLimitUsd !== params.monthlyLimitUsd
+                !balance?.autoTopUp ||
+                (balance.autoTopUp.monthlyLimitUsd ?? null) !==
+                    (params.monthlyLimitUsd ?? null)
             ) {
                 throw new Error(
                     "Monthly auto top-up limit could not be confirmed",
@@ -161,16 +177,7 @@ export const updateCreditAutoTopUpAction = async (params: {
         }
         return result;
     } catch (error) {
-        if (
-            error instanceof BillingHttpError &&
-            (error.body as { code?: unknown } | null)?.code ===
-                "AUTO_TOP_UP_PENDING"
-        ) {
-            return {
-                saveError:
-                    "Resolve the previous charge before changing its amount or card",
-            } as const;
-        }
+        if (isAutoTopUpPending(error)) return autoTopUpPendingResult;
         console.error("Failed to update auto top-up:", error);
         // Billing answers 409 NO_PAYMENT_METHOD when no card is saved and
         // 400 INVALID_* for a bad pair; surface the code so the UI can react.
@@ -205,16 +212,7 @@ export const removeCreditPaymentMethodAction = async (params: {
     try {
         return await removeCreditPaymentMethod(params);
     } catch (error) {
-        if (
-            error instanceof BillingHttpError &&
-            (error.body as { code?: unknown } | null)?.code ===
-                "AUTO_TOP_UP_PENDING"
-        ) {
-            return {
-                saveError:
-                    "Resolve the previous charge before changing its amount or card",
-            } as const;
-        }
+        if (isAutoTopUpPending(error)) return autoTopUpPendingResult;
         console.error("Failed to remove the card:", error);
         throw new Error("Failed to remove the card");
     }
