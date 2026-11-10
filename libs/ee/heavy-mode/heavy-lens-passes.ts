@@ -3,7 +3,8 @@
  * next to the generalist. Teams / Enterprise plan gated at runtime via
  * `isHeavyModePlanAllowed` (heavy-mode-plan.ts).
  */
-import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
+import type { AgentRunner, AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
+import type { RunState } from '@libs/agent-harness/domain/contracts/run-state.contract';
 import type {
     ToolContext,
     ToolRegistry,
@@ -43,6 +44,7 @@ import {
     gapAgentMaxSteps,
 } from './gap-agents';
 import { bugHistoryLens, pastBugsFor, selectPastBugs } from './bug-history';
+import { DEBATE_SYSTEM_PROMPT, type DebateVariant, debateProfiles, runDebate } from './debate';
 import {
     HEAVY_LENS_MAX_FINDINGS,
     HEAVY_LENS_MAX_STEPS,
@@ -66,6 +68,21 @@ export interface HeavyLensPass {
     /** Whether the pass's findings stand, asked once the pass ends (the fuzz
      *  agent's stand only when a fuzzer run failed). */
     keepsFindings?: () => boolean;
+    /** A pass that is more than one run (the debate, debate.ts): it runs
+     *  itself and returns its findings and every run it made. */
+    run?: (
+        params: Parameters<HeavyLensRun>[0],
+        ctx: ToolContext,
+    ) => Promise<{ suggestions: FinderSuggestion[]; states: RunState[] }>;
+}
+
+/** The debate's second reviewer on another model (debate.ts). */
+export interface DebatePartner {
+    runner: AgentRunner;
+    modelId: string;
+    fallbackModelId?: string;
+    providerOptions?: Readonly<Record<string, unknown>>;
+    contextWindowTokens?: number;
 }
 
 /** What the lenses need from the finder's run environment. */
@@ -93,6 +110,8 @@ export interface HeavyLensEnvironment {
     remoteCommands?: RemoteCommands;
     /** The sandbox can run a program (E2B): the code-execution agent runs. */
     sandboxCanRun?: boolean;
+    /** The debate's second reviewer runs on this model; absent → the same. */
+    debatePartner?: DebatePartner;
 }
 
 /**
@@ -137,7 +156,68 @@ export function buildHeavyLensPasses(
             providerOptions: env.providerOptions,
             acceptsRevisions: !!input.previousDecisions?.length,
         }),
-    })), ...buildGapAgentPasses(env, lensDiff), ...buildBugHistoryPasses(env, lensDiff)];
+    })), ...buildGapAgentPasses(env, lensDiff), ...buildBugHistoryPasses(env, lensDiff), ...buildDebatePasses(env, lensDiff)];
+}
+
+/**
+ * The debate experiment (debate.ts): one pass per variant, each two
+ * reviewers with the finder's tools. The second runs on the partner's model
+ * when there is one. Needs the repository, so not self-contained.
+ */
+function buildDebatePasses(env: HeavyLensEnvironment, lensDiff: string): HeavyLensPass[] {
+    const { input } = env;
+    if (env.isSelfContained) return [];
+    const allowed = input.allowedLabels;
+    const maxSteps = gapAgentMaxSteps((input.changedFiles ?? []).length);
+    const partner = env.debatePartner;
+    const specFor = (labels: FinderLabel[], onPartner: boolean) => {
+        const window = onPartner ? (partner!.contextWindowTokens ?? env.contextWindowTokens) : env.contextWindowTokens;
+        return buildFinderAgentSpec({
+            systemPrompt: DEBATE_SYSTEM_PROMPT,
+            modelId: onPartner ? partner!.modelId : env.modelId,
+            fallbackModelId: onPartner ? partner!.fallbackModelId : env.fallbackModelId,
+            usageRunName: input.usageRunName,
+            agentName: input.agentName,
+            tools: env.tools,
+            labels,
+            compressor: window ? new ContextWindowCompressor(window, { overheadTokens: env.overheadTokens }) : undefined,
+            maxSteps,
+            providerOptions: onPartner ? partner!.providerOptions : env.providerOptions,
+            acceptsRevisions: !!input.previousDecisions?.length,
+        });
+    };
+    return (['attack', 'focus'] as DebateVariant[]).flatMap((variant) => {
+        const profiles = debateProfiles(variant).map((p) => ({ ...p, labels: p.labels.filter((l) => !allowed || allowed.includes(l)) }));
+        if (profiles.some((p) => !p.labels.length)) return [];
+        const [a, b] = profiles;
+        const specA = specFor(a.labels, false);
+        const specB = specFor(b.labels, !!partner);
+        const label = `lens-debate-${variant}`;
+        return [
+            {
+                label,
+                findingLabel: a.labels[0],
+                prompt: '',
+                spec: specA,
+                run: async (params, ctx) => {
+                    const out = await runDebate({
+                        variant,
+                        label,
+                        sides: [
+                            { profile: a, runner: params.runner, spec: specA, modelId: env.modelId },
+                            { profile: b, runner: partner?.runner ?? params.runner, spec: specB, modelId: partner?.modelId ?? env.modelId },
+                        ],
+                        diffText: lensDiff,
+                        claudeWording: env.claudeWording,
+                        lensBatch: input.lensBatch,
+                        params,
+                        ctx,
+                    });
+                    return { suggestions: out.suggestions, states: out.states };
+                },
+            },
+        ];
+    });
 }
 
 /**
@@ -256,6 +336,17 @@ export async function runHeavyLensPasses(
     const settled = await Promise.allSettled(
         passes.map(async (pass) => {
             const passT0 = Date.now();
+            if (pass.run) {
+                const out = await pass.run(params, ctx);
+                return {
+                    pass,
+                    state: out.states[0],
+                    extraStates: out.states.slice(1),
+                    suggestions: out.suggestions.map((s) => ({ ...s, producedBy: pass.label })),
+                    ms: Date.now() - passT0,
+                    passT0,
+                };
+            }
             const state = await params.runner.run(
                 pass.spec,
                 {
@@ -317,6 +408,7 @@ export async function runHeavyLensPasses(
             return {
                 pass,
                 state,
+                extraStates: [] as RunState[],
                 suggestions,
                 ms: Date.now() - passT0,
                 passT0,
@@ -346,8 +438,11 @@ export async function runHeavyLensPasses(
         }
         const { pass, state, ms, passT0 } = r.value;
         suggestions.push(...r.value.suggestions);
-        usage = sumVerifyUsage(usage, usageOf(state.usage));
-        for (const f of strongFilesFromRun(state)) investigatedFiles.add(f);
+        for (const s of [state, ...r.value.extraStates].filter(Boolean)) {
+            usage = sumVerifyUsage(usage, usageOf(s.usage));
+            for (const f of strongFilesFromRun(s)) investigatedFiles.add(f);
+        }
+        if (!state) return;
         passStats.push(
             passStatOf(state, {
                 label: pass.label,
