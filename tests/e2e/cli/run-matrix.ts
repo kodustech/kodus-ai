@@ -146,7 +146,12 @@ const SCENARIO_REQUIRED: Record<string, ScenarioRequirement> = {
     },
     // The risk preview creates and archives its private per-run repository.
     "risk-routing-pipeline": {
-        env: ["GH_REPO_ADMIN_TOKEN"],
+        env: [
+            "GH_REPO_ADMIN_TOKEN",
+            "RUNO",
+            "HEAD_REF",
+            "CLOUD_RISK_POLICY_TENANT_EMAIL",
+        ],
     },
 };
 

@@ -1005,11 +1005,25 @@ export const riskRoutingPipeline: Scenario = {
         );
         let scenarioFailed = false;
         try {
-            const provider = makeProvider(
-                'github',
-                'cloud',
-                fullName,
-                ctx.provider.authToken(),
+            const provider = makeProvider('github', 'cloud', fullName);
+            // authToken() is the product's reviewer credential. The harness
+            // must keep GH_TEST_TOKEN as the PR author: GitHub forbids self-approval.
+            const reviewer = await http<{ id: number }>(
+                'https://api.github.com/user',
+                {
+                    headers: {
+                        Authorization: `Bearer ${provider.authToken()}`,
+                        Accept: 'application/vnd.github+json',
+                    },
+                    timeoutMs: 15_000,
+                },
+            );
+            ctx.assert(
+                reviewer.status === 200 &&
+                    typeof reviewer.body?.id === 'number' &&
+                    String(reviewer.body.id) !==
+                        (await provider.currentUserId()),
+                'QA PR author and integration must be different GitHub accounts.',
             );
             const isolated: RunContext = {
                 ...ctx,
