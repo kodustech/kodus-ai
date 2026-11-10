@@ -119,13 +119,37 @@ describe('IntegrationService.getPlatformAuthDetails — credential identity', ()
         expect(result.authUpdatedAt).toBe(updatedAt);
     });
 
-    it('still returns null when there is no integration', async () => {
-        const service = makeService(null);
-        await expect(
-            service.getPlatformAuthDetails(
-                { organizationId: 'org-1', teamId: 'team-1' },
-                PlatformType.GITHUB,
-            ),
-        ).resolves.toBeNull();
+    it('reflects the row as it is on each read, so a rewritten credential reads as a new identity', async () => {
+        const authDetails = { authToken: 'encrypted', authMode: 'token' };
+        const later = new Date('2026-11-11T09:00:00.000Z');
+        const findOne = jest
+            .fn()
+            .mockResolvedValueOnce({
+                uuid: 'integration-1',
+                authIntegration: { uuid: 'auth-row-1', updatedAt, authDetails },
+            })
+            .mockResolvedValueOnce({
+                uuid: 'integration-1',
+                authIntegration: {
+                    uuid: 'auth-row-1',
+                    updatedAt: later,
+                    authDetails,
+                },
+            });
+        const service = new IntegrationService({ findOne } as any, {} as any);
+        const tenant = { organizationId: 'org-1', teamId: 'team-1' };
+
+        const first = await service.getPlatformAuthDetails<any>(
+            tenant,
+            PlatformType.GITHUB,
+        );
+        const second = await service.getPlatformAuthDetails<any>(
+            tenant,
+            PlatformType.GITHUB,
+        );
+
+        expect(first.authUpdatedAt).toBe(updatedAt);
+        expect(second.authUpdatedAt).toBe(later);
+        expect(second.authIntegrationId).toBe('auth-row-1');
     });
 });

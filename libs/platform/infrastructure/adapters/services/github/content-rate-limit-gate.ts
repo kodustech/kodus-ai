@@ -28,13 +28,26 @@ export class ContentRateLimitGate {
     // classifyGitHubError uses to compute a retry-after deadline.
     constructor(private readonly now: () => number = () => Date.now()) {}
 
-    /** Whether `error` is a GitHub rate limit (primary or secondary). */
-    isRateLimit(error: unknown): boolean {
-        return isRateLimitError(classifyGitHubError(error));
+    /**
+     * Whether `error` says the credential's primary bucket is empty
+     * (`x-ratelimit-remaining: 0`). Every other read with this credential
+     * fails the same way until the reset. A secondary (burst) limit is not
+     * this: another request, such as the base-ref fallback, can succeed.
+     */
+    isBucketExhausted(error: unknown): boolean {
+        const classified = classifyGitHubError(error);
+        return isRateLimitError(classified) && classified.remaining === 0;
     }
 
-    /** Records the window when `error` is a GitHub rate limit. */
-    record(tenant: string, error: unknown): void {
+    /**
+     * Records the window when `error` is a GitHub rate limit (primary or
+     * secondary). No key — the credential could not be identified — records
+     * nothing, so an unknown credential never gates the tenant's others.
+     */
+    record(tenant: string | undefined, error: unknown): void {
+        if (!tenant) {
+            return;
+        }
         const classified = classifyGitHubError(error);
         if (!isRateLimitError(classified)) {
             return;
@@ -52,8 +65,11 @@ export class ContentRateLimitGate {
         }
     }
 
-    /** Milliseconds until the tenant may call again; 0 when open. */
-    blockedForMs(tenant: string): number {
+    /** Milliseconds until the tenant may call again; 0 when open or unkeyed. */
+    blockedForMs(tenant: string | undefined): number {
+        if (!tenant) {
+            return 0;
+        }
         const until = this.blockedUntil.get(tenant);
         if (until === undefined) {
             return 0;
@@ -111,6 +127,10 @@ export const contentRateLimitGate = new ContentRateLimitGate();
  *    reconnect creates a new row. Nothing derived from the token is used.
  *    Another write to the row only opens the gate early: the next read gets
  *    the 403 again and closes it.
+ *
+ * Undefined when neither identifies the credential (for instance the auth
+ * lookup failed and returned a bare `{ authMode }`): the caller then skips
+ * the gate entirely rather than gating the whole tenant under one key.
  */
 export const contentRateLimitKey = (
     organizationAndTeamData?: { organizationId?: string; teamId?: string },
@@ -118,7 +138,7 @@ export const contentRateLimitKey = (
         GithubAuthDetail,
         'authMode' | 'installationId' | 'authIntegrationId' | 'authUpdatedAt'
     > | null,
-): string => {
+): string | undefined => {
     const tenant = `${organizationAndTeamData?.organizationId ?? 'no-org'}:${organizationAndTeamData?.teamId ?? 'no-team'}`;
 
     if (authDetail?.authMode === AuthMode.OAUTH && authDetail.installationId) {
@@ -126,11 +146,11 @@ export const contentRateLimitKey = (
     }
 
     const row = authDetail?.authIntegrationId;
-    const writtenAt = toIsoOrUndefined(authDetail?.authUpdatedAt);
-    if (row || writtenAt) {
-        return `${tenant}:token:${row ?? 'no-row'}:${writtenAt ?? 'no-date'}`;
+    if (!row) {
+        return undefined;
     }
-    return `${tenant}:unknown`;
+    const writtenAt = toIsoOrUndefined(authDetail?.authUpdatedAt);
+    return `${tenant}:token:${row}:${writtenAt ?? 'no-date'}`;
 };
 
 // The same instant compares equal whether it arrives as a Date (TypeORM) or

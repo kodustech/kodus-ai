@@ -5565,9 +5565,10 @@ This is an experimental feature that generates committable changes. Review the d
                     throw error;
                 }
 
-                // Rate limited: the base read hits the same exhausted bucket.
-                // The outer catch records the window.
-                if (contentRateLimitGate.isRateLimit(error)) {
+                // Primary bucket empty: the base read hits the same exhausted
+                // bucket. A secondary (burst) limit still tries the base, as
+                // before. The outer catch records the window either way.
+                if (contentRateLimitGate.isBucketExhausted(error)) {
                     throw error;
                 }
 
@@ -5582,9 +5583,7 @@ This is an experimental feature that generates committable changes. Review the d
                 return lines;
             }
         } catch (error) {
-            if (rateLimitKey) {
-                contentRateLimitGate.record(rateLimitKey, error);
-            }
+            contentRateLimitGate.record(rateLimitKey, error);
             const status =
                 (error as any)?.status ?? (error as any)?.response?.status;
             if (status === 404) {

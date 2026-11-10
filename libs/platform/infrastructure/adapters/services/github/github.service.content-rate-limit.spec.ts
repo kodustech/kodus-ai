@@ -127,12 +127,36 @@ describe('GithubService.getRepositoryContentFile — rate-limit gate', () => {
         contentRateLimitGate.reset();
     });
 
-    it('does not try the base ref when the head read is rate limited', async () => {
+    it('does not try the base ref when the head read finds the bucket empty', async () => {
         const getContent = jest.fn().mockRejectedValue(primaryRateLimit());
         const { service } = makeService(getContent);
 
         await expect(read(service)).resolves.toBeUndefined();
         expect(getContent).toHaveBeenCalledTimes(1);
+    });
+
+    it('still tries the base ref after a secondary (burst) limit on the head, as before', async () => {
+        const getContent = jest
+            .fn()
+            .mockRejectedValueOnce(secondaryRateLimit(60))
+            .mockResolvedValueOnce(ok);
+        const { service } = makeService(getContent);
+
+        await expect(read(service)).resolves.toEqual(ok);
+        expect(getContent).toHaveBeenCalledTimes(2);
+        expect(getContent.mock.calls[1][0].ref).toBe('main');
+    });
+
+    it('never gates when the credential cannot be identified', async () => {
+        // The auth lookup failed: getGithubAuthDetails returns a bare mode.
+        const getContent = limitedThenOk();
+        const { service } = makeService(getContent, {
+            authDetail: { authMode: AuthMode.OAUTH },
+        });
+
+        await read(service, 'src/a.ts');
+        await expect(read(service, 'src/b.ts')).resolves.toEqual(ok);
+        expect(getContent).toHaveBeenCalledTimes(2);
     });
 
     it('skips further reads inside the window without building a client, logging once', async () => {
@@ -195,19 +219,22 @@ describe('GithubService.getRepositoryContentFile — rate-limit gate', () => {
     it('resumes reading after the window closes', async () => {
         jest.useFakeTimers({ now: new Date('2026-11-10T12:00:00Z') });
         try {
+            // Secondary limit on head and on the base fallback.
             const getContent = jest
                 .fn()
+                .mockRejectedValueOnce(secondaryRateLimit(60))
                 .mockRejectedValueOnce(secondaryRateLimit(60))
                 .mockResolvedValue(ok);
             const { service } = makeService(getContent);
 
             await read(service, 'src/a.ts');
+            expect(getContent).toHaveBeenCalledTimes(2);
             await expect(read(service, 'src/b.ts')).resolves.toBeUndefined();
-            expect(getContent).toHaveBeenCalledTimes(1);
+            expect(getContent).toHaveBeenCalledTimes(2);
 
             jest.setSystemTime(new Date('2026-11-10T12:01:01Z'));
             await expect(read(service, 'src/c.ts')).resolves.toEqual(ok);
-            expect(getContent).toHaveBeenCalledTimes(2);
+            expect(getContent).toHaveBeenCalledTimes(3);
         } finally {
             jest.useRealTimers();
         }
@@ -357,15 +384,14 @@ describe('contentRateLimitKey', () => {
         );
     });
 
-    it('falls back to the tenant when no credential row is known', () => {
+    it('gives no key, instead of a tenant-wide one, when the credential is not identified', () => {
         const tokenWithoutRow = { authMode: AuthMode.TOKEN, authToken: 'x' };
-        expect(contentRateLimitKey(tenant, tokenWithoutRow)).toBe(
-            'org-1:team-1:unknown',
-        );
-        expect(contentRateLimitKey(tenant, null)).toBe('org-1:team-1:unknown');
-        expect(contentRateLimitKey(undefined, undefined)).toBe(
-            'no-org:no-team:unknown',
-        );
+        expect(contentRateLimitKey(tenant, tokenWithoutRow)).toBeUndefined();
+        expect(
+            contentRateLimitKey(tenant, { authMode: AuthMode.OAUTH }),
+        ).toBeUndefined();
+        expect(contentRateLimitKey(tenant, null)).toBeUndefined();
+        expect(contentRateLimitKey(undefined, undefined)).toBeUndefined();
     });
 });
 
@@ -382,16 +408,29 @@ describe('ContentRateLimitGate', () => {
     it('ignores errors that are not rate limits', () => {
         const g = gate();
         for (const error of [new Error('boom'), forbidden()]) {
-            expect(g.isRateLimit(error)).toBe(false);
+            expect(g.isBucketExhausted(error)).toBe(false);
             g.record('t', error);
         }
         expect(g.blockedForMs('t')).toBe(0);
     });
 
+    it('tells an empty primary bucket from a secondary limit', () => {
+        const g = gate();
+        expect(g.isBucketExhausted(primaryRateLimit())).toBe(true);
+        expect(g.isBucketExhausted(secondaryRateLimit(60))).toBe(false);
+        expect(g.isBucketExhausted(secondaryRateLimit(60, 429))).toBe(false);
+    });
+
+    it('records and gates nothing without a key', () => {
+        const g = gate();
+        g.record(undefined, primaryRateLimit());
+        expect(g.blockedForMs(undefined)).toBe(0);
+        expect((g as any).blockedUntil.size).toBe(0);
+    });
+
     it('caps a far-future reset at one hour', () => {
         const g = gate();
         const farFuture = primaryRateLimit(86_400);
-        expect(g.isRateLimit(farFuture)).toBe(true);
         g.record('t', farFuture);
         expect(g.blockedForMs('t')).toBeGreaterThan(0);
         expect(g.blockedForMs('t')).toBeLessThanOrEqual(60 * 60 * 1000);
