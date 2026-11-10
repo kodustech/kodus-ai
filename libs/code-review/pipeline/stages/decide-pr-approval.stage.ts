@@ -1,4 +1,5 @@
 import { usesNamedApprovalPolicies } from '@libs/code-review/domain/approval/migrate-review-settings';
+import { REVIEW_SETTINGS_HOLD_REASON } from '@libs/code-review/domain/approval/unavailable-review-settings';
 import { Inject, Injectable } from '@nestjs/common';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
@@ -71,7 +72,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
             return this.updateContext(context, (draft) => {
                 draft.approvalDecision = {
                     kind: 'hold',
-                    reason: config.reviewSettingsError,
+                    reason: REVIEW_SETTINGS_HOLD_REASON,
                 };
             });
         }

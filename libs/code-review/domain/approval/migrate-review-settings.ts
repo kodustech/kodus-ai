@@ -28,6 +28,36 @@ const own = (source: object, key: string) =>
     Object.prototype.hasOwnProperty.call(source, key) &&
     (source as Record<string, unknown>)[key] !== undefined;
 
+/** Resolve just activation without merging/parsing unrelated review settings. */
+export function resolveRiskActivation(
+    defaults: DeepPartial<CodeReviewConfig>,
+    ...sources: object[]
+) {
+    let approvalActive = !!defaults.pullRequestApprovalActive;
+    let choice: { independent: boolean; active: boolean } | undefined;
+    let source: 'legacy' | 'independent' = 'legacy';
+    for (const raw of sources) {
+        const layer = raw as Partial<CodeReviewConfig>;
+        if (own(raw, 'pullRequestApprovalActive'))
+            approvalActive = !!layer.pullRequestApprovalActive;
+        if (own(raw, 'riskAssessmentActive') || own(raw, 'riskCriteria'))
+            source = 'independent';
+        if (own(raw, 'riskAssessmentActive')) {
+            if (typeof layer.riskAssessmentActive !== 'boolean')
+                throw new Error('Invalid risk assessment setting.');
+            choice = { independent: true, active: layer.riskAssessmentActive };
+        } else if (own(raw, 'approvalRiskActive')) {
+            choice = { independent: false, active: !!layer.approvalRiskActive };
+        }
+    }
+    return {
+        source,
+        active: choice
+            ? choice.active && (choice.independent || approvalActive)
+            : approvalActive && !!defaults.approvalRiskActive,
+    };
+}
+
 /** Translate aliases at their source priority, before defaults or lower canonical fields can mask them. */
 export function resolveReviewSettings(
     defaults: DeepPartial<CodeReviewConfig>,
@@ -35,9 +65,8 @@ export function resolveReviewSettings(
 ): CodeReviewConfig {
     const effective = deepMerge(defaults, ...sources) as CodeReviewConfig;
     const saved = deepMerge(...sources) as Partial<CodeReviewConfig>;
-    let riskChoice: { independent: boolean; active: boolean } | undefined;
+    const riskActivation = resolveRiskActivation(defaults, ...sources);
     let approvalPolicySource: 'legacy' | 'named' = 'legacy';
-    let riskAssessmentSource: 'legacy' | 'independent' = 'legacy';
     let policies: NamedApprovalPolicy[] = approvalPoliciesSchema.parse([
         {
             id: 'legacy-approval',
@@ -51,20 +80,6 @@ export function resolveReviewSettings(
     let legacyRoutingMode = defaults.reviewMode;
     for (const source of sources) {
         const layer = source as Partial<CodeReviewConfig>;
-        if (own(source, 'riskAssessmentActive') || own(source, 'riskCriteria'))
-            riskAssessmentSource = 'independent';
-        if (own(source, 'riskAssessmentActive')) {
-            if (typeof layer.riskAssessmentActive !== 'boolean')
-                throw new Error('Invalid risk assessment setting.');
-            riskChoice = {
-                independent: true,
-                active: layer.riskAssessmentActive,
-            };
-        } else if (own(source, 'approvalRiskActive'))
-            riskChoice = {
-                independent: false,
-                active: !!layer.approvalRiskActive,
-            };
         if (own(source, 'riskReviewRouting')) {
             riskReviewRoutingSchema.parse(layer.riskReviewRouting);
         } else if (own(source, 'reviewMode')) {
@@ -123,12 +138,8 @@ export function resolveReviewSettings(
     return {
         ...effective,
         approvalPolicySource,
-        riskAssessmentSource,
-        riskAssessmentActive: riskChoice
-            ? riskChoice.active &&
-              (riskChoice.independent || !!effective.pullRequestApprovalActive)
-            : !!effective.pullRequestApprovalActive &&
-              !!effective.approvalRiskActive,
+        riskAssessmentSource: riskActivation.source,
+        riskAssessmentActive: riskActivation.active,
         riskCriteria: criteria,
         approvalPolicies: policies,
         riskReviewRouting: {

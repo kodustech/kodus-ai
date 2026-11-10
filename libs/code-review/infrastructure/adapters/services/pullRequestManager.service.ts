@@ -88,7 +88,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
             } else {
                 options?.onDiffSource?.('none');
                 // Retrieve all files changed in the pull request. Pass
-                // `headSha` so the GitHub adapter can memoize by (PR, SHA)
+                // `headSha` and `baseSha` so the adapter binds cached files to both refs
                 // — `getChangedFilesMetadata` will hit the same key in the
                 // same job, halving the GitHub fan-out.
                 changedFiles =
@@ -97,6 +97,9 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                         repository,
                         prNumber: pullRequest?.number,
                         headSha: pullRequest?.head?.sha,
+                        ...(pullRequest?.base?.sha
+                            ? { baseSha: pullRequest.base.sha }
+                            : {}),
                     });
             }
 
@@ -325,9 +328,12 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                         prNumber: pullRequest?.number,
                         // Memoization key (see GithubService.getFilesByPullRequestId).
                         // The same call lands in `getChangedFiles` earlier in
-                        // the pipeline; same (PR, SHA) → cache hit, no extra
+                        // the pipeline; same (PR, head, base) → cache hit, no extra
                         // GitHub round-trip on this second hop.
                         headSha: pullRequest?.head?.sha,
+                        ...(pullRequest?.base?.sha
+                            ? { baseSha: pullRequest.base.sha }
+                            : {}),
                     });
             }
 
@@ -405,6 +411,9 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                   repository,
                   prNumber: pullRequest?.number,
                   headSha: pullRequest?.head?.sha,
+                  ...(pullRequest?.base?.sha
+                      ? { baseSha: pullRequest.base.sha }
+                      : {}),
               })));
         // Not `[]`: that would skip the review as a PR with nothing new.
         // Readers answer an unreadable whole-PR list with `[]` too.
@@ -427,6 +436,9 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                 prNumber: pullRequest?.number,
                 lastCommitSha,
                 headSha: pullRequest?.head?.sha,
+                ...(pullRequest?.base?.sha
+                    ? { baseSha: pullRequest.base.sha }
+                    : {}),
                 fallback: useInterdiff ? 'interdiff' : 'full',
                 retargeted,
                 revertedFiles: interdiff?.revertedFiles.length ?? 0,

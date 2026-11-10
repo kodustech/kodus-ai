@@ -1,6 +1,8 @@
+import type { RiskAssessmentResult } from '@libs/code-review/domain/risk/risk-assessment';
 import * as yaml from 'js-yaml';
 import CodeBaseConfigService from '@libs/ee/codeBase/codeBaseConfig.service';
 import { GitlabMappedPlatform } from '@libs/common/utils/webhooks/gitlab';
+import { GithubMappedPlatform } from '@libs/common/utils/webhooks/github';
 import { GitlabService } from '@libs/platform/infrastructure/adapters/services/gitlab.service';
 import { AzureReposService } from '@libs/platform/infrastructure/adapters/services/azureRepos/azureRepos.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
@@ -15,8 +17,18 @@ import { FetchChangedFilesStage } from './fetch-changed-files.stage';
 import { DecidePrApprovalStage } from './decide-pr-approval.stage';
 import { RequestChangesOrApproveStage } from './finish-process-review.stage';
 import { LLM } from '@libs/llm/llm';
+import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
+import { UpdateCommentsAndGenerateSummaryStage } from './finish-comments.stage';
+import { BehaviourForExistingDescription } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 
 jest.mock('@libs/llm/llm', () => ({ LLM: { run: jest.fn() } }));
+
+function snapshotOf(risk: RiskAssessmentResult) {
+    if (risk.status !== 'assessed')
+        throw new Error('Expected an assessed risk snapshot');
+    return risk.snapshot;
+}
 
 const org = { organizationId: 'org', teamId: 'team' };
 const repository = { id: 'repo', name: 'api' };
@@ -70,8 +82,9 @@ function setup(
         findByKey: jest.fn(async () => null),
     };
     const host = {
-        getPullRequest: jest.fn(async (_input?: any) => livePr),
+        getPullRequest: jest.fn(async (_input?: any): Promise<any> => livePr),
         getFilesByPullRequestId: jest.fn(async () => files),
+        getPullRequestByNumber: jest.fn(async () => livePr),
         verifyConnection: jest.fn(async () => ({
             hasConnection: true,
             isSetupComplete: true,
@@ -245,6 +258,19 @@ it('never replaces a stale webhook head during hydration', async () => {
     expect(result.approvalDecision.kind).toBe('hold');
 });
 
+it('preserves rate-limit handling for essential snapshot hydration', async () => {
+    const s = setup({ riskAssessmentActive: true });
+    s.context.pullRequest = { ...livePr, base: {} };
+    s.metadata.getPullRequestDetails = async () => {
+        throw { status: 429 };
+    };
+    const result = await s.resolve.execute(s.context);
+    expect(result.statusInfo.status).toBe(AutomationStatus.SKIPPED);
+    expect(result.statusInfo.message).toContain('rate-limit');
+    expect(s.metadata.getChangedFilesMetadata).not.toHaveBeenCalled();
+    expect(LLM.run).not.toHaveBeenCalled();
+});
+
 it.each(['removed', 'ignored', 'incremental'])(
     'does not confuse analysed-file stats with the full PR diff (%s)',
     async (variant) => {
@@ -282,6 +308,129 @@ it.each(['removed', 'ignored', 'incremental'])(
         });
     },
 );
+
+it('accepts a complete PR with fewer files than an incremental diff that reverts earlier changes', async () => {
+    const s = setup(
+        { riskAssessmentActive: true, approvalPolicies: [policy] },
+        { incremental: true },
+    );
+    s.context.pullRequest.changedFilesCount = 1;
+    s.metadata.getChangedFilesMetadata.mockImplementation(
+        async (_o, _r, _p, last) =>
+            last
+                ? [
+                      change('src/a.ts'),
+                      change('src/reverted-b.ts'),
+                      change('src/reverted-c.ts'),
+                  ]
+                : [change('src/a.ts')],
+    );
+    const reviewed = await s.fetch.execute(
+        await s.risk.execute(await s.resolve.execute(s.context)),
+    );
+    expect(reviewed.pullRequest.stats.total_files).toBe(3);
+    expect(reviewed.fullPrFiles).toHaveLength(1);
+    expect((await s.risk.execute(reviewed)).riskAssessment.status).toBe(
+        'assessed',
+    );
+    expect((await s.decide.execute(reviewed)).approvalDecision.kind).toBe(
+        'approve',
+    );
+});
+
+it('reassesses rather than reusing a stored result with a stale description key', async () => {
+    const s = setup({ riskAssessmentActive: true });
+    const resolved = await s.resolve.execute(s.context);
+    const first = await s.risk.execute(resolved);
+    const stored = {
+        ...first.riskAssessment,
+        snapshot: {
+            ...snapshotOf(first.riskAssessment),
+            descriptionKey: 'stale-key',
+        },
+    };
+    jest.mocked(LLM.run).mockClear();
+    const result = await s.risk.execute({
+        ...resolved,
+        lastExecution: { riskAssessment: stored },
+    } as any);
+    expect(LLM.run).toHaveBeenCalledTimes(1);
+    expect(snapshotOf(result.riskAssessment).descriptionKey).toBe(
+        snapshotOf(first.riskAssessment).descriptionKey,
+    );
+});
+
+it('holds risk and file policies when the live provider count proves the list is truncated', async () => {
+    const s = setup({ riskAssessmentActive: true, approvalPolicies: [policy] });
+    s.host.getPullRequest.mockResolvedValue({
+        ...livePr,
+        changedFilesCount: 2,
+    });
+    const result = await s.risk.execute(await s.resolve.execute(s.context));
+    expect(result.riskAssessment).toMatchObject({
+        status: 'unavailable',
+        reason: 'Kody could not verify the complete PR diff.',
+    });
+    expect(LLM.run).not.toHaveBeenCalled();
+    const noRisk = {
+        ...result,
+        codeReviewConfig: {
+            ...result.codeReviewConfig,
+            riskAssessmentActive: false,
+        },
+    };
+    expect((await s.decide.execute(noRisk)).approvalDecision).toMatchObject({
+        kind: 'hold',
+        reason: 'The complete PR file list could not be verified.',
+    });
+});
+
+it('skips an incomplete primary review diff when its provider count is already known', async () => {
+    const s = setup({ riskAssessmentActive: false });
+    s.context.pullRequest = new GithubMappedPlatform().mapPullRequest({
+        payload: {
+            pull_request: {
+                number: 7,
+                title: 'Change',
+                changed_files: 2,
+                head: { sha: 'head', ref: 'feature' },
+                base: { sha: 'base', ref: 'main' },
+            },
+        } as any,
+    });
+    expect(s.context.pullRequest.changedFilesCount).toBe(2);
+    const result = await s.resolve.execute(s.context);
+    expect(result.statusInfo.status).toBe(AutomationStatus.SKIPPED);
+    expect(result.codeReviewConfig).toBeUndefined();
+    expect(LLM.run).not.toHaveBeenCalled();
+});
+
+it('checks possible risk activation without rereading common policies per directory', async () => {
+    const readsFor = async (count: number) => {
+        const s = setup(
+            { riskAssessmentActive: false },
+            {
+                directories: Array.from({ length: count }, (_, i) => ({
+                    id: `d${i}`,
+                    path: `dir${i}`,
+                    configs: {},
+                })),
+            },
+        );
+        let reads = 0;
+        Object.defineProperty(s.stored.configs, 'approvalPolicies', {
+            enumerable: true,
+            get: () => {
+                reads++;
+                return [policy];
+            },
+        });
+        const resolved = await s.resolve.execute(s.context);
+        expect(resolved.codeReviewConfig.riskAssessmentMayBeActive).toBe(false);
+        return reads;
+    };
+    expect(await readsFor(200)).toBe(await readsFor(2));
+});
 
 it('does not fetch a full incremental diff or invent a risk veto for an organization with risk off everywhere', async () => {
     const s = setup({}, { incremental: true });
@@ -401,6 +550,131 @@ it('binds migrated conditional approvals to the same reviewed head, base and met
     expect(stale.approvalDecision.kind).toBe('hold');
     await s.finish.execute(result);
     expect(s.host.approvePullRequest).not.toHaveBeenCalled();
+});
+
+it.each([
+    [BehaviourForExistingDescription.CONCATENATE, false],
+    [BehaviourForExistingDescription.REPLACE, false],
+    [BehaviourForExistingDescription.REPLACE, true],
+])(
+    'binds the real summary write only while the assessed context is current (%s, author edit=%s)',
+    async (behaviour, authorEdit) => {
+        const s = setup({
+            riskAssessmentActive: true,
+            approvalPolicies: [policy],
+            summary: {
+                generatePRSummary: true,
+                behaviourForExistingDescription: behaviour,
+            },
+        });
+        let live = { ...livePr, body: 'Human-authored context. Closes #12' };
+        s.context.pullRequest = live;
+        s.context.initialCommentData = { commentId: 1 };
+        s.host.getPullRequest.mockImplementation(async () => live);
+        s.host.getPullRequestByNumber.mockImplementation(async () => live);
+        const writer = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            { resolveTaskSlot: async () => undefined } as any,
+            {
+                ...s.host,
+                updateDescriptionInPullRequest: async ({ summary }) => {
+                    live = { ...live, body: summary };
+                },
+            } as any,
+            {} as any,
+        );
+        // Script the model output; use production summary formatting and host writing.
+        jest.spyOn(writer as any, 'runSummaryPromptV5').mockImplementation(
+            async () => {
+                if (authorEdit)
+                    live = {
+                        ...live,
+                        body: 'New human context while the model was running.',
+                    };
+                return '## Summary\nUpdated the constant.';
+            },
+        );
+        const stage = new UpdateCommentsAndGenerateSummaryStage(
+            writer,
+            s.metadata as any,
+            {} as any,
+            s.host as any,
+        );
+        const assessed = await s.fetch.execute(
+            await s.risk.execute(await s.resolve.execute(s.context)),
+        );
+        const result = await s.decide.execute(
+            await stage.execute({
+                ...assessed,
+                pullRequestMessagesConfig: {
+                    endReviewMessage: { status: PullRequestMessageStatus.OFF },
+                },
+            } as any),
+        );
+        expect(live.body).not.toBe(s.context.pullRequest.body);
+        expect(result.approvalDecision.kind).toBe(
+            authorEdit ? 'hold' : 'approve',
+        );
+        if (authorEdit) {
+            expect(live.body).toBe(
+                'New human context while the model was running.',
+            );
+            expect(snapshotOf(result.riskAssessment).descriptionKey).toBe(
+                snapshotOf(assessed.riskAssessment).descriptionKey,
+            );
+        } else
+            expect(snapshotOf(result.riskAssessment).descriptionKey).not.toBe(
+                snapshotOf(assessed.riskAssessment).descriptionKey,
+            );
+        await s.finish.execute(result);
+        expect(s.host.approvePullRequest).toHaveBeenCalledTimes(
+            authorEdit ? 0 : 1,
+        );
+    },
+);
+
+it('keeps parser details private and logs the actual configuration scope', async () => {
+    const s = setup(
+        { approvalPolicies: [policy] },
+        { file: { approvalLabels: ['automerge'] } },
+    );
+    const warn = jest.spyOn((s.config as any).logger, 'warn');
+    try {
+        const result = await s.decide.execute(
+            await s.fetch.execute(await s.resolve.execute(s.context)),
+        );
+        expect(result.codeReviewConfig.reviewSettingsError).toContain(
+            'Legacy approval filters',
+        );
+        expect(result.approvalDecision.reason).toBe(
+            'Risk or approval settings are invalid. Check your configuration.',
+        );
+        await s.finish.execute(result);
+        expect(s.messages.postApprovalReason).toHaveBeenCalledWith(
+            org,
+            7,
+            repository,
+            'Risk or approval settings are invalid. Check your configuration.',
+            'hold',
+        );
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                error: expect.objectContaining({
+                    message: expect.stringContaining('Legacy approval filters'),
+                }),
+                metadata: expect.objectContaining({
+                    organizationAndTeamData: org,
+                    repositoryId: 'repo',
+                    defaultBranch: 'main',
+                }),
+            }),
+        );
+    } finally {
+        warn.mockRestore();
+    }
 });
 
 it.each([false, true])(

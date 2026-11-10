@@ -30,6 +30,7 @@ import type {
     FileChange,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { hasCompletePrFileList } from '@libs/code-review/domain/review-files';
 import { riskCriteriaSchema } from '@libs/core/infrastructure/config/types/general/risk-assessment';
 
 export interface PrRiskAssessmentRequest {
@@ -42,6 +43,7 @@ export interface PrRiskAssessmentRequest {
         head?: { sha?: string };
         base?: { sha?: string };
         stats?: { total_files: number };
+        changedFilesCount?: number;
     };
     codeReviewConfig?: Pick<
         CodeReviewConfig,
@@ -123,8 +125,9 @@ export class PrRiskAssessmentService {
                     repository,
                     prNumber: pullRequest.number,
                     headSha,
+                    baseSha,
                 }));
-            if (!files?.length || files.some((file) => !file.filename)) {
+            if (!hasCompletePrFileList(files, pullRequest.changedFilesCount)) {
                 return unavailable(
                     'Kody could not verify the complete PR diff.',
                 );
@@ -139,6 +142,10 @@ export class PrRiskAssessmentService {
                     'The PR changed while Kody was reading its diff.',
                 );
             }
+            if (!hasCompletePrFileList(files, live.changedFilesCount))
+                return unavailable(
+                    'Kody could not verify the complete PR diff.',
+                );
             fullPrFiles = files;
             const stored = await this.organizationParameters.findByKey(
                 OrganizationParametersKey.BYOK_CONFIG,

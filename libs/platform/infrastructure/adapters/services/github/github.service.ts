@@ -4660,11 +4660,16 @@ export class GithubService
     }
 
     async getFilesByPullRequestId(params: any): Promise<any[] | null> {
-        const { organizationAndTeamData, repository, prNumber, headSha } =
-            params;
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            headSha,
+            baseSha,
+        } = params;
 
-        // Cache: the list of changed files for a PR at a specific HEAD
-        // SHA is immutable — pushing a new commit produces a new SHA.
+        // A full PR diff belongs to both refs. Retargeting can change its file
+        // list without a new head, so incomplete identities bypass the cache.
         // The pipeline calls this twice per job (PullRequestManagerService
         // `getChangedFiles` + `getChangedFilesMetadata`), and a paginated
         // PR can fan out into 5-15+ subrequests. Caching by (prNumber,
@@ -4673,9 +4678,10 @@ export class GithubService
         // Callers that don't pass `headSha` (legacy paths, cron jobs that
         // don't have the head SHA handy) skip the cache and pay the
         // original cost — same behavior as before.
-        const cacheKey = headSha
-            ? `gh:pr-files:${organizationAndTeamData?.organizationId ?? 'no-org'}:${repository?.id ?? repository?.name}:${prNumber}:${headSha}`
-            : null;
+        const cacheKey =
+            headSha && baseSha
+                ? `gh:pr-files:v2:${organizationAndTeamData?.organizationId ?? 'no-org'}:${repository?.id ?? repository?.name}:${prNumber}:${headSha}:${baseSha}`
+                : null;
         if (cacheKey) {
             const cached =
                 await this.cacheService.getFromCache<any[]>(cacheKey);
@@ -8920,6 +8926,10 @@ This is an experimental feature that generates committable changes. Review the d
             organizationId: organizationAndTeamData?.organizationId ?? '',
             title: pullRequest?.title ?? '',
             body: pullRequest?.body ?? '',
+            ...('changed_files' in pullRequest &&
+            typeof pullRequest.changed_files === 'number'
+                ? { changedFilesCount: pullRequest.changed_files }
+                : {}),
             labels: (pullRequest?.labels ?? [])
                 .map((label) =>
                     typeof label === 'string' ? label : label?.name,

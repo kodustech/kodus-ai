@@ -67,6 +67,17 @@ beforeEach(() => {
     jest.mocked(LLM.run).mockResolvedValue({ judgment: 'eligible' } as any);
 });
 
+it('never echoes private configuration errors in an approval decision', async () => {
+    const input = request();
+    input.config.reviewSettingsError =
+        'PRIVATE-INSTRUCTIONS from a malformed saved setting';
+    expect((await service().evaluate(input)).decision).toMatchObject({
+        kind: 'hold',
+        reason: 'Risk or approval settings are invalid. Check your configuration.',
+    });
+    expect(code.getPullRequest).not.toHaveBeenCalled();
+});
+
 it('uses the complete PR diff and persists explicit eligibility on the reviewed snapshot', async () => {
     const result = await service().evaluate(request());
     expect(result.decision).toMatchObject({

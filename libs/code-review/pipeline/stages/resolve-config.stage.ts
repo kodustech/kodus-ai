@@ -1,3 +1,4 @@
+import { hasCompletePrFileList } from '@libs/code-review/domain/review-files';
 import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { StageMessageHelper } from '@libs/core/infrastructure/pipeline/utils/stage-message.helper';
 import { PipelineReasons } from '@libs/core/infrastructure/pipeline/constants/pipeline-reasons.const';
@@ -87,9 +88,13 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                             ...pullRequest,
                             head: { ...pullRequest.head, sha: live.head.sha },
                             base: { ...pullRequest.base, sha: live.base.sha },
+                            ...(live.changedFilesCount !== undefined
+                                ? { changedFilesCount: live.changedFilesCount }
+                                : {}),
                         };
                     }
                 } catch (error) {
+                    if (is429Error(error)) throw error;
                     this.logger.warn({
                         message: 'Could not hydrate the reviewed PR snapshot',
                         context: this.stageName,
@@ -141,6 +146,18 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                 context.organizationAndTeamData,
             );
 
+            if (
+                !baseCommit &&
+                !context.rebaseInterdiffFiles &&
+                !hasCompletePrFileList(
+                    preliminaryFiles,
+                    pullRequest.changedFilesCount,
+                )
+            ) {
+                // This is the main review's diff, not an optional risk read.
+                throw new PullRequestChangesUnreadableError(pullRequest.number);
+            }
+
             let config = await this.codeBaseConfigService.getConfig(
                 context.organizationAndTeamData,
                 context.repository,
@@ -172,8 +189,10 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                 // complete diff only if they need it after the review.
                 if (fullPrFiles || needsPrWideSettings) {
                     if (
-                        !fullPrFiles?.length ||
-                        fullPrFiles.some((file) => !file.filename)
+                        !hasCompletePrFileList(
+                            fullPrFiles,
+                            pullRequest.changedFilesCount,
+                        )
                     ) {
                         throw new Error(
                             'The complete PR file list is unavailable',
@@ -212,6 +231,9 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                     }
                 }
             } catch (error) {
+                // Only the extra PR-wide risk read is optional. A 429 here
+                // keeps the incremental review in its default mode and vetoes
+                // approval; essential snapshot/diff reads use the outer skip.
                 this.logger.warn({
                     message:
                         'Could not resolve PR-wide risk and approval settings',

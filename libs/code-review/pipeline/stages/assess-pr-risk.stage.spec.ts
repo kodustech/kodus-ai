@@ -144,6 +144,17 @@ it('does not score when the provider rejects an incomplete file listing', async 
     expect(assessPrRisk).not.toHaveBeenCalled();
 });
 
+it('does not score a resolved provider listing with missing file paths', async () => {
+    management.getFilesByPullRequestId.mockResolvedValue([
+        { ...files[0], filename: undefined },
+    ]);
+    expect((await stage.execute(context())).riskAssessment).toMatchObject({
+        status: 'unavailable',
+        reason: 'Kody could not verify the complete PR diff.',
+    });
+    expect(assessPrRisk).not.toHaveBeenCalled();
+});
+
 it('keeps history failure unavailable instead of claiming no risk', async () => {
     maps.read.mockRejectedValue(new Error('database failed'));
     expect((await stage.execute(context())).riskAssessment).toMatchObject({

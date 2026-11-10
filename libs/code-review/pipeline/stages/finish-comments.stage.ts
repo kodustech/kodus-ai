@@ -49,6 +49,7 @@ import {
  * is trustworthy. #1844.
  */
 import { SUMMARY_GENERATION_FAILED_REASON } from '../constants/error-reasons';
+import { prRiskDescriptionKey } from '@libs/code-review/domain/risk/risk-configuration';
 
 /** The steps of the PR summary: read the PR and its changes, ask the model, write it to the PR. */
 type SummaryStep = 'collect' | 'generate' | 'publish';
@@ -305,12 +306,58 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
 
                 summaryStep = 'publish';
 
+                // A summary is Kody's own write, including replace mode. Bind
+                // that known transformation only if the assessed human context
+                // and both commits are still current immediately before it.
+                const risk = context.riskAssessment;
+                let publishedDescriptionKey: string | undefined;
+                if (
+                    risk?.status === 'assessed' &&
+                    currentPR &&
+                    risk.snapshot.descriptionKey ===
+                        prRiskDescriptionKey(currentPR)
+                ) {
+                    const beforePublish = await retryWithBackoff(
+                        () =>
+                            this.codeManagementService.getPullRequest({
+                                organizationAndTeamData,
+                                repository,
+                                prNumber: pullRequest.number,
+                            }),
+                        {
+                            maxAttempts: 3,
+                            shouldRetry: isTransientCodeHostError,
+                        },
+                    );
+                    if (
+                        beforePublish?.head?.sha === risk.snapshot.headSha &&
+                        beforePublish?.base?.sha === risk.snapshot.baseSha &&
+                        prRiskDescriptionKey(beforePublish) ===
+                            risk.snapshot.descriptionKey
+                    ) {
+                        publishedDescriptionKey = prRiskDescriptionKey({
+                            title: beforePublish.title,
+                            body: summaryPR,
+                        });
+                    } else {
+                        throw new Error(
+                            'The PR changed while Kody was generating its summary.',
+                        );
+                    }
+                }
+
                 await this.commentManagerService.updateSummarizationInPR(
                     organizationAndTeamData,
                     pullRequest.number,
                     repository,
                     summaryPR,
                 );
+                if (publishedDescriptionKey)
+                    context = this.updateContext(context, (draft) => {
+                        if (draft.riskAssessment?.status === 'assessed')
+                            draft.riskAssessment.snapshot.descriptionKey =
+                                publishedDescriptionKey;
+                    });
             } catch (error) {
                 // Terminal BYOK (suspended key / no credit) on the model call →
                 // warn: user's provider config, not a Kodus fault. A git

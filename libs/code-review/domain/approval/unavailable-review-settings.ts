@@ -1,5 +1,9 @@
 import type { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
+/** Public decisions never echo parser output or saved private instructions. */
+export const REVIEW_SETTINGS_HOLD_REASON =
+    'Risk or approval settings are invalid. Check your configuration.';
+
 const reviewSettingsKeys = [
     'approvalPolicies',
     'approvalLabels',

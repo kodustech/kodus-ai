@@ -1,3 +1,4 @@
+import { hasCompletePrFileList } from '@libs/code-review/domain/review-files';
 import { Inject, Injectable } from '@nestjs/common';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
@@ -91,7 +92,7 @@ export class ApprovalPoliciesService {
                 eligibility,
             };
         if (input.config.reviewSettingsError)
-            return hold(input.config.reviewSettingsError);
+            return hold(REVIEW_SETTINGS_HOLD_REASON);
         if (!input.reviewClean)
             return hold('The review is not clean or did not complete.');
         const riskVeto = riskApprovalVeto(
@@ -169,13 +170,16 @@ export class ApprovalPoliciesService {
                   (await this.codeManagement.getFilesByPullRequestId({
                       ...request,
                       headSha,
+                      baseSha,
                   })))
                 : [];
             // The host's file API must return a complete listing. Pipeline
             // stats count analysed files after ignore/deletion filtering.
+            // They are not a lower bound either: incremental reverts can make
+            // that subset larger than the current PR's complete file list.
             if (
                 needsFiles &&
-                (!files?.length || files.some((file) => !file.filename))
+                !hasCompletePrFileList(files, live.changedFilesCount)
             )
                 return hold('The complete PR file list could not be verified.');
             let modelLoaded = false;
@@ -291,3 +295,4 @@ export class ApprovalPoliciesService {
         }
     }
 }
+import { REVIEW_SETTINGS_HOLD_REASON } from '@libs/code-review/domain/approval/unavailable-review-settings';

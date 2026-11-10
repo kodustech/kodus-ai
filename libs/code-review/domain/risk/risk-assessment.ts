@@ -94,12 +94,17 @@ export function riskApprovalVeto(
     if (
         risk?.status !== 'assessed' ||
         !currentHeadSha ||
-        risk.snapshot.headSha !== currentHeadSha ||
-        (currentDescription &&
-            risk.snapshot.descriptionKey !==
-                prRiskDescriptionKey(currentDescription))
+        risk.snapshot.headSha !== currentHeadSha
     ) {
         return 'Risk assessment is unavailable for the current PR head.';
     }
+    if (currentDescription && !risk.snapshot.descriptionKey)
+        return 'Risk assessment is unavailable for the current PR context.';
+    if (
+        currentDescription &&
+        risk.snapshot.descriptionKey !==
+            prRiskDescriptionKey(currentDescription)
+    )
+        return 'The PR title or description changed after risk assessment.';
     return risk.riskIdentified ? 'Risk was identified in this PR.' : undefined;
 }

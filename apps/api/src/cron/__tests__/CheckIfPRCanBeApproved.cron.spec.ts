@@ -3018,6 +3018,70 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         },
     );
 
+    it('checks live description even when the legacy host-approval exception skips snapshot revalidation', async () => {
+        const { deps, run } = await legacyRiskCase('low', false);
+        const execution =
+            await deps.automationExecutionService.findLatestExecutionByFilters();
+        delete execution.dataExecution.approvalRisk;
+        execution.dataExecution.approvalDecision = { kind: 'approve' };
+        execution.dataExecution.riskAssessment = {
+            status: 'assessed',
+            riskIdentified: false,
+            reason: 'No risk.',
+            snapshot: {
+                organizationId: 'org-1',
+                repositoryId: 'repo-a',
+                prNumber: 1,
+                headSha: 'head',
+                baseSha: 'base',
+                assessmentKey: 'key',
+                configurationKey: prRiskConfigurationKey({}),
+                descriptionKey: prRiskDescriptionKey({
+                    title: 'Previous title',
+                }),
+            },
+        };
+        deps.codeManagementService.getReviewStatusByPullRequest
+            .mockReset()
+            .mockResolvedValue(PullRequestReviewState.APPROVED);
+        expect(await run()).toBe(false);
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining(
+                    'PR title or description changed',
+                ),
+            }),
+            PlatformType.GITLAB,
+        );
+    });
+
+    it('does not publish a private parser error through cron approval comments', async () => {
+        const { deps, input, run } = await legacyRiskCase('low', false);
+        input.codeReviewConfig.reviewSettingsError =
+            'PRIVATE-INSTRUCTIONS in malformed configuration';
+        expect(await run()).toBe(false);
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining(
+                    'Risk or approval settings are invalid. Check your configuration.',
+                ),
+            }),
+            PlatformType.GITLAB,
+        );
+        expect(
+            JSON.stringify(
+                deps.codeManagementService.createIssueComment.mock.calls,
+            ),
+        ).not.toContain('PRIVATE-INSTRUCTIONS');
+    });
+
     it('never approves a saved risk hold after a rename leaves its risk-enabled directory', async () => {
         const { cron, deps } = makeCron();
         useRealConfig(

@@ -1,4 +1,5 @@
 import { usesNamedApprovalPolicies } from '@libs/code-review/domain/approval/migrate-review-settings';
+import { REVIEW_SETTINGS_HOLD_REASON } from '@libs/code-review/domain/approval/unavailable-review-settings';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
@@ -1180,7 +1181,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     prNumber: pr.number,
                 },
                 pr.provider as PlatformType,
-                { kind: 'hold', reason: codeReviewConfig.reviewSettingsError },
+                { kind: 'hold', reason: REVIEW_SETTINGS_HOLD_REASON },
             );
             return false;
         }
@@ -1515,6 +1516,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                           codeReviewConfig?.riskAssessmentActive === true,
                           lastExecution.dataExecution.riskAssessment,
                           currentHeadSha,
+                          currentPullRequest,
                       )
                     : undefined;
                 if (sharedVeto) {

@@ -28,7 +28,14 @@ import { decrypt } from '@libs/common/utils/crypto';
 import { ValidateCodeManagementIntegration } from '@libs/common/utils/decorators/validate-code-management-integration.decorator';
 import { deepMerge } from '@libs/common/utils/deep';
 import { withDirectoryAgentLists } from '@libs/code-review/domain/custom-agents/directory-cascade';
-import { resolveReviewSettings } from '@libs/code-review/domain/approval/migrate-review-settings';
+import {
+    resolveReviewSettings,
+    resolveRiskActivation,
+} from '@libs/code-review/domain/approval/migrate-review-settings';
+import {
+    riskCriteriaSchema,
+    riskReviewRoutingSchema,
+} from '@libs/core/infrastructure/config/types/general/risk-assessment';
 import { unavailableReviewSettings } from '@libs/code-review/domain/approval/unavailable-review-settings';
 import { approvalPathsOf } from '@libs/code-review/domain/approval/approval-decision';
 import {
@@ -483,6 +490,19 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             ),
             directoryDelta,
         );
+        if (merged.reviewSettingsError)
+            this.logger.warn({
+                message: 'Invalid risk or approval settings',
+                context: CodeBaseConfigService.name,
+                error: new Error(merged.reviewSettingsError),
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository.id,
+                    repositoryName: repository.name,
+                    defaultBranch,
+                    directoryId: directoryConfig?.id,
+                },
+            });
 
         let configLevel = ConfigLevel.GLOBAL;
         let directoryId: string | undefined = undefined;
@@ -518,16 +538,30 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 (repoConfig.directories ?? []).some((directory) => {
                     if (this.getFileOverridePreference(repoConfig, directory))
                         return true;
-                    const possible = this.mergeReviewSettings(
-                        globalDelta || {},
-                        repoDelta || {},
-                        repositoryFileDelta || {},
-                        directory.configs || {},
-                    );
-                    return (
-                        !!possible.reviewSettingsError ||
-                        possible.riskAssessmentActive === true
-                    );
+                    const delta = directory.configs || {};
+                    // Only a directory's own fields need validation here;
+                    // common policies/agents were already resolved once above.
+                    if (
+                        (delta.riskCriteria !== undefined &&
+                            !riskCriteriaSchema.safeParse(delta.riskCriteria)
+                                .success) ||
+                        (delta.riskReviewRouting !== undefined &&
+                            !riskReviewRoutingSchema.safeParse(
+                                delta.riskReviewRouting,
+                            ).success)
+                    )
+                        return true;
+                    try {
+                        return resolveRiskActivation(
+                            this.DEFAULT_CONFIG,
+                            globalDelta || {},
+                            repoDelta || {},
+                            repositoryFileDelta || {},
+                            delta,
+                        ).active;
+                    } catch {
+                        return true;
+                    }
                 }),
             configLevel,
             directoryId,
@@ -568,10 +602,6 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             return resolveReviewSettings(this.DEFAULT_CONFIG, ...sources);
         } catch (error) {
             const reason = `Risk or approval settings are invalid: ${error instanceof Error ? error.message : 'Invalid configuration.'}`;
-            this.logger.warn({
-                message: reason,
-                context: CodeBaseConfigService.name,
-            });
             return resolveReviewSettings(
                 this.DEFAULT_CONFIG,
                 ...sources.map((source) =>
