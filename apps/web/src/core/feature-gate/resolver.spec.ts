@@ -165,16 +165,28 @@ describe("isFeatureEnabled (web resolver)", () => {
         ).toBe(true);
     });
 
-    it("counts BETA_FEATURES=1 as enabled, like the lib adapter", async () => {
+    it("reads every BETA_FEATURES encoding the lib adapter reads", async () => {
         // #2425: the checker took `1` while the adapters took only `true`, so
-        // the report printed `pass` for an install the API denied.
+        // the report printed `pass` for an install the API denied. Both
+        // encodings are asserted here, and `0` with them so accepting `1` does
+        // not leave the symmetric case resting on nothing matching.
         process.env.WEB_NODE_ENV = "self-hosted";
-        process.env.BETA_FEATURES = "1";
         featureMock.current = { ...baseFeature, stage: "beta" };
 
-        expect(
-            await isFeatureEnabled({ feature: "github-enterprise-server-pat" }),
-        ).toBe(true);
+        for (const [value, expected] of [
+            ["true", true],
+            ["1", true],
+            ["0", false],
+            ["false", false],
+        ] as const) {
+            process.env.BETA_FEATURES = value;
+
+            expect(
+                await isFeatureEnabled({
+                    feature: "github-enterprise-server-pat",
+                }),
+            ).toBe(expected);
+        }
     });
 
     it("falls through permissively when WEB_POSTHOG_KEY is unset in cloud", async () => {

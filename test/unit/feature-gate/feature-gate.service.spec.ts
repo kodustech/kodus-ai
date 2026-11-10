@@ -406,8 +406,10 @@ describe('FeatureGateService', () => {
             ).resolves.toBe(true);
         });
 
-        it('counts BETA_FEATURES=1 as enabled, like check-gate always did', async () => {
-            process.env.BETA_FEATURES = '1';
+        it('reads the same BETA_FEATURES encodings as the web mirror', async () => {
+            // Same value table as the resolver spec: `1` because check-gate
+            // always took it, `0` because accepting `1` makes the symmetric
+            // case look supported.
             mockedSnapshot.current = snapshotWith(
                 FEATURE_KEYS.githubEnterpriseServerPat,
                 {
@@ -417,9 +419,18 @@ describe('FeatureGateService', () => {
             );
             const svc = new FeatureGateService(fakePostHog() as never);
 
-            await expect(
-                svc.isEnabled(FEATURE_KEYS.githubEnterpriseServerPat, orgCtx),
-            ).resolves.toBe(true);
+            for (const [value, expected] of [
+                ['true', true],
+                ['1', true],
+                ['0', false],
+                ['false', false],
+            ] as const) {
+                process.env.BETA_FEATURES = value;
+
+                await expect(
+                    svc.isEnabled(FEATURE_KEYS.githubEnterpriseServerPat, orgCtx),
+                ).resolves.toBe(expected);
+            }
         });
 
         it('returns false for alpha features even with BETA_FEATURES=true', async () => {
