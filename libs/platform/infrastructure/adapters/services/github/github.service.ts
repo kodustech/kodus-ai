@@ -161,6 +161,10 @@ import {
     WebhookSetupResult,
 } from '../webhook-setup/webhook-setup';
 import { recordWebhookSetupOutcome } from '../webhook-setup/webhook-setup-failures.service';
+import {
+    contentRateLimitGate,
+    contentRateLimitKey,
+} from './content-rate-limit-gate';
 
 interface GitHubAuthResponse {
     token: string;
@@ -5439,6 +5443,9 @@ This is an experimental feature that generates committable changes. Review the d
     }
 
     async getRepositoryContentFile(params: any): Promise<any | null> {
+        // Set once the credential is known; the outer catch records a rate
+        // limit only for a read that got that far.
+        let rateLimitKey: string | undefined;
         try {
             const { organizationAndTeamData, repository, file, pullRequest } =
                 params;
@@ -5446,8 +5453,10 @@ This is an experimental feature that generates committable changes. Review the d
             const githubAuthDetail = await this.getGithubAuthDetails(
                 organizationAndTeamData,
             );
-
-            const octokit = await this.instanceOctokit(organizationAndTeamData);
+            rateLimitKey = contentRateLimitKey(
+                organizationAndTeamData,
+                githubAuthDetail,
+            );
 
             // Cache by BLOB sha (not branch+path) so the entry invalidates
             // automatically when the file content changes — pushing a new
@@ -5462,11 +5471,46 @@ This is an experimental feature that generates committable changes. Review the d
             const cacheKey = file?.sha
                 ? `gh:contents:${githubAuthDetail?.org}/${repository.name}:${file.sha}:${file.filename}`
                 : undefined;
-            if (cacheKey) {
-                const cached =
-                    await this.cacheService.getFromCache<any>(cacheKey);
+            const readCached = () =>
+                cacheKey
+                    ? this.cacheService.getFromCache<any>(cacheKey)
+                    : Promise.resolve(undefined);
+
+            // GitHub already said this credential's bucket is exhausted: any
+            // read until the reset fails with the same 403 and ends in the
+            // same `undefined` below. A cache hit still answers; otherwise
+            // skip the call, its two logs, and building the client.
+            const blockedForMs =
+                contentRateLimitGate.blockedForMs(rateLimitKey);
+            if (blockedForMs > 0) {
+                const cached = await readCached();
                 if (cached) return cached;
+                if (contentRateLimitGate.firstSkipInWindow(rateLimitKey)) {
+                    this.logger.warn({
+                        message:
+                            'GitHub rate limit open for this installation — skipping per-file content reads until it resets',
+                        context: GithubService.name,
+                        metadata: {
+                            organizationId:
+                                organizationAndTeamData?.organizationId,
+                            teamId: organizationAndTeamData?.teamId,
+                            repositoryName: repository?.name,
+                            prNumber: pullRequest?.number,
+                            resumeInSeconds: Math.ceil(blockedForMs / 1000),
+                        },
+                    });
+                }
+                return undefined;
             }
+
+            // Same order as before outside the window: client, then cache.
+            // The auth detail is already loaded; passing it saves a re-read.
+            const octokit = await this.instanceOctokit(
+                organizationAndTeamData,
+                githubAuthDetail,
+            );
+            const cached = await readCached();
+            if (cached) return cached;
 
             try {
                 // First, try to fetch from the head branch of the PR
@@ -5521,6 +5565,12 @@ This is an experimental feature that generates committable changes. Review the d
                     throw error;
                 }
 
+                // Rate limited: the base read hits the same exhausted bucket.
+                // The outer catch records the window.
+                if (contentRateLimitGate.isRateLimit(error)) {
+                    throw error;
+                }
+
                 // If it fails, try to fetch from the base branch
                 const lines = (await octokit.repos.getContent({
                     owner: githubAuthDetail?.org,
@@ -5532,6 +5582,9 @@ This is an experimental feature that generates committable changes. Review the d
                 return lines;
             }
         } catch (error) {
+            if (rateLimitKey) {
+                contentRateLimitGate.record(rateLimitKey, error);
+            }
             const status =
                 (error as any)?.status ?? (error as any)?.response?.status;
             if (status === 404) {
