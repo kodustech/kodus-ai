@@ -111,23 +111,6 @@ describe('loadRuleSourceReferences', () => {
         );
     });
 
-    it('treats a read that answers with something other than text as a failed read of that path only', async () => {
-        const logger = { warn: jest.fn() };
-        const index = await loadRuleSourceReferences(
-            [
-                { uuid: 'r1', rule: 'a', sourcePath: 'odd.md' },
-                { uuid: 'r2', rule: 'b', sourcePath: 'fine.md' },
-            ],
-            async (path) => (path === 'odd.md' ? (42 as any) : 'fine'),
-            { logger },
-        );
-
-        expect(index.has('r1')).toBe(false);
-        expect(index.get('r2')![0].content).toBe('fine');
-        expect(logger.warn).toHaveBeenCalledTimes(1);
-        expect(logger.warn.mock.calls[0][0].metadata.sourcePath).toBe('odd.md');
-    });
-
     it('skips rules without a sourcePath, empty files, and a missing sandbox', async () => {
         const read = jest.fn().mockResolvedValue('   ');
         expect(

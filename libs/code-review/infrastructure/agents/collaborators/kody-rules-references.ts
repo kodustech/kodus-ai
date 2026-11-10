@@ -91,13 +91,7 @@ export async function loadRuleSourceReferences(
         [...rulesByPath].map(async ([sourcePath, byUuid]) => {
             let content: string | undefined;
             try {
-                const answer: unknown = await read(sourcePath, 1, 100000);
-                if (answer != null && typeof answer !== 'string') {
-                    throw new Error(
-                        `read answered with ${typeof answer}, not text`,
-                    );
-                }
-                content = typeof answer === 'string' ? answer : undefined;
+                content = await read(sourcePath, 1, 100000);
             } catch (err) {
                 logger?.warn({
                     message: `kody-rules reference load failed for ${sourcePath}; judging ${byUuid.size} rule(s) without it`,
