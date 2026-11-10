@@ -171,6 +171,10 @@ it.each([
     ['src/status.rs', '+let note = b"return bytes";'],
     ['src/status.py', '+note = f"{{return placeholder}}"'],
     [
+        'src/status.tsx',
+        "--- a/return.tsx\n+++ b/return.tsx\n@@ -1 +1 @@\n+const title = <p>don't</p>;",
+    ],
+    [
         'src/status.ts',
         '--- a/return.ts\n+++ b/return.ts\n@@ -1 +1 @@\n+const count = 1;',
     ],
@@ -197,6 +201,9 @@ it.each([
     '+/* tests go here */',
     '+   ',
     '--- a/test.ts\n+++ b/test.ts\n@@ -1 +1 @@\n+// test coverage',
+    '--- a/test.ts\n+++ b/test.ts\n',
+    '+++ b/test.ts\n',
+    'diff --git a/test.ts b/test.ts\nold mode 100644\nnew mode 100755\n',
 ])(
     'does not count a test-only comment or whitespace as coverage: %s',
     async (patch) => {
@@ -280,7 +287,7 @@ it.each([
     '+const ratio = "value" / count; return authorize();',
     '++value; return authorize();',
     '+++value; return authorize();',
-    '+++ value; return authorize();',
+    '@@ -1 +1 @@\n+++ value; return authorize();',
     '--- a/status.ts\n+++ b/status.ts\n@@ -1 +1 @@\n+++value; return authorize();',
 ])('keeps executable code visible around literals: %s', async (patch) => {
     (LLM.run as jest.Mock).mockResolvedValue({
@@ -323,6 +330,9 @@ it.each([
 it.each([
     ['src/status.cs', '+var text = @"path\\"; return Authorize();'],
     ['src/status.rs', "+fn authorize<'a>() { return true; }"],
+    ['src/return.ts', '--- a/return.ts\n+++ b/return.ts\n'],
+    ['src/return.ts', '+++ b/return.ts\n'],
+    ['src/status.ts', '+++ value; return authorize();'],
     ['src/status.py', '+"""\n+if (disabled) return None\n+"""'],
     [
         'src/status.tsx',

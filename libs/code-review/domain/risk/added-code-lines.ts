@@ -2,17 +2,34 @@
 export function addedCodeLines(
     patch: string,
     filename: string,
+    addedPattern?: RegExp,
 ): string | undefined {
     const hashComments = filename.toLowerCase().endsWith('.py');
+    const rustLiterals = /\.rs$/i.test(filename);
     const templateExpressions = /\.[cm]?[jt]sx?$/i.test(filename);
     const hunks = patch.split(/^@@.*@@.*$/m);
     // A full unified diff has a preamble before its first hunk. Inside a
     // hunk, even `+++value` is added code, not a `+++ b/file` header.
     if (hunks.length > 1) hunks.shift();
-    const fragments = hunks.map((hunk) => {
-        const lines = hunk
+    else if (/^diff --git |^\+\+\+[ \t]/m.test(patch)) return undefined;
+    const chunks = hunks.map((hunk) =>
+        hunk
             .split('\n')
-            .filter((line) => line.startsWith(' ') || line.startsWith('+'));
+            .filter((line) => line.startsWith(' ') || line.startsWith('+')),
+    );
+    // Apply the cheap raw-code guard after removing metadata and before
+    // lexical analysis. A header filename must never trigger this check.
+    if (
+        addedPattern &&
+        !chunks.some((lines) =>
+            lines.some(
+                (line) =>
+                    line.startsWith('+') && addedPattern.test(line.slice(1)),
+            ),
+        )
+    )
+        return '';
+    const fragments = chunks.map((lines) => {
         if (!lines.length) return '';
         const source = lines.map((line) => line.slice(1)).join('\n');
         const addedOnly = (text: string) =>
@@ -150,17 +167,25 @@ export function addedCodeLines(
                 continue;
             }
             if (char === '"' || char === "'" || char === '`') {
+                const precededByIdentifier = /\p{ID_Continue}/u.test(
+                    source[index - 1] ?? '',
+                );
                 const prefix =
-                    source.slice(0, index).match(/[\p{ID_Continue}]+$/u)?.[0] ??
-                    '';
+                    char !== '`' &&
+                    (hashComments || rustLiterals) &&
+                    precededByIdentifier
+                        ? (source
+                              .slice(0, index)
+                              .match(/[\p{ID_Continue}]+$/u)?.[0] ?? '')
+                        : '';
                 const knownPrefix = hashComments
                     ? /^(?:[rubft]|br|rb|fr|rf|tr|rt)$/i.test(prefix)
-                    : /\.rs$/i.test(filename) &&
+                    : rustLiterals &&
                       (prefix === 'b' || (prefix === 'c' && char === '"'));
                 if (
                     !knownPrefix &&
                     char !== '`' &&
-                    /\p{ID_Continue}/u.test(source[index - 1] ?? '') &&
+                    precededByIdentifier &&
                     /\p{ID_Start}/u.test(next ?? '')
                 )
                     return undefined;

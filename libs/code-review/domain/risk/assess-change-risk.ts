@@ -35,10 +35,6 @@ const SOURCE_FILE = /\.(?:ts|tsx|js|jsx|py|go|java|cs|rs)$/i;
 const TEST_FILE =
     /(?:^|\/)(?:__tests__|tests?|specs?)(?:\/|\.|$)|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java))$/i;
 const ADDED_CONTROL_FLOW = /\b(?:if\s*\(|return\b|throw\b)/;
-const POSSIBLE_ADDED_CONTROL_FLOW = new RegExp(
-    `^\\+.*${ADDED_CONTROL_FLOW.source}`,
-    'm',
-);
 
 function controlFlowEvidence(
     files: FileChange[],
@@ -62,8 +58,11 @@ function controlFlowEvidence(
             TEST_FILE.test(file.filename)
         )
             continue;
-        if (!POSSIBLE_ADDED_CONTROL_FLOW.test(file.patch ?? '')) continue;
-        const code = addedCodeLines(file.patch ?? '', file.filename);
+        const code = addedCodeLines(
+            file.patch ?? '',
+            file.filename,
+            ADDED_CONTROL_FLOW,
+        );
         if (code === undefined) unverifiable = true;
         else if (ADDED_CONTROL_FLOW.test(code)) return 'untested';
     }
