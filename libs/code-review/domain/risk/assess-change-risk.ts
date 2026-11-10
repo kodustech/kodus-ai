@@ -10,6 +10,7 @@ import {
 } from '@libs/llm/error-classifier';
 import { createLogger } from '@libs/core/log/logger';
 import { CHANGE_RISK_PROMPT } from './change-risk-prompt';
+import { addedCodeLines } from './added-code-lines';
 
 /** Internal judgment retained for compatibility; public PR risk is binary. */
 export interface ChangeRiskAssessment {
@@ -33,22 +34,27 @@ const logger = createLogger('AssessApprovalRisk');
 const SOURCE_FILE = /\.(?:ts|tsx|js|jsx|py|go|java|cs|rs)$/i;
 const TEST_FILE =
     /(?:^|\/)(?:__tests__|tests?|specs?)(?:\/|\.|$)|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java))$/i;
-const ADDED_CONTROL_FLOW = /^\+(?!\+).*\b(?:if\s*\(|return\b|throw\b)/m;
-const ADDED_TEST_LINE = /^\+(?!\+).+/m;
+const ADDED_CONTROL_FLOW = /\b(?:if\s*\(|return\b|throw\b)/;
 
 function hasUntestedControlFlowChange(files: FileChange[]): boolean {
+    const codeByFile = new Map(
+        files.map((file) => [
+            file,
+            addedCodeLines(file.patch ?? '', file.filename),
+        ]),
+    );
     return (
         !files.some(
             (file) =>
                 file.status !== 'removed' &&
                 TEST_FILE.test(file.filename) &&
-                ADDED_TEST_LINE.test(file.patch ?? ''),
+                /\S/.test(codeByFile.get(file)!),
         ) &&
         files.some(
             (file) =>
                 SOURCE_FILE.test(file.filename) &&
                 !TEST_FILE.test(file.filename) &&
-                ADDED_CONTROL_FLOW.test(file.patch ?? ''),
+                ADDED_CONTROL_FLOW.test(codeByFile.get(file)!),
         )
     );
 }

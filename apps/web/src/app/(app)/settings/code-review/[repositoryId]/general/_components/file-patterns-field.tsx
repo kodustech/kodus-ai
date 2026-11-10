@@ -3,6 +3,10 @@
 import { useId, useState } from "react";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
+import {
+    MAX_FILE_PATTERN_LENGTH,
+    MAX_FILE_PATTERNS,
+} from "@libs/common/utils/glob-pattern-validation";
 
 import { FilePatternsEditor } from "./file-patterns-editor";
 
@@ -61,6 +65,8 @@ export function FilePatternsField({
                         onChange={onChange}
                         purpose={purpose}
                         compact
+                        maxPatterns={MAX_FILE_PATTERNS}
+                        maxPatternLength={MAX_FILE_PATTERN_LENGTH}
                         disabled={disabled}
                     />
                 </div>

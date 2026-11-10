@@ -12,7 +12,7 @@ import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 // SeverityLevel no longer used — request changes is driven by level classification
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
-import { SUMMARY_GENERATION_FAILED_REASON } from './finish-comments.stage';
+import { SUMMARY_GENERATION_FAILED_REASON } from '../constants/error-reasons';
 import type { ApprovalDecision } from '@libs/code-review/domain/approval/approval-decision';
 import { reviewsOnlyIgnoredFiles } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import {
@@ -253,35 +253,31 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
             await this.notifyAutoApproved(context);
         }
 
-        if (
-            !approved &&
-            codeReviewConfig.approvalPolicies !== undefined &&
-            context.approvalDecision?.kind === 'approve'
-        ) {
+        if (!approved && context.approvalDecision?.kind === 'approve') {
+            const reason =
+                'Automatic approval could not be confirmed. Run a new review if the PR changed.';
+            context = this.updateContext(context, (draft) => {
+                draft.approvalDecision = {
+                    ...context.approvalDecision,
+                    kind: 'hold',
+                    reason,
+                };
+            });
             try {
                 const status =
                     await this.codeManagementService.getReviewStatusByPullRequest(
                         { organizationAndTeamData, repository, prNumber },
                     );
-                const confirmed = status === PullRequestReviewState.APPROVED;
-                const reason = confirmed
-                    ? context.approvalDecision.reason
-                    : 'Automatic approval could not be confirmed. Run a new review if the PR changed.';
-                await this.commentManagerService.postApprovalReason(
-                    organizationAndTeamData,
-                    prNumber,
-                    repository,
-                    reason,
-                    confirmed ? 'approve' : 'hold',
-                );
-                if (!confirmed)
-                    context = this.updateContext(context, (draft) => {
-                        draft.approvalDecision = {
-                            ...context.approvalDecision,
-                            kind: 'hold',
-                            reason,
-                        };
-                    });
+                // An existing host approval is not a submission by this run.
+                // Preserve its note while recording that this run did not approve.
+                if (status !== PullRequestReviewState.APPROVED)
+                    await this.commentManagerService.postApprovalReason(
+                        organizationAndTeamData,
+                        prNumber,
+                        repository,
+                        reason,
+                        'hold',
+                    );
             } catch (error) {
                 context = this.updateContext(context, (draft) => {
                     draft.errors ??= [];

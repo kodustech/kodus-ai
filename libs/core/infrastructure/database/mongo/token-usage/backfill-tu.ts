@@ -1,4 +1,4 @@
-import { ROUTING_TASKS } from '@libs/core/log/token-usage-tu';
+import { ROUTING_TASKS, RISK_RUN_NAMES } from '@libs/core/log/token-usage-tu';
 /**
  * Backfills the indexable `attributes.tu` sub-doc onto historical
  * `observability_telemetry` spans so the Token Usage screen's covered
@@ -90,10 +90,17 @@ const areaExpr = {
             },
             {
                 case: {
-                    $regexMatch: {
-                        input: rn,
-                        regex: '^(code-review|analyzeCodeWithAI)',
-                    },
+                    $or: [
+                        {
+                            $regexMatch: {
+                                input: rn,
+                                regex: '^(code-review|analyzeCodeWithAI)',
+                            },
+                        },
+                        {
+                            $in: [rn, [...RISK_RUN_NAMES]],
+                        },
+                    ],
                 },
                 then: 'review',
             },

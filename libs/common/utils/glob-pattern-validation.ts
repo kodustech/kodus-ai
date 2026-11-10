@@ -1,3 +1,6 @@
+export const MAX_FILE_PATTERNS = 100;
+export const MAX_FILE_PATTERN_LENGTH = 500;
+
 export type GlobPatternCheck =
     { valid: true } | { valid: false; message: string };
 

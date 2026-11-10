@@ -59,6 +59,15 @@ describe('shared PR risk contract', () => {
         ).toBe(false);
     });
 
+    it('does not reuse a persisted snapshot without a boolean judgment', () => {
+        expect(
+            matchesRiskSnapshot(
+                { status: 'assessed', reason: 'Stored snapshot.', snapshot },
+                snapshot,
+            ),
+        ).toBe(false);
+    });
+
     it.each([
         undefined,
         { status: 'disabled' },

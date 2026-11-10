@@ -59,6 +59,9 @@ describe("ModelCombobox — per-agent picker", () => {
         fireEvent.click(screen.getByText("pick"));
         expect(() => act(() => typeInSearch("g"))).not.toThrow();
         expect(screen.getByRole("option", { name: /Gemini/ })).toBeVisible();
+        expect(
+            screen.queryByRole("option", { name: /^Claude Sonnet/ }),
+        ).not.toBeInTheDocument();
     });
 
     it("still explains why a gated option is disabled", async () => {

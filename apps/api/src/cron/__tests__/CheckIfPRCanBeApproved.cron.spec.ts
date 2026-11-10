@@ -269,17 +269,21 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         },
     );
 
-    it('preserves an approval already on the host when policies change', async () => {
-        const { deps, run } = namedPolicyCase();
-        deps.codeManagementService.getReviewStatusByPullRequest
-            .mockReset()
-            .mockResolvedValue(PullRequestReviewState.APPROVED);
-        expect(await run()).toBe(false);
-        expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
-        expect(
-            deps.codeManagementService.createIssueComment,
-        ).not.toHaveBeenCalled();
-    });
+    it.each([AutomationStatus.SUCCESS, AutomationStatus.PARTIAL_ERROR])(
+        'preserves an approval already on the host when the recorded status is %s',
+        async (status) => {
+            const { deps, run, execution } = namedPolicyCase();
+            execution.status = status;
+            deps.codeManagementService.getReviewStatusByPullRequest
+                .mockReset()
+                .mockResolvedValue(PullRequestReviewState.APPROVED);
+            expect(await run()).toBe(false);
+            expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).not.toHaveBeenCalled();
+        },
+    );
 
     it('publishes no-match outcomes and never falls back to the old generic approval path', async () => {
         const { deps, input, run } = namedPolicyCase();

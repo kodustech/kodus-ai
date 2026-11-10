@@ -26,7 +26,7 @@ import {
 } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { ApprovalPoliciesService } from '../services/approval-policies.service';
-import { SUMMARY_GENERATION_FAILED_REASON } from './finish-comments.stage';
+import { SUMMARY_GENERATION_FAILED_REASON } from '../constants/error-reasons';
 
 @Injectable()
 export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineContext> {

@@ -157,6 +157,123 @@ it('uses the production model slot and includes area evidence and coverage', asy
     expect(request.user).toContain('"prsWithCompleteFiles":8');
 });
 
+it.each([
+    ['src/status.ts', '+// never return null here'],
+    ['src/status.ts', '+/** @return the risk level */'],
+    ['src/status.ts', '+const note = "if (disabled) return null";'],
+    ['src/status.ts', "+const note = 'throw new Error()';"],
+    ['src/status.ts', '+const note = `if (disabled) return null`;'],
+    ['src/status.ts', '+const note = /return\\s+null/;'],
+    ['src/status.py', '+# return None'],
+    ['src/status.py', '+"""\n+if (disabled) return None\n+"""'],
+])(
+    'does not treat prose or literals in %s as control flow: %s',
+    async (filename, patch) => {
+        (LLM.run as jest.Mock).mockResolvedValue({
+            level: 'low',
+            reason: 'Behavior unchanged.',
+        });
+        expect(
+            (
+                await assessApprovalRisk({
+                    ...input,
+                    files: [{ filename, status: 'modified', patch } as any],
+                })
+            ).level,
+        ).toBe('low');
+    },
+);
+
+it.each(['+// added test coverage', '+/* tests go here */', '+   '])(
+    'does not count a test-only comment or whitespace as coverage: %s',
+    async (patch) => {
+        (LLM.run as jest.Mock).mockResolvedValue({
+            level: 'low',
+            reason: 'Behavior unchanged.',
+        });
+        expect(
+            (
+                await assessApprovalRisk({
+                    ...input,
+                    files: [
+                        {
+                            filename: 'src/status.ts',
+                            status: 'modified',
+                            patch: '+return allowAccess();',
+                        },
+                        {
+                            filename: 'src/status.spec.ts',
+                            status: 'modified',
+                            patch,
+                        },
+                    ] as any,
+                })
+            ).level,
+        ).toBe('medium');
+    },
+);
+
+it('keeps code after a JS private member visible to the control-flow guard', async () => {
+    (LLM.run as jest.Mock).mockResolvedValue({
+        level: 'low',
+        reason: 'Behavior unchanged.',
+    });
+    expect(
+        (
+            await assessApprovalRisk({
+                ...input,
+                files: [
+                    {
+                        filename: 'src/status.ts',
+                        status: 'modified',
+                        patch: '+this.#access = true; return true;',
+                    },
+                ] as any,
+            })
+        ).level,
+    ).toBe('medium');
+});
+
+it.each([
+    '+const text = `value: ${(() => { return authorize(); })()}`;',
+    '+const ratio = "value" / count; return authorize();',
+])('keeps executable code visible around literals: %s', async (patch) => {
+    (LLM.run as jest.Mock).mockResolvedValue({
+        level: 'low',
+        reason: 'Behavior unchanged.',
+    });
+    expect(
+        (
+            await assessApprovalRisk({
+                ...input,
+                files: [
+                    { filename: 'src/status.ts', status: 'modified', patch },
+                ] as any,
+            })
+        ).level,
+    ).toBe('medium');
+});
+
+it.each([
+    ['src/status.py', '+count //= 2; return authorize()'],
+    ['src/status.go', '+text := `ends with a backslash\\`; return authorize()'],
+    ['src/status.cs', '+var text = @"path\\"; return Authorize();'],
+    ['src/status.rs', "+fn authorize<'a>() { return true; }"],
+])('keeps executable code visible in %s fragments', async (filename, patch) => {
+    (LLM.run as jest.Mock).mockResolvedValue({
+        level: 'low',
+        reason: 'Behavior unchanged.',
+    });
+    expect(
+        (
+            await assessApprovalRisk({
+                ...input,
+                files: [{ filename, status: 'modified', patch }] as any,
+            })
+        ).level,
+    ).toBe('medium');
+});
+
 it('returns unknown when the model fails, so approval cannot proceed', async () => {
     (LLM.run as jest.Mock).mockRejectedValue(new Error('timeout'));
 

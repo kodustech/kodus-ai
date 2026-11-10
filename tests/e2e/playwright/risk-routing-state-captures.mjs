@@ -17,8 +17,7 @@ export async function captureRiskRoutingStates({
     initialCaptures = [],
 }) {
     assert.ok(
-        settingsRequest?.url &&
-            settingsRequest.body?.organizationAndTeamData?.teamId,
+        settingsRequest.url && settingsRequest.teamId,
         'Use the authenticated full-app smoke before capturing states.',
     );
     const dir = `${out}/app-states`;
@@ -83,7 +82,7 @@ export async function captureRiskRoutingStates({
     };
     async function configure(configValue) {
         const response = await context.request.post(settingsRequest.url, {
-            data: { ...settingsRequest.body, configValue },
+            data: { organizationAndTeamData: { teamId: settingsRequest.teamId }, configValue },
         });
         if (!response.ok()) {
             const failure = await response.json().catch(() => ({}));
@@ -310,6 +309,23 @@ export async function captureRiskRoutingStates({
             'Critérios',
             'Excluded files: teste de path',
         );
+
+        await open('risk', { riskCriteria: [{ ...criteria[0], includedFiles: Array.from({ length: 100 }, (_, index) => `src/qa-limit/${index}/**`) }] });
+        await page.getByRole('button', { name: 'Edit Access control', exact: true }).click();
+        await page.getByRole('button', { name: 'Edit included files', exact: true }).click();
+        const criterionPanel = page.getByRole('dialog');
+        const patternInput = criterionPanel.getByRole('textbox', { name: 'Add or search file patterns' });
+        await patternInput.fill('overflow/**');
+        await expect(criterionPanel.getByRole('status')).toContainText('Limit of 100 patterns reached');
+        await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeDisabled();
+        await patternInput.press('Enter');
+        await patternInput.fill('');
+        await page.getByRole('button', { name: 'Remove src/qa-limit/0/**', exact: true }).click();
+        await expect(criterionPanel.getByRole('status')).toHaveCount(0);
+        await patternInput.fill('replacement/**');
+        await patternInput.press('Enter');
+        await expect(criterionPanel.getByRole('status')).toContainText('Limit of 100 patterns reached');
+        await shot('48-criterion-path-limit', 'Critérios', 'Limite de paths com recuperação após remover um item');
 
         await open('routing');
         await shot('14-routing-on', 'Routing', 'Por risco: Balanced / Heavy');

@@ -105,6 +105,8 @@ export class ApprovalPoliciesService {
         )
             return hold('The reviewed PR snapshot could not be verified.');
         try {
+            // Bitbucket never applied legacy approvalLabels. Preserve migrated
+            // behavior; the settings writer rejects every new canonical label condition.
             const policies = approvalPoliciesFromConfig(input.config).map(
                 (policy) =>
                     input.platformType === PlatformType.BITBUCKET &&

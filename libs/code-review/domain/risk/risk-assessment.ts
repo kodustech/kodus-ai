@@ -38,19 +38,31 @@ export function hasConfirmedRisk(
     return risk?.status === 'assessed' && risk.riskIdentified;
 }
 
-/** The approval cron rechecks configuration and provider identity without another model call. */
+function isStoredAssessment(
+    risk: Partial<RiskAssessmentResult> | undefined,
+): risk is Extract<RiskAssessmentResult, { status: 'assessed' }> {
+    return (
+        risk?.status === 'assessed' &&
+        typeof risk.riskIdentified === 'boolean' &&
+        typeof risk.reason === 'string' &&
+        !!risk.reason.trim() &&
+        !!risk.snapshot
+    );
+}
+
+/** Persisted executions may predate snapshot fields; they are not output-schema validated on read. */
 export function isCurrentRiskAssessment(
-    risk: RiskAssessmentResult | undefined,
+    risk: Partial<RiskAssessmentResult> | undefined,
     expected: Omit<RiskSnapshot, 'assessmentKey' | 'configurationKey'> & {
         configurationKey: string;
     },
 ): boolean {
     return (
-        risk?.status === 'assessed' &&
+        isStoredAssessment(risk) &&
         !!expected.baseSha &&
         !!expected.headSha &&
         !!expected.configurationKey &&
-        !!risk.snapshot?.configurationKey &&
+        !!risk.snapshot.configurationKey &&
         Object.entries(expected).every(
             ([key, value]) => risk.snapshot[key] === value,
         )
@@ -59,10 +71,10 @@ export function isCurrentRiskAssessment(
 
 /** Only an assessment of the current snapshot is reusable. */
 export function matchesRiskSnapshot(
-    risk: RiskAssessmentResult | undefined,
+    risk: Partial<RiskAssessmentResult> | undefined,
     snapshot: RiskSnapshot,
 ): boolean {
-    if (risk?.status !== 'assessed' || !risk.snapshot) return false;
+    if (!isStoredAssessment(risk)) return false;
     return (Object.keys(snapshot) as Array<keyof RiskSnapshot>).every(
         (key) => risk.snapshot[key] === snapshot[key],
     );

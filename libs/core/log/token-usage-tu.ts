@@ -106,6 +106,12 @@ export const SYSTEM_RUN_NAMES: ReadonlySet<string> = new Set([
 
 const n = (v: unknown): number => (typeof v === 'number' ? v : 0);
 
+export const RISK_RUN_NAMES: ReadonlySet<string> = new Set([
+    'pr-risk-assessment',
+    'approval-risk',
+    'approval-policy-eligibility',
+]);
+
 /**
  * Maps a span's run/agent identifiers onto the fixed {@link TokenUsageArea}
  * set. Driven by `gen_ai.run.name` — the one attribute every usage span
@@ -127,7 +133,11 @@ export function deriveArea(runName: unknown, phase?: unknown): TokenUsageArea {
     if (/kod(?:y|us).?rules?/i.test(rn) || rn.startsWith('kodyMemory')) {
         return 'kody_rules';
     }
-    if (rn.startsWith('code-review') || rn.startsWith('analyzeCodeWithAI')) {
+    if (
+        rn.startsWith('code-review') ||
+        rn.startsWith('analyzeCodeWithAI') ||
+        RISK_RUN_NAMES.has(rn)
+    ) {
         return 'review';
     }
     if (SUGGESTION_RUN_NAMES.has(rn) || rn.startsWith('safeguard')) {

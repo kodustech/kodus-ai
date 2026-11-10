@@ -18,12 +18,16 @@ export function FilePatternsEditor({
     purpose = "ignore",
     compact = false,
     disabled = false,
+    maxPatterns,
+    maxPatternLength,
 }: {
     value: string[];
     onChange: (paths: string[]) => void;
     purpose?: "ignore" | "include" | "exclude";
     compact?: boolean;
     disabled?: boolean;
+    maxPatterns?: number;
+    maxPatternLength?: number;
 }) {
     const validatorId = useId();
     const [search, setSearch] = useState("");
@@ -53,11 +57,20 @@ export function FilePatternsEditor({
     // not be.
     const isDuplicate = newPath !== "" && paths.includes(newPath);
     const patternCheck = useMemo(
-        () => (newPath === "" ? null : checkIgnorePattern(newPath)),
-        [newPath],
+        () =>
+            newPath === ""
+                ? null
+                : maxPatternLength !== undefined &&
+                    newPath.length > maxPatternLength
+                  ? {
+                        valid: false,
+                        message: `Use ${maxPatternLength} characters or fewer.`,
+                    }
+                  : checkIgnorePattern(newPath),
+        [newPath, maxPatternLength],
     );
-    const canAdd =
-        newPath !== "" && !isDuplicate && patternCheck?.valid === true;
+    const atLimit = maxPatterns !== undefined && paths.length >= maxPatterns;
+    const canAdd = !atLimit && !isDuplicate && patternCheck?.valid === true;
 
     const addPath = () => {
         if (disabled || !canAdd) return;
@@ -116,6 +129,15 @@ export function FilePatternsEditor({
                         </Button>
                     )}
                 </div>
+
+                {atLimit && (
+                    <p
+                        role="status"
+                        className="text-text-secondary text-[13px]">
+                        Limit of {maxPatterns} patterns reached. Remove one to
+                        add another.
+                    </p>
+                )}
 
                 {/* Deliberately "valid glob syntax", not "valid pattern".
                         A syntactically fine pattern can still match nothing —

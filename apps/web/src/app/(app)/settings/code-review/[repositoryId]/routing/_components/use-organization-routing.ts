@@ -56,13 +56,14 @@ export function useOrganizationRouting({
     const routing = edit?.routing ?? saved;
     const dirty = !!edit && !sameRouting(edit.baseline, routing);
     const labels = routingModelLabels(status?.models ?? []);
+    const metadataById = new Map(
+        (status?.models ?? []).map((model) => [model.modelId, model]),
+    );
     const pool: PoolModel[] = groupModelsByProvider(
         enabled ? query.data : undefined,
     ).flatMap((group) =>
         group.models.map((model) => {
-            const metadata = status?.models.find(
-                (entry) => entry.modelId === model.id,
-            );
+            const metadata = metadataById.get(model.id);
             return {
                 id: model.id,
                 label:
@@ -154,26 +155,18 @@ export function useOrganizationRouting({
                         edit.baseline.taskOverrides?.[task as LlmTask] !== id,
                 )
                 .map(([, id]) => id),
-        ].filter(Boolean);
-        if (
-            changedIds.some(
-                (id) => !fresh.models.some((model) => model.id === id),
-            )
-        )
+        ].filter((id): id is string => !!id);
+        const freshModelIds = new Set(fresh.models.map((model) => model.id));
+        if (changedIds.some((id) => !freshModelIds.has(id)))
             throw new RoutingSettingsError(
                 "A selected model was removed. Refresh and choose a connected model.",
             );
-        if (
-            changedIds.some(
-                (id) =>
-                    !currentStatus?.models.some(
-                        (model) =>
-                            model.modelId === id &&
-                            model.resolvable &&
-                            !model.managed,
-                    ),
-            )
-        )
+        const availableModelIds = new Set(
+            (currentStatus?.models ?? [])
+                .filter((model) => model.resolvable && !model.managed)
+                .map((model) => model.modelId),
+        );
+        if (changedIds.some((id) => !availableModelIds.has(id)))
             throw new RoutingSettingsError(
                 "A selected provider is unavailable. Reconnect it or choose another model.",
             );

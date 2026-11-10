@@ -218,6 +218,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     'Could not verify shared risk configuration for approval',
                 context: CheckIfPRCanBeApprovedCronProvider.name,
                 error,
+                metadata: {
+                    organizationAndTeamData: input.organizationAndTeamData,
+                    repositoryId: input.repositoryId,
+                    prNumber: input.prNumber,
+                },
             });
             return false;
         }
@@ -956,22 +961,26 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     FINAL_PROVIDER_TIMEOUT_MS,
                     'policy review findings',
                 );
+                if (!Array.isArray(comments))
+                    return hold('Review findings remain unresolved.');
+                const commentsById = new Map<
+                    string,
+                    (typeof comments)[number]
+                >();
+                for (const comment of comments) {
+                    const id = String(
+                        platformType === PlatformType.GITHUB
+                            ? (comment.fullDatabaseId ?? comment.id)
+                            : platformType === PlatformType.AZURE_REPOS
+                              ? comment.threadId
+                              : comment.id,
+                    );
+                    if (!commentsById.has(id)) commentsById.set(id, comment);
+                }
                 if (
-                    !Array.isArray(comments) ||
                     pr.suggestions.some((suggestion) => {
                         const id = suggestion.comment?.id;
-                        const comment = comments.find(
-                            (candidate) =>
-                                String(
-                                    platformType === PlatformType.GITHUB
-                                        ? (candidate.fullDatabaseId ??
-                                              candidate.id)
-                                        : platformType ===
-                                            PlatformType.AZURE_REPOS
-                                          ? candidate.threadId
-                                          : candidate.id,
-                                ) === String(id),
-                        );
+                        const comment = commentsById.get(String(id));
                         return !id || comment?.isResolved !== true;
                     })
                 )

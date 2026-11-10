@@ -144,7 +144,7 @@ async function save() {
     const sent = response.request().postDataJSON()?.configValue || {};
     settingsRequest = {
         url: response.url(),
-        body: response.request().postDataJSON(),
+        teamId: response.request().postDataJSON()?.organizationAndTeamData?.teamId,
     };
     saves.push({
         fields: Object.keys(sent),
@@ -476,7 +476,7 @@ try {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', {name: 'General settings', exact: true}).waitFor();
     await hydrated(page.getByRole('button', { name: 'Add policy', exact: true }));
-    const storedParameter = await context.request.get(`${WEB}/api/proxy/api/parameters/find-by-key?key=code_review_config&teamId=${encodeURIComponent(settingsRequest.body.organizationAndTeamData.teamId)}`);
+    const storedParameter = await context.request.get(`${WEB}/api/proxy/api/parameters/find-by-key?key=code_review_config&teamId=${encodeURIComponent(settingsRequest.teamId)}`);
     assert.ok(storedParameter.ok(), 'Read the saved policy configuration after deletion.');
     const storedBody = await storedParameter.json();
     const storedPolicies = (storedBody.data ?? storedBody).configValue?.configs?.approvalPolicies;
@@ -514,7 +514,7 @@ try {
         initialCaptures,
     });
     pass('Settings states are captured inside the complete application');
-    await testRoutingProviderMatrix({ page, context, teamId: settingsRequest.body.organizationAndTeamData.teamId, web: WEB, out: OUT, hydrated });
+    await testRoutingProviderMatrix({ page, context, teamId: settingsRequest.teamId, web: WEB, out: OUT, hydrated });
     pass('Provider HTTP fixture matrix passes in the full app without external model calls');
     assert.deepEqual(pageErrors, [], 'No uncaught app errors.');
 } catch (error) {

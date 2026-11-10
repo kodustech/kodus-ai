@@ -194,6 +194,17 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         },
     );
 
+    it('does not attribute an existing host approval to this run', async () => {
+        codeManagement.getReviewStatusByPullRequest.mockResolvedValue(
+            PullRequestReviewState.APPROVED,
+        );
+        const result = await (stage as any).executeStage(namedContext());
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+        expect(result.approvalDecision.kind).toBe('hold');
+        expect(commentManager.postApprovalReason).not.toHaveBeenCalled();
+        expect(notificationService.emit).not.toHaveBeenCalled();
+    });
+
     it('publishes a risk or review hold after the decision, including a degraded run', async () => {
         await (stage as any).executeStage(
             namedContext({

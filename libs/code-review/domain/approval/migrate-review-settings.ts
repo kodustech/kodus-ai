@@ -86,32 +86,27 @@ export function resolveReviewSettings(
             own(source, 'approvalLabels') ||
             own(source, 'approvalAuthors')
         ) {
-            const legacy = policies.findIndex(
-                (policy) => policy.id === 'legacy-approval',
-            );
-            if (legacy === -1) {
-                if (
-                    layer.approvalLabels?.length ||
-                    layer.approvalAuthors?.length
-                )
-                    throw new Error(
-                        'Legacy approval filters cannot scope named policies. Use approvalPolicies in this configuration source.',
-                    );
-            } else {
-                policies = policies.map((policy, index) =>
-                    index !== legacy
-                        ? policy
-                        : {
-                              ...policy,
-                              ...(own(source, 'approvalLabels')
-                                  ? { labels: layer.approvalLabels }
-                                  : {}),
-                              ...(own(source, 'approvalAuthors')
-                                  ? { authors: layer.approvalAuthors }
-                                  : {}),
-                          },
+            let hasLegacyPolicy = false;
+            policies = policies.map((policy) => {
+                if (policy.id !== 'legacy-approval') return policy;
+                hasLegacyPolicy = true;
+                return {
+                    ...policy,
+                    ...(own(source, 'approvalLabels')
+                        ? { labels: layer.approvalLabels }
+                        : {}),
+                    ...(own(source, 'approvalAuthors')
+                        ? { authors: layer.approvalAuthors }
+                        : {}),
+                };
+            });
+            if (
+                !hasLegacyPolicy &&
+                (layer.approvalLabels?.length || layer.approvalAuthors?.length)
+            )
+                throw new Error(
+                    'Legacy approval filters cannot scope named policies. Use approvalPolicies in this configuration source.',
                 );
-            }
         }
     }
     return {

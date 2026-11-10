@@ -88,8 +88,7 @@ export function routingHref(anchor?: string | null) {
 /** Env defaults are not a connected, user-configurable provider. */
 export function hasRoutingProvider(status: LLMConfigStatus | null | undefined) {
     if (!status) return false;
-    const models = status.models ?? [];
-    return models.some(
+    return status.models.some(
         (model) => !model.managed && !!model.providerId && model.resolvable,
     );
 }
