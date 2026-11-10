@@ -612,7 +612,17 @@ export async function captureRiskRoutingStates({
         await shot('40-routing-mobile', 'Mobile', 'Routing no mobile');
         await open('general');
         await shot('41-general-mobile', 'Mobile', 'General no mobile');
+        // Valid file-only conditions avoid provider-label prerequisites and
+        // keep the form long enough to exercise its own scroll container.
+        await open('general', {
+            approvalPolicies: policies.map((policy) => policy.id === 'screenshot-docs'
+                ? { ...policy, maxChangedLines: 100, lineCountExcludedFiles: ['docs/generated/**'],
+                    instruction: 'Only documentation changes that leave application behavior unchanged.' }
+                : policy),
+        });
         await editPolicy('Documentation');
+        const mobileSettings = page.getByRole('region', { name: 'Policy settings', exact: true });
+        await mobileSettings.evaluate((node) => { node.scrollTop = 0; });
         const apply = page.getByRole('button', { name: 'Apply', exact: true });
         await expect(apply).toBeInViewport();
         const before = await apply.boundingBox();
@@ -621,17 +631,16 @@ export async function captureRiskRoutingStates({
             'Mobile',
             'Editor de política com ações fixas',
         );
-        const scrolled = await page
-            .getByRole('region', { name: 'Policy settings', exact: true })
-            .evaluate((node) => {
-                const before = node.scrollTop;
-                node.scrollTop = node.scrollHeight;
-                return { before, after: node.scrollTop };
-            });
+        const scrolled = await mobileSettings.evaluate((node) => {
+            const before = node.scrollTop;
+            node.scrollTop = node.scrollHeight;
+            return { before, after: node.scrollTop, height: node.scrollHeight, viewport: node.clientHeight };
+        });
         assert.ok(
-            scrolled.after > scrolled.before,
+            scrolled.height > scrolled.viewport && scrolled.after > scrolled.before,
             'Policy conditions must actually scroll on mobile.',
         );
+        await expect(page.getByRole('combobox', { name: 'Add condition', exact: true })).toBeInViewport();
         await expect(apply).toBeInViewport();
         const after = await apply.boundingBox();
         assert.ok(
