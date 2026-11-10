@@ -13,7 +13,8 @@ import type { SecurityScanBudget, SecurityScanSpend } from './security-scan.type
  * A request cannot be cancelled halfway, and inside an agent loop each step
  * resends a longer conversation than the one before, so the next request can
  * cost more than any seen. The first request has no history, so it is
- * reserved at `initialReserve`.
+ * reserved at `initialReserve`. When several requests run at once, each of
+ * them can be that large, so the reserve is taken once per request in flight.
  */
 const RESERVE_FACTOR = 1.5;
 
@@ -21,6 +22,7 @@ export class ScanBudgetMeter implements UsageMeter {
     private spent: SecurityScanSpend;
     private largestRequestUsd = 0;
     private largestRequestTokens = 0;
+    private inFlight = 1;
     private readonly listeners: Array<() => void> = [];
 
     constructor(
@@ -77,6 +79,11 @@ export class ScanBudgetMeter implements UsageMeter {
         }
     }
 
+    /** How many requests may be running at once from now on. */
+    expectInFlight(requests: number): void {
+        this.inFlight = Math.max(1, Math.floor(requests));
+    }
+
     /** Called once, the first time the cap is (about to be) reached. */
     onExhausted(listener: () => void): void {
         if (this.isExhausted()) {
@@ -88,19 +95,21 @@ export class ScanBudgetMeter implements UsageMeter {
 
     isExhausted(): boolean {
         if (this.budget.maxUsd !== undefined && this.rates) {
-            const reserve = Math.max(
-                this.largestRequestUsd * RESERVE_FACTOR,
-                this.spent.requests ? 0 : this.initialReserve.usd,
-            );
+            const reserve =
+                Math.max(
+                    this.largestRequestUsd * RESERVE_FACTOR,
+                    this.spent.requests ? 0 : this.initialReserve.usd,
+                ) * this.inFlight;
             if (this.spent.usd + reserve >= this.budget.maxUsd) {
                 return true;
             }
         }
         if (this.budget.maxTokens !== undefined) {
-            const reserve = Math.max(
-                this.largestRequestTokens * RESERVE_FACTOR,
-                this.spent.requests ? 0 : this.initialReserve.tokens,
-            );
+            const reserve =
+                Math.max(
+                    this.largestRequestTokens * RESERVE_FACTOR,
+                    this.spent.requests ? 0 : this.initialReserve.tokens,
+                ) * this.inFlight;
             const used = this.spent.inputTokens + this.spent.outputTokens;
             if (used + reserve >= this.budget.maxTokens) {
                 return true;
