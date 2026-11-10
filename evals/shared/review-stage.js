@@ -28,7 +28,7 @@
 const path = require('path');
 const { AsyncLocalStorage } = require('async_hooks');
 const { mirrorFor, inlineMirror, contentAt, pullRequestFiles } = require('./repo-mirror');
-const { EVAL_ORG } = require('./model-route');
+const { EVAL_ORG, storedByokConfig } = require('./model-route');
 
 const LIBS = path.join(__dirname, '../../libs');
 const lib = (p) => require(path.join(LIBS, p));
@@ -236,6 +236,7 @@ function observeFinderPasses() {
                     relevantLinesEnd: c.relevantLinesEnd ?? null,
                     label: c.label ?? null,
                     suggestionContent: c.suggestionContent || '',
+                    producedBy: c.producedBy ?? null,
                 })),
                 kept: out.kept.map((c, i) => ({ index: idx(c), parseMode: out.keptVerdicts?.[i]?.parseMode ?? null })),
                 dropped: out.dropped.map((d) => ({ index: idx(d.candidate), rationale: d.verdict?.rationale ?? null, parseMode: d.verdict?.parseMode ?? null })),
@@ -251,11 +252,33 @@ function observeFinderPasses() {
     if (onlyPasses) {
         swapExports(HEAVY_PASSES_PATH, (real) => ({
             buildHeavyLensRun: (env) => {
+                // RECALL_DEBATE_PARTNER=<tier-0 id>: the debate's second reviewer
+                // runs on that model (routedTeamConfig resolves its slot).
+                const slot = global.__DEBATE_PARTNER_SLOT;
+                if (slot) env = { ...env, debatePartner: debatePartnerOf(slot) };
                 const passes = real.buildHeavyLensPasses(env).filter((p) => onlyPasses.includes(p.label));
                 for (const pass of passes) recordToolCalls(pass);
                 return passes.length ? (params, ctx) => real.runHeavyLensPasses(passes, params, ctx) : undefined;
             },
         }));
+    }
+
+    function debatePartnerOf(slot) {
+        const { AiSdkAgentRunner } = lib('agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner.ts');
+        const { buildProviderOptions } = lib('llm/reasoning-options.ts');
+        return {
+            runner: new AiSdkAgentRunner(slot, { provider: typeof slot.provider === 'string' ? slot.provider : undefined }),
+            modelId: slot.model,
+            fallbackModelId: slot.fallback?.model,
+            providerOptions: buildProviderOptions('finder/debate-partner', undefined, {
+                reasoningEffort: slot.reasoningEffort,
+                reasoningConfigOverride: slot.reasoningConfigOverride,
+                byokProvider: slot.provider,
+                modelName: slot.model,
+                openrouterProviderOrder: slot.openrouterProviderOrder,
+                openrouterAllowFallbacks: slot.openrouterAllowFallbacks,
+            }),
+        };
     }
 
     // The dump keeps no tool call of a heavy pass: under RECALL_DUMP each call
@@ -340,7 +363,9 @@ function observeFinderPasses() {
                 const gateDrop = gateIndex >= 0 ? gate.dropped.find((d) => d.index === gateIndex) : null;
                 return {
                     index,
-                    origin: originOf.get(key) || 'synthesis-rescue',
+                    // A pass of several runs (the debate) is not one runner call:
+                    // its findings name it in producedBy.
+                    origin: originOf.get(key) || first.items?.[index]?.producedBy || 'synthesis-rescue',
                     verify: v.skipped ? 'not-run' : dropped ? 'dropped' : gateDrop ? 'dropped-by-evidence-gate' : 'kept',
                     rationale: dropped?.rationale ?? gateDrop?.rationale ?? null,
                 };
@@ -772,6 +797,23 @@ async function routedTeamConfig({ team, route, permissionService, codeManagement
     const routed = routeCodeReviewModel(route.storedConfig, codeReviewConfig, heavy);
     codeReviewConfig.resolvedModelSlot = routed.resolvedModelSlot;
     codeReviewConfig.byokConfig = routed.resolvedModelSlot;
+    const partnerId = process.env.RECALL_DEBATE_PARTNER;
+    if (partnerId) {
+        const { TIER0 } = require('./tier0-models');
+        const spec = TIER0[partnerId];
+        if (!spec) throw new Error(`RECALL_DEBATE_PARTNER: unknown tier-0 model '${partnerId}'`);
+        const apiKey = (spec.keyEnvs || []).map((name) => process.env[name]).find(Boolean);
+        if (!apiKey) throw new Error(`RECALL_DEBATE_PARTNER: no key for ${partnerId} (${(spec.keyEnvs || []).join(', ')})`);
+        const stored = storedByokConfig({
+            provider: spec.provider,
+            model: spec.doModel || partnerId,
+            apiKey,
+            baseURL: spec.baseURL,
+            reasoningEffort: process.env.RECALL_DEBATE_PARTNER_EFFORT || null,
+            openrouterProviderOrder: spec.openrouterProviderOrder,
+        });
+        global.__DEBATE_PARTNER_SLOT = routeCodeReviewModel(stored, codeReviewConfig, heavy).resolvedModelSlot;
+    }
     return codeReviewConfig;
 }
 

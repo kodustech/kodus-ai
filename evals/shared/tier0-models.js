@@ -121,6 +121,9 @@ const TIER0 = {
     // key is never sent upstream, so CODEX_HOME stands in for it.
     'gpt-6.1-sol@sub': { provider: 'openai', byokNative: true, doModel: 'gpt-6.1-sol', keyEnvs: ['CODEX_HOME'], baseURL: 'http://127.0.0.1:8789/v1' },
     'gpt-6-luna@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6-luna', keyEnvs: ['MATRIX_OPENAI_API_KEY'] },
+    // DeepSeek's own API: `deepseek-flash` is its id for the newest V4.1 Flash
+    // snapshot (the codereviewbench.com route, feat/bench-v3-runs).
+    'deepseek-v4.1-flash': { provider: 'openai_compatible', doModel: 'deepseek-flash', keyEnvs: ['API_DEEPSEEK_API_KEY'], baseURL: 'https://api.deepseek.com' },
     'claude-sonnet-5.5@api': { provider: 'anthropic', byokNative: true, doModel: 'claude-sonnet-5-5', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'] },
     'claude-opus-5.5@api': { provider: 'anthropic', byokNative: true, doModel: 'claude-opus-5-5', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'] },
     // The nightly's judge (JUDGE_MODEL), on the OpenAI key the nightly sets for it.
