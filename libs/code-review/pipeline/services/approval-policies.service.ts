@@ -1,3 +1,4 @@
+import { createLogger } from '@libs/core/log/logger';
 import { hasCompletePrFileList } from '@libs/code-review/domain/review-files';
 import { Inject, Injectable } from '@nestjs/common';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
@@ -58,6 +59,7 @@ export interface ApprovalPoliciesRequest {
 
 @Injectable()
 export class ApprovalPoliciesService {
+    private readonly logger = createLogger(ApprovalPoliciesService.name);
     constructor(
         private readonly codeManagement: CodeManagementService,
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
@@ -107,6 +109,7 @@ export class ApprovalPoliciesService {
             !input.organizationAndTeamData.organizationId
         )
             return hold('The reviewed PR snapshot could not be verified.');
+        let phase = 'policy-config';
         try {
             // Bitbucket never applied legacy approvalLabels. Preserve migrated
             // behavior; the settings writer rejects every new canonical label condition.
@@ -143,6 +146,7 @@ export class ApprovalPoliciesService {
                 repository: input.repository,
                 prNumber: input.pullRequest.number,
             };
+            phase = 'pr-snapshot';
             const live = await this.codeManagement.getPullRequest({
                 ...request,
                 includeLabels: true,
@@ -165,6 +169,7 @@ export class ApprovalPoliciesService {
                             policy.maxChangedLines !== undefined ||
                             policy.instruction?.trim()),
                 ) || !!input.config.approvalSensitivePaths?.length;
+            phase = 'pr-files';
             const files = needsFiles
                 ? (input.fullPrFiles ??
                   (await this.codeManagement.getFilesByPullRequestId({
@@ -244,6 +249,7 @@ export class ApprovalPoliciesService {
                 eligibility[key] = result;
                 return result;
             };
+            phase = 'policy-evaluation';
             const decision = await evaluateApprovalPolicies({
                 approvalActive: true,
                 policies,
@@ -267,6 +273,7 @@ export class ApprovalPoliciesService {
             });
             // A provider read or model call can race a new commit or base update.
             if (decision.kind === 'approve') {
+                phase = 'final-snapshot';
                 const current = await this.codeManagement.getPullRequest({
                     ...request,
                     includeLabels: true,
@@ -290,7 +297,53 @@ export class ApprovalPoliciesService {
                 },
                 eligibility,
             };
-        } catch {
+        } catch (error) {
+            const sources = [
+                'libs/code-review/pipeline/services/approval-policies.service.ts',
+                'libs/code-review/domain/approval/approval-policies.ts',
+                'libs/code-review/domain/approval/approval-pr-metadata.ts',
+                'libs/code-review/domain/approval/approval-file-conditions.ts',
+                'libs/platform/infrastructure/adapters/services/codeManagement.service.ts',
+                'libs/platform/infrastructure/adapters/services/github/github.service.ts',
+            ];
+            const stack = error instanceof Error ? error.stack : undefined;
+            const sourceFile = sources.find((file) =>
+                stack?.includes(file + ':'),
+            );
+            const line = sourceFile
+                ? Number(stack?.split(sourceFile + ':')[1]?.split(':')[0])
+                : undefined;
+            this.logger.warn({
+                message: 'Approval conditions could not be verified',
+                context: ApprovalPoliciesService.name,
+                metadata: {
+                    organizationId:
+                        input.organizationAndTeamData.organizationId,
+                    teamId: input.organizationAndTeamData.teamId,
+                    repositoryId: input.repository.id,
+                    prNumber: input.pullRequest.number,
+                    phase,
+                    errorType:
+                        error instanceof Error &&
+                        [
+                            'Error',
+                            'TypeError',
+                            'ReferenceError',
+                            'ZodError',
+                            'QueryFailedError',
+                        ].includes(error.name)
+                            ? error.name
+                            : 'Unknown',
+                    sourceFile,
+                    sourceLine:
+                        typeof line === 'number' &&
+                        Number.isInteger(line) &&
+                        line > 0 &&
+                        line < 100000
+                            ? line
+                            : undefined,
+                },
+            });
             return hold('Approval conditions could not be verified.');
         }
     }

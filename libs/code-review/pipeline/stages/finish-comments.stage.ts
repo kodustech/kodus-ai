@@ -53,12 +53,13 @@ import { SUMMARY_GENERATION_FAILED_REASON } from '../constants/error-reasons';
 import { prRiskDescriptionKey } from '@libs/code-review/domain/risk/risk-configuration';
 
 /** The steps of the PR summary: read the PR and its changes, ask the model, write it to the PR. */
-type SummaryStep = 'collect' | 'generate' | 'publish';
+type SummaryStep = 'collect' | 'generate' | 'publish' | 'confirm';
 
 const SUMMARY_STEP_FAILURE: Record<SummaryStep, string> = {
     collect: 'Failed to read the pull request for the summary',
     generate: 'Failed to generate summary',
     publish: 'Failed to publish summary to the pull request',
+    confirm: 'Could not confirm the published summary',
 };
 
 class SummaryPrUnavailableError extends Error {
@@ -307,8 +308,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     await this.commentManagerService.generateSummaryPR(
                         {
                             ...pullRequest,
-                            // Some code hosts answer a failed read with null; the
-                            // webhook's description beats replacing it with none.
+                            // Legacy raw reads can return null. Assessed PRs
+                            // require a current snapshot before replacing human context.
                             body: currentPR ? currentPR.body : pullRequest.body,
                         },
                         repository,
@@ -378,6 +379,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 ) {
                     // Hosts may trim descriptions. Confirm the exact write and
                     // both refs before treating it as Kody's own transformation.
+                    summaryStep = 'confirm';
                     const published = await this.readSummaryPullRequest(
                         summaryRequest,
                         true,

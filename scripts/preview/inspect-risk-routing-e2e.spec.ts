@@ -31,3 +31,19 @@ it('exports only machine decisions, omitting free-form nested evidence', () => {
         key: expect.any(String),
     });
 });
+
+it('exports the fixed approval-evaluation failure code without forwarding prose', () => {
+    expect(
+        executionEvidence({
+            decision: {
+                kind: 'hold',
+                reason: 'Approval conditions could not be verified.',
+            },
+        }).decision.reasonCode,
+    ).toBe('conditions-unverified');
+    expect(
+        executionEvidence({
+            decision: { kind: 'hold', reason: 'private canary' },
+        }).decision.reasonCode,
+    ).toBeUndefined();
+});

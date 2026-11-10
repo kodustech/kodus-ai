@@ -33,7 +33,12 @@ type Evidence = {
         status: string;
         heavy?: boolean;
         risk?: { status: string; riskIdentified?: boolean; reason?: string };
-        decision?: { kind: string; reason?: string; reviewedHeadSha?: string };
+        decision?: {
+            kind: string;
+            reason?: string;
+            reasonCode?: string;
+            reviewedHeadSha?: string;
+        };
         eligibility?: Record<string, { key: string; status: string }>;
         agentSkips?: Array<{ id: string; reason: string }>;
     } | null;
@@ -216,6 +221,13 @@ async function waitForApproval(
     let data = initial;
     while (true) {
         const state = await providerState(ctx, repo, pr);
+        ctx.assert(
+            !(
+                data.execution?.status === 'success' &&
+                data.execution?.decision?.reasonCode === 'conditions-unverified'
+            ),
+            `PR #${pr.number} approval condition evaluation failed; inspect the recorded execution.`,
+        );
         if (
             data.execution?.decision?.reviewedHeadSha === state.headSha &&
             state.approvals.length > 0 &&
@@ -991,6 +1003,7 @@ export const riskRoutingPipeline: Scenario = {
             baseRepo.full_name,
             `tiny-url-risk-e2e-${runSlug(ctx.runId)}`,
         );
+        let scenarioFailed = false;
         try {
             const provider = makeProvider(
                 'github',
@@ -1030,31 +1043,70 @@ export const riskRoutingPipeline: Scenario = {
                 },
             };
             return await riskRoutingPipelineOnRepo.run(isolated);
+        } catch (error) {
+            scenarioFailed = true;
+            throw error;
         } finally {
             // Keep the private PR evidence reachable while disabling further activity.
-            const cleanup = await http<{ archived: boolean }>(
-                `https://api.github.com/repos/${fullName}`,
-                {
+            let observed: {
+                status?: number;
+                archived?: boolean;
+                private?: boolean;
+            } = {};
+            try {
+                const cleanup = await http<{
+                    archived: boolean;
+                    private: boolean;
+                }>(`https://api.github.com/repos/${fullName}`, {
                     method: 'PATCH',
                     headers: {
                         Authorization: `Bearer ${process.env.GH_REPO_ADMIN_TOKEN || ctx.provider.authToken()}`,
                         Accept: 'application/vnd.github+json',
                     },
                     body: { archived: true },
-                },
-            );
-            ctx.assert(
-                cleanup.status === 200 && cleanup.body.archived,
-                'Could not archive this run’s private risk QA repository.',
-            );
-            writeFileSync(
-                join(ctx.artifactDir, 'qa-repository-cleanup.json'),
-                JSON.stringify(
-                    { repository: fullName, private: true, archived: true },
-                    null,
-                    2,
-                ),
-            );
+                });
+                observed = {
+                    status: cleanup.status,
+                    archived:
+                        typeof cleanup.body?.archived === 'boolean'
+                            ? cleanup.body.archived
+                            : undefined,
+                    private:
+                        typeof cleanup.body?.private === 'boolean'
+                            ? cleanup.body.private
+                            : undefined,
+                };
+            } catch {
+                // The observed failure is recorded below, without provider prose.
+            } finally {
+                let recorded = false;
+                try {
+                    writeFileSync(
+                        join(ctx.artifactDir, 'qa-repository-cleanup.json'),
+                        JSON.stringify(
+                            { repository: fullName, ...observed },
+                            null,
+                            2,
+                        ),
+                    );
+                    recorded = true;
+                } catch {
+                    /* Preserve the scenario's original failure below. */
+                }
+                const cleaned =
+                    observed.status === 200 &&
+                    observed.archived === true &&
+                    observed.private === true;
+                if ((!cleaned || !recorded) && scenarioFailed)
+                    console.warn(
+                        `Risk QA repository cleanup failed (HTTP ${observed.status ?? 'unavailable'}); preserving the scenario error.`,
+                    );
+                if (!scenarioFailed)
+                    ctx.assert(
+                        cleaned && recorded,
+                        'Could not verify the private risk QA repository was archived.',
+                    );
+            }
         }
     },
 };

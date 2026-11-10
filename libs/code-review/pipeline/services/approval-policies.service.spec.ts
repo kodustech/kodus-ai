@@ -345,3 +345,33 @@ it('performs team membership lookups afresh even when eligibility was cached', a
     expect(code.getApprovalTeamMembership).toHaveBeenCalledTimes(2);
     expect(LLM.run).toHaveBeenCalledTimes(1);
 });
+
+it('reports the failing approval phase without exporting private error content', async () => {
+    const current = service();
+    const warn = jest
+        .spyOn((current as any).logger, 'warn')
+        .mockImplementation(() => undefined);
+    const secret = 'private-token-canary';
+    const error = new TypeError(secret);
+    error.stack = `TypeError: ${secret}\n at libs/code-review/${secret}.ts:123:1`;
+    code.getPullRequest.mockRejectedValue(error);
+    try {
+        expect((await current.evaluate(request())).decision).toMatchObject({
+            kind: 'hold',
+            reason: 'Approval conditions could not be verified.',
+        });
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    phase: 'pr-snapshot',
+                    errorType: 'TypeError',
+                    repositoryId: 'repo',
+                }),
+            }),
+        );
+        expect(JSON.stringify(warn.mock.calls)).not.toContain(secret);
+        expect(warn.mock.calls[0][0]).not.toHaveProperty('error');
+    } finally {
+        warn.mockRestore();
+    }
+});

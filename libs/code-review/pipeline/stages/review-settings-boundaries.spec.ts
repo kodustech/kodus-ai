@@ -692,6 +692,9 @@ it.each([
         if (output.startsWith('retry-')) expect(summaryReads).toBe(4);
         if (output === 'unavailable-after') {
             expect(summaryReads).toBe(5);
+            expect(afterSummary.errors.at(-1).metadata.message).toBe(
+                'Could not confirm the published summary',
+            );
             expect(afterSummary.errors.at(-1).error.message).toBe(
                 'The current pull request could not be read for the summary.',
             );

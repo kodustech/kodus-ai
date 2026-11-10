@@ -47,6 +47,11 @@ function executionEvidence(row) {
                       'out-of-scope',
                   ]),
                   reviewedHeadSha: id(row.decision.reviewedHeadSha),
+                  reasonCode:
+                      row.decision.reason ===
+                      'Approval conditions could not be verified.'
+                          ? 'conditions-unverified'
+                          : undefined,
               }
             : undefined,
         eligibility: Object.fromEntries(
