@@ -800,6 +800,40 @@ const STAGES = [
         note: 'The 200-PR risk quality eval is awaiting independent labels; the controlled pair only checks wiring.',
     },
     {
+        id: 'implementation-check',
+        name: 'Implementation check',
+        short: 'Records whether a suggestion was applied',
+        group: 'On the PR',
+        does: "After a push, decides for each delivered suggestion whether the developer made the change it asked for, records it as implemented, partially implemented or not, and resolves the threads of the applied ones. The Cockpit's implementation rate and the next review read it.",
+        pipeline: null,
+        tests: [
+            {
+                kind: 'unit',
+                name: 'The check, the processor and the model call',
+                specs: [
+                    'libs/code-review/infrastructure/adapters/services/suggestion.service.implementation-check.spec.ts',
+                    'libs/code-review/workflow/implementation-verification.processor.spec.ts',
+                    'libs/code-review/infrastructure/adapters/services/llmAnalysis.service.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: 'Suggestions and a push go through the check and its model call with a scripted model',
+                wiring: ['implementation-check'],
+            },
+        ],
+        eval: {
+            path: 'evals/implementation-check',
+            metric: 'of verdicts right (applied or not)',
+            sets: {
+                controlled:
+                    'suggestions on real public PR files and hand-written follow-up pushes: fixed, fixed another way, untouched, declined, partial',
+                full: null,
+            },
+            nightly: 'shared',
+        },
+    },
+    {
         id: 'rules-learned',
         name: 'Learned from reviews',
         short: 'Writes rules from past reviews',
