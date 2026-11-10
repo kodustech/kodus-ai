@@ -36,7 +36,7 @@ const TEST_FILE =
     /(?:^|\/)(?:__tests__|tests?|specs?)(?:\/|\.|$)|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java))$/i;
 const ADDED_CONTROL_FLOW = /\b(?:if\s*\(|return\b|throw\b)/;
 const POSSIBLE_ADDED_CONTROL_FLOW = new RegExp(
-    `^\\+(?!\\+).*${ADDED_CONTROL_FLOW.source}`,
+    `^\\+.*${ADDED_CONTROL_FLOW.source}`,
     'm',
 );
 

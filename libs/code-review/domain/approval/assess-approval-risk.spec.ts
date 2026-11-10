@@ -165,6 +165,15 @@ it.each([
     ['src/status.ts', '+const note = `if (disabled) return null`;'],
     ['src/status.ts', '+const note = /return\\s+null/;'],
     ['src/status.py', '+# return None'],
+    ['src/status.py', '+note = f"return {name}"'],
+    ['src/status.py', '+note = r"return text"'],
+    ['src/status.py', '+note = b"return bytes"'],
+    ['src/status.rs', '+let note = b"return bytes";'],
+    ['src/status.py', '+note = f"{{return placeholder}}"'],
+    [
+        'src/status.ts',
+        '--- a/return.ts\n+++ b/return.ts\n@@ -1 +1 @@\n+const count = 1;',
+    ],
 ])(
     'does not treat prose or literals in %s as control flow: %s',
     async (filename, patch) => {
@@ -183,7 +192,12 @@ it.each([
     },
 );
 
-it.each(['+// added test coverage', '+/* tests go here */', '+   '])(
+it.each([
+    '+// added test coverage',
+    '+/* tests go here */',
+    '+   ',
+    '--- a/test.ts\n+++ b/test.ts\n@@ -1 +1 @@\n+// test coverage',
+])(
     'does not count a test-only comment or whitespace as coverage: %s',
     async (patch) => {
         (LLM.run as jest.Mock).mockResolvedValue({
@@ -264,6 +278,10 @@ it('keeps code after a JS private member visible to the control-flow guard', asy
 it.each([
     '+const text = `value: ${(() => { return authorize(); })()}`;',
     '+const ratio = "value" / count; return authorize();',
+    '++value; return authorize();',
+    '+++value; return authorize();',
+    '+++ value; return authorize();',
+    '--- a/status.ts\n+++ b/status.ts\n@@ -1 +1 @@\n+++value; return authorize();',
 ])('keeps executable code visible around literals: %s', async (patch) => {
     (LLM.run as jest.Mock).mockResolvedValue({
         level: 'low',
@@ -284,6 +302,9 @@ it.each([
 it.each([
     ['src/status.py', '+count //= 2; return authorize()'],
     ['src/status.go', '+text := `ends with a backslash\\`; return authorize()'],
+    ['src/status.py', '+text = f"{allow if (ready) else deny}"'],
+    ['src/status.py', '+text = f"\\{allow if (ready) else deny}"'],
+    ['src/status.py', '+text = f"{f\'{allow if (ready) else deny}\'}"'],
 ])('keeps executable code visible in %s fragments', async (filename, patch) => {
     (LLM.run as jest.Mock).mockResolvedValue({
         level: 'low',
@@ -435,6 +456,63 @@ it.each([
 
     expect(result.level).toBe('low');
 });
+
+it.each([
+    ['test_status.py', '+assert render() == f"Hello {name}"'],
+    ['test_status.py', '+assert render() == rf"Hello {name}"'],
+    ['test_status.py', '+assert read() == b"data"'],
+    ['test_status.py', '+assert read() == u"text"'],
+    ['test_status.py', '+assert read() == r"abc"'],
+    ['test_status.py', '+assert read() == rb"abc"'],
+    ['tests/status_test.rs', '+assert_eq!(read(), b"bytes");'],
+])(
+    'keeps assertions around prefixed literals in %s',
+    async (filename, patch) => {
+        (LLM.run as jest.Mock).mockResolvedValue({
+            level: 'low',
+            reason: 'Behavior covered by tests.',
+        });
+        const result = await assessApprovalRisk({
+            ...input,
+            files: [
+                {
+                    filename: 'src/status.ts',
+                    status: 'modified',
+                    patch: '+return authorize();',
+                },
+                { filename, status: 'modified', patch },
+            ] as any,
+        });
+        expect(result.level).toBe('low');
+    },
+);
+
+it.each([
+    ['test_status.py', '+b"placeholder"'],
+    ['test_status.py', '+f"placeholder"'],
+    ['test_status.py', '+f"{{return placeholder}}"'],
+    ['tests/status_test.rs', '+b"placeholder"'],
+])(
+    'does not count a literal prefix alone as test evidence in %s',
+    async (filename, patch) => {
+        (LLM.run as jest.Mock).mockResolvedValue({
+            level: 'low',
+            reason: 'Behavior unchanged.',
+        });
+        const result = await assessApprovalRisk({
+            ...input,
+            files: [
+                {
+                    filename: 'src/status.ts',
+                    status: 'modified',
+                    patch: '+return authorize();',
+                },
+                { filename, status: 'modified', patch },
+            ] as any,
+        });
+        expect(result.level).toBe('medium');
+    },
+);
 
 it.each([
     { status: 'removed', patch: '@@ -1 +0 @@\n-assert behavior' },

@@ -5,14 +5,14 @@ export function addedCodeLines(
 ): string | undefined {
     const hashComments = filename.toLowerCase().endsWith('.py');
     const templateExpressions = /\.[cm]?[jt]sx?$/i.test(filename);
-    const fragments = patch.split(/^@@.*@@.*$/m).map((hunk) => {
+    const hunks = patch.split(/^@@.*@@.*$/m);
+    // A full unified diff has a preamble before its first hunk. Inside a
+    // hunk, even `+++value` is added code, not a `+++ b/file` header.
+    if (hunks.length > 1) hunks.shift();
+    const fragments = hunks.map((hunk) => {
         const lines = hunk
             .split('\n')
-            .filter(
-                (line) =>
-                    line.startsWith(' ') ||
-                    (line.startsWith('+') && !line.startsWith('+++')),
-            );
+            .filter((line) => line.startsWith(' ') || line.startsWith('+'));
         if (!lines.length) return '';
         const source = lines.map((line) => line.slice(1)).join('\n');
         const addedOnly = (text: string) =>
@@ -32,12 +32,17 @@ export function addedCodeLines(
             return undefined;
         let result = '';
         let delimiter = '';
+        let pythonInterpolation = false;
         let blockComment = false;
         let lineComment = false;
         let regexLiteral = false;
         let regexClass = false;
         let previous = '';
-        const interpolationDepth: number[] = [];
+        const interpolations: {
+            depth: number;
+            delimiter: string;
+            python: boolean;
+        }[] = [];
         for (let index = 0; index < source.length; index++) {
             const char = source[index];
             const next = source[index + 1];
@@ -64,22 +69,38 @@ export function addedCodeLines(
             }
             if (delimiter || regexLiteral) {
                 if (
-                    delimiter === '`' &&
-                    templateExpressions &&
-                    char === '$' &&
-                    next === '{'
+                    pythonInterpolation &&
+                    (char === '{' || char === '}') &&
+                    next === char
                 ) {
-                    result += '${';
+                    result += '  ';
                     index++;
+                    continue;
+                }
+                if (
+                    (delimiter === '`' &&
+                        templateExpressions &&
+                        char === '$' &&
+                        next === '{') ||
+                    (pythonInterpolation && char === '{')
+                ) {
+                    result += pythonInterpolation ? '{' : '${';
+                    if (!pythonInterpolation) index++;
+                    interpolations.push({
+                        depth: 0,
+                        delimiter,
+                        python: pythonInterpolation,
+                    });
                     delimiter = '';
+                    pythonInterpolation = false;
                     previous = '{';
-                    interpolationDepth.push(0);
                     continue;
                 }
                 if (
                     char === '\\' &&
                     next !== undefined &&
                     next !== '\n' &&
+                    !(pythonInterpolation && (next === '{' || next === '}')) &&
                     !(delimiter === '`' && /\.go$/i.test(filename))
                 ) {
                     result += '  ';
@@ -90,6 +111,7 @@ export function addedCodeLines(
                     result += ' '.repeat(delimiter.length);
                     index += delimiter.length - 1;
                     delimiter = '';
+                    pythonInterpolation = false;
                     previous = 'v';
                 } else {
                     if (regexLiteral) {
@@ -104,13 +126,14 @@ export function addedCodeLines(
                 }
                 continue;
             }
-            if (interpolationDepth.length && (char === '{' || char === '}')) {
-                const last = interpolationDepth.length - 1;
-                if (char === '{') interpolationDepth[last]++;
-                else if (interpolationDepth[last] === 0) {
-                    interpolationDepth.pop();
-                    delimiter = '`';
-                } else interpolationDepth[last]--;
+            if (interpolations.length && (char === '{' || char === '}')) {
+                const current = interpolations[interpolations.length - 1];
+                if (char === '{') current.depth++;
+                else if (current.depth === 0) {
+                    interpolations.pop();
+                    delimiter = current.delimiter;
+                    pythonInterpolation = current.python;
+                } else current.depth--;
             }
             if (
                 (!hashComments && char === '/' && next === '/') ||
@@ -127,15 +150,29 @@ export function addedCodeLines(
                 continue;
             }
             if (char === '"' || char === "'" || char === '`') {
+                const prefix =
+                    source.slice(0, index).match(/[\p{ID_Continue}]+$/u)?.[0] ??
+                    '';
+                const knownPrefix = hashComments
+                    ? /^(?:[rubft]|br|rb|fr|rf|tr|rt)$/i.test(prefix)
+                    : /\.rs$/i.test(filename) &&
+                      (prefix === 'b' || (prefix === 'c' && char === '"'));
                 if (
+                    !knownPrefix &&
                     char !== '`' &&
                     /\p{ID_Continue}/u.test(source[index - 1] ?? '') &&
                     /\p{ID_Start}/u.test(next ?? '')
                 )
                     return undefined;
+                if (knownPrefix)
+                    result =
+                        result.slice(0, -prefix.length) +
+                        ' '.repeat(prefix.length);
                 delimiter = source.startsWith(char.repeat(3), index)
                     ? char.repeat(3)
                     : char;
+                pythonInterpolation =
+                    hashComments && knownPrefix && /[ft]/i.test(prefix);
                 result += ' '.repeat(delimiter.length);
                 index += delimiter.length - 1;
                 continue;
@@ -156,7 +193,7 @@ export function addedCodeLines(
         return delimiter ||
             blockComment ||
             regexLiteral ||
-            interpolationDepth.length
+            interpolations.length
             ? undefined
             : addedOnly(result);
     });
