@@ -93,6 +93,25 @@ describe('ScanBudgetMeter', () => {
         expect(meter.isExhausted()).toBe(true);
     });
 
+    it('reserves room for every request that may be in flight at once', () => {
+        const alone = new ScanBudgetMeter({ maxUsd: 1 }, RATES);
+        const four = new ScanBudgetMeter({ maxUsd: 1 }, RATES);
+        four.expectInFlight(4);
+
+        // $0.10 spent, a request reserved at $0.15: one ($0.25) or four at
+        // once ($0.70) fit under $1. Then $0.40 spent, $0.45 per request:
+        // one still fits ($0.85), four ($2.20) do not.
+        alone.record(request(100_000, 0));
+        four.record(request(100_000, 0));
+        expect(alone.isExhausted()).toBe(false);
+        expect(four.isExhausted()).toBe(false);
+
+        alone.record(request(300_000, 0));
+        four.record(request(300_000, 0));
+        expect(alone.isExhausted()).toBe(false);
+        expect(four.isExhausted()).toBe(true);
+    });
+
     it('never stops a scan without a limit, but still counts its spend', () => {
         const meter = new ScanBudgetMeter({}, RATES);
 

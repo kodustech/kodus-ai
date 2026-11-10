@@ -71,6 +71,11 @@ const LENS_MAX_STEPS = 30;
  * F3 50.0 -> 55.3) at twice the lens cost; one until that cost is decided.
  */
 const LENS_PASSES = 1;
+/**
+ * Units audited at once. Each holds one lens loop, so this is also how many
+ * model requests can be in flight; the budget reserve scales with it.
+ */
+export const UNIT_CONCURRENCY = 4;
 const LISTING_LIMIT = 4000;
 const MAP_LISTING_SAMPLE = 600;
 
@@ -238,41 +243,38 @@ export class SecurityScanEngine {
         const findings: ScanFinding[] = [];
         const examined = new Set<string>();
         let stoppedByBudget = false;
+        let stopped = false;
 
-        for (const unit of units) {
+        const queue = units.filter((unit) => {
             const state = progress.get(unit.id)?.state;
-            if (state === 'done' || state === 'failed') {
-                continue;
-            }
+            return state !== 'done' && state !== 'failed';
+        });
+        const mayStart = (): boolean => {
+            if (stopped) return false;
             if (signal.aborted && !budgetSignal.aborted) {
-                break;
-            }
-            if (budgetSignal.aborted || params.meter.isExhausted()) {
+                stopped = true;
+            } else if (budgetSignal.aborted || params.meter.isExhausted()) {
                 stoppedByBudget = true;
-                break;
+                stopped = true;
+            } else if (params.deadlineAt && this.now() >= params.deadlineAt) {
+                stopped = true;
             }
-            if (params.deadlineAt && this.now() >= params.deadlineAt) {
-                break;
-            }
+            return !stopped;
+        };
+        const reproduceOneAtATime = serially();
+        // Units are audited at once but folded in one at a time, in the order
+        // they started (the plan's priority): the dedup compares a unit with
+        // everything folded before it, so two units cannot both report one
+        // bug, and of two reports of one bug the higher-priority unit's stays.
+        let folded: Promise<void> = Promise.resolve();
 
-            const unitHits = [unit.file, ...unit.relatedFiles].flatMap(
-                (file) => hitsByFile.get(file) ?? [],
-            );
-
-            const reported = [...(params.reported ?? []), ...findings];
-            const result = await this.auditUnit(
-                params,
-                unit,
-                unitHits,
-                existingFiles,
-                signal,
-                reported,
-            );
-
+        const fold = async (unit: ScanUnit, result: AuditResult) => {
             if (result.aborted) {
-                // What the unit found before it stopped is kept, but the unit
-                // is not counted as examined: its files were only partly read,
-                // so nothing there may be resolved as gone.
+                // What the unit found before it stopped is kept, but
+                // the unit is not counted as examined: its files were
+                // only partly read, so nothing there may be resolved
+                // as gone.
+                stopped = true;
                 findings.push(...result.findings);
                 if (budgetSignal.aborted || params.meter.isExhausted()) {
                     stoppedByBudget = true;
@@ -286,19 +288,23 @@ export class SecurityScanEngine {
                         result.findings,
                     );
                 } else if (result.findings.length) {
-                    // The job ended mid-unit: the unit runs again next time;
-                    // its findings so far are stored now so none is lost.
+                    // The job ended mid-unit: the unit runs again next
+                    // time; its findings so far are stored now so none
+                    // is lost.
                     await params.onUnitDone?.(
                         { unitId: unit.id, state: 'pending', findings: 0 },
                         result.findings,
                     );
                 }
-                break;
+                return;
             }
 
+            // The unit ran beside units folded in after it started: what they
+            // reported was not in its view yet.
+            const reported = [...(params.reported ?? []), ...findings];
             result.findings = await this.withoutDuplicates(
                 params,
-                result.findings,
+                result.findings.filter((f) => !isDuplicate(reported, f)),
                 nearby(reported, unit, result.findings),
             );
 
@@ -315,7 +321,36 @@ export class SecurityScanEngine {
             }
             findings.push(...result.findings);
             await params.onUnitDone?.(unitProgress, result.findings);
-        }
+        };
+
+        const worker = async () => {
+            while (queue.length && mayStart()) {
+                const unit = queue.shift()!;
+                const unitHits = [unit.file, ...unit.relatedFiles].flatMap(
+                    (file) => hitsByFile.get(file) ?? [],
+                );
+                const audit = this.auditUnit(
+                    params,
+                    unit,
+                    unitHits,
+                    existingFiles,
+                    signal,
+                    [...(params.reported ?? []), ...findings],
+                    reproduceOneAtATime,
+                );
+                const turn = folded;
+                folded = audit.then(async (result) => {
+                    await turn;
+                    await fold(unit, result);
+                });
+                // The worker takes its next unit once this one's audit ends,
+                // without waiting for earlier units to be folded in.
+                await audit;
+            }
+        };
+        params.meter.expectInFlight(UNIT_CONCURRENCY);
+        await Promise.all(Array.from({ length: UNIT_CONCURRENCY }, worker));
+        await folded;
 
         if (stoppedByBudget) {
             for (const unit of units) {
@@ -476,12 +511,9 @@ export class SecurityScanEngine {
         signal: AbortSignal,
         /** What earlier units of this scan already reported. */
         earlier: ScanReportedFinding[] = [],
-    ): Promise<{
-        findings: ScanFinding[];
-        error?: string;
-        /** The unit stopped halfway: the cap, or the job ended. */
-        aborted?: boolean;
-    }> {
+        /** Units share one sandbox: reproduction tests run one at a time. */
+        oneAtATime: Serial = serially(),
+    ): Promise<AuditResult> {
         const findings: ScanFinding[] = [];
         let failures = 0;
 
@@ -578,7 +610,7 @@ export class SecurityScanEngine {
                 ) {
                     break;
                 }
-                await this.reproduce(params, finding);
+                await oneAtATime(() => this.reproduce(params, finding));
             }
         }
 
@@ -958,6 +990,25 @@ function sampleListing(listing: string[], limit: number): string[] {
         { length: limit },
         (_, i) => listing[Math.floor(i * step)],
     );
+}
+
+interface AuditResult {
+    findings: ScanFinding[];
+    error?: string;
+    /** The unit stopped halfway: the cap, or the job ended. */
+    aborted?: boolean;
+}
+
+type Serial = <T>(task: () => Promise<T>) => Promise<T>;
+
+/** Runs the tasks handed to it one at a time, in the order handed. */
+function serially(): Serial {
+    let tail: Promise<unknown> = Promise.resolve();
+    return (task) => {
+        const run = tail.then(task, task);
+        tail = run.catch(() => undefined);
+        return run;
+    };
 }
 
 function anySignal(signals: Array<AbortSignal | undefined>): AbortSignal {

@@ -267,6 +267,61 @@ describe('SecurityScanEngine', () => {
         expect(meter.snapshot().requests).toBe(4 + 1 + 1);
     });
 
+    it('audits units at once and folds them in the order of the plan', async () => {
+        let running = 0;
+        let most = 0;
+        const lens = fakeLens((file, cls) =>
+            file.endsWith('exec.ts') && cls === 'injection'
+                ? [{ ...IDOR, relevantFile: 'src/admin/exec.ts' }]
+                : file.endsWith('orders.controller.ts') && cls === 'authz'
+                  ? [IDOR]
+                  : [],
+        );
+        const runLens = jest.fn(async (input: any, secrets: any) => {
+            running++;
+            most = Math.max(most, running);
+            // The first unit in the plan is the slowest to finish.
+            const slow = input.userPrompt.includes('orders.controller.ts');
+            await new Promise((r) => setTimeout(r, slow ? 30 : 5));
+            running--;
+            return lens(input, secrets);
+        });
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({
+                units: [
+                    {
+                        file: 'src/orders/orders.controller.ts',
+                        relatedFiles: [],
+                        classes: ['authz'],
+                        priority: 90,
+                        reason: '',
+                    },
+                    {
+                        file: 'src/admin/exec.ts',
+                        relatedFiles: [],
+                        classes: ['injection'],
+                        priority: 80,
+                        reason: '',
+                    },
+                ],
+            }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(most).toBeGreaterThan(1);
+        expect(result.findings.map((f) => f.filePath)).toEqual([
+            'src/orders/orders.controller.ts',
+            'src/admin/exec.ts',
+        ]);
+    });
+
     it('drops, before finalizing, a finding in an invented file or a test', async () => {
         const runLens = fakeLens((file, cls) =>
             file.endsWith('orders.controller.ts') && cls === 'authz'
