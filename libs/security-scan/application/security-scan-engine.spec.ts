@@ -32,6 +32,7 @@ export class OrdersController {
     return exec('ls ' + req.query.dir);
 }`,
     'src/util/date.ts': 'export const now = () => new Date();',
+    'test/orders.e2e-spec.ts': "it('reads an order', () => {});",
 };
 
 const SURFACE: SurfaceMap = {
@@ -264,6 +265,37 @@ describe('SecurityScanEngine', () => {
         // Every model request inside the scan was metered.
         // Four lenses, the map and one finalize.
         expect(meter.snapshot().requests).toBe(4 + 1 + 1);
+    });
+
+    it('drops, before finalizing, a finding in an invented file or a test', async () => {
+        const runLens = fakeLens((file, cls) =>
+            file.endsWith('orders.controller.ts') && cls === 'authz'
+                ? [
+                      { ...IDOR, relevantFile: 'src/orders/invented.ts' },
+                      { ...IDOR, relevantFile: 'test/orders.e2e-spec.ts' },
+                      { ...IDOR, relevantFile: '/repo/' + IDOR.relevantFile },
+                  ]
+                : [],
+        );
+        const llm = fakeLlm(new Error('no plan'));
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm,
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.findings.map((f) => f.filePath)).toEqual([
+            'src/orders/orders.controller.ts',
+        ]);
+        expect(
+            llm.mock.calls.filter(([req]) => req.runName.endsWith('-finalize')),
+        ).toHaveLength(1);
     });
 
     it('gives each lens the scan prompt, the sandbox tools and no diff', async () => {
