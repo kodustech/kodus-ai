@@ -1,9 +1,23 @@
 import modelData from './model-context-windows.json';
 
-const MODELS = modelData as Record<
-    string,
-    { max_input_tokens: number; litellm_provider?: string }
->;
+type MirrorRow = {
+    max_input_tokens: number;
+    litellm_provider?: string;
+    source?: 'models.dev';
+};
+
+const ALL_ROWS = modelData as Record<string, MirrorRow>;
+
+/** Rows from LiteLLM, current or kept from an earlier refresh. */
+const MODELS: Record<string, MirrorRow> = {};
+/** Rows filled from models.dev, read as `limit.context - limit.output` when
+ *  the host publishes no input limit. That is a floor, often well below the
+ *  real window, so they answer only a model every other step missed, and never
+ *  a substring match (see `scripts/refresh-model-context-windows.mjs`). */
+const MODELS_DEV: Record<string, MirrorRow> = {};
+for (const [name, row] of Object.entries(ALL_ROWS)) {
+    (row.source === 'models.dev' ? MODELS_DEV : MODELS)[name] = row;
+}
 
 /** Conservative default when the model is unknown. */
 export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
@@ -82,6 +96,10 @@ const NORMALIZED_INDEX = new Map<string, number>();
 for (const [name, info] of Object.entries(MODELS)) {
     NORMALIZED_INDEX.set(normalize(name), info.max_input_tokens);
 }
+const MODELS_DEV_INDEX = new Map<string, number>();
+for (const [name, info] of Object.entries(MODELS_DEV)) {
+    MODELS_DEV_INDEX.set(normalize(name), info.max_input_tokens);
+}
 
 /**
  * Resolves the max input tokens (context window) for a given model.
@@ -91,8 +109,9 @@ for (const [name, info] of Object.entries(MODELS)) {
  *   2. Normalized match (strips provider prefix, punctuation, case)
  *   3. Manual override, exact on the normalized name — only reachable for a
  *      model the mirror does not have
- *   4. Partial/substring match on normalized names
- *   5. Default (128k)
+ *   4. Partial/substring match on normalized names, LiteLLM rows only
+ *   5. models.dev row, exact or normalized
+ *   6. Default (128k)
  *
  * The overrides used to sit at position 1 AND match by substring, so a
  * hand-typed number for an older model silently overruled real data for a newer
@@ -159,7 +178,15 @@ export function lookupModelContextWindow(
         return bestMatch;
     }
 
-    // 5. Unknown — the caller decides what to substitute.
+    // 5. models.dev — a floor for a model nobody else knows.
+    const modelsDevHit =
+        MODELS_DEV[modelName]?.max_input_tokens ??
+        MODELS_DEV_INDEX.get(normalized);
+    if (modelsDevHit) {
+        return modelsDevHit;
+    }
+
+    // 6. Unknown — the caller decides what to substitute.
     return undefined;
 }
 

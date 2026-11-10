@@ -52,8 +52,9 @@ describe('model-context-window', () => {
         it('a model the mirror carries needs no override at all', () => {
             // claude-sonnet-4-5 sits only in the mirror now, so a refresh moves
             // its window on its own — which a duplicated override would have
-            // pinned in place.
-            expect(getModelContextWindow('claude-sonnet-4-5')).toBe(1_000_000);
+            // pinned in place. Upstream moved it from 1,000,000 (the beta
+            // long-context window) to 200,000 on the 2026-11 refresh.
+            expect(getModelContextWindow('claude-sonnet-4-5')).toBe(200_000);
         });
     });
 
@@ -80,6 +81,24 @@ describe('model-context-window', () => {
             // normalized-index key. Substring match picks the LONGEST key that
             // contains it: 'snowflake/jamba-instruct' -> 256000.
             expect(getModelContextWindow('jamba-instruct')).toBe(256_000);
+        });
+    });
+
+    describe('getModelContextWindow — models.dev rows fill gaps only', () => {
+        it('answers for a model no other step knows', () => {
+            // Only models.dev carries it: 1,048,576 context minus 32,768 output.
+            expect(getModelContextWindow('kimi-for-coding')).toBe(1_015_808);
+        });
+
+        it('never answers ahead of a LiteLLM row, even a substring one', () => {
+            // models.dev reads this one as 104,858 (its smallest host); the
+            // LiteLLM family row holds the real 1,048,576.
+            expect(getModelContextWindow('deepseek-v4.1-flash')).toBe(1_048_576);
+        });
+
+        it('keeps a row LiteLLM dropped instead of falling back to 128k', () => {
+            // LiteLLM deleted every openrouter/* row on 2026-10-09.
+            expect(getModelContextWindow('xiaomi/mimo-v2.6-pro')).toBe(1_048_576);
         });
     });
 
