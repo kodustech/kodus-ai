@@ -43,7 +43,12 @@ export function parseOpenAiIds(body: unknown): CatalogModel[] {
     const data = Array.isArray(body)
         ? body
         : (body as { data?: unknown } | undefined)?.data;
-    if (!Array.isArray(data)) return [];
+    if (data === undefined || data === null) return [];
+    // A `data` field that is not a list is a malformed body. Throw so the
+    // caller reports a failed listing instead of an empty model list.
+    if (!Array.isArray(data)) {
+        throw new Error('Malformed /models response: `data` is not an array');
+    }
     return data
         .filter(
             (m): m is { id: string } =>

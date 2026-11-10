@@ -103,9 +103,9 @@ describe('openAiModelListing — openai_compatible bare-array /models body', () 
         );
     });
 
-    it('returns no models for a body that is neither shape', () => {
-        expect(ids({ object: 'list' })).toEqual([]);
-        expect(ids({ data: 'not-a-list' })).toEqual([]);
-        expect(ids(undefined)).toEqual([]);
+    it('rejects a body whose data field is not a list', () => {
+        expect(() => ids({ data: 'not-a-list' })).toThrow(
+            'Malformed /models response: `data` is not an array',
+        );
     });
 });
