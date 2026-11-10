@@ -71,7 +71,7 @@ func TestAsyncBakeRetainsPhysicalMemoryAfterClaimReleaseUntilItActuallyReturns(t
 				t.Fatal(err)
 			}
 			<-drv.started
-			if got := h.a.mem.committed(); got != 4096 {
+			if got := h.a.mem.Committed(); got != 4096 {
 				t.Fatalf("live claim and bake double-counted or lost: %d", got)
 			}
 			if err := h.handle("claim-1", protocol.MessageTypeClaimRelease, &protocol.ClaimReleaseBody{}); err != nil {
@@ -93,11 +93,11 @@ func TestAsyncBakeRetainsPhysicalMemoryAfterClaimReleaseUntilItActuallyReturns(t
 				<-h.a.beat
 			}
 			allow()
-			waitFor(t, func() bool { return h.a.mem.committed() == 0 })
+			waitFor(t, func() bool { return h.a.mem.Committed() == 0 })
 			waitFor(t, func() bool { return len(h.a.beat) > 0 })
 			<-h.a.beat
 			h.ready("claim-2")
-			if got := h.a.mem.committed(); got != 4096 {
+			if got := h.a.mem.Committed(); got != 4096 {
 				t.Fatalf("old hold released a new claim's reservation: %d", got)
 			}
 		})
@@ -106,26 +106,26 @@ func TestAsyncBakeRetainsPhysicalMemoryAfterClaimReleaseUntilItActuallyReturns(t
 
 func TestAsyncBakeReservesFullBudgetWithoutDoubleCountingReadyClaim(t *testing.T) {
 	h, drv, _, allow := bakeMemoryHarness(t, 8192, 4096, 2048, nil)
-	if got := h.a.mem.committed(); got != 2048 {
+	if got := h.a.mem.Committed(); got != 2048 {
 		t.Fatalf("ready reservation=%d", got)
 	}
 	if err := startMemoryBake(t, h); err != nil {
 		t.Fatal(err)
 	}
 	<-drv.started
-	if got := h.a.mem.committed(); got != 4096 {
+	if got := h.a.mem.Committed(); got != 4096 {
 		t.Fatalf("bake and claim must share one full budget, got %d", got)
 	}
 	allow()
 	h.a.Wait()
-	if got := h.a.mem.committed(); got != 2048 {
+	if got := h.a.mem.Committed(); got != 2048 {
 		t.Fatalf("completed bake changed live claim budget: %d", got)
 	}
 }
 
 func TestAsyncBakeWithoutFullBudgetIsRefusedBeforePinOrAck(t *testing.T) {
 	h, _, pin, _ := bakeMemoryHarness(t, 6144, 4096, 2048, nil)
-	if ok, _, _ := h.a.mem.admit("other-held", 4096, true); !ok {
+	if ok, _, _ := h.a.mem.Admit("other-held", 4096, true); !ok {
 		t.Fatal("fixture reservation failed")
 	}
 	if err := startMemoryBake(t, h); nackCode(err) != "no_capacity" {
@@ -137,54 +137,8 @@ func TestAsyncBakeWithoutFullBudgetIsRefusedBeforePinOrAck(t *testing.T) {
 	if pins != 0 {
 		t.Fatal("refused bake stranded a driver pin")
 	}
-	if got := h.a.mem.committed(); got != 6144 {
+	if got := h.a.mem.Committed(); got != 6144 {
 		t.Fatalf("refused bake changed reservations: %d", got)
-	}
-}
-
-func TestMemoryLedgerAsyncHoldsShareOneBudgetAndCannotEraseANewOwner(t *testing.T) {
-	m := newMemoryLedger(10)
-	if ok, _, _ := m.admit("claim", 2, true); !ok {
-		t.Fatal("admit")
-	}
-	first, ok := m.retain("claim", 4)
-	if !ok {
-		t.Fatal("first retain")
-	}
-	second, ok := m.retain("claim", 6)
-	if !ok {
-		t.Fatal("second retain")
-	}
-	if got := m.committed(); got != 6 {
-		t.Fatalf("shared tree double-counted: %d", got)
-	}
-	m.set("claim", 8)
-	second()
-	if got := m.committed(); got != 8 {
-		t.Fatalf("hold completion removed live claim capacity: %d", got)
-	}
-	m.set("claim", 2)
-	m.forget("claim")
-	if got := m.committed(); got != 4 {
-		t.Fatalf("logical release removed physical hold: %d", got)
-	}
-	if ok, _, _ := m.admit("claim", 1, false); ok {
-		t.Fatal("same released id borrowed a still-live physical hold")
-	}
-	first()
-	if got := m.committed(); got != 0 {
-		t.Fatalf("last hold survived completion: %d", got)
-	}
-	if ok, _, _ := m.admit("claim", 3, true); !ok {
-		t.Fatal("cleaned id could not be admitted")
-	}
-	first()
-	second()
-	if got := m.committed(); got != 3 {
-		t.Fatalf("stale hold callback erased new owner: %d", got)
-	}
-	if _, ok := m.retain("missing", 1); ok {
-		t.Fatal("retained absent claim")
 	}
 }
 
@@ -194,28 +148,11 @@ func TestAsyncBakePinRefusalReleasesOnlyItsExtraMemoryHold(t *testing.T) {
 	if err := startMemoryBake(t, h); nackCode(err) != "bake_source" {
 		t.Fatalf("pin failure: %v", err)
 	}
-	if got := h.a.mem.committed(); got != 2048 {
+	if got := h.a.mem.Committed(); got != 2048 {
 		t.Fatalf("pin failure stranded full budget or erased live claim: %d", got)
 	}
-	if len(h.a.mem.holds) != 0 {
+	if h.a.mem.Holds() != 0 {
 		t.Fatal("pin refusal left async hold")
-	}
-}
-
-func TestRetainingAlreadyCommittedBudgetNeedsNoAdditionalCapacity(t *testing.T) {
-	m := newMemoryLedger(10)
-	m.admit("a", 8, false)
-	m.admit("b", 8, false) // legacy hub already overcommitted
-	release, ok := m.retain("a", 8)
-	if !ok {
-		t.Fatal("retaining the same physical budget asked for capacity again")
-	}
-	defer release()
-	if _, ok := m.retain("a", 9); ok {
-		t.Fatal("overcommitted cell granted additional capacity")
-	}
-	if got := m.committed(); got != 16 {
-		t.Fatalf("retention changed committed capacity: %d", got)
 	}
 }
 
@@ -224,13 +161,13 @@ func TestRequiredMemoryAdmissionCannotBeBypassedByAnOlderHub(t *testing.T) {
 	if h.a.hubAccepts(protocol.FeatureCellMemory) {
 		t.Fatal("fixture unexpectedly negotiated memory")
 	}
-	if ok, _, _ := h.a.mem.admit("physical-held", 12288, true); !ok {
+	if ok, _, _ := h.a.mem.Admit("physical-held", 12288, true); !ok {
 		t.Fatal("fixture reservation failed")
 	}
 	if err := h.handle("claim-old-hub", protocol.MessageTypeClaimAcquire, h.acquireBody()); nackCode(err) != "no_capacity" {
 		t.Fatalf("old hub bypassed required admission: %v", err)
 	}
-	if got := h.a.mem.committed(); got != 12288 {
+	if got := h.a.mem.Committed(); got != 12288 {
 		t.Fatalf("overcommitted required physical budget: %d", got)
 	}
 	if len(h.drv.Machines()) != 0 {
@@ -275,7 +212,7 @@ func TestAsyncBakeWithUnconfirmedPhysicalCleanupKeepsItsMemoryQuarantined(t *tes
 	waitFor(t, func() bool { _, ok := h.a.claims.Get("claim-1"); return !ok })
 	allow()
 	h.a.Wait() // Driver.Bake returned but a helper may still be alive.
-	if got := h.a.mem.committed(); got != 4096 {
+	if got := h.a.mem.Committed(); got != 4096 {
 		t.Fatalf("unconfirmed cleanup freed physical memory: %d", got)
 	}
 	if err := h.handle("claim-2", protocol.MessageTypeClaimAcquire, h.acquireBody()); nackCode(err) != "no_capacity" {

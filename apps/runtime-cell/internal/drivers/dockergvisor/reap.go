@@ -14,6 +14,7 @@ import (
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/buildstate"
 )
 
 // The independent reaper's view of a docker-gvisor cell (S-08, cmd/reaper
@@ -45,7 +46,7 @@ type Reaper struct {
 	cfg ReaperConfig
 	// mounted lists the overlays mounted under a directory (Linux
 	// mountinfo); a build state directory with one is left to the cell.
-	mounted func(under string) ([]overlayMount, error)
+	mounted func(under string) ([]buildstate.OverlayMount, error)
 }
 
 // NewForReaper is the reaper's driver: List and Destroy, nothing else. It
@@ -61,22 +62,12 @@ func NewForReaper(d Docker, cfg ReaperConfig) (*Reaper, error) {
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
-	return &Reaper{d: d, cfg: cfg, mounted: hostOverlays}, nil
+	return &Reaper{d: d, cfg: cfg, mounted: buildstate.MountedOverlays}, nil
 }
 
 // reaper is the driver's own reaper, for the cell's sweep.
 func (d *Driver) reaper() *Reaper {
-	return &Reaper{d: d.d, cfg: ReaperConfig{CellID: d.cfg.CellID, WorkDir: d.workDir(), EgressContainer: d.cfg.EgressContainer, Log: d.log()}, mounted: hostOverlays}
-}
-
-// hostOverlays lists the overlays mounted under a directory; none where
-// the cell mounts none (not Linux).
-func hostOverlays(under string) ([]overlayMount, error) {
-	m := defaultMounter()
-	if m == nil {
-		return nil, nil
-	}
-	return m.Mounted(under)
+	return &Reaper{d: d.d, cfg: ReaperConfig{CellID: d.cfg.CellID, WorkDir: d.workDir(), EgressContainer: d.cfg.EgressContainer, Log: d.log()}, mounted: buildstate.MountedOverlays}
 }
 
 const composeProjectLabel = "com.docker.compose.project"

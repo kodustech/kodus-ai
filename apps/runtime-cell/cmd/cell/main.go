@@ -24,6 +24,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/evidence"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/claimlimits"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver/fake"
@@ -161,7 +162,7 @@ func main() {
 		// The project boots from the checkout through the driver (Up), so
 		// the transport carries no upload; exec runs in the project's public
 		// service container, under gVisor (Driver.Exec).
-		cfg.Driver, cfg.Composer, cfg.BakePinner, cfg.Pooler, cfg.Transport = d, d, d, d, transport.Compose{Run: d.Exec}
+		cfg.Driver, cfg.Composer, cfg.Recipes, cfg.BakePinner, cfg.Pooler, cfg.Transport = d, d, d, d, d, transport.Compose{Run: d.Exec}
 		cfg.Diagnoser, cfg.BootTimes = d, d
 		cfg.FakeSupport, cfg.SQLObservers = true, d
 		cfg.ServiceLogs = d // a probe round's service logs (EVIDENCE-CAPTURE-DESIGN)
@@ -500,11 +501,11 @@ func (d deniedEgress) Denied(claimID string) []agent.DeniedEgress {
 // or refused, for its outbound evidence.
 type outboundCalls struct{ r control.OutboundReader }
 
-func (o outboundCalls) Outbound(ctx context.Context, claimID string, since, until time.Time) ([]agent.OutboundCall, error) {
+func (o outboundCalls) Outbound(ctx context.Context, claimID string, since, until time.Time) ([]evidence.OutboundCall, error) {
 	got, err := o.r.Outbound(ctx, claimID, since, until)
-	out := make([]agent.OutboundCall, 0, len(got))
+	out := make([]evidence.OutboundCall, 0, len(got))
 	for _, g := range got {
-		out = append(out, agent.OutboundCall{Host: g.Host, Port: g.Port, At: g.At, Allowed: g.Allowed})
+		out = append(out, evidence.OutboundCall{Host: g.Host, Port: g.Port, At: g.At, Allowed: g.Allowed})
 	}
 	return out, err
 }

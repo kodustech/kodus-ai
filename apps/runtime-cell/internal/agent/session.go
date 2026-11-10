@@ -161,7 +161,7 @@ func (a *Agent) housekeeping(ctx context.Context, rc RunConfig) {
 				a.log.Info("sweep", "destroyed", n, "err", err)
 			}
 			a.ReapDeadClaims(ctx)
-			a.refillPools()
+			a.pool.RefillAll()
 		}
 	}
 }

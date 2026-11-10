@@ -11,6 +11,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/bakecatalog"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
@@ -84,7 +85,7 @@ func (d *Driver) pinnedBakeSHA(ref driver.MachineRef) (string, error) {
 	}
 	_, sha, ok := strings.Cut(ref.ImageID, "@")
 	if source, nonce, hasGeneration := strings.Cut(sha, "."); hasGeneration {
-		if !hexValue(nonce, 24) {
+		if !bakecatalog.IsHex(nonce, 24) {
 			return "", ErrBakeDataUnavailable
 		}
 		sha = source
@@ -236,7 +237,7 @@ func (d *Driver) restoreData(ctx context.Context, ref driver.MachineRef, keys []
 
 // bakeData copies the stopped setup's volumes into its staged generation.
 // Publication/retirement is separate and cannot prune an in-flight source.
-func (d *Driver) bakeData(ctx context.Context, spec driver.BakeSpec, keys []string, generation *bakeGeneration) (int, error) {
+func (d *Driver) bakeData(ctx context.Context, spec driver.BakeSpec, keys []string, generation *bakecatalog.Generation) (int, error) {
 	machine := spec.Source.MachineID
 	parent := ""
 	if d.cfg.ClaimLimits != nil {

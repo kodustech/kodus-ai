@@ -39,10 +39,11 @@ func TestRecoveryRestoresOnlyBakeEligibilityNotClaimsOrPoolMachines(t *testing.T
 	if !catalog.bounded {
 		t.Fatal("recovery has no startup deadline")
 	}
-	if len(h.a.baked) != 2 || h.a.latestBake[poolKey{"org-a", "env-a"}] != "current-generation" {
+	if len(h.a.origin.Images()) != 2 || h.a.origin.Latest("org-a", "env-a") != "current-generation" {
 		t.Fatal("verified eligibility was not restored")
 	}
-	if len(h.a.pools) != 0 || h.a.claims.Free() != h.a.cfg.MaxClaims || len(h.a.tainted) != 0 {
+	tainted, _, _ := h.a.origin.Counts()
+	if h.a.pool.Environments() != 0 || h.a.claims.Free() != h.a.cfg.MaxClaims || tainted != 0 {
 		t.Fatal("recovery resurrected execution state")
 	}
 }
@@ -103,9 +104,7 @@ func TestSameEnvironmentCannotOvertakePublicationAcknowledgement(t *testing.T) {
 	if len(h.drv.BakesSnapshot()) != 2 {
 		t.Fatal("refused request executed or another environment was blocked")
 	}
-	h.a.mu.Lock()
-	remaining := len(h.a.activeBakes)
-	h.a.mu.Unlock()
+	_, _, remaining := h.a.origin.Counts()
 	if remaining != 0 {
 		t.Fatal("publication reservation leaked")
 	}
@@ -124,7 +123,7 @@ func TestConcurrentBakeRefusalTakesNoPinOrMemory(t *testing.T) {
 	pin.mu.Lock()
 	pins := len(pin.refs)
 	pin.mu.Unlock()
-	if pins != 1 || h.a.mem.committed() != 4096 {
+	if pins != 1 || h.a.mem.Committed() != 4096 {
 		allow()
 		t.Fatal("refused request took pin or memory")
 	}

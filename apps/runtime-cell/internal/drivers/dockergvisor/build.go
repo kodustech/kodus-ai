@@ -11,10 +11,13 @@ import (
 	"sort"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/bakecatalog"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/buildfingerprint"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/buildprogress"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/buildstate"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/redact"
 )
 
@@ -60,7 +63,7 @@ func (d *Driver) build(ctx context.Context, ref driver.MachineRef, builds []sand
 	if len(builds) == 0 {
 		return nil, steps, nil
 	}
-	var selected *bakeGeneration
+	var selected *bakecatalog.Generation
 	if generationPin(ref.ImageID) {
 		g, release, err := d.holdGeneration(ctx, ref)
 		if err != nil {
@@ -72,7 +75,7 @@ func (d *Driver) build(ctx context.Context, ref driver.MachineRef, builds []sand
 	built := map[string]string{}
 	for _, b := range builds {
 		tag := builtTag(ref.MachineID, b.Service)
-		fp, err := fingerprint(b, d.cfg.BuilderImage)
+		fp, err := buildfingerprint.Of(b, d.cfg.BuilderImage)
 		if err != nil {
 			d.log().Warn("build.fingerprint.failed", "machine", ref.MachineID, "service", b.Service, "err", err)
 			fp = ""
@@ -208,16 +211,16 @@ func (d *Driver) runBuild(ctx context.Context, ref driver.MachineRef, b sandbox.
 	// finds its layers and cache mounts there, and needs no exported cache.
 	// The exported cache is then only the fallback of a build that cannot
 	// mount the state: exporting it too would cost the seeding setup minutes.
-	req := stateRequest{Machine: ref.MachineID, Service: b.Service, Org: ref.Tags[driver.TagOrg], Env: ref.Tags[driver.TagEnv], Seeds: setup && seeds}
+	req := buildstate.Request{Machine: ref.MachineID, Service: b.Service, Org: ref.Tags[driver.TagOrg], Env: ref.Tags[driver.TagEnv], Seeds: setup && seeds}
 	cacheInput := "cold"
 	if st, ok := d.states.Acquire(ctx, req); ok {
 		defer d.states.Release(st)
-		run.StateDir, run.GCKeepStorage = st.dir, d.cfg.BuildStateKeep
+		run.StateDir, run.GCKeepStorage = st.Dir, d.cfg.BuildStateKeep
 		cacheInput = "state_overlay"
-		if st.mode == "seed" {
+		if st.Mode == buildstate.ModeSeed {
 			cacheInput = "state_seed"
 		}
-		d.log().Info("build.state", "machine", ref.MachineID, "service", b.Service, "mode", st.mode)
+		d.log().Info("build.state", "machine", ref.MachineID, "service", b.Service, "mode", st.Mode)
 	} else {
 		// Held for the whole build: a promotion meanwhile adds a generation
 		// and leaves this one where the builder mounted it.

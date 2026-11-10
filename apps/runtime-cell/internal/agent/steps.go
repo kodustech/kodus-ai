@@ -191,7 +191,7 @@ func (a *Agent) runProbe(ctx context.Context, frameID string, c *claims.Claim, b
 	if res.Probe != nil {
 		res.Probe.ImageID = m.Workload.ImageID
 		// What the app did in [t0, t1]; never anything the gate compares.
-		a.attachProbeEvidence(ctx, c, b, res.Probe, t0, t1)
+		a.evidence.AttachProbe(ctx, evidenceOf(c), b, res.Probe, t0, t1)
 	}
 	a.sendStepResult(ctx, c, "probe.run", res)
 }
@@ -206,7 +206,7 @@ func (a *Agent) observe(ctx context.Context, frameID string, c *claims.Claim, b 
 	// effects back.
 	fwd := *b
 	fwd.Evidence = nil
-	if a.asked(b.Evidence, protocol.EvidenceCaptureDb, protocol.FeatureDBEffects) {
+	if a.evidence.Asked(b.Evidence, protocol.EvidenceCaptureDb, protocol.FeatureDBEffects) {
 		fwd.Evidence = &protocol.EvidenceRequest{Capture: []protocol.EvidenceCapture{protocol.EvidenceCaptureDb}}
 	}
 	frame, err := protocol.Encode(protocol.Header{ID: frameID, CellID: a.cfg.CellID, ClaimID: c.ID}, &fwd)
@@ -243,7 +243,7 @@ func (a *Agent) runExec(ctx context.Context, c *claims.Claim, b *protocol.ExecBo
 		res.VMHealth = protocol.VMHealthUnreachable
 	} else {
 		res.Exec = &protocol.ExecResult{ExitCode: int64(out.ExitCode), Stdout: out.Stdout, Stderr: out.Stderr, Truncated: out.Truncated, DurationMs: out.DurationMs}
-		res.Exec.Refs = a.execCast(ctx, c, b, start, out)
+		res.Exec.Refs = a.evidence.ExecCast(ctx, evidenceOf(c), b, start, out)
 	}
 	a.sendStepResult(ctx, c, "exec", res)
 }

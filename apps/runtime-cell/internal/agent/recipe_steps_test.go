@@ -41,7 +41,7 @@ const migrateRecipe = "version: 1\nservices: { compose: { public: api } }\ndata:
 // setup may fetch), before claim.ready, and again after every reset's Up.
 func TestRecipeStepsRunAfterTheEgressAndAgainAfterAReset(t *testing.T) {
 	rc := &recipeComposer{composer: composer{ips: [][]string{{"172.30.0.2"}, {"172.30.0.7"}}}}
-	h := newHarness(t, func(c *Config) { c.Composer = rc })
+	h := newHarness(t, func(c *Config) { c.Composer, c.Recipes = rc, rc })
 	rc.egress = h.egress
 	b := h.acquireBody()
 	withRecipe(b, migrateRecipe)
@@ -66,7 +66,7 @@ func TestRecipeStepsRunAfterTheEgressAndAgainAfterAReset(t *testing.T) {
 // A recipe with no steps does not call the driver for them.
 func TestARecipeWithoutStepsRunsNone(t *testing.T) {
 	rc := &recipeComposer{composer: composer{ips: [][]string{{"172.30.0.2"}}}}
-	h := newHarness(t, func(c *Config) { c.Composer = rc })
+	h := newHarness(t, func(c *Config) { c.Composer, c.Recipes = rc, rc })
 	rc.egress = h.egress
 	b := h.acquireBody()
 	withRecipe(b, "version: 1\nservices: { compose: { public: api } }\n")
@@ -91,7 +91,7 @@ func TestAFailedRecipeStepIsATypedBlocker(t *testing.T) {
 		{&driver.RecipeStepError{Step: "seed", Field: "data.seed", Err: errors.New("psql: relation does not exist")}, protocol.BlockerKindSeedData, "recipe_seed"},
 	} {
 		rc := &recipeComposer{composer: composer{ips: [][]string{{"172.30.0.2"}}}, fail: tc.err}
-		h := newHarness(t, func(c *Config) { c.Composer = rc })
+		h := newHarness(t, func(c *Config) { c.Composer, c.Recipes = rc, rc })
 		rc.egress = h.egress
 		b := h.acquireBody()
 		withRecipe(b, migrateRecipe)
@@ -109,7 +109,7 @@ func TestAFailedRecipeStepIsATypedBlocker(t *testing.T) {
 // does not: the claim fails on it, typed, and the project never comes up.
 func TestARecipeThatNeedsOtherReposIsRefusedBeforeUp(t *testing.T) {
 	rc := &recipeComposer{composer: composer{ips: [][]string{{"172.30.0.2"}}}}
-	h := newHarness(t, func(c *Config) { c.Composer = rc })
+	h := newHarness(t, func(c *Config) { c.Composer, c.Recipes = rc, rc })
 	rc.egress = h.egress
 	b := h.acquireBody()
 	withRecipe(b, "version: 1\nservices:\n  compose: { public: api }\n  needs: [{ repo: o/billing }]\n")

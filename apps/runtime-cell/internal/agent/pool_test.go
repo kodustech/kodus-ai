@@ -29,10 +29,8 @@ func bakeImage(t *testing.T, h *harness) string {
 }
 
 func (h *harness) lastBaked() string {
-	h.a.mu.Lock()
-	defer h.a.mu.Unlock()
 	last := ""
-	for id := range h.a.baked {
+	for _, id := range h.a.origin.Images() {
 		if id > last {
 			last = id
 		}
@@ -52,14 +50,12 @@ func waitFor(t *testing.T, ok func() bool) {
 }
 
 func (h *harness) poolMachines(image string) []driver.PoolMachine {
-	h.a.mu.Lock()
-	defer h.a.mu.Unlock()
-	p := h.a.pools[poolKey{"org-a", "env-1"}]
-	if p == nil {
+	target, ok := h.a.pool.Target("org-a", "env-1")
+	if !ok {
 		return nil
 	}
 	var out []driver.PoolMachine
-	for _, m := range p.ready {
+	for _, m := range target.Ready {
 		if image == "" || m.ImageID == image {
 			out = append(out, m)
 		}
@@ -120,7 +116,7 @@ func TestAClaimAdoptsAPoolMachineAndThePoolRefills(t *testing.T) {
 	if got := h.drv.AdoptionsSnapshot(); len(got) != 1 || got[0] != "claim-1="+pooled.Workload.MachineID {
 		t.Fatalf("adoptions %v", got)
 	}
-	if !h.a.isTainted(pooled.Workload.MachineID) {
+	if !h.a.origin.Tainted(pooled.Workload.MachineID) {
 		t.Fatal("a PR claim's adopted machine is not marked as having run PR code")
 	}
 	waitFor(t, func() bool {
@@ -204,7 +200,7 @@ func TestAFailedFillIsTriedAgainLater(t *testing.T) {
 		t.Fatalf("%d machines from a failing fill", n)
 	}
 	h.drv.FailPool = nil
-	h.a.refillPools()
+	h.a.pool.RefillAll()
 	waitFor(t, func() bool { return len(h.poolMachines(img)) == 1 })
 }
 
@@ -231,10 +227,8 @@ func TestPoolTargetLatestFollowsTheEnvironmentsBake(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(20 * time.Millisecond)
-	h.a.mu.Lock()
-	other := h.a.pools[poolKey{"org-a", "env-2"}]
-	h.a.mu.Unlock()
-	if other == nil || other.imageID != "" || len(other.ready) != 0 {
+	other, ok := h.a.pool.Target("org-a", "env-2")
+	if !ok || other.ImageID != "" || len(other.Ready) != 0 {
 		t.Fatalf("env-2 pool %+v took env-1's bake", other)
 	}
 }

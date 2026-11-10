@@ -54,11 +54,14 @@ func TestResourceEnforcementFailureRemainsAPlatformBlockerOnEveryBootPath(t *tes
 				case "upload":
 					c.Transport = stubTransport{upload: driver.WorkloadBootFailed(fault)}
 				case "compose":
-					c.Composer = enforcementFailureComposer{up: driver.WorkloadBootFailed(fault)}
+					failing := enforcementFailureComposer{up: driver.WorkloadBootFailed(fault)}
+					c.Composer, c.Recipes = failing, failing
 				case "recipe-setup":
-					c.Composer = enforcementFailureComposer{recipe: &driver.RecipeStepError{Step: "setup", Field: "setup[0]", Err: fault}}
+					failing := enforcementFailureComposer{recipe: &driver.RecipeStepError{Step: "setup", Field: "setup[0]", Err: fault}}
+					c.Composer, c.Recipes = failing, failing
 				case "recipe-migrate":
-					c.Composer = enforcementFailureComposer{recipe: &driver.RecipeStepError{Step: "migrate", Field: "data.migrate", Err: fault}}
+					failing := enforcementFailureComposer{recipe: &driver.RecipeStepError{Step: "migrate", Field: "data.migrate", Err: fault}}
+					c.Composer, c.Recipes = failing, failing
 				}
 			})
 			b := h.acquireBody()

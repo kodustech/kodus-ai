@@ -3,39 +3,17 @@ package agent
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/claims"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/pool"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/provenance"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 )
 
 // bakeTimeout bounds one image bake.
 const bakeTimeout = 90 * time.Minute
-
-type bakedImage struct {
-	orgID, environmentID, sha string
-}
-
-func (a *Agent) taint(ref driver.MachineRef) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.tainted[ref.MachineID] = true
-}
-
-// untaint forgets a destroyed machine (ids are never reused).
-func (a *Agent) untaint(ref driver.MachineRef) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	delete(a.tainted, ref.MachineID)
-}
-
-func (a *Agent) isTainted(machineID string) bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.tainted[machineID]
-}
 
 // ranPRCode reports whether the claim is a PR claim or holds a machine that
 // ran PR code.
@@ -44,7 +22,7 @@ func (a *Agent) ranPRCode(c *claims.Claim) bool {
 		return true
 	}
 	id := c.Machines().Workload.MachineID
-	return id != "" && a.isTainted(id)
+	return id != "" && a.origin.Tainted(id)
 }
 
 // isCleanSetupClaim is a setup claim that never ran PR code.
@@ -87,7 +65,10 @@ func (a *Agent) bake(claimID string, b protocol.ImageBakeBody) error {
 	if err != nil {
 		return nack("org_key", "no key for the org")
 	}
-	finishBake, ok := a.reserveBake(b.OrgID, b.EnvironmentID)
+	// The reservation lasts through the agent pointer and catalog
+	// acknowledgement. Concurrent same-environment requests fail explicitly
+	// before taking resources.
+	finishBake, ok := a.origin.Reserve(b.OrgID, b.EnvironmentID)
 	if !ok {
 		return nack("bake_in_progress", "this environment already has a bake in progress")
 	}
@@ -105,7 +86,7 @@ func (a *Agent) bake(claimID string, b protocol.ImageBakeBody) error {
 	// its full physical budget until the bake helper actually finishes.
 	finishMemory := func() {}
 	if a.mem != nil && bakeClaim != nil {
-		release, ok := a.mem.retain(claimID, a.budget.ClaimMemory(claimSize(bakeClaim.Acquire)).BootMB)
+		release, ok := a.mem.Retain(claimID, a.budget.ClaimMemory(claimSize(bakeClaim.Acquire)).BootMB)
 		if !ok {
 			return nack("no_capacity", "the setup's full physical budget is not available for baking")
 		}
@@ -150,10 +131,7 @@ func (a *Agent) bake(claimID string, b protocol.ImageBakeBody) error {
 			log.Error("bake.failed", "err", err)
 			return
 		}
-		a.mu.Lock()
-		a.baked[img.ImageID] = bakedImage{orgID: b.OrgID, environmentID: b.EnvironmentID, sha: b.Sha}
-		a.latestBake[poolKey{b.OrgID, b.EnvironmentID}] = img.ImageID
-		a.mu.Unlock()
+		a.origin.Add(img.ImageID, provenance.Image{OrgID: b.OrgID, EnvironmentID: b.EnvironmentID, SHA: b.Sha}, true)
 		if a.cfg.BakeCatalog != nil {
 			if err := a.cfg.BakeCatalog.AcknowledgeBake(ctx, img.ImageID); err != nil {
 				log.Error("bake.catalog.cleanup_pending", "alarm", true, "err", err)
@@ -161,27 +139,10 @@ func (a *Agent) bake(claimID string, b protocol.ImageBakeBody) error {
 		}
 		a.m.bakes.Inc("done")
 		log.Info("bake.done", "image", img.ImageID)
-		a.poolFollowsBake(b.OrgID, b.EnvironmentID, img.ImageID)
+		a.pool.FollowBake(b.OrgID, b.EnvironmentID, img.ImageID)
 	})
 	accepted = true
 	return nil
-}
-
-// The reservation lasts through the agent pointer and catalog acknowledgement.
-// Concurrent same-environment requests fail explicitly before taking resources.
-func (a *Agent) reserveBake(org, env string) (func(), bool) {
-	k := poolKey{org, env}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.activeBakes == nil {
-		a.activeBakes = map[poolKey]bool{}
-	}
-	if a.activeBakes[k] {
-		return nil, false
-	}
-	a.activeBakes[k] = true
-	var once sync.Once
-	return func() { once.Do(func() { a.mu.Lock(); delete(a.activeBakes, k); a.mu.Unlock() }) }, true
 }
 
 // poolTarget answers pool.target (S-52): pool machines come only from an
@@ -201,22 +162,18 @@ func (a *Agent) poolTarget(claimID string, b protocol.PoolTargetBody) error {
 	// this cell baked for that environment; that refusal (S-52) comes before
 	// any other.
 	latest := b.ImageID == latestImage
-	a.mu.Lock()
-	if latest {
-		b.ImageID = a.latestBake[poolKey{b.OrgID, b.EnvironmentID}]
-	}
-	img, baked := a.baked[b.ImageID]
-	a.mu.Unlock()
-	if !latest && (!baked || img.orgID != b.OrgID || img.environmentID != b.EnvironmentID) {
+	resolved, img, baked := a.origin.Resolve(b.OrgID, b.EnvironmentID, b.ImageID)
+	b.ImageID = resolved
+	if !latest && (!baked || img.OrgID != b.OrgID || img.EnvironmentID != b.EnvironmentID) {
 		return nack("image_not_baked", "the pool only takes an image this cell baked from the default branch (S-52)")
 	}
 	if a.cfg.Pooler == nil {
 		return nack("pool_unsupported", "this cell's %s driver keeps no pool", a.cfg.Driver.Kind())
 	}
 	// A size this cell grants no claim would fill a pool nothing adopts.
-	if err := poolClaimSize(b).Within(a.cfg.Driver.Capabilities().MaxClaimSize); err != nil {
+	if err := pool.ClaimSize(b).Within(a.cfg.Driver.Capabilities().MaxClaimSize); err != nil {
 		return nack("size_unavailable", "%v", err)
 	}
-	a.setPoolTarget(b)
+	a.pool.SetTarget(b)
 	return nil
 }

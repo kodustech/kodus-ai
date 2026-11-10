@@ -46,7 +46,7 @@ func recordChowns(d *Driver) *chowns {
 // environment's state or cache, or swap the image the cell loads.
 func TestTheBuildersDirectoriesAreItsAlone(t *testing.T) {
 	d, docker, _ := statefulDriver(t)
-	if err := os.MkdirAll(states(d).root, 0o700); err != nil {
+	if err := os.MkdirAll(stateRoot(d), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	for _, root := range builderRoots(d.workDir()) {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/buildfingerprint"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 )
@@ -76,7 +77,7 @@ func TestBakeKeepsTheSetupMachinesImagesPastItsRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sum, err := fingerprint(sandbox.Build{Context: dir, Dockerfile: "Dockerfile"}, d.cfg.BuilderImage)
+	sum, err := buildfingerprint.Of(sandbox.Build{Context: dir, Dockerfile: "Dockerfile"}, d.cfg.BuilderImage)
 	if err != nil {
 		t.Fatal(err)
 	}

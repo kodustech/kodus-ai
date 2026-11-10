@@ -11,8 +11,12 @@ The cell runs code nobody trusts. Read `README.md` first for the package map and
   - `protocol`, `redact`, `clock` and `metrics` are leaves.
 
   A driver never imports `agent`. The data plane (`egress`, `resolver`, `injector`, `observer`) never imports the control side.
+- The same roles as the product's hexagonal libs, in Go's idiom: `agent` is the application, the ports are the interfaces it is given (`driver`, `transport`, `hubclient`, `policy/control`), `drivers/*` are adapters, `cmd/*` is the composition root. A rule that needs no backend and no claim state is a pure package (`recipe`, `netguard`, `buildfingerprint`, `bakecatalog`, `agent/checkout`, `agent/admission`, `agent/provenance`): an adapter calls it, it never lives inside one. What only one driver needs but stands on its own is a subpackage of that driver (`drivers/dockergvisor/buildstate`, `buildcache`), with its own tests.
+- The agent is a router over its parts: a part with state of its own is a package with its own lock (`agent/claims`, `outbox`, `pool`, `admission`, `provenance`), and a part without state takes a narrow view of the claim, never the claim (`agent/evidence`), given what it needs at construction. `Agent.mu` guards the hub session only. A new concern is a new part, not another field and method on `Agent`.
+- A claim's preparation is a list of steps on one `preparation` (`agent/prepare.go`), and a project's boot on docker-gvisor a list of steps on one `projectBoot` (`drivers/dockergvisor/up.go`). A new stage is a new step in that list, in its place in the order, not more lines in another step.
+- `internal/archrules` tests these boundaries on the import graph. A new boundary is a new rule there, in the same change as its line here.
 - `cmd/*/main.go` only wires. A function in it that is more than glue belongs in a package with a test.
-- Optional capabilities are explicit fields of `agent.Config` (`Keys`, `Manifests`, `BootTimes`, `Diagnoser`, `Secrets`, `DeniedEgress`, `Composer`, `Alerts`). Never discover them by type assertion.
+- Optional capabilities are explicit fields of `agent.Config` (`Keys`, `Manifests`, `BootTimes`, `Diagnoser`, `Secrets`, `DeniedEgress`, `Composer`, `Recipes`, `Alerts`). Never discover them by type assertion.
 - A claim's mutable state lives in `agent/claims` behind the claim's lock. Read it through its methods, never by copying fields across goroutines.
 - `Agent.Handle` runs on the WebSocket read loop: it validates and answers at once. Work that needs I/O before the answer goes through `hubclient.Later`; anything else goes through `goTracked`.
 - Test fakes live in `internal/testing/` or in `_test.go` files. `driver/fake` is selectable only with `-dev`.

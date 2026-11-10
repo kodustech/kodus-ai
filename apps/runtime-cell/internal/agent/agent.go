@@ -7,6 +7,9 @@
 //   - outbox: claim frames delivered until the hub acks them;
 //   - lease: lease, sweep and dead-man, which own how long machines live;
 //   - handle.go: one hub frame to one handler, no I/O on the read loop;
+//   - checkout: what is read from and written into a claim's checkout;
+//   - admission: the memory ledger; pool: the warm pool; provenance: which
+//     machines ran PR code and which images this cell baked (S-52);
 //   - acquire.go, steps.go, release.go: the claim's life on the cell;
 //   - egress_sync.go, image_policy.go, hold.go, bundle.go, redaction.go.
 package agent
@@ -21,8 +24,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/admission"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/claims"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/evidence"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/outbox"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/pool"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/provenance"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/browser"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/clock"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dedup"
@@ -147,6 +154,10 @@ type Config struct {
 	// the agent hands it the checkout's compose file and adds the
 	// containers' addresses to the claim's egress Sources.
 	Composer driver.ComposeBooter
+	// Recipes runs the recipe's own boot steps (setup, data.migrate,
+	// data.seed) in the project Composer brought up; nil: this cell runs
+	// none. Set with Composer, by the composition root.
+	Recipes driver.RecipeRunner
 	// BakePinner is set when the driver bakes from the setup claim's
 	// machine (docker-gvisor): image.bake pins that machine's output before
 	// the ack, so releasing the claim cannot take it away.
@@ -170,7 +181,7 @@ type Config struct {
 	// Outbound its egress there (evidence.go). EvidenceHTTP is the client
 	// artifacts are uploaded with (nil: a plain one, 30 s).
 	ServiceLogs  driver.ServiceLogReader
-	Outbound     OutboundSource
+	Outbound     evidence.OutboundSource
 	EvidenceHTTP *http.Client
 	// Browser starts the browser runner per probe round (ADR-071,
 	// browser.go); nil: a browser probe goes to the observer, which refuses
@@ -236,6 +247,8 @@ type Agent struct {
 	m       agentMetrics
 	wg      sync.WaitGroup
 
+	// mu guards the hub session only: conn, version, accepts and runCtx.
+	// Every other part keeps its own state behind its own lock.
 	mu      sync.Mutex
 	conn    hubclient.Sender
 	version int64
@@ -246,20 +259,18 @@ type Agent struct {
 	// instead of holding Wait.
 	runCtx context.Context
 
-	// tainted are machines that ran PR code: never an image, a snapshot nor
-	// a pool machine (S-52). baked are the images this cell baked from a
-	// default-branch commit, the only ones pool.target accepts.
-	tainted map[string]bool
-	baked   map[string]bakedImage
-	// pools are the warm pools pool.target asked for, by environment.
-	pools map[poolKey]*envPool
-	// latestBake is each environment's last image baked here.
-	latestBake  map[poolKey]string
-	activeBakes map[poolKey]bool
+	// origin is what the cell knows of where its machines and images came
+	// from (S-52): tainted machines, the images it baked, the bakes in
+	// progress (its own lock).
+	origin *provenance.Record
+	// evidence captures what a step leaves: logs, egress, the cast.
+	evidence *evidence.Collector
+	// pool keeps the warm pools pool.target asked for (its own lock).
+	pool *pool.Manager
 
 	// mem is the memory admission (memory.go), nil without one; budget is
 	// the driver's count of a claim.
-	mem    *memoryLedger
+	mem    *admission.Ledger
 	budget driver.MemoryBudget
 	// beat asks the session for a heartbeat now (nudgeHeartbeat).
 	beat         chan struct{}
@@ -331,10 +342,10 @@ func New(cfg Config) (*Agent, error) {
 		return nil, fmt.Errorf("agent: max claim steps must be 1..%d", MaxClaimStepsLimit)
 	}
 	if cfg.PoolMax == 0 {
-		cfg.PoolMax = defaultPoolMax
+		cfg.PoolMax = pool.DefaultMax
 	}
 	if cfg.PoolTTL == 0 {
-		cfg.PoolTTL = defaultPoolTTL
+		cfg.PoolTTL = pool.DefaultTTL
 	}
 	if cfg.InitialLease == 0 {
 		cfg.InitialLease = 5 * time.Minute
@@ -357,19 +368,16 @@ func New(cfg Config) (*Agent, error) {
 	now := cfg.Clock.Now
 	leases := lease.NewManager(cfg.CellID, cfg.Driver, now, cfg.Log)
 	a := &Agent{
-		cfg:        cfg,
-		clock:      cfg.Clock,
-		log:        cfg.Log.With("cell", cfg.CellID),
-		leases:     leases,
-		deadman:    lease.NewDeadMan(leases, now, cfg.Log),
-		steps:      dedup.NewStore(dedup.DefaultTTL, now),
-		claims:     claims.NewRegistry(cfg.MaxClaims),
-		tainted:    map[string]bool{},
-		baked:      map[string]bakedImage{},
-		pools:      map[poolKey]*envPool{},
-		latestBake: map[poolKey]string{},
-		runCtx:     context.Background(),
-		beat:       make(chan struct{}, 1),
+		cfg:     cfg,
+		clock:   cfg.Clock,
+		log:     cfg.Log.With("cell", cfg.CellID),
+		leases:  leases,
+		deadman: lease.NewDeadMan(leases, now, cfg.Log),
+		steps:   dedup.NewStore(dedup.DefaultTTL, now),
+		claims:  claims.NewRegistry(cfg.MaxClaims),
+		origin:  provenance.New(),
+		runCtx:  context.Background(),
+		beat:    make(chan struct{}, 1),
 		m: agentMetrics{
 			claims:               cfg.Metrics.Gauge("cell_claims", "Claims the cell holds, by state.", "state"),
 			claimsReaped:         cfg.Metrics.Counter("cell_claims_reaped_total", "Claims the cell tore down without a claim.release, by reason.", "reason"),
@@ -386,6 +394,12 @@ func New(cfg Config) (*Agent, error) {
 			sqlObserverDuration:  cfg.Metrics.Counter("cell_sql_observer_provision_duration_ms_total", "Cumulative managed SQL observer provisioning time in milliseconds."),
 		},
 	}
+	a.evidence = &evidence.Collector{ServiceLogs: cfg.ServiceLogs, Outbound: cfg.Outbound, HTTP: cfg.EvidenceHTTP, Clock: cfg.Clock, Accepts: a.hubAccepts}
+	a.pool = pool.New(pool.Config{
+		CellID: cfg.CellID, Pooler: cfg.Pooler, Machines: cfg.Driver, OrgKey: cfg.OrgKey,
+		WorkloadSize: cfg.WorkloadSize, Max: cfg.PoolMax, TTL: cfg.PoolTTL,
+		Accepting: a.acceptingWork, Go: a.goTracked, Clock: cfg.Clock, Log: a.log, Outcomes: a.m.pool,
+	})
 	if cfg.BakeCatalog != nil {
 		startup := cfg.RecoveryContext
 		if startup == nil {
@@ -398,10 +412,7 @@ func New(cfg Config) (*Agent, error) {
 			return nil, fmt.Errorf("agent: bake recovery: %w", err)
 		}
 		for _, image := range recovered {
-			a.baked[image.ImageID] = bakedImage{orgID: image.OrgID, environmentID: image.EnvironmentID, sha: image.SHA}
-			if image.Current {
-				a.latestBake[poolKey{image.OrgID, image.EnvironmentID}] = image.ImageID
-			}
+			a.origin.Add(image.ImageID, provenance.Image{OrgID: image.OrgID, EnvironmentID: image.EnvironmentID, SHA: image.SHA}, image.Current)
 		}
 	}
 	// No source-health series for a cell without an injector alert source.
@@ -409,9 +420,9 @@ func New(cfg Config) (*Agent, error) {
 		a.m.alertSourceAvailable.Set(0)
 	}
 	if b, ok := driver.MemoryBudgetOf(cfg.Driver); ok && cfg.MemoryAllocatableMB > 0 {
-		a.mem, a.budget = newMemoryLedger(cfg.MemoryAllocatableMB), b
-		cfg.Metrics.GaugeFunc("cell_memory_committed_mb", "Memory the cell's claims are counted for (ADR-070), in MB.", func() float64 { return float64(a.mem.committed()) })
-		cfg.Metrics.GaugeFunc("cell_memory_allocatable_mb", "Memory the cell may commit to claims (ADR-070), in MB.", func() float64 { return float64(a.mem.allocatable) })
+		a.mem, a.budget = admission.New(cfg.MemoryAllocatableMB), b
+		cfg.Metrics.GaugeFunc("cell_memory_committed_mb", "Memory the cell's claims are counted for (ADR-070), in MB.", func() float64 { return float64(a.mem.Committed()) })
+		cfg.Metrics.GaugeFunc("cell_memory_allocatable_mb", "Memory the cell may commit to claims (ADR-070), in MB.", func() float64 { return float64(a.mem.Allocatable()) })
 	}
 	a.outbox = outbox.New(outbox.Config{
 		Conn: a.currentConn, Attempts: cfg.SettleAttempts, Backoff: cfg.SettleBackoff,
@@ -419,15 +430,7 @@ func New(cfg Config) (*Agent, error) {
 	})
 	cfg.Metrics.GaugeFunc("cell_deadman_state", "Dead-man state: 0 healthy, 1 lost (no new work), 2 abandoned (every machine destroyed).",
 		func() float64 { return float64(a.deadman.State()) })
-	cfg.Metrics.GaugeFunc("cell_pool_ready", "Warm pool machines ready, every environment.", func() float64 {
-		a.mu.Lock()
-		defer a.mu.Unlock()
-		n := 0
-		for _, p := range a.pools {
-			n += len(p.ready)
-		}
-		return float64(n)
-	})
+	cfg.Metrics.GaugeFunc("cell_pool_ready", "Warm pool machines ready, every environment.", func() float64 { return float64(a.pool.Ready()) })
 	cfg.Metrics.GaugeFunc("cell_free_slots", "Claims the cell can still take.", func() float64 { return float64(a.claims.Free()) })
 	a.observeClaims()
 	return a, nil

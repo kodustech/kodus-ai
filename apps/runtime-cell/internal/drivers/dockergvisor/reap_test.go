@@ -11,6 +11,7 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver/drivertest"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/buildstate"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/reaper"
 )
 
@@ -101,7 +102,7 @@ func newTestReaper(t *testing.T, f reapFixture) *Reaper {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rp.mounted = func(string) ([]overlayMount, error) { return nil, nil }
+	rp.mounted = func(string) ([]buildstate.OverlayMount, error) { return nil, nil }
 	return rp
 }
 
@@ -209,8 +210,8 @@ func TestReaperRefusesAnotherCellsMachine(t *testing.T) {
 func TestReaperLeavesAMountedBuildState(t *testing.T) {
 	_, f := newReapFixture(t)
 	rp := newTestReaper(t, f)
-	rp.mounted = func(under string) ([]overlayMount, error) {
-		return []overlayMount{{Target: filepath.Join(under, "app", "merged")}}, nil
+	rp.mounted = func(under string) ([]buildstate.OverlayMount, error) {
+		return []buildstate.OverlayMount{{Target: filepath.Join(under, "app", "merged")}}, nil
 	}
 	r := &reaper.Reaper{CellID: "cell-1", Driver: rp, Now: func() time.Time { return reapNow }}
 	if _, err := r.Run(context.Background()); err != nil {

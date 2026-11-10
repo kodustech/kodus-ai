@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/bakecatalog"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 )
 
@@ -120,7 +121,7 @@ func (d *Driver) Bake(ctx context.Context, spec driver.BakeSpec) (driver.ImageRe
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return driver.ImageRef{}, err
 	}
-	g := bakeGeneration{Cell: spec.CellID, Org: spec.OrgID, Environment: spec.EnvironmentID, SHA: spec.SHA, RecipeSHA: spec.RecipeSHA, Nonce: hex.EncodeToString(nonce[:]), Images: map[string]string{}, Volumes: map[string]string{}}
+	g := bakecatalog.Generation{Cell: spec.CellID, Org: spec.OrgID, Environment: spec.EnvironmentID, SHA: spec.SHA, RecipeSHA: spec.RecipeSHA, Nonce: hex.EncodeToString(nonce[:]), Images: map[string]string{}, Volumes: map[string]string{}}
 	g.ID = generationID(g.Cell, g.Org, g.Environment, g.SHA, g.Nonce)
 	for _, image := range pin.images {
 		if image.fp != "" {

@@ -23,9 +23,14 @@ The cell is Go (`go.mod` here); the hub and the gate are TypeScript (`apps/runti
 
 Control side (the agent and what it talks to):
 
-- `agent`: the orchestrator. `handle.go` maps each hub frame to a handler and never does I/O on the read loop. `acquire.go`, `steps.go` and `release.go` cover a claim's life. `egress_sync.go`, `image_policy.go` (S-52 taint, bake, pool), `hold.go`, `bundle.go`, `redaction.go` and `alerts.go` cover the rest.
+- `agent`: the orchestrator. `handle.go` maps each hub frame to a handler and never does I/O on the read loop. A claim's life: `acquire.go` admits the frame, `prepare.go` runs the preparation as named steps (network, machines, code, upload, compose, egress, recipe, observer SQL), `settle.go` tells the hub ready or failed, `steps.go` runs its steps and `release.go` ends it. `blocker.go` is a prepare failure's kind and signature. `egress_sync.go`, `image_policy.go` (S-52 taint, bake, pool), `hold.go`, `bundle.go`, `redaction.go` and `alerts.go` cover the rest.
 - `agent/claims`: each claim's state machine (acquiring, ready, failed, held, released), behind the claim's lock, and the registry that bounds how many claims a cell holds. Claim ids are validated here (`id.go`).
 - `agent/outbox`: claim frames (`claim.ready`, `claim.failed`, `step.result`, `blocked`) resent until the hub acks them.
+- `agent/admission`: the memory ledger (ADR-070): megabytes per claim id, what fits, what asynchronous work still holds. It knows no driver, claim or hub.
+- `agent/evidence`: what a step leaves (service logs, egress, database effects, the exec's cast), redacted, bounded and uploaded only with its grant. It sees a claim as an id, a logger, a workload and a redactor.
+- `agent/pool`: the warm pool: targets per environment, the ready machines, refill and discard, behind its own lock. The agent adopts what it hands out.
+- `agent/provenance`: where machines and images came from (S-52): tainted machines, the images this cell baked, each environment's last, the bakes in progress.
+- `agent/checkout`: what the cell reads from and writes into a claim's checkout before the boot: the default branch's recipe laid over the checkout's copy, Kody's authored build files, and what the checkout pins for the mirror (`go.sum`, Dockerfile images). No claim state; the agent turns its errors into blockers.
 - `hubclient`: the mTLS WebSocket, ack/nack within 5 s, and `Later` for answers that need I/O.
 - `protocol`: the envelope and bodies generated from the TS JSON Schema, plus a strict decoder that refuses what the TS decoder refuses, with the same codes.
 - `lease`: leases, the tag-based sweep, and the dead-man switch.
@@ -63,7 +68,12 @@ Environment (how a checkout boots):
 - `compose`: reads and adapts a checkout's compose project, as data.
 - `compose/sandbox`: the gVisor compose allowlist. `Apply` checks and rewrites the PR's file; `VerifyCanonical` checks what compose will really run.
 - `checkoutfs`: the only way the cell writes its own files into a checkout. Nothing it writes follows a name the PR planted.
+- `bakecatalog`: the durable record of baked generations: staged, published, current, retired, held. One JSON file under an exclusive lock, written by rename. It knows no backend: the driver says which generations are its own and removes the artifacts of the ones the catalog drops.
+- `drivers/dockergvisor/buildstate`: BuildKit's state per environment (one seeding setup or many copy-on-write readers, never both; LRU eviction; leftover overlays).
+- `drivers/dockergvisor/buildcache`: the exported build cache as generations, so a promotion never changes files under a running build.
+- `buildfingerprint`: the identity of one image build (context BuildKit would send, Dockerfile, target, args, builder image). A driver that reuses a baked image compares fingerprints; the package knows no backend.
 - `drivers/*`: the drivers below; `drivers/dockercli` is the one adapter to the docker binary.
+- `archrules`: the package boundaries of `AGENTS.md` as a test over the import graph.
 - `buildprogress`: reads BuildKit's plain progress into per-step durations (`build.steps`: the slowest steps, cached and failed counts). Names are redacted and bounded; no step output is kept.
 
 ## Executable recipe additions
@@ -118,7 +128,7 @@ A new driver is done when it passes the suite.
 
 Only `docker-gvisor` bakes (`Capabilities.Bake`). On any other driver the agent refuses `image.bake` with `bake_unsupported` when it arrives, and the setup records the refusal instead of an image that was never made.
 
-**Warm pool** (`internal/agent/pool.go`, `driver.Pooler`; docker-gvisor only, others answer `pool_unsupported`). `pool.target` only takes an image this cell baked (S-52) and asks the cell to keep `size` machines ready for the environment, at most `PoolMax` (4).
+**Warm pool** (`internal/agent/pool`, `driver.Pooler`; docker-gvisor only, others answer `pool_unsupported`). `pool.target` only takes an image this cell baked (S-52) and asks the cell to keep `size` machines ready for the environment, at most `PoolMax` (4).
 - A pool machine is what a claim would make before its project comes up: its own network wired to the egress, a holder tagged `kodus:role=pool` with a ceiling `PoolTTL` (4h) away, and every baked data volume of the environment already copied into its project volumes.
 - `claim.acquire` of the same org and environment, asking for `latest` or the pool's image, with a ceiling no later than the machine's, adopts one (`Pooler.Adopt`) instead of making its network and workload. The machine keeps its pool tags; the cell keeps the claim → machine binding, moves its expiry with the claim's lease, and lets the claim's observer join the adopted network. A PR claim taints it like any machine.
 - An adopted machine is destroyed on release and never goes back to the pool. The pool refills after each adoption, after a failed fill on the next sweep tick (never in a loop of its own), and moves to the new image when the environment is baked again, discarding the old machines.

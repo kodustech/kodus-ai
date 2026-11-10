@@ -64,9 +64,9 @@ func (a *Agent) cleanup(ctx context.Context, c *claims.Claim, reason string) {
 			// Logical removal is not physical release. Convert the active
 			// reservation to an exceptional hold before removing the claim,
 			// so neither a new id nor reuse of this id borrows its capacity.
-			_, retained := a.mem.retain(c.ID, a.mem.count(c.ID))
+			_, retained := a.mem.Retain(c.ID, a.mem.Count(c.ID))
 			if retained {
-				a.mem.forget(c.ID)
+				a.mem.Forget(c.ID)
 			}
 			c.Log.Error("resource.cleanup_pending", "alarm", true, "memoryRetained", retained, "err", err)
 			a.nudgeHeartbeat()
@@ -86,12 +86,12 @@ func (a *Agent) cleanup(ctx context.Context, c *claims.Claim, reason string) {
 	if a.cfg.SQLObservers != nil {
 		a.cfg.SQLObservers.ForgetObserverSQL(c.Machines().Workload.MachineID)
 	}
-	a.untaint(c.Machines().Workload)
+	a.origin.Untaint(c.Machines().Workload.MachineID)
 	if dir, err := claims.WorkDir(a.cfg.WorkDir, c.ID); err == nil {
 		_ = os.RemoveAll(dir) // a compose checkout, kept until now
 	}
 	if a.claims.Remove(c) && a.mem != nil {
-		a.mem.forget(c.ID)
+		a.mem.Forget(c.ID)
 		a.nudgeHeartbeat()
 	}
 	a.observeClaims()

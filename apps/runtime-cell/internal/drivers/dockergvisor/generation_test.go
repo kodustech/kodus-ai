@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/bakecatalog"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
@@ -56,15 +57,13 @@ func TestRestartCleansOnlyOwnedPendingCatalogFiles(t *testing.T) {
 	}
 }
 
-func generationForTest(t *testing.T, d *Driver, id string) bakeGeneration {
+func generationForTest(t *testing.T, d *Driver, id string) bakecatalog.Generation {
 	t.Helper()
 	c, err := d.catalogFor(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	g, ok := c.state.Generations[id]
+	g, ok, _ := c.Lookup(id)
 	if !ok {
 		t.Fatal("generation absent")
 	}
@@ -73,7 +72,7 @@ func generationForTest(t *testing.T, d *Driver, id string) bakeGeneration {
 
 func installGenerationForTest(t *testing.T, d *Driver, docker *memDocker) string {
 	t.Helper()
-	g := bakeGeneration{Cell: "cell-1", Org: bakeOrg, Environment: bakeEnv, SHA: strings.Repeat("a", 40), RecipeSHA: "r", Nonce: strings.Repeat("1", 24), Images: map[string]string{}, Volumes: map[string]string{}}
+	g := bakecatalog.Generation{Cell: "cell-1", Org: bakeOrg, Environment: bakeEnv, SHA: strings.Repeat("a", 40), RecipeSHA: "r", Nonce: strings.Repeat("1", 24), Images: map[string]string{}, Volumes: map[string]string{}}
 	g.ID = generationID(g.Cell, g.Org, g.Environment, g.SHA, g.Nonce)
 	labels := envLabels(g.Cell, g.Org, g.Environment)
 	labels[labelBakeSHA], labels[labelBakeVolume], labels[labelBakeGeneration] = g.SHA, "pgdata", g.Nonce
@@ -127,7 +126,7 @@ func TestGenerationCatalogRecoversOnlyVerifiedBakes(t *testing.T) {
 			case "surviving holder":
 				docker.plant(dockercli.Container{Name: "old-holder", Labels: map[string]string{"kodus.cell": "cell-1", labelMachine: "old-holder"}})
 			case "corrupt catalog":
-				if err := os.WriteFile(filepath.Join(d.workDir(), "bake-catalog", catalogName), []byte(`{"version":1,"version":2}`), 0o600); err != nil {
+				if err := os.WriteFile(filepath.Join(d.workDir(), "bake-catalog", bakecatalog.FileName), []byte(`{"version":1,"version":2}`), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -340,17 +339,18 @@ func TestRetiredArtifactsRemainDurablyRetryable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := c.state.Retired[old.ImageID]; !ok {
+	_, eligible, retired := c.Lookup(old.ImageID)
+	if !retired {
 		t.Fatal("failed deletion lost its journal")
 	}
-	if _, ok := c.state.Generations[old.ImageID]; ok {
+	if eligible {
 		t.Fatal("retired generation remained eligible")
 	}
 	failing.fail = false
 	if err := d.pruneGenerations(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(c.state.Retired) != 0 {
+	if _, retired, _ := c.Counts(); retired != 0 {
 		t.Fatal("successful cleanup retained stale journal")
 	}
 }
@@ -382,7 +382,7 @@ func TestUnpublishedCrashArtifactsAreCleanupOnlyAfterRestart(t *testing.T) {
 	if err != nil || len(recovered) != 1 || recovered[0].ImageID != old.ID {
 		t.Fatalf("partial generation recovered: %v %v", recovered, err)
 	}
-	if len(restarted.catalog.state.Retired) != 0 {
+	if _, retired, _ := restarted.catalog.Counts(); retired != 0 {
 		t.Fatal("crash journal not drained")
 	}
 }
@@ -398,7 +398,7 @@ func TestCatalogRefusesFIFOAndSymlinkWithoutOpeningThem(t *testing.T) {
 			if err := d.Close(); err != nil {
 				t.Fatal(err)
 			}
-			path := filepath.Join(d.workDir(), "bake-catalog", catalogName)
+			path := filepath.Join(d.workDir(), "bake-catalog", bakecatalog.FileName)
 			if kind == "fifo" {
 				if err := unix.Mkfifo(path, 0o600); err != nil {
 					t.Fatal(err)
@@ -426,11 +426,11 @@ func TestPostRenameSyncFailurePreservesPotentiallyCommittedGeneration(t *testing
 	id := installGenerationForTest(t, d, docker)
 	g := generationForTest(t, d, id)
 	c, _ := d.catalogFor(ctx)
-	c.syncDir = func(*os.File) error { return errors.New("fsync failed after rename") }
-	if err := d.publishGeneration(ctx, g); !errors.Is(err, errCatalogCommitUncertain) {
+	d.syncCatalogDir = func(*os.File) error { return errors.New("fsync failed after rename") }
+	if err := d.publishGeneration(ctx, g); !errors.Is(err, bakecatalog.ErrCommitUncertain) {
 		t.Fatalf("lost commit uncertainty: %v", err)
 	}
-	if c.state.Current[generationScope(g.Org, g.Environment)] != id {
+	if c.Current(g.Org, g.Environment) != id {
 		t.Fatal("potential commit rolled back in memory")
 	}
 	if _, ok := docker.volume(g.Volumes["pgdata"]); !ok {
@@ -461,9 +461,8 @@ func TestFullBakeUncertaintyKeepsTheAgentsPreviousLatestUsable(t *testing.T) {
 	if err := d.AcknowledgeBake(ctx, old.ImageID); err != nil {
 		t.Fatal(err)
 	}
-	c, _ := d.catalogFor(ctx)
 	syncs := 0
-	c.syncDir = func(f *os.File) error {
+	d.syncCatalogDir = func(f *os.File) error {
 		syncs++
 		if syncs == 2 {
 			return errors.New("one-shot postrename fsync failure")
@@ -471,7 +470,7 @@ func TestFullBakeUncertaintyKeepsTheAgentsPreviousLatestUsable(t *testing.T) {
 		return f.Sync()
 	}
 	next := bakeWithData(t, d, docker, "claim-next", "new seed")
-	if _, err := d.Bake(ctx, bakeSpec(next)); !errors.Is(err, errCatalogCommitUncertain) {
+	if _, err := d.Bake(ctx, bakeSpec(next)); !errors.Is(err, bakecatalog.ErrCommitUncertain) {
 		t.Fatalf("expected uncertainty: %v", err)
 	}
 	// The agent did not receive a successful image result and still routes old.
@@ -553,9 +552,7 @@ func TestParallelBakesKeepManifestMapsImmutableAndHoldsBounded(t *testing.T) {
 		ids[result.image.ImageID] = true
 	}
 	c, _ := d.catalogFor(ctx)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if len(c.holds) != 0 {
-		t.Fatalf("finished bakes leaked hold counters: %v", c.holds)
+	if _, _, held := c.Counts(); held != 0 {
+		t.Fatalf("finished bakes leaked %d hold counters", held)
 	}
 }

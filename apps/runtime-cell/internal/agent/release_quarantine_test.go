@@ -83,7 +83,7 @@ func TestConfirmedReleaseAndLegacyModeDoNotQuarantineMemory(t *testing.T) {
 				t.Fatal(err)
 			}
 			waitFor(t, func() bool { _, ok := h.a.claims.Get("claim-1"); return !ok })
-			if got := h.a.mem.committed(); got != 0 {
+			if got := h.a.mem.Committed(); got != 0 {
 				t.Fatalf("normal/legacy release held memory: %d", got)
 			}
 		})
@@ -99,9 +99,11 @@ func TestPendingPhysicalCleanupCannotBecomeAWorkloadBootFailure(t *testing.T) {
 				case "upload":
 					c.Transport = stubTransport{upload: fault}
 				case "compose":
-					c.Composer = enforcementFailureComposer{up: fault}
+					failing := enforcementFailureComposer{up: fault}
+					c.Composer, c.Recipes = failing, failing
 				case "recipe":
-					c.Composer = enforcementFailureComposer{recipe: &driver.RecipeStepError{Step: "setup", Field: "setup[0]", Err: fault}}
+					failing := enforcementFailureComposer{recipe: &driver.RecipeStepError{Step: "setup", Field: "setup[0]", Err: fault}}
+					c.Composer, c.Recipes = failing, failing
 				}
 			})
 			b := h.acquireBody()

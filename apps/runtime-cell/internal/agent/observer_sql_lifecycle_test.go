@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -13,7 +15,21 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observerauth"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
+
+// recipeCheckout is a checkout that carries the given recipe.
+func recipeCheckout(t *testing.T, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".kodus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, recipe.Path), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
 
 const sqlLifecycleRecipe = `version: 1
 services:
@@ -91,7 +107,7 @@ func TestSQLObserverLifecycleRefusesUnboundCredentials(t *testing.T) {
 				}
 			})
 			c := sqlLifecycleClaim(h)
-			err := h.a.provisionObserverSQL(context.Background(), c, checkout(t, sqlLifecycleRecipe))
+			err := h.a.provisionObserverSQL(context.Background(), c, recipeCheckout(t, sqlLifecycleRecipe))
 			if err == nil || configured != 0 || c.ObserverGeneration() != 0 {
 				t.Fatal("unbound credential reached observer configuration or advanced generation")
 			}
@@ -119,7 +135,7 @@ func TestSQLObserverLifecycleConfiguresEachSeedGenerationWithRedaction(t *testin
 		}
 	})
 	c := sqlLifecycleClaim(h)
-	repo := checkout(t, sqlLifecycleRecipe)
+	repo := recipeCheckout(t, sqlLifecycleRecipe)
 	for range 2 {
 		if err := h.a.provisionObserverSQL(context.Background(), c, repo); err != nil {
 			t.Fatal("valid seeded account was refused")

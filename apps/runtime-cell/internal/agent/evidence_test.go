@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/evidence"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
@@ -84,9 +85,9 @@ func (l logsStub) ServiceLogs(context.Context, string, driver.MachineRef, time.T
 	return l, nil
 }
 
-type outboundStub []OutboundCall
+type outboundStub []evidence.OutboundCall
 
-func (o outboundStub) Outbound(context.Context, string, time.Time, time.Time) ([]OutboundCall, error) {
+func (o outboundStub) Outbound(context.Context, string, time.Time, time.Time) ([]evidence.OutboundCall, error) {
 	return o, nil
 }
 

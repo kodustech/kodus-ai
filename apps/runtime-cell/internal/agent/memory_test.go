@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/provenance"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver/fake"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
@@ -54,15 +55,15 @@ func TestASecondBuildThatDoesNotFitIsRefusedUntilTheFirstIsReady(t *testing.T) {
 			t.Fatalf("a base on %q with no bake on this cell boots at %d MB", img, got)
 		}
 	}
-	h.a.baked["img-1"] = bakedImage{orgID: baked.OrgID, environmentID: "another-env"}
+	h.a.origin.Add("img-1", provenance.Image{OrgID: baked.OrgID, EnvironmentID: "another-env"}, false)
 	if got := h.a.claimMemoryNeed(*baked, false); got != 12_288 {
 		t.Fatalf("another environment's bake counts the base at %d MB", got)
 	}
-	h.a.baked["img-1"] = bakedImage{orgID: baked.OrgID, environmentID: baked.EnvironmentID, sha: "an-older-default-branch"}
+	h.a.origin.Add("img-1", provenance.Image{OrgID: baked.OrgID, EnvironmentID: baked.EnvironmentID, SHA: "an-older-default-branch"}, false)
 	if got := h.a.claimMemoryNeed(*baked, false); got != 12_288 {
 		t.Fatalf("the bake of another commit counts the base at %d MB", got)
 	}
-	h.a.baked["img-1"] = bakedImage{orgID: baked.OrgID, environmentID: baked.EnvironmentID, sha: baked.Sha}
+	h.a.origin.Add("img-1", provenance.Image{OrgID: baked.OrgID, EnvironmentID: baked.EnvironmentID, SHA: baked.Sha}, false)
 	if got := h.a.claimMemoryNeed(*baked, false); got != 2_048 {
 		t.Fatalf("a base on the bake boots at %d MB", got)
 	}
@@ -73,7 +74,7 @@ func TestASecondBuildThatDoesNotFitIsRefusedUntilTheFirstIsReady(t *testing.T) {
 	}
 	b1 := h.acquireBody()
 	pr(b1)
-	if ok, _, _ := h.a.mem.admit("claim-held", 12_288, true); !ok {
+	if ok, _, _ := h.a.mem.Admit("claim-held", 12_288, true); !ok {
 		t.Fatal("the first build did not fit an empty cell")
 	}
 	b2 := h.acquireBody()
@@ -85,7 +86,7 @@ func TestASecondBuildThatDoesNotFitIsRefusedUntilTheFirstIsReady(t *testing.T) {
 	if !strings.Contains(err.Error(), "needs 12288 MB") || !strings.Contains(err.Error(), "2457 of the cell's 14745 MB are free") {
 		t.Fatalf("the refusal does not say why: %v", err)
 	}
-	if _, held := h.a.claims.Get("claim-2"); held || h.a.mem.count("claim-2") != 0 || len(h.drv.Machines()) != 0 {
+	if _, held := h.a.claims.Get("claim-2"); held || h.a.mem.Count("claim-2") != 0 || len(h.drv.Machines()) != 0 {
 		t.Fatal("a refused claim took a slot, memory or a machine")
 	}
 	if hb := h.a.Heartbeat(); hb.Memory == nil || hb.Memory.CommittedMb != 12_288 || hb.Memory.AllocatableMb != 14_745 || hb.Memory.BootMb != 12_288 || hb.Memory.ReadyMb != 2_048 {
@@ -93,9 +94,9 @@ func TestASecondBuildThatDoesNotFitIsRefusedUntilTheFirstIsReady(t *testing.T) {
 	}
 
 	// The first build is done: counted at its ready size, the second fits.
-	h.a.mem.set("claim-held", 2_048)
+	h.a.mem.Set("claim-held", 2_048)
 	h.ready("claim-2", pr)
-	if got := h.a.mem.count("claim-2"); got != 2_048 {
+	if got := h.a.mem.Count("claim-2"); got != 2_048 {
 		t.Fatalf("a ready claim is counted at %d MB, want its ready size", got)
 	}
 	if hb := h.a.Heartbeat(); hb.Memory.CommittedMb != 4_096 {
@@ -106,8 +107,8 @@ func TestASecondBuildThatDoesNotFitIsRefusedUntilTheFirstIsReady(t *testing.T) {
 	if err := h.handle("claim-2", protocol.MessageTypeClaimRelease, &protocol.ClaimReleaseBody{}); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, func() bool { return h.a.mem.count("claim-2") == 0 })
-	if got := h.a.mem.committed(); got != 2_048 {
+	waitFor(t, func() bool { return h.a.mem.Count("claim-2") == 0 })
+	if got := h.a.mem.Committed(); got != 2_048 {
 		t.Fatalf("committed after release = %d", got)
 	}
 }
@@ -145,7 +146,7 @@ func TestHeartbeatMemoryOnlyToAHubThatAcceptsIt(t *testing.T) {
 	if hb := h.a.Heartbeat(); hb.Memory != nil {
 		t.Fatal("heartbeat memory went to a hub that does not accept it")
 	}
-	h.a.mem.admit("claim-held", 12_288, true)
+	h.a.mem.Admit("claim-held", 12_288, true)
 	h.ready("claim-old-hub", func(b *protocol.ClaimAcquireBody) { b.Side = protocol.SidePr })
 	plain := newHarness(t)
 	plain.a.accepts = protocol.Accepted(&protocol.AckBody{Accepts: []string{protocol.FeatureCellMemory}})
@@ -153,31 +154,4 @@ func TestHeartbeatMemoryOnlyToAHubThatAcceptsIt(t *testing.T) {
 		t.Fatal("a cell without a memory budget reported memory")
 	}
 	plain.ready("claim-1")
-}
-
-func TestMemoryLedger(t *testing.T) {
-	m := newMemoryLedger(10)
-	if ok, fresh, _ := m.admit("a", 6, true); !ok || !fresh {
-		t.Fatal("a did not fit")
-	}
-	if ok, _, free := m.admit("b", 5, true); ok || free != 4 {
-		t.Fatalf("b fit past the cell (free %d)", free)
-	}
-	if ok, fresh, _ := m.admit("a", 9, true); !ok || fresh || m.count("a") != 6 {
-		t.Fatal("a second admit of a held claim changed it")
-	}
-	if over := m.set("a", 11); !over {
-		t.Fatal("going over was not reported")
-	}
-	if m.set("missing", 1) || m.count("missing") != 0 {
-		t.Fatal("set counted a claim the ledger does not hold")
-	}
-	m.forget("a")
-	if m.committed() != 0 {
-		t.Fatal("forget left memory counted")
-	}
-	// Not enforced (an older hub): counted, never refused.
-	if ok, fresh, _ := m.admit("c", 50, false); !ok || !fresh || m.committed() != 50 {
-		t.Fatal("an unenforced admit refused or did not count")
-	}
 }

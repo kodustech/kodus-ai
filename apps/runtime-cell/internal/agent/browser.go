@@ -22,7 +22,7 @@ import (
 // the feature and the cell reads only from a hub that accepts it. Anything
 // else goes to the observer, which refuses it (browser_unavailable).
 func (a *Agent) playsBrowser(b *protocol.ProbeRunBody) bool {
-	return b.Probe.Spec.Browser != nil && a.cfg.Browser != nil && a.asked(b.Evidence, protocol.EvidenceCaptureBrowser, protocol.FeatureBrowser)
+	return b.Probe.Spec.Browser != nil && a.cfg.Browser != nil && a.evidence.Asked(b.Evidence, protocol.EvidenceCaptureBrowser, protocol.FeatureBrowser)
 }
 
 // appTarget is the exposed http service the page loads: the first of the
@@ -79,10 +79,10 @@ func (a *Agent) runBrowser(ctx context.Context, c *claims.Claim, b *protocol.Pro
 		Browser: out.Browser, Requests: out.Requests, DurationMs: max(t1.Sub(t0).Milliseconds(), 0),
 	}
 	// The back-end lanes of the same window (service logs, outbound calls).
-	a.attachProbeEvidence(ctx, c, b, p, t0, t1)
+	a.evidence.AttachProbe(ctx, evidenceOf(c), b, p, t0, t1)
 	var refs []protocol.EvidenceRef
 	for _, art := range out.Artifacts {
-		if ref := a.upload(ctx, c, b.Evidence, art.Type, art.ContentType, art.Body, art.Truncated, art.Redactions); ref != nil {
+		if ref := a.evidence.Upload(ctx, evidenceOf(c), b.Evidence, art.Type, art.ContentType, art.Body, art.Truncated, art.Redactions); ref != nil {
 			refs = append(refs, *ref)
 		}
 	}
