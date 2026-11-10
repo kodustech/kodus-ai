@@ -9,6 +9,7 @@ import {
     render,
     screen,
     waitFor,
+    within,
 } from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
 import type { BYOKConfig } from "src/features/ee/byok/_types";
@@ -681,20 +682,29 @@ it("refreshes the seeded team's provider cache and replaces a cached overview af
     ).toBeUndefined();
 });
 
-it.each([null, undefined, "missing"])(
-    "shows the environment fallback for unresolved risk model %s",
-    async (modelId) => {
-        mockRepo = "repo";
-        mockStatus.modelRouting.riskAssessment =
-            modelId === "missing" ? undefined : { modelId, inherited: true };
-        mockStatus.env = { configured: true, model: "environment-risk-model" };
-        mount(true);
-        expect(await screen.findByText("Environment Risk Model")).toBeVisible();
-        expect(
-            screen.queryByText("Uses default model"),
-        ).not.toBeInTheDocument();
-    },
-);
+it("shows the environment fallback when risk resolution has no BYOK slot", async () => {
+    mockRepo = "repo";
+    // The status projector always emits riskAssessment. An unresolved slot
+    // leaves its optional modelId absent in the JSON response.
+    mockStatus.modelRouting.riskAssessment = { inherited: true };
+    for (const model of mockStatus.models)
+        model.capabilities = { structuredOutput: "none", toolCalling: "none" };
+    mockStatus.reviewModels = {
+        balanced: { inherited: true },
+        heavy: { inherited: true },
+    };
+    mockStatus.env = { configured: true, model: "environment-risk-model" };
+    mount(true);
+    const organization = screen.getByRole("region", {
+        name: "Organization models",
+    });
+    expect(
+        await within(organization).findByText("Environment Risk Model"),
+    ).toBeVisible();
+    expect(
+        within(organization).queryByText("Uses default model"),
+    ).not.toBeInTheDocument();
+});
 
 it.each([
     [

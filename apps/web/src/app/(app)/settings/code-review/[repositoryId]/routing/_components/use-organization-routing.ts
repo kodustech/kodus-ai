@@ -194,7 +194,7 @@ export function useOrganizationRouting({
                 ? dirty
                     ? draftTaskModel(task, routing, status)
                     : task === "riskAssessment"
-                      ? status.modelRouting?.riskAssessment?.modelId
+                      ? status.modelRouting?.riskAssessment.modelId
                       : status.reviewModels?.[
                             task === "codeReviewHeavy" ? "heavy" : "balanced"
                         ].modelId
