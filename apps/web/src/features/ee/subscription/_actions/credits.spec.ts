@@ -326,7 +326,7 @@ describe("monthly cap server action", () => {
     );
 
     it.each(["NO_PAYMENT_METHOD", "INVALID_MONTHLY_LIMIT"])(
-        "preserves the structured %s code alongside a readable error",
+        "extracts the structured %s code from an envelope with a readable error",
         async (code) => {
             updateMock.mockRejectedValue(
                 new BillingHttpError(409, {
