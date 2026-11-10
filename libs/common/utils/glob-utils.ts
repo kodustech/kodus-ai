@@ -16,22 +16,43 @@ import picomatch from 'picomatch';
  * hit and every pattern was recompiled for every file. On a 970-file PR
  * that blocked the worker event loop for ~30s in production.
  *
- * The bound now holds the default list plus team-specific patterns, and
- * eviction drops only the oldest-inserted slice, so a working set below
- * the bound is never wiped.
+ * The bound now holds the default list plus team-specific patterns, and a
+ * full cache drops one slice (second chance) instead of everything, so a
+ * working set below the bound is never wiped and patterns in use survive
+ * churn from patterns that are not.
  */
-const MATCHER_CACHE_CASE_SENSITIVE = new Map<string, picomatch.Matcher>();
-const MATCHER_CACHE_CASE_INSENSITIVE = new Map<string, picomatch.Matcher>();
+type CachedMatcher = { matcher: picomatch.Matcher; used: boolean };
+
+const MATCHER_CACHE_CASE_SENSITIVE = new Map<string, CachedMatcher>();
+const MATCHER_CACHE_CASE_INSENSITIVE = new Map<string, CachedMatcher>();
 const MAX_CACHE_SIZE = 5_000;
-/** Share of the cache dropped when it is full (oldest-inserted first). */
+/** Share of the cache dropped when it is full. */
 const EVICTION_BATCH = Math.ceil(MAX_CACHE_SIZE / 10);
 
-function evictOldest(cache: Map<string, picomatch.Matcher>): void {
-    // Map iterates in insertion order, so the first keys are the oldest.
+/**
+ * Second-chance eviction: walk in insertion order, drop entries not hit
+ * since the last eviction and clear the flag on the ones that were, so the
+ * shared default ignore list (hit on every file) is kept while one-off
+ * patterns go. A hit only sets a flag — no Map reordering on the hot path,
+ * which a strict LRU would pay on every file × pattern lookup.
+ */
+function evictSlice(cache: Map<string, CachedMatcher>): void {
     let removed = 0;
+    for (const [key, entry] of cache) {
+        if (removed >= EVICTION_BATCH) {
+            return;
+        }
+        if (entry.used) {
+            entry.used = false;
+            continue;
+        }
+        cache.delete(key);
+        removed++;
+    }
+    // Everything was in use: fall back to the oldest-inserted entries.
     for (const key of cache.keys()) {
         if (removed >= EVICTION_BATCH) {
-            break;
+            return;
         }
         cache.delete(key);
         removed++;
@@ -52,21 +73,22 @@ function getCachedMatcher(
         ? MATCHER_CACHE_CASE_INSENSITIVE
         : MATCHER_CACHE_CASE_SENSITIVE;
 
-    let matcher = cache.get(pattern);
-    if (matcher) {
-        return matcher;
+    const cached = cache.get(pattern);
+    if (cached) {
+        cached.used = true;
+        return cached.matcher;
     }
 
     // Never clear-all: see the cache sizing note above.
     if (cache.size >= MAX_CACHE_SIZE) {
-        evictOldest(cache);
+        evictSlice(cache);
     }
 
-    matcher = picomatch(pattern, {
+    const matcher = picomatch(pattern, {
         dot: true,
         nocase: caseInsensitive,
     });
-    cache.set(pattern, matcher);
+    cache.set(pattern, { matcher, used: false });
 
     return matcher;
 }

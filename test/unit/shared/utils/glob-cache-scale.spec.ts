@@ -227,6 +227,24 @@ describe('glob-utils cache bound', () => {
         expect(isFileMatchingGlob('dist/a.js', ['dist/**'])).toBe(true);
         expect(isFileMatchingGlob('src/a.js', ['dist/**'])).toBe(false);
     });
+
+    it('keeps patterns in use through churn from one-off patterns (second chance)', () => {
+        // The shared default list is hit on every file; tenant- or rule-
+        // specific globs arrive once. Past the bound, eviction must drop the
+        // one-off patterns, not the list in use.
+        const hot = DEFAULT_IGNORE_PATHS.slice(0, 50);
+        for (let i = 0; i < 6_000; i++) {
+            isFileMatchingGlob('src/app.ts', [`**/one-off-${i}/**`]);
+            if (i % 100 === 0) {
+                isFileMatchingGlob('src/app.ts', hot);
+            }
+        }
+
+        const compilesOfHot = compileSpy.mock.calls.filter(([pattern]) =>
+            hot.includes(pattern as string),
+        ).length;
+        expect(compilesOfHot).toBe(new Set(hot).size);
+    });
 });
 
 describe('glob-utils invalid patterns (unchanged semantics)', () => {
