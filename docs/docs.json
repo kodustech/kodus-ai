@@ -55,6 +55,7 @@
                                         "group": "Advanced Configs",
                                         "pages": [
                                             "en/how_to_use/code_review/configs/general",
+                                            "en/how_to_use/code_review/configs/review_all_repositories",
                                             "en/how_to_use/code_review/configs/auto_approve",
                                             "en/how_to_use/code_review/configs/risk",
                                             "en/how_to_use/code_review/configs/routing",

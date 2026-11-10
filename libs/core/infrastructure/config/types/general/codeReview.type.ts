@@ -829,14 +829,6 @@ export interface SuggestionControlConfig {
     };
 }
 
-export type ImplementedSuggestionsToAnalyze = {
-    id: string;
-    relevantFile: string;
-    language: string;
-    improvedCode: string;
-    existingCode: string;
-};
-
 /**
  * Business Logic settings as stored. Primitives and arrays only, so the
  * settings form tracks the level (global, repository, directory) per field.

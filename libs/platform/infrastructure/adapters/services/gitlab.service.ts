@@ -128,6 +128,11 @@ import {
 } from './gitlab-rate-limit.util';
 import { gitlabRequesterFn } from './gitlab-request-handler';
 import { listingFailed } from './repository-listing';
+import {
+    failWebhookSetupForAll,
+    runWebhookSetup,
+    WebhookSetupResult,
+} from './webhook-setup/webhook-setup';
 
 /**
  * Award emojis are the one reaction source that costs a request per comment —
@@ -1444,6 +1449,7 @@ export class GitlabService implements Omit<
                                         ),
                                     default_branch: defaultBranch,
                                     lastActivityAt: project.last_activity_at,
+                                    ...gitlabRepositoryFlags(project),
                                 };
                             };
 
@@ -1487,6 +1493,7 @@ export class GitlabService implements Omit<
                                                 project?.path_with_namespace,
                                         ),
                                     default_branch: project?.default_branch,
+                                    ...gitlabRepositoryFlags(project),
                                 };
                             }
                         }
@@ -3322,6 +3329,73 @@ export class GitlabService implements Omit<
                 metadata: { organizationAndTeamData },
             });
         }
+    }
+
+    async ensureRepositoryWebhooks(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositories: Repositories[];
+    }): Promise<WebhookSetupResult> {
+        const { organizationAndTeamData, repositories = [] } = params;
+        const labels = {
+            provider: 'GitLab',
+            permissionHint:
+                'Creating a project webhook needs the Maintainer or Owner role on the project.',
+        };
+
+        if (!repositories.length) {
+            return { configured: [], failed: {}, notAttempted: [] };
+        }
+
+        let gitlabAPI: ReturnType<GitlabService['instanceGitlabApi']>;
+        const webhookUrl = process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK;
+
+        try {
+            if (!webhookUrl) {
+                throw new Error(
+                    'The GitLab webhook URL is not configured (API_GITLAB_CODE_MANAGEMENT_WEBHOOK)',
+                );
+            }
+
+            gitlabAPI = this.instanceGitlabApi(
+                await this.getAuthDetails(organizationAndTeamData),
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Could not start GitLab webhook setup',
+                context: GitlabService.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryCount: repositories.length,
+                },
+            });
+            return failWebhookSetupForAll(repositories, error, labels);
+        }
+
+        const result = await runWebhookSetup(
+            repositories,
+            (repo) =>
+                this.ensureSingleKodusHook(
+                    gitlabAPI,
+                    repo.id,
+                    webhookUrl,
+                    organizationAndTeamData,
+                ),
+            labels,
+        );
+
+        this.logger.log({
+            message: 'GitLab webhook setup finished',
+            context: GitlabService.name,
+            metadata: {
+                organizationAndTeamData,
+                configured: result.configured.length,
+                failed: Object.keys(result.failed).length,
+                notAttempted: result.notAttempted.length,
+            },
+        });
+
+        return result;
     }
 
     /**
@@ -6321,4 +6395,16 @@ export class GitlabService implements Omit<
         // `getUserByUsername`.
         return null;
     }
+}
+
+function gitlabRepositoryFlags(project: {
+    archived?: boolean;
+    forked_from_project?: unknown;
+    mirror?: boolean;
+}): { archived: boolean; fork: boolean; mirror: boolean } {
+    return {
+        archived: Boolean(project?.archived),
+        fork: Boolean(project?.forked_from_project),
+        mirror: Boolean(project?.mirror),
+    };
 }

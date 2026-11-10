@@ -6,6 +6,7 @@ import {
 
 import { DeliveryStatus } from '../enums/deliveryStatus.enum';
 import { ImplementationStatus } from '../enums/implementationStatus.enum';
+import type { ImplementationCheckRecord } from '../implementation-status';
 import { PriorityStatus } from '../enums/priorityStatus.enum';
 import { FeedbackType } from '@libs/platformData/domain/pullRequests/enums/feedbackType.enum';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
@@ -153,6 +154,8 @@ export interface ISuggestion {
     priorityStatus: PriorityStatus;
     deliveryStatus: DeliveryStatus;
     implementationStatus?: ImplementationStatus;
+    /** The last implementation check that looked at this suggestion. */
+    implementationCheck?: ImplementationCheckRecord;
     comment?: {
         id: number;
         pullRequestReviewId: number;
@@ -299,3 +302,10 @@ export interface IPullRequestUserMapping {
     user: IPullRequestUser;
     organizationId: string;
 }
+
+export type UpdateSuggestionOptions = {
+    /** Writes the suggestion only while its stored status is none of these. */
+    implementationStatusNotIn?: ImplementationStatus[];
+    /** false: return only whether a suggestion was written, not the PR document. */
+    returnDocument?: boolean;
+};

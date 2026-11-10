@@ -159,6 +159,12 @@ import {
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 import { listingFailed } from '../repository-listing';
+import {
+    failWebhookSetupForAll,
+    runWebhookSetup,
+    WebhookSetupResult,
+} from '../webhook-setup/webhook-setup';
+import { recordWebhookSetupOutcome } from '../webhook-setup/webhook-setup-failures.service';
 
 interface GitHubAuthResponse {
     token: string;
@@ -521,6 +527,7 @@ export class GithubService
 
                 await this.createPullRequestWebhook({
                     organizationAndTeamData: params.organizationAndTeamData,
+                    integrationId: integration?.uuid,
                 });
             }
         } catch (err) {
@@ -2654,6 +2661,9 @@ export class GithubService
                         repository?.name === repo?.name,
                 ),
                 lastActivityAt: (repo as any)?.pushed_at || repo.updated_at,
+                archived: Boolean(repo?.archived),
+                fork: Boolean(repo?.fork),
+                mirror: Boolean(repo?.mirror_url),
             }));
         } catch (err) {
             throw new BadRequestException(err);
@@ -6279,105 +6289,207 @@ This is an experimental feature that generates committable changes. Review the d
         }
     }
 
-    async createPullRequestWebhook(params: any) {
+    /**
+     * Makes sure every selected repository has the Kodus hook (token mode;
+     * the GitHub App delivers through its app-level hook) and records the
+     * repositories that could not get one.
+     */
+    async createPullRequestWebhook(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        integrationId?: string;
+    }) {
         const { organizationAndTeamData } = params;
-
-        const githubAuthDetail = await this.getGithubAuthDetails(
-            organizationAndTeamData,
-        );
-
-        const octokit = await this.instanceOctokit(organizationAndTeamData);
+        const startedAt = new Date().toISOString();
 
         const repositories = <Repositories[]>(
             await this.findOneByOrganizationAndTeamDataAndConfigKey(
-                params?.organizationAndTeamData,
+                organizationAndTeamData,
                 IntegrationConfigKey.REPOSITORIES,
             )
         );
 
-        const webhookUrl = this.getGithubWebhookUrl();
-
-        if (!webhookUrl || !repositories?.length) {
+        if (!repositories?.length) {
             return;
         }
 
-        // Usar método centralizado para determinar o owner correto
-        const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
+        const result = await this.ensureRepositoryWebhooks({
+            organizationAndTeamData,
+            repositories,
+        });
+
+        if (result.managedByApp) {
+            return;
+        }
+
+        const integrationId =
+            params.integrationId ??
+            (
+                await this.integrationService.findOne({
+                    organization: {
+                        uuid: organizationAndTeamData.organizationId,
+                    },
+                    team: { uuid: organizationAndTeamData.teamId },
+                    platform: PlatformType.GITHUB,
+                })
+            )?.uuid;
+
+        if (integrationId) {
+            await recordWebhookSetupOutcome(this.integrationConfigService, {
+                organizationAndTeamData,
+                integrationId,
+                startedAt,
+                result,
+            });
+        }
+    }
+
+    async ensureRepositoryWebhooks(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositories: Repositories[];
+    }): Promise<WebhookSetupResult> {
+        const { organizationAndTeamData, repositories = [] } = params;
+        const labels = {
+            provider: 'GitHub',
+            permissionHint:
+                'The token needs read and write access to repository webhooks (admin:repo_hook, or "Webhooks: Read and write" on a fine-grained token).',
+        };
+
+        if (!repositories.length) {
+            return { configured: [], failed: {}, notAttempted: [] };
+        }
+
+        let octokit: any;
+        let webhookUrl: string | undefined;
 
         try {
-            for (const repo of repositories) {
-                // The hook lives under the REPO's namespace, not the
-                // integration account's. getCorrectOwner resolves personal
-                // PAT integrations to the authenticated user's login, which
-                // 404s ("Not Found - list-repository-webhooks") for every
-                // repo the account merely collaborates on — the whole
-                // registerRepo call then fails. Prefer the owner recorded on
-                // the repository itself; keep getCorrectOwner as a fallback
-                // for legacy configs missing both fields.
-                const repoOwner =
-                    repo.full_name?.split('/')[0] ||
-                    repo.organizationName ||
-                    owner;
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                organizationAndTeamData,
+            );
+
+            if (githubAuthDetail?.authMode !== AuthMode.TOKEN) {
+                return {
+                    configured: repositories.map((repo) => String(repo.id)),
+                    failed: {},
+                    notAttempted: [],
+                    managedByApp: true,
+                };
+            }
+
+            webhookUrl = this.getGithubWebhookUrl();
+
+            if (!webhookUrl) {
+                throw new Error(
+                    'The GitHub webhook URL is not configured (API_GITHUB_CODE_MANAGEMENT_WEBHOOK)',
+                );
+            }
+
+            octokit = await this.instanceOctokit(organizationAndTeamData);
+        } catch (error) {
+            this.logger.error({
+                message: 'Could not start GitHub webhook setup',
+                context: GithubService.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryCount: repositories.length,
+                },
+            });
+            return failWebhookSetupForAll(repositories, error, labels);
+        }
+
+        let fallbackOwner: string | undefined;
+        const ownerOf = async (repo: Repositories): Promise<string> => {
+            // The hook lives under the REPO's namespace, not the integration
+            // account's: a personal token's own login 404s on every
+            // repository the account only collaborates on.
+            const recorded =
+                repo.full_name?.split('/')[0] || repo.organizationName;
+            if (recorded) {
+                return recorded;
+            }
+            fallbackOwner ??= await this.getCorrectOwner(
+                await this.getGithubAuthDetails(organizationAndTeamData),
+                octokit,
+            );
+            return fallbackOwner;
+        };
+
+        const events = [
+            'push',
+            'pull_request',
+            'issue_comment',
+            'pull_request_review_comment',
+            'pull_request_review',
+        ];
+
+        const result = await runWebhookSetup(
+            repositories,
+            async (repo) => {
+                const owner = await ownerOf(repo);
                 const { data: webhooks } = await octokit.repos.listWebhooks({
-                    owner: repoOwner,
+                    owner,
                     repo: repo.name,
                 });
 
-                const webhookToDelete = webhooks.find(
-                    (webhook) =>
-                        webhook.config && webhook.config.url === webhookUrl,
+                const existing = (webhooks ?? []).find(
+                    (webhook: any) => webhook?.config?.url === webhookUrl,
                 );
 
-                if (webhookToDelete) {
-                    await octokit.repos.deleteWebhook({
-                        owner: repoOwner,
-                        repo: repo.name,
-                        hook_id: webhookToDelete.id,
-                    });
+                if (existing) {
+                    const missingEvents = Array.isArray(existing.events)
+                        ? events.filter((e) => !existing.events.includes(e))
+                        : [];
+
+                    if (existing.active === false || missingEvents.length) {
+                        await octokit.repos.updateWebhook({
+                            owner,
+                            repo: repo.name,
+                            hook_id: existing.id,
+                            events,
+                            active: true,
+                        });
+                    }
+                    return;
                 }
 
                 const response = await octokit.repos.createWebhook({
-                    owner: repoOwner,
+                    owner,
                     repo: repo.name,
                     config: {
                         url: webhookUrl,
                         content_type: 'json',
                         insecure_ssl: '0',
                     },
-                    events: [
-                        'push',
-                        'pull_request',
-                        'issue_comment',
-                        'pull_request_review_comment',
-                        'pull_request_review',
-                    ],
+                    events,
                     active: true,
                 });
 
                 this.logger.log({
-                    message: `Webhook adicionado ao repositório ${repo.name} (owner: ${repoOwner})`,
+                    message: 'GitHub webhook created',
                     context: GithubService.name,
                     metadata: {
-                        ...params,
-                        owner: repoOwner,
-                        repositoryName: repo.name,
+                        organizationAndTeamData,
+                        owner,
+                        repositoryId: repo.id,
                         webhookId: response?.data?.id,
                     },
                 });
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Error to create webhook:',
-                context: GithubService.name,
-                serviceName: 'Github service createPullRequestWebhook',
-                error: error,
-                metadata: {
-                    ...params,
-                    owner,
-                },
-            });
-            throw error;
-        }
+            },
+            labels,
+        );
+
+        this.logger.log({
+            message: 'GitHub webhook setup finished',
+            context: GithubService.name,
+            metadata: {
+                organizationAndTeamData,
+                configured: result.configured.length,
+                failed: Object.keys(result.failed).length,
+                notAttempted: result.notAttempted.length,
+            },
+        });
+
+        return result;
     }
 
     private getGithubWebhookUrl(): string | undefined {

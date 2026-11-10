@@ -543,6 +543,63 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         });
     });
 
+    describe('updateSuggestion without the document back', () => {
+        it('projects only the id, so a write costs no PR document', async () => {
+            await repo.updateSuggestion(
+                'sugg-id-1',
+                { implementationStatus: 'implemented' } as any,
+                ORG,
+                { returnDocument: false },
+            );
+
+            const [filter, , options] = findOneAndUpdate.mock.calls[0];
+            expect(filter).toMatchObject({ 'files.suggestions.id': 'sugg-id-1' });
+            expect(options).toMatchObject({ projection: { _id: 1 } });
+        });
+    });
+
+    describe('updateSuggestion with a status condition', () => {
+        it('matches only a suggestion whose stored status is outside the excluded ones, in the query and the array filter', async () => {
+            await repo.updateSuggestion(
+                'sugg-id-1',
+                { implementationStatus: 'implemented' } as any,
+                ORG,
+                { implementationStatusNotIn: ['implemented'] as any },
+            );
+
+            const [filter, update, options] = findOneAndUpdate.mock.calls[0];
+            expect(filter).toEqual({
+                'organizationId': 'org-A',
+                'files.suggestions': {
+                    $elemMatch: {
+                        id: 'sugg-id-1',
+                        implementationStatus: { $nin: ['implemented'] },
+                    },
+                },
+            });
+            expect(update).toEqual({
+                $set: {
+                    'files.$[file].suggestions.$[suggestion].implementationStatus':
+                        'implemented',
+                },
+            });
+            expect(options.arrayFilters).toEqual([
+                {
+                    'file.suggestions': {
+                        $elemMatch: {
+                            id: 'sugg-id-1',
+                            implementationStatus: { $nin: ['implemented'] },
+                        },
+                    },
+                },
+                {
+                    'suggestion.id': 'sugg-id-1',
+                    'suggestion.implementationStatus': { $nin: ['implemented'] },
+                },
+            ]);
+        });
+    });
+
     describe('findFileWithSuggestions', () => {
         it('includes organizationId in the aggregation $match', async () => {
             // aggregate().exec() must resolve to an array

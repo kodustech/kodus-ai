@@ -1,8 +1,12 @@
 import { redirect } from "next/navigation";
 import { Badge } from "@components/ui/badge";
 import { Page } from "@components/ui/page";
-import { getIntegrationConfig } from "@services/integrations/integrationConfig/fetch";
+import {
+    getRepositorySelection,
+    type RepositorySelection,
+} from "@services/codeManagement/repositorySelection";
 import { getWebhookCreationFailures } from "@services/codeManagement/webhookCreationFailures";
+import { getIntegrationConfig } from "@services/integrations/integrationConfig/fetch";
 import { getConnections } from "@services/setup/fetch";
 import { ErrorCard } from "src/core/components/ui/error-card";
 import {
@@ -23,7 +27,14 @@ import { getAutoLicenseAssignmentConfig } from "src/lib/services/organizationPar
 import { GitProviders } from "./_components/_providers";
 import { GitConnectedProvider } from "./_components/connected-provider";
 import { IgnoredUsersCard } from "./_components/ignored-users-card";
+import { ReviewAllRepositoriesCard } from "./_components/review-all-repositories-card";
 import { GitRepositoriesTable } from "./_components/table";
+
+const MANUAL_SELECTION: RepositorySelection = {
+    mode: "manual",
+    includeForksAndMirrors: false,
+    sync: null,
+};
 
 export default async function GitSettings() {
     const teamId = await getGlobalSelectedTeamId();
@@ -42,6 +53,7 @@ export default async function GitSettings() {
         ReturnType<typeof getWebhookCreationFailures>
     > = {};
     let webhookFailuresUnavailable = false;
+    let repositorySelection: RepositorySelection = MANUAL_SELECTION;
     let connectionsError = false;
 
     try {
@@ -51,6 +63,7 @@ export default async function GitSettings() {
             autoLicenseAssignmentConfig,
             organizationMembersRaw,
             webhookFailures,
+            repositorySelection,
         ] = await Promise.all([
             getConnections(teamId),
             getIntegrationConfig({ teamId }),
@@ -66,6 +79,7 @@ export default async function GitSettings() {
                 webhookFailuresUnavailable = true;
                 return {};
             }),
+            getRepositorySelection(teamId).catch(() => MANUAL_SELECTION),
         ]);
     } catch (err) {
         console.error("[GitSettings] error fetching data:", err);
@@ -100,9 +114,11 @@ export default async function GitSettings() {
 
     // 1. condition: team has a git provider connected, but no repositories were selected;
     // 2. pathname checking to avoid infinite redirect loop with Parallel Route `/settings/git/repositories`;
+    // 3. a team reviewing every repository may have none yet while the first sync runs;
     if (
         gitConnection &&
         connectedRepositories.length === 0 &&
+        repositorySelection.mode !== "all" &&
         pathname === "/settings/git"
     ) {
         redirect("/settings/git/repositories");
@@ -152,14 +168,23 @@ export default async function GitSettings() {
                                 message="Failed to load connections. Please try again."
                             />
                         ) : gitConnection ? (
-                            <GitRepositoriesTable
-                                platformName={gitConnection.platformName}
-                                repositories={connectedRepositories}
-                                webhookFailures={webhookFailures}
-                                webhookFailuresUnavailable={
-                                    webhookFailuresUnavailable
-                                }
-                            />
+                            <>
+                                <ReviewAllRepositoriesCard
+                                    platformName={gitConnection.platformName}
+                                    initialSelection={repositorySelection}
+                                />
+                                <GitRepositoriesTable
+                                    platformName={gitConnection.platformName}
+                                    repositories={connectedRepositories}
+                                    webhookFailures={webhookFailures}
+                                    webhookFailuresUnavailable={
+                                        webhookFailuresUnavailable
+                                    }
+                                    reviewsAllRepositories={
+                                        repositorySelection.mode === "all"
+                                    }
+                                />
+                            </>
                         ) : (
                             <GitProviders />
                         )}

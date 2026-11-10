@@ -20,11 +20,14 @@ export const GitRepositoriesTable = ({
     repositories,
     webhookFailures,
     webhookFailuresUnavailable,
+    reviewsAllRepositories,
 }: {
     repositories: AwaitedReturnType<typeof getIntegrationConfig>;
     platformName: string;
     webhookFailures?: Record<string, WebhookCreationFailure>;
     webhookFailuresUnavailable?: boolean;
+    /** The sync adds every repository, so removing or adding by hand is off. */
+    reviewsAllRepositories?: boolean;
 }) => {
     const [query, setQuery] = useState("");
     const canCreate = usePermission(Action.Create, ResourceType.GitSettings);
@@ -36,8 +39,12 @@ export const GitRepositoriesTable = ({
                 repositories.find((repo) => String(repo.id) === repositoryId)
                     ?.name ?? repositoryId,
             reason: failure?.reason,
+            kind: failure?.kind,
         }),
     );
+    const permissionErrors = withoutWebhook.filter(
+        (entry) => entry.kind === "permission",
+    ).length;
 
     return (
         <div>
@@ -63,8 +70,13 @@ export const GitRepositoriesTable = ({
                     <AlertDescription>
                         <p>
                             Kody is never notified of pull requests opened on
-                            these repositories, so no review runs. The provider
-                            refused the webhook when the selection was saved:
+                            these repositories, so no review runs.{" "}
+                            {permissionErrors > 0
+                                ? `The ${platformName} credential lacks the permission to create webhooks on ${permissionErrors === 1 ? "one of them" : `${permissionErrors} of them`}. `
+                                : ""}
+                            {reviewsAllRepositories
+                                ? "Each sync retries them:"
+                                : "The provider refused the webhook when the selection was saved:"}
                         </p>
 
                         <ul className="mt-2 space-y-1">
@@ -92,21 +104,27 @@ export const GitRepositoriesTable = ({
                         onChange={(e) => setQuery(e.target.value)}
                     />
 
-                    <Link href="/settings/git/repositories">
-                        <Button
-                            size="md"
-                            decorative
-                            variant="primary-dark"
-                            disabled={!canCreate}
-                            leftIcon={<PlusIcon />}>
-                            Add repository
-                        </Button>
-                    </Link>
+                    {!reviewsAllRepositories && (
+                        <Link href="/settings/git/repositories">
+                            <Button
+                                size="md"
+                                decorative
+                                variant="primary-dark"
+                                disabled={!canCreate}
+                                leftIcon={<PlusIcon />}>
+                                Add repository
+                            </Button>
+                        </Link>
+                    )}
                 </div>
             </div>
 
             <DataTable
-                columns={columns}
+                columns={
+                    reviewsAllRepositories
+                        ? columns.filter((column) => column.id !== "actions")
+                        : columns
+                }
                 data={repositories}
                 pageSize={25}
                 state={{ globalFilter: query }}

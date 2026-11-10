@@ -31,6 +31,8 @@ import {
     TranslationsCategory,
 } from '@libs/common/utils/translations/translations';
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
+import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
+import { WebhookSetupResult } from '@libs/platform/domain/platformIntegrations/types/codeManagement/webhook-setup.type';
 
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.BITBUCKET, 'codeManagement')
@@ -692,6 +694,16 @@ export class BitbucketService implements Omit<
             params.organizationAndTeamData,
         );
         return impl.isWebhookActive(params);
+    }
+
+    async ensureRepositoryWebhooks(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositories: Repositories[];
+    }): Promise<WebhookSetupResult> {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.ensureRepositoryWebhooks(params);
     }
 
     async diagnoseRepositoryAccess(params: {

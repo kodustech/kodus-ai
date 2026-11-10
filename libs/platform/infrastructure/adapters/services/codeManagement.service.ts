@@ -53,6 +53,7 @@ import type {
     ApprovalTeamMembership,
     ApprovalTeamMembershipParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/approvalTeamMembership.type';
+import { WebhookSetupResult } from '@libs/platform/domain/platformIntegrations/types/codeManagement/webhook-setup.type';
 
 @Injectable()
 export class CodeManagementService implements ICodeManagementService {
@@ -1564,6 +1565,31 @@ export class CodeManagementService implements ICodeManagementService {
             this.platformIntegrationFactory.getCodeManagementService(type);
 
         return codeManagementService.deleteWebhook(params);
+    }
+
+    async ensureRepositoryWebhooks(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repositories: Repositories[];
+        },
+        type?: PlatformType,
+    ): Promise<WebhookSetupResult> {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                params.organizationAndTeamData,
+            );
+        }
+
+        if (!type) {
+            throw new Error(
+                'No code management integration is connected for this team',
+            );
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        return codeManagementService.ensureRepositoryWebhooks(params);
     }
 
     async isWebhookActive(params: {

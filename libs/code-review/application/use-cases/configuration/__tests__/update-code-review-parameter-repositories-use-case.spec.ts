@@ -39,7 +39,6 @@ describe('UpdateCodeReviewParameterRepositoriesUseCase', () => {
             {
                 registerRepositoriesLog: jest.fn(),
             } as any,
-            {} as any,
             { codeReviewSettingsUpdated: jest.fn() } as any,
         );
         const loggerErrorSpy = jest.spyOn(useCase['logger'], 'error');
@@ -109,7 +108,6 @@ describe('UpdateCodeReviewParameterRepositoriesUseCase', () => {
                 ]),
             } as any,
             { emit: jest.fn() } as any,
-            {} as any,
             { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
@@ -195,7 +193,6 @@ describe('UpdateCodeReviewParameterRepositoriesUseCase', () => {
                 ]),
             } as any,
             eventEmitter as any,
-            undefined as any,
             { codeReviewSettingsUpdated: jest.fn() } as any,
         );
 
@@ -234,6 +231,49 @@ describe('UpdateCodeReviewParameterRepositoriesUseCase', () => {
                 ],
                 removedRepositories: [],
                 configLevel: 'global',
+            }),
+        );
+    });
+
+    it('attaches repositories for the automatic sync, even with centralized config enabled, and audits it as the sync', async () => {
+        const createOrUpdateParametersUseCase = {
+            execute: jest.fn().mockResolvedValue({ ok: true }),
+        };
+        const eventEmitter = { emit: jest.fn() };
+        const findByKey = jest.fn(async (key: string) =>
+            key === 'centralized_config'
+                ? { configValue: { enabled: true } }
+                : { configValue: { repositories: [] } },
+        );
+
+        const useCase = new UpdateCodeReviewParameterRepositoriesUseCase(
+            { findByKey } as any,
+            createOrUpdateParametersUseCase as any,
+            {
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'repo-1', name: 'alpha' }]),
+            } as any,
+            eventEmitter as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
+        );
+
+        await useCase.execute({
+            actor: { source: 'sync', organizationId: 'org-1' },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+        });
+
+        expect(createOrUpdateParametersUseCase.execute).toHaveBeenCalled();
+        expect(eventEmitter.emit).toHaveBeenCalledWith(
+            AuditLogEvents.REPOSITORIES,
+            expect.objectContaining({
+                userInfo: {
+                    userId: 'repository-sync',
+                    userEmail: 'Automatic repository sync',
+                },
             }),
         );
     });

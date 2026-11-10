@@ -110,6 +110,12 @@ import {
 } from '@libs/common/utils/translations/translations';
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
 import { listingFailed } from '../repository-listing';
+import {
+    failWebhookSetupForAll,
+    runWebhookSetup,
+    WebhookSetupResult,
+} from '../webhook-setup/webhook-setup';
+import { recordWebhookSetupOutcome } from '../webhook-setup/webhook-setup-failures.service';
 
 /** Bound on the pages `readAllPages` follows before calling a read incomplete. */
 const MAX_PAGES = 200;
@@ -1399,6 +1405,9 @@ export class BitbucketCloudService implements Omit<
                 name: project?.name ?? '',
             },
             lastActivityAt: repo?.updated_on || repo?.created_on,
+            archived: false,
+            fork: Boolean(repo?.parent),
+            mirror: false,
         };
     }
 
@@ -3394,9 +3403,10 @@ export class BitbucketCloudService implements Omit<
             // in it. The last chunk arrives with the complete selection and
             // runs this once.
             if (!params.deferWebhooks) {
-                void this.createWebhook(params.organizationAndTeamData).catch(
-                    () => undefined,
-                );
+                void this.createWebhook(
+                    params.organizationAndTeamData,
+                    integration?.uuid,
+                ).catch(() => undefined);
             }
         } catch (error) {
             this.logger.error({
@@ -3413,27 +3423,100 @@ export class BitbucketCloudService implements Omit<
         }
     }
 
+    /**
+     * Makes sure every selected repository has the Kodus hook and records
+     * the repositories that could not get one.
+     */
     async createWebhook(
         organizationAndTeamData: OrganizationAndTeamData,
+        integrationId?: string,
     ): Promise<void> {
-        try {
-            const bitbucketAuthDetail = await this.getAuthDetails(
+        const startedAt = new Date().toISOString();
+
+        const repositories = <Repositories[]>(
+            await this.findOneByOrganizationAndTeamDataAndConfigKey(
                 organizationAndTeamData,
+                IntegrationConfigKey.REPOSITORIES,
+            )
+        );
+
+        if (!repositories?.length) {
+            return;
+        }
+
+        const result = await this.ensureRepositoryWebhooks({
+            organizationAndTeamData,
+            repositories,
+        });
+
+        const resolvedIntegrationId =
+            integrationId ??
+            (
+                await this.integrationService.findOne({
+                    organization: {
+                        uuid: organizationAndTeamData.organizationId,
+                    },
+                    team: { uuid: organizationAndTeamData.teamId },
+                    platform: PlatformType.BITBUCKET,
+                })
+            )?.uuid;
+
+        if (resolvedIntegrationId) {
+            await recordWebhookSetupOutcome(this.integrationConfigService, {
+                organizationAndTeamData,
+                integrationId: resolvedIntegrationId,
+                startedAt,
+                result,
+            });
+        }
+    }
+
+    async ensureRepositoryWebhooks(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositories: Repositories[];
+    }): Promise<WebhookSetupResult> {
+        const { organizationAndTeamData, repositories = [] } = params;
+        const labels = {
+            provider: 'Bitbucket',
+            permissionHint:
+                'Creating a repository webhook needs admin access to the repository and the "Webhooks: Read and write" permission on the credential.',
+        };
+
+        if (!repositories.length) {
+            return { configured: [], failed: {}, notAttempted: [] };
+        }
+
+        const webhookUrl = process.env.GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK;
+        let bitbucketAPI: ReturnType<
+            BitbucketCloudService['instanceBitbucketApi']
+        >;
+
+        try {
+            if (!webhookUrl) {
+                throw new Error(
+                    'The Bitbucket webhook URL is not configured (GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK)',
+                );
+            }
+
+            bitbucketAPI = this.instanceBitbucketApi(
+                await this.getAuthDetails(organizationAndTeamData),
             );
-
-            const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetail);
-
-            const repositories = <Repositories[]>(
-                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+        } catch (error) {
+            this.logger.error({
+                message: 'Could not start Bitbucket webhook setup',
+                context: BitbucketCloudService.name,
+                error,
+                metadata: {
                     organizationAndTeamData,
-                    IntegrationConfigKey.REPOSITORIES,
-                )
-            );
+                    repositoryCount: repositories.length,
+                },
+            });
+            return failWebhookSetupForAll(repositories, error, labels);
+        }
 
-            const webhookUrl =
-                process.env.GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK;
-
-            for (const repo of repositories) {
+        const result = await runWebhookSetup(
+            repositories,
+            async (repo) => {
                 const existingHooks = await bitbucketAPI.webhooks
                     .listForRepo({
                         repo_slug: `{${repo.id}}`,
@@ -3442,62 +3525,49 @@ export class BitbucketCloudService implements Omit<
                     })
                     .then((res) => this.getPaginatedResults(bitbucketAPI, res));
 
-                const hookExists = existingHooks.some(
-                    (hook) => hook?.url === webhookUrl,
-                );
-
-                if (!hookExists) {
-                    await bitbucketAPI.webhooks.create({
-                        repo_slug: `{${repo.id}}`,
-                        workspace: `{${repo.workspaceId}}`,
-                        _body: {
-                            description: 'Kodus Webhook',
-                            url: webhookUrl,
-                            active: true,
-                            events: [
-                                'pullrequest:created',
-                                'pullrequest:updated',
-                                'pullrequest:rejected',
-                                'pullrequest:fulfilled',
-                                'pullrequest:comment_created',
-                            ],
-                        },
-                    });
-                    this.logger.log({
-                        message: 'Webhook created successfully',
-                        context: BitbucketCloudService.name,
-                        serviceName:
-                            'BitbucketCloudService createMergeRequestWebhook',
-                        metadata: {
-                            organizationAndTeamData,
-                        },
-                    });
-                } else {
-                    this.logger.log({
-                        message: 'Webhook already exists',
-                        context: BitbucketCloudService.name,
-                        serviceName:
-                            'BitbucketCloudService createMergeRequestWebhook',
-                        metadata: {
-                            organizationAndTeamData,
-                        },
-                    });
+                if (existingHooks.some((hook) => hook?.url === webhookUrl)) {
+                    return;
                 }
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Error to create webhook',
-                context: BitbucketCloudService.name,
-                serviceName: 'BitbucketCloudService createMergeRequestWebhook',
-                error: error,
-                metadata: {
-                    organizationAndTeamData,
-                },
-            });
-            throw error;
-        }
-    }
 
+                await bitbucketAPI.webhooks.create({
+                    repo_slug: `{${repo.id}}`,
+                    workspace: `{${repo.workspaceId}}`,
+                    _body: {
+                        description: 'Kodus Webhook',
+                        url: webhookUrl,
+                        active: true,
+                        events: [
+                            'pullrequest:created',
+                            'pullrequest:updated',
+                            'pullrequest:rejected',
+                            'pullrequest:fulfilled',
+                            'pullrequest:comment_created',
+                        ],
+                    },
+                });
+
+                this.logger.log({
+                    message: 'Bitbucket webhook created',
+                    context: BitbucketCloudService.name,
+                    metadata: { organizationAndTeamData, repositoryId: repo.id },
+                });
+            },
+            labels,
+        );
+
+        this.logger.log({
+            message: 'Bitbucket webhook setup finished',
+            context: BitbucketCloudService.name,
+            metadata: {
+                organizationAndTeamData,
+                configured: result.configured.length,
+                failed: Object.keys(result.failed).length,
+                notAttempted: result.notAttempted.length,
+            },
+        });
+
+        return result;
+    }
     async getCheckEvidence(
         params: GetCheckEvidenceParams,
     ): Promise<CheckEvidence[]> {

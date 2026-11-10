@@ -20,7 +20,7 @@ import { LLMDecisionExtractionSchema as llmDecisionExtractionSchemaSession } fro
 import { repeatedClusteringSchema } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
 import {
     severityAnalysisSchema,
-    validateImplementedSchema,
+    implementationCheckSchema,
 } from '@libs/code-review/infrastructure/adapters/services/llmAnalysis.service';
 import { documentationSearchExaFormatSchema } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import {
@@ -119,7 +119,7 @@ describe('zodToStrictWireSchema', () => {
             repeatedClusteringSchema,
         ],
         ['severityAnalysisSchema (llmAnalysis)', severityAnalysisSchema],
-        ['validateImplementedSchema (llmAnalysis)', validateImplementedSchema],
+        ['implementationCheckSchema (llmAnalysis)', implementationCheckSchema],
         [
             'documentationSearchExaFormatSchema (exa formatter)',
             documentationSearchExaFormatSchema,
@@ -322,7 +322,7 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/code-review/infrastructure/adapters/services/commentAnalysis.service.ts', // commentCategorizerSchema, commentIrrelevanceFilterSchema, kodyRulesGenerator{,DuplicateFilter,QualityFilter}Schema
         'libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service.ts', // DocumentationPlannerSchema
         'libs/code-review/infrastructure/adapters/services/documentation-search-exa.service.ts', // documentationSearchExaFormatSchema
-        'libs/code-review/infrastructure/adapters/services/llmAnalysis.service.ts', // severityAnalysisSchema, validateImplementedSchema
+        'libs/code-review/infrastructure/adapters/services/llmAnalysis.service.ts', // severityAnalysisSchema, implementationCheckSchema
         'libs/code-review/infrastructure/adapters/services/safeguardPipeline.service.ts', // safeguardFeatureExtractionSchema, safeguardVerificationSchema, agentTurnSchema
         'libs/code-review/infrastructure/adapters/services/suggestionLLMValidator.service.ts', // validateCodeSemanticsSchema, checkSuggestionSimplicitySchema
         'libs/ee/analytics-warehouse/classification/pull-request-classifier.service.ts', // classificationBatchSchema

@@ -124,6 +124,11 @@ import {
 } from '../code-management-defaults.constants';
 import { AzureReposRequestHelper } from './azure-repos-request-helper';
 import { listingFailed } from '../repository-listing';
+import {
+    failWebhookSetupForAll,
+    runWebhookSetup,
+    WebhookSetupResult,
+} from '../webhook-setup/webhook-setup';
 
 // Sequence for the webhook-pass id in the instrumentation logs, so
 // successive passes over the same selection can be told apart.
@@ -2676,6 +2681,169 @@ export class AzureReposService implements Omit<
         return undefined;
     }
 
+    /**
+     * Subscribes the given repositories without pruning anything: only the
+     * full pass in `createWebhook` knows the whole selection. Shares that
+     * pass's in-process slot so the two never build subscriptions from the
+     * same stale snapshot.
+     */
+    async ensureRepositoryWebhooks(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositories: Repositories[];
+    }): Promise<WebhookSetupResult> {
+        const { organizationAndTeamData, repositories = [] } = params;
+        const labels = {
+            provider: 'Azure DevOps',
+            permissionHint:
+                'Creating service hook subscriptions needs the "Edit subscriptions" permission on the project (Project Administrators have it).',
+        };
+
+        if (!repositories.length) {
+            return { configured: [], failed: {}, notAttempted: [] };
+        }
+
+        const passKey = `${organizationAndTeamData?.organizationId}:${organizationAndTeamData?.teamId}`;
+
+        if (!(await this.waitForWebhookPassSlot(passKey))) {
+            // Running beside the full pass would build from the same stale
+            // snapshot, and freeing the slot afterwards would drop its claim.
+            this.logger.warn({
+                message:
+                    'Azure DevOps webhook setup deferred: a full pass still holds the slot',
+                context: AzureReposService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryCount: repositories.length,
+                },
+            });
+            return {
+                configured: [],
+                failed: {},
+                notAttempted: repositories.map((repo) => String(repo.id)),
+                deferred: {
+                    reason: 'Waiting: another webhook setup was running for this team. It will be retried on the next sync.',
+                },
+            };
+        }
+        azureWebhookPassInFlight.add(passKey);
+
+        try {
+            const passId = `ensure-${Date.now().toString(36)}-${(azureWebhookPassSeq += 1)}`;
+            let azureAuthDetail: AzureReposAuthDetail;
+            let existingSubscriptions: AzureRepoSubscription[];
+
+            try {
+                if (!process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK) {
+                    throw new Error(
+                        'The Azure DevOps webhook URL is not configured (GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK)',
+                    );
+                }
+
+                azureAuthDetail = await this.getAuthDetails(
+                    organizationAndTeamData,
+                );
+
+                existingSubscriptions =
+                    await this.azureReposRequestHelper.listSubscriptions({
+                        orgName: azureAuthDetail.orgName,
+                        token: azureAuthDetail.token,
+                    });
+            } catch (error) {
+                this.logger.error({
+                    message: 'Could not start Azure DevOps webhook setup',
+                    context: AzureReposService.name,
+                    error,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryCount: repositories.length,
+                    },
+                });
+                return failWebhookSetupForAll(repositories, error, labels);
+            }
+
+            const subscriptionIndex = new Map<
+                string,
+                AzureRepoSubscription[]
+            >();
+            for (const subscription of existingSubscriptions ?? []) {
+                const key = AzureReposService.subscriptionKey(
+                    subscription.publisherInputs?.projectId,
+                    subscription.publisherInputs?.repository,
+                    subscription.eventType,
+                );
+                subscriptionIndex.set(key, [
+                    ...(subscriptionIndex.get(key) ?? []),
+                    subscription,
+                ]);
+            }
+
+            const result = await runWebhookSetup(
+                repositories,
+                async (repo) => {
+                    if (!repo?.project?.id) {
+                        throw new Error(
+                            'The repository has no Azure DevOps project id',
+                        );
+                    }
+
+                    await this.createNotificationChannel(
+                        repo.project.id,
+                        azureAuthDetail.token,
+                        azureAuthDetail.orgName,
+                        String(repo.id),
+                        passId,
+                        subscriptionIndex,
+                        organizationAndTeamData?.teamId,
+                        { rethrow: true },
+                    );
+                },
+                labels,
+            );
+
+            this.logger.log({
+                message: 'Azure DevOps webhook setup finished',
+                context: AzureReposService.name,
+                metadata: {
+                    passId,
+                    organizationAndTeamData,
+                    configured: result.configured.length,
+                    failed: Object.keys(result.failed).length,
+                    notAttempted: result.notAttempted.length,
+                },
+            });
+
+            return result;
+        } finally {
+            azureWebhookPassInFlight.delete(passKey);
+
+            // A save that arrived meanwhile coalesced into this slot; its
+            // full pass has to run now, or its selection never converges.
+            if (azureWebhookPassRerunRequested.delete(passKey)) {
+                void this.createWebhook(organizationAndTeamData);
+            }
+        }
+    }
+
+    /** How long a targeted webhook setup waits for a running full pass. */
+    static WEBHOOK_PASS_WAIT_MS = 120_000;
+
+    /** True once the slot is free; false when the wait ran out. */
+    private async waitForWebhookPassSlot(passKey: string): Promise<boolean> {
+        const deadline = Date.now() + AzureReposService.WEBHOOK_PASS_WAIT_MS;
+        while (azureWebhookPassInFlight.has(passKey)) {
+            if (Date.now() >= deadline) {
+                return false;
+            }
+            await new Promise((resolve) =>
+                setTimeout(
+                    resolve,
+                    Math.min(500, AzureReposService.WEBHOOK_PASS_WAIT_MS),
+                ),
+            );
+        }
+        return true;
+    }
+
     async createWebhook(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<void> {
@@ -3820,6 +3988,9 @@ export class AzureReposService implements Omit<
                 name: project?.name ?? '',
             },
             lastActivityAt: repo?.lastUpdateTime ?? project?.lastUpdateTime,
+            archived: Boolean(repo?.isDisabled),
+            fork: Boolean(repo?.isFork),
+            mirror: false,
         };
     }
 
@@ -4808,6 +4979,7 @@ export class AzureReposService implements Omit<
         passId?: string,
         subscriptionIndex: Map<string, AzureRepoSubscription[]> = new Map(),
         teamId?: string,
+        options: { rethrow?: boolean } = {},
     ): Promise<void> {
         const webhookUrl =
             process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK!;
@@ -4840,6 +5012,7 @@ export class AzureReposService implements Omit<
                     passId,
                     subscriptionIndex,
                     teamId,
+                    rethrow: options.rethrow,
                 }).catch((error) => {
                     this.logger.error({
                         message: `Erro no hook ${type}: ${error.message ?? error}`,
@@ -4852,11 +5025,21 @@ export class AzureReposService implements Omit<
                             repoId,
                         },
                     });
+                    if (options.rethrow) {
+                        throw error;
+                    }
                 }),
         );
 
-        // Aguardar todas, mas já lidamos com erros acima
-        await Promise.all(tasks);
+        const settled = await Promise.allSettled(tasks);
+        const rejections = settled
+            .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+            .map((r) => r.reason);
+
+        if (rejections.length) {
+            // A rate limit decides what the caller does next, so it wins.
+            throw rejections.find((e) => is429Error(e)) ?? rejections[0];
+        }
     }
 
     /**
@@ -4994,6 +5177,7 @@ export class AzureReposService implements Omit<
         passId?: string;
         subscriptionIndex: Map<string, AzureRepoSubscription[]>;
         teamId?: string;
+        rethrow?: boolean;
     }): Promise<void> {
         const {
             orgName,
@@ -5139,6 +5323,9 @@ export class AzureReposService implements Omit<
                 error,
                 metadata: { eventType, orgName, projectId, repoId },
             });
+            if (opts.rethrow) {
+                throw error;
+            }
         }
     }
 
