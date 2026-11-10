@@ -1,11 +1,15 @@
 import { Action, ResourceType } from "@services/permissions/types";
 
 import { BillingHttpError } from "../_services/billing/utils";
-import { updateCreditAutoTopUpAction } from "./credits";
+import {
+    removeCreditPaymentMethodAction,
+    updateCreditAutoTopUpAction,
+} from "./credits";
 
 const canAccessMock = jest.fn();
 const updateMock = jest.fn();
 const balanceMock = jest.fn();
+const removeMock = jest.fn();
 jest.mock("@services/permissions/fetch", () => ({
     canAccess: (...args: unknown[]) => canAccessMock(...args),
 }));
@@ -15,6 +19,7 @@ jest.mock("src/core/utils/gate-hit", () => ({
 jest.mock("../_services/billing/fetch", () => ({
     updateCreditAutoTopUp: (...args: unknown[]) => updateMock(...args),
     getCreditBalance: (...args: unknown[]) => balanceMock(...args),
+    removeCreditPaymentMethod: (...args: unknown[]) => removeMock(...args),
 }));
 jest.mock("../_services/billing/utils", () => ({
     BillingHttpError: class extends Error {
@@ -31,6 +36,7 @@ describe("monthly cap server action", () => {
     beforeEach(() => {
         canAccessMock.mockReset().mockResolvedValue(true);
         updateMock.mockReset();
+        removeMock.mockReset();
         balanceMock.mockReset().mockResolvedValue(null);
     });
 
@@ -158,7 +164,90 @@ describe("monthly cap server action", () => {
                 monthlyLimitUsd: 100,
             }),
         ).rejects.toThrow("Failed to update auto top-up");
+        expect(balanceMock).toHaveBeenCalledWith({ teamId: "team-1" });
     });
+
+    it("requires Billing Read before using balance data to confirm a partial save", async () => {
+        canAccessMock.mockImplementation((_resource, action) =>
+            Promise.resolve(action === Action.Update),
+        );
+        updateMock.mockResolvedValue({ enabled: true, monthlyLimitUsd: 100 });
+        await expect(
+            updateCreditAutoTopUpAction({
+                teamId: "team-1",
+                enabled: true,
+                monthlyLimitUsd: 100,
+            }),
+        ).rejects.toThrow("Failed to update auto top-up");
+        expect(canAccessMock).toHaveBeenCalledWith(
+            ResourceType.Billing,
+            Action.Read,
+        );
+        expect(balanceMock).not.toHaveBeenCalled();
+    });
+
+    it("preserves mutation fields and recalculates the block state when read-back has older settings", async () => {
+        updateMock.mockResolvedValue({
+            enabled: true,
+            amountUsd: 100,
+            thresholdUsd: 10,
+            monthlyLimitUsd: 100,
+        });
+        balanceMock.mockResolvedValue({
+            autoTopUp: {
+                enabled: false,
+                amountUsd: 50,
+                thresholdUsd: 5,
+                monthlyLimitUsd: 100,
+                monthlyPurchasedUsd: 20,
+                monthlyRemainingUsd: 80,
+                monthlyLimitReached: false,
+            },
+        });
+        await expect(
+            updateCreditAutoTopUpAction({
+                teamId: "team-1",
+                enabled: true,
+                amountUsd: 100,
+                thresholdUsd: 10,
+                monthlyLimitUsd: 100,
+            }),
+        ).resolves.toEqual({
+            enabled: true,
+            amountUsd: 100,
+            thresholdUsd: 10,
+            monthlyLimitUsd: 100,
+            monthlyPurchasedUsd: 20,
+            monthlyRemainingUsd: 80,
+            monthlyLimitReached: true,
+        });
+    });
+
+    it.each(["settings", "card"])(
+        "returns a readable pending-charge result for %s without claiming success",
+        async (operation) => {
+            const error = new BillingHttpError(409, {
+                code: "AUTO_TOP_UP_PENDING",
+                error: "Resolve the previous charge before changing its amount or card",
+            });
+            updateMock.mockRejectedValue(error);
+            removeMock.mockRejectedValue(error);
+            const response =
+                operation === "settings"
+                    ? await updateCreditAutoTopUpAction({
+                          teamId: "team-1",
+                          enabled: true,
+                          monthlyLimitUsd: 100,
+                      })
+                    : await removeCreditPaymentMethodAction({
+                          teamId: "team-1",
+                      });
+            expect(response).toEqual({
+                saveError:
+                    "Resolve the previous charge before changing its amount or card",
+            });
+        },
+    );
 
     it("surfaces validation failures instead of claiming the cap was saved", async () => {
         updateMock.mockRejectedValue(

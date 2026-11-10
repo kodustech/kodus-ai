@@ -520,6 +520,10 @@ const AutoTopUpRow = ({
                         ? { monthlyLimitUsd: next.monthlyLimitUsd }
                         : {}),
                 });
+                if (saved && "saveError" in saved) {
+                    toast({variant: "warning", title: "Previous top-up pending", description: saved.saveError});
+                    return;
+                }
                 // The switch is driven by server state, so writing the
                 // mutation's OWN answer into the cache is what moves it. This
                 // used to discard `saved` and rely on the refetch below, which
@@ -600,7 +604,11 @@ const AutoTopUpRow = ({
     });
 
     const [removeCard, { loading: removingCard }] = useAsyncAction(async () => {
-        await removeCreditPaymentMethodAction({ teamId });
+        const removed = await removeCreditPaymentMethodAction({ teamId });
+        if (removed && "saveError" in removed) {
+            toast({variant: "warning", title: "Previous top-up pending", description: removed.saveError});
+            return;
+        }
         toast({ variant: "info", title: "Card removed" });
         onChanged();
     });

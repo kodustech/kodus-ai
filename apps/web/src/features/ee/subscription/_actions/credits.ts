@@ -126,9 +126,27 @@ export const updateCreditAutoTopUpAction = async (params: {
             result?.monthlyLimitUsd === params.monthlyLimitUsd &&
             result.monthlyPurchasedUsd === undefined
         ) {
+            await assertCanReadCredits();
             const balance = await getCreditBalance({ teamId: params.teamId });
-            if (balance?.autoTopUp)
-                result = { ...result, ...balance.autoTopUp };
+            if (
+                balance?.autoTopUp?.monthlyLimitUsd !== params.monthlyLimitUsd
+            ) {
+                throw new Error(
+                    "Monthly auto top-up limit could not be confirmed",
+                );
+            }
+            result = {
+                ...balance.autoTopUp,
+                ...result,
+                monthlyPurchasedUsd: balance.autoTopUp.monthlyPurchasedUsd,
+            };
+            if (
+                typeof result.monthlyRemainingUsd === "number" &&
+                typeof result.amountUsd === "number"
+            ) {
+                result.monthlyLimitReached =
+                    result.monthlyRemainingUsd < result.amountUsd;
+            }
         }
         // During a rolling deploy an older billing instance can ignore new
         // fields. Never claim a spending cap was saved without its response.
@@ -143,6 +161,16 @@ export const updateCreditAutoTopUpAction = async (params: {
         }
         return result;
     } catch (error) {
+        if (
+            error instanceof BillingHttpError &&
+            (error.body as { code?: unknown } | null)?.code ===
+                "AUTO_TOP_UP_PENDING"
+        ) {
+            return {
+                saveError:
+                    "Resolve the previous charge before changing its amount or card",
+            } as const;
+        }
         console.error("Failed to update auto top-up:", error);
         // Billing answers 409 NO_PAYMENT_METHOD when no card is saved and
         // 400 INVALID_* for a bad pair; surface the code so the UI can react.
@@ -177,6 +205,16 @@ export const removeCreditPaymentMethodAction = async (params: {
     try {
         return await removeCreditPaymentMethod(params);
     } catch (error) {
+        if (
+            error instanceof BillingHttpError &&
+            (error.body as { code?: unknown } | null)?.code ===
+                "AUTO_TOP_UP_PENDING"
+        ) {
+            return {
+                saveError:
+                    "Resolve the previous charge before changing its amount or card",
+            } as const;
+        }
         console.error("Failed to remove the card:", error);
         throw new Error("Failed to remove the card");
     }
