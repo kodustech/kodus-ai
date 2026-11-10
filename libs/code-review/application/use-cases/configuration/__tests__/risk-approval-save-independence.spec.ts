@@ -519,3 +519,39 @@ it('preserves the other legacy route when only one canonical route is edited', a
         riskReviewRouting: { noRisk: 'heavy', riskFound: 'balanced' },
     });
 });
+
+it.each(['edit', 'restore'])(
+    'preserves an inherited canonical route when migrating the other legacy route: %s',
+    async (action) => {
+        const { run, save, stored } = setup(true);
+        Object.assign(stored.configs, {
+            riskReviewRouting: { noRisk: 'balanced' },
+        });
+        stored.repositories[0].configs = { reviewMode: 'heavy' };
+        stored.repositories[0].directories[0].configs = {} as any;
+        save.mockImplementation(async (_org, value) => {
+            Object.assign(stored, structuredClone(value));
+            return true;
+        });
+        await run(
+            action === 'edit'
+                ? { riskReviewRouting: { riskFound: 'balanced' } }
+                : {},
+            {
+                repositoryId: 'repo',
+                ...(action === 'restore'
+                    ? { inheritFields: ['riskReviewRouting.riskFound'] }
+                    : {}),
+            },
+        );
+        const read = () =>
+            resolveReviewSettings(
+                getDefaultKodusConfigFile(),
+                stored.configs,
+                stored.repositories[0].configs,
+            );
+        expect(read().riskReviewRouting.noRisk).toBe('balanced');
+        await run({ riskReviewRouting: { noRisk: 'heavy' } });
+        expect(read().riskReviewRouting.noRisk).toBe('heavy');
+    },
+);

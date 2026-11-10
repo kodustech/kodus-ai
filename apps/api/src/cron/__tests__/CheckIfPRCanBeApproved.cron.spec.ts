@@ -1279,11 +1279,17 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         );
         expect(
             deps.pullRequestService.setApprovalReasonDeliveryFailure,
-        ).toHaveBeenCalledWith('org-1', 'repo-1', 7, {
-            decision: 'hold',
-            reason: 'A person should review this.',
-            occurredAt: expect.any(String),
-        });
+        ).toHaveBeenCalledWith(
+            'org-1',
+            'repo-1',
+            7,
+            {
+                decision: 'hold',
+                reason: 'A person should review this.',
+                occurredAt: expect.any(String),
+            },
+            { notAfter: expect.any(String) },
+        );
     });
 
     it('clears a prior delivery failure when the reason is already on the PR', async () => {
@@ -1321,7 +1327,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).not.toHaveBeenCalled();
         expect(
             deps.pullRequestService.setApprovalReasonDeliveryFailure,
-        ).toHaveBeenCalledWith('org-1', 'repo-1', 7, null);
+        ).toHaveBeenCalledWith('org-1', 'repo-1', 7, null, {
+            notAfter: expect.any(String),
+        });
     });
 
     it('logs a context-read failure without reading the failing getter twice', async () => {

@@ -42,14 +42,13 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
     });
 
     describe('setApprovalReasonDeliveryFailure', () => {
-        it('writes only the targeted PR and clears only an existing notice', async () => {
+        it('scopes ordered writes and clears to the targeted PR', async () => {
             model.updateOne = jest.fn().mockResolvedValue({ matchedCount: 1 });
             const failure = {
                 decision: 'hold' as const,
                 reason: 'A person must approve.',
                 occurredAt: '2026-10-24T00:00:00.000Z',
             };
-
             expect(
                 await repo.setApprovalReasonDeliveryFailure(
                     'org-A',
@@ -58,32 +57,28 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                     failure,
                 ),
             ).toBe(true);
-            expect(model.updateOne).toHaveBeenNthCalledWith(
-                1,
-                {
-                    'organizationId': 'org-A',
-                    'repository.id': 'repo-alpha',
-                    'number': 7,
-                },
-                { $set: { approvalReasonDeliveryFailure: failure } },
-            );
-
             await repo.setApprovalReasonDeliveryFailure(
                 'org-A',
                 'repo-alpha',
                 7,
                 null,
+                { expectedFailure: failure },
             );
-            expect(model.updateOne).toHaveBeenNthCalledWith(
-                2,
-                {
+            for (const [filter] of model.updateOne.mock.calls) {
+                expect(filter).toMatchObject({
                     'organizationId': 'org-A',
                     'repository.id': 'repo-alpha',
                     'number': 7,
-                    'approvalReasonDeliveryFailure': { $ne: null },
-                },
-                { $set: { approvalReasonDeliveryFailure: null } },
-            );
+                });
+            }
+            expect(
+                model.updateOne.mock.calls[0][1].$set
+                    .approvalReasonDeliveryFailure,
+            ).toEqual(failure);
+            expect(
+                model.updateOne.mock.calls[1][1].$set
+                    .approvalReasonDeliveryFailure,
+            ).toBeNull();
         });
 
         it('reports a missing PR when a failed delivery cannot be recorded', async () => {
@@ -553,7 +548,9 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             );
 
             const [filter, , options] = findOneAndUpdate.mock.calls[0];
-            expect(filter).toMatchObject({ 'files.suggestions.id': 'sugg-id-1' });
+            expect(filter).toMatchObject({
+                'files.suggestions.id': 'sugg-id-1',
+            });
             expect(options).toMatchObject({ projection: { _id: 1 } });
         });
     });
@@ -594,7 +591,9 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 },
                 {
                     'suggestion.id': 'sugg-id-1',
-                    'suggestion.implementationStatus': { $nin: ['implemented'] },
+                    'suggestion.implementationStatus': {
+                        $nin: ['implemented'],
+                    },
                 },
             ]);
         });

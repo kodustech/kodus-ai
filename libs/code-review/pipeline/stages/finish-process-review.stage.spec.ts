@@ -170,7 +170,13 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
             expect.anything(),
             expect.stringContaining('All clean PRs'),
             'approve',
-            { confirmedApproval: { headSha: 'head', baseSha: 'base' } },
+            {
+                confirmedApproval: {
+                    headSha: 'head',
+                    baseSha: 'base',
+                    occurredAt: expect.any(String),
+                },
+            },
         );
     });
 

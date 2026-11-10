@@ -1160,8 +1160,19 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             inheritFields.some((field) =>
                 field.startsWith('riskReviewRouting.'),
             );
+        const ancestorRouting =
+            level === ConfigLevel.GLOBAL
+                ? undefined
+                : deepMerge(
+                      codeReviewConfigs.configs ?? {},
+                      ...(level === ConfigLevel.DIRECTORY
+                          ? [repository!.configs ?? {}]
+                          : []),
+                  ).riskReviewRouting;
         const oldReviewConfig =
-            ownsLegacyMode && editsRouting
+            ownsLegacyMode &&
+            editsRouting &&
+            ancestorRouting?.noRisk === undefined
                 ? {
                       ...oldConfig,
                       riskReviewRouting: {

@@ -29,6 +29,13 @@ export interface IApprovalReasonDeliveryFailure {
     reviewedBaseSha?: string;
 }
 
+export interface ApprovalReasonDeliveryGuard {
+    /** Logical publication attempt time, captured before provider I/O. */
+    notAfter?: string;
+    /** Repair only the notice that was read, never a replacement. */
+    expectedFailure?: IApprovalReasonDeliveryFailure;
+}
+
 export interface SuggestionCountsBySeverity {
     // deliveryStatus === 'sent' — comment posted on the PR.
     sent: number;

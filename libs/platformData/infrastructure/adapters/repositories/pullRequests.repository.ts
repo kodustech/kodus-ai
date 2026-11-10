@@ -21,6 +21,7 @@ import {
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
 import {
     IApprovalReasonDeliveryFailure,
+    ApprovalReasonDeliveryGuard,
     IFile,
     IPullRequests,
     IPullRequestUserMapping,
@@ -57,21 +58,71 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         repositoryId: string,
         prNumber: number,
         failure: IApprovalReasonDeliveryFailure | null,
+        guard?: ApprovalReasonDeliveryGuard,
     ): Promise<boolean> {
+        // A repair belongs to the original attempt. Advancing its watermark
+        // to the repair time could suppress a newer publication still in flight.
+        const eventAt =
+            guard?.expectedFailure?.occurredAt ??
+            failure?.occurredAt ??
+            guard?.notAfter ??
+            new Date().toISOString();
+        const expected = guard?.expectedFailure;
         const result = await this.pullRequestsModel.updateOne(
             {
                 organizationId,
                 'repository.id': repositoryId,
                 'number': prNumber,
-                // Clearing a notice that does not exist should leave the PR
-                // untouched, including its updatedAt timestamp.
-                ...(failure === null
-                    ? { approvalReasonDeliveryFailure: { $ne: null } }
+                '$and': [
+                    {
+                        $or: [
+                            {
+                                approvalReasonDeliveryUpdatedAt: {
+                                    $exists: false,
+                                },
+                            },
+                            {
+                                approvalReasonDeliveryUpdatedAt: {
+                                    $lte: eventAt,
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        $or: [
+                            { approvalReasonDeliveryFailure: null },
+                            {
+                                'approvalReasonDeliveryFailure.occurredAt': {
+                                    $exists: false,
+                                },
+                            },
+                            {
+                                'approvalReasonDeliveryFailure.occurredAt': {
+                                    $lte: eventAt,
+                                },
+                            },
+                        ],
+                    },
+                ],
+                ...(expected
+                    ? Object.fromEntries(
+                          Object.entries(expected)
+                              .filter(([, value]) => value !== undefined)
+                              .map(([key, value]) => [
+                                  `approvalReasonDeliveryFailure.${key}`,
+                                  value,
+                              ]),
+                      )
                     : {}),
             },
-            { $set: { approvalReasonDeliveryFailure: failure } },
+            {
+                $set: {
+                    approvalReasonDeliveryFailure: failure,
+                    approvalReasonDeliveryUpdatedAt: eventAt,
+                },
+            },
         );
-        return failure === null || result.matchedCount > 0;
+        return result.matchedCount > 0;
     }
 
     //#region Create

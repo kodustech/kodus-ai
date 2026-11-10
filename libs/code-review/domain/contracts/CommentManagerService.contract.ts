@@ -22,7 +22,11 @@ export interface ApprovalReasonOptions {
     /** Update Kody's earlier reason note, but never open one. */
     onlyIfPresent?: boolean;
     /** Supplied only after this run successfully submitted the approval. */
-    confirmedApproval?: { headSha: string; baseSha: string };
+    confirmedApproval?: {
+        headSha: string;
+        baseSha: string;
+        occurredAt?: string;
+    };
 }
 
 export interface ICommentManagerService {

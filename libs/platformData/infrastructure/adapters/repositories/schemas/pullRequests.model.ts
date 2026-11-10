@@ -20,6 +20,10 @@ export class PullRequestsModel extends CoreDocument {
     @Prop({ type: Object, required: false, default: null })
     public approvalReasonDeliveryFailure?: IApprovalReasonDeliveryFailure | null;
 
+    /** Retained after a clear so a late older failure cannot reappear. */
+    @Prop({ type: String, required: false })
+    public approvalReasonDeliveryUpdatedAt?: string;
+
     @Prop({ type: String, required: true })
     public title: string;
 

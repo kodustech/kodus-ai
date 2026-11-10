@@ -141,6 +141,8 @@ export class CommentManagerService implements ICommentManagerService {
         kind: 'approve' | 'hold',
         options?: ApprovalReasonOptions,
     ): Promise<void> {
+        const occurredAt =
+            options?.confirmedApproval?.occurredAt ?? new Date().toISOString();
         try {
             await this.publishApprovalReason(
                 organizationAndTeamData,
@@ -149,6 +151,7 @@ export class CommentManagerService implements ICommentManagerService {
                 reason,
                 kind,
                 options,
+                occurredAt,
             );
         } catch (error) {
             const confirmed = options?.confirmedApproval;
@@ -161,7 +164,7 @@ export class CommentManagerService implements ICommentManagerService {
                         {
                             decision: 'approve',
                             reason,
-                            occurredAt: new Date().toISOString(),
+                            occurredAt,
                             reviewedHeadSha: confirmed.headSha,
                             reviewedBaseSha: confirmed.baseSha,
                         },
@@ -178,6 +181,11 @@ export class CommentManagerService implements ICommentManagerService {
                             prNumber,
                         },
                     });
+                    throw new AggregateError(
+                        [error, persistenceError],
+                        'Approval reason publication and delivery-state persistence failed',
+                        { cause: error },
+                    );
                 }
             }
             throw error;
@@ -190,7 +198,8 @@ export class CommentManagerService implements ICommentManagerService {
         repository: { name: string; id: string },
         reason: string,
         kind: 'approve' | 'hold',
-        options?: { onlyIfPresent?: boolean },
+        options: { onlyIfPresent?: boolean } | undefined,
+        occurredAt: string,
     ): Promise<void> {
         const request = {
             organizationAndTeamData,
@@ -259,6 +268,7 @@ export class CommentManagerService implements ICommentManagerService {
                 repository.id,
                 prNumber,
                 null,
+                { notAfter: occurredAt },
             );
         } catch (error) {
             this.logger.warn({

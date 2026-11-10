@@ -93,6 +93,7 @@ import {
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import {
     IApprovalReasonDeliveryFailure,
+    ApprovalReasonDeliveryGuard,
     IPullRequestWithDeliveredSuggestions,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
@@ -931,6 +932,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                     reviewedHeadSha: failure.reviewedHeadSha,
                                     reviewedBaseSha: failure.reviewedBaseSha,
                                 },
+                                failure,
                             );
                         }
                     } catch (error) {
@@ -1847,7 +1849,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
         },
         platformType: PlatformType,
         decision: ApprovalDecision,
+        expectedFailure?: IApprovalReasonDeliveryFailure,
     ): Promise<void> {
+        const occurredAt = new Date().toISOString();
+        const guard = {
+            notAfter: occurredAt,
+            ...(expectedFailure ? { expectedFailure } : {}),
+        };
         let operation = 'getAllCommentsInPullRequest';
         try {
             const body = formatApprovalReasonComment(
@@ -1920,7 +1928,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     );
                 }
             }
-            await this.recordApprovalReasonDelivery(request, null);
+            await this.recordApprovalReasonDelivery(request, null, guard);
         } catch (error) {
             this.logger.warn({
                 message: 'Could not post conditional approval reason',
@@ -1935,19 +1943,23 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     writeTimeoutMs: APPROVAL_REASON_WRITE_TIMEOUT_MS,
                 },
             });
-            await this.recordApprovalReasonDelivery(request, {
-                decision: decision.kind === 'approve' ? 'approve' : 'hold',
-                reason: decision.reason,
-                occurredAt: new Date().toISOString(),
-                ...(decision.kind === 'approve' &&
-                decision.reviewedHeadSha &&
-                decision.reviewedBaseSha
-                    ? {
-                          reviewedHeadSha: decision.reviewedHeadSha,
-                          reviewedBaseSha: decision.reviewedBaseSha,
-                      }
-                    : {}),
-            });
+            await this.recordApprovalReasonDelivery(
+                request,
+                {
+                    decision: decision.kind === 'approve' ? 'approve' : 'hold',
+                    reason: decision.reason,
+                    occurredAt: expectedFailure?.occurredAt ?? occurredAt,
+                    ...(decision.kind === 'approve' &&
+                    decision.reviewedHeadSha &&
+                    decision.reviewedBaseSha
+                        ? {
+                              reviewedHeadSha: decision.reviewedHeadSha,
+                              reviewedBaseSha: decision.reviewedBaseSha,
+                          }
+                        : {}),
+                },
+                guard,
+            );
         }
     }
 
@@ -1958,6 +1970,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
             prNumber: number;
         },
         failure: IApprovalReasonDeliveryFailure | null,
+        guard?: ApprovalReasonDeliveryGuard,
     ): Promise<void> {
         let organizationAndTeamData: OrganizationAndTeamData | undefined;
         let repositoryId: string | undefined;
@@ -1972,8 +1985,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     repositoryId,
                     prNumber,
                     failure,
+                    guard,
                 );
-            if (!persisted) {
+            if (!persisted && !guard) {
                 throw new Error(
                     'Pull request for delivery status was not found',
                 );

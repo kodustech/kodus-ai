@@ -203,6 +203,7 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
             approvalPolicy.assessRisk ||
             approvalPolicy.sensitivePaths?.length
         );
+        const approvalAttemptAt = new Date().toISOString();
         const approved = await this.approvePullRequest(
             codeReviewConfig.pullRequestApprovalActive &&
                 !context.onlyCustomAgent &&
@@ -235,6 +236,7 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                             context.approvalDecision.reviewedBaseSha
                             ? {
                                   confirmedApproval: {
+                                      occurredAt: approvalAttemptAt,
                                       headSha:
                                           context.approvalDecision
                                               .reviewedHeadSha,
