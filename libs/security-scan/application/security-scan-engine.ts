@@ -43,6 +43,7 @@ import {
     mergeMapPlan,
     rankCandidates,
 } from '../domain/scan-units';
+import { admitFindingPath } from '../domain/finding-path';
 import type {
     ScanFinding,
     ScanReportedFinding,
@@ -263,6 +264,7 @@ export class SecurityScanEngine {
                 params,
                 unit,
                 unitHits,
+                existingFiles,
                 signal,
                 reported,
             );
@@ -470,6 +472,7 @@ export class SecurityScanEngine {
         params: SecurityScanEngineParams,
         unit: ScanUnit,
         hits: SurfaceHit[],
+        files: ReadonlySet<string>,
         signal: AbortSignal,
         /** What earlier units of this scan already reported. */
         earlier: ScanReportedFinding[] = [],
@@ -517,11 +520,28 @@ export class SecurityScanEngine {
                 }
                 const kept = (output.findings?.suggestions ?? []) as any[];
                 for (const suggestion of kept) {
+                    const path = admitFindingPath(
+                        suggestion.relevantFile,
+                        files,
+                    );
+                    if ('rejected' in path) {
+                        logger.log({
+                            message: `Security finding dropped: ${path.rejected === 'missing' ? 'names no file in the repository' : 'is in a test, fixture or vendored file'}`,
+                            context: SecurityScanEngine.name,
+                            metadata: {
+                                repositoryId: params.repositoryId,
+                                unit: unit.id,
+                                vulnClass,
+                                relevantFile: suggestion.relevantFile,
+                            },
+                        });
+                        continue;
+                    }
                     const finding = await this.finalize(
                         params,
                         unit,
                         vulnClass,
-                        suggestion,
+                        { ...suggestion, relevantFile: path.file },
                     );
                     if (
                         finding &&
