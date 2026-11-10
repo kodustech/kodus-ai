@@ -382,6 +382,46 @@ describe('FeatureGateService', () => {
             expect(posthog.isFeatureEnabled).not.toHaveBeenCalled();
         });
 
+        it('applies a BETA_FEATURES flip made after construction', async () => {
+            // The web mirror reads the env on every call and its spec pins
+            // that. A value captured in the constructor answered `false` for
+            // this process while the resolver answered `true`.
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'beta',
+                    audience: ['cloud', 'self-hosted'],
+                },
+            );
+            const svc = new FeatureGateService(fakePostHog() as never);
+
+            await expect(
+                svc.isEnabled(FEATURE_KEYS.githubEnterpriseServerPat, orgCtx),
+            ).resolves.toBe(false);
+
+            process.env.BETA_FEATURES = 'true';
+
+            await expect(
+                svc.isEnabled(FEATURE_KEYS.githubEnterpriseServerPat, orgCtx),
+            ).resolves.toBe(true);
+        });
+
+        it('counts BETA_FEATURES=1 as enabled, like check-gate always did', async () => {
+            process.env.BETA_FEATURES = '1';
+            mockedSnapshot.current = snapshotWith(
+                FEATURE_KEYS.githubEnterpriseServerPat,
+                {
+                    stage: 'beta',
+                    audience: ['cloud', 'self-hosted'],
+                },
+            );
+            const svc = new FeatureGateService(fakePostHog() as never);
+
+            await expect(
+                svc.isEnabled(FEATURE_KEYS.githubEnterpriseServerPat, orgCtx),
+            ).resolves.toBe(true);
+        });
+
         it('returns false for alpha features even with BETA_FEATURES=true', async () => {
             process.env.BETA_FEATURES = 'true';
             mockedSnapshot.current = snapshotWith(FEATURE_KEYS.githubEnterpriseServerPat, {

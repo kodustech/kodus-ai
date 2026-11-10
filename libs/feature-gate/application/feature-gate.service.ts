@@ -12,6 +12,7 @@ import {
 import {
     cloudFallbackOnPosthogError,
     evaluateCatalogGate,
+    isBetaFeaturesEnabled,
 } from '../domain/decision';
 import { FEATURE_KEYS, type FeatureKey } from '../domain/feature-keys';
 import type { ReleaseTrack } from '../domain/release-track';
@@ -60,14 +61,12 @@ export interface IFeatureGateService {
 export class FeatureGateService implements IFeatureGateService {
     private readonly logger = createLogger(FeatureGateService.name);
     private readonly snapshot: FeaturesSnapshot;
-    private readonly betaFeaturesEnabled: boolean;
 
     constructor(
         @Inject(POSTHOG_PROVIDER_TOKEN)
         private readonly posthog: IPostHogProvider,
     ) {
         this.snapshot = loadSnapshot();
-        this.betaFeaturesEnabled = process.env.BETA_FEATURES === 'true';
     }
 
     async isEnabled(
@@ -88,8 +87,12 @@ export class FeatureGateService implements IFeatureGateService {
             // feature: the release track only decides CLOUD beta, since the
             // `track` input is ignored for a self-hosted audience. Reading
             // `true` for any other beta turned every self-hosted beta on
-            // without the env (#2425).
-            selfHostedBetaEnabled: this.betaFeaturesEnabled,
+            // without the env (#2425). Read per call, through the same parser
+            // as the web mirror, so the value cannot be frozen at
+            // construction while the resolver sees the live one.
+            selfHostedBetaEnabled: isBetaFeaturesEnabled(
+                process.env.BETA_FEATURES,
+            ),
         });
 
         if (decision === 'deny') return false;
