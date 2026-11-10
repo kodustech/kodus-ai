@@ -458,3 +458,41 @@ it('propagates publication and delivery-state errors together', async () => {
         cause: publication,
     });
 });
+
+it('reports a refused failure write without replacing the publication error', async () => {
+    const error = new Error('Publication failed');
+    const manager = new CommentManagerService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {
+            getAllCommentsInPullRequest: jest.fn().mockRejectedValue(error),
+        } as any,
+        {
+            setApprovalReasonDeliveryFailure: jest
+                .fn()
+                .mockResolvedValue(false),
+        } as any,
+    );
+    const warn = jest.spyOn((manager as any).logger, 'warn');
+    await expect(
+        manager.postApprovalReason(
+            { organizationId: 'org', teamId: 'team' },
+            1,
+            { id: 'repo', name: 'api' },
+            'Reason',
+            'approve',
+            { confirmedApproval: { headSha: 'head', baseSha: 'base' } },
+        ),
+    ).rejects.toBe(error);
+    expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+            message: expect.stringContaining('PR missing or notice superseded'),
+            metadata: expect.objectContaining({
+                repositoryId: 'repo',
+                prNumber: 1,
+            }),
+        }),
+    );
+});

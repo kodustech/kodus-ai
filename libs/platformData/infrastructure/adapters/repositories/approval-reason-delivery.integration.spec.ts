@@ -87,16 +87,28 @@ describeMongo('approval reason delivery ordering on real Mongo', () => {
         expect(await write(null, { notAfter: old.occurredAt })).toBe(false);
         expect((await read()).approvalReasonDeliveryFailure).toEqual(newer);
     });
-    it('retains the ordering watermark after successful delivery', async () => {
-        await write(newer);
-        expect(
-            await write(null, {
-                expectedFailure: newer,
-                notAfter: newer.occurredAt,
-            }),
-        ).toBe(true);
-        expect(await write(old)).toBe(false);
-        expect((await read()).approvalReasonDeliveryFailure).toBeNull();
+    it.each([false, true])(
+        'retains a successful delivery watermark (prior failure: %s)',
+        async (priorFailure) => {
+            if (priorFailure) await write(newer);
+            expect(
+                await write(null, {
+                    ...(priorFailure ? { expectedFailure: newer } : {}),
+                    notAfter: newer.occurredAt,
+                }),
+            ).toBe(true);
+            expect(await write(old)).toBe(false);
+            expect((await read()).approvalReasonDeliveryFailure).toBeNull();
+        },
+    );
+    it('preserves a same-time replacement notice when the expected record differs', async () => {
+        await write(old);
+        const replacement = { ...newer, occurredAt: old.occurredAt };
+        await write(replacement);
+        await write(null, { expectedFailure: old, notAfter: newer.occurredAt });
+        expect((await read()).approvalReasonDeliveryFailure).toEqual(
+            replacement,
+        );
     });
     it('refuses a late failed repair after another snapshot replaces its notice', async () => {
         await write(old);

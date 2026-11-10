@@ -1315,6 +1315,40 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         );
     });
 
+    it('reports a refused guarded write instead of silently losing the status', async () => {
+        const { cron, deps } = makeCron();
+        deps.pullRequestService.setApprovalReasonDeliveryFailure.mockResolvedValue(
+            false,
+        );
+        await (cron as any).recordApprovalReasonDelivery(
+            {
+                organizationAndTeamData: {
+                    organizationId: 'org',
+                    teamId: 'team',
+                },
+                repository: { id: 'repo', name: 'api' },
+                prNumber: 1,
+            },
+            {
+                decision: 'approve',
+                reason: 'Reason',
+                occurredAt: '2026-11-10T10:00:00.000Z',
+            },
+            { notAfter: '2026-11-10T10:00:00.000Z' },
+        );
+        expect((cron as any).logger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining(
+                    'PR missing or notice superseded',
+                ),
+                metadata: expect.objectContaining({
+                    repositoryId: 'repo',
+                    prNumber: 1,
+                }),
+            }),
+        );
+    });
+
     it('clears a prior delivery failure when the reason is already on the PR', async () => {
         const { cron, deps } = makeCron();
         deps.codeManagementService.getAllCommentsInPullRequest.mockResolvedValue(

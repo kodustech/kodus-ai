@@ -1161,7 +1161,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 field.startsWith('riskReviewRouting.'),
             );
         const ancestorRouting =
-            level === ConfigLevel.GLOBAL
+            !ownsLegacyMode || !editsRouting || level === ConfigLevel.GLOBAL
                 ? undefined
                 : deepMerge(
                       codeReviewConfigs.configs ?? {},

@@ -1991,10 +1991,17 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     failure,
                     guard,
                 );
-            if (!persisted && !guard) {
-                throw new Error(
-                    'Pull request for delivery status was not found',
-                );
+            if (!persisted) {
+                this.logger.warn({
+                    message:
+                        'Approval reason delivery status was not changed: PR missing or notice superseded',
+                    context: CheckIfPRCanBeApprovedCronProvider.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId,
+                        prNumber,
+                    },
+                });
             }
         } catch (error) {
             this.logger.error({

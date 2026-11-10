@@ -157,18 +157,31 @@ export class CommentManagerService implements ICommentManagerService {
             const confirmed = options?.confirmedApproval;
             if (kind === 'approve' && confirmed?.headSha && confirmed.baseSha) {
                 try {
-                    await this.pullRequestsService.setApprovalReasonDeliveryFailure(
-                        organizationAndTeamData.organizationId,
-                        repository.id,
-                        prNumber,
-                        {
-                            decision: 'approve',
-                            reason,
-                            occurredAt,
-                            reviewedHeadSha: confirmed.headSha,
-                            reviewedBaseSha: confirmed.baseSha,
-                        },
-                    );
+                    const persisted =
+                        await this.pullRequestsService.setApprovalReasonDeliveryFailure(
+                            organizationAndTeamData.organizationId,
+                            repository.id,
+                            prNumber,
+                            {
+                                decision: 'approve',
+                                reason,
+                                occurredAt,
+                                reviewedHeadSha: confirmed.headSha,
+                                reviewedBaseSha: confirmed.baseSha,
+                            },
+                        );
+                    if (!persisted) {
+                        this.logger.warn({
+                            message:
+                                'Approval reason delivery status was not changed: PR missing or notice superseded',
+                            context: CommentManagerService.name,
+                            metadata: {
+                                organizationAndTeamData,
+                                repositoryId: repository.id,
+                                prNumber,
+                            },
+                        });
+                    }
                 } catch (persistenceError) {
                     this.logger.warn({
                         message:
