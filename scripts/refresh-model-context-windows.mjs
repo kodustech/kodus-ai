@@ -38,6 +38,7 @@ const CORPUS = join(
     ROOT,
     'libs/llm/testing/__fixtures__/byok-prod-shapes.json',
 );
+const RUNTIME = join(ROOT, 'libs/llm/model-context-window.ts');
 const DEFAULT_WINDOW = 128_000;
 
 /**
@@ -143,10 +144,17 @@ const smallestByKey = new Map();
 for (const provider of Object.values(modelsDev)) {
     for (const [id, model] of Object.entries(provider?.models ?? {})) {
         const limit = model?.limit ?? {};
+        // `context - output` reserves the whole output cap, which the agent's
+        // prompt budget already reserves again, so a derived value is floored at
+        // what the model got before it had a row: the default, or the whole
+        // context when that is smaller.
         const input = isWindow(limit.input)
             ? limit.input
             : isWindow(limit.context) && isWindow(limit.output)
-              ? limit.context - limit.output
+              ? Math.max(
+                    limit.context - limit.output,
+                    Math.min(limit.context, DEFAULT_WINDOW),
+                )
               : undefined;
         const key = normalize(id);
         if (!isWindow(input) || id in next || taken.has(key)) continue;
@@ -163,9 +171,37 @@ for (const key of smallestByKey.keys()) taken.add(key);
 // the LiteLLM rows above.
 keepPrevious(true);
 
+// The runtime asks a models.dev row only after a manual override and the
+// substring step over the other rows have both missed. A row either of them
+// answers first is never read, and writing it would let --check fail on a
+// models.dev change nothing reads.
+const overrideKeys = new Set(
+    [
+        ...readFileSync(RUNTIME, 'utf8')
+            .match(/const MANUAL_OVERRIDES[^]*?\n};/)[0]
+            .matchAll(/^\s*'([^']+)':/gm),
+    ].map((m) => m[1]),
+);
+const otherKeys = Object.entries(next)
+    .filter(([, rec]) => !fromModelsDev(rec))
+    .map(([id]) => normalize(id));
+let shadowed = 0;
+for (const [id, rec] of Object.entries(next)) {
+    if (!fromModelsDev(rec)) continue;
+    const key = normalize(id);
+    if (
+        overrideKeys.has(key) ||
+        otherKeys.some((k) => key.includes(k) || k.includes(key))
+    ) {
+        delete next[id];
+        shadowed++;
+    }
+}
+
 console.log(
     `sources: litellm ${fromLiteLLM} / models.dev ${Object.keys(modelsDevKeyOf).length}` +
-        ` / kept from previous mirror ${retained.length}`,
+        ` / kept from previous mirror ${retained.length}` +
+        ` / models.dev rows the runtime never reads, dropped ${shadowed}`,
 );
 
 const added = Object.keys(next).filter((k) => !(k in current));

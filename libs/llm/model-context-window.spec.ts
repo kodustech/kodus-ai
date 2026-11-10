@@ -92,7 +92,8 @@ describe('model-context-window', () => {
 
         it('never answers ahead of a LiteLLM row, even a substring one', () => {
             // models.dev reads this one as 104,858 (its smallest host); the
-            // LiteLLM family row holds the real 1,048,576.
+            // LiteLLM family row holds the real 1,048,576. Ranked ahead of the
+            // substring step, models.dev answered the smaller number.
             expect(getModelContextWindow('deepseek-v4.1-flash')).toBe(1_048_576);
         });
 
