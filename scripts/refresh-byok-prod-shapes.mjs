@@ -197,6 +197,17 @@ const shapes = [...byShape.values()]
         `${a.provider}${a.model}`.localeCompare(`${b.provider}${b.model}`),
     );
 
+// A dump in any other layout (the legacy one included) yields no slot with a
+// provider and a model. Writing that would empty the corpus every BYOK matrix
+// replays, and --check would still pass, since it only fails on added shapes.
+if (!shapes.length) {
+    console.error(
+        `refusing the dump — ${rows.length} row(s), ${slotCount} slot(s), no slot with a provider and a model. ` +
+            'Produce it with scripts/sql/byok-prod-shapes.sql.',
+    );
+    process.exit(1);
+}
+
 // Refuse to emit anything that still looks like a credential or an org id.
 const blob = JSON.stringify(shapes);
 const leaks = [];
