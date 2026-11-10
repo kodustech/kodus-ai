@@ -70,6 +70,30 @@ describe('loadRuleSourceReferences', () => {
         expect(index.get('other')).toHaveLength(1);
     });
 
+    it('reads at most a few paths at a time', async () => {
+        let inFlight = 0;
+        let peak = 0;
+        const read = jest.fn(async () => {
+            inFlight++;
+            peak = Math.max(peak, inFlight);
+            await new Promise((resolve) => setImmediate(resolve));
+            inFlight--;
+            return 'file';
+        });
+        const rules = Array.from({ length: 10 }, (_, i) => ({
+            uuid: `r${i}`,
+            title: 't',
+            rule: 'r',
+            sourcePath: `docs/${i}.md`,
+        }));
+
+        const index = await loadRuleSourceReferences(rules, read);
+
+        expect(read).toHaveBeenCalledTimes(10);
+        expect(index.size).toBe(10);
+        expect(peak).toBeLessThanOrEqual(4);
+    });
+
     it('cuts the content at maxRefChars', async () => {
         const index = await loadRuleSourceReferences(
             [{ uuid: 'r1', rule: 'r', sourcePath: 'big.md' }],
@@ -173,6 +197,7 @@ describe('collectLoadedReferences', () => {
                 source: 'context-os',
                 filePath: 'docs/a.md',
                 repository: 'design-system',
+                repositoryId: 'repo-2',
                 lineRange: { start: 3, end: 9 },
                 content: 'other repo',
             },
@@ -196,6 +221,69 @@ describe('collectLoadedReferences', () => {
             { prRepository: { name: 'repo', fullName: 'owner/repo' } },
         );
         expect(index.get('r1')![0].repository).toBeUndefined();
+    });
+
+    it('treats a repository with another id as another repository, even when the names match', () => {
+        const index = collectLoadedReferences(
+            new Map([
+                [
+                    'r1',
+                    [
+                        {
+                            filePath: 'a.md',
+                            content: 'x',
+                            repositoryId: 'repo-9',
+                            repositoryName: 'repo',
+                        },
+                    ],
+                ],
+            ]),
+            { prRepository },
+        );
+        expect(index.get('r1')![0]).toMatchObject({
+            repository: 'repo',
+            repositoryId: 'repo-9',
+        });
+    });
+
+    it('keeps two rules on the same path in same-named repositories apart', () => {
+        const index = collectLoadedReferences(
+            new Map([
+                [
+                    'a',
+                    [
+                        {
+                            filePath: 'docs/policy.md',
+                            content: 'policy',
+                            repositoryId: 'repo-1',
+                            repositoryName: 'api',
+                        },
+                    ],
+                ],
+                [
+                    'b',
+                    [
+                        {
+                            filePath: 'docs/policy.md',
+                            content: 'policy, and more',
+                            repositoryId: 'repo-2',
+                            repositoryName: 'api',
+                        },
+                    ],
+                ],
+            ]),
+            { prRepository: { id: 'repo-1', name: 'api' } },
+        );
+        const section = buildReferenceSection(
+            [
+                { uuid: 'a', rule: 'a' },
+                { uuid: 'b', rule: 'b' },
+            ],
+            index,
+        );
+
+        expect(section.idsByRule).toEqual([['R1'], ['R2']]);
+        expect(section.stats.entries).toBe(2);
     });
 
     // The budget is per rule, across its files, and counts each file's

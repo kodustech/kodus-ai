@@ -16,15 +16,21 @@
  *
  * This module imports nothing from the judge, so the judge can import it.
  */
+import pLimit from 'p-limit';
+
 import type { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import type { LoadedReference } from '@libs/kodyRules/infrastructure/adapters/services/externalReferenceLoader.service';
 
 export type RuleReferenceSource = 'rule-source' | 'context-os';
 
 export interface RuleReference {
     source: RuleReferenceSource;
     filePath: string;
-    /** Set only when the file lives outside the pull request's repository. */
+    /** Set only when the file lives outside the pull request's repository:
+     *  its name, for the prompt. */
     repository?: string;
+    /** That repository's id, which tells apart repositories with one name. */
+    repositoryId?: string;
     lineRange?: { start: number; end: number };
     /** The `sourceAnchor` of a rule source file. */
     anchor?: string;
@@ -36,14 +42,7 @@ export interface RuleReference {
 export type RuleReferenceIndex = Map<string, RuleReference[]>;
 
 /** One file as `ExternalReferenceLoaderService` resolves it. */
-export interface LoadedRuleReference {
-    filePath?: string;
-    content?: string;
-    description?: string;
-    repositoryId?: string;
-    repositoryName?: string;
-    lineRange?: { start: number; end: number };
-}
+export type LoadedRuleReference = LoadedReference;
 
 interface ReferenceLogger {
     warn: (entry: any) => void;
@@ -55,6 +54,8 @@ type LogMetadata = Record<string, unknown>;
 
 const LOG_CONTEXT = 'kody-rules-sharded';
 const DEFAULT_MAX_REF_CHARS = 6000;
+/** Source files read from the sandbox at once. */
+const SOURCE_READ_CONCURRENCY = 4;
 
 /**
  * The rule's own `sourcePath` (IDE sync, centralized config), read through the
@@ -87,38 +88,41 @@ export async function loadRuleSourceReferences(
         if (!byUuid.has(rule.uuid)) byUuid.set(rule.uuid, rule);
     }
 
+    const limit = pLimit(SOURCE_READ_CONCURRENCY);
     await Promise.all(
-        [...rulesByPath].map(async ([sourcePath, byUuid]) => {
-            let content: string | undefined;
-            try {
-                content = await read(sourcePath, 1, 100000);
-            } catch (err) {
-                logger?.warn({
-                    message: `kody-rules reference load failed for ${sourcePath}; judging ${byUuid.size} rule(s) without it`,
-                    context: LOG_CONTEXT,
-                    metadata: {
-                        ...logMetadata,
-                        sourcePath,
-                        ruleUuids: [...byUuid.keys()],
-                        err,
-                    },
-                });
-                return;
-            }
-            if (!content || content.trim().length === 0) return;
-            for (const [uuid, rule] of byUuid) {
-                index.set(uuid, [
-                    {
-                        source: 'rule-source',
-                        filePath: sourcePath,
-                        ...(rule.sourceAnchor
-                            ? { anchor: rule.sourceAnchor }
-                            : {}),
-                        content: content.slice(0, maxRefChars),
-                    },
-                ]);
-            }
-        }),
+        [...rulesByPath].map(([sourcePath, byUuid]) =>
+            limit(async () => {
+                let content: string | undefined;
+                try {
+                    content = await read(sourcePath, 1, 100000);
+                } catch (err) {
+                    logger?.warn({
+                        message: `kody-rules reference load failed for ${sourcePath}; judging ${byUuid.size} rule(s) without it`,
+                        context: LOG_CONTEXT,
+                        metadata: {
+                            ...logMetadata,
+                            sourcePath,
+                            ruleUuids: [...byUuid.keys()],
+                            err,
+                        },
+                    });
+                    return;
+                }
+                if (!content || content.trim().length === 0) return;
+                for (const [uuid, rule] of byUuid) {
+                    index.set(uuid, [
+                        {
+                            source: 'rule-source',
+                            filePath: sourcePath,
+                            ...(rule.sourceAnchor
+                                ? { anchor: rule.sourceAnchor }
+                                : {}),
+                            content: content.slice(0, maxRefChars),
+                        },
+                    ]);
+                }
+            }),
+        ),
     );
     return index;
 }
@@ -150,14 +154,15 @@ export function collectLoadedReferences(
             if (!content || content.trim().length === 0) continue;
             const remaining = maxRefChars - used;
             if (remaining <= 0) break;
-            const filePath = ref.filePath?.trim() || 'referenced file';
+            const filePath = ref.filePath.trim() || 'referenced file';
             const cut = content.slice(0, remaining);
             used += legacyHeaderLength(filePath) + cut.length;
             const repository = otherRepository(ref, options.prRepository);
             refs.push({
                 source: 'context-os',
                 filePath,
-                ...(repository ? { repository } : {}),
+                ...(repository?.name ? { repository: repository.name } : {}),
+                ...(repository?.id ? { repositoryId: repository.id } : {}),
                 ...(ref.lineRange ? { lineRange: ref.lineRange } : {}),
                 content: cut,
             });
@@ -268,9 +273,8 @@ function identityOf(ref: RuleReference): string {
     const range = ref.lineRange
         ? `${ref.lineRange.start}-${ref.lineRange.end}`
         : 'all';
-    return [ref.source, ref.repository ?? '', ref.filePath, range].join(
-        '\u0000',
-    );
+    const repository = ref.repositoryId ?? ref.repository ?? '';
+    return [ref.source, repository, ref.filePath, range].join('\u0000');
 }
 
 function compatible(a: string, b: string): boolean {
@@ -296,18 +300,24 @@ function legacyHeaderLength(filePath: string): number {
         .length;
 }
 
+/**
+ * The repository a file was read from, when it is not the pull request's.
+ * Ids decide when both sides have one, since two repositories can share a
+ * name; the name is the fallback only when an id is missing.
+ */
 function otherRepository(
     ref: LoadedRuleReference,
     pr: { id?: string; name?: string; fullName?: string } | undefined,
-): string | undefined {
+): { id?: string; name: string } | undefined {
     const name = ref.repositoryName?.trim();
     const id = ref.repositoryId?.trim();
     if (!name && !id) return undefined;
     if (pr) {
-        if (id && pr.id && id === pr.id) return undefined;
-        if (name && (name === pr.name || name === pr.fullName)) {
+        if (id && pr.id) {
+            if (id === pr.id) return undefined;
+        } else if (name && (name === pr.name || name === pr.fullName)) {
             return undefined;
         }
     }
-    return name || id;
+    return { ...(id ? { id } : {}), name: name || id! };
 }
