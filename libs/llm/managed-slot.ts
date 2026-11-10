@@ -726,21 +726,14 @@ export function getModelName(
     slot?: NormalizedModel,
     defaultModelOverride?: string,
 ): string {
+    // Built from getModelId so the label and the id the context window is
+    // sized by cannot drift apart.
+    const id = getModelId(slot, defaultModelOverride);
     if (slot) {
-        return `${slot.provider}:${slot.model}`;
+        return `${slot.provider}:${id}`;
     }
-
-    // Same single-source cascade the model is BUILT from (resolveManagedSlot),
-    // so the telemetry name always matches the model actually used.
     const env = resolveEnvProvider();
-    if (env) {
-        // An invalid config can come from `auto` with no model set.
-        return env.kind === 'invalid'
-            ? process.env.API_LLM_PROVIDER_MODEL?.trim() || 'auto'
-            : `${env.name}:${env.model ?? process.env.API_LLM_PROVIDER_MODEL}`;
-    }
-
-    return defaultModelOverride || DEFAULT_MODEL.model;
+    return env && env.kind !== 'invalid' ? `${env.name}:${id}` : id;
 }
 
 /**
