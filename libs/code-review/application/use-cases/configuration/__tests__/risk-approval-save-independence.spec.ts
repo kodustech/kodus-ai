@@ -33,6 +33,18 @@ function setup(approvalActive: boolean, provider = PlatformType.GITHUB) {
     const save = jest.fn().mockResolvedValue(true);
     const authorization = { ensure: jest.fn().mockResolvedValue(undefined) };
     const code = { getTypeIntegration: jest.fn().mockResolvedValue(provider) };
+    const centralized = {
+        getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue(null),
+        getScopedKodusConfigFileContent: jest.fn().mockResolvedValue(null),
+        createMutationPullRequestIfEnabled: jest
+            .fn()
+            .mockResolvedValue({
+                mode: 'centralized-pr',
+                prUrl: 'https://example.test/pr/1',
+            }),
+        buildCentralizedPath: ({ repositoryFolder, relativePath }) =>
+            `${repositoryFolder}/${relativePath}`,
+    };
     const useCase = new UpdateOrCreateCodeReviewParameterUseCase(
         {
             findByKey: jest.fn().mockResolvedValue({ configValue: stored }),
@@ -51,7 +63,7 @@ function setup(approvalActive: boolean, provider = PlatformType.GITHUB) {
         authorization as any,
         { detectAndSaveReferences: jest.fn() } as any,
         { buildConfigKey: () => 'key' } as any,
-        { getCentralizedRepositoryIfEnabled: async () => null } as any,
+        centralized as any,
         { find: async () => [] } as any,
         { getBYOKConfig: jest.fn(), getSubscriptionStatus: jest.fn() } as any,
         { execute: jest.fn() } as any,
@@ -73,8 +85,54 @@ function setup(approvalActive: boolean, provider = PlatformType.GITHUB) {
             actor: { source: 'web', userId: 'user' },
             requestUser: { uuid: 'user' },
         } as any);
-    return { run, save, stored, authorization, code };
+    return { run, save, stored, authorization, code, centralized };
 }
+
+it('sends a restore-only request to the centralized file mutation', async () => {
+    const { run, stored, centralized } = setup(true);
+    Object.assign(stored.configs, { riskAssessmentActive: false });
+    stored.repositories[0].configs = {
+        riskAssessmentActive: true,
+        reviewMode: 'heavy',
+    };
+    centralized.getCentralizedRepositoryIfEnabled.mockResolvedValue({
+        id: 'central',
+    });
+    centralized.getScopedKodusConfigFileContent.mockResolvedValue({
+        riskAssessmentActive: true,
+        reviewMode: 'heavy',
+    });
+    await run(
+        {},
+        { repositoryId: 'repo', inheritFields: ['riskAssessmentActive'] },
+    );
+    expect(
+        centralized.createMutationPullRequestIfEnabled,
+    ).toHaveBeenCalledTimes(1);
+    const request =
+        centralized.createMutationPullRequestIfEnabled.mock.calls[0][0];
+    const files = request.files({ repositoryFolder: 'api' });
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatchObject({ operation: 'upsert' });
+    expect(files[0].content).toContain('reviewMode: heavy');
+    expect(files[0].content).not.toContain('riskAssessmentActive');
+});
+
+it.each([
+    ['riskAssessmentActive', { approvalRiskActive: false }],
+    ['riskCriteria', { approvalRiskInstructions: 'New instructions.' }],
+    ['approvalPolicies', { approvalLabels: ['safe'] }],
+    ['approvalPolicies', { approvalAuthors: ['safe-bot'] }],
+])(
+    'rejects conflicting legacy writes while restoring %s',
+    async (field, config) => {
+        const { run, save } = setup(true);
+        await expect(
+            run(config, { repositoryId: 'repo', inheritFields: [field] }),
+        ).rejects.toThrow('legacy');
+        expect(save).not.toHaveBeenCalled();
+    },
+);
 
 it.each([true, false])(
     'keeps the engine state independent when changing legacy approval from %p',

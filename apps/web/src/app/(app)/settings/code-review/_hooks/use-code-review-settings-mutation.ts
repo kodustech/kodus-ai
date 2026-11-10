@@ -20,9 +20,12 @@ import {
 } from "../_types";
 import {
     getChangedConfigMask,
-    getInheritedReviewFields,
     pickChangedConfig,
 } from "../_utils/changed-config";
+import {
+    getInheritedReviewFields,
+    withoutReviewInheritanceIntents,
+} from "../_utils/review-settings-inheritance";
 import {
     CodeReviewSettingsConflictError,
     CodeReviewSettingsValidationError,
@@ -144,6 +147,9 @@ export const useCodeReviewSettingsMutation = (params: {
         options?: SaveOptions,
     ): Promise<SaveSettingsResult> => {
         const prepared = await (options?.prepare ?? defaultPrepare)(formData);
+        const savedFormData = withoutReviewInheritanceIntents(
+            withoutListRevisions(prepared.savedFormData),
+        );
 
         const { language: _language, ...formattedConfig } = formData;
         // `formState.defaultValues` is the snapshot of the last render and
@@ -168,7 +174,7 @@ export const useCodeReviewSettingsMutation = (params: {
             Object.keys(changedConfig).length === 0 &&
             inheritFields.length === 0
         ) {
-            form.reset(withoutListRevisions(prepared.savedFormData));
+            form.reset(savedFormData);
             invalidateRelatedQueries();
             return {};
         }
@@ -224,7 +230,6 @@ export const useCodeReviewSettingsMutation = (params: {
             );
         }
 
-        const savedFormData = withoutListRevisions(prepared.savedFormData);
         // A save of the lists changed their revisions: resolve once the
         // config carrying the new ones is loaded, or the next edit would
         // start from the old ones and be refused as if someone else saved.

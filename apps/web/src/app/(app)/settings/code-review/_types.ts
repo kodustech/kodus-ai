@@ -228,6 +228,8 @@ export enum FormattedConfigLevel {
 }
 
 export interface IFormattedConfigProperty<T> {
+    /** Client-only native Undo intent, consumed after a successful save. */
+    inheritanceIntent?: { value: unknown; level: FormattedConfigLevel };
     value: T;
     level: FormattedConfigLevel;
     overriddenValue?: T;

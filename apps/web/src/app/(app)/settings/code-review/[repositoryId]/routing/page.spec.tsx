@@ -362,6 +362,43 @@ it("restores each routing override independently with the native indicator", asy
     });
 });
 
+it("restores a just-saved override before the server metadata refreshes", async () => {
+    mockRepo = "repo";
+    mount(true);
+    fireEvent.click(screen.getByRole("combobox", { name: "No risk found" }));
+    fireEvent.click(screen.getByRole("option", { name: "Heavy" }));
+    await waitFor(() =>
+        expect(
+            screen.getByRole("button", { name: "Save settings" }),
+        ).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+        expect(
+            screen.getByRole("button", { name: "Save settings" }),
+        ).toBeDisabled(),
+    );
+    // The mocked server snapshot still describes the inherited Global value.
+    const row = screen.getByRole("group", { name: "No risk found" });
+    const badge = within(row).getByText("Overridden");
+    fireEvent.click(
+        badge
+            .closest("[data-decorative]")!
+            .parentElement!.querySelector("svg")!,
+    );
+    await waitFor(() =>
+        expect(
+            screen.getByRole("button", { name: "Save settings" }),
+        ).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save.mock.calls[1][5]).toEqual({
+        inheritFields: ["riskReviewRouting.noRisk"],
+    });
+});
+
 it("does not change the inactive risk mappings when a fixed mode changes", async () => {
     mount(false);
     fireEvent.keyDown(screen.getByRole("combobox", { name: "All PRs" }), {

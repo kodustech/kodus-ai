@@ -131,6 +131,15 @@ import {
 import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/general/approval-policies';
 import { REVIEW_SETTINGS_INHERITABLE_FIELDS } from '@libs/core/infrastructure/config/types/general/risk-assessment';
 
+const INHERITABLE_REVIEW_FIELDS = new Set<string>(
+    REVIEW_SETTINGS_INHERITABLE_FIELDS,
+);
+const LEGACY_REVIEW_FIELDS: Readonly<Record<string, readonly string[]>> = {
+    riskAssessmentActive: ['approvalRiskActive'],
+    riskCriteria: ['approvalRiskInstructions'],
+    approvalPolicies: ['approvalLabels', 'approvalAuthors'],
+};
+
 @Injectable()
 export class UpdateOrCreateCodeReviewParameterUseCase {
     private readonly logger = createLogger(
@@ -185,15 +194,28 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     body.inheritFields.length >
                         REVIEW_SETTINGS_INHERITABLE_FIELDS.length ||
                     body.inheritFields.some(
-                        (field) =>
-                            !(
-                                REVIEW_SETTINGS_INHERITABLE_FIELDS as readonly string[]
-                            ).includes(field),
+                        (field) => !INHERITABLE_REVIEW_FIELDS.has(field),
                     ))
             )
                 throw new BadRequestException(
                     'Invalid scoped review settings to inherit.',
                 );
+            if (body.inheritFields?.length) {
+                const aliases = new Set(
+                    body.inheritFields.flatMap(
+                        (field) => LEGACY_REVIEW_FIELDS[field] ?? [],
+                    ),
+                );
+                if (
+                    Object.entries(configValue).some(
+                        ([key, value]) =>
+                            value !== undefined && aliases.has(key),
+                    )
+                )
+                    throw new BadRequestException(
+                        'Do not combine inheritance with legacy review overrides.',
+                    );
+            }
             // An empty ID explicitly requests inheritance; pairing it with a
             // legacy model name is still a contradictory write.
             if (
@@ -1011,11 +1033,6 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         fields: string[],
     ): ConfigDelta {
         const next = { ...config };
-        const legacy = {
-            riskAssessmentActive: ['approvalRiskActive'],
-            riskCriteria: ['approvalRiskInstructions'],
-            approvalPolicies: ['approvalLabels', 'approvalAuthors'],
-        };
         for (const field of fields) {
             const [key, leaf] = field.split('.');
             if (leaf) {
@@ -1023,7 +1040,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 delete next[key][leaf];
                 if (!Object.keys(next[key]).length) delete next[key];
             } else delete next[key];
-            for (const alias of legacy[field] ?? []) delete next[alias];
+            for (const alias of LEGACY_REVIEW_FIELDS[field] ?? [])
+                delete next[alias];
         }
         return next;
     }
@@ -1236,6 +1254,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             throw new BadRequestException(error.message);
         }
         const isSelectionOnlyPayload =
+            inheritFields.length === 0 &&
             this.isSelectionOnlyConfigPayload(sanitizedIncomingConfig) &&
             level !== ConfigLevel.GLOBAL &&
             !pathsChanged;

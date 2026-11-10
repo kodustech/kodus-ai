@@ -245,6 +245,18 @@ async function verifyRiskInheritance() {
     await hydrated(toggle);
     await expect(toggle).toHaveAttribute('aria-checked', 'true');
     await expect(row.getByText('Overridden', { exact: true })).toHaveCount(0);
+    // Save an override through the UI, then Undo without a reload. The
+    // server's ownership metadata may still be refreshing after that save.
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    const explicit = await save();
+    assert.ok(!explicit.inheritFields?.includes('riskAssessmentActive'), 'A manual Off remains an explicit override.');
+    await expect(indicator).toHaveCount(1);
+    await hydrated(undo);
+    await undo.click();
+    const restored = await save();
+    assert.deepEqual(restored.inheritFields, ['riskAssessmentActive'], 'Undo after save must retain its intent without a reload.');
+    assert.ok(!Object.hasOwn((await read()).repositories.find((entry) => entry.id === repo.id).configs, 'riskAssessmentActive'), 'Undo after save must clear the actual stored override.');
     await page.goto(globalUrl, { waitUntil: 'domcontentloaded' });
     await hydrated(
         page.getByRole('switch', { name: 'Risk assessment', exact: true }),

@@ -17,6 +17,7 @@ import {
     FormattedConfigLevel,
     IFormattedConfigProperty,
 } from "../_types";
+import { isReviewSettingsInheritanceField } from "../_utils/review-settings-inheritance";
 import { useCodeReviewConfig } from "../../_components/context";
 import { useCurrentConfigLevel } from "../../_hooks";
 import {
@@ -66,6 +67,13 @@ export const OverrideIndicatorForm = ({
         form.setValue(`${fieldName}.level` as any, level, {
             shouldDirty: true,
         });
+        if (isReviewSettingsInheritanceField(fieldName)) {
+            form.setValue(
+                `${fieldName}.inheritanceIntent` as any,
+                { value, level },
+                { shouldDirty: false },
+            );
+        }
         form.trigger(fieldName as any);
     };
 
