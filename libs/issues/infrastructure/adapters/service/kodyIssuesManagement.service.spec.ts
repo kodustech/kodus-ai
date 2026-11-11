@@ -207,11 +207,13 @@ describe('KodyIssuesManagementService', () => {
 
     describe('mergeSuggestionsIntoIssues', () => {
         beforeEach(() => {
+            // The stored PR's author differs from the webhook context's, so
+            // only the lookup can supply it.
             pullRequestsServiceMock.findByNumberAndRepositoryName = jest
                 .fn()
                 .mockResolvedValue({
                     number: 42,
-                    user: { id: 'user-1', name: 'test-user' },
+                    user: { id: 'stored-7', name: 'stored-author' },
                 });
             issuesServiceMock.addContributingSuggestions = jest.fn();
             kodyIssuesAnalysisServiceMock.mergeSuggestionsIntoIssues =
@@ -255,10 +257,17 @@ describe('KodyIssuesManagementService', () => {
                     {
                         id: 'suggestion-1',
                         prNumber: 42,
-                        prAuthor: { id: 'user-1', name: 'test-user' },
+                        prAuthor: { id: 'stored-7', name: 'stored-author' },
                     },
                 ],
                 'org-uuid',
+            );
+            expect(
+                pullRequestsServiceMock.findByNumberAndRepositoryName,
+            ).toHaveBeenCalledWith(
+                42,
+                'test-repo',
+                mockOrganizationAndTeamData,
             );
             expect(issuesServiceMock.create).not.toHaveBeenCalled();
         });

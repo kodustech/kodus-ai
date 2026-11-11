@@ -17,6 +17,7 @@ import { IssuesEntity } from '@libs/issues/domain/entities/issues.entity';
 import { normalizeScanPath } from '@libs/issues/domain/scan-fingerprint';
 import {
     IIssue,
+    IIssueOwner,
     IssueSource,
 } from '@libs/issues/domain/interfaces/issues.interface';
 import { IContributingSuggestion } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
@@ -65,7 +66,10 @@ export class IssuesRepository implements IIssuesRepository {
     ): Promise<IssuesEntity[] | null> {
         // A scan issue stores its path normalized; a review issue stores it as
         // the PR spelled it. Either spelling finds both.
-        const spellings = [...new Set([filePath, normalizeScanPath(filePath)])];
+        const raw = String(filePath ?? '');
+        const spellings = [
+            ...new Set([raw, raw ? normalizeScanPath(raw) : raw]),
+        ];
         const issues = await this.issuesModel.find({
             'organizationId': organizationId,
             'repository.id': repositoryId,
@@ -178,7 +182,15 @@ export class IssuesRepository implements IIssuesRepository {
     ): Promise<IssuesEntity[] | null> {
         await this.issuesModel.updateMany(
             { _id: { $in: uuids } },
-            { $set: { status: status } },
+            {
+                $set: {
+                    status,
+                    // Resolved always carries when, as the scan's own path does.
+                    ...(status === IssueStatus.RESOLVED && {
+                        resolvedAt: new Date().toISOString(),
+                    }),
+                },
+            },
         );
 
         const docs = await this.issuesModel.find({ _id: { $in: uuids } });
@@ -260,6 +272,58 @@ export class IssuesRepository implements IIssuesRepository {
             }
         }
 
+        // The outcome depends on the status read above; the write only lands
+        // if that status still holds, so a person dismissing the finding in
+        // between is never overwritten. When it moved, read it again.
+        for (let attempt = 0; attempt < 3 && existing; attempt++) {
+            const { update, outcome } = this.scanSighting(
+                existing,
+                finding,
+                now,
+            );
+            const doc = await this.issuesModel.findOneAndUpdate(
+                { _id: existing._id, status: existing.status },
+                update,
+                { new: true },
+            );
+            if (doc) {
+                return {
+                    issue: mapSimpleModelToEntity(doc, IssuesEntity),
+                    outcome,
+                };
+            }
+            existing = await this.issuesModel.findOne(filter).exec();
+        }
+        if (!existing) {
+            throw new Error('Scan finding disappeared while it was updated');
+        }
+        return {
+            issue: mapSimpleModelToEntity(existing, IssuesEntity),
+            outcome:
+                existing.status === IssueStatus.DISMISSED
+                    ? 'dismissed'
+                    : 'still_open',
+        };
+    }
+
+    /** What one more sighting of a stored finding changes, given its status. */
+    private scanSighting(
+        existing: { status?: IssueStatus; owner?: IIssueOwner },
+        finding: ScanFindingUpsert,
+        now: string,
+    ): { update: Record<string, unknown>; outcome: ScanFindingOutcome } {
+        if (existing.status === IssueStatus.DISMISSED) {
+            // Dismissed by a person: keep it dismissed, only record the sighting.
+            return {
+                outcome: 'dismissed',
+                update: {
+                    $set: {
+                        lastSeenScanId: finding.lastSeenScanId,
+                        lastSeenAt: now,
+                    },
+                },
+            };
+        }
         const refreshed: Partial<IIssue> = {
             filePath: normalizeScanPath(finding.filePath),
             title: finding.title,
@@ -281,33 +345,14 @@ export class IssuesRepository implements IIssuesRepository {
                 ? { owner: finding.owner }
                 : {}),
         };
-
-        let outcome: ScanFindingOutcome = 'still_open';
-        const update: Record<string, unknown> = { $set: refreshed };
-
         if (existing.status === IssueStatus.RESOLVED) {
-            outcome = 'reopened';
             refreshed.status = IssueStatus.OPEN;
-            update.$unset = { resolvedAt: '' };
-        } else if (existing.status === IssueStatus.DISMISSED) {
-            // Dismissed by a person: keep it dismissed, only record the sighting.
-            outcome = 'dismissed';
-            update.$set = {
-                lastSeenScanId: finding.lastSeenScanId,
-                lastSeenAt: now,
+            return {
+                outcome: 'reopened',
+                update: { $set: refreshed, $unset: { resolvedAt: '' } },
             };
         }
-
-        const doc = await this.issuesModel.findByIdAndUpdate(
-            existing._id,
-            update,
-            { new: true },
-        );
-
-        return {
-            issue: mapSimpleModelToEntity(doc ?? existing, IssuesEntity),
-            outcome,
-        };
+        return { outcome: 'still_open', update: { $set: refreshed } };
     }
 
     async resolveUnseenScanFindings(
