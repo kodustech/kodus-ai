@@ -45,6 +45,10 @@ export enum PlanType {
 
 export enum ValidationErrorType {
     INVALID_LICENSE = 'INVALID_LICENSE',
+    /** The license read itself failed (billing 5xx, rate limit, timeout).
+     *  Distinct from INVALID_LICENSE: the org may be perfectly licensed, so
+     *  the caller must ask to retry rather than report the trial as ended. */
+    LICENSE_UNAVAILABLE = 'LICENSE_UNAVAILABLE',
     USER_NOT_LICENSED = 'USER_NOT_LICENSED',
     BYOK_REQUIRED = 'BYOK_REQUIRED',
     PLAN_LIMIT_EXCEEDED = 'PLAN_LIMIT_EXCEEDED',
@@ -373,7 +377,9 @@ export class PermissionValidationService {
 
                 return {
                     allowed: false,
-                    errorType: ValidationErrorType.INVALID_LICENSE,
+                    errorType: validation?.unavailable
+                        ? ValidationErrorType.LICENSE_UNAVAILABLE
+                        : ValidationErrorType.INVALID_LICENSE,
                     metadata: { validation },
                 };
             }

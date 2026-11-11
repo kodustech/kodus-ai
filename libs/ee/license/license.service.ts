@@ -19,6 +19,29 @@ import {
 } from './interfaces/license.interface';
 
 /**
+ * True when the license read never produced an answer: no HTTP response at
+ * all (network error, DNS, timeout), a transport-level timeout status, a
+ * server-side failure, or a rate limit. Those are transient. A client error
+ * (401, 403, 404) is a real answer and keeps today's `{ valid: false }`
+ * contract.
+ */
+function isLicenseServiceUnreachable(error: unknown): boolean {
+    const status = (error as AxiosError)?.response?.status;
+
+    if (status == null) {
+        return true;
+    }
+
+    return (
+        status === 408 || // request timeout
+        status === 425 || // too early
+        status === 499 || // client closed the request (gateway)
+        status === 429 || // rate limited
+        status >= 500
+    );
+}
+
+/**
  * LicenseService handles organization and user license validation via billing service endpoints.
  */
 export class LicenseService implements ILicenseService {
@@ -59,7 +82,15 @@ export class LicenseService implements ILicenseService {
                     ...organizationAndTeamData,
                 },
             });
-            return { valid: false };
+            // A failed read says nothing about the license. Report it as such
+            // so the caller can tell "billing could not answer" from "the org
+            // has no subscription" instead of posting "your trial has ended".
+            return {
+                valid: false,
+                ...(isLicenseServiceUnreachable(error)
+                    ? { unavailable: true }
+                    : {}),
+            };
         }
     }
 

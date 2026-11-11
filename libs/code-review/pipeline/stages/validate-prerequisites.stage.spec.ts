@@ -790,6 +790,43 @@ describe('ValidatePrerequisitesStage', () => {
             );
         });
 
+        it('posts "subscription check unavailable" when the license read itself failed, and never tries to provision a trial', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.LICENSE_UNAVAILABLE,
+                    metadata: {
+                        validation: { valid: false, unavailable: true },
+                    },
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            const body =
+                mockCodeManagementService.createIssueComment.mock.calls[0][0]
+                    .body;
+            expect(body).toContain('Subscription check unavailable');
+            expect(body).not.toContain('trial has ended');
+            expect(result.statusInfo?.message).toContain(
+                'Subscription Check Unavailable',
+            );
+            // A failed read must not reach the "missing trial" heal: that path
+            // would POST /trial while billing is already failing.
+            expect(mockLicenseService.startTrial).not.toHaveBeenCalled();
+            expect(
+                mockPermissionValidationService.validateExecutionPermissions,
+            ).toHaveBeenCalledTimes(1);
+        });
+
         it('keeps the generic "Plan Limit Exceeded" SKIPPED status for a non-trial plan limit', async () => {
             const context = makeContext();
 
