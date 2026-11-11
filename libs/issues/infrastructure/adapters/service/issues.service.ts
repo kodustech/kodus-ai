@@ -128,10 +128,12 @@ export class IssuesService implements IIssuesService {
     async addContributingSuggestions(
         uuid: string,
         suggestions: IContributingSuggestion[],
+        organizationId: string,
     ): Promise<IssuesEntity | null> {
         return this.issuesRepository.addContributingSuggestions(
             uuid,
             suggestions,
+            organizationId,
         );
     }
 

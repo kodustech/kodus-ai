@@ -25,6 +25,12 @@ import { IssuesModel } from './schemas/issues.model';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 
+/** Owner origins a security scan sets itself, and may update. */
+const SCAN_OWNER_ORIGINS = new Set<string | undefined>([
+    'codeowners',
+    'last_author',
+]);
+
 @Injectable()
 export class IssuesRepository implements IIssuesRepository {
     constructor(
@@ -188,9 +194,11 @@ export class IssuesRepository implements IIssuesRepository {
     async addContributingSuggestions(
         uuid: string,
         suggestions: IContributingSuggestion[],
+        organizationId: string,
     ): Promise<IssuesEntity | null> {
         // One conditional push per suggestion: two writers merging the same
-        // PR (a redelivered webhook) cannot both add it.
+        // PR (a redelivered webhook) cannot both add it. The organization is
+        // in the filter: the id came from a model's answer.
         const seen = new Set<string>();
         for (const suggestion of suggestions) {
             if (!suggestion?.id || seen.has(suggestion.id)) {
@@ -200,13 +208,16 @@ export class IssuesRepository implements IIssuesRepository {
             await this.issuesModel.updateOne(
                 {
                     '_id': uuid,
+                    organizationId,
                     'contributingSuggestions.id': { $ne: suggestion.id },
                 },
                 { $push: { contributingSuggestions: suggestion } },
             );
         }
 
-        const doc = await this.issuesModel.findById(uuid).exec();
+        const doc = await this.issuesModel
+            .findOne({ _id: uuid, organizationId })
+            .exec();
         return doc ? mapSimpleModelToEntity(doc, IssuesEntity) : null;
     }
 
@@ -263,8 +274,12 @@ export class IssuesRepository implements IIssuesRepository {
             evidence: finding.evidence,
             lastSeenScanId: finding.lastSeenScanId,
             lastSeenAt: now,
-            // A person may have reassigned it since; only fill a missing owner.
-            ...(existing.owner ? {} : { owner: finding.owner }),
+            // An owner the scan decided (CODEOWNERS, last author) follows the
+            // repository as it changes; one a person set is kept.
+            ...(finding.owner &&
+            (!existing.owner || SCAN_OWNER_ORIGINS.has(existing.owner.origin))
+                ? { owner: finding.owner }
+                : {}),
         };
 
         let outcome: ScanFindingOutcome = 'still_open';

@@ -183,7 +183,9 @@ describe('KodyIssuesManagementService', () => {
     // with the schema's default implementationStatus; the earlier comment
     // already tracks it, so it never becomes an issue.
     it('leaves a suggestion discarded as a repeat out of the issues', async () => {
-        const valid = await (service as any).filterValidSuggestionsFromPrByStatus([
+        const valid = await (
+            service as any
+        ).filterValidSuggestionsFromPrByStatus([
             {
                 path: 'src/main.ts',
                 suggestions: [
@@ -198,7 +200,9 @@ describe('KodyIssuesManagementService', () => {
             },
         ]);
 
-        expect(valid.map((s: { id: string }) => s.id)).toEqual(['suggestion-1']);
+        expect(valid.map((s: { id: string }) => s.id)).toEqual([
+            'suggestion-1',
+        ]);
     });
 
     describe('mergeSuggestionsIntoIssues', () => {
@@ -215,14 +219,16 @@ describe('KodyIssuesManagementService', () => {
         });
 
         it('stores a matched suggestion on the issue it matched', async () => {
-            issuesServiceMock.findByFileAndStatus = jest.fn().mockResolvedValue([
-                {
-                    uuid: 'issue-1',
-                    contributingSuggestions: [
-                        { id: 'old', prNumber: 'not-a-number' },
-                    ],
-                },
-            ]);
+            issuesServiceMock.findByFileAndStatus = jest
+                .fn()
+                .mockResolvedValue([
+                    {
+                        uuid: 'issue-1',
+                        contributingSuggestions: [
+                            { id: 'old', prNumber: 'not-a-number' },
+                        ],
+                    },
+                ]);
             kodyIssuesAnalysisServiceMock.mergeSuggestionsIntoIssues.mockResolvedValue(
                 {
                     matches: [
@@ -243,27 +249,68 @@ describe('KodyIssuesManagementService', () => {
 
             expect(
                 issuesServiceMock.addContributingSuggestions,
-            ).toHaveBeenCalledWith('issue-1', [
-                {
-                    id: 'suggestion-1',
-                    prNumber: 42,
-                    prAuthor: { id: 'user-1', name: 'test-user' },
-                },
-            ]);
+            ).toHaveBeenCalledWith(
+                'issue-1',
+                [
+                    {
+                        id: 'suggestion-1',
+                        prNumber: 42,
+                        prAuthor: { id: 'user-1', name: 'test-user' },
+                    },
+                ],
+                'org-uuid',
+            );
             expect(issuesServiceMock.create).not.toHaveBeenCalled();
         });
 
-        it('matches against a security-scan issue, which has no PR suggestion', async () => {
-            issuesServiceMock.findByFileAndStatus = jest.fn().mockResolvedValue([
+        it('treats an issue id the model was not shown as no match', async () => {
+            issuesServiceMock.findByFileAndStatus = jest
+                .fn()
+                .mockResolvedValue([
+                    { uuid: 'issue-1', contributingSuggestions: [] },
+                ]);
+            kodyIssuesAnalysisServiceMock.mergeSuggestionsIntoIssues.mockResolvedValue(
                 {
-                    uuid: 'scan-issue',
-                    title: 'IDOR on order lookup',
-                    description: 'Any user can read any order.',
-                    filePath: 'src/main.ts',
-                    language: 'typescript',
-                    contributingSuggestions: [],
+                    matches: [
+                        {
+                            suggestionId: 'suggestion-1',
+                            existingIssueId: 'issue-of-another-tenant',
+                        },
+                    ],
                 },
+            );
+            const createNewIssues = jest
+                .spyOn(service as any, 'createNewIssues')
+                .mockResolvedValue(undefined);
+
+            await service.mergeSuggestionsIntoIssues(
+                baseParams,
+                'src/main.ts',
+                [mockSuggestion],
+                undefined,
+            );
+
+            expect(
+                issuesServiceMock.addContributingSuggestions,
+            ).not.toHaveBeenCalled();
+            expect(createNewIssues).toHaveBeenCalledWith(baseParams, [
+                mockSuggestion,
             ]);
+        });
+
+        it('matches against a security-scan issue, which has no PR suggestion', async () => {
+            issuesServiceMock.findByFileAndStatus = jest
+                .fn()
+                .mockResolvedValue([
+                    {
+                        uuid: 'scan-issue',
+                        title: 'IDOR on order lookup',
+                        description: 'Any user can read any order.',
+                        filePath: 'src/main.ts',
+                        language: 'typescript',
+                        contributingSuggestions: [],
+                    },
+                ]);
             kodyIssuesAnalysisServiceMock.mergeSuggestionsIntoIssues.mockResolvedValue(
                 { matches: [] },
             );
@@ -290,6 +337,36 @@ describe('KodyIssuesManagementService', () => {
                     ],
                 },
             ]);
+        });
+    });
+
+    describe('resolveExistingIssues', () => {
+        it('resolves the scan findings of a removed file and dismisses its review issues', async () => {
+            jest.spyOn(service as any, 'getChangedFiles').mockResolvedValue([]);
+            issuesServiceMock.findByFileAndStatus = jest
+                .fn()
+                .mockResolvedValue([
+                    { uuid: 'scan-1', source: 'security_scan' },
+                    { uuid: 'review-1' },
+                ]);
+            issuesServiceMock.updateStatusByIds = jest
+                .fn()
+                .mockResolvedValue([]);
+
+            await service.resolveExistingIssues(
+                baseParams,
+                [{ path: 'src/main.ts', status: 'removed', suggestions: [] }],
+                undefined,
+            );
+
+            expect(issuesServiceMock.updateStatusByIds).toHaveBeenCalledWith(
+                ['scan-1'],
+                'resolved',
+            );
+            expect(issuesServiceMock.updateStatusByIds).toHaveBeenCalledWith(
+                ['review-1'],
+                'dismissed',
+            );
         });
     });
 

@@ -90,6 +90,7 @@ export interface IIssuesRepository {
     addContributingSuggestions(
         uuid: string,
         suggestions: IContributingSuggestion[],
+        organizationId: string,
     ): Promise<IssuesEntity | null>;
 
     upsertScanFinding(

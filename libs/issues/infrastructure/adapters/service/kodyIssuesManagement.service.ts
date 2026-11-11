@@ -36,6 +36,7 @@ import {
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { IssueStatus } from '@libs/core/infrastructure/config/types/general/issues.type';
+import { IssueSource } from '@libs/issues/domain/interfaces/issues.interface';
 import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 import { IssueCreationConfig } from '@libs/issues/domain/entities/issue-creation-config.entity';
@@ -277,7 +278,12 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                 );
 
             // 4. Processar resultado do merge
-            await this.processMergeResult(context, mergeResult, newSuggestions);
+            await this.processMergeResult(
+                context,
+                mergeResult,
+                newSuggestions,
+                new Set(existingIssues.map((issue) => issue.uuid)),
+            );
         } catch (error) {
             // Terminal BYOK billing/auth → warn (user's provider config; one
             // suspended key fans out per-file), real fault → error.
@@ -444,12 +450,31 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                 if (!openIssues?.length) continue;
 
                 if (fileData.status === 'removed') {
-                    updatePromises.push(
-                        this.issuesService.updateStatusByIds(
-                            openIssues.map((issue) => issue.uuid),
-                            IssueStatus.DISMISSED,
-                        ),
-                    );
+                    // A scan finding goes with its file: resolved, so the
+                    // next scan reopens it if the code comes back. A review
+                    // issue keeps being dismissed.
+                    const byStatus = [
+                        [IssueStatus.RESOLVED, true],
+                        [IssueStatus.DISMISSED, false],
+                    ] as const;
+                    for (const [status, scan] of byStatus) {
+                        const ids = openIssues
+                            .filter(
+                                (issue) =>
+                                    (issue.source ===
+                                        IssueSource.SECURITY_SCAN) ===
+                                    scan,
+                            )
+                            .map((issue) => issue.uuid);
+                        if (ids.length) {
+                            updatePromises.push(
+                                this.issuesService.updateStatusByIds(
+                                    ids,
+                                    status,
+                                ),
+                            );
+                        }
+                    }
                     continue;
                 }
 
@@ -571,6 +596,8 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
         >,
         mergeResult: any,
         newSuggestions: Partial<CodeSuggestion>[],
+        /** The issues the model was shown: it may only match one of these. */
+        shownIssueIds: Set<string>,
     ): Promise<void> {
         if (!mergeResult?.matches) {
             return;
@@ -580,14 +607,21 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
         const suggestionsMap = new Map(newSuggestions.map((s) => [s.id, s]));
 
         const unmatchedSuggestions: Partial<CodeSuggestion>[] = [];
-        let pullRequest: any;
+        let pullRequest: Awaited<
+            ReturnType<IPullRequestsService['findByNumberAndRepositoryName']>
+        >;
 
         for (const match of mergeResult.matches) {
             const suggestion = suggestionsMap.get(match.suggestionId);
 
             if (!suggestion) continue;
 
-            if (match.existingIssueId) {
+            // An id the model was not shown (made up, or of another file) is
+            // no match: the suggestion becomes an issue of its own.
+            if (
+                match.existingIssueId &&
+                shownIssueIds.has(match.existingIssueId)
+            ) {
                 pullRequest ??=
                     await this.pullRequestsService.findByNumberAndRepositoryName(
                         context.pullRequest.number,
@@ -604,6 +638,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                             pullRequest,
                         ),
                     ],
+                    context.organizationAndTeamData.organizationId,
                 );
             } else {
                 unmatchedSuggestions.push(suggestion);

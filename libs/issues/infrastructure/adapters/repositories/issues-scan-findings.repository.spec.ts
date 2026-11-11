@@ -69,7 +69,21 @@ describe('IssuesRepository — security-scan findings', () => {
         });
     });
 
-    it('refreshes a finding that is still open without touching its owner', async () => {
+    it('moves an owner the scan set when CODEOWNERS now names someone else', async () => {
+        const model = modelWith({
+            _id: 'i-1',
+            status: IssueStatus.OPEN,
+            owner: { gitId: '', username: 'old', origin: 'last_author' },
+        });
+        const repository = new IssuesRepository(model as any);
+
+        await repository.upsertScanFinding(finding);
+
+        const update = model.findByIdAndUpdate.mock.calls[0][1];
+        expect(update.$set.owner).toEqual(finding.owner);
+    });
+
+    it('refreshes a finding that is still open without touching an owner a person set', async () => {
         const model = modelWith({
             _id: 'i-1',
             status: IssueStatus.OPEN,
@@ -189,17 +203,30 @@ describe('IssuesRepository.addContributingSuggestions', () => {
         const s1 = { id: 's1', prNumber: 1, prAuthor: { id: '1', name: 'a' } };
         const s2 = { id: 's2', prNumber: 2, prAuthor: { id: '1', name: 'a' } };
 
-        await repository.addContributingSuggestions('i-1', [s1, s2, s1]);
+        await repository.addContributingSuggestions(
+            'i-1',
+            [s1, s2, s1],
+            'org-1',
+        );
 
         // The filter carries the "not there yet" check, so two writers
-        // merging the same PR cannot both push it.
+        // merging the same PR cannot both push it, and the organization, so
+        // an id a model answered with cannot reach another tenant's issue.
         expect(model.updateOne.mock.calls).toEqual([
             [
-                { '_id': 'i-1', 'contributingSuggestions.id': { $ne: 's1' } },
+                {
+                    '_id': 'i-1',
+                    'organizationId': 'org-1',
+                    'contributingSuggestions.id': { $ne: 's1' },
+                },
                 { $push: { contributingSuggestions: s1 } },
             ],
             [
-                { '_id': 'i-1', 'contributingSuggestions.id': { $ne: 's2' } },
+                {
+                    '_id': 'i-1',
+                    'organizationId': 'org-1',
+                    'contributingSuggestions.id': { $ne: 's2' },
+                },
                 { $push: { contributingSuggestions: s2 } },
             ],
         ]);
