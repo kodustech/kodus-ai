@@ -30,6 +30,7 @@ export const getLayoutData = cache(async (teamId: string) => {
         kodusProviderFeatureFlag,
         deterministicEvidenceFeatureFlag,
         conditionalPrApprovalFeatureFlag,
+        deepScanFeatureFlag,
     ] = await Promise.all([
         getPermissions().catch(() => ({})),
         getOrganizationName().catch(() => ""),
@@ -73,6 +74,7 @@ export const getLayoutData = cache(async (teamId: string) => {
                 }),
             )
             .catch(() => false),
+        isDeepScanEnabled().catch(() => false),
     ]);
 
     return {
@@ -86,9 +88,19 @@ export const getLayoutData = cache(async (teamId: string) => {
             kodusProvider: kodusProviderFeatureFlag,
             deterministicEvidence: deterministicEvidenceFeatureFlag,
             conditionalPrApproval: conditionalPrApprovalFeatureFlag,
+            deepScan: deepScanFeatureFlag,
         },
     };
 });
+
+/** Whether the organization is in the deep scan's private alpha. */
+export const isDeepScanEnabled = cache(async () =>
+    isFeatureEnabled({
+        feature: FEATURE_FLAGS.deepScan,
+        identifier: "organization",
+        releaseTrack: await getOrganizationReleaseTrack(),
+    }),
+);
 
 /**
  * Fetches teams with request-level caching.

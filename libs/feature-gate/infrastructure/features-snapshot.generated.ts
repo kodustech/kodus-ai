@@ -5,7 +5,7 @@ import type { FeaturesSnapshot } from '../domain/snapshot.types';
 
 export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
     "schema_version": 1,
-    "generated_at": "2026-10-23T18:39:31.119Z",
+    "generated_at": "2026-11-11T19:14:18.046Z",
     "source": "manual",
     "features": {
         "conditional-pr-approval": {
@@ -24,6 +24,14 @@ export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
             "audience": [
                 "cloud",
                 "self-hosted"
+            ]
+        },
+        "deep-scan": {
+            "name": "Deep scan",
+            "stage": "alpha",
+            "description": "Scan a whole repository for exploitable vulnerabilities on demand, with findings, attack paths and reproduction tests in Kody Issues.",
+            "audience": [
+                "cloud"
             ]
         },
         "deterministic-evidence": {

@@ -14,6 +14,8 @@ import {
 } from "@testing-library/react";
 import type { BYOKConfig } from "src/features/ee/byok/_types";
 
+import { FeatureFlagsProvider } from "src/app/(app)/settings/_components/context";
+
 import { OrganizationModels, OtherTaskModels } from "./organization-models";
 import {
     useOrganizationRouting,
@@ -153,7 +155,9 @@ function Harness({
         </>
     );
 }
-function mount(props: { canEdit?: boolean; heavyAllowed?: boolean } = {}) {
+function mount(
+    props: { canEdit?: boolean; heavyAllowed?: boolean; deepScan?: boolean } = {},
+) {
     const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
     });
@@ -161,9 +165,11 @@ function mount(props: { canEdit?: boolean; heavyAllowed?: boolean } = {}) {
         client,
         ...render(
             <QueryClientProvider client={client}>
-                <TooltipProvider>
-                    <Harness {...props} />
-                </TooltipProvider>
+                <FeatureFlagsProvider featureFlags={{ deepScan: props.deepScan }}>
+                    <TooltipProvider>
+                        <Harness {...props} />
+                    </TooltipProvider>
+                </FeatureFlagsProvider>
             </QueryClientProvider>,
         ),
     };
@@ -264,9 +270,15 @@ it("keeps fallback distinct from default and lets the user remove it", async () 
     expect(draft().fallbackModelId).toBeUndefined();
 });
 it("offers the deep scan its own model among the other tasks", async () => {
-    mount();
+    mount({ deepScan: true });
     await waitFor(() => expect(latest.canEdit).toBe(true));
     expect(await screen.findByText("Deep scan")).toBeInTheDocument();
+});
+it("hides the deep scan's model outside its private alpha", async () => {
+    mount();
+    await waitFor(() => expect(latest.canEdit).toBe(true));
+    expect(await screen.findByText("Custom Agents")).toBeInTheDocument();
+    expect(screen.queryByText("Deep scan")).not.toBeInTheDocument();
 });
 it("re-reads the config, preserves a new provider/model and unrelated routes, and never resubmits masks as keys", async () => {
     mount();

@@ -2,6 +2,7 @@ import {
     BadRequestException,
     Body,
     Controller,
+    ForbiddenException,
     Get,
     Inject,
     Param,
@@ -41,6 +42,10 @@ import {
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { StartSecurityScanUseCase } from '@libs/security-scan/application/start-security-scan.use-case';
 import { GetSecurityScansUseCase } from '@libs/security-scan/application/get-security-scans.use-case';
+import {
+    DEEP_SCAN_NOT_ENABLED_MESSAGE,
+    DeepScanGate,
+} from '@libs/security-scan/application/deep-scan.gate';
 
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
@@ -101,12 +106,17 @@ export class SecurityScansController {
         private readonly startSecurityScan: StartSecurityScanUseCase,
         private readonly getSecurityScans: GetSecurityScansUseCase,
         private readonly authorizationService: AuthorizationService,
+        private readonly deepScanGate: DeepScanGate,
     ) {}
 
-    private organizationId(): string {
+    /** The caller's organization, once the deep scan is enabled for it. */
+    private async organizationId(): Promise<string> {
         const organizationId = this.request?.user?.organization?.uuid;
         if (!organizationId) {
             throw new BadRequestException('Organization not found');
+        }
+        if (!(await this.deepScanGate.isEnabledFor(organizationId))) {
+            throw new ForbiddenException(DEEP_SCAN_NOT_ENABLED_MESSAGE);
         }
         return organizationId;
     }
@@ -130,7 +140,7 @@ export class SecurityScansController {
     async start(@Body() body: StartSecurityScanDto) {
         return this.startSecurityScan.execute({
             organizationAndTeamData: {
-                organizationId: this.organizationId(),
+                organizationId: await this.organizationId(),
                 teamId: body.teamId,
             },
             repositoryId: body.repositoryId,
@@ -156,7 +166,7 @@ export class SecurityScansController {
     @CheckPolicies(canReadScans)
     async list(@Query('limit') limit?: string) {
         return this.getSecurityScans.list(
-            this.organizationId(),
+            await this.organizationId(),
             (await this.visibleRepositories()) ?? undefined,
             limit ? Number(limit) : undefined,
         );
@@ -171,7 +181,7 @@ export class SecurityScansController {
     @CheckPolicies(canReadScans)
     async get(@Param('id') id: string) {
         return this.getSecurityScans.get(
-            this.organizationId(),
+            await this.organizationId(),
             id,
             (await this.visibleRepositories()) ?? undefined,
         );

@@ -14,6 +14,8 @@ import {
 } from "src/features/ee/byok/_components/routing/task-override-grid";
 import type { LlmTask } from "src/features/ee/byok/_types";
 
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
+
 import type { OrganizationRoutingController } from "./use-organization-routing";
 
 const reviewTasks: {
@@ -284,6 +286,11 @@ export function OtherTaskModels({
     canEdit: boolean;
 }) {
     const { pool, routing } = controller;
+    // The deep scan is a private alpha: its card shows only where it runs.
+    const { deepScan } = useFeatureFlags();
+    const tasks = deepScan
+        ? otherTasks
+        : otherTasks.filter((task) => task !== "securityScan");
     const single = pool.length === 1;
     const editable = canEdit && controller.canEdit;
     return (
@@ -296,7 +303,7 @@ export function OtherTaskModels({
                         </summary>
                         <CardContent>
                             <TaskOverrideGrid
-                                tasks={otherTasks}
+                                tasks={tasks}
                                 models={pool}
                                 defaultModelId={routing.defaultModelId}
                                 taskOverrides={routing.taskOverrides ?? {}}
@@ -305,7 +312,7 @@ export function OtherTaskModels({
                                 disabled={
                                     !editable ||
                                     (single &&
-                                        !otherTasks.some(
+                                        !tasks.some(
                                             (task) =>
                                                 routing.taskOverrides?.[task],
                                         ))

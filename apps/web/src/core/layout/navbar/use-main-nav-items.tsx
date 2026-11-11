@@ -14,6 +14,7 @@ import {
     SparklesIcon,
     type LucideIcon,
 } from "lucide-react";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { useKodusCreditBalance } from "src/features/ee/byok/_hooks/use-kodus-credit-balance";
 import { isCockpitTierAllowed } from "src/features/ee/cockpit/_helpers/tier-policy";
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
@@ -73,6 +74,7 @@ export const useMainNavItems = () => {
         Action.Read,
         ResourceType.SecurityScan,
     );
+    const { deepScan } = useFeatureFlags();
     const canReadRepositories = usePermission(
         Action.Read,
         ResourceType.GitSettings,
@@ -122,7 +124,8 @@ export const useMainNavItems = () => {
                 label: "Deep scan",
                 icon: ShieldCheckIcon,
                 href: "/deep-scan",
-                visible: canReadSecurityScans,
+                // Private alpha: only organizations the flag lets in.
+                visible: canReadSecurityScans && deepScan === true,
                 badge: ALPHA_BADGE,
                 matcher: (path) => path.startsWith("/deep-scan"),
             },
@@ -192,6 +195,7 @@ export const useMainNavItems = () => {
             : undefined,
         canReadPlugins,
         canReadSecurityScans,
+        deepScan,
         canReadRepositories,
         canEditOrg,
         isMCPAvailable,

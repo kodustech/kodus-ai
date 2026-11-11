@@ -10,6 +10,7 @@ import { AnalyticsModule } from '@libs/analytics/modules/analytics.module';
 import { SpendLimitModule } from '@libs/analytics/modules/spend-limit.module';
 import { IssuesModule } from '@libs/issues/issues.module';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
+import { OrganizationModule } from '@libs/organization/modules/organization.module';
 
 import {
     SecurityScanModel,
@@ -22,6 +23,7 @@ import {
 import { SecurityScanJobProcessor } from './application/security-scan-job.processor';
 import { StartSecurityScanUseCase } from './application/start-security-scan.use-case';
 import { GetSecurityScansUseCase } from './application/get-security-scans.use-case';
+import { DeepScanGate } from './application/deep-scan.gate';
 
 @Module({
     imports: [
@@ -35,6 +37,7 @@ import { GetSecurityScansUseCase } from './application/get-security-scans.use-ca
         SpendLimitModule,
         forwardRef(() => IssuesModule),
         forwardRef(() => IntegrationConfigModule),
+        forwardRef(() => OrganizationModule),
     ],
     providers: [
         {
@@ -52,12 +55,14 @@ import { GetSecurityScansUseCase } from './application/get-security-scans.use-ca
         SecurityScanJobProcessor,
         StartSecurityScanUseCase,
         GetSecurityScansUseCase,
+        DeepScanGate,
     ],
     exports: [
         SECURITY_SCAN_REPOSITORY_TOKEN,
         SecurityScanJobProcessor,
         StartSecurityScanUseCase,
         GetSecurityScansUseCase,
+        DeepScanGate,
     ],
 })
 export class SecurityScanModule {}
