@@ -205,6 +205,139 @@ beforeEach(() => {
 });
 afterEach(() => jest.clearAllMocks());
 
+describe('renames preserve the current-path review configuration', () => {
+    const sourcePolicy = {
+        id: 'legacy-policy',
+        name: 'Legacy paths',
+        enabled: true,
+        labels: ['legacy-approved'],
+    };
+    const repositoryPolicy = {
+        id: 'repo-policy',
+        name: 'Repository',
+        enabled: true,
+    };
+    const criterion = {
+        id: 'legacy-risk',
+        name: 'Legacy payment code',
+        enabled: true,
+        instructions: 'Check payment authorization when code leaves this area.',
+    };
+    const files = [
+        {
+            ...change('src/billing/invoice.ts', 'renamed'),
+            previous_filename: 'legacy/invoice.ts',
+        },
+        change('src/billing/total.ts'),
+    ];
+    const fixture = (destinationConfigured: boolean, incremental = false) =>
+        setup(
+            {
+                automatedReviewActive: true,
+                ignorePaths: ['repo-ignored/**'],
+                riskAssessmentActive: false,
+                riskCriteria: [],
+                approvalPolicies: [repositoryPolicy],
+            },
+            {
+                files,
+                incremental,
+                directories: [
+                    {
+                        id: 'legacy',
+                        path: 'legacy',
+                        configs: {
+                            automatedReviewActive: false,
+                            ignorePaths: ['legacy-ignored/**'],
+                            riskAssessmentActive: true,
+                            riskCriteria: [criterion],
+                            approvalPolicies: [sourcePolicy],
+                        },
+                    },
+                    ...(destinationConfigured
+                        ? [
+                              {
+                                  id: 'billing',
+                                  path: 'src/billing',
+                                  configs: {
+                                      automatedReviewActive: true,
+                                      ignorePaths: ['billing-ignored/**'],
+                                      reviewMode: 'heavy',
+                                      approvalPolicies: [
+                                          {
+                                              ...repositoryPolicy,
+                                              id: 'billing-policy',
+                                          },
+                                      ],
+                                  },
+                              },
+                          ]
+                        : []),
+                ],
+            },
+        );
+
+    it.each([
+        { destinationConfigured: false, incremental: false },
+        { destinationConfigured: false, incremental: true },
+        { destinationConfigured: true, incremental: false },
+        { destinationConfigured: true, incremental: true },
+    ])(
+        'keeps review settings at the destination while resolving PR-wide safeguards (%j)',
+        async ({ destinationConfigured, incremental }) => {
+            const s = fixture(destinationConfigured, incremental);
+            const result = await s.resolve.execute(s.context);
+            expect(result.codeReviewConfig).toMatchObject({
+                automatedReviewActive: true,
+                ignorePaths: [
+                    destinationConfigured
+                        ? 'billing-ignored/**'
+                        : 'repo-ignored/**',
+                ],
+            });
+            expect(result.codeReviewConfig.directoryId).toBe(
+                destinationConfigured ? 'billing' : undefined,
+            );
+            expect(result.codeReviewConfig.riskAssessmentActive).toBe(
+                !destinationConfigured,
+            );
+            expect(result.codeReviewConfig.riskCriteria).toEqual(
+                destinationConfigured ? [] : [criterion],
+            );
+            expect(result.codeReviewConfig.approvalPolicies).toEqual([
+                destinationConfigured ? repositoryPolicy : sourcePolicy,
+            ]);
+            if (destinationConfigured)
+                expect(result.codeReviewConfig.reviewMode).toBe('heavy');
+            // Old paths affect safeguards, never the review's actual diff.
+            expect(result.fullPrFiles).toEqual(files);
+            expect(result.preliminaryFiles).toEqual(
+                incremental ? [files[0]] : files,
+            );
+        },
+    );
+
+    it.each([false, true])(
+        'keeps simple config on current paths (destination configured: %s)',
+        async (destinationConfigured) => {
+            const s = fixture(destinationConfigured);
+            const result = await s.config.getSimpleConfig(org, {
+                repositoryId: repository.id,
+                preliminaryFiles: files as any,
+            });
+            expect(result.automatedReviewActive).toBe(true);
+            expect(result.directoryId).toBe(
+                destinationConfigured ? 'billing' : undefined,
+            );
+            expect(result.ignorePaths).toEqual([
+                destinationConfigured
+                    ? 'billing-ignored/**'
+                    : 'repo-ignored/**',
+            ]);
+        },
+    );
+});
+
 it('hydrates a real GitLab webhook through the normalized provider before risk and approval', async () => {
     const s = setup({ riskAssessmentActive: true, approvalPolicies: [policy] });
     const provider = new (GitlabService as any)();

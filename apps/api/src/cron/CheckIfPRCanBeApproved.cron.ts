@@ -808,7 +808,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                             await this.codeBaseConfigService.getConfig(
                                                 organizationAndTeamData,
                                                 repository,
-                                                files as FileChange[],
+                                                directoryChangedPaths.map(
+                                                    (filename) => ({
+                                                        filename,
+                                                    }),
+                                                ),
                                             );
                                     } else {
                                         if (

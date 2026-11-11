@@ -37,7 +37,6 @@ import {
     riskReviewRoutingSchema,
 } from '@libs/core/infrastructure/config/types/general/risk-assessment';
 import { unavailableReviewSettings } from '@libs/code-review/domain/approval/unavailable-review-settings';
-import { approvalPathsOf } from '@libs/code-review/domain/approval/approval-decision';
 import {
     buildDefaultGlobalCodeReviewConfig,
     getDefaultKodusConfigFile,
@@ -110,7 +109,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
     async getConfig(
         organizationAndTeamData: OrganizationAndTeamData,
         repository: { name: string; id: string },
-        preliminaryFiles?: FileChange[],
+        preliminaryFiles?: Pick<FileChange, 'filename'>[],
     ): Promise<CodeReviewConfig> {
         try {
             const [
@@ -409,7 +408,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         repository: { name: string; id: string },
         parameter: CodeReviewParameter,
         defaultBranch: string,
-        preliminaryFiles?: FileChange[],
+        preliminaryFiles?: Pick<FileChange, 'filename'>[],
     ): Promise<CodeReviewConfigWithoutLLMProvider> {
         if (!parameter) {
             const config = this.mergeReviewSettings();
@@ -1219,15 +1218,15 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
     }
 
     private extractUniqueDirectoryPaths(
-        files: { filename: string; previous_filename?: string }[] = [],
+        files: Pick<FileChange, 'filename'>[] = [],
     ): string[] {
         const paths = new Set<string>();
 
-        approvalPathsOf(files || []).forEach((path) => {
-            const lastSlashIndex = path.lastIndexOf('/');
+        (files || []).forEach(({ filename }) => {
+            const lastSlashIndex = filename.lastIndexOf('/');
 
             if (lastSlashIndex > 0) {
-                const directoryPath = path.substring(0, lastSlashIndex);
+                const directoryPath = filename.substring(0, lastSlashIndex);
                 paths.add(directoryPath);
             }
         });

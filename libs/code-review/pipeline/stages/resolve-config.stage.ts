@@ -34,6 +34,7 @@ import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pull
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import type { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { approvalPathsOf } from '@libs/code-review/domain/approval/approval-decision';
 
 @Injectable()
 export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -198,13 +199,24 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                             'The complete PR file list is unavailable',
                         );
                     }
+                    const hasPreviousPaths =
+                        needsPrWideSettings &&
+                        fullPrFiles.some(
+                            (file) =>
+                                file.previous_filename &&
+                                file.previous_filename !== file.filename,
+                        );
+                    // Review settings follow current filenames. Only the
+                    // PR-wide safeguards also consider where renamed code was.
                     const prWideConfig =
-                        fullPrFiles === preliminaryFiles
+                        fullPrFiles === preliminaryFiles && !hasPreviousPaths
                             ? config
                             : await this.codeBaseConfigService.getConfig(
                                   context.organizationAndTeamData,
                                   context.repository,
-                                  fullPrFiles,
+                                  approvalPathsOf(fullPrFiles).map(
+                                      (filename) => ({ filename }),
+                                  ),
                               );
                     for (const key of [
                         'riskAssessmentActive',
