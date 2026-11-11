@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import pLimit from 'p-limit';
 
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
@@ -8,7 +9,10 @@ import {
 } from '@libs/core/infrastructure/http/rate-limit-retry';
 import {
     parkRateGate,
+    RateGateWaitExceededError,
     rateGateKey,
+    recordRateGateSuccess,
+    recordRateLimited,
     runWithRateGate,
 } from '@libs/core/infrastructure/http/per-key-rate-gate';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
@@ -2049,58 +2053,41 @@ export class BitbucketCloudService implements Omit<
                     ),
                 );
 
-            const prFilesWithDiffAndContents = await Promise.all(
-                prFiles
-                    .filter((file) => file.new?.path || file.old?.path)
-                    .map(async (file) => {
-                        const isRemoved = file.status === 'removed';
-                        const pathForContent = isRemoved
-                            ? file.old?.path
-                            : (file.new?.path ?? file.old?.path);
-                        const commitForContent = isRemoved
-                            ? pr.destination?.commit?.hash
-                            : pr.source?.commit?.hash;
-
-                        const contents =
-                            pathForContent && commitForContent
-                                ? await bitbucketAPI.source
-                                      .read({
-                                          repo_slug: `{${repo.id}}`,
-                                          workspace: `{${repo.workspaceId}}`,
-                                          commit: commitForContent,
-                                          path: pathForContent,
-                                      })
-                                      .then((res) => res.data as string)
-                                      .catch(() => null)
-                                : null;
-
-                        const pathForDiff = isRemoved
-                            ? file.old?.path
-                            : (file.new?.path ?? file.old?.path);
-
-                        const diff = pathForDiff
-                            ? await bitbucketAPI.commits
-                                  .getDiff({
-                                      repo_slug: `{${repo.id}}`,
-                                      workspace: `{${repo.workspaceId}}`,
-                                      spec: `${pr.source?.commit?.hash}..${pr.destination?.commit?.hash}`,
-                                      path: pathForDiff,
-                                  })
-                                  .then((res) =>
-                                      this.convertDiff(res.data as string),
-                                  )
-                                  .catch(() => null)
-                            : null;
-
-                        return {
-                            ...file,
-                            contents,
-                            diff,
-                        };
-                    }),
+            const sourceHash = pr.source?.commit?.hash;
+            const destinationHash = pr.destination?.commit?.hash;
+            const changedPrFiles = prFiles.filter(
+                (file) => file.new?.path || file.old?.path,
             );
+            const pathForDiff = (file: Schema.Diffstat) =>
+                file.status === 'removed'
+                    ? file.old?.path
+                    : (file.new?.path ?? file.old?.path);
 
-            return prFilesWithDiffAndContents.map((file) => ({
+            // One diff for the whole PR instead of one per file: the per-file
+            // fan-out was N parallel requests and Bitbucket answered 429.
+            const patches = await this.readPatchesByPath({
+                bitbucketAPI,
+                repo,
+                spec: `${sourceHash}..${destinationHash}`,
+                paths: changedPrFiles.map(pathForDiff).filter(Boolean),
+                fillMissingPerFile: true,
+                logContext: { organizationAndTeamData, prNumber },
+            });
+
+            // No file contents here: every caller reads them later through
+            // getRepositoryContentFile (the review only for files it keeps),
+            // and GitHub's adapter returns none either. Reading them here
+            // cost one request per file on a call made several times per
+            // review, and that is what kept Bitbucket credentials at 429.
+            const prFilesWithDiff = changedPrFiles.map((file) => {
+                const diffPath = pathForDiff(file);
+                return {
+                    ...file,
+                    diff: diffPath ? (patches.get(diffPath) ?? null) : null,
+                };
+            });
+
+            return prFilesWithDiff.map((file) => ({
                 filename: file.new?.path ?? file.old?.path,
                 previous_filename:
                     file.new?.path && file.old?.path !== file.new.path
@@ -2113,11 +2100,14 @@ export class BitbucketCloudService implements Omit<
                 changes: file.lines_added + file.lines_removed,
                 patch: file.diff,
                 blob_url: null,
-                content: file.contents,
+                content: null,
                 contents_url: null,
                 raw_url: null,
             }));
         } catch (error) {
+            // A rate limit is not a PR without files: let the job retry it
+            // with backoff instead of reviewing nothing.
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message: `Error to get files by pull request id: ${params?.prNumber}`,
                 context: BitbucketCloudService.name,
@@ -2189,51 +2179,49 @@ export class BitbucketCloudService implements Omit<
             }
             const allFilesInPR = diffstat.values;
 
-            // ⚙️ Processa apenas arquivos que realmente mudaram desde o último commit
-            const changedFiles = await Promise.all(
-                allFilesInPR.map(async (file) => {
-                    const path = file.new?.path;
-                    if (!path) {
-                        return null;
-                    }
+            // One diff since the last reviewed commit instead of one per file.
+            // A file missing from it did not change since that commit. Both
+            // sides of each entry are listed: a deletion is keyed by its old
+            // path, and must not look like a parse mismatch.
+            const patches = await this.readPatchesByPath({
+                bitbucketAPI,
+                repo,
+                spec: `${pr.source?.commit?.hash}..${lastCommit.sha}`,
+                paths: [
+                    ...new Set(
+                        allFilesInPR
+                            .flatMap((file) => [file.new?.path, file.old?.path])
+                            .filter(Boolean),
+                    ),
+                ],
+                fillMissingPerFile: false,
+                logContext: { organizationAndTeamData, prNumber },
+            });
 
-                    const diff = await bitbucketAPI.commits
-                        .getDiff({
-                            repo_slug: `{${repo.id}}`,
-                            workspace: `{${repo.workspaceId}}`,
-                            spec: `${pr.source?.commit?.hash}..${lastCommit.sha}`,
-                            path,
-                        })
-                        .then((res) => res.data as string);
+            // No contents, same as getFilesByPullRequestId: the caller
+            // (PullRequestHandlerService) reads them per kept file.
+            const changedFiles = allFilesInPR.map((file) => {
+                const path = file.new?.path;
+                if (!path || !patches.has(path)) return null;
+                // null: its diff could not be read. Kept, so a failed read
+                // never passes for an unchanged file.
+                const diff = patches.get(path);
+                if (diff !== null && !diff.trim()) return null;
 
-                    if (!diff?.trim()) {
-                        return null;
-                    }
-
-                    const content = await bitbucketAPI.source
-                        .read({
-                            repo_slug: `{${repo.id}}`,
-                            workspace: `{${repo.workspaceId}}`,
-                            commit: pr.source?.commit?.hash,
-                            path,
-                        })
-                        .then((res) => res.data as string);
-
-                    return {
-                        filename: path,
-                        sha: pr.source?.commit?.hash,
-                        status: file.status,
-                        additions: file.lines_added,
-                        deletions: file.lines_removed,
-                        changes: file.lines_added + file.lines_removed,
-                        patch: diff,
-                        content,
-                        blob_url: null,
-                        contents_url: null,
-                        raw_url: null,
-                    };
-                }),
-            );
+                return {
+                    filename: path,
+                    sha: pr.source?.commit?.hash,
+                    status: file.status,
+                    additions: file.lines_added,
+                    deletions: file.lines_removed,
+                    changes: file.lines_added + file.lines_removed,
+                    patch: diff,
+                    blob_url: null,
+                    content: null,
+                    contents_url: null,
+                    raw_url: null,
+                };
+            });
 
             return changedFiles.filter(Boolean);
         } catch (error) {
@@ -3783,9 +3771,27 @@ export class BitbucketCloudService implements Omit<
     // How many Retry-After-honoured waits rawFetch performs on a 429 before
     // giving up and surfacing it. 4 covers transient per-endpoint bursts
     // without hanging a request indefinitely on a genuinely throttled account.
+    // Per-file Bitbucket reads (contents, per-file diff fallback) run at most
+    // this many at a time instead of all at once.
+    private static readonly PER_FILE_REQUEST_CONCURRENCY = 5;
+
     private static readonly RATE_GATE_429_MAX_RETRIES = Number(
         process.env.BITBUCKET_RATE_GATE_429_MAX_RETRIES ?? 4,
     );
+
+    // Longest a call may queue behind a parked credential before it gets a
+    // 429 back. Unbounded, a credential that kept answering 429 held one
+    // review stage for 99 minutes; bounded, the job fails into its own
+    // delayed retry instead.
+    private static readonly RATE_GATE_MAX_WAIT_MS = 5 * 60_000;
+
+    // Backoff for a 429 without Retry-After: starts at 10s and doubles per
+    // 429 in a row on the same credential, up to a minute (Bitbucket's
+    // burst windows are per minute).
+    private static readonly RATE_LIMIT_BACKOFF = {
+        baseMs: BitbucketCloudService.RATE_GATE_MIN_INTERVAL_MS * 25,
+        maxMs: 60_000,
+    };
 
     private safeFetch(url: string, options: any): Promise<any> {
         // Gate every Bitbucket HTTP call through a single-slot, spaced
@@ -3805,9 +3811,40 @@ export class BitbucketCloudService implements Omit<
             gateKey,
             {
                 minIntervalMs: BitbucketCloudService.RATE_GATE_MIN_INTERVAL_MS,
+                maxWaitMs: BitbucketCloudService.RATE_GATE_MAX_WAIT_MS,
             },
             () => this.rawFetch(url, options, gateKey),
-        );
+        ).catch((error) => {
+            if (!(error instanceof RateGateWaitExceededError)) throw error;
+            // The SDK turns anything fetch throws into a 500, so answer with
+            // a 429 instead: callers then see the rate limit it really is.
+            this.logger.warn({
+                message: `Bitbucket rate gate: gave up after ${error.waitedMs}ms waiting for a parked credential`,
+                context: BitbucketCloudService.name,
+                metadata: {
+                    url,
+                    gateKey,
+                    waitedMs: error.waitedMs,
+                    retryAfterMs: error.retryAfterMs,
+                },
+            });
+            return new Response(
+                JSON.stringify({
+                    type: 'error',
+                    error: { message: error.message },
+                }),
+                {
+                    status: 429,
+                    statusText: 'Too Many Requests',
+                    headers: {
+                        'content-type': 'application/json',
+                        'retry-after': String(
+                            Math.ceil(error.retryAfterMs / 1000),
+                        ),
+                    },
+                },
+            );
+        });
     }
 
     private async rawFetch(
@@ -3853,9 +3890,14 @@ export class BitbucketCloudService implements Omit<
                 // retry. parseRetryAfterMs falls back to a conservative
                 // cooldown when Bitbucket omits the header (it often does on
                 // per-endpoint burst 429s).
-                const waitMs = this.parseRetryAfterMs(
-                    response.headers.get('retry-after'),
+                const backoffMs = recordRateLimited(
+                    gateKey,
+                    BitbucketCloudService.RATE_LIMIT_BACKOFF,
                 );
+                const waitMs =
+                    this.parseRetryAfterMs(
+                        response.headers.get('retry-after'),
+                    ) ?? backoffMs;
                 parkRateGate(gateKey, Date.now() + waitMs);
                 if (attempt < BitbucketCloudService.RATE_GATE_429_MAX_RETRIES) {
                     this.logger.warn({
@@ -3867,6 +3909,8 @@ export class BitbucketCloudService implements Omit<
                     continue;
                 }
                 // Exhausted: fall through and return the 429 to the caller.
+            } else {
+                recordRateGateSuccess(gateKey);
             }
 
             if (!response.headers.get('content-type')) {
@@ -3883,13 +3927,11 @@ export class BitbucketCloudService implements Omit<
     }
 
     // Parses a Retry-After header (delta-seconds or HTTP-date) into a
-    // forward-looking delay in ms. Falls back to a conservative cooldown
-    // when the header is absent or unparseable — Bitbucket frequently
-    // omits it on per-endpoint burst 429s, and guessing too low just
-    // re-trips the window.
-    private parseRetryAfterMs(raw: string | null): number {
-        const fallbackMs = BitbucketCloudService.RATE_GATE_MIN_INTERVAL_MS * 25;
-        if (!raw) return fallbackMs;
+    // forward-looking delay in ms, or null when the header is absent or
+    // unusable. Bitbucket often omits it on per-endpoint burst 429s; the
+    // caller then backs off exponentially (RATE_LIMIT_BACKOFF).
+    private parseRetryAfterMs(raw: string | null): number | null {
+        if (!raw) return null;
         const asSeconds = Number(raw);
         if (Number.isFinite(asSeconds) && asSeconds >= 0) {
             return Math.round(asSeconds * 1000);
@@ -3897,9 +3939,9 @@ export class BitbucketCloudService implements Omit<
         const asDate = Date.parse(raw);
         if (Number.isFinite(asDate)) {
             const delta = asDate - Date.now();
-            return delta > 0 ? delta : fallbackMs;
+            return delta > 0 ? delta : null;
         }
-        return fallbackMs;
+        return null;
     }
 
     /**
@@ -5017,6 +5059,128 @@ export class BitbucketCloudService implements Omit<
 
     private convertDiff(diff: string) {
         return diff.split('\n').slice(4).join('\n');
+    }
+
+    /**
+     * Patches of `paths` under `spec`, read with ONE `commits.getDiff` for
+     * the whole spec and split per file. Bitbucket Cloud rate-limits hard,
+     * and a diff request per file on a large PR was enough to get 429s.
+     *
+     * Falls back to per-file requests, at most PER_FILE_REQUEST_CONCURRENCY
+     * at a time, when the whole-spec diff fails for a reason other than a
+     * rate limit, and (with `fillMissingPerFile`) for paths the whole diff
+     * did not include. A 429 is rethrown: rawFetch already waited out
+     * Retry-After a few times, and an empty patch would be reviewed as "no
+     * change" instead of being retried.
+     */
+    private async readPatchesByPath(params: {
+        bitbucketAPI: APIClient;
+        repo: Pick<Repositories, 'id' | 'workspaceId'>;
+        spec: string;
+        paths: string[];
+        fillMissingPerFile: boolean;
+        /** Who the read is for, carried into every log line. */
+        logContext: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            prNumber: number;
+        };
+    }): Promise<Map<string, string | null>> {
+        const { bitbucketAPI, repo, spec, paths, fillMissingPerFile } = params;
+        const logMetadata = {
+            organizationId:
+                params.logContext.organizationAndTeamData.organizationId,
+            teamId: params.logContext.organizationAndTeamData.teamId,
+            prNumber: params.logContext.prNumber,
+            repoId: repo.id,
+            spec,
+        };
+        const patches = new Map<string, string | null>();
+        let wholeDiffRead = false;
+        // Whole-diff sections the parser could not key, or keyed to a path
+        // the listing does not have: a missing path may then be a parse
+        // mismatch rather than a file this diff leaves untouched.
+        let parseMismatch = false;
+
+        try {
+            const diff = await bitbucketAPI.commits
+                .getDiff({
+                    repo_slug: `{${repo.id}}`,
+                    workspace: `{${repo.workspaceId}}`,
+                    spec,
+                })
+                .then((res) => res.data as string);
+            const files = splitUnifiedDiff(diff);
+            for (const file of files) {
+                patches.set(file.filename, file.patch);
+            }
+            const sections = (diff?.match(/^diff --git /gm) ?? []).length;
+            const listed = new Set(paths);
+            parseMismatch =
+                files.length < sections ||
+                files.some((file) => !listed.has(file.filename));
+            wholeDiffRead = true;
+        } catch (error) {
+            if (is429Error(error)) throw error;
+            this.logger.warn({
+                message: `Whole-PR diff failed for spec ${spec}; falling back to per-file diffs`,
+                context: BitbucketCloudService.name,
+                error,
+                metadata: { ...logMetadata, files: paths.length },
+            });
+        }
+
+        const missing = paths.filter((path) => !patches.has(path));
+        if (
+            !missing.length ||
+            (wholeDiffRead && !fillMissingPerFile && !parseMismatch)
+        ) {
+            return patches;
+        }
+        if (wholeDiffRead && parseMismatch) {
+            this.logger.warn({
+                message: `Whole-PR diff for spec ${spec} did not key every file; reading ${missing.length} missing file(s) one by one`,
+                context: BitbucketCloudService.name,
+                metadata: { ...logMetadata, missing: missing.length },
+            });
+        }
+
+        const limit = pLimit(
+            BitbucketCloudService.PER_FILE_REQUEST_CONCURRENCY,
+        );
+        await Promise.all(
+            missing.map((path) =>
+                limit(async () => {
+                    try {
+                        const diff = await bitbucketAPI.commits
+                            .getDiff({
+                                repo_slug: `{${repo.id}}`,
+                                workspace: `{${repo.workspaceId}}`,
+                                spec,
+                                path,
+                            })
+                            .then((res) => res.data as string);
+                        patches.set(
+                            path,
+                            splitUnifiedDiff(diff)[0]?.patch ??
+                                this.convertDiff(diff ?? ''),
+                        );
+                    } catch (error) {
+                        if (is429Error(error)) throw error;
+                        // null = the read failed, as opposed to a path absent
+                        // from the map (not in the diff): callers keep it
+                        this.logger.warn({
+                            message: `Could not read the diff of ${path} for spec ${spec}`,
+                            context: BitbucketCloudService.name,
+                            error,
+                            metadata: { ...logMetadata, path },
+                        });
+                        patches.set(path, null);
+                    }
+                }),
+            ),
+        );
+
+        return patches;
     }
 
     async isWebhookActive(params: {
