@@ -196,4 +196,31 @@ export class EnrichedPullRequestsQueryDto {
             "The pull request's own state — NOT the review status. `open` is the reviewable backlog.",
     })
     prState?: 'open' | 'closed';
+
+    /**
+     * Ask for `pagination.totalItems`, `totalPages` and `distinctPrTotal` in
+     * the same response.
+     *
+     * Off by default: the totals are counted over every execution that matches
+     * the filters, which costs far more than the page and used to hold the
+     * rows back. Callers that only page read `nextCursor`; callers that show a
+     * number should prefer GET /pull-requests/executions/totals.
+     */
+    @IsOptional()
+    @IsBoolean()
+    @Type(() => String)
+    @Transform(({ value }) => {
+        if (value === undefined || value === null || value === '') {
+            return undefined;
+        }
+        const normalized = String(value).trim().toLowerCase();
+        if (normalized === 'true') return true;
+        if (normalized === 'false') return false;
+        return undefined;
+    })
+    @ApiPropertyOptional({
+        description:
+            'Include the totals (totalItems, totalPages, distinctPrTotal) in pagination. Off by default — see GET /pull-requests/executions/totals.',
+    })
+    includeTotal?: boolean;
 }

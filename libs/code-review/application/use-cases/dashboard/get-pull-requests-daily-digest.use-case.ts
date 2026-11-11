@@ -18,19 +18,33 @@ import {
 } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { resolveDashboardRepositoryScope } from './utils/team-repository-scope.util';
+import { parseRequestedFields } from './utils/requested-fields.util';
 
+// A count is `null` when the caller did not ask for it (see `fields`).
 export interface PullRequestsDailyDigest {
     // ISO start-of-day (UTC) the digest is scoped to.
     date: string;
     // Distinct PRs that had a Kody review today.
-    reviewedToday: number;
+    reviewedToday: number | null;
     // Of today's reviewed PRs, how many delivered at least one critical/high.
-    needsAttention: number;
+    needsAttention: number | null;
     // Distinct PRs whose review errored (error / partial_error) today.
-    erroredToday: number;
+    erroredToday: number | null;
     // PRs opened today, still open, with no Kody review yet.
-    awaitingReview: number;
+    awaitingReview: number | null;
 }
+
+export type PullRequestsDailyDigestField = Exclude<
+    keyof PullRequestsDailyDigest,
+    'date'
+>;
+
+export const PULL_REQUESTS_DAILY_DIGEST_FIELDS: readonly PullRequestsDailyDigestField[] =
+    ['reviewedToday', 'needsAttention', 'erroredToday', 'awaitingReview'];
+
+/** `?fields=reviewedToday` → the counts to compute. */
+export const parsePullRequestsDailyDigestFields = (raw?: string | string[]) =>
+    parseRequestedFields(raw, PULL_REQUESTS_DAILY_DIGEST_FIELDS);
 
 @Injectable()
 export class GetPullRequestsDailyDigestUseCase implements IUseCase {
@@ -55,13 +69,25 @@ export class GetPullRequestsDailyDigestUseCase implements IUseCase {
 
     async execute(query: {
         teamId?: string;
+        // The counts the caller will show. Each costs a query (and "needs
+        // attention" an aggregation over today's PR documents), so a view that
+        // shows one should not pay for four. Absent → all of them.
+        fields?: PullRequestsDailyDigestField[];
     }): Promise<PullRequestsDailyDigest> {
         const organizationId = this.request.user?.organization?.uuid;
         if (!organizationId) {
             throw new Error('No organization found in request');
         }
 
-        const { date, empty } = this.buildScope();
+        const wanted = new Set<PullRequestsDailyDigestField>(
+            query.fields?.length
+                ? query.fields
+                : PULL_REQUESTS_DAILY_DIGEST_FIELDS,
+        );
+        const wants = (field: PullRequestsDailyDigestField) =>
+            wanted.has(field);
+
+        const { date, empty } = this.buildScope(wants);
 
         try {
             const organizationAndTeamData: OrganizationAndTeamData = {
@@ -94,14 +120,20 @@ export class GetPullRequestsDailyDigestUseCase implements IUseCase {
             //    DB-side (DISTINCT PR + bool_or on error status) scoped to
             //    today. Replaces the old "scan up to N executions and dedup in
             //    memory" approach — no cap, no unbounded in-memory load.
-            const reviewedKeyRows =
-                await this.automationExecutionService.getDistinctReviewedPullRequestKeys(
-                    {
-                        organizationAndTeamData,
-                        repositoryIds,
-                        createdAtFrom: date,
-                    },
-                );
+            //    Feeds three of the four counts.
+            const needsReviewedKeys =
+                wants('reviewedToday') ||
+                wants('erroredToday') ||
+                wants('needsAttention');
+            const reviewedKeyRows = needsReviewedKeys
+                ? await this.automationExecutionService.getDistinctReviewedPullRequestKeys(
+                      {
+                          organizationAndTeamData,
+                          repositoryIds,
+                          createdAtFrom: date,
+                      },
+                  )
+                : [];
 
             const reviewedCriteria: Array<{
                 number: number;
@@ -123,7 +155,7 @@ export class GetPullRequestsDailyDigestUseCase implements IUseCase {
             // 2. Needs attention: today's reviewed PRs with a delivered
             //    critical/high suggestion.
             let needsAttention = 0;
-            if (reviewedCriteria.length) {
+            if (wants('needsAttention') && reviewedCriteria.length) {
                 const counts =
                     await this.pullRequestsService.findSuggestionCountsByNumbersAndRepositoryIds(
                         reviewedCriteria,
@@ -146,23 +178,24 @@ export class GetPullRequestsDailyDigestUseCase implements IUseCase {
             //    license, BYOK, manual/paused cadence, ignored user). Sourced
             //    from automation_execution (the table that drives the list), so
             //    a PR counts as awaiting iff it's on the screen and still unseen.
-            const awaitingKeys =
-                await this.automationExecutionService.getAwaitingReviewPullRequestKeys(
-                    {
-                        organizationAndTeamData,
-                        repositoryIds,
-                        createdAtFrom: date,
-                    },
-                );
-
-            const awaitingReview = awaitingKeys.length;
+            const awaitingKeys = wants('awaitingReview')
+                ? await this.automationExecutionService.getAwaitingReviewPullRequestKeys(
+                      {
+                          organizationAndTeamData,
+                          repositoryIds,
+                          createdAtFrom: date,
+                      },
+                  )
+                : [];
 
             return {
                 date,
-                reviewedToday,
-                needsAttention,
-                erroredToday,
-                awaitingReview,
+                reviewedToday: wants('reviewedToday') ? reviewedToday : null,
+                needsAttention: wants('needsAttention') ? needsAttention : null,
+                erroredToday: wants('erroredToday') ? erroredToday : null,
+                awaitingReview: wants('awaitingReview')
+                    ? awaitingKeys.length
+                    : null,
             };
         } catch (error) {
             this.logger.error({
@@ -175,7 +208,9 @@ export class GetPullRequestsDailyDigestUseCase implements IUseCase {
         }
     }
 
-    private buildScope(): { date: string; empty: PullRequestsDailyDigest } {
+    private buildScope(
+        wants: (field: PullRequestsDailyDigestField) => boolean,
+    ): { date: string; empty: PullRequestsDailyDigest } {
         const now = new Date();
         const todayStart = new Date(
             Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
@@ -184,12 +219,14 @@ export class GetPullRequestsDailyDigestUseCase implements IUseCase {
 
         return {
             date,
+            // No repository in scope: nothing to count, so a requested
+            // count is a real zero.
             empty: {
                 date,
-                reviewedToday: 0,
-                needsAttention: 0,
-                erroredToday: 0,
-                awaitingReview: 0,
+                reviewedToday: wants('reviewedToday') ? 0 : null,
+                needsAttention: wants('needsAttention') ? 0 : null,
+                erroredToday: wants('erroredToday') ? 0 : null,
+                awaitingReview: wants('awaitingReview') ? 0 : null,
             },
         };
     }

@@ -129,11 +129,13 @@ export class PullRequestExecutionsPaginationDto {
     @ApiProperty()
     currentPage: number;
 
-    @ApiProperty()
-    totalPages: number;
+    // Present only with `includeTotal=true` (or on an empty result): the list
+    // no longer counts by default. See GET /pull-requests/executions/totals.
+    @ApiProperty({ required: false })
+    totalPages?: number;
 
-    @ApiProperty()
-    totalItems: number;
+    @ApiProperty({ required: false })
+    totalItems?: number;
 
     // Distinct PRs matching the DB-level filters — the accurate "N pull
     // requests" for the header. Undefined on error/empty responses. Kept in the

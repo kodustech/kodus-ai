@@ -13,14 +13,18 @@ import {
     PULL_REQUEST_SSE,
     type PullRequestFilters,
 } from "./fetch";
+import { throttle } from "./throttle";
 import type {
     AwaitingPullRequestsResponse,
     PullRequestAuthorsResponse,
     PullRequestExecution,
     PullRequestExecutionsPayload,
     PullRequestExecutionsResponse,
+    PullRequestExecutionsTotalsResponse,
     PullRequestFilesResponse,
+    PullRequestsDailyDigestField,
     PullRequestsDailyDigestResponse,
+    PullRequestsFacetName,
     PullRequestsFacetsResponse,
     PullRequestSuggestionsResponse,
 } from "./types";
@@ -39,8 +43,10 @@ const normalizeExecutions = (
     return [];
 };
 
-// Distinct-PR total the backend computed for the current filters (see the use
-// case). Only present on the object-shaped payload; undefined otherwise.
+// Distinct-PR total carried on the list's first page. Only an API that
+// predates GET /pull-requests/executions/totals still sends it (the list
+// stopped counting), so this is the fallback for that case; undefined
+// otherwise.
 const pickDistinctPrTotal = (
     payload: PullRequestExecutionsPayload,
 ): number | undefined => {
@@ -52,7 +58,14 @@ const DEFAULT_PAGE_SIZE = 30;
 
 export const useInfinitePullRequestExecutions = (
     filters?: PullRequestFilters,
-    options?: { pageSize?: number; poll?: boolean },
+    options?: {
+        pageSize?: number;
+        poll?: boolean;
+        // Ask the backend for the distinct-PR total of these filters. Off by
+        // default: counting walks every matching execution, so only a view
+        // that is about to show the number should pay for it.
+        withTotal?: boolean;
+    },
 ) => {
     const pageSize = options?.pageSize ?? filters?.limit ?? DEFAULT_PAGE_SIZE;
     // Poll the first page as a fallback refresh. Callers that already mount
@@ -198,23 +211,44 @@ export const useInfinitePullRequestExecutions = (
         return Array.from(map.values());
     }, [infiniteData]);
 
-    // Accurate distinct-PR total for the active filters, read from the first
-    // page (same for every page). Undefined until the first page loads or when
-    // the backend couldn't compute it — callers fall back to the loaded count.
-    const filteredPrTotal = useMemo(
-        () => pickDistinctPrTotal(infiniteData?.pages?.[0]?.data),
-        [infiniteData],
-    );
+    // Accurate distinct-PR total for the active filters. Its own request, so
+    // the rows above never wait for the count. Undefined until it answers, when
+    // it was not asked for, or when the backend couldn't compute it — callers
+    // fall back to the loaded count.
+    const withTotal = options?.withTotal ?? false;
+    const { data: totals } = useQuery({
+        queryKey: ["pull-request-executions", "totals", baseFilters],
+        queryFn: () =>
+            axiosAuthorized.fetcher<PullRequestExecutionsTotalsResponse>(
+                PULL_REQUEST_API.GET_EXECUTIONS_TOTALS(baseFilters),
+            ),
+        enabled: withTotal && !!baseFilters.teamId,
+        retry: false,
+        staleTime: 60_000,
+        select: (response) => response.data,
+    });
+    const filteredPrTotal = useMemo(() => {
+        if (!withTotal) return undefined;
+        if (typeof totals?.distinctPrTotal === "number") {
+            return totals.distinctPrTotal;
+        }
+        return pickDistinctPrTotal(infiniteData?.pages?.[0]?.data);
+    }, [withTotal, totals, infiniteData]);
 
     return { ...query, data: infiniteData, items, filteredPrTotal };
 };
 
-export const usePullRequestsDailyDigest = (teamId?: string) => {
+export const usePullRequestsDailyDigest = (
+    teamId?: string,
+    // The counts this view renders — see usePullRequestsFacets. Omit for all.
+    fields?: readonly PullRequestsDailyDigestField[],
+) => {
+    const fieldsKey = fields?.length ? [...fields].sort().join(",") : "all";
     return useQuery({
-        queryKey: ["pull-requests-daily-digest", teamId],
+        queryKey: ["pull-requests-daily-digest", teamId, fieldsKey],
         queryFn: () =>
             axiosAuthorized.fetcher<PullRequestsDailyDigestResponse>(
-                PULL_REQUEST_API.GET_DAILY_DIGEST(teamId),
+                PULL_REQUEST_API.GET_DAILY_DIGEST(teamId, fields),
             ),
         enabled: !!teamId,
         retry: false,
@@ -226,12 +260,17 @@ export const usePullRequestsDailyDigest = (teamId?: string) => {
 export const usePullRequestsFacets = (
     teamId?: string,
     scope?: "mine" | "team",
+    // The counters this view renders. The backend runs one query per counter
+    // (two of them over the team's whole review history), so naming them keeps
+    // a view that shows two numbers from paying for five. Omit for all.
+    fields?: readonly PullRequestsFacetName[],
 ) => {
+    const fieldsKey = fields?.length ? [...fields].sort().join(",") : "all";
     return useQuery({
-        queryKey: ["pull-requests-facets", teamId, scope ?? "team"],
+        queryKey: ["pull-requests-facets", teamId, scope ?? "team", fieldsKey],
         queryFn: () =>
             axiosAuthorized.fetcher<PullRequestsFacetsResponse>(
-                PULL_REQUEST_API.GET_FACETS(teamId, scope),
+                PULL_REQUEST_API.GET_FACETS(teamId, scope, fields),
             ),
         enabled: !!teamId,
         retry: false,
@@ -361,25 +400,56 @@ export const usePullRequestFiles = (
     });
 };
 
+// How often a stream of `execution_updated` events may refresh each part of
+// the screen. A review emits one event per stage and a busy team runs many at
+// once, so refreshing on every event re-ran the list and every counter several
+// times a second. The rows are cheap and are what the reader watches change;
+// the counters scan far more and move far less.
+const LIST_REFRESH_INTERVAL_MS = 5_000;
+const COUNTERS_REFRESH_INTERVAL_MS = 60_000;
+
 export const usePullRequestExecutionSSE = (enabled = true) => {
     const queryClient = useQueryClient();
     const controllerRef = useRef<AbortController | null>(null);
 
+    const refreshers = useMemo(
+        () => ({
+            list: throttle(() => {
+                queryClient.invalidateQueries({
+                    queryKey: ["pull-request-executions"],
+                });
+            }, LIST_REFRESH_INTERVAL_MS),
+            // Digest and facets power the cards. The suggestion verification
+            // pass emits `execution_updated` after persisting statuses (see
+            // ImplementationVerificationProcessor), so the first event still
+            // refreshes them right away; a burst then costs one more refresh
+            // at the end of the interval, not one per event.
+            counters: throttle(() => {
+                queryClient.invalidateQueries({
+                    queryKey: ["pull-requests-daily-digest"],
+                });
+                queryClient.invalidateQueries({
+                    queryKey: ["pull-requests-facets"],
+                });
+            }, COUNTERS_REFRESH_INTERVAL_MS),
+        }),
+        [queryClient],
+    );
+
     const invalidate = useCallback(() => {
-        queryClient.invalidateQueries({
-            queryKey: ["pull-request-executions"],
-        });
-        queryClient.invalidateQueries({
-            queryKey: ["pull-requests-daily-digest"],
-        });
-        // Facets power the Needs attention / Awaiting cards. The suggestion
-        // verification pass emits `execution_updated` after persisting statuses
-        // (see ImplementationVerificationProcessor), so invalidating here makes
-        // the cards refetch at the exact moment the counts change.
-        queryClient.invalidateQueries({
-            queryKey: ["pull-requests-facets"],
-        });
-    }, [queryClient]);
+        refreshers.list();
+        refreshers.counters();
+    }, [refreshers]);
+
+    // A refresh still waiting for its interval has nothing left to refresh
+    // once the screen is gone.
+    useEffect(
+        () => () => {
+            refreshers.list.cancel();
+            refreshers.counters.cancel();
+        },
+        [refreshers],
+    );
 
     useEffect(() => {
         if (!enabled) return;

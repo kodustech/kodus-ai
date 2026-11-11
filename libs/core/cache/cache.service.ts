@@ -120,27 +120,4 @@ export class CacheService {
             return [];
         }
     }
-
-    async deleteByKeyPattern(pattern: string): Promise<void> {
-        try {
-            this.logger.log({
-                message:
-                    'Invalidating cache for pull requests executions endpoint',
-                context: CacheService.name,
-                metadata: { pattern },
-            });
-
-            await this.cacheManager.clear();
-        } catch (error) {
-            this.logger.error({
-                message: 'Error invalidating cache by pattern',
-                context: CacheService.name,
-                serviceName: 'CacheService',
-                error: error,
-                metadata: {
-                    pattern: pattern,
-                },
-            });
-        }
-    }
 }

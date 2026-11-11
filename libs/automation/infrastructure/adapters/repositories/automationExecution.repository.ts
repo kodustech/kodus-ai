@@ -8,6 +8,7 @@ import {
     LessThan,
     Not,
     Repository,
+    SelectQueryBuilder,
 } from 'typeorm';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -23,6 +24,7 @@ import {
 import { createNestedConditions } from '@libs/core/infrastructure/repositories/model/filters';
 
 import { AutomationExecutionModel } from './schemas/automationExecution.model';
+import { TeamAutomationModel } from './schemas/teamAutomation.model';
 
 @Injectable()
 export class AutomationExecutionRepository implements IAutomationExecutionRepository {
@@ -268,6 +270,9 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
         take?: number;
         order?: 'ASC' | 'DESC';
         includeTotal?: boolean;
+        // Run only the count over the filters and skip the page query, for
+        // callers that read the totals on their own. Implies `includeTotal`.
+        countOnly?: boolean;
     }): Promise<{
         data: AutomationExecutionEntity[];
         total: number;
@@ -294,11 +299,21 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
             cursor,
             take = 30,
             order = 'DESC',
-            includeTotal = true,
+            countOnly = false,
         } = params;
+        const includeTotal = countOnly || (params.includeTotal ?? true);
 
         try {
             const { organizationId, teamId } = organizationAndTeamData;
+
+            const teamAutomationIds =
+                await this.findPullRequestTeamAutomationIds(
+                    organizationId,
+                    teamId,
+                );
+            if (!teamAutomationIds.length) {
+                return { data: [], total: 0, distinctPrTotal: 0 };
+            }
 
             const queryBuilder =
                 this.automationExecutionRepository.createQueryBuilder(
@@ -351,6 +366,7 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                 .andWhere(
                     'EXISTS (SELECT 1 FROM "code_review_execution" "cre" WHERE "cre"."automation_execution_id" = "automation_execution"."uuid")',
                 );
+            this.scopeToTeamAutomations(queryBuilder, teamAutomationIds);
 
             if (repositoryIds?.length) {
                 if (repositoryIds.length === 1) {
@@ -478,6 +494,10 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                 }
             }
 
+            if (countOnly) {
+                return { data: [], total, distinctPrTotal };
+            }
+
             const executions = await queryBuilder
                 .orderBy('automation_execution.createdAt', order)
                 // Deterministic tiebreaker in the SAME direction as createdAt so
@@ -513,6 +533,10 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                 error,
                 metadata: { params },
             });
+            // A count that failed is unknown, not zero.
+            if (countOnly) {
+                throw error;
+            }
             return { data: [], total: 0, distinctPrTotal: 0 };
         }
     }
@@ -529,6 +553,9 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryIds?: string[];
         createdAtFrom?: Date | string;
+        // Rethrow a failed query instead of answering an empty list, for
+        // callers that must tell "none" apart from "could not ask".
+        failOnError?: boolean;
     }): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>> {
         const { organizationAndTeamData, repositoryIds, createdAtFrom } =
             params;
@@ -539,6 +566,15 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
         }
 
         try {
+            const teamAutomationIds =
+                await this.findPullRequestTeamAutomationIds(
+                    organizationId,
+                    teamId,
+                );
+            if (!teamAutomationIds.length) {
+                return [];
+            }
+
             const queryBuilder = this.automationExecutionRepository
                 .createQueryBuilder('automation_execution')
                 .select('automation_execution.repositoryId', 'repositoryId')
@@ -566,6 +602,7 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                 .having(
                     "bool_or(automation_execution.status <> 'skipped') = false",
                 );
+            this.scopeToTeamAutomations(queryBuilder, teamAutomationIds);
 
             if (repositoryIds?.length) {
                 queryBuilder.andWhere(
@@ -593,6 +630,9 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                 error,
                 metadata: { params },
             });
+            if (params.failOnError) {
+                throw error;
+            }
             return [];
         }
     }
@@ -605,6 +645,8 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryIds?: string[];
         createdAtFrom?: Date | string;
+        // See getAwaitingReviewPullRequestKeys.
+        failOnError?: boolean;
     }): Promise<
         Array<{
             repositoryId: string;
@@ -621,6 +663,15 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
         }
 
         try {
+            const teamAutomationIds =
+                await this.findPullRequestTeamAutomationIds(
+                    organizationId,
+                    teamId,
+                );
+            if (!teamAutomationIds.length) {
+                return [];
+            }
+
             const queryBuilder = this.automationExecutionRepository
                 .createQueryBuilder('automation_execution')
                 .select('automation_execution.repositoryId', 'repositoryId')
@@ -649,6 +700,7 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                 )
                 .groupBy('automation_execution.repositoryId')
                 .addGroupBy('automation_execution.pullRequestNumber');
+            this.scopeToTeamAutomations(queryBuilder, teamAutomationIds);
 
             if (repositoryIds?.length) {
                 queryBuilder.andWhere(
@@ -682,6 +734,9 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                 error,
                 metadata: { params },
             });
+            if (params.failOnError) {
+                throw error;
+            }
             return [];
         }
     }
@@ -1018,6 +1073,70 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
             });
             return [];
         }
+    }
+
+    /**
+     * The team's automations that own at least one pull request execution —
+     * in practice the single code review automation.
+     *
+     * The pull request queries used to reach the team only through joins
+     * (execution → team automation → team → organization). The planner cannot
+     * turn a join into a constant, so it never knew which executions belong to
+     * the team until it had read them: a page ordered by date walked the
+     * global `createdAt` index and threw away every other team's rows (a team
+     * with old reviews scanned most of the table for 30 rows), and any filter
+     * made it read the team's whole history and sort it.
+     *
+     * Resolving the ids first lets those queries filter
+     * `automation_execution.team_automation_id` directly, which is what the
+     * team-leading indexes need. The organization is checked here, so a team
+     * id from another organization still resolves to nothing.
+     */
+    private async findPullRequestTeamAutomationIds(
+        organizationId: string | undefined,
+        teamId: string | undefined,
+    ): Promise<string[]> {
+        if (!organizationId || !teamId) {
+            return [];
+        }
+
+        const rows = await this.automationExecutionRepository.manager
+            .createQueryBuilder(TeamAutomationModel, 'teamAutomation')
+            .select('teamAutomation.uuid', 'uuid')
+            .innerJoin('teamAutomation.team', 'team')
+            .innerJoin('team.organization', 'organization')
+            .where('team.uuid = :teamId', { teamId })
+            .andWhere('organization.uuid = :organizationId', { organizationId })
+            .andWhere(
+                'EXISTS (SELECT 1 FROM "automation_execution" "pr_execution" WHERE "pr_execution"."team_automation_id" = "teamAutomation"."uuid" AND "pr_execution"."pullRequestNumber" IS NOT NULL AND "pr_execution"."repositoryId" IS NOT NULL)',
+            )
+            .getRawMany<{ uuid: string }>();
+
+        return rows.map((row) => row.uuid);
+    }
+
+    /**
+     * Equality for the usual single automation: only then are the rows of
+     * `(team_automation_id, createdAt, uuid)` already in the order the list
+     * wants, so a page stops after reading a page. With several ids the
+     * planner sorts, as it always did.
+     */
+    private scopeToTeamAutomations(
+        queryBuilder: SelectQueryBuilder<AutomationExecutionModel>,
+        teamAutomationIds: string[],
+    ): void {
+        if (teamAutomationIds.length === 1) {
+            queryBuilder.andWhere(
+                '"automation_execution"."team_automation_id" = :teamAutomationId',
+                { teamAutomationId: teamAutomationIds[0] },
+            );
+            return;
+        }
+
+        queryBuilder.andWhere(
+            '"automation_execution"."team_automation_id" IN (:...teamAutomationIds)',
+            { teamAutomationIds },
+        );
     }
 
     private getFilterConditions(

@@ -205,6 +205,13 @@ export class PullRequestsModel extends CoreDocument {
     public isDraft: boolean;
 }
 
+/**
+ * The index that reaches an organization's open pull requests. Named here so
+ * queries that hint it and the definition below cannot drift apart.
+ */
+export const OPEN_PULL_REQUESTS_INDEX =
+    'idx_org_status_merged_openedAt_for_awaiting';
+
 export const PullRequestsSchema =
     SchemaFactory.createForClass(PullRequestsModel);
 
@@ -295,5 +302,5 @@ PullRequestsSchema.index(
 // Create with `{ background: true }` on large prod collections.
 PullRequestsSchema.index(
     { organizationId: 1, status: 1, merged: 1, openedAt: 1 },
-    { name: 'idx_org_status_merged_openedAt_for_awaiting' },
+    { name: OPEN_PULL_REQUESTS_INDEX },
 );

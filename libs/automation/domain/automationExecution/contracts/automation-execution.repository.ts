@@ -38,6 +38,7 @@ export interface IAutomationExecutionRepository {
         take?: number;
         order?: 'ASC' | 'DESC';
         includeTotal?: boolean;
+        countOnly?: boolean;
     }): Promise<{
         data: AutomationExecutionEntity[];
         total: number;
@@ -48,6 +49,7 @@ export interface IAutomationExecutionRepository {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryIds?: string[];
         createdAtFrom?: Date | string;
+        failOnError?: boolean;
     }): Promise<
         Array<{
             repositoryId: string;
@@ -62,6 +64,7 @@ export interface IAutomationExecutionRepository {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryIds?: string[];
         createdAtFrom?: Date | string;
+        failOnError?: boolean;
     }): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>>;
     findCliReviewExecutionsByOrganization(params: {
         organizationAndTeamData: OrganizationAndTeamData;

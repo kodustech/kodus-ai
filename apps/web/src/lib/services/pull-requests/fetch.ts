@@ -1,7 +1,12 @@
 import { authorizedFetch } from "@services/fetch";
 import { pathToApiUrl } from "src/core/utils/helpers";
 
-import type { PullRequestExecutionsPayload } from "./types";
+import type {
+    PullRequestExecutionsPayload,
+    PullRequestExecutionsTotals,
+    PullRequestsDailyDigestField,
+    PullRequestsFacetName,
+} from "./types";
 
 export interface PullRequestFilters {
     teamId?: string;
@@ -95,20 +100,59 @@ export const PULL_REQUEST_API = {
             `/pull-requests/executions${queryString ? `?${queryString}` : ""}`,
         );
     },
-    GET_DAILY_DIGEST: (teamId?: string) => {
+    // Totals for the list's DB-level filters. The list itself no longer counts
+    // (counting walks every matching execution and used to hold the rows back),
+    // so a view that shows a number asks for it here. Paging and the
+    // suggestion/author filters do not apply to a count and are not sent.
+    GET_EXECUTIONS_TOTALS: (filters?: PullRequestFilters) => {
+        const params = new URLSearchParams();
+
+        if (filters?.teamId) params.append("teamId", filters.teamId);
+        if (filters?.repositoryId)
+            params.append("repositoryId", filters.repositoryId);
+        if (filters?.repositoryName)
+            params.append("repositoryName", filters.repositoryName);
+        if (filters?.pullRequestTitle)
+            params.append("pullRequestTitle", filters.pullRequestTitle);
+        if (filters?.pullRequestNumber)
+            params.append("pullRequestNumber", filters.pullRequestNumber);
+        if (filters?.status) params.append("status", filters.status);
+        if (filters?.createdAtFrom)
+            params.append("createdAtFrom", filters.createdAtFrom);
+        if (filters?.createdAtTo)
+            params.append("createdAtTo", filters.createdAtTo);
+
+        const queryString = params.toString();
+        return pathToApiUrl(
+            `/pull-requests/executions/totals${queryString ? `?${queryString}` : ""}`,
+        );
+    },
+    GET_DAILY_DIGEST: (
+        teamId?: string,
+        // The counts the view shows; the backend skips the rest.
+        fields?: readonly PullRequestsDailyDigestField[],
+    ) => {
         const params = new URLSearchParams();
         if (teamId) params.append("teamId", teamId);
+        if (fields?.length) params.append("fields", fields.join(","));
         const queryString = params.toString();
         return pathToApiUrl(
             `/pull-requests/executions/summary${queryString ? `?${queryString}` : ""}`,
         );
     },
-    GET_FACETS: (teamId?: string, scope?: "mine" | "team") => {
+    GET_FACETS: (
+        teamId?: string,
+        scope?: "mine" | "team",
+        // The counters the view shows. Each is a query of its own on the
+        // backend, so asking for all five to show two wastes three scans.
+        fields?: readonly PullRequestsFacetName[],
+    ) => {
         const params = new URLSearchParams();
         if (teamId) params.append("teamId", teamId);
         // Only send the non-default scope so the "team" facet keeps a stable
         // cache key / URL.
         if (scope === "mine") params.append("scope", "mine");
+        if (fields?.length) params.append("fields", fields.join(","));
         const queryString = params.toString();
         return pathToApiUrl(
             `/pull-requests/executions/facets${queryString ? `?${queryString}` : ""}`,
@@ -166,11 +210,11 @@ export const PULL_REQUEST_API = {
 /**
  * How many distinct pull requests Kody reviewed for a team since a date.
  *
- * Server-side counterpart of the Reviews list: it asks for a single row and
- * reads `pagination.distinctPrTotal`, the total the backend computes for the
- * filters. Used by gated screens that want to say what the org already has
- * instead of showing invented sample numbers — every viewer who sees this
- * count can already read the same PRs on /pull-requests, so it leaks nothing.
+ * Server-side counterpart of the Reviews list: it reads the distinct-PR total
+ * the backend computes for the filters. Used by gated screens that want to say
+ * what the org already has instead of showing invented sample numbers — every
+ * viewer who sees this count can already read the same PRs on /pull-requests,
+ * so it leaks nothing.
  *
  * Returns `null` when the count can't be established (no team, request
  * failed, older payload shape without a total), so callers can fall back to
@@ -193,24 +237,38 @@ export const getReviewedPullRequestCount = async ({
         ? new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000)
         : undefined;
 
+    const filters: PullRequestFilters = {
+        teamId,
+        createdAtFrom: since?.toISOString(),
+        status,
+    };
+
+    try {
+        const totals = await authorizedFetch<PullRequestExecutionsTotals>(
+            PULL_REQUEST_API.GET_EXECUTIONS_TOTALS(filters),
+            { cache: "no-store" },
+        );
+        if (typeof totals?.distinctPrTotal === "number") {
+            return totals.distinctPrTotal;
+        }
+    } catch {
+        // An API that predates the totals endpoint answers 404 here. It still
+        // counts on the list, which is what the fallback below reads.
+    }
+
     try {
         const payload = await authorizedFetch<PullRequestExecutionsPayload>(
-            PULL_REQUEST_API.GET_EXECUTIONS({
-                teamId,
-                limit: 1,
-                createdAtFrom: since?.toISOString(),
-                status,
-            }),
+            PULL_REQUEST_API.GET_EXECUTIONS({ ...filters, limit: 1 }),
             { cache: "no-store" },
         );
 
         if (!payload || Array.isArray(payload)) return null;
 
-        // `distinctPrTotal` is the accurate count, but the backend omits it
-        // when there is nothing to count — a workspace with no reviews comes
-        // back as `{ data: [], pagination: { totalItems: 0 } }`. Falling back
-        // to `totalItems` is what tells "none yet" apart from "couldn't ask",
-        // and those two lead to different screens.
+        // An empty workspace comes back as
+        // `{ data: [], pagination: { totalItems: 0 } }` with no
+        // `distinctPrTotal`. Falling back to `totalItems` is what tells "none
+        // yet" apart from "couldn't ask", and those two lead to different
+        // screens.
         const { distinctPrTotal, totalItems } = payload.pagination ?? {};
         if (typeof distinctPrTotal === "number") return distinctPrTotal;
         if (typeof totalItems === "number") return totalItems;

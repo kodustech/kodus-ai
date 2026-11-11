@@ -44,6 +44,7 @@ import { AuthorizationService } from '@libs/identity/infrastructure/adapters/ser
 import {
     PaginatedEnrichedPullRequestsResponse,
     PaginationMetadata,
+    PullRequestExecutionsTotals,
 } from '@libs/code-review/dtos/dashboard/paginated-enriched-pull-requests.dto';
 import { EnrichedPullRequestsQueryDto } from '@libs/code-review/dtos/dashboard/enriched-pull-requests-query.dto';
 import { EnrichedPullRequestResponse } from '@libs/code-review/dtos/dashboard/enriched-pull-request-response.dto';
@@ -69,7 +70,9 @@ import {
  */
 type ExecutionCursor = { createdAt: Date | string; uuid: string };
 
-const encodeExecutionCursor = (cursor?: ExecutionCursor): string | undefined => {
+const encodeExecutionCursor = (
+    cursor?: ExecutionCursor,
+): string | undefined => {
     if (!cursor?.uuid || !cursor?.createdAt) {
         return undefined;
     }
@@ -79,9 +82,9 @@ const encodeExecutionCursor = (cursor?: ExecutionCursor): string | undefined => 
             ? cursor.createdAt.toISOString()
             : new Date(cursor.createdAt).toISOString();
 
-    return Buffer.from(JSON.stringify({ createdAt, uuid: cursor.uuid })).toString(
-        'base64url',
-    );
+    return Buffer.from(
+        JSON.stringify({ createdAt, uuid: cursor.uuid }),
+    ).toString('base64url');
 };
 
 const decodeExecutionCursor = (raw?: string): ExecutionCursor | undefined => {
@@ -148,7 +151,6 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             page = 1,
             cursor,
             hasSentSuggestions,
-            pullRequestTitle,
             pullRequestNumber,
             teamId,
             authorPolicy = 'all',
@@ -160,6 +162,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             needsAttention,
             author,
             prState,
+            includeTotal: wantTotal = false,
         } = query;
 
         if (!this.request.user?.organization?.uuid) {
@@ -186,54 +189,17 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         };
 
         try {
-            const assignedRepositoryIds =
-                await this.authorizationService.getRepositoryScope({
-                    user: this.request.user,
-                    action: Action.Read,
-                    resource: ResourceType.PullRequests,
-                });
-
-            if (
-                assignedRepositoryIds !== null &&
-                assignedRepositoryIds.length === 0
-            ) {
+            // Shared with `countTotals`, so the list and its totals can never
+            // be resolved against different repositories or title matches.
+            const filters = await this.resolveExecutionFilters(
+                query,
+                organizationAndTeamData,
+            );
+            if (!filters) {
                 return this.buildEmptyResponse(limit, page);
             }
-
-            let requestedRepositoryIds: string[] | undefined;
-            let repositoryNameFilter = repositoryName;
-
-            if (repositoryId) {
-                requestedRepositoryIds = [String(repositoryId)];
-                repositoryNameFilter = undefined;
-            } else if (repositoryName) {
-                const resolvedRepositoryIds =
-                    await this.resolveRepositoryIdsByName({
-                        organizationAndTeamData,
-                        repositoryName,
-                    });
-
-                if (resolvedRepositoryIds?.length) {
-                    requestedRepositoryIds = resolvedRepositoryIds;
-                    repositoryNameFilter = undefined;
-                }
-            }
-
-            let allowedRepositoryIds = requestedRepositoryIds;
-
-            if (assignedRepositoryIds !== null) {
-                if (allowedRepositoryIds?.length) {
-                    allowedRepositoryIds = allowedRepositoryIds.filter((id) =>
-                        assignedRepositoryIds.includes(id),
-                    );
-
-                    if (allowedRepositoryIds.length === 0) {
-                        return this.buildEmptyResponse(limit, page);
-                    }
-                } else {
-                    allowedRepositoryIds = assignedRepositoryIds;
-                }
-            }
+            const { allowedRepositoryIds, repositoryNameFilter, prFilters } =
+                filters;
 
             const enrichedPullRequests: EnrichedPullRequestResponse[] = [];
             const resumeCursor = decodeExecutionCursor(cursor);
@@ -268,35 +234,6 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 authorPolicy,
                 organizationAndTeamData,
             );
-
-            // If filtering by title, fetch PR numbers from MongoDB first
-            let prFilters:
-                Array<{ number: number; repositoryId: string }> | undefined;
-            if (pullRequestTitle) {
-                const prNumbers =
-                    await this.pullRequestsService.findPRNumbersByTitleAndOrganization(
-                        pullRequestTitle,
-                        organizationId,
-                        allowedRepositoryIds,
-                    );
-
-                if (prNumbers.length === 0) {
-                    // No PRs match the title filter
-                    return {
-                        data: [],
-                        pagination: {
-                            currentPage: page,
-                            totalPages: 0,
-                            totalItems: 0,
-                            itemsPerPage: limit,
-                            hasNextPage: false,
-                            hasPreviousPage: false,
-                        },
-                    };
-                }
-
-                prFilters = prNumbers;
-            }
 
             // A page is filled by scanning executions and discarding the ones
             // that fail a post-query filter, so a selective filter makes the
@@ -341,11 +278,14 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                         cursor: lastConsumed,
                         take: limit,
                         order: 'DESC',
-                        includeTotal: totalExecutions === 0,
+                        // Counting walks every execution that matches the
+                        // filters, so it is opt-in: the page itself never
+                        // needs it (`hasMoreExecutions` comes from the scan).
+                        includeTotal: wantTotal && totalExecutions === 0,
                     },
                 );
 
-                if (totalExecutions === 0) {
+                if (wantTotal && totalExecutions === 0) {
                     totalExecutions = total;
                     distinctPrTotal = batchDistinctPrTotal ?? 0;
                 }
@@ -773,6 +713,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 } else if (!batchWasFull) {
                     hasMoreExecutions = false;
                 } else if (
+                    wantTotal &&
                     !resumeCursor &&
                     initialSkip + accumulatedExecutions >= totalExecutions
                 ) {
@@ -782,33 +723,34 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 }
             }
 
-            if (totalExecutions === 0) {
+            // Nothing matched at all. Without a count this is known only when
+            // the scan started at the very beginning and read no row; a later
+            // page that comes back empty says nothing about the total.
+            const nothingMatched = wantTotal
+                ? totalExecutions === 0
+                : accumulatedExecutions === 0 &&
+                  !resumeCursor &&
+                  initialSkip === 0;
+            if (nothingMatched) {
                 this.logger.warn({
                     message: 'No automation executions with PR data found',
                     context: GetEnrichedPullRequestsUseCase.name,
                     metadata: { organizationId },
                 });
-                return {
-                    data: [],
-                    pagination: {
-                        currentPage: page,
-                        totalPages: 0,
-                        totalItems: 0,
-                        itemsPerPage: limit,
-                        hasNextPage: false,
-                        hasPreviousPage: false,
-                    },
-                };
+                return this.buildEmptyResponse(limit, page);
             }
 
             const paginatedData = enrichedPullRequests.slice(0, limit);
 
-            const totalPages = Math.ceil(totalExecutions / limit);
             const paginationMetadata: PaginationMetadata = {
                 currentPage: page,
-                totalPages,
-                totalItems: totalExecutions,
-                distinctPrTotal,
+                ...(wantTotal
+                    ? {
+                          totalPages: Math.ceil(totalExecutions / limit),
+                          totalItems: totalExecutions,
+                          distinctPrTotal,
+                      }
+                    : {}),
                 itemsPerPage: limit,
                 // Whether the SCAN has more to give — not whether the page
                 // number is below a total counted in a different unit.
@@ -828,7 +770,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 context: GetEnrichedPullRequestsUseCase.name,
                 metadata: {
                     organizationId,
-                    totalExecutions,
+                    totalExecutions: wantTotal ? totalExecutions : undefined,
                     returnedItems: paginatedData.length,
                     page,
                     limit,
@@ -848,6 +790,175 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             });
             throw error;
         }
+    }
+
+    /**
+     * Totals for the same filters the list takes: executions that match, and
+     * the distinct pull requests behind them.
+     *
+     * Counting walks every matching execution, which for a team with a long
+     * history is the slowest thing the Reviews screen asks for. It used to ride
+     * on the first page of the list and hold the rows back; it is its own call
+     * now, so only a view that shows the number pays for it.
+     *
+     * Like `pagination.distinctPrTotal` before it, this covers the DB-level
+     * filters only (status, dates, repository, PR number, title). The
+     * suggestion/author filters run after the query and are not reflected.
+     */
+    async countTotals(
+        query: EnrichedPullRequestsQueryDto,
+    ): Promise<PullRequestExecutionsTotals> {
+        const {
+            repositoryId,
+            repositoryName,
+            teamId,
+            pullRequestNumber,
+            status,
+            createdAtFrom,
+            createdAtTo,
+        } = query;
+
+        if (!this.request.user?.organization?.uuid) {
+            throw new Error('No organization found in request');
+        }
+
+        if (repositoryId) {
+            await this.authorizationService.ensure({
+                user: this.request.user,
+                action: Action.Read,
+                resource: ResourceType.PullRequests,
+                repoIds: [repositoryId],
+            });
+        }
+
+        const organizationId = this.request.user.organization.uuid;
+        const organizationAndTeamData: OrganizationAndTeamData = {
+            organizationId,
+            teamId,
+        };
+
+        try {
+            const filters = await this.resolveExecutionFilters(
+                query,
+                organizationAndTeamData,
+            );
+            if (!filters) {
+                return { totalItems: 0, distinctPrTotal: 0 };
+            }
+
+            const { total, distinctPrTotal } =
+                await this.automationExecutionService.findPullRequestExecutionsByOrganizationAndTeam(
+                    {
+                        organizationAndTeamData,
+                        repositoryIds: filters.allowedRepositoryIds,
+                        repositoryName: filters.repositoryNameFilter,
+                        pullRequestNumber,
+                        prFilters: filters.prFilters,
+                        status,
+                        createdAtFrom,
+                        createdAtTo,
+                        countOnly: true,
+                    },
+                );
+
+            return { totalItems: total, distinctPrTotal };
+        } catch (error) {
+            this.logger.error({
+                message: 'Error counting pull request executions',
+                context: GetEnrichedPullRequestsUseCase.name,
+                error,
+                metadata: { repositoryId, repositoryName, organizationId },
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Which executions a request may see and is asking for: the caller's
+     * repository scope, the repository filter resolved to ids, and a title
+     * search resolved to PR keys. `null` means the filters cannot match
+     * anything, so the caller answers empty without querying.
+     */
+    private async resolveExecutionFilters(
+        query: EnrichedPullRequestsQueryDto,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<{
+        allowedRepositoryIds?: string[];
+        repositoryNameFilter?: string;
+        prFilters?: Array<{ number: number; repositoryId: string }>;
+    } | null> {
+        const { repositoryId, repositoryName, pullRequestTitle } = query;
+
+        const assignedRepositoryIds =
+            await this.authorizationService.getRepositoryScope({
+                user: this.request.user,
+                action: Action.Read,
+                resource: ResourceType.PullRequests,
+            });
+
+        if (
+            assignedRepositoryIds !== null &&
+            assignedRepositoryIds.length === 0
+        ) {
+            return null;
+        }
+
+        let requestedRepositoryIds: string[] | undefined;
+        let repositoryNameFilter = repositoryName;
+
+        if (repositoryId) {
+            requestedRepositoryIds = [String(repositoryId)];
+            repositoryNameFilter = undefined;
+        } else if (repositoryName) {
+            const resolvedRepositoryIds = await this.resolveRepositoryIdsByName(
+                {
+                    organizationAndTeamData,
+                    repositoryName,
+                },
+            );
+
+            if (resolvedRepositoryIds?.length) {
+                requestedRepositoryIds = resolvedRepositoryIds;
+                repositoryNameFilter = undefined;
+            }
+        }
+
+        let allowedRepositoryIds = requestedRepositoryIds;
+
+        if (assignedRepositoryIds !== null) {
+            if (allowedRepositoryIds?.length) {
+                allowedRepositoryIds = allowedRepositoryIds.filter((id) =>
+                    assignedRepositoryIds.includes(id),
+                );
+
+                if (allowedRepositoryIds.length === 0) {
+                    return null;
+                }
+            } else {
+                allowedRepositoryIds = assignedRepositoryIds;
+            }
+        }
+
+        // A title search is answered by MongoDB first: the executions table
+        // has no title to filter on.
+        let prFilters:
+            Array<{ number: number; repositoryId: string }> | undefined;
+        if (pullRequestTitle) {
+            const prNumbers =
+                await this.pullRequestsService.findPRNumbersByTitleAndOrganization(
+                    pullRequestTitle,
+                    organizationAndTeamData.organizationId,
+                    allowedRepositoryIds,
+                );
+
+            if (prNumbers.length === 0) {
+                return null;
+            }
+
+            prFilters = prNumbers;
+        }
+
+        return { allowedRepositoryIds, repositoryNameFilter, prFilters };
     }
 
     private buildEmptyResponse(
@@ -1090,7 +1201,12 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         pullRequest: IPullRequests,
     ): SuggestionCountsBySeverity {
         const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
-        const unresolvedBySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
+        const unresolvedBySeverity = {
+            critical: 0,
+            high: 0,
+            medium: 0,
+            low: 0,
+        };
         const categorySet = new Set<string>();
         let sent = 0;
         let filtered = 0;
@@ -1127,8 +1243,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 categories: Array.isArray(precomputed.categories)
                     ? precomputed.categories
                     : [],
-                firstSentSuggestion:
-                    precomputed.firstSentSuggestion ?? null,
+                firstSentSuggestion: precomputed.firstSentSuggestion ?? null,
             };
         }
 

@@ -4,7 +4,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import * as crypto from 'crypto';
 import { Model } from 'mongoose';
 import mongoose from 'mongoose';
-import { PullRequestsModel } from './schemas/pullRequests.model';
+import {
+    OPEN_PULL_REQUESTS_INDEX,
+    PullRequestsModel,
+} from './schemas/pullRequests.model';
 
 import {
     mapSimpleModelsToEntities,
@@ -41,6 +44,17 @@ import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mong
 // aggregation itself, instead of fetching a whole PR's suggestion history and
 // discarding most of it in JS.
 const PER_FILE_HISTORY_LIMIT = 5;
+
+/**
+ * mongod's answer to a `hint` naming an index the collection does not have
+ * ("hint provided does not correspond to an existing index", code 2).
+ */
+function isUnknownIndexHint(error: unknown): boolean {
+    const message = (error as { message?: string } | null)?.message ?? '';
+    return /hint provided does not correspond to an existing index/i.test(
+        message,
+    );
+}
 
 @Injectable()
 export class PullRequestsRepository implements IPullRequestsRepository {
@@ -992,10 +1006,37 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             filter['files.suggestions.deliveryStatus'] = DeliveryStatus.SENT;
         }
 
-        return this.pullRequestsModel
-            .countDocuments(filter)
-            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
-            .exec();
+        if (!opts.openOnly) {
+            return this.pullRequestsModel
+                .countDocuments(filter)
+                .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+                .exec();
+        }
+
+        // Open PRs are a small slice of an organization's history, and the
+        // open-PR index reaches exactly that slice. Left to choose, the planner
+        // also tries the delivered-suggestion index, which leads to every PR
+        // that ever delivered a suggestion; on a large organization that trial
+        // alone outran the time limit ("error while multiplanner was selecting
+        // best plan"), so the count failed before it started.
+        try {
+            return await this.pullRequestsModel
+                .countDocuments(filter)
+                .hint(OPEN_PULL_REQUESTS_INDEX)
+                .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+                .exec();
+        } catch (error) {
+            // A deployment whose index build has not finished (or failed) has
+            // no such index to hint. Same count, planner's choice.
+            if (!isUnknownIndexHint(error)) {
+                throw error;
+            }
+
+            return this.pullRequestsModel
+                .countDocuments(filter)
+                .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+                .exec();
+        }
     }
 
     async findFileWithSuggestions(

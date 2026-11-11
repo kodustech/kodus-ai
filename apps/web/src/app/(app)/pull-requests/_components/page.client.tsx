@@ -18,6 +18,8 @@ import {
     usePullRequestsDailyDigest,
     usePullRequestsFacets,
     type PullRequestExecution,
+    type PullRequestsDailyDigestField,
+    type PullRequestsFacetName,
 } from "@services/pull-requests";
 import { SearchIcon, UserIcon, XIcon } from "lucide-react";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
@@ -45,6 +47,26 @@ const STATUSES = [
     "in_progress",
     "pending",
 ] as const;
+// The counters each view renders. The backend runs one query per counter, so
+// the screen names exactly these instead of receiving all of them.
+const TEAM_FACETS = ["awaiting", "needsAttention"] as const;
+const MINE_FACETS = ["needsAttention", "mine"] as const;
+const DIGEST_FIELDS: readonly PullRequestsDailyDigestField[] = [
+    "reviewedToday",
+];
+
+type PulseCard = {
+    key: string;
+    label: string;
+    sub: string;
+    hint: string;
+    // null = not known (still loading, or the count failed). Never shown as 0.
+    value: number | null;
+    tone: string;
+    active: boolean;
+    onClick: () => void;
+};
+
 // Mirrors the automation_execution status values verbatim.
 const STATUS_LABEL: Record<(typeof STATUSES)[number], string> = {
     success: "Success",
@@ -180,6 +202,29 @@ export function PullRequestsPageClient() {
         setSearchQuery(asNumber);
     };
 
+    // "Awaiting review" is a distinct dataset (open PRs with no review), so it's
+    // a toggle in the filter bar rather than a filter value. Its count comes
+    // from the facets endpoint.
+    const isAwaiting = view === "awaiting";
+    // Filters applied post-query (Mongo side) — while any is active, the
+    // backend's distinct-PR total (DB-level only) is an upper bound, not exact.
+    // The "mine" view pins author=me, which is post-query too.
+    const hasMongoFilters =
+        suggestionsFilter !== "all" ||
+        needsAttention === "true" ||
+        !!effectiveAuthor ||
+        // The PR-state filter runs in the same post-query loop, so it makes
+        // the total an upper bound too — without this the header would print
+        // a DB-level count next to a shorter list.
+        !!prState ||
+        authorPolicy !== "all";
+    // The header only prints the backend's total when it is exact (see
+    // `canUseExactFilteredTotal` below), so that is the only time it is asked
+    // for: counting is the slowest thing this screen can request. No Mongo-side
+    // filter implies `authorPolicy === "all"`, which is itself a chip — so the
+    // "a filter is active" half of that rule already holds here.
+    const wantsExactFilteredTotal = !isAwaiting && !hasMongoFilters;
+
     const {
         items: pullRequests,
         isLoading,
@@ -211,7 +256,7 @@ export function PullRequestsPageClient() {
         // This view mounts usePullRequestExecutionSSE (above), which invalidates
         // the query on every execution_updated event — so skip the redundant
         // 30s first-page poll.
-        { pageSize: 30, poll: false },
+        { pageSize: 30, poll: false, withTotal: wantsExactFilteredTotal },
     );
 
     const groupedPullRequests = useMemo(() => {
@@ -264,17 +309,6 @@ export function PullRequestsPageClient() {
         setCreatedAtFrom(null);
         setCreatedAtTo(null);
     };
-
-    // "Awaiting review" is a distinct dataset (open PRs with no review), so it's
-    // a toggle in the filter bar rather than a filter value. Its count comes
-    // from the facets endpoint.
-    const isAwaiting = view === "awaiting";
-    // Facets follow the view: in "mine" the actionable count is scoped to my PRs
-    // so the card can't overcount team work under a "mine" heading.
-    const { data: facets } = usePullRequestsFacets(teamId, scope);
-    // Daily "pulse of the review process" — how it's going today, not the state
-    // of any single PR. Drives the summary strip below the header.
-    const { data: digest } = usePullRequestsDailyDigest(teamId);
 
     // Surface the applied filters as removable chips (the popover only shows a
     // count). Defaults — suggestions "all", authors "reviewable" — are not chips.
@@ -375,18 +409,28 @@ export function PullRequestsPageClient() {
         isAwaiting ||
         isMineView ||
         authorPolicy !== "all";
-    // Filters applied post-query (Mongo side) — while any is active,
-    // `filteredPrTotal` (DB-level only) is an upper bound, not exact. The
-    // "mine" view pins author=me, which is post-query too.
-    const hasMongoFilters =
-        suggestionsFilter !== "all" ||
-        needsAttention === "true" ||
-        !!effectiveAuthor ||
-        // The PR-state filter runs in the same post-query loop, so it makes
-        // `filteredPrTotal` an upper bound too — without this the header would
-        // print a DB-level count next to a shorter list.
-        !!prState ||
-        authorPolicy !== "all";
+    // Facets follow the view: in "mine" the actionable count is scoped to my PRs
+    // so the card can't overcount team work under a "mine" heading. Only the
+    // counters this view renders are requested — each is a scan of its own on
+    // the backend. `all` is the unfiltered header count, so it is asked for
+    // only when no filter is active.
+    const facetFields = useMemo<PullRequestsFacetName[]>(
+        () => [
+            ...(isMineView ? MINE_FACETS : TEAM_FACETS),
+            ...(hasActiveFilters ? [] : (["all"] as const)),
+        ],
+        [isMineView, hasActiveFilters],
+    );
+    const { data: facets, isPending: facetsPending } = usePullRequestsFacets(
+        teamId,
+        scope,
+        facetFields,
+    );
+    // Daily "pulse of the review process" — how it's going today, not the state
+    // of any single PR. Drives the summary strip below the header.
+    const { data: digest, isPending: digestPending } =
+        usePullRequestsDailyDigest(teamId, DIGEST_FIELDS);
+
     const canUseExactFilteredTotal =
         hasActiveFilters &&
         !isAwaiting &&
@@ -445,15 +489,19 @@ export function PullRequestsPageClient() {
         );
     };
     // Team dashboard cards — the lead's "how are we doing?" across the whole
-    // team scope. Depend on the daily digest (today's pulse).
-    const teamPulseCards = digest
+    // team scope. Shown once either source has answered: the digest and the
+    // facets are separate requests, and a slow one must not hide the other's
+    // numbers. A count that is not known (still loading, or failed) is `null`
+    // and renders as a dash — never as 0, which would read as "nothing here".
+    const hasPulse = !digestPending || !facetsPending;
+    const teamPulseCards: PulseCard[] = hasPulse
         ? [
               {
                   key: "reviewed",
                   label: "Reviewed today",
                   sub: "today",
                   hint: "Distinct PRs Kody reviewed today (UTC). Opens today's reviews — add a Status filter to narrow (e.g. failed).",
-                  value: digest.reviewedToday,
+                  value: digest?.reviewedToday ?? null,
                   tone: "text-success",
                   active: reviewedTodayActive,
                   onClick: () =>
@@ -472,7 +520,7 @@ export function PullRequestsPageClient() {
                   // Backlog is a current total, not a "today" number — read it
                   // from facets (same source as the toggle's 665), so the card
                   // and the toggle never disagree.
-                  value: facets?.awaiting ?? 0,
+                  value: facets?.awaiting ?? null,
                   tone: "text-text-primary",
                   active: isAwaiting,
                   onClick: () => {
@@ -489,7 +537,7 @@ export function PullRequestsPageClient() {
                   // Open PRs that still carry an unresolved delivered suggestion
                   // (implementationStatus ≠ implemented) — actionable, not
                   // "ever delivered a crit/high".
-                  value: facets?.needsAttention ?? 0,
+                  value: facets?.needsAttention ?? null,
                   tone: "text-warning",
                   active: !isAwaiting && needsAttention === "true",
                   onClick: toggleNeedsAttention,
@@ -500,14 +548,14 @@ export function PullRequestsPageClient() {
     // facets endpoint (scope=mine), so they never show team totals under a
     // "mine" heading. The two cards are the two halves of the mine list: what
     // still needs me vs. everything I've had reviewed.
-    const minePulseCards = facets
+    const minePulseCards: PulseCard[] = facets
         ? [
               {
                   key: "mine-attention",
                   label: "Needs my attention",
                   sub: "open",
                   hint: "Your open PRs where Kody left a suggestion you haven't applied yet. Click to filter to just these.",
-                  value: facets.needsAttention ?? 0,
+                  value: facets.needsAttention,
                   tone: "text-warning",
                   active: needsAttention === "true",
                   onClick: toggleNeedsAttention,
@@ -517,7 +565,7 @@ export function PullRequestsPageClient() {
                   label: "My reviewed PRs",
                   sub: "total",
                   hint: "All of your PRs Kody has already reviewed. Click to see the full queue.",
-                  value: facets.mine ?? 0,
+                  value: facets.mine,
                   tone: "text-success",
                   active: needsAttention !== "true",
                   onClick: () => {
@@ -572,13 +620,18 @@ export function PullRequestsPageClient() {
                         <div className="flex flex-wrap items-center gap-1.5">
                             {pulseCards.map((card) => {
                                 const isZero = card.value === 0;
+                                const isUnknown = card.value === null;
                                 return (
                                     <button
                                         key={card.key}
                                         type="button"
                                         onClick={card.onClick}
                                         aria-pressed={card.active}
-                                        title={card.hint}
+                                        title={
+                                            isUnknown
+                                                ? `${card.hint} This count isn't available right now.`
+                                                : card.hint
+                                        }
                                         className={cn(
                                             "inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-left transition",
                                             card.active
@@ -591,11 +644,11 @@ export function PullRequestsPageClient() {
                                         <span
                                             className={cn(
                                                 "text-xs font-semibold tabular-nums",
-                                                isZero
+                                                isZero || isUnknown
                                                     ? "text-text-tertiary"
                                                     : card.tone,
                                             )}>
-                                            {card.value}
+                                            {card.value ?? "—"}
                                         </span>
                                     </button>
                                 );
