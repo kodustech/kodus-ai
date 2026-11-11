@@ -32,7 +32,8 @@ export type SecurityVulnerabilityClass =
     | "ssrf"
     | "data_exposure"
     | "secret_identity"
-    | "misconfiguration";
+    | "misconfiguration"
+    | "resource_exhaustion";
 
 export type IssueSecurityDetails = {
     cwe?: string;
