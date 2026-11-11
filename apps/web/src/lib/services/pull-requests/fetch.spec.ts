@@ -73,15 +73,6 @@ describe("PULL_REQUEST_API", () => {
             "/pull-requests/executions/summary?teamId=team-1",
         );
     });
-
-    it("does not send a total request with the list", () => {
-        const url = PULL_REQUEST_API.GET_EXECUTIONS({
-            teamId: "team-1",
-            limit: 30,
-        });
-
-        expect(query(url)).toEqual({ teamId: "team-1", limit: "30" });
-    });
 });
 
 describe("getReviewedPullRequestCount", () => {

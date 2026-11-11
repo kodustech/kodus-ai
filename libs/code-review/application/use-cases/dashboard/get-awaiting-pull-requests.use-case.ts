@@ -9,7 +9,7 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { resolveDashboardRepositoryScope } from './utils/team-repository-scope.util';
-import { isOpenPullRequest } from './utils/pull-request-metrics';
+import { findOpenAwaitingPullRequests } from './utils/open-awaiting-pull-requests.util';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
@@ -89,41 +89,19 @@ export class GetAwaitingPullRequestsUseCase implements IUseCase {
             const { repositoryIds } = scope;
 
             // Awaiting = PRs Kody was triggered on but skipped and never
-            // reviewed (every execution status='skipped'). Same source as the
-            // Awaiting facet count, so the list and the badge always agree.
-            const awaitingKeys =
-                await this.automationExecutionService.getAwaitingReviewPullRequestKeys(
-                    { organizationAndTeamData, repositoryIds },
-                );
+            // reviewed (every execution status='skipped'), still open. Same
+            // helper as the Awaiting facet count, so the list and the badge
+            // always agree.
+            const awaiting = await findOpenAwaitingPullRequests({
+                automationExecutionService: this.automationExecutionService,
+                pullRequestsService: this.pullRequestsService,
+                organizationAndTeamData,
+                repositoryIds,
+            });
 
-            const awaitingCriteria = awaitingKeys
-                .slice(0, MAX_AWAITING)
-                .map((k) => ({
-                    number: k.pullRequestNumber,
-                    repositoryId: k.repositoryId,
-                }));
-
-            if (!awaitingCriteria.length) {
-                return [];
-            }
-
-            const prs =
-                (await this.pullRequestsService.findManyByNumbersAndRepositoryIds(
-                    awaitingCriteria,
-                    organizationId,
-                )) ?? [];
-
-            return prs
-                .filter(
-                    (pr) =>
-                        pr?.number != null &&
-                        pr?.repository?.id &&
-                        // Drop skipped PRs that were later merged/closed — a
-                        // config-skip on a done PR isn't "awaiting review"
-                        // anymore. Shared predicate → same rule as the facet
-                        // count, so the list and the badge stay in agreement.
-                        isOpenPullRequest(pr),
-                )
+            // Newest first, THEN the cap: cutting before sorting showed an
+            // arbitrary hundred, and counted closed PRs against the limit.
+            return awaiting
                 .map((pr) => ({
                     prId: pr.uuid!,
                     prNumber: pr.number,
@@ -137,7 +115,8 @@ export class GetAwaitingPullRequestsUseCase implements IUseCase {
                     },
                     openedAt: pr.openedAt,
                 }))
-                .sort((a, b) => (a.openedAt < b.openedAt ? 1 : -1));
+                .sort((a, b) => (a.openedAt < b.openedAt ? 1 : -1))
+                .slice(0, MAX_AWAITING);
         } catch (error) {
             this.logger.error({
                 message: 'Error listing awaiting pull requests',

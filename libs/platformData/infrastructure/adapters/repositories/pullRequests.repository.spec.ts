@@ -179,7 +179,8 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             const findExec = jest.fn().mockResolvedValue([]);
             const maxTimeMS = jest.fn().mockReturnValue({ exec: findExec });
             const lean = jest.fn().mockReturnValue({ maxTimeMS });
-            model.find = jest.fn().mockReturnValue({ lean });
+            const hint = jest.fn().mockReturnValue({ lean });
+            model.find = jest.fn().mockReturnValue({ hint, lean });
 
             await repo.findPRNumbersByTitleAndOrganization(
                 'fix(api) .*',

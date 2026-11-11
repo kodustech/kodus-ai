@@ -844,7 +844,10 @@ export function PullRequestsPageClient() {
 
                 {isAwaiting ? (
                     <div className="min-h-0 flex-1 overflow-y-auto">
-                        <AwaitingList teamId={teamId} />
+                        <AwaitingList
+                            teamId={teamId}
+                            total={facets?.awaiting}
+                        />
                     </div>
                 ) : error && !groupedPullRequests.length ? (
                     // Only when there is nothing to show. React Query marks the

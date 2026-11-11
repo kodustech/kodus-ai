@@ -6,6 +6,7 @@ import { Model } from 'mongoose';
 import mongoose from 'mongoose';
 import {
     OPEN_PULL_REQUESTS_INDEX,
+    PULL_REQUEST_TITLE_INDEX,
     PullRequestsModel,
 } from './schemas/pullRequests.model';
 
@@ -193,13 +194,28 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             filter['repository.id'] = { $in: repositoryIds };
         }
 
-        const results = await this.pullRequestsModel
-            .find(filter, { 'number': 1, 'repository.id': 1 })
-            .lean()
-            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
-            .exec();
+        // The title lives in no other index, so this used to fetch every PR
+        // document of the organization — files and patches included — to test
+        // its title, once per search. The title index holds every field the
+        // query reads, so with `_id` projected out the documents are never
+        // loaded. Hinted: the planner prefers an index that leads with the
+        // repository, which brings the fetch back.
+        const results = await this.withIndexHint(
+            PULL_REQUEST_TITLE_INDEX,
+            (hint) => {
+                const query = this.pullRequestsModel.find(filter, {
+                    'number': 1,
+                    'repository.id': 1,
+                    '_id': 0,
+                });
+                return (hint ? query.hint(hint) : query)
+                    .lean()
+                    .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+                    .exec();
+            },
+        );
 
-        return results.map((doc) => ({
+        return results.map((doc: any) => ({
             number: doc.number,
             repositoryId: doc.repository?.id || '',
         }));
@@ -958,6 +974,174 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             openOnly?: boolean;
         },
     ): Promise<number> {
+        const filter = this.buildDeliveredPullRequestsFilter(
+            organizationId,
+            repositoryIds,
+            opts,
+        );
+        const count = (hint?: string) => {
+            const query = this.pullRequestsModel.countDocuments(filter);
+            return (hint ? query.hint(hint) : query)
+                .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+                .exec();
+        };
+
+        if (!opts.openOnly) {
+            return count();
+        }
+
+        // Open PRs are a small slice of an organization's history, and the
+        // open-PR index reaches exactly that slice. Left to choose, the planner
+        // also tries the delivered-suggestion index, which leads to every PR
+        // that ever delivered a suggestion; on a large organization that trial
+        // alone outran the time limit ("error while multiplanner was selecting
+        // best plan"), so the count failed before it started.
+        return this.withIndexHint(OPEN_PULL_REQUESTS_INDEX, count);
+    }
+
+    /**
+     * Keys of the organization's open pull requests, optionally only those
+     * that still carry a delivered suggestion nobody applied — the same PRs
+     * `countDeliveredPullRequests({ openOnly, unresolvedOnly })` counts.
+     *
+     * The Reviews list uses it to turn "needs attention" and "open" from a
+     * walk over the team's whole review history (fetch a page of executions,
+     * load their PRs, throw most away, repeat) into a lookup of exactly these
+     * PRs. `truncated` means there are more than `limit`, in which case the
+     * keys are not the whole set and must not be used to narrow anything.
+     */
+    async findOpenPullRequestKeys(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: { unresolvedOnly?: boolean; limit: number },
+    ): Promise<{
+        keys: Array<{ number: number; repositoryId: string }>;
+        truncated: boolean;
+    }> {
+        const filter: Record<string, any> = {
+            organizationId,
+            merged: { $ne: true },
+            status: { $nin: ['closed'] },
+        };
+        if (repositoryIds?.length) {
+            filter['repository.id'] = { $in: repositoryIds };
+        }
+        if (opts.unresolvedOnly) {
+            filter.files = {
+                $elemMatch: {
+                    suggestions: {
+                        $elemMatch: {
+                            deliveryStatus: DeliveryStatus.SENT,
+                            implementationStatus: {
+                                $ne: ImplementationStatus.IMPLEMENTED,
+                            },
+                        },
+                    },
+                },
+            };
+        }
+
+        const rows = await this.withIndexHint(
+            OPEN_PULL_REQUESTS_INDEX,
+            (hint) => {
+                const query = this.pullRequestsModel
+                    .find(filter, { 'number': 1, 'repository.id': 1, '_id': 0 })
+                    .limit(opts.limit + 1);
+                return (hint ? query.hint(hint) : query)
+                    .lean()
+                    .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+                    .exec();
+            },
+        );
+
+        const keys = rows
+            .filter((row: any) => row?.number != null && row?.repository?.id)
+            .map((row: any) => ({
+                number: row.number as number,
+                repositoryId: String(row.repository.id),
+            }));
+
+        return {
+            keys: keys.slice(0, opts.limit),
+            truncated: rows.length > opts.limit,
+        };
+    }
+
+    /**
+     * The organization's open pull requests, without the heavy arrays. For
+     * callers that hold a set of PR keys far larger than the number of open
+     * PRs and only care about the open ones: reading the open slice and
+     * intersecting beats loading every key. `null` when there are more than
+     * `limit` open PRs — the caller keeps its own path.
+     */
+    async findOpenPullRequests(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        limit: number,
+    ): Promise<PullRequestsEntity[] | null> {
+        const filter: Record<string, any> = {
+            organizationId,
+            merged: { $ne: true },
+            status: { $nin: ['closed'] },
+        };
+        if (repositoryIds?.length) {
+            filter['repository.id'] = { $in: repositoryIds };
+        }
+
+        const rows = await this.withIndexHint(
+            OPEN_PULL_REQUESTS_INDEX,
+            (hint) => {
+                const query = this.pullRequestsModel
+                    .find(filter, {
+                        files: 0,
+                        commits: 0,
+                        prLevelSuggestions: 0,
+                    })
+                    .limit(limit + 1);
+                return (hint ? query.hint(hint) : query)
+                    .lean()
+                    .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+                    .exec();
+            },
+        );
+
+        if (rows.length > limit) {
+            return null;
+        }
+
+        return mapSimpleModelsToEntities(rows, PullRequestsEntity);
+    }
+
+    /**
+     * Runs a query with an index hint, and without it on a deployment that
+     * does not have the index (its build has not finished, or failed): the
+     * same query, the planner's choice.
+     */
+    private async withIndexHint<T>(
+        indexName: string,
+        run: (hint?: string) => Promise<T>,
+    ): Promise<T> {
+        try {
+            return await run(indexName);
+        } catch (error) {
+            if (!isUnknownIndexHint(error)) {
+                throw error;
+            }
+
+            return run();
+        }
+    }
+
+    private buildDeliveredPullRequestsFilter(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: {
+            severities?: string[];
+            authorEmail?: string;
+            unresolvedOnly?: boolean;
+            openOnly?: boolean;
+        },
+    ): Record<string, any> {
         const filter: Record<string, any> = { organizationId };
         if (repositoryIds?.length) {
             filter['repository.id'] = { $in: repositoryIds };
@@ -1006,37 +1190,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             filter['files.suggestions.deliveryStatus'] = DeliveryStatus.SENT;
         }
 
-        if (!opts.openOnly) {
-            return this.pullRequestsModel
-                .countDocuments(filter)
-                .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
-                .exec();
-        }
-
-        // Open PRs are a small slice of an organization's history, and the
-        // open-PR index reaches exactly that slice. Left to choose, the planner
-        // also tries the delivered-suggestion index, which leads to every PR
-        // that ever delivered a suggestion; on a large organization that trial
-        // alone outran the time limit ("error while multiplanner was selecting
-        // best plan"), so the count failed before it started.
-        try {
-            return await this.pullRequestsModel
-                .countDocuments(filter)
-                .hint(OPEN_PULL_REQUESTS_INDEX)
-                .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
-                .exec();
-        } catch (error) {
-            // A deployment whose index build has not finished (or failed) has
-            // no such index to hint. Same count, planner's choice.
-            if (!isUnknownIndexHint(error)) {
-                throw error;
-            }
-
-            return this.pullRequestsModel
-                .countDocuments(filter)
-                .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
-                .exec();
-        }
+        return filter;
     }
 
     async findFileWithSuggestions(

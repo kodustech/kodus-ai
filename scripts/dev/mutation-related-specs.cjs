@@ -68,7 +68,11 @@ const specs = output
     .map((line) => line.trim())
     .filter(Boolean)
     .map((abs) => path.relative(root, abs))
-    .filter((spec) => !spec.startsWith('..'));
+    .filter((spec) => !spec.startsWith('..'))
+    // Integration specs need a database this job does not start. The Mongo
+    // ones refuse to skip in CI (resolveMongoTestGate throws on import), which
+    // fails Stryker's dry run before a single mutant is tried.
+    .filter((spec) => !/\.integration\.spec\.ts$/.test(spec));
 
 specs
     .map((spec) => ({ spec, closeness: closeness(spec) }))

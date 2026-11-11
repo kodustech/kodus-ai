@@ -9,7 +9,7 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { resolveDashboardRepositoryScope } from './utils/team-repository-scope.util';
-import { isOpenPullRequest } from './utils/pull-request-metrics';
+import { findOpenAwaitingPullRequests } from './utils/open-awaiting-pull-requests.util';
 import { parseRequestedFields } from './utils/requested-fields.util';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { createLogger } from '@libs/core/log/logger';
@@ -251,32 +251,22 @@ export class GetPullRequestsFacetsUseCase implements IUseCase {
         }
     }
 
-    // Awaiting count = skipped-only PRs that are still OPEN. Hydrate just the
-    // awaiting keys (bounded — usually a handful) instead of scanning every
-    // open PR for the org, and apply the SAME case-insensitive open predicate
-    // the Awaiting list uses so the badge and the list agree.
+    // Awaiting count = skipped-only PRs that are still OPEN — the same PRs the
+    // Awaiting list shows, resolved by the same helper so the badge and the
+    // list agree.
     private async countAwaiting(
         organizationAndTeamData: OrganizationAndTeamData,
         repositoryIds: string[] | undefined,
     ): Promise<number> {
-        const awaitingKeys =
-            await this.automationExecutionService.getAwaitingReviewPullRequestKeys(
-                { organizationAndTeamData, repositoryIds, failOnError: true },
-            );
-        if (!awaitingKeys.length) {
-            return 0;
-        }
+        const awaiting = await findOpenAwaitingPullRequests({
+            automationExecutionService: this.automationExecutionService,
+            pullRequestsService: this.pullRequestsService,
+            organizationAndTeamData,
+            repositoryIds,
+            failOnError: true,
+        });
 
-        const awaitingPrs =
-            (await this.pullRequestsService.findManyByNumbersAndRepositoryIds(
-                awaitingKeys.map((key) => ({
-                    number: key.pullRequestNumber,
-                    repositoryId: key.repositoryId,
-                })),
-                organizationAndTeamData.organizationId,
-            )) ?? [];
-
-        return awaitingPrs.filter((pr) => isOpenPullRequest(pr)).length;
+        return awaiting.length;
     }
 
     /** A facet's value, or `null` — logged — when its query fails. */

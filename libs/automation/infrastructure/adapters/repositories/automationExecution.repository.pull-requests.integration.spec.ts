@@ -7,8 +7,8 @@
  * tell a query that returns the wrong rows from one that returns the right
  * ones — this file can.
  *
- * Skips automatically if Postgres isn't reachable, like
- * user.repository.integration.spec.ts.
+ * Locally, an unreachable Postgres skips the suite with a warning, like
+ * user.repository.integration.spec.ts. In CI it fails.
  */
 require('dotenv').config();
 
@@ -153,8 +153,15 @@ type Seeded = { uuid: string; createdAt: string };
             try {
                 await dataSource.initialize();
             } catch (error) {
-                if (UNREACHABLE.has((error as { code?: string })?.code ?? '')) {
+                const code = (error as { code?: string })?.code ?? '';
+                // CI always has Postgres (tests.yml): there, an unreachable
+                // database is a failure, not a reason to report green having
+                // run no query. SKIP_INTEGRATION is the way to opt out.
+                if (UNREACHABLE.has(code) && !process.env.CI) {
                     canRun = false;
+                    console.warn(
+                        `[integration] Postgres unreachable (${code}): the pull request list queries were NOT exercised.`,
+                    );
                     return;
                 }
                 throw error;
@@ -453,6 +460,128 @@ type Seeded = { uuid: string; createdAt: string };
                     }),
                 ),
             ).toEqual([rows.webPr3Success.uuid, rows.apiPr2Old.uuid]);
+        });
+
+        it('reads pull request keys as a set: order, repeats and strangers do not matter', async () => {
+            if (!canRun) return;
+
+            const wanted = [
+                rows.apiPr7Error.uuid,
+                rows.webPr3Success.uuid,
+                rows.apiPr7Success.uuid,
+            ];
+
+            const result = await list({
+                includeTotal: false,
+                prFilters: [
+                    { number: 3, repositoryId: REPO_WEB },
+                    { number: 7, repositoryId: REPO_API },
+                    // repeated
+                    { number: 7, repositoryId: REPO_API },
+                    // right number, wrong repository
+                    { number: 7, repositoryId: REPO_WEB },
+                    // no such pull request
+                    { number: 4242, repositoryId: REPO_API },
+                    // only ever skipped: it has no reviewed execution
+                    { number: 9, repositoryId: REPO_API },
+                ],
+            });
+            expect(uuids(result)).toEqual(wanted);
+
+            // A key list far longer than the team's history.
+            const many = await list({
+                includeTotal: false,
+                prFilters: [
+                    ...Array.from({ length: 3000 }, (_, i) => ({
+                        number: 100_000 + i,
+                        repositoryId: REPO_API,
+                    })),
+                    { number: 2, repositoryId: REPO_API },
+                ],
+            });
+            expect(uuids(many)).toEqual([rows.apiPr2Old.uuid]);
+
+            const none = await list({
+                includeTotal: false,
+                prFilters: [{ number: 4242, repositoryId: REPO_API }],
+            });
+            expect(none.data).toEqual([]);
+        });
+
+        it('combines pull request keys with the other filters, paging and totals', async () => {
+            if (!canRun) return;
+
+            const keys = [
+                { number: 7, repositoryId: REPO_API },
+                { number: 5, repositoryId: REPO_API },
+                { number: 4, repositoryId: REPO_API },
+            ];
+
+            const errorsOnly = await list({
+                includeTotal: false,
+                prFilters: keys,
+                status: 'error',
+            });
+            expect(uuids(errorsOnly)).toEqual([rows.apiPr7Error.uuid]);
+
+            const afterCursor = await list({
+                includeTotal: false,
+                prFilters: keys,
+                take: 2,
+                cursor: {
+                    createdAt: rows.apiPr7Success.createdAt,
+                    uuid: rows.apiPr7Success.uuid,
+                },
+            });
+            expect(uuids(afterCursor)).toEqual([
+                rows.apiPr5Partial.uuid,
+                rows.tieHigh.uuid,
+            ]);
+
+            const totals = await list({ countOnly: true, prFilters: keys });
+            // PR 7 twice, PR 5 once, PR 4 twice.
+            expect(totals).toEqual({ data: [], total: 5, distinctPrTotal: 3 });
+        });
+
+        it('does not let a pull request key reach another team’s execution', async () => {
+            if (!canRun) return;
+
+            // PR 7 of the same repository exists on the sibling team and on
+            // another organization.
+            const sibling =
+                await repository.findPullRequestExecutionsByOrganizationAndTeam(
+                    {
+                        organizationAndTeamData: {
+                            organizationId: org,
+                            teamId: siblingTeam,
+                        },
+                        includeTotal: false,
+                        prFilters: [{ number: 7, repositoryId: REPO_API }],
+                    },
+                );
+            expect(sibling.data).toHaveLength(1);
+            expect(uuids(sibling)).not.toContain(rows.apiPr7Error.uuid);
+
+            const split =
+                await repository.findPullRequestExecutionsByOrganizationAndTeam(
+                    {
+                        organizationAndTeamData: {
+                            organizationId: org,
+                            teamId: splitTeam,
+                        },
+                        includeTotal: false,
+                        prFilters: [
+                            { number: 31, repositoryId: REPO_API },
+                            { number: 33, repositoryId: REPO_API },
+                            { number: 7, repositoryId: REPO_API },
+                        ],
+                    },
+                );
+            // Both automations of the split team, and nothing of PR 7.
+            expect(uuids(split)).toEqual([
+                'aaaaaaaa-0000-4000-8000-000000000003',
+                'aaaaaaaa-0000-4000-8000-000000000001',
+            ]);
         });
 
         it('counts executions and distinct pull requests over the same filters', async () => {

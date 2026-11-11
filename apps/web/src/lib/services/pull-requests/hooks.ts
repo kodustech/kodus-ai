@@ -13,14 +13,17 @@ import {
     PULL_REQUEST_SSE,
     type PullRequestFilters,
 } from "./fetch";
-import { throttle } from "./throttle";
+import {
+    createExecutionRefreshers,
+    executionsTotalsQueryOptions,
+    PULL_REQUEST_QUERY_ROOT,
+} from "./query-options";
 import type {
     AwaitingPullRequestsResponse,
     PullRequestAuthorsResponse,
     PullRequestExecution,
     PullRequestExecutionsPayload,
     PullRequestExecutionsResponse,
-    PullRequestExecutionsTotalsResponse,
     PullRequestFilesResponse,
     PullRequestsDailyDigestField,
     PullRequestsDailyDigestResponse,
@@ -28,6 +31,7 @@ import type {
     PullRequestsFacetsResponse,
     PullRequestSuggestionsResponse,
 } from "./types";
+import { pollWhileVisible } from "./visible-polling";
 
 const normalizeExecutions = (
     payload: PullRequestExecutionsPayload,
@@ -147,7 +151,7 @@ export const useInfinitePullRequestExecutions = (
         [string, PullRequestFilters],
         string | undefined
     >({
-        queryKey: ["pull-request-executions", baseFilters],
+        queryKey: [PULL_REQUEST_QUERY_ROOT.list, baseFilters],
         initialPageParam: undefined,
         queryFn: async ({ pageParam }) => {
             const params = pageParam
@@ -178,10 +182,10 @@ export const useInfinitePullRequestExecutions = (
     const { refetch } = query;
     useEffect(() => {
         if (!poll) return;
-        const id = setInterval(() => {
+        // Only while someone is looking: a hidden tab polled all day.
+        return pollWhileVisible(() => {
             refetch();
         }, 30_000);
-        return () => clearInterval(id);
     }, [refetch, poll]);
 
     const items = useMemo(() => {
@@ -217,14 +221,7 @@ export const useInfinitePullRequestExecutions = (
     // fall back to the loaded count.
     const withTotal = options?.withTotal ?? false;
     const { data: totals } = useQuery({
-        queryKey: ["pull-request-executions", "totals", baseFilters],
-        queryFn: () =>
-            axiosAuthorized.fetcher<PullRequestExecutionsTotalsResponse>(
-                PULL_REQUEST_API.GET_EXECUTIONS_TOTALS(baseFilters),
-            ),
-        enabled: withTotal && !!baseFilters.teamId,
-        retry: false,
-        staleTime: 60_000,
+        ...executionsTotalsQueryOptions(baseFilters, withTotal),
         select: (response) => response.data,
     });
     const filteredPrTotal = useMemo(() => {
@@ -245,7 +242,7 @@ export const usePullRequestsDailyDigest = (
 ) => {
     const fieldsKey = fields?.length ? [...fields].sort().join(",") : "all";
     return useQuery({
-        queryKey: ["pull-requests-daily-digest", teamId, fieldsKey],
+        queryKey: [PULL_REQUEST_QUERY_ROOT.digest, teamId, fieldsKey],
         queryFn: () =>
             axiosAuthorized.fetcher<PullRequestsDailyDigestResponse>(
                 PULL_REQUEST_API.GET_DAILY_DIGEST(teamId, fields),
@@ -267,7 +264,12 @@ export const usePullRequestsFacets = (
 ) => {
     const fieldsKey = fields?.length ? [...fields].sort().join(",") : "all";
     return useQuery({
-        queryKey: ["pull-requests-facets", teamId, scope ?? "team", fieldsKey],
+        queryKey: [
+            PULL_REQUEST_QUERY_ROOT.facets,
+            teamId,
+            scope ?? "team",
+            fieldsKey,
+        ],
         queryFn: () =>
             axiosAuthorized.fetcher<PullRequestsFacetsResponse>(
                 PULL_REQUEST_API.GET_FACETS(teamId, scope, fields),
@@ -400,39 +402,12 @@ export const usePullRequestFiles = (
     });
 };
 
-// How often a stream of `execution_updated` events may refresh each part of
-// the screen. A review emits one event per stage and a busy team runs many at
-// once, so refreshing on every event re-ran the list and every counter several
-// times a second. The rows are cheap and are what the reader watches change;
-// the counters scan far more and move far less.
-const LIST_REFRESH_INTERVAL_MS = 5_000;
-const COUNTERS_REFRESH_INTERVAL_MS = 60_000;
-
 export const usePullRequestExecutionSSE = (enabled = true) => {
     const queryClient = useQueryClient();
     const controllerRef = useRef<AbortController | null>(null);
 
     const refreshers = useMemo(
-        () => ({
-            list: throttle(() => {
-                queryClient.invalidateQueries({
-                    queryKey: ["pull-request-executions"],
-                });
-            }, LIST_REFRESH_INTERVAL_MS),
-            // Digest and facets power the cards. The suggestion verification
-            // pass emits `execution_updated` after persisting statuses (see
-            // ImplementationVerificationProcessor), so the first event still
-            // refreshes them right away; a burst then costs one more refresh
-            // at the end of the interval, not one per event.
-            counters: throttle(() => {
-                queryClient.invalidateQueries({
-                    queryKey: ["pull-requests-daily-digest"],
-                });
-                queryClient.invalidateQueries({
-                    queryKey: ["pull-requests-facets"],
-                });
-            }, COUNTERS_REFRESH_INTERVAL_MS),
-        }),
+        () => createExecutionRefreshers(queryClient),
         [queryClient],
     );
 

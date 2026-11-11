@@ -75,6 +75,36 @@ describe('GetPullRequestsDailyDigestUseCase', () => {
         expect(new Date(digest.date).getUTCHours()).toBe(0);
     });
 
+    it('asks both counts to fail rather than answer an empty list', async () => {
+        const harness = buildUseCase();
+
+        await harness.useCase.execute({ teamId: 't1' });
+
+        expect(harness.getDistinctReviewedPullRequestKeys).toHaveBeenCalledWith(
+            expect.objectContaining({ failOnError: true }),
+        );
+        expect(harness.getAwaitingReviewPullRequestKeys).toHaveBeenCalledWith(
+            expect.objectContaining({ failOnError: true }),
+        );
+    });
+
+    it.each([
+        ['reviewed', 'getDistinctReviewedPullRequestKeys'],
+        ['awaiting', 'getAwaitingReviewPullRequestKeys'],
+    ] as const)(
+        'fails the request when the %s count cannot be read, instead of reporting 0',
+        async (_name, method) => {
+            const harness = buildUseCase();
+            harness[method].mockRejectedValueOnce(
+                new Error('canceling statement due to statement timeout'),
+            );
+
+            await expect(
+                harness.useCase.execute({ teamId: 't1' }),
+            ).rejects.toThrow('statement timeout');
+        },
+    );
+
     it('runs one query when only "reviewed today" is asked for', async () => {
         const harness = buildUseCase();
 

@@ -77,6 +77,9 @@ glob_escape() { printf '%s' "$1" | sed -e 's/[][()*?{}]/[&]/g'; }
 SPECS=()
 add_spec() {
     [ -f "$1" ] || return 0
+    # Integration specs need a database this job does not start — see
+    # mutation-related-specs.cjs.
+    case "$1" in *.integration.spec.ts) return 0 ;; esac
     local escaped="<rootDir>/$(glob_escape "$1")"
     for existing in "${SPECS[@]-}"; do
         [ "$existing" = "$escaped" ] && return 0

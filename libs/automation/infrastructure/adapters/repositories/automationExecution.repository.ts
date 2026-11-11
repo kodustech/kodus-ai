@@ -417,24 +417,38 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
             }
 
             if (prFilters?.length) {
-                // Filter by specific PR numbers and repository IDs
-                const prConditions = prFilters
-                    .map(
-                        (pr, index) =>
-                            `(automation_execution.pullRequestNumber = :prNumber${index} AND automation_execution.repositoryId = :repoId${index})`,
-                    )
-                    .join(' OR ');
-
-                const prParams = prFilters.reduce(
-                    (acc, pr, index) => {
-                        acc[`prNumber${index}`] = pr.number;
-                        acc[`repoId${index}`] = pr.repositoryId;
-                        return acc;
+                // The pull requests are resolved to their executions first,
+                // through the (team, repository, number) index, and the list
+                // then reads those executions by primary key.
+                //
+                // It used to be one `(number = … AND repository = …)` per pull
+                // request, OR-ed: two parameters each, tens of milliseconds to
+                // plan at a few thousand keys, and no upper bound — a title
+                // search for a common word matches thousands of pull requests.
+                // The keys travel as two arrays instead. The subquery is an
+                // ARRAY(...) on purpose: it runs once, before the list, so the
+                // planner cannot fold it into a join and fall back to walking
+                // the team's history comparing every row against every key.
+                queryBuilder.andWhere(
+                    `"automation_execution"."uuid" = ANY (ARRAY(
+                        SELECT "pr_key_execution"."uuid"
+                        FROM unnest(
+                            CAST(:prKeyRepositoryIds AS varchar[]),
+                            CAST(:prKeyNumbers AS int[])
+                        ) AS "pr_key"("repository_id", "number")
+                        INNER JOIN "automation_execution" "pr_key_execution"
+                            ON "pr_key_execution"."repositoryId" = "pr_key"."repository_id"
+                           AND "pr_key_execution"."pullRequestNumber" = "pr_key"."number"
+                        WHERE "pr_key_execution"."team_automation_id" = ANY (CAST(:prKeyTeamAutomationIds AS uuid[]))
+                    ))`,
+                    {
+                        prKeyRepositoryIds: prFilters.map((pr) =>
+                            String(pr.repositoryId),
+                        ),
+                        prKeyNumbers: prFilters.map((pr) => pr.number),
+                        prKeyTeamAutomationIds: teamAutomationIds,
                     },
-                    {} as Record<string, any>,
                 );
-
-                queryBuilder.andWhere(`(${prConditions})`, prParams);
             }
 
             if (cursor) {

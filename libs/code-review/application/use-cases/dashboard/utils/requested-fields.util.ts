@@ -9,12 +9,11 @@ export function parseRequestedFields<T extends string>(
     raw: string | string[] | undefined,
     allowed: readonly T[],
 ): T[] | undefined {
+    const allowedNames = new Set<string>(allowed);
     const names = (Array.isArray(raw) ? raw : [raw ?? ''])
         .flatMap((value) => String(value).split(','))
         .map((value) => value.trim())
-        .filter((value): value is T =>
-            (allowed as readonly string[]).includes(value),
-        );
+        .filter((value): value is T => allowedNames.has(value));
 
     return names.length ? Array.from(new Set(names)) : undefined;
 }

@@ -18,6 +18,7 @@ import { Model } from 'mongoose';
 
 import {
     OPEN_PULL_REQUESTS_INDEX,
+    PULL_REQUEST_TITLE_INDEX,
     PullRequestsModel,
     PullRequestsSchema,
 } from '@libs/platformData/infrastructure/adapters/repositories/schemas/pullRequests.model';
@@ -68,7 +69,9 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
             module = await Test.createTestingModule({
                 imports: [
                     ConfigModule.forRoot(),
-                    MongooseModule.forRoot(mongoUri),
+                    // monitorCommands: the tests below read the commands
+                    // the repository actually sends.
+                    MongooseModule.forRoot(mongoUri, { monitorCommands: true }),
                     MongooseModule.forFeature([
                         {
                             name: PullRequestsModel.name,
@@ -85,8 +88,12 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
             await model.init();
 
             // Counted: open, in scope, with an unresolved delivered suggestion.
-            await insertPr({});
-            await insertPr({ repository: { id: 'repo-2', name: 'web' } });
+            // (PR numbers follow insertion order: 1, 2, 3, …)
+            await insertPr({ title: 'Fix LOGIN redirect' });
+            await insertPr({
+                repository: { id: 'repo-2', name: 'web' },
+                title: 'login: handle (api) .* edge',
+            });
             await insertPr({
                 // one resolved, one still open → still needs attention
                 files: [
@@ -107,9 +114,12 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
             await insertPr({ user: { email: 'Lead@Example.com' } });
 
             // Not counted:
-            await insertPr({ status: 'closed' });
+            await insertPr({ status: 'closed', title: 'Rework login form' });
             await insertPr({ merged: true });
-            await insertPr({ repository: { id: 'repo-out', name: 'x' } });
+            await insertPr({
+                repository: { id: 'repo-out', name: 'x' },
+                title: 'login outside the team',
+            });
             await insertPr({
                 files: [
                     {
@@ -129,7 +139,10 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
                 ],
             });
             await insertPr({ files: [] });
-            await insertPr({ organizationId: OTHER_ORG });
+            await insertPr({
+                organizationId: OTHER_ORG,
+                title: 'login in another organization',
+            });
         });
 
         afterAll(async () => {
@@ -146,8 +159,68 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
                 ...opts,
             });
 
+        /** The count commands mongod received while `run` was in flight. */
+        const countCommandsOf = async (run: () => Promise<unknown>) => {
+            const commands: Array<{ hint?: unknown }> = [];
+            const client = model.db.getClient();
+            const onCommand = (event: {
+                commandName: string;
+                command: { aggregate?: string; hint?: unknown };
+            }) => {
+                if (
+                    event.commandName === 'aggregate' &&
+                    event.command.aggregate === model.collection.collectionName
+                ) {
+                    commands.push(event.command);
+                }
+            };
+            client.on('commandStarted', onCommand);
+            try {
+                await run();
+            } finally {
+                client.off('commandStarted', onCommand);
+            }
+            return commands;
+        };
+
         it('counts open pull requests that still carry an unresolved delivered suggestion', async () => {
             await expect(count()).resolves.toBe(4);
+        });
+
+        // What the fix changed. The counts above are the same before and
+        // after it; the plan mongod is told to use is not.
+        it('tells mongod to count through the open-PR index', async () => {
+            const commands = await countCommandsOf(() => count());
+
+            expect(commands).toHaveLength(1);
+            expect(commands[0].hint).toBe(OPEN_PULL_REQUESTS_INDEX);
+        });
+
+        it('leaves the plan to mongod when the count is not limited to open PRs', async () => {
+            const commands = await countCommandsOf(() =>
+                repository.countDeliveredPullRequests(
+                    ORG,
+                    ['repo-1', 'repo-2'],
+                    { unresolvedOnly: true },
+                ),
+            );
+
+            expect(commands).toHaveLength(1);
+            expect(commands[0].hint).toBeUndefined();
+        });
+
+        it('retries without the hint, once, on a deployment that lacks the index', async () => {
+            await model.collection.dropIndex(OPEN_PULL_REQUESTS_INDEX);
+            try {
+                const commands = await countCommandsOf(() => count());
+
+                expect(commands.map((command) => command.hint)).toEqual([
+                    OPEN_PULL_REQUESTS_INDEX,
+                    undefined,
+                ]);
+            } finally {
+                await model.syncIndexes();
+            }
         });
 
         it('narrows to one author, case-insensitively', async () => {
@@ -168,6 +241,187 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
             } finally {
                 await model.syncIndexes();
             }
+        });
+
+        describe('findOpenPullRequestKeys', () => {
+            const SCOPE = ['repo-1', 'repo-2'];
+            const numbers = (result: { keys: Array<{ number: number }> }) =>
+                result.keys.map((key) => key.number).sort((a, b) => a - b);
+
+            it('answers the PRs the "needs attention" count counts', async () => {
+                const result = await repository.findOpenPullRequestKeys(
+                    ORG,
+                    SCOPE,
+                    { unresolvedOnly: true, limit: 100 },
+                );
+
+                expect(numbers(result)).toEqual([1, 2, 3, 4]);
+                expect(result.truncated).toBe(false);
+                expect(result.keys).toContainEqual({
+                    number: 2,
+                    repositoryId: 'repo-2',
+                });
+                await expect(count()).resolves.toBe(result.keys.length);
+            });
+
+            it('answers every open PR in scope without the suggestion condition', async () => {
+                const inScope = await repository.findOpenPullRequestKeys(
+                    ORG,
+                    SCOPE,
+                    { limit: 100 },
+                );
+                // 8, 9 and 10 are open but carry nothing unresolved.
+                expect(numbers(inScope)).toEqual([1, 2, 3, 4, 8, 9, 10]);
+
+                const wholeOrganization =
+                    await repository.findOpenPullRequestKeys(ORG, undefined, {
+                        limit: 100,
+                    });
+                expect(numbers(wholeOrganization)).toEqual([
+                    1, 2, 3, 4, 7, 8, 9, 10,
+                ]);
+            });
+
+            it('says when there are more than it was asked for', async () => {
+                const exact = await repository.findOpenPullRequestKeys(
+                    ORG,
+                    SCOPE,
+                    { limit: 7 },
+                );
+                expect(exact.truncated).toBe(false);
+                expect(exact.keys).toHaveLength(7);
+
+                const short = await repository.findOpenPullRequestKeys(
+                    ORG,
+                    SCOPE,
+                    { limit: 6 },
+                );
+                expect(short.truncated).toBe(true);
+                expect(short.keys).toHaveLength(6);
+            });
+
+            it('answers the same keys on a deployment that lacks the index', async () => {
+                await model.collection.dropIndex(OPEN_PULL_REQUESTS_INDEX);
+                try {
+                    const result = await repository.findOpenPullRequestKeys(
+                        ORG,
+                        SCOPE,
+                        { unresolvedOnly: true, limit: 100 },
+                    );
+                    expect(numbers(result)).toEqual([1, 2, 3, 4]);
+                } finally {
+                    await model.syncIndexes();
+                }
+            });
+        });
+
+        describe('findOpenPullRequests', () => {
+            it('reads the open PRs in scope', async () => {
+                const open = await repository.findOpenPullRequests(
+                    ORG,
+                    ['repo-1', 'repo-2'],
+                    100,
+                );
+
+                expect(
+                    open?.map((pr) => pr.number).sort((a, b) => a - b),
+                ).toEqual([1, 2, 3, 4, 8, 9, 10]);
+                expect(open?.find((pr) => pr.number === 2)?.repository).toEqual(
+                    { id: 'repo-2', name: 'web' },
+                );
+            });
+
+            it('answers null when there are more open PRs than the limit', async () => {
+                await expect(
+                    repository.findOpenPullRequests(
+                        ORG,
+                        ['repo-1', 'repo-2'],
+                        7,
+                    ),
+                ).resolves.toHaveLength(7);
+                await expect(
+                    repository.findOpenPullRequests(
+                        ORG,
+                        ['repo-1', 'repo-2'],
+                        6,
+                    ),
+                ).resolves.toBeNull();
+            });
+        });
+
+        describe('findPRNumbersByTitleAndOrganization', () => {
+            const search = (title: string, repositoryIds?: string[]) =>
+                repository
+                    .findPRNumbersByTitleAndOrganization(
+                        title,
+                        ORG,
+                        repositoryIds,
+                    )
+                    .then((keys) => keys.sort((a, b) => a.number - b.number));
+
+            it('matches the title anywhere, whatever the case, within the scope', async () => {
+                await expect(
+                    search('login', ['repo-1', 'repo-2']),
+                ).resolves.toEqual([
+                    { number: 1, repositoryId: 'repo-1' },
+                    { number: 2, repositoryId: 'repo-2' },
+                    { number: 5, repositoryId: 'repo-1' },
+                ]);
+
+                // No scope: the organization's PRs, never another organization's.
+                await expect(search('LOGIN')).resolves.toEqual([
+                    { number: 1, repositoryId: 'repo-1' },
+                    { number: 2, repositoryId: 'repo-2' },
+                    { number: 5, repositoryId: 'repo-1' },
+                    { number: 7, repositoryId: 'repo-out' },
+                ]);
+            });
+
+            it('treats what was typed as text, not as a pattern', async () => {
+                await expect(search('(api) .*')).resolves.toEqual([
+                    { number: 2, repositoryId: 'repo-2' },
+                ]);
+                await expect(search('.*')).resolves.toEqual([
+                    { number: 2, repositoryId: 'repo-2' },
+                ]);
+            });
+
+            it('is answered from the title index without loading a document', async () => {
+                const plan = await model.collection
+                    .find(
+                        {
+                            organizationId: ORG,
+                            title: { $regex: 'login', $options: 'i' },
+                        },
+                        {
+                            projection: {
+                                'number': 1,
+                                'repository.id': 1,
+                                '_id': 0,
+                            },
+                        },
+                    )
+                    .hint(PULL_REQUEST_TITLE_INDEX)
+                    .explain('executionStats');
+
+                expect(plan.executionStats.nReturned).toBe(4);
+                expect(plan.executionStats.totalDocsExamined).toBe(0);
+            });
+
+            it('answers the same PRs on a deployment that lacks the index', async () => {
+                await model.collection.dropIndex(PULL_REQUEST_TITLE_INDEX);
+                try {
+                    await expect(
+                        search('login', ['repo-1', 'repo-2']),
+                    ).resolves.toEqual([
+                        { number: 1, repositoryId: 'repo-1' },
+                        { number: 2, repositoryId: 'repo-2' },
+                        { number: 5, repositoryId: 'repo-1' },
+                    ]);
+                } finally {
+                    await model.syncIndexes();
+                }
+            });
         });
     },
 );

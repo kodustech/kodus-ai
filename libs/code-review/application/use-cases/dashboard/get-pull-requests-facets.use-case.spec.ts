@@ -29,8 +29,13 @@ const buildUseCase = (
             opts.openOnly ? 7 : 4,
     );
     const findManyByNumbersAndRepositoryIds = jest.fn(async () => [
-        { number: 10, status: 'open', merged: false },
-        { number: 11, status: 'closed', merged: true },
+        { number: 10, repository: { id: 'r1' }, status: 'open', merged: false },
+        {
+            number: 11,
+            repository: { id: 'r1' },
+            status: 'closed',
+            merged: true,
+        },
     ]);
 
     // `any`: the test reaches the injected collaborators, which are private.

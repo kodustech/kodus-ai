@@ -116,6 +116,21 @@ const decodeExecutionCursor = (raw?: string): ExecutionCursor | undefined => {
  */
 const MAX_BATCHES_PER_REQUEST = 10;
 
+/**
+ * How many open pull requests are worth resolving up front for the "needs
+ * attention" and "open" filters. Past this the keys stop being a shortcut —
+ * most of the recent history is open anyway — and the scan is left alone.
+ */
+const MAX_OPEN_PULL_REQUEST_KEYS = 5000;
+
+const intersectPullRequestKeys = (
+    left: Array<{ number: number; repositoryId: string }>,
+    right: Array<{ number: number; repositoryId: string }>,
+) => {
+    const keys = new Set(right.map((pr) => `${pr.repositoryId}#${pr.number}`));
+    return left.filter((pr) => keys.has(`${pr.repositoryId}#${pr.number}`));
+};
+
 @Injectable()
 export class GetEnrichedPullRequestsUseCase implements IUseCase {
     private readonly logger = createLogger(GetEnrichedPullRequestsUseCase.name);
@@ -198,8 +213,33 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             if (!filters) {
                 return this.buildEmptyResponse(limit, page);
             }
-            const { allowedRepositoryIds, repositoryNameFilter, prFilters } =
-                filters;
+            const { allowedRepositoryIds, repositoryNameFilter } = filters;
+            let { prFilters } = filters;
+
+            // "Needs attention" and "open" are decided by the PR document, so
+            // the scan below can only apply them after reading a batch. Open
+            // PRs are a sliver of a team's history: the scan read 300
+            // executions per request to keep a handful, page after page.
+            // Asking MongoDB for those PRs first lets the scan start from
+            // exactly their executions. The filters in the loop stay as they
+            // are — this only narrows what the loop is given.
+            if (needsAttention || prState === 'open') {
+                const openKeys = await this.findOpenPullRequestKeys({
+                    organizationId,
+                    repositoryIds: allowedRepositoryIds,
+                    unresolvedOnly: Boolean(needsAttention),
+                });
+
+                if (openKeys) {
+                    const narrowed = prFilters
+                        ? intersectPullRequestKeys(prFilters, openKeys)
+                        : openKeys;
+                    if (narrowed.length === 0) {
+                        return this.buildEmptyResponse(limit, page);
+                    }
+                    prFilters = narrowed;
+                }
+            }
 
             const enrichedPullRequests: EnrichedPullRequestResponse[] = [];
             const resumeCursor = decodeExecutionCursor(cursor);
@@ -874,6 +914,45 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
     }
 
     /**
+     * The organization's open pull requests — only those with an unresolved
+     * delivered suggestion when `unresolvedOnly` — as keys the execution query
+     * can filter on.
+     *
+     * `undefined` means "do not narrow": there are more open PRs than is
+     * worth sending as a filter, or the lookup failed. The caller then scans
+     * and filters as it always did, so this can make a request faster but
+     * never change its answer.
+     */
+    private async findOpenPullRequestKeys(params: {
+        organizationId: string;
+        repositoryIds?: string[];
+        unresolvedOnly: boolean;
+    }): Promise<Array<{ number: number; repositoryId: string }> | undefined> {
+        try {
+            const { keys, truncated } =
+                await this.pullRequestsService.findOpenPullRequestKeys(
+                    params.organizationId,
+                    params.repositoryIds,
+                    {
+                        unresolvedOnly: params.unresolvedOnly,
+                        limit: MAX_OPEN_PULL_REQUEST_KEYS,
+                    },
+                );
+
+            return truncated ? undefined : keys;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve the open pull requests up front; scanning instead',
+                context: GetEnrichedPullRequestsUseCase.name,
+                error,
+                metadata: { organizationId: params.organizationId },
+            });
+            return undefined;
+        }
+    }
+
+    /**
      * Which executions a request may see and is asking for: the caller's
      * repository scope, the repository filter resolved to ids, and a title
      * search resolved to PR keys. `null` means the filters cannot match
@@ -927,8 +1006,9 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
 
         if (assignedRepositoryIds !== null) {
             if (allowedRepositoryIds?.length) {
+                const assigned = new Set(assignedRepositoryIds);
                 allowedRepositoryIds = allowedRepositoryIds.filter((id) =>
-                    assignedRepositoryIds.includes(id),
+                    assigned.has(id),
                 );
 
                 if (allowedRepositoryIds.length === 0) {
