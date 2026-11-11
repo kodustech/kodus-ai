@@ -55,8 +55,10 @@ jest.mock(
 jest.mock(
     '@libs/llm/model-context-window',
     () => ({
-        resolveContextWindow: jest.fn(() => 200_000),
-        lookupModelContextWindow: jest.fn(() => 200_000),
+        resolveContextWindowWithSource: jest.fn(() => ({
+            tokens: 200_000,
+            source: 'litellm',
+        })),
     }),
 );
 

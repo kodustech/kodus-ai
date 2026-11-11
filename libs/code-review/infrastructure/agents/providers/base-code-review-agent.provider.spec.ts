@@ -557,6 +557,36 @@ describe('request assembly + byokConfig threading', () => {
         expect(loopParams.contextWindowTokens).toBe(922_000);
     });
 
+    it.each([
+        ['byok', 'gpt-6.1-sol', 500_000, 500_000],
+        ['litellm', 'gpt-6.1-sol', undefined, 922_000],
+        ['default', 'totally-unknown-xyz-model', undefined, 128_000],
+    ])(
+        'logs the context window with source %s',
+        async (source, modelId, maxInputTokens, tokens) => {
+            resolveModelMock.mockResolvedValue(
+                makeModel({
+                    main: {
+                        modelName: `openai:${modelId}`,
+                        modelId,
+                        maxInputTokens,
+                    },
+                }),
+            );
+            const agent = newAgent();
+            const log = jest.spyOn((agent as any).agentLogger, 'log');
+            await agent.execute(makeInput());
+            const entry = log.mock.calls
+                .map(([e]: any[]) => e)
+                .find((e: any) => /context window:/.test(e.message));
+            expect(entry.metadata).toMatchObject({
+                modelId,
+                contextWindowTokens: tokens,
+                contextWindowSource: source,
+            });
+        },
+    );
+
     it('wires byokErrorReporter → ByokErrorCounter.record when the counter is injected', async () => {
         const counter = { record: jest.fn() };
         await newAgent(counter).execute(makeInput());

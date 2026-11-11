@@ -29,10 +29,7 @@ import {
     listsRepoInstructions,
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
-import {
-    lookupModelContextWindow,
-    resolveContextWindow,
-} from '@libs/llm/model-context-window';
+import { resolveContextWindowWithSource } from '@libs/llm/model-context-window';
 import {
     buildPathMismatchWarning,
     buildVerifyUnavailableWarning,
@@ -353,10 +350,11 @@ export abstract class BaseCodeReviewAgentProvider {
         // Looked up by the bare model id: the `provider:model` label misses the
         // mirror's exact and normalized keys.
         const windowModelId = mainModel.modelId ?? modelName;
-        const contextWindow = resolveContextWindow({
-            byokMaxInputTokens: mainModel.maxInputTokens,
-            modelName: windowModelId,
-        });
+        const { tokens: contextWindow, source: contextWindowSource } =
+            resolveContextWindowWithSource({
+                byokMaxInputTokens: mainModel.maxInputTokens,
+                modelName: windowModelId,
+            });
         // The window is otherwise invisible: a model the mirror does not know
         // gets the 128k default with no error, and the review plans against it.
         this.agentLogger.log({
@@ -369,12 +367,7 @@ export abstract class BaseCodeReviewAgentProvider {
                 modelName,
                 modelId: windowModelId,
                 contextWindowTokens: contextWindow,
-                contextWindowSource:
-                    (mainModel.maxInputTokens ?? 0) > 0
-                        ? 'byok'
-                        : lookupModelContextWindow(windowModelId) !== undefined
-                          ? 'mirror'
-                          : 'default',
+                contextWindowSource,
             },
         });
         // Resolve adaptive-fit profile from the same context window the

@@ -1,6 +1,7 @@
 import {
     getModelContextWindow,
     resolveContextWindow,
+    resolveContextWindowWithSource,
 } from './model-context-window';
 
 describe('model-context-window', () => {
@@ -118,6 +119,22 @@ describe('model-context-window', () => {
             expect(getModelContextWindow('totally-unknown-xyz-model')).toBe(
                 128_000,
             );
+        });
+    });
+
+    describe('resolveContextWindowWithSource', () => {
+        it.each([
+            ['byok', { byokMaxInputTokens: 999, modelName: 'gpt-5' }, 999],
+            ['litellm (exact)', { modelName: 'gpt-5' }, 272_000],
+            ['litellm (substring)', { modelName: 'jamba-instruct' }, 256_000],
+            ['override', { modelName: 'glm-4-7' }, 202_752],
+            ['models.dev', { modelName: 'kimi-for-coding' }, 1_015_808],
+            ['default', { modelName: 'totally-unknown-xyz-model' }, 128_000],
+        ])('names the step that answered: %s', (label, params, tokens) => {
+            expect(resolveContextWindowWithSource(params)).toEqual({
+                tokens,
+                source: label.split(' ')[0],
+            });
         });
     });
 
