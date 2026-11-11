@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
@@ -97,10 +97,50 @@ export interface PublishPreview {
     };
 }
 
+/**
+ * What a re-check compares: everything the outcome says except the clock each
+ * run stamps on it (`readAt`, `updatedAt`). Hashing the whole outcome keeps
+ * every rendered field in the comparison - summaries, titles, thin tasks,
+ * scope, messages - so only a run that says the same thing matches.
+ */
+export function outcomeSignature(
+    outcome: BusinessValidationOutcome,
+    headSha?: string,
+    trigger?: string,
+): string {
+    return createHash('sha256')
+        .update(
+            JSON.stringify({
+                outcome: withoutClock(outcome),
+                // The comment names the commit it read and how the read was
+                // started, so the same verdict at a new head is a new comment.
+                headSha: headSha ?? null,
+                trigger: trigger ?? null,
+            }),
+        )
+        .digest('hex');
+}
+
+function withoutClock(value: unknown): unknown {
+    if (Array.isArray(value)) {
+        return value.map(withoutClock);
+    }
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value as Record<string, unknown>)
+                .filter(([key]) => key !== 'readAt' && key !== 'updatedAt')
+                .map(([key, entry]) => [key, withoutClock(entry)]),
+        );
+    }
+    return value;
+}
+
 export interface PublishResult {
     outcome: BusinessValidationOutcome;
     runId?: string;
     comment: 'created' | 'updated' | 'none';
+    /** A re-check: whether its text differs from the comment it edited. Unset when the earlier text could not be read. */
+    changed?: boolean;
 }
 
 /**
@@ -335,6 +375,7 @@ export class BusinessLogicPublisher {
 
         let comment: RunComment | undefined;
         let action: PublishResult['comment'] = 'none';
+        let changed: boolean | undefined;
         if (
             scope &&
             !input.dryRun &&
@@ -351,10 +392,15 @@ export class BusinessLogicPublisher {
                 },
             );
             if (body) {
-                ({ comment, action } = await this.writeComment(
+                ({ comment, action, changed } = await this.writeComment(
                     request,
                     body,
                     previousComment,
+                    outcomeSignature(
+                        outcome,
+                        input.headSha,
+                        input.trigger === 'auto' ? undefined : input.trigger,
+                    ),
                 ));
                 if (action === 'created' && comment) {
                     await this.recordSuggestion(
@@ -387,7 +433,12 @@ export class BusinessLogicPublisher {
             // An earlier run waiting on the tracker is answered by this one.
             await this.runs.clearPendingRecheck(scope);
         }
-        return { outcome, runId, comment: action };
+        return {
+            outcome,
+            runId,
+            comment: action,
+            ...(changed !== undefined ? { changed } : {}),
+        };
     }
 
     /**
@@ -424,7 +475,12 @@ export class BusinessLogicPublisher {
         request: BusinessValidationRequest,
         body: string,
         previous: ValidationRunRecord | undefined,
-    ): Promise<{ comment?: RunComment; action: PublishResult['comment'] }> {
+        signature: string,
+    ): Promise<{
+        comment?: RunComment;
+        action: PublishResult['comment'];
+        changed?: boolean;
+    }> {
         const target = {
             organizationAndTeamData: request.organizationAndTeamData,
             prNumber: request.pullRequest!.number,
@@ -439,6 +495,13 @@ export class BusinessLogicPublisher {
                 previous?.comment ??
                 (await this.findByMarker(target, platform));
             if (existing) {
+                // Only a run that recorded its verdict can say whether this
+                // one differs; an older run's text is not comparable to a new
+                // render (it embeds the clock), so the reply stays neutral.
+                const changed =
+                    typeof previous?.comment?.signature === 'string'
+                        ? previous.comment.signature !== signature
+                        : undefined;
                 // A comment deleted on the PR, or one Kody can no longer
                 // edit, is replaced by a new one; otherwise the PR would
                 // never get a Business Logic comment again.
@@ -456,15 +519,20 @@ export class BusinessLogicPublisher {
                     .then(() => true)
                     .catch(() => false);
                 if (updated) {
-                    return { comment: existing, action: 'updated' };
+                    return {
+                        comment: { ...existing, signature },
+                        action: 'updated',
+                        ...(changed !== undefined ? { changed } : {}),
+                    };
                 }
             }
             const created = await this.codeManagementService.createIssueComment(
                 { ...target, body },
                 platform,
             );
+            const ids = commentIds(created, platform);
             return {
-                comment: commentIds(created, platform),
+                comment: ids ? { ...ids, signature } : undefined,
                 action: created ? 'created' : 'none',
             };
         } catch (error) {

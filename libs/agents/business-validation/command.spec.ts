@@ -46,7 +46,17 @@ describe('replyFor', () => {
         expect(reply).toMatch(/Kody · Business Logic comment/);
     });
 
-    it('says the comment was updated when an earlier run left one', () => {
-        expect(replyFor(validated, 'updated')).toMatch(/is updated/);
+    it('says the result did not change when the re-check reaches the same verdict', () => {
+        const reply = replyFor(validated, 'updated', false);
+        expect(reply).toMatch(/The result did not change/);
+        expect(reply).not.toMatch(/is updated/);
+        expect(reply).not.toMatch(/comment is the same/);
+    });
+
+    it('does not claim a change when the earlier text could not be read', () => {
+        const reply = replyFor(validated, 'updated');
+        expect(reply).not.toMatch(/is updated|did not change/);
+        expect(reply).toMatch(/Business logic re-checked: SAA-96 met\./);
+        expect(reply).toMatch(/Kody · Business Logic comment/);
     });
 });

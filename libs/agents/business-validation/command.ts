@@ -25,24 +25,34 @@ export function commandArgument(
  * What the command replies once the outcome is on the PR. A verdict, a task
  * too thin or a typo went into the Business Logic comment, so the reply only
  * points there; anything else is the reason nothing was checked. The first
- * run posts that comment, so it can't say the comment was updated.
+ * run posts that comment, so it can't say the comment was updated; a re-check
+ * says whether its text changed, and claims an update only when it did.
  */
 export function replyFor(
     outcome: BusinessValidationOutcome,
     comment: 'created' | 'updated' | 'none',
+    changed?: boolean,
 ): string {
     if (outcome.kind === 'skipped') {
         return outcome.message;
     }
-    if (comment === 'none') {
-        return outcome.kind === 'validated'
+    const verdict =
+        outcome.kind === 'validated'
             ? `Business logic re-checked: ${outcome.checks.map((c) => c.task.id).join(', ')} ${outcome.passed ? 'met' : 'has open requirements'}.`
             : outcome.message;
+    if (comment === 'none') {
+        return verdict;
     }
     if (comment === 'created') {
         return 'Business logic checked. The result is in the Kody · Business Logic comment on this pull request.';
     }
-    return 'Business logic re-checked. The Kody · Business Logic comment on this pull request is updated.';
+    if (changed === false) {
+        return `${verdict} The result did not change.`;
+    }
+    if (changed === true) {
+        return `${verdict} The Kody · Business Logic comment is updated.`;
+    }
+    return `${verdict} The result is in the Kody · Business Logic comment on this pull request.`;
 }
 
 /** Text given to the command that is not a reference is the task itself. */
