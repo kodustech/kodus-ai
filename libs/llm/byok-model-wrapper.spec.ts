@@ -12,6 +12,7 @@ jest.mock('@libs/llm/token-estimate', () => ({
 
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 import { wrapByokModel } from './byok-model-wrapper';
+import { runWithUsageMeter } from './usage-meter';
 import { clearRefusals, MAX_REFUSAL_RETRIES } from './rejected-reasoning-field';
 import { getLimiterForSlot } from './byok-to-vercel';
 
@@ -675,5 +676,84 @@ describe('wrapByokModel — a reasoning field the upstream refuses', () => {
             reporter,
         }).doGenerate(withThinking);
         expect(reporter).not.toHaveBeenCalled();
+    });
+});
+
+describe('wrapByokModel — spend cap admission (#2451)', () => {
+    const answering = (usage: unknown) => ({
+        specificationVersion: 'v4',
+        provider: 'test-provider',
+        modelId: 'test-model',
+        supportedUrls: {},
+        doGenerate: jest.fn(async () => ({
+            content: [{ type: 'text', text: 'ok' }],
+            finishReason: 'stop',
+            usage,
+            warnings: [],
+        })),
+        doStream: jest.fn(),
+    });
+
+    beforeEach(() => {
+        estimateMock.mockReset();
+        estimateMock.mockReturnValue(1200);
+    });
+
+    it('admits each request with its prompt and answer cap, then settles what it billed', async () => {
+        const settle = jest.fn();
+        const admit = jest.fn(() => settle);
+        const model = answering({
+            inputTokens: { total: 1000, cacheRead: 200, cacheWrite: 0 },
+            outputTokens: { total: 50, reasoning: 10 },
+        });
+
+        await runWithUsageMeter({ record: jest.fn(), admit }, () =>
+            wrap(model).doGenerate({ prompt: PROMPT, maxOutputTokens: 500 }),
+        );
+
+        expect(admit).toHaveBeenCalledWith({
+            inputTokens: 1200,
+            maxOutputTokens: 500,
+        });
+        expect(settle).toHaveBeenCalledWith(
+            expect.objectContaining({
+                inputTokens: 1000,
+                outputTokens: 50,
+                cacheReadTokens: 200,
+                reasoningTokens: 10,
+            }),
+        );
+    });
+
+    it('never sends a request the meter refuses', async () => {
+        const model = answering({});
+        const admit = jest.fn(() => {
+            throw new Error('spend cap reached');
+        });
+
+        await expect(
+            runWithUsageMeter({ record: jest.fn(), admit }, () =>
+                wrap(model).doGenerate({ prompt: PROMPT }),
+            ),
+        ).rejects.toThrow('spend cap reached');
+        expect(model.doGenerate).not.toHaveBeenCalled();
+    });
+
+    it('settles a failed request with nothing billed', async () => {
+        const settle = jest.fn();
+        const model = answering({});
+        model.doGenerate.mockRejectedValue(new Error('socket hang up'));
+
+        await expect(
+            runWithUsageMeter({ record: jest.fn(), admit: () => settle }, () =>
+                wrap(model).doGenerate({ prompt: PROMPT }),
+            ),
+        ).rejects.toThrow('socket hang up');
+        expect(settle).toHaveBeenCalledWith(undefined);
+    });
+
+    it('does not count the prompt outside a metered run', async () => {
+        await wrap(answering({})).doGenerate({ prompt: PROMPT });
+        expect(estimateMock).not.toHaveBeenCalled();
     });
 });
