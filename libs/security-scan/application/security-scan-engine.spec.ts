@@ -120,7 +120,9 @@ function fakeLens(findingsFor: (file: string, cls: string) => any[]) {
         reportUsage({ inputTokens: 90_000, outputTokens: 10_000 } as any, {
             runName: input.usageRunName,
         });
-        const file = /Start from this file:\n(.+)\n/.exec(input.userPrompt)[1];
+        const file = /Start from this file:\n`{3,}\n(.+)\n/.exec(
+            input.userPrompt,
+        )[1];
         const cls = input.agentName.replace('security-scan-', '');
         return {
             findings: { reasoning: '', suggestions: findingsFor(file, cls) },
