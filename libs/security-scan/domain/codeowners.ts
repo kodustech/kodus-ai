@@ -42,10 +42,7 @@ export function parseCodeowners(content: string): CodeownersRule[] {
 }
 
 /** The owners of `filePath`, from the last rule that matches it. */
-export function ownersFor(
-    rules: CodeownersRule[],
-    filePath: string,
-): string[] {
+export function ownersFor(rules: CodeownersRule[], filePath: string): string[] {
     const path = filePath.replace(/^\.?\//, '');
     for (let i = rules.length - 1; i >= 0; i--) {
         if (rules[i].matcher.test(path)) {
@@ -89,7 +86,11 @@ function toMatcher(pattern: string): RegExp {
 
     const prefix = anchored ? '^' : '^(?:.*/)?';
     // A directory pattern owns everything under it; a file-like pattern also
-    // owns a directory of that name and its contents.
-    const suffix = directory ? '/.*$' : '(?:/.*)?$';
+    // owns a directory of that name and its contents, except one whose last
+    // segment has a single `*`: GitHub's `docs/*` owns docs/a.md, not
+    // docs/a/b.md.
+    const last = p.split('/').pop() ?? '';
+    const shallow = last.includes('*') && !last.includes('**');
+    const suffix = directory ? '/.*$' : shallow ? '$' : '(?:/.*)?$';
     return new RegExp(prefix + body + suffix);
 }

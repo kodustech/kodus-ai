@@ -34,14 +34,24 @@ apps/*/auth.ts          @acme/security
         expect(ownersFor(anchored, 'lib/src/payments/a.ts')).toEqual([]);
     });
 
+    it('owns only the files directly in a folder for `folder/*`, as GitHub does', () => {
+        const shallow = parseCodeowners('docs/*  @docs');
+        expect(ownersFor(shallow, 'docs/getting-started.md')).toEqual([
+            '@docs',
+        ]);
+        expect(ownersFor(shallow, 'docs/build-app/troubleshooting.md')).toEqual(
+            [],
+        );
+    });
+
     it('matches a bare name at any depth', () => {
         const bare = parseCodeowners('auth @sec');
         expect(ownersFor(bare, 'apps/api/auth/guard.ts')).toEqual(['@sec']);
     });
 
     it('returns no owner when nothing matches', () => {
-        expect(ownersFor(parseCodeowners('/only/ @x'), 'other/file.ts')).toEqual(
-            [],
-        );
+        expect(
+            ownersFor(parseCodeowners('/only/ @x'), 'other/file.ts'),
+        ).toEqual([]);
     });
 });
