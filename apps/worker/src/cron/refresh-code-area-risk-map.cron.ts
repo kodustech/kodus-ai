@@ -132,8 +132,10 @@ export class RefreshCodeAreaRiskMapCron {
                         name: repo.name,
                         usesRiskApproval: scopes.some(
                             (scope) =>
-                                scope.pullRequestApprovalActive === true &&
-                                scope.approvalRiskActive === true,
+                                scope.riskAssessmentActive === true ||
+                                (scope.riskAssessmentActive === undefined &&
+                                    scope.pullRequestApprovalActive === true &&
+                                    scope.approvalRiskActive === true),
                         ),
                     });
                 }

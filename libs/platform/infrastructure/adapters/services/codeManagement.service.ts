@@ -49,6 +49,10 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PlatformIntegrationFactory } from './platformIntegration.factory';
+import type {
+    ApprovalTeamMembership,
+    ApprovalTeamMembershipParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/approvalTeamMembership.type';
 import { WebhookSetupResult } from '@libs/platform/domain/platformIntegrations/types/codeManagement/webhook-setup.type';
 
 @Injectable()
@@ -115,6 +119,25 @@ export class CodeManagementService implements ICodeManagementService {
         }
 
         return codeManagementService.listIssues(params);
+    }
+
+    async getApprovalTeamMembership(
+        params: ApprovalTeamMembershipParams,
+    ): Promise<ApprovalTeamMembership> {
+        try {
+            const type = await this.getTypeIntegration(
+                params.organizationAndTeamData,
+            );
+            if (!type) return 'unavailable';
+            const provider =
+                this.platformIntegrationFactory.getCodeManagementService(type);
+            return (
+                (await provider.getApprovalTeamMembership?.(params)) ??
+                'unavailable'
+            );
+        } catch {
+            return 'unavailable';
+        }
     }
 
     async getIssue(
@@ -644,11 +667,10 @@ export class CodeManagementService implements ICodeManagementService {
             organizationAndTeamData: OrganizationAndTeamData;
             repository: { name: string; id: string };
             prNumber: number;
-            // Optional — when present, providers that implement caching
-            // (currently GitHub) key their cache entry by it. Other
-            // providers ignore it. Should be the head sha of the PR ref
-            // so the cache invalidates when new commits are pushed.
+            // Cache identity requires both PR refs. A retarget can change the
+            // full file list without changing the head.
             headSha?: string;
+            baseSha?: string;
         },
         type?: PlatformType,
     ) {
@@ -1223,6 +1245,7 @@ export class CodeManagementService implements ICodeManagementService {
             organizationAndTeamData: OrganizationAndTeamData;
             repository: { name: string; id: string };
             prNumber: number;
+            headSha?: string;
         },
         type?: PlatformType,
     ) {
@@ -1551,7 +1574,9 @@ export class CodeManagementService implements ICodeManagementService {
         type?: PlatformType,
     ): Promise<WebhookSetupResult> {
         if (!type) {
-            type = await this.getTypeIntegration(params.organizationAndTeamData);
+            type = await this.getTypeIntegration(
+                params.organizationAndTeamData,
+            );
         }
 
         if (!type) {

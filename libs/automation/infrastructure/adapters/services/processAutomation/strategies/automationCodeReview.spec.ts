@@ -85,9 +85,9 @@ describe('AutomationCodeReviewService', () => {
         it.each(['command', 'command-force'])(
             'raises so the request can be retried (origin %s)',
             async (origin) => {
-                const error = await service
-                    .run!(makePayload({ origin, triggerCommentId: 7 }))
-                    .catch((raised) => raised);
+                const error = await service.run!(
+                    makePayload({ origin, triggerCommentId: 7 }),
+                ).catch((raised) => raised);
 
                 expect(isPrReviewInProgressError(error)).toBe(true);
                 expect(error.gate).toBe('lock');
@@ -121,9 +121,9 @@ describe('AutomationCodeReviewService', () => {
                 { uuid: 'execution-1', createdAt: holderCreatedAt },
             ]);
 
-            const error = await service
-                .run!(makePayload({ origin: 'command' }))
-                .catch((raised) => raised);
+            const error = await service.run!(
+                makePayload({ origin: 'command' }),
+            ).catch((raised) => raised);
 
             expect(error.holderVisibleUntil).toEqual(
                 new Date(holderCreatedAt.getTime() + 30 * 60_000),
@@ -133,9 +133,9 @@ describe('AutomationCodeReviewService', () => {
         it('falls back to now when the holder has no execution row yet', async () => {
             automationExecutionService.find.mockResolvedValue([]);
 
-            const error = await service
-                .run!(makePayload({ origin: 'command' }))
-                .catch((raised) => raised);
+            const error = await service.run!(
+                makePayload({ origin: 'command' }),
+            ).catch((raised) => raised);
 
             expect(error.holderVisibleUntil.getTime()).toBeGreaterThan(
                 Date.now() + 29 * 60_000,
@@ -143,9 +143,9 @@ describe('AutomationCodeReviewService', () => {
         });
 
         it('never starts the pipeline', async () => {
-            await service
-                .run!(makePayload({ origin: 'command' }))
-                .catch(() => undefined);
+            await service.run!(makePayload({ origin: 'command' })).catch(
+                () => undefined,
+            );
 
             expect(
                 codeReviewHandlerService.handlePullRequest,
@@ -164,9 +164,9 @@ describe('AutomationCodeReviewService', () => {
         });
 
         it('raises so the request can be retried', async () => {
-            const error = await service
-                .run!(makePayload({ origin: 'command', triggerCommentId: 7 }))
-                .catch((raised) => raised);
+            const error = await service.run!(
+                makePayload({ origin: 'command', triggerCommentId: 7 }),
+            ).catch((raised) => raised);
 
             expect(isPrReviewInProgressError(error)).toBe(true);
             expect(error.gate).toBe('execution');
@@ -180,17 +180,17 @@ describe('AutomationCodeReviewService', () => {
         });
 
         it('releases the lock it acquired', async () => {
-            await service
-                .run!(makePayload({ origin: 'command' }))
-                .catch(() => undefined);
+            await service.run!(makePayload({ origin: 'command' })).catch(
+                () => undefined,
+            );
 
             expect(lock.release).toHaveBeenCalled();
         });
 
         it('does not report the refusal as an execution error', async () => {
-            await service
-                .run!(makePayload({ origin: 'command' }))
-                .catch(() => undefined);
+            await service.run!(makePayload({ origin: 'command' })).catch(
+                () => undefined,
+            );
 
             expect(
                 automationExecutionService.updateCodeReview,
@@ -253,9 +253,9 @@ describe('AutomationCodeReviewService', () => {
                 },
             ]);
 
-            const error = await service
-                .run!(makePayload({ origin: 'command' }))
-                .catch((raised) => raised);
+            const error = await service.run!(
+                makePayload({ origin: 'command' }),
+            ).catch((raised) => raised);
 
             expect(isPrReviewInProgressError(error)).toBe(true);
             expect(error.gate).toBe('execution');
@@ -319,9 +319,7 @@ describe('AutomationCodeReviewService', () => {
             await jest.advanceTimersByTimeAsync(2 * 60_000);
             finishReview({ statusInfo: { status: 'success' } });
 
-            await expect(run).resolves.toBe(
-                'Automation executed successfully',
-            );
+            await expect(run).resolves.toBe('Automation executed successfully');
         });
     });
 
@@ -370,6 +368,22 @@ describe('AutomationCodeReviewService', () => {
                 'reviewedBaseBranch',
             );
         });
+
+        it('preserves shared risk and intentional agent skips when a later stage did not complete review', () => {
+            const riskAssessment = {
+                status: 'unavailable',
+                reason: 'Assessment failed.',
+            };
+            const customAgentRiskSkips = [
+                { id: 'agent', reason: 'risk-unavailable' },
+            ];
+            expect(build({ riskAssessment, customAgentRiskSkips })).toEqual(
+                expect.objectContaining({
+                    riskAssessment,
+                    customAgentRiskSkips,
+                }),
+            );
+        });
     });
 
     describe('when the review finishes', () => {
@@ -415,8 +429,9 @@ describe('AutomationCodeReviewService', () => {
             await service.run!(makePayload());
 
             const persistedAt =
-                automationExecutionService.updateCodeReview.mock
-                    .invocationCallOrder.at(-1);
+                automationExecutionService.updateCodeReview.mock.invocationCallOrder.at(
+                    -1,
+                );
             const enqueuedAt =
                 enqueueImplementationCheckUseCase.execute.mock
                     .invocationCallOrder[0];

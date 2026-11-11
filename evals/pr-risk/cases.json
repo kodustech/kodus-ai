@@ -1,0 +1,227 @@
+[
+    {
+        "id": "risk-found",
+        "checks": "A confirmed risk routes Heavy, selects the conditional agent and vetoes approval from one shared assessment.",
+        "title": "EVAL_FORCE_MEDIUM_RISK: change authorization",
+        "active": true,
+        "files": [
+            {
+                "filename": "src/auth.ts",
+                "status": "modified",
+                "additions": 1,
+                "deletions": 1,
+                "patch": "@@ -1 +1 @@\n-allow(user)\n+allowAll()"
+            }
+        ],
+        "expected": {
+            "status": "assessed",
+            "riskIdentified": true,
+            "mode": "heavy",
+            "agentRuns": true,
+            "approvalVeto": true,
+            "policyDecision": "hold"
+        }
+    },
+    {
+        "id": "no-risk",
+        "checks": "A no-risk assessment routes Balanced, skips the conditional agent and removes only the risk veto.",
+        "title": "EVAL_FORCE_NO_PR_RISK: clarify documentation",
+        "active": true,
+        "files": [
+            {
+                "filename": "docs/flags.md",
+                "status": "modified",
+                "additions": 1,
+                "deletions": 0,
+                "patch": "+Clarify the existing flag."
+            }
+        ],
+        "expected": {
+            "status": "assessed",
+            "riskIdentified": false,
+            "mode": "balanced",
+            "agentRuns": false,
+            "approvalVeto": false,
+            "policyDecision": "approve",
+            "calls": 2
+        },
+        "policies": [
+            {
+                "id": "docs",
+                "name": "Docs",
+                "enabled": true,
+                "includedFiles": ["docs/**"],
+                "instruction": "Only clarify existing documentation."
+            }
+        ]
+    },
+    {
+        "id": "omitted-provider-patch",
+        "checks": "An omitted provider patch stays unknown without a model call, uses the default mode, skips the conditional agent and vetoes approval.",
+        "title": "EVAL_FORCE_NO_PR_RISK: a large patch is absent from the provider response",
+        "active": true,
+        "files": [
+            {
+                "filename": "qa-risk-large/notes.txt",
+                "status": "added",
+                "additions": 2500,
+                "deletions": 0
+            }
+        ],
+        "expected": {
+            "status": "unavailable",
+            "calls": 0,
+            "mode": "balanced",
+            "agentRuns": false,
+            "approvalVeto": true,
+            "policyDecision": "hold"
+        }
+    },
+    {
+        "id": "unavailable",
+        "checks": "An invalid model response uses the configured default, skips the conditional agent and blocks approval.",
+        "title": "EVAL_FORCE_UNKNOWN_PR_RISK: opaque contract",
+        "active": true,
+        "files": [
+            {
+                "filename": "src/auth.ts",
+                "status": "modified",
+                "additions": 1,
+                "deletions": 1,
+                "patch": "@@ -1 +1 @@\n-allow(user)\n+allowAll()"
+            }
+        ],
+        "expected": {
+            "status": "unavailable",
+            "calls": 2,
+            "mode": "balanced",
+            "agentRuns": false,
+            "approvalVeto": true,
+            "policyDecision": "hold"
+        }
+    },
+    {
+        "id": "disabled",
+        "checks": "Disabled assessment makes no model call, keeps the fixed mode and skips the conditional agent.",
+        "title": "Engine off",
+        "active": false,
+        "files": [
+            {
+                "filename": "src/auth.ts",
+                "status": "modified",
+                "additions": 1,
+                "deletions": 1,
+                "patch": "@@ -1 +1 @@\n-allow(user)\n+allowAll()"
+            }
+        ],
+        "expected": {
+            "status": "disabled",
+            "mode": "balanced",
+            "agentRuns": false,
+            "approvalVeto": false,
+            "policyDecision": "approve"
+        }
+    },
+    {
+        "id": "ineligible-policy",
+        "checks": "An instruction that is ineligible never authorizes a policy, and is reused only on this exact snapshot.",
+        "title": "EVAL_FORCE_NO_PR_RISK EVAL_FORCE_INELIGIBLE_POLICY: documentation qualification",
+        "active": true,
+        "files": [
+            {
+                "filename": "docs/flags.md",
+                "status": "modified",
+                "additions": 1,
+                "deletions": 0,
+                "patch": "+Clarify the existing flag."
+            }
+        ],
+        "expected": {
+            "status": "assessed",
+            "riskIdentified": false,
+            "mode": "balanced",
+            "agentRuns": false,
+            "approvalVeto": false,
+            "policyDecision": "out-of-scope",
+            "calls": 2,
+            "replayCalls": 0
+        },
+        "policies": [
+            {
+                "id": "docs",
+                "name": "Docs",
+                "enabled": true,
+                "includedFiles": ["docs/**"],
+                "instruction": "Only clarify existing documentation."
+            }
+        ]
+    },
+    {
+        "id": "unavailable-policy",
+        "checks": "An instruction that is unavailable never authorizes a policy and is retried, without publishing model prose.",
+        "title": "EVAL_FORCE_NO_PR_RISK EVAL_FORCE_UNKNOWN_POLICY: documentation qualification",
+        "active": true,
+        "files": [
+            {
+                "filename": "docs/flags.md",
+                "status": "modified",
+                "additions": 1,
+                "deletions": 0,
+                "patch": "+Clarify the existing flag."
+            }
+        ],
+        "expected": {
+            "status": "assessed",
+            "riskIdentified": false,
+            "mode": "balanced",
+            "agentRuns": false,
+            "approvalVeto": false,
+            "policyDecision": "out-of-scope",
+            "calls": 2,
+            "replayCalls": 1
+        },
+        "policies": [
+            {
+                "id": "docs",
+                "name": "Docs",
+                "enabled": true,
+                "includedFiles": ["docs/**"],
+                "instruction": "Only clarify existing documentation."
+            }
+        ]
+    },
+    {
+        "id": "fixed-condition-before-instruction",
+        "checks": "A missing required label skips the instruction model call and records why the policy did not match.",
+        "title": "EVAL_FORCE_NO_PR_RISK: clarify documentation",
+        "active": true,
+        "files": [
+            {
+                "filename": "docs/flags.md",
+                "status": "modified",
+                "additions": 1,
+                "deletions": 0,
+                "patch": "+Clarify the existing flag."
+            }
+        ],
+        "expected": {
+            "status": "assessed",
+            "riskIdentified": false,
+            "mode": "balanced",
+            "agentRuns": false,
+            "approvalVeto": false,
+            "policyDecision": "out-of-scope",
+            "calls": 1
+        },
+        "policies": [
+            {
+                "id": "docs",
+                "name": "Docs",
+                "enabled": true,
+                "includedFiles": ["docs/**"],
+                "instruction": "Only clarify existing documentation.",
+                "labels": ["ready"]
+            }
+        ]
+    }
+]

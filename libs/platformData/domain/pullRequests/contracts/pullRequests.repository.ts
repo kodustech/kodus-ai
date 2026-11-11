@@ -7,6 +7,7 @@ import { PullRequestsEntity } from '../entities/pullRequests.entity';
 import { DeliveryStatus } from '../enums/deliveryStatus.enum';
 import {
     IApprovalReasonDeliveryFailure,
+    ApprovalReasonDeliveryGuard,
     IPullRequests,
     IFile,
     ISuggestion,
@@ -69,6 +70,7 @@ export interface IPullRequestsRepository {
         repositoryId: string,
         prNumber: number,
         failure: IApprovalReasonDeliveryFailure | null,
+        guard?: ApprovalReasonDeliveryGuard,
     ): Promise<boolean>;
 
     create(

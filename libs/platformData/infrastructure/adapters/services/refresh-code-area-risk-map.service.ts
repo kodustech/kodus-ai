@@ -303,6 +303,7 @@ export class RefreshCodeAreaRiskMapService {
                             repository,
                             prNumber: number,
                             headSha: pr.head?.sha,
+                            baseSha: pr.base?.sha,
                         }),
                     { maxAttempts: 4, baseDelayMs: 2_000, maxDelayMs: 30_000 },
                 );

@@ -1,3 +1,7 @@
+import type {
+    ApprovalTeamMembership,
+    ApprovalTeamMembershipParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/approvalTeamMembership.type';
 import {
     is429Error,
     isTransientFetchError,
@@ -1055,7 +1059,8 @@ export class AzureReposService implements Omit<
                 token,
             }),
         ]);
-        if (!reviewerId) throw new Error('Unable to identify reviewer from PAT.');
+        if (!reviewerId)
+            throw new Error('Unable to identify reviewer from PAT.');
         await this.azureReposRequestHelper.votePullRequest({
             orgName,
             token,
@@ -1295,7 +1300,8 @@ export class AzureReposService implements Omit<
         targetUrl?: string;
         updatedDate?: string;
     }): CheckEvidence {
-        const unfinished = status.state === 'pending' || status.state === 'notSet';
+        const unfinished =
+            status.state === 'pending' || status.state === 'notSet';
         const name = status.context?.genre
             ? `${status.context.genre}/${status.context?.name ?? ''}`
             : (status.context?.name ?? '');
@@ -2508,6 +2514,32 @@ export class AzureReposService implements Omit<
         }
     }
 
+    async getApprovalTeamMembership(
+        params: ApprovalTeamMembershipParams,
+    ): Promise<ApprovalTeamMembership> {
+        try {
+            const auth = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            const projectId = await this.getProjectIdFromRepository(
+                params.organizationAndTeamData,
+                params.repository.id,
+            );
+            if (!auth?.orgName || !auth.token || !projectId)
+                return 'unavailable';
+            return await this.azureReposRequestHelper.getApprovalTeamMembership(
+                {
+                    ...auth,
+                    projectId,
+                    team: params.team,
+                    author: params.author,
+                },
+            );
+        } catch {
+            return 'unavailable';
+        }
+    }
+
     async getAuthDetails(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<AzureReposAuthDetail> {
@@ -2729,7 +2761,10 @@ export class AzureReposService implements Omit<
                 return failWebhookSetupForAll(repositories, error, labels);
             }
 
-            const subscriptionIndex = new Map<string, AzureRepoSubscription[]>();
+            const subscriptionIndex = new Map<
+                string,
+                AzureRepoSubscription[]
+            >();
             for (const subscription of existingSubscriptions ?? []) {
                 const key = AzureReposService.subscriptionKey(
                     subscription.publisherInputs?.projectId,
@@ -2945,7 +2980,10 @@ export class AzureReposService implements Omit<
             // which grows with the organization rather than with the
             // selection. Keyed exactly like the prune step so the two cannot
             // disagree about what counts as the same subscription.
-            const subscriptionIndex = new Map<string, AzureRepoSubscription[]>();
+            const subscriptionIndex = new Map<
+                string,
+                AzureRepoSubscription[]
+            >();
 
             for (const subscription of surviving) {
                 const key = AzureReposService.subscriptionKey(
@@ -3340,9 +3378,9 @@ export class AzureReposService implements Omit<
             // in it. The last chunk arrives with the complete selection and
             // runs this once.
             if (!params.deferWebhooks) {
-                void this.createWebhook(
-                    params.organizationAndTeamData,
-                ).catch(() => undefined);
+                void this.createWebhook(params.organizationAndTeamData).catch(
+                    () => undefined,
+                );
             }
         } catch (err) {
             this.logger.error({
@@ -4877,7 +4915,9 @@ export class AzureReposService implements Omit<
             return { removed: 0, surviving: existingSubscriptions };
         }
 
-        const staleIds = new Set(stale.map(({ subscription }) => subscription.id));
+        const staleIds = new Set(
+            stale.map(({ subscription }) => subscription.id),
+        );
         let removed = 0;
 
         for (const { subscription, reason } of stale) {
@@ -4960,35 +5000,35 @@ export class AzureReposService implements Omit<
 
         const tasks = AzureReposService.WEBHOOK_EVENTS.map(
             ({ type, resourceVersion }) =>
-            this.createOrReplaceHook({
-                orgName: organizationName,
-                token: userToken,
-                projectId,
-                repoId,
-                eventType: type,
-                resourceVersion,
-                webhookUrl,
-                encryptedToken,
-                passId,
-                subscriptionIndex,
-                teamId,
-                rethrow: options.rethrow,
-            }).catch((error) => {
-                this.logger.error({
-                    message: `Erro no hook ${type}: ${error.message ?? error}`,
-                    context: this.createNotificationChannel.name,
-                    error,
-                    metadata: {
-                        eventType: type,
-                        organizationName,
-                        projectId,
-                        repoId,
-                    },
-                });
-                if (options.rethrow) {
-                    throw error;
-                }
-            }),
+                this.createOrReplaceHook({
+                    orgName: organizationName,
+                    token: userToken,
+                    projectId,
+                    repoId,
+                    eventType: type,
+                    resourceVersion,
+                    webhookUrl,
+                    encryptedToken,
+                    passId,
+                    subscriptionIndex,
+                    teamId,
+                    rethrow: options.rethrow,
+                }).catch((error) => {
+                    this.logger.error({
+                        message: `Erro no hook ${type}: ${error.message ?? error}`,
+                        context: this.createNotificationChannel.name,
+                        error,
+                        metadata: {
+                            eventType: type,
+                            organizationName,
+                            projectId,
+                            repoId,
+                        },
+                    });
+                    if (options.rethrow) {
+                        throw error;
+                    }
+                }),
         );
 
         const settled = await Promise.allSettled(tasks);
@@ -5344,7 +5384,9 @@ export class AzureReposService implements Omit<
             startLine: lineComment?.start_line,
             endLine: lineComment?.line,
             prompt: resolveAgentPrompt(lineComment?.suggestion),
-            improvedCode: this.dedentCode(lineComment?.body?.improvedCode || ''),
+            improvedCode: this.dedentCode(
+                lineComment?.body?.improvedCode || '',
+            ),
             language: lineComment?.suggestion?.language || repository?.language,
         });
 

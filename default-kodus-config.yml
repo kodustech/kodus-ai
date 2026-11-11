@@ -10,6 +10,12 @@ reviewCadence:
     timeWindow: 15 # minutes
     pushesToTrigger: 3
 pullRequestApprovalActive: false
+approvalPolicies: []
+riskAssessmentActive: false
+riskCriteria: []
+riskReviewRouting:
+    noRisk: balanced
+    riskFound: heavy
 approvalLabels: []
 approvalAuthors: []
 approvalRiskActive: false

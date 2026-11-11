@@ -350,6 +350,8 @@ export interface ReviewAgentInput
         ModelConfig,
         FitConfig,
         RuntimeMeta {
+    /** The PR's shared risk result; context, never a replacement for investigation. */
+    riskAssessment?: import('@libs/code-review/domain/risk/risk-assessment').RiskAssessmentResult;
     onAgentProgress?: (event: AgentProgressEvent) => void;
     /** Parent (job-level) AbortSignal. Forwarded to runAgentLoop so the
      *  outer router timeout cancels the LLM call instead of leaving it

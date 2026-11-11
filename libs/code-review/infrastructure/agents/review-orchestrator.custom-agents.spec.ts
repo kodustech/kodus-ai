@@ -88,6 +88,65 @@ function inputFor(over: Record<string, unknown> = {}) {
 }
 
 describe('ReviewOrchestratorService — custom agents', () => {
+    it.each([
+        [{ status: 'disabled' }, 'risk-disabled'],
+        [{ status: 'unavailable', reason: 'Timeout.' }, 'risk-unavailable'],
+        [{ status: 'assessed', riskIdentified: false }, 'risk-not-found'],
+    ])(
+        'reports an intentional conditional skip for %j without creating a provider',
+        async (riskAssessment, reason) => {
+            const { service, factory } = setup();
+            const result = await service.execute(
+                inputFor({
+                    customAgents: [agentConfig({ runWhen: 'risk-found' })],
+                    riskAssessment,
+                }),
+            );
+            expect(factory.create).not.toHaveBeenCalled();
+            expect(result.customAgentRuns).toEqual([
+                expect.objectContaining({
+                    status: 'risk-condition-not-met',
+                    reason,
+                }),
+            ]);
+            expect(result.failures).toEqual([]);
+            expect(result.incomplete).toEqual([]);
+        },
+    );
+
+    it('passes the one shared risk result as context to an eligible agent', async () => {
+        const { service, customCalls } = setup();
+        const riskAssessment = {
+            status: 'assessed',
+            riskIdentified: true,
+            reason: 'Ledger balance can change.',
+        };
+        await service.execute(
+            inputFor({
+                customAgents: [agentConfig({ runWhen: 'risk-found' })],
+                riskAssessment,
+            }),
+        );
+        expect(customCalls.get('agent-1')).toMatchObject({ riskAssessment });
+    });
+
+    it('runs an explicitly named disabled conditional agent without risk and without built-in reviewers', async () => {
+        const { service, generalist, kodyRules, factory } = setup();
+        const result = await service.execute(
+            inputFor({
+                onlyCustomAgent: 'ledger-rules',
+                customAgents: [
+                    agentConfig({ enabled: false, runWhen: 'risk-found' }),
+                ],
+                riskAssessment: { status: 'disabled' },
+            }),
+        );
+        expect(factory.create).toHaveBeenCalledTimes(1);
+        expect(generalist.execute).not.toHaveBeenCalled();
+        expect(kodyRules.execute).not.toHaveBeenCalled();
+        expect(result.customAgentRuns[0].status).toBe('ran');
+    });
+
     it('runs each enabled agent in parallel with the generalist and Kody Rules', async () => {
         const { service, generalist, kodyRules, factory } = setup();
 
