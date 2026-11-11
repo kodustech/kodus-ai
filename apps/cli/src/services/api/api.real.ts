@@ -7,6 +7,7 @@ import {
 import type { IKodusApi, ISessionsApi, ITrialApi } from './api.interface.js';
 import { RealAuthApi } from './auth.api.js';
 import { RealConfigApi } from './config.api.js';
+import { RealIssuesApi } from './issues.api.js';
 import { RealReviewApi } from './review.api.js';
 import { RealRulesApi } from './rules.api.js';
 import { RealSessionsApi } from './sessions.api.js';
@@ -22,4 +23,5 @@ export class RealApi implements IKodusApi {
     trial: ITrialApi = new RealTrialApi();
     sessions: ISessionsApi = new RealSessionsApi();
     rules = new RealRulesApi();
+    issues = new RealIssuesApi();
 }
