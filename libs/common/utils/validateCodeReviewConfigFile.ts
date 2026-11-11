@@ -6,12 +6,61 @@ import * as yaml from 'js-yaml';
 import codereviewConfigSchema from '@libs/common/schemas/codereview.json';
 import { KodusConfigFile } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
+import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/general/approval-policies';
+import {
+    riskCriteriaSchema,
+    riskReviewRoutingSchema,
+} from '@libs/core/infrastructure/config/types/general/risk-assessment';
 
 interface IValidateKodusConfigFileReturn {
     isValidConfigFile: boolean;
     validationErrors?: ErrorObject<string, Record<string, any>, unknown>[];
     errorMessages?: string;
     isDeprecated?: boolean;
+}
+
+/** Shared semantic validation for the live YAML loader and the schema validator. */
+export function validateRiskApprovalSettings(input: unknown): ErrorObject[] {
+    if (!input || typeof input !== 'object' || Array.isArray(input))
+        return [
+            {
+                instancePath: '',
+                schemaPath: '#',
+                keyword: 'type',
+                params: { type: 'object' },
+                message: 'must be an object',
+            },
+        ];
+    const config = input as Record<string, unknown>;
+    const checks = [
+        ['approvalPolicies', approvalPoliciesSchema],
+        ['riskCriteria', riskCriteriaSchema],
+        ['riskReviewRouting', riskReviewRoutingSchema],
+    ] as const;
+    const errors: ErrorObject[] = [];
+    for (const [key, schema] of checks) {
+        if (config[key] === undefined) continue;
+        if (!schema.safeParse(config[key]).success)
+            errors.push({
+                instancePath: `/${key}`,
+                schemaPath: `#/properties/${key}`,
+                keyword: 'format',
+                params: {},
+                message: 'must satisfy the code review settings contract',
+            });
+    }
+    if (
+        config.riskAssessmentActive !== undefined &&
+        typeof config.riskAssessmentActive !== 'boolean'
+    )
+        errors.push({
+            instancePath: '/riskAssessmentActive',
+            schemaPath: '#/properties/riskAssessmentActive',
+            keyword: 'type',
+            params: { type: 'boolean' },
+            message: 'must be boolean',
+        });
+    return errors;
 }
 
 export default function validateKodusConfigFile(
@@ -64,6 +113,14 @@ export default function validateKodusConfigFile(
 
     // Validate the configuration file
     if (validate(configFile)) {
+        const semanticErrors = validateRiskApprovalSettings(configFile);
+        if (semanticErrors.length)
+            return {
+                isValidConfigFile: false,
+                validationErrors: semanticErrors,
+                errorMessages: formatValidationErrors(semanticErrors),
+                isDeprecated,
+            };
         return { isValidConfigFile: true, validationErrors: [], isDeprecated };
     } else {
         const errorMessages = formatValidationErrors(validate.errors || []);

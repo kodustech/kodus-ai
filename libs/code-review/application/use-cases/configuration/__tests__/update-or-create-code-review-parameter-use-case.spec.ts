@@ -570,7 +570,10 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
         };
 
         const centralizedConfigPrService = {
-            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue({ id: 'central-repo-1', name: 'centralized-config' }),
+            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue({
+                id: 'central-repo-1',
+                name: 'centralized-config',
+            }),
             getScopedKodusConfigFileContent: jest.fn().mockResolvedValue({}),
             createMutationPullRequestIfEnabled: jest.fn().mockResolvedValue({
                 mode: 'centralized-pr',
@@ -754,7 +757,10 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
         };
 
         const centralizedConfigPrService = {
-            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue({ id: 'central-repo-1', name: 'centralized-config' }),
+            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue({
+                id: 'central-repo-1',
+                name: 'centralized-config',
+            }),
             getScopedKodusConfigFileContent: jest.fn().mockResolvedValue({
                 customMessages: {
                     globalSettings: {
@@ -874,7 +880,10 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
         };
 
         const centralizedConfigPrService = {
-            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue({ id: 'central-repo-1', name: 'centralized-config' }),
+            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue({
+                id: 'central-repo-1',
+                name: 'centralized-config',
+            }),
             getScopedKodusConfigFileContent: jest.fn().mockResolvedValue(null),
             createMutationPullRequestIfEnabled: jest.fn().mockResolvedValue({
                 mode: 'centralized-pr',
@@ -972,7 +981,10 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
         };
 
         const centralizedConfigPrService = {
-            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue({ id: 'central-repo-1', name: 'centralized-config' }),
+            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue({
+                id: 'central-repo-1',
+                name: 'centralized-config',
+            }),
             getScopedKodusConfigFileContent: jest.fn().mockResolvedValue({
                 runOnDraft: true,
             }),
@@ -1070,7 +1082,10 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
         };
 
         const centralizedConfigPrService = {
-            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue({ id: 'central-repo-1', name: 'centralized-config' }),
+            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue({
+                id: 'central-repo-1',
+                name: 'centralized-config',
+            }),
             getScopedKodusConfigFileContent: jest.fn().mockResolvedValue({
                 runOnDraft: true,
             }),
@@ -1169,7 +1184,10 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
         };
 
         const centralizedConfigPrService = {
-            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue({ id: 'central-repo-1', name: 'centralized-config' }),
+            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue({
+                id: 'central-repo-1',
+                name: 'centralized-config',
+            }),
             getScopedKodusConfigFileContent: jest.fn().mockResolvedValue({
                 automatedReviewActive: false,
             }),
@@ -1382,7 +1400,10 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
         };
 
         const centralizedConfigPrService = {
-            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue({ id: 'central-repo-1', name: 'centralized-config' }),
+            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue({
+                id: 'central-repo-1',
+                name: 'centralized-config',
+            }),
             getScopedKodusConfigFileContent: jest.fn().mockResolvedValue({
                 automatedReviewActive: false,
                 isRequestChangesActive: true,
@@ -1505,7 +1526,9 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
         // Centralized disabled: getScopedKodusConfigFileContent returns null,
         // createMutationPullRequestIfEnabled returns { mode: 'direct' }
         const centralizedConfigPrServiceMock = {
-            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue(null),
+            getCentralizedRepositoryIfEnabled: jest
+                .fn()
+                .mockResolvedValue(null),
             getScopedKodusConfigFileContent: jest.fn().mockResolvedValue(null),
             createMutationPullRequestIfEnabled: jest
                 .fn()
@@ -1518,9 +1541,11 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             } as any,
             createOrUpdateParametersUseCase as any,
             {
-                findIntegrationConfigFormatted: jest.fn().mockResolvedValue([
-                    { id: 'repo-1', name: 'my-app', directories: [] },
-                ]),
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue([
+                        { id: 'repo-1', name: 'my-app', directories: [] },
+                    ]),
             } as any,
             { emit: jest.fn() } as any,
             { ensure: jest.fn() } as any,
@@ -1575,7 +1600,9 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
         };
 
         const centralizedConfigPrServiceMock = {
-            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue(null),
+            getCentralizedRepositoryIfEnabled: jest
+                .fn()
+                .mockResolvedValue(null),
             getScopedKodusConfigFileContent: jest.fn().mockResolvedValue(null),
             createMutationPullRequestIfEnabled: jest
                 .fn()
@@ -1604,9 +1631,11 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             } as any,
             createOrUpdateParametersUseCase as any,
             {
-                findIntegrationConfigFormatted: jest.fn().mockResolvedValue([
-                    { id: 'repo-1', name: 'my-app', directories: [] },
-                ]),
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue([
+                        { id: 'repo-1', name: 'my-app', directories: [] },
+                    ]),
             } as any,
             { emit: jest.fn() } as any,
             { ensure: jest.fn() } as any,
@@ -1655,7 +1684,9 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
         };
 
         const centralizedConfigPrServiceMock = {
-            getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue(null),
+            getCentralizedRepositoryIfEnabled: jest
+                .fn()
+                .mockResolvedValue(null),
             getScopedKodusConfigFileContent: jest.fn().mockResolvedValue(null),
             createMutationPullRequestIfEnabled: jest
                 .fn()
@@ -1684,9 +1715,11 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             } as any,
             createOrUpdateParametersUseCase as any,
             {
-                findIntegrationConfigFormatted: jest.fn().mockResolvedValue([
-                    { id: 'repo-1', name: 'my-app', directories: [] },
-                ]),
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue([
+                        { id: 'repo-1', name: 'my-app', directories: [] },
+                    ]),
             } as any,
             { emit: jest.fn() } as any,
             { ensure: jest.fn() } as any,
@@ -1777,9 +1810,11 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             } as any,
             createOrUpdateParametersUseCase as any,
             {
-                findIntegrationConfigFormatted: jest.fn().mockResolvedValue([
-                    { id: 'repo-1', name: 'alpha', directories: [] },
-                ]),
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue([
+                        { id: 'repo-1', name: 'alpha', directories: [] },
+                    ]),
             } as any,
             { emit: jest.fn() } as any,
             { ensure: jest.fn() } as any,
@@ -1856,9 +1891,11 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             } as any,
             createOrUpdateParametersUseCase as any,
             {
-                findIntegrationConfigFormatted: jest.fn().mockResolvedValue([
-                    { id: 'repo-1', name: 'alpha', directories: [] },
-                ]),
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue([
+                        { id: 'repo-1', name: 'alpha', directories: [] },
+                    ]),
             } as any,
             { emit: jest.fn() } as any,
             { ensure: jest.fn() } as any,
@@ -1908,4 +1945,133 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
 
         expect(repository.configs.byokModel).toBeUndefined();
     });
+});
+
+it('refuses an explicit legacy model name together with a slot id before any write', async () => {
+    const dependencies = Array.from({ length: 13 }, () => ({}));
+    const useCase = new (UpdateOrCreateCodeReviewParameterUseCase as any)(
+        ...dependencies,
+    );
+    await expect(
+        useCase.execute({
+            configValue: { byokModelId: 'slot', byokModel: 'legacy-name' },
+            organizationAndTeamData: { organizationId: 'org', teamId: 'team' },
+        }),
+    ).rejects.toThrow('Use byokModelId or byokModel, not both.');
+});
+
+it.each(['sync', 'web'])(
+    'refuses a parent policy that would orphan child filters during %s',
+    async (source) => {
+        const saved = {
+            configs: {},
+            repositories: [
+                {
+                    id: 'repo-1',
+                    name: 'alpha',
+                    isSelected: true,
+                    configs: { approvalLabels: ['ready'] },
+                    directories: [],
+                },
+            ],
+        };
+        const write = { execute: jest.fn().mockResolvedValue(true) };
+        const useCase = new UpdateOrCreateCodeReviewParameterUseCase(
+            {
+                findByKey: jest.fn().mockResolvedValue({ configValue: saved }),
+            } as any,
+            write as any,
+            {
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue([
+                        { id: 'repo-1', name: 'alpha', directories: [] },
+                    ]),
+            } as any,
+            { emit: jest.fn() } as any,
+            { ensure: jest.fn() } as any,
+            { detectAndSaveReferences: jest.fn() } as any,
+            { buildConfigKey: jest.fn().mockReturnValue('key') } as any,
+            {
+                getCentralizedRepositoryIfEnabled: jest
+                    .fn()
+                    .mockResolvedValue(null),
+                getScopedKodusConfigFileContent: jest
+                    .fn()
+                    .mockResolvedValue(null),
+                createMutationPullRequestIfEnabled: jest
+                    .fn()
+                    .mockResolvedValue({ mode: 'direct' }),
+            } as any,
+            { find: jest.fn().mockResolvedValue([]) } as any,
+            {
+                getBYOKConfig: jest.fn(),
+                getSubscriptionStatus: jest.fn(),
+            } as any,
+            { execute: jest.fn() } as any,
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
+            { codeReviewSettingsUpdated: jest.fn() } as any,
+        );
+        const operation = useCase.execute({
+            actor: { source },
+            skipAuthorization: true,
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            configValue: {
+                approvalPolicies: [{ id: 'docs', name: 'Docs', enabled: true }],
+            },
+        } as any);
+        await expect(operation).rejects.toThrow(
+            'Legacy approval filters cannot scope named policies',
+        );
+        expect(write.execute).not.toHaveBeenCalled();
+        // Canonicalizing the child at its own source preserves its restriction
+        // and makes the subsequent parent edit safe for both web and sync.
+        saved.repositories[0].configs = {
+            approvalPolicies: [
+                {
+                    id: 'legacy-approval',
+                    name: 'Existing approval policy',
+                    enabled: true,
+                    labels: ['ready'],
+                },
+            ],
+        } as any;
+        await expect(
+            useCase.execute({
+                actor: { source },
+                skipAuthorization: true,
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                configValue: {
+                    approvalPolicies: [
+                        { id: 'docs', name: 'Docs', enabled: true },
+                    ],
+                },
+            } as any),
+        ).resolves.toBeTruthy();
+        expect(write.execute).toHaveBeenCalled();
+    },
+);
+
+it('rejects a request to inherit a slot ID and set a legacy model at the same time', async () => {
+    const useCase = new (UpdateOrCreateCodeReviewParameterUseCase as any)(
+        ...Array.from({ length: 13 }, () => ({})),
+    );
+    await expect(
+        useCase.execute({
+            configValue: { byokModelId: '', byokModel: 'legacy-name' },
+            organizationAndTeamData: { organizationId: 'org', teamId: 'team' },
+        }),
+    ).rejects.toThrow('Use byokModelId or byokModel, not both.');
 });

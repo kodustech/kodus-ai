@@ -48,6 +48,7 @@ export type CustomAgentPresentation = {
 };
 
 export type CustomAgent = {
+    runWhen?: "always" | "risk-found";
     id: string;
     name: string;
     enabled: boolean;

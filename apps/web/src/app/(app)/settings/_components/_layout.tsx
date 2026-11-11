@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { redirect, usePathname } from "next/navigation";
 import { magicModal } from "@components/ui/magic-modal";
+import { getLLMConfigStatus } from "@services/organizationParameters/fetch";
 import {
     useCodeReviewSettingsShell,
     useSuspenseGetDefaultCodeReviewParameter,
@@ -16,6 +17,7 @@ import {
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import type { CustomMessageConfig } from "@services/pull-request-messages/types";
+import { useQuery } from "@tanstack/react-query";
 import {
     ScopeToolsPortal,
     useLendAddDirectory,
@@ -25,6 +27,7 @@ import {
 } from "src/core/layout/sidebar/scope-tools";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { safeArray } from "src/core/utils/safe-array";
+import { routingStatusQueryKey } from "src/features/ee/byok/_components/routing/routing-state";
 
 import { useCodeReviewRouteParams } from "../_hooks";
 import { RouteSkeleton } from "../../_components/route-skeleton";
@@ -85,6 +88,16 @@ export const SettingsLayout = ({
 }: SettingsLayoutProps) => {
     const { teamId } = useSelectedTeamId();
     const effectiveTeamId = teamId ?? initialTeamId;
+    const modelStatus = useQuery({
+        queryKey: routingStatusQueryKey(effectiveTeamId),
+        queryFn: getLLMConfigStatus,
+        initialData: initialModelData.llmConfigStatus ?? undefined,
+        staleTime: 15_000,
+        refetchOnMount: "always",
+        refetchOnWindowFocus: "always",
+        retry: false,
+        throwOnError: false,
+    });
     const defaultConfig = useSuspenseGetDefaultCodeReviewParameter({
         initialData: initialDefaultConfig,
     });
@@ -129,7 +142,15 @@ export const SettingsLayout = ({
     });
 
     return (
-        <CodeReviewModelDataProvider value={initialModelData}>
+        <CodeReviewModelDataProvider
+            value={{
+                ...initialModelData,
+                llmConfigStatus: modelStatus.data ?? null,
+                isCheckingProvider: modelStatus.isFetching,
+                providerStatusError:
+                    modelStatus.isError ||
+                    (modelStatus.isSuccess && !modelStatus.data),
+            }}>
             <CodeReviewConfigFetchStateProvider
                 value={{
                     isFetching: isShellFetching,

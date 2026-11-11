@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
 const { registerTs, countTokens, tokensUsed } = require('../shared/eval-kit');
-const { orgRouteOrExit } = require('../shared/model-route');
+const { orgRouteOrExit, EVAL_ORG } = require('../shared/model-route');
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 
 const args = Object.fromEntries(
@@ -34,6 +34,12 @@ const {
 } = require('../../libs/feature-gate/application/feature-gate.service.ts');
 const { LicenseService } = require('../../libs/ee/license/license.service.ts');
 const {
+    ApprovalPoliciesService,
+} = require('../../libs/code-review/pipeline/services/approval-policies.service.ts');
+const {
+    PermissionValidationService,
+} = require('../../libs/ee/shared/services/permissionValidation.service.ts');
+const {
     OrganizationService,
 } = require('../../libs/organization/infrastructure/adapters/services/organization.service.ts');
 const {
@@ -50,6 +56,71 @@ const {
 } = require('../../libs/code-review/domain/approval/approval-decision.ts');
 const targets = require('./targets.json');
 const storedIntegrations = require('./integrations.json');
+const compareShared = args['compare-shared'] === true;
+const { stageFor } = require('../pr-risk/runtime');
+const {
+    resolveRiskReviewMode,
+} = require('../../libs/code-review/domain/review-mode.ts');
+
+function usageSince(before) {
+    const now = tokensUsed();
+    return Object.fromEntries(
+        ['in', 'out', 'cacheRead', 'cacheWrite', 'calls', 'ms'].map((key) => [
+            key,
+            now[key] - before[key],
+        ]),
+    );
+}
+
+async function runSharedCase(item) {
+    const { pr, stage, approvalStage } = stageFor(item, route.storedConfig, {
+        withMap: true,
+    });
+    const before = { ...tokensUsed() };
+    const input = {
+        organizationAndTeamData: EVAL_ORG,
+        repository: {
+            id: item.repositoryId || 'eval-repo',
+            name: item.repository || 'eval-repo',
+        },
+        pullRequest: pr,
+        origin: 'github',
+        codeReviewConfig: {
+            riskAssessmentActive: true,
+            pullRequestApprovalActive: true,
+            approvalPolicies: [
+                { id: 'all', name: 'All clean PRs', enabled: true },
+            ],
+        },
+        lineComments: [],
+        prLevelCommentResults: [],
+    };
+    const assessed = await stage.execute(input);
+    const result = await approvalStage.execute(assessed);
+    const replayBefore = tokensUsed().calls;
+    const risk = result.riskAssessment;
+    const replay =
+        risk.status === 'assessed'
+            ? await stage.execute({
+                  ...input,
+                  lastExecution: { riskAssessment: risk },
+              })
+            : undefined;
+    return {
+        decision: result.approvalDecision,
+        risk,
+        mode: resolveRiskReviewMode({
+            risk,
+            currentHeadSha: pr.head.sha,
+            heavyAllowed: true,
+        }),
+        cache: {
+            reused: replay ? replay.riskAssessment === risk : null,
+            calls: tokensUsed().calls - replayBefore,
+        },
+        usage: usageSince(before),
+    };
+}
 
 function loadCases() {
     if (set === 'controlled') return require('./controlled.json');
@@ -167,7 +238,20 @@ async function runCase(item, slot, withMap = true) {
         organizationService,
         licenseService,
     );
-    const stage = new DecidePrApprovalStage(host, maps, access);
+    const parameters = {
+        findByKey: async () => ({ configValue: route.storedConfig }),
+    };
+    const stage = new DecidePrApprovalStage(
+        host,
+        maps,
+        access,
+        new ApprovalPoliciesService(
+            host,
+            parameters,
+            access,
+            new PermissionValidationService(licenseService, parameters),
+        ),
+    );
     const context = {
         organizationAndTeamData: {
             organizationId,
@@ -218,7 +302,9 @@ function summaryMetrics(rows) {
                 row.metadata.expect === 'approve',
         ),
     };
-    const arms = ['baseline', 'modelOnly', 'modelAndMap'];
+    const arms = compareShared
+        ? ['baseline', 'legacy', 'shared']
+        : ['baseline', 'modelOnly', 'modelAndMap'];
     return Object.fromEntries(
         arms.map((arm) => {
             const hold = groups.hold.filter(
@@ -290,6 +376,12 @@ async function main() {
             return 2;
         }
     }
+    if (compareShared && set === 'controlled') {
+        console.error(
+            'not measured: shared comparison requires frozen full or full-balanced snapshots',
+        );
+        return 2;
+    }
     const slot = routeCodeReviewModel(route.storedConfig, {}).resolvedModelSlot;
     if (!slot) {
         console.error('not measured: no production model slot');
@@ -300,7 +392,46 @@ async function main() {
     let errored = 0;
     for (const item of cases) {
         try {
-            if (set !== 'controlled') {
+            if (compareShared) {
+                const before = { ...tokensUsed() };
+                const legacy = await runCase(item, slot, true);
+                const legacyUsage = usageSince(before);
+                const shared = await runSharedCase(item);
+                const arms = {
+                    baseline: 'approve',
+                    legacy: legacy.decision?.kind,
+                    shared: shared.decision?.kind,
+                };
+                const transportFailure =
+                    legacy.risk?.failure || shared.risk?.failure;
+                if (transportFailure) errored++;
+                const ok = arms.shared === item.expect;
+                rows.push({
+                    id: item.id,
+                    checks: 'Shared and legacy assessment on the identical frozen PR, assuming a clean review.',
+                    hits: transportFailure ? 0 : Number(ok),
+                    total: transportFailure ? 0 : 1,
+                    ...(transportFailure ? { unmeasured: true } : {}),
+                    detail: [
+                        { what: `${arms.shared} expected ${item.expect}`, ok },
+                    ],
+                    metadata: {
+                        expect: item.expect,
+                        arms,
+                        risks: { legacy: legacy.risk, shared: shared.risk },
+                        routing: shared.mode,
+                        cache: shared.cache,
+                        usage: { legacy: legacyUsage, shared: shared.usage },
+                        sparseHistory:
+                            !item.areaMap ||
+                            item.areaMap.coverage?.scannedPrs < 10,
+                        linkedBugHistory: touchesLinkedBugHistory(item),
+                    },
+                });
+                console.log(
+                    `${item.id}: legacy=${arms.legacy} shared=${arms.shared} risk=${shared.risk.status} mode=${shared.mode}`,
+                );
+            } else if (set !== 'controlled') {
                 const baseline = evaluateApproval({
                     approvalActive: true,
                     reviewClean: true,
@@ -384,6 +515,13 @@ async function main() {
         set,
         question: evalQuestion('evals/approval-risk'),
         model,
+        ...(compareShared
+            ? {
+                  comparison: 'legacy-vs-shared-risk',
+                  labelSource:
+                      'preliminary AI adjudications; no human quality floor',
+              }
+            : {}),
         runs: 1,
         metric: {
             name: 'approval decisions matching adjudication',
@@ -415,6 +553,6 @@ async function main() {
 main()
     .then((code) => process.exit(code))
     .catch((error) => {
-        console.error(error);
+        console.error('approval-risk eval failed', { message: error.message });
         process.exit(2);
     });

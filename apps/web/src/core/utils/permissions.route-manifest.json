@@ -296,6 +296,22 @@
     }
   },
   {
+    "route": "/settings/code-review/x/risk",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/settings/code-review/x/routing",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "route": "/settings/code-review/x/skills",
     "expected": {
       "billing_manager": "allow",

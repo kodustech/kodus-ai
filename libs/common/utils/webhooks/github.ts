@@ -57,6 +57,9 @@ export class GithubMappedPlatform implements IMappedPlatform {
             repository: payload?.repository,
             title: payload?.pull_request?.title,
             body: payload?.pull_request?.body,
+            ...(typeof payload?.pull_request?.changed_files === 'number'
+                ? { changedFilesCount: payload.pull_request.changed_files }
+                : {}),
             number: payload?.pull_request?.number,
             user: payload?.pull_request?.user,
             url:

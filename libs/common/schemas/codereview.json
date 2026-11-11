@@ -22,13 +22,21 @@
                 },
                 "behaviourForExistingDescription": {
                     "type": "string",
-                    "enum": ["replace", "concatenate", "complement"],
+                    "enum": [
+                        "replace",
+                        "concatenate",
+                        "complement"
+                    ],
                     "default": "concatenate",
                     "description": "Defines how to handle existing descriptions."
                 },
                 "behaviourForNewCommits": {
                     "type": "string",
-                    "enum": ["none", "replace", "concatenate"],
+                    "enum": [
+                        "none",
+                        "replace",
+                        "concatenate"
+                    ],
                     "default": "none",
                     "description": "Defines how Kody updates the summary when new commits arrive."
                 }
@@ -136,13 +144,20 @@
             "properties": {
                 "groupingMode": {
                     "type": "string",
-                    "enum": ["minimal", "full"],
+                    "enum": [
+                        "minimal",
+                        "full"
+                    ],
                     "default": "full",
                     "description": "Defines the grouping mode for suggestions."
                 },
                 "limitationType": {
                     "type": "string",
-                    "enum": ["file", "pr", "severity"],
+                    "enum": [
+                        "file",
+                        "pr",
+                        "severity"
+                    ],
                     "default": "pr",
                     "description": "Defines the limitation type for suggestions."
                 },
@@ -154,7 +169,12 @@
                 },
                 "severityLevelFilter": {
                     "type": "string",
-                    "enum": ["critical", "high", "medium", "low"],
+                    "enum": [
+                        "critical",
+                        "high",
+                        "medium",
+                        "low"
+                    ],
                     "default": "medium",
                     "description": "Filter for the severity level of suggestions."
                 },
@@ -191,7 +211,12 @@
                             "description": "Maximum number of critical severity suggestions."
                         }
                     },
-                    "required": ["low", "medium", "high", "critical"],
+                    "required": [
+                        "low",
+                        "medium",
+                        "high",
+                        "critical"
+                    ],
                     "additionalProperties": false,
                     "description": "Limits for suggestions by severity level. Only used when limitationType is 'severity'."
                 }
@@ -236,7 +261,10 @@
         },
         "reviewMode": {
             "type": "string",
-            "enum": ["balanced", "heavy"],
+            "enum": [
+                "balanced",
+                "heavy"
+            ],
             "default": "balanced",
             "description": "How deep a pull request review goes. balanced runs the main reviewer; heavy adds nine specialist reviewers for higher recall, at the cost of more model calls. A review command can ask for the other mode with --heavy or --balanced."
         },
@@ -253,13 +281,19 @@
         "approvalLabels": {
             "type": "array",
             "maxItems": 50,
-            "items": { "type": "string", "minLength": 1 },
+            "items": {
+                "type": "string",
+                "minLength": 1
+            },
             "description": "A PR must carry at least one of these labels to be eligible for automatic approval."
         },
         "approvalAuthors": {
             "type": "array",
             "maxItems": 50,
-            "items": { "type": "string", "minLength": 1 },
+            "items": {
+                "type": "string",
+                "minLength": 1
+            },
             "description": "A PR must be opened by one of these provider logins to be eligible for automatic approval."
         },
         "approvalRiskActive": {
@@ -275,7 +309,10 @@
         "approvalSensitivePaths": {
             "type": "array",
             "maxItems": 100,
-            "items": { "type": "string", "minLength": 1 },
+            "items": {
+                "type": "string",
+                "minLength": 1
+            },
             "description": "Glob patterns for paths that require human approval."
         },
         "isRequestChangesActive": {
@@ -310,7 +347,9 @@
                         "description": "Optional ref pin. When omitted, cascade uses the PR head branch if it exists on the linked repo, otherwise the default branch."
                     }
                 },
-                "required": ["repository"],
+                "required": [
+                    "repository"
+                ],
                 "additionalProperties": false
             }
         },
@@ -336,7 +375,11 @@
                 },
                 "criteriaLocation": {
                     "type": "string",
-                    "enum": ["auto", "heading", "field"],
+                    "enum": [
+                        "auto",
+                        "heading",
+                        "field"
+                    ],
                     "default": "auto",
                     "description": "Where the task's acceptance criteria live."
                 },
@@ -363,7 +406,11 @@
                 },
                 "recheckOn": {
                     "type": "string",
-                    "enum": ["failing", "push", "request"],
+                    "enum": [
+                        "failing",
+                        "push",
+                        "request"
+                    ],
                     "default": "request",
                     "description": "When a push re-checks a PR already checked: while its last check failed, on every push, or only on @kody -v business-logic. A re-check edits the same comment."
                 },
@@ -374,6 +421,170 @@
                 }
             },
             "additionalProperties": false
+        },
+        "approvalPolicies": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "name",
+                    "enabled"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "labels": {
+                        "type": "array",
+                        "maxItems": 50,
+                        "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                        }
+                    },
+                    "authors": {
+                        "type": "array",
+                        "maxItems": 50,
+                        "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                        }
+                    },
+                    "authorTeams": {
+                        "type": "array",
+                        "maxItems": 50,
+                        "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                        }
+                    },
+                    "includedFiles": {
+                        "type": "array",
+                        "maxItems": 100,
+                        "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                        }
+                    },
+                    "excludedFiles": {
+                        "type": "array",
+                        "maxItems": 100,
+                        "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                        }
+                    },
+                    "maxChangedLines": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                    },
+                    "lineCountExcludedFiles": {
+                        "type": "array",
+                        "maxItems": 100,
+                        "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                        }
+                    },
+                    "instruction": {
+                        "type": "string",
+                        "maxLength": 4000
+                    }
+                }
+            }
+        },
+        "riskAssessmentActive": {
+            "type": "boolean",
+            "default": false
+        },
+        "riskCriteria": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "name",
+                    "enabled",
+                    "instructions"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "instructions": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                    },
+                    "includedFiles": {
+                        "type": "array",
+                        "maxItems": 100,
+                        "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                        }
+                    },
+                    "excludedFiles": {
+                        "type": "array",
+                        "maxItems": 100,
+                        "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                        }
+                    }
+                }
+            }
+        },
+        "riskReviewRouting": {
+            "type": "object",
+            "properties": {
+                "noRisk": {
+                    "type": "string",
+                    "enum": [
+                        "balanced",
+                        "heavy"
+                    ]
+                },
+                "riskFound": {
+                    "type": "string",
+                    "enum": [
+                        "balanced",
+                        "heavy"
+                    ]
+                }
+            }
         }
     },
     "required": [

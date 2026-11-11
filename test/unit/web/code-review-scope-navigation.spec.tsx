@@ -1,6 +1,8 @@
 /** @jest-environment jsdom */
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TooltipProvider } from '@components/ui/tooltip';
 
 let mockPathname = '/settings/code-review/global/general';
@@ -58,6 +60,14 @@ jest.mock('@services/parameters/hooks', () => ({
 }));
 jest.mock('@services/parameters/fetch', () => ({
     createOrUpdateCodeReviewParameter: jest.fn(),
+}));
+jest.mock('@services/organizationParameters/fetch', () => ({
+    getLLMConfigStatus: jest.fn().mockResolvedValue({
+        source: 'none',
+        models: [],
+        byok: { configured: false },
+        env: { configured: false },
+    }),
 }));
 jest.mock('@components/ui/magic-modal', () => ({
     ...jest.requireActual('@components/ui/magic-modal'),
@@ -127,7 +137,11 @@ const {
 } = require('../../../apps/web/src/app/(app)/settings/_components/_layout');
 const {
     useCodeReviewConfig,
+    useCodeReviewModelData,
 } = require('../../../apps/web/src/app/(app)/settings/_components/context');
+const {
+    getLLMConfigStatus,
+} = require('@services/organizationParameters/fetch');
 const { AppSidebar } = require('../../../apps/web/src/core/layout/sidebar');
 const {
     ScopeToolsProvider,
@@ -158,26 +172,49 @@ const ConfigProbe = () => {
         </output>
     );
 };
+const ProviderStateProbe = () => {
+    const state = useCodeReviewModelData();
+    return (
+        <output data-testid="provider-state">
+            {JSON.stringify({
+                connected: state.hasConnectedProvider,
+                error: state.providerStatusError,
+            })}
+        </output>
+    );
+};
 
 const Harness = ({
     config = configValue,
-}: { config?: typeof configValue } = {}) => (
-    <TooltipProvider>
-        <ScopeToolsProvider>
-            <AppSidebar />
-            <SettingsLayout
-                initialTeamId="team-1"
-                initialConfigValue={config as any}
-                initialDefaultConfig={{} as any}
-                initialPlatformConfig={{ configValue: {} } as any}
-                initialParameters={{}}
-                initialModelData={{ llmConfigStatus: null, byokModels: [] }}
-            >
-                <ConfigProbe />
-            </SettingsLayout>
-        </ScopeToolsProvider>
-    </TooltipProvider>
-);
+}: { config?: typeof configValue } = {}) => {
+    const [client] = useState(
+        () =>
+            new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+    );
+    return (
+        <QueryClientProvider client={client}>
+            <TooltipProvider>
+                <ScopeToolsProvider>
+                    <AppSidebar />
+                    <SettingsLayout
+                        initialTeamId="team-1"
+                        initialConfigValue={config as any}
+                        initialDefaultConfig={{} as any}
+                        initialPlatformConfig={{ configValue: {} } as any}
+                        initialParameters={{}}
+                        initialModelData={{
+                            llmConfigStatus: null,
+                            byokModels: [],
+                        }}
+                    >
+                        <ConfigProbe />
+                        <ProviderStateProbe />
+                    </SettingsLayout>
+                </ScopeToolsProvider>
+            </TooltipProvider>
+        </QueryClientProvider>
+    );
+};
 
 beforeAll(() => {
     Element.prototype.scrollIntoView = jest.fn();
@@ -197,6 +234,35 @@ beforeEach(() => {
     mockPathname = '/settings/code-review/global/general';
     mockDirectoryId = null;
     jest.clearAllMocks();
+    getLLMConfigStatus
+        .mockReset()
+        .mockResolvedValue({
+            source: 'none',
+            models: [],
+            byok: { configured: false },
+            env: { configured: false },
+        });
+});
+
+it('treats an empty provider-status response as unavailable instead of leaving Routing loading forever', async () => {
+    getLLMConfigStatus.mockResolvedValueOnce(null);
+    render(<Harness />);
+    await waitFor(() =>
+        expect(screen.getByTestId('provider-state')).toHaveTextContent(
+            '"error":true',
+        ),
+    );
+    expect(screen.getByTestId('provider-state')).toHaveTextContent(
+        '"connected":false',
+    );
+});
+
+it('keeps Routing discoverable without a provider in the selected repository scope', () => {
+    mockPathname = '/settings/code-review/inherited/general';
+    render(<Harness />);
+    expect(
+        screen.getByRole('link', { name: /^Routing(?:\s|$)/ }),
+    ).toHaveAttribute('href', '/settings/code-review/inherited/routing');
 });
 
 it('lists and opens repositories inheriting Global without creating configuration', () => {

@@ -148,6 +148,21 @@ describe('ResolveConfigStage — input contract', () => {
         expect(result.preliminaryFiles).toBe(FILES);
     });
 
+    it('continues incremental review with risk unavailable when the extra full-diff read is rate limited', async () => {
+        prManager.getChangedFilesMetadata
+            .mockResolvedValueOnce(FILES)
+            .mockRejectedValueOnce({ status: 429 });
+        const result = await stage.execute(
+            buildContext({
+                lastExecution: { lastAnalyzedCommit: 'previous' },
+            } as any),
+        );
+        expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
+        expect(result.riskConfigurationUnavailable).toBe(true);
+        expect(result.codeReviewConfig.riskAssessmentActive).toBe(true);
+        expect(result.preliminaryFiles).toEqual(FILES);
+    });
+
     it('forceFullRerun drops the base commit (re-reads the whole PR)', async () => {
         const context = buildContext({
             lastExecution: { lastAnalyzedCommit: 'sha-prev' },
@@ -173,7 +188,13 @@ describe('ResolveConfigStage — input contract', () => {
 
         const result = await stage.execute(context);
 
-        expect(prManager.getChangedFilesMetadata).not.toHaveBeenCalled();
+        expect(prManager.getChangedFilesMetadata).toHaveBeenCalledWith(
+            ORG,
+            REPO,
+            PR,
+            undefined,
+            undefined,
+        );
         expect(codeBaseConfig.getConfig).toHaveBeenCalledWith(
             ORG,
             REPO,

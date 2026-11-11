@@ -131,6 +131,49 @@ describe('ValidateConfigStage — v2 routing', () => {
         expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
     });
 
+    it.each([
+        [true, undefined, true, 'gpt-5-mini'],
+        [false, undefined, false, 'gpt-4o'],
+        [true, 'balanced', false, 'gpt-4o'],
+        [false, 'heavy', true, 'gpt-5-mini'],
+    ] as const)(
+        'routes shared risk=%s with requested=%s to the effective mode and model',
+        async (riskIdentified, requestedReviewMode, heavy, model) => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: v2({
+                    taskOverrides: { codeReviewHeavy: 'm-B' },
+                    defaultModelId: 'm-A',
+                }),
+            });
+            const ctx = buildContext(undefined);
+            ctx.codeReviewConfig.riskAssessmentActive = true;
+            ctx.pullRequest.head.sha = 'head';
+            const early = await stage.execute(ctx);
+            expect(early.codeReviewConfig.resolvedModelSlot).toBeUndefined();
+            const result = await stage.resolveReviewRouting({
+                ...early,
+                requestedReviewMode,
+                riskAssessment: {
+                    status: 'assessed',
+                    riskIdentified,
+                    reason: 'Evidence.',
+                    snapshot: {
+                        organizationId: 'org-1',
+                        repositoryId: 'repo-1',
+                        prNumber: 1,
+                        baseSha: 'base',
+                        headSha: ctx.pullRequest.head.sha,
+                        assessmentKey: 'key',
+                    },
+                },
+            });
+            expect(result.heavy).toBe(heavy);
+            expect(result.codeReviewConfig.resolvedModelSlot?.model).toBe(
+                model,
+            );
+        },
+    );
+
     it('runs heavy on the Heavy model when the repository is set to Heavy, unless --balanced asks otherwise', async () => {
         mockOrganizationParametersService.findByKey.mockResolvedValue({
             configValue: v2({
@@ -815,11 +858,9 @@ describe('ValidateConfigStage — Kodus credits on the routed model', () => {
                 {
                     provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
                     useValue: {
-                        findByKey: jest
-                            .fn()
-                            .mockResolvedValue({
-                                configValue: config(routing),
-                            }),
+                        findByKey: jest.fn().mockResolvedValue({
+                            configValue: config(routing),
+                        }),
                     },
                 },
                 {

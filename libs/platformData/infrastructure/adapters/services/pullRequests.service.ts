@@ -9,6 +9,7 @@ import { IPullRequestsService } from '@libs/platformData/domain/pullRequests/con
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 import {
     IApprovalReasonDeliveryFailure,
+    ApprovalReasonDeliveryGuard,
     ICommit,
     IFile,
     IPullRequests,
@@ -112,12 +113,14 @@ export class PullRequestsService implements IPullRequestsService {
         repositoryId: string,
         prNumber: number,
         failure: IApprovalReasonDeliveryFailure | null,
+        guard?: ApprovalReasonDeliveryGuard,
     ): Promise<boolean> {
         return this.pullRequestsRepository.setApprovalReasonDeliveryFailure(
             organizationId,
             repositoryId,
             prNumber,
             failure,
+            guard,
         );
     }
 

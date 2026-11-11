@@ -42,14 +42,13 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
     });
 
     describe('setApprovalReasonDeliveryFailure', () => {
-        it('writes only the targeted PR and clears only an existing notice', async () => {
+        it('scopes ordered writes and clears to the targeted PR', async () => {
             model.updateOne = jest.fn().mockResolvedValue({ matchedCount: 1 });
             const failure = {
                 decision: 'hold' as const,
                 reason: 'A person must approve.',
                 occurredAt: '2026-10-24T00:00:00.000Z',
             };
-
             expect(
                 await repo.setApprovalReasonDeliveryFailure(
                     'org-A',
@@ -58,32 +57,28 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                     failure,
                 ),
             ).toBe(true);
-            expect(model.updateOne).toHaveBeenNthCalledWith(
-                1,
-                {
-                    organizationId: 'org-A',
-                    'repository.id': 'repo-alpha',
-                    number: 7,
-                },
-                { $set: { approvalReasonDeliveryFailure: failure } },
-            );
-
             await repo.setApprovalReasonDeliveryFailure(
                 'org-A',
                 'repo-alpha',
                 7,
                 null,
+                { expectedFailure: failure },
             );
-            expect(model.updateOne).toHaveBeenNthCalledWith(
-                2,
-                {
-                    organizationId: 'org-A',
+            for (const [filter] of model.updateOne.mock.calls) {
+                expect(filter).toMatchObject({
+                    'organizationId': 'org-A',
                     'repository.id': 'repo-alpha',
-                    number: 7,
-                    approvalReasonDeliveryFailure: { $ne: null },
-                },
-                { $set: { approvalReasonDeliveryFailure: null } },
-            );
+                    'number': 7,
+                });
+            }
+            expect(
+                model.updateOne.mock.calls[0][1].$set
+                    .approvalReasonDeliveryFailure,
+            ).toEqual(failure);
+            expect(
+                model.updateOne.mock.calls[1][1].$set
+                    .approvalReasonDeliveryFailure,
+            ).toBeNull();
         });
 
         it('reports a missing PR when a failed delivery cannot be recorded', async () => {
@@ -116,9 +111,7 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 organizationId: 'org-A',
             } as any;
 
-            await repo.appendPrLevelSuggestions(entity, [
-                { id: 'new' } as any,
-            ]);
+            await repo.appendPrLevelSuggestions(entity, [{ id: 'new' } as any]);
 
             expect(findOneAndUpdate).toHaveBeenCalledTimes(1);
             const [filter, update, options] = findOneAndUpdate.mock.calls[0];
@@ -297,7 +290,15 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 'files.suggestions.id': 1,
                 'files.suggestions.deliveryStatus': 1,
                 'files.suggestions.comment': 1,
+                'approvalReasonDeliveryFailure': 1,
             });
+            expect(
+                pipeline.find((step) => step.$group).$group
+                    .approvalReasonDeliveryFailure,
+            ).toEqual({ $first: '$approvalReasonDeliveryFailure' });
+            expect(pipeline.at(-1).$project.approvalReasonDeliveryFailure).toBe(
+                1,
+            );
             expect(pipeline[2]).toEqual({ $unwind: '$files' });
             expect(option).toHaveBeenCalledWith({ maxTimeMS: 50_000 });
         });
@@ -305,7 +306,27 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
 
     describe('findPullRequestsWithoutDeliveredSuggestionsForApproval', () => {
         it('queries exact repository/PR pairs in bounded pages without loading file arrays', async () => {
-            const findExec = jest.fn().mockResolvedValue([]);
+            const failure = {
+                decision: 'approve',
+                reason: 'Approved by policy Docs.',
+                occurredAt: '2026-11-10T12:00:00Z',
+                reviewedHeadSha: 'head',
+                reviewedBaseSha: 'base',
+            };
+            const findExec = jest
+                .fn()
+                .mockResolvedValueOnce([
+                    {
+                        _id: 'pr',
+                        number: 1,
+                        organizationId: 'org-A',
+                        status: 'open',
+                        provider: 'github',
+                        repository: { id: 'repo-a', name: 'Repo A' },
+                        approvalReasonDeliveryFailure: failure,
+                    },
+                ])
+                .mockResolvedValue([]);
             const maxTimeMS = jest.fn().mockReturnValue({ exec: findExec });
             const lean = jest.fn().mockReturnValue({ maxTimeMS });
             const limit = jest.fn().mockReturnValue({ lean });
@@ -316,11 +337,12 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 pullRequestNumber: index + 1,
             }));
 
-            await repo.findPullRequestsWithoutDeliveredSuggestionsForApproval(
-                'org-A',
-                refs,
-                'open',
-            );
+            const results =
+                await repo.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+                    'org-A',
+                    refs,
+                    'open',
+                );
 
             expect(model.find).toHaveBeenCalledTimes(2);
             const [filter, projection] = model.find.mock.calls[0];
@@ -335,6 +357,8 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             });
             expect(filter.$nor).toHaveLength(1);
             expect(projection.files).toBeUndefined();
+            expect(projection.approvalReasonDeliveryFailure).toBe(1);
+            expect(results[0].approvalReasonDeliveryFailure).toEqual(failure);
             expect(sort).toHaveBeenCalledWith({ _id: 1 });
             expect(limit).toHaveBeenNthCalledWith(1, 100);
             expect(limit).toHaveBeenNthCalledWith(2, 1);
@@ -524,7 +548,9 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             );
 
             const [filter, , options] = findOneAndUpdate.mock.calls[0];
-            expect(filter).toMatchObject({ 'files.suggestions.id': 'sugg-id-1' });
+            expect(filter).toMatchObject({
+                'files.suggestions.id': 'sugg-id-1',
+            });
             expect(options).toMatchObject({ projection: { _id: 1 } });
         });
     });
@@ -565,7 +591,9 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 },
                 {
                     'suggestion.id': 'sugg-id-1',
-                    'suggestion.implementationStatus': { $nin: ['implemented'] },
+                    'suggestion.implementationStatus': {
+                        $nin: ['implemented'],
+                    },
                 },
             ]);
         });
