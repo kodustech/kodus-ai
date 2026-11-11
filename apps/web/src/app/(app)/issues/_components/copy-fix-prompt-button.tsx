@@ -64,7 +64,7 @@ export const CopyFixPromptButton = ({
                         ? `Only the first ${FIX_PROMPT_MAX_ISSUES} are in it.`
                         : "",
                     skipped.length
-                        ? `${skipped.length} left out: you cannot read them.`
+                        ? `${skipped.length} left out: unknown, or in a repository you cannot read.`
                         : "",
                 ]
                     .filter(Boolean)

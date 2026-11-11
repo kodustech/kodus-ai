@@ -8,6 +8,7 @@
 import { z } from 'zod';
 
 import { LLM } from '@libs/llm/llm';
+import { redactSecrets } from '@libs/llm/review-error-diagnostics';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { runWithUsageMeter } from '@libs/llm/usage-meter';
 import { cweFamily } from '@libs/issues/domain/scan-fingerprint';
@@ -832,9 +833,13 @@ export class SecurityScanEngine {
                 executed: true,
                 exitCode: result.exitCode,
                 reproduced: result.exitCode === 0,
-                output: `${result.stdout ?? ''}\n${result.stderr ?? ''}`
-                    .trim()
-                    .slice(-4000),
+                // Shown to whoever reads the issue. The sandbox holds no
+                // credential the command can read (the clone token lives only
+                // in the fetch's environment, the proxy's config is root-only),
+                // so this is a floor under what a repository could plant.
+                output: redactSecrets(
+                    `${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim(),
+                ).slice(-4000),
             });
             // The test lives on the issue; left in the checkout, the next
             // units' lenses would read it as the repository's own code.

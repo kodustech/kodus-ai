@@ -207,7 +207,6 @@ export function mergeMapPlan(params: {
     );
 }
 
-function clampPriority(value: unknown): number {
-    const n = typeof value === 'number' && Number.isFinite(value) ? value : 50;
-    return Math.max(0, Math.min(100, Math.round(n)));
+function clampPriority(value: number | undefined): number {
+    return Math.max(0, Math.min(100, Math.round(value ?? 50)));
 }

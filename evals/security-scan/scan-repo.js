@@ -39,15 +39,15 @@ async function openSandbox(c, sandboxKind) {
         };
         return sandbox;
     }
-    const cloneUrl = await mirrorFor({ repo: c.repo, headSha: c.commit });
-    const params = { cloneUrl, authToken: '', branch: '', platform: 'github', checkoutSha: c.commit, sandboxMetadata: { stage: 'eval-security-scan' } };
+    const params = { authToken: '', branch: '', platform: 'github', checkoutSha: c.commit, sandboxMetadata: { stage: 'eval-security-scan' } };
     if (sandboxKind === 'e2b') {
         const { E2BSandboxService } = lib('sandbox/infrastructure/providers/e2b-sandbox.service.ts');
         const env = { ...require('dotenv').parse(fs.existsSync(path.join(__dirname, '../../.env')) ? fs.readFileSync(path.join(__dirname, '../../.env')) : ''), ...process.env };
         // E2B clones from GitHub itself: a file:// mirror is on this machine.
         return new E2BSandboxService({ get: (k) => env[k] }).createSandboxWithRepo({ ...params, cloneUrl: `https://github.com/${c.repo}.git` });
     }
-    return new LocalSandboxService(undefined).createSandboxWithRepo(params);
+    const cloneUrl = await mirrorFor({ repo: c.repo, headSha: c.commit });
+    return new LocalSandboxService(undefined).createSandboxWithRepo({ ...params, cloneUrl });
 }
 
 /**

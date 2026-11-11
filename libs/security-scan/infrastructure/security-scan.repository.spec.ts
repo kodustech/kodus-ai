@@ -23,17 +23,25 @@ describe('SecurityScanRepository', () => {
 });
 
 describe('SecurityScanRepository.failStale', () => {
-    it('fails only queued or running scans silent for longer than the window', async () => {
+    it("fails a running or queued scan silent for longer than its state's window", async () => {
         const updateMany = jest.fn(async () => ({ modifiedCount: 2 }));
         const repository = new SecurityScanRepository({ updateMany } as any);
         const before = Date.now();
 
-        await expect(repository.failStale('org-1', 60_000)).resolves.toBe(2);
+        await expect(
+            repository.failStale('org-1', { runningMs: 60_000, queuedMs: 600_000 }),
+        ).resolves.toBe(2);
 
         const [filter, update] = updateMany.mock.calls[0] as unknown as [any, any];
         expect(filter.organizationId).toBe('org-1');
-        expect(filter.status).toEqual({ $in: ['queued', 'running'] });
-        expect(filter.updatedAt.$lt.getTime()).toBeLessThanOrEqual(before - 60_000 + 50);
+        const [running, queued] = filter.$or;
+        expect(running.status).toBe('running');
+        expect(running.updatedAt.$lt.getTime()).toBeLessThanOrEqual(before - 60_000 + 50);
+        // A queued scan waits for a worker as long as the backlog: it has the
+        // longer window.
+        expect(queued.status).toBe('queued');
+        expect(queued.updatedAt.$lt.getTime()).toBeLessThanOrEqual(before - 600_000 + 50);
+        expect(queued.updatedAt.$lt.getTime()).toBeGreaterThan(before - 600_000 - 1_000);
         expect(update.$set.status).toBe('failed');
         expect(update.$set.error).toMatch(/Interrupted/);
     });
@@ -79,7 +87,7 @@ describe('SecurityScanRepository: one active scan per repository', () => {
         const updateMany = jest.fn(async () => ({ modifiedCount: 1 }));
         const repository = new SecurityScanRepository({ updateMany } as any);
 
-        await repository.failStale('org-1', 60_000);
+        await repository.failStale('org-1', { runningMs: 60_000, queuedMs: 60_000 });
 
         const [, update] = updateMany.mock.calls[0] as unknown as [any, any];
         expect(update.$unset).toEqual({ activeKey: '' });

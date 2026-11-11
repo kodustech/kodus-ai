@@ -55,7 +55,8 @@ export const ScanStatusBanner = ({ scans }: { scans: SecurityScan[] }) => {
             <Banner tone="info" icon={<ShieldIcon />}>
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                     <p className="text-text-primary text-sm font-medium">
-                        {running.status === "queued"
+                        {/* Queued again between two jobs: already started. */}
+                        {running.status === "queued" && !running.startedAt
                             ? `Starting a scan of ${running.repository.fullName}`
                             : `Scanning ${running.repository.fullName}`}
                     </p>

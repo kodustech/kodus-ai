@@ -1,4 +1,4 @@
-import { enclosingSymbol } from './enclosing-symbol';
+import { codeLines, enclosingSymbol } from './enclosing-symbol';
 
 const lineOf = (source: string, marker: string) =>
     source.split('\n').findIndex((l) => l.includes(marker)) + 1;
@@ -299,5 +299,21 @@ export class OrdersController {
         const started = Date.now();
         expect(enclosingSymbol(src, lineOf(src, 'SINK'))).toBe('render');
         expect(Date.now() - started).toBeLessThan(200);
+    });
+});
+
+describe('codeLines', () => {
+    it('keeps one line per source line when a string continues past a backslash', () => {
+        const src = [
+            'const banner = "first \\',
+            'second";',
+            'function handler(req) {',
+            '    run(req.query.cmd); // SINK',
+            '}',
+        ].join('\n');
+
+        expect(codeLines(src)).toHaveLength(5);
+        expect(codeLines(src)[1].trim()).toBe(';');
+        expect(enclosingSymbol(src, lineOf(src, 'SINK'))).toBe('handler');
     });
 });

@@ -5,13 +5,19 @@ import { SecurityScanRecord } from '../domain/security-scan.types';
 import {
     ISecurityScanRepository,
     SECURITY_SCAN_REPOSITORY_TOKEN,
+    StaleScanWindows,
 } from '../infrastructure/security-scan.repository';
 
 /**
- * A live scan writes to its record after every unit, and one job runs at
- * most 34 minutes: an hour of silence means the worker running it is gone.
+ * A running scan writes to its record after every unit, and one job runs at
+ * most 34 minutes: an hour of silence means the worker running it is gone. A
+ * queued one (new, or between two jobs) waits as long as the queue's backlog,
+ * so it is given a day before its job is taken as lost.
  */
-export const STALE_SCAN_AFTER_MS = 60 * 60 * 1000;
+export const STALE_SCAN_AFTER: StaleScanWindows = {
+    runningMs: 60 * 60 * 1000,
+    queuedMs: 24 * 60 * 60 * 1000,
+};
 
 @Injectable()
 export class GetSecurityScansUseCase {
@@ -26,7 +32,7 @@ export class GetSecurityScansUseCase {
         repositoryIds: string[] | undefined,
         limit = 20,
     ): Promise<SecurityScanRecord[]> {
-        await this.scans.failStale(organizationId, STALE_SCAN_AFTER_MS);
+        await this.scans.failStale(organizationId, STALE_SCAN_AFTER);
         return this.scans.findRecent(
             organizationId,
             repositoryIds,

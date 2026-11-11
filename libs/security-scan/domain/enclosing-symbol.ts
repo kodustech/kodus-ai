@@ -144,12 +144,18 @@ export function codeLines(source: string): string[] {
     let line = '';
     // What the text being read is inside, if anything.
     let inside: '/*' | '"""' | "'''" | '`' | '"' | "'" | null = null;
+    // A backslash ended the line inside a string: the string goes on.
+    let continued = false;
 
     for (let i = 0; i < source.length; i++) {
         const ch = source[i];
         if (ch === '\n') {
-            // A plain quote never spans lines; an unterminated one ends here.
-            if (inside === '"' || inside === "'") inside = null;
+            // A plain quote never spans lines unless the line ends in a
+            // backslash; an unterminated one ends here.
+            if ((inside === '"' || inside === "'") && !continued) {
+                inside = null;
+            }
+            continued = false;
             out.push(line.replace(/\r$/, ''));
             line = '';
             continue;
@@ -157,6 +163,13 @@ export function codeLines(source: string): string[] {
         if (inside) {
             const closer = inside === '/*' ? '*/' : inside;
             if (ch === '\\' && inside !== '/*') {
+                if (source[i + 1] === '\n') {
+                    // Left for the line break above, which ends the line.
+                    line += ' ';
+                    continued = true;
+                    continue;
+                }
+                continued = source[i + 1] === '\r';
                 line += '  ';
                 i++;
                 continue;

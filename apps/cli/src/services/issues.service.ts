@@ -12,7 +12,9 @@ const ISSUES_FEATURE = 'Issues';
 /** At most this many issues go into one prompt (the API refuses more). */
 export const FIX_PROMPT_MAX_ISSUES = 25;
 
-const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low'];
+const SEVERITY_RANK = new Map(
+    ['critical', 'high', 'medium', 'low'].map((s, i) => [s, i] as const),
+);
 
 export type IssuesFilter = {
     /** Default open. */
@@ -57,12 +59,12 @@ class IssuesService {
                 (i) =>
                     !repo ||
                     i.repository?.name?.toLowerCase() === repo ||
-                    String(i.repository?.id) === repo,
+                    String(i.repository?.id).toLowerCase() === repo,
             )
             .sort(
                 (a, b) =>
-                    SEVERITY_ORDER.indexOf(a.severity) -
-                    SEVERITY_ORDER.indexOf(b.severity),
+                    (SEVERITY_RANK.get(a.severity) ?? -1) -
+                    (SEVERITY_RANK.get(b.severity) ?? -1),
             );
     }
 

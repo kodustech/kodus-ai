@@ -50,6 +50,8 @@ export class BuildFixPromptUseCase implements IUseCase {
             resource: ResourceType.Issues,
         });
 
+        const readableIds = readable === null ? null : new Set(readable);
+
         const issues = await Promise.all(
             wanted.map((id) => this.issuesService.findById(id)),
         );
@@ -57,14 +59,15 @@ export class BuildFixPromptUseCase implements IUseCase {
             (issue) =>
                 !!issue?.repository?.id &&
                 issue.organizationId === organizationId &&
-                (readable === null || readable.includes(issue.repository.id)),
+                (readableIds === null || readableIds.has(issue.repository.id)),
         );
         const included = kept.map((issue) => issue.uuid);
+        const includedIds = new Set(included);
 
         return {
             prompt: kept.length ? buildFixPrompt(kept) : '',
             included,
-            skipped: wanted.filter((id) => !included.includes(id)),
+            skipped: wanted.filter((id) => !includedIds.has(id)),
         };
     }
 }

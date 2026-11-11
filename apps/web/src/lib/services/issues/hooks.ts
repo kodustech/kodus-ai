@@ -14,11 +14,9 @@ import type {
 // list filters a value to match on ("code_review" vs "security_scan").
 // Module-level so React Query memoizes the selected data across renders.
 const withIssueSource = (issues: IssueListItem[]): IssueListItem[] =>
-    Array.isArray(issues)
-        ? issues.map((issue) =>
-              issue.source ? issue : { ...issue, source: "code_review" },
-          )
-        : issues;
+    issues.map((issue) =>
+        issue.source ? issue : { ...issue, source: "code_review" },
+    );
 
 export const useIssues = () => {
     const { organizationId } = useOrganizationContext();

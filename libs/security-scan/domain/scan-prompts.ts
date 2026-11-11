@@ -1,5 +1,8 @@
 import type { SurfaceHit, VulnClass } from './surface/surface.types';
 import type { ScanUnit } from './security-scan.types';
+import { fenced } from '@libs/common/utils/markdown-fence';
+
+export { fenced };
 
 export const VULN_CLASSES: VulnClass[] = [
     'authz',
@@ -143,20 +146,6 @@ export function buildLensFocus(vulnClass: VulnClass): string {
     return `Security auditor for one class: ${brief.name}. Its focus is an exploitable vulnerability of that class in which a named attacker crosses a security boundary: an unauthenticated caller reaching what needs a login, a user reaching another user's or another tenant's data, a user gaining an administrator's power, an outsider making the server reach its internal network.
 Outside the focus, however real the code smell: a capability the application already grants that caller with nothing limiting it; what an administrator or the operator configures; a command-line tool, developer script or desktop app attacking only the user running it; an error or traceback returned to the user whose own request failed; data that is public anyway; a token or id the attacker has no way to learn or guess; an insecure default the operator is told to change.
 Within the focus: getting around a limit the application itself enforces (a sandbox around user code, a block on internal or metadata addresses, a per-user folder, an allow-list), a secret committed to the repository, and an insecure default the code ships with that a remote attacker can use (a CSRF from another site, a debug console, a cross-origin read, a cookie stolen over plain HTTP).`;
-}
-
-/**
- * Repository content in a fence it cannot close: one backtick more than the
- * longest run inside it, so a ``` line in a file does not end the block and
- * turn what follows into instructions.
- */
-export function fenced(content: string): string {
-    const longest = Math.max(
-        0,
-        ...(content.match(/`+/g) ?? []).map((run) => run.length),
-    );
-    const fence = '`'.repeat(Math.max(3, longest + 1));
-    return `${fence}\n${content}\n${fence}`;
 }
 
 /** Said in every prompt that carries repository content. */

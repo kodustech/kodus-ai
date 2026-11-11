@@ -22,7 +22,7 @@ function useCaseWith(last: Record<string, unknown> | null) {
     const scans = {
         failStale: jest.fn(async () => 0),
         findActive: jest.fn(async () => null),
-        findRecent: jest.fn(async () => (last ? [last] : [])),
+        findLatest: jest.fn(async () => last),
         create: jest.fn(async (scan: any) => ({ uuid: 'scan-2', ...scan })),
     };
     const useCase = new StartSecurityScanUseCase(

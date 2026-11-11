@@ -26,7 +26,7 @@ import { SpendLimitConfigService } from '@libs/analytics/application/spend-limit
 
 import { validateBudget } from '../domain/budget-meter';
 import { resolveScanModel } from './scan-model';
-import { STALE_SCAN_AFTER_MS } from './get-security-scans.use-case';
+import { STALE_SCAN_AFTER } from './get-security-scans.use-case';
 import {
     SecurityScanBudget,
     SecurityScanRecord,
@@ -99,7 +99,7 @@ export class StartSecurityScanUseCase {
             throw new BadRequestException(budgetError);
         }
 
-        await this.scans.failStale(orgTeam.organizationId, STALE_SCAN_AFTER_MS);
+        await this.scans.failStale(orgTeam.organizationId, STALE_SCAN_AFTER);
         const active = await this.scans.findActive(
             orgTeam.organizationId,
             String(repository.id),
@@ -190,11 +190,7 @@ export class StartSecurityScanUseCase {
         SecurityScanRecord,
         'units' | 'progress' | 'reported' | 'coverage'
     > | null> {
-        const [last] = await this.scans.findRecent(
-            organizationId,
-            [repositoryId],
-            1,
-        );
+        const last = await this.scans.findLatest(organizationId, repositoryId);
         if (
             !last?.units?.length ||
             (last.status !== SecurityScanStatus.STOPPED_BY_BUDGET &&

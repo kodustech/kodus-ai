@@ -37,6 +37,7 @@ import {
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
+import { extractProviderMessage } from '@libs/llm/review-error-diagnostics';
 
 import { ScanBudgetMeter, validateBudget } from '../domain/budget-meter';
 import {
@@ -150,7 +151,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             });
             await this.scans.update(scan.uuid, {
                 status: SecurityScanStatus.FAILED,
-                error: String(error?.message ?? error).slice(0, 500),
+                error: scanErrorMessage(error),
                 finishedAt: new Date().toISOString(),
             });
             await this.markFailed(jobId, error);
@@ -183,7 +184,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         // it cannot compute would never stop the scan.
         const budgetError = validateBudget(scan.budget, !!rates);
         if (budgetError) {
-            throw new Error(budgetError);
+            throw new ScanFailure(budgetError);
         }
         const meter = new ScanBudgetMeter(scan.budget, rates, scan.spend);
 
@@ -202,8 +203,8 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             scan.repository.platform as PlatformType,
         );
         if (!cloneParams?.url) {
-            throw new Error(
-                `Could not resolve how to clone ${scan.repository.fullName}`,
+            throw new ScanFailure(
+                `Could not resolve how to clone ${scan.repository.fullName}. Check the repository's integration.`,
             );
         }
         const branch = scan.repository.defaultBranch.replace(
@@ -365,8 +366,10 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
 
         if (!result.finished && !result.stoppedByBudget && !signal?.aborted) {
             // The sandbox is about to expire: persist and let a new job, with
-            // a new sandbox, take the rest.
+            // a new sandbox, take the rest. Queued again until a worker takes
+            // it, so the wait is not read as a stopped worker.
             await this.scans.update(scan.uuid, {
+                status: SecurityScanStatus.QUEUED,
                 progress: result.progress,
                 spend: meter.snapshot(),
                 coverage,
@@ -542,4 +545,24 @@ function toReported(finding: ScanFinding): ScanReportedFinding {
         endLine: finding.endLine,
         attackPath: finding.attackPath,
     };
+}
+
+/** A failure whose message is written for the person who ran the scan. */
+export class ScanFailure extends Error {}
+
+/**
+ * What a failed scan shows. Its error is returned by the API to everyone who
+ * can see the repository, so the raw message (clone URLs, database errors,
+ * internal paths) stays in the log; only a sentence written for the user, or
+ * the model provider's own answer, redacted, is kept on the scan.
+ */
+export function scanErrorMessage(error: unknown): string {
+    if (error instanceof ScanFailure) {
+        return error.message;
+    }
+    const provider = extractProviderMessage(error);
+    if (provider) {
+        return `The model provider refused a request: ${provider}`;
+    }
+    return 'The scan stopped on an internal error. Its findings so far are kept; run it again, and contact support if it keeps failing.';
 }

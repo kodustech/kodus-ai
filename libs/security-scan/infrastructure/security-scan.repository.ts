@@ -38,13 +38,25 @@ export interface ISecurityScanRepository {
         organizationId: string,
         repositoryId: string,
     ): Promise<SecurityScanRecord | null>;
+    /** The repository's last scan, with its plan, progress and findings. */
+    findLatest(
+        organizationId: string,
+        repositoryId: string,
+    ): Promise<SecurityScanRecord | null>;
     /**
-     * Marks as failed the organization's queued or running scans nothing has
-     * touched for `staleAfterMs`: the worker running them stopped. Returns how
-     * many.
+     * Marks as failed the organization's scans nothing has touched for their
+     * state's window: the worker running them stopped, or the job waiting for
+     * one was lost. Returns how many.
      */
-    failStale(organizationId: string, staleAfterMs: number): Promise<number>;
+    failStale(organizationId: string, after: StaleScanWindows): Promise<number>;
 }
+
+export type StaleScanWindows = {
+    /** A running scan writes after every unit. */
+    runningMs: number;
+    /** A queued scan waits for a worker, as long as the queue's backlog. */
+    queuedMs: number;
+};
 
 const ACTIVE = [SecurityScanStatus.QUEUED, SecurityScanStatus.RUNNING];
 
@@ -140,15 +152,37 @@ export class SecurityScanRepository implements ISecurityScanRepository {
         return doc ? toRecord(doc) : null;
     }
 
+    async findLatest(
+        organizationId: string,
+        repositoryId: string,
+    ): Promise<SecurityScanRecord | null> {
+        const doc = await this.model
+            .findOne({ organizationId, 'repository.id': repositoryId })
+            .sort({ createdAt: -1 })
+            .exec();
+        return doc ? toRecord(doc) : null;
+    }
+
     async failStale(
         organizationId: string,
-        staleAfterMs: number,
+        after: StaleScanWindows,
     ): Promise<number> {
+        const silentFor = (ms: number) => ({
+            $lt: new Date(Date.now() - ms),
+        });
         const result = await this.model.updateMany(
             {
                 organizationId,
-                status: { $in: ACTIVE },
-                updatedAt: { $lt: new Date(Date.now() - staleAfterMs) },
+                $or: [
+                    {
+                        status: SecurityScanStatus.RUNNING,
+                        updatedAt: silentFor(after.runningMs),
+                    },
+                    {
+                        status: SecurityScanStatus.QUEUED,
+                        updatedAt: silentFor(after.queuedMs),
+                    },
+                ],
             },
             {
                 $set: {

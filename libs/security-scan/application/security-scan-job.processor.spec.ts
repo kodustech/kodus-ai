@@ -13,8 +13,10 @@ jest.mock(
 
 import { SecurityScanEngine } from './security-scan-engine';
 import {
+    ScanFailure,
     SecurityScanJobProcessor,
     buildIssueDescription,
+    scanErrorMessage,
 } from './security-scan-job.processor';
 import { SecurityScanStatus } from '../domain/security-scan.types';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
@@ -251,7 +253,9 @@ describe('SecurityScanJobProcessor', () => {
         );
         // Nothing is resolved until the whole scan has run.
         expect(issuesService.resolveUnseenScanFindings).not.toHaveBeenCalled();
-        expect(lastUpdate(scans).status).toBeUndefined();
+        // Waiting for the next worker: queued, so the wait is not read as a
+        // stopped worker.
+        expect(lastUpdate(scans).status).toBe(SecurityScanStatus.QUEUED);
     });
 
     it('does nothing for a scan that already finished', async () => {
@@ -265,11 +269,11 @@ describe('SecurityScanJobProcessor', () => {
         expect(scans.update).not.toHaveBeenCalled();
     });
 
-    it('records a failure on the scan', async () => {
+    it('records a failure on the scan, without the internal error', async () => {
         const { processor, scans } = setup({ result: finishedResult() });
         (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
             run: jest.fn(async () => {
-                throw new Error('sandbox died');
+                throw new Error('clone of https://x-access-token:ghs_abc@github.com/acme/shop failed');
             }),
         }));
 
@@ -278,9 +282,10 @@ describe('SecurityScanJobProcessor', () => {
         expect(lastUpdate(scans)).toEqual(
             expect.objectContaining({
                 status: SecurityScanStatus.FAILED,
-                error: 'sandbox died',
+                error: expect.stringMatching(/internal error/),
             }),
         );
+        expect(lastUpdate(scans).error).not.toMatch(/github|ghs_/);
     });
 
     it('fails a USD-capped scan whose model has lost its price, instead of running it uncapped', async () => {
@@ -315,5 +320,30 @@ describe('buildIssueDescription', () => {
         expect(text).toContain('CWE-639 · found at abcdef123456');
         expect(text).not.toContain('Attack path');
         expect(text).not.toContain('test()');
+    });
+});
+
+describe('scanErrorMessage', () => {
+    it('keeps a message written for the user', () => {
+        expect(scanErrorMessage(new ScanFailure('Set a spend limit.'))).toBe(
+            'Set a spend limit.',
+        );
+    });
+
+    it("quotes the model provider's answer, redacted", () => {
+        const error = Object.assign(new Error('Bad request'), {
+            responseBody: JSON.stringify({
+                error: { message: 'Invalid key sk-ant-api03-abcdefghijklmnopqrstuvwxyz' },
+            }),
+        });
+        const message = scanErrorMessage(error);
+        expect(message).toMatch(/^The model provider refused a request: Invalid key/);
+        expect(message).not.toMatch(/abcdefghijklmnop/);
+    });
+
+    it('hides any other error', () => {
+        expect(scanErrorMessage(new Error('E11000 duplicate key one_active_scan'))).toMatch(
+            /^The scan stopped on an internal error/,
+        );
     });
 });

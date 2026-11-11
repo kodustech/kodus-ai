@@ -65,7 +65,7 @@ export const ScanHistoryButton = ({ scans }: { scans: SecurityScan[] }) => {
                     <SheetHeader className="border-card-lv3/60 border-b px-6 pt-5 pb-4">
                         <SheetTitle>Scan history</SheetTitle>
                         <SheetDescription>
-                            Every deep scan of this team, newest first.
+                            The most recent deep scans of this team, newest first.
                         </SheetDescription>
                     </SheetHeader>
 

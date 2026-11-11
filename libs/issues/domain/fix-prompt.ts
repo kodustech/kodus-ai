@@ -1,3 +1,5 @@
+import { fenced } from '@libs/common/utils/markdown-fence';
+
 import type { IIssue } from './interfaces/issues.interface';
 
 /** The most issues one prompt carries: past that a coding agent loses the thread. */
@@ -100,7 +102,7 @@ function section(issue: FixPromptIssue, n: number): string {
             ? 'It ran in an isolated sandbox and reproduced the issue.'
             : 'It was written but has not reproduced the issue yet; check it before relying on it.';
         out.push(
-            `Reproduction test (${test.path}). ${status} Run it with: \`${test.command}\`\n\n\`\`\`\n${test.content.trim()}\n\`\`\``,
+            `Reproduction test (${test.path}). ${status} Run it with:\n${fenced(test.command)}\n\n${fenced(test.content.trim())}`,
         );
     }
 
@@ -109,7 +111,7 @@ function section(issue: FixPromptIssue, n: number): string {
     );
     if (suggestion) {
         out.push(
-            `Change Kody suggested in a review:\n\`\`\`${suggestion.language ?? ''}\n${suggestion.improvedCode.trim()}\n\`\`\``,
+            `Change Kody suggested in a review:\n${fenced(suggestion.improvedCode.trim(), suggestion.language ?? '')}`,
         );
     }
 
