@@ -160,6 +160,9 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
                 lastNDays?: number;
                 limit?: number;
             };
+            // A screen is waiting: providers that back off on rate limits
+            // give up sooner. Only Bitbucket Cloud reads it today.
+            interactive?: boolean;
         };
     }): Promise<Repositories[]>;
     getListMembers(

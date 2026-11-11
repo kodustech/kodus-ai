@@ -39,6 +39,7 @@ export class GetRepositoriesUseCase implements IUseCase {
                     filters: {
                         organizationSelected: params?.organizationSelected,
                     },
+                    options: { interactive: true },
                 });
 
             const assignedRepositoryIds =

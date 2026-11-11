@@ -112,6 +112,69 @@ describe('BitbucketCloudService — rate limit visibility', () => {
         expect(error?.getStatus?.()).toBe(HttpStatus.TOO_MANY_REQUESTS);
         expect(error?.message).toMatch(/rate limiting/);
     });
+
+    describe('a listing someone waits on (interactive)', () => {
+        const listInteractive = (service: BitbucketCloudService) =>
+            service
+                .getRepositories({
+                    organizationAndTeamData: org,
+                    options: { interactive: true },
+                })
+                .then(
+                    (repos) => ({ repos }),
+                    (error) => ({ error }),
+                );
+
+        it('retries a 429 once after 20s, then gives the 429 back', async () => {
+            jest.useFakeTimers();
+            const fetchMock = jest.fn().mockResolvedValue(respond(429));
+            global.fetch = fetchMock as any;
+            const { service } = makeService();
+
+            const listing = listInteractive(service);
+            await jest.advanceTimersByTimeAsync(19_999);
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            await jest.advanceTimersByTimeAsync(1);
+            const { error } = (await listing) as any;
+
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            expect(error?.getStatus?.()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+        });
+
+        it('lists normally when the one retry succeeds', async () => {
+            jest.useFakeTimers();
+            const fetchMock = jest
+                .fn()
+                .mockResolvedValueOnce(respond(429))
+                .mockResolvedValue(respond(200));
+            global.fetch = fetchMock as any;
+            const { service } = makeService();
+
+            const listing = listInteractive(service);
+            await jest.advanceTimersByTimeAsync(20_000);
+
+            await expect(listing).resolves.toEqual({ repos: [] });
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        });
+
+        it('keeps the full backoff for a listing nobody waits on', async () => {
+            jest.useFakeTimers();
+            const fetchMock = jest.fn().mockResolvedValue(respond(429));
+            global.fetch = fetchMock as any;
+            const { service } = makeService();
+
+            const listing = service
+                .getRepositories({ organizationAndTeamData: org })
+                .catch(() => undefined);
+            // 10s, then 20s: no give-up at the 20s mark
+            await jest.advanceTimersByTimeAsync(29_999);
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+
+            await jest.runAllTimersAsync();
+            await listing;
+            expect(fetchMock).toHaveBeenCalledTimes(5);
+        });
+    });
 });
 
 describe('BitbucketCloudService — author scan paging', () => {

@@ -105,7 +105,12 @@ import {
  * which only sees the request, can tag its rate-limit logs.
  */
 const LOG_CONTEXT = Symbol('bitbucketLogContext');
-type FetchLogContext = { organizationId?: string; teamId?: string };
+type FetchLogContext = {
+    organizationId?: string;
+    teamId?: string;
+    // Someone is waiting on a screen: see INTERACTIVE_429_WAIT_MS.
+    interactive?: boolean;
+};
 import { ConfigService } from '@nestjs/config';
 import { APIClient, Bitbucket, Schema } from 'bitbucket';
 import { Response as BitbucketResponse } from 'bitbucket/src/request/types';
@@ -1336,18 +1341,23 @@ export class BitbucketCloudService implements Omit<
                 lastNDays?: number;
                 limit?: number;
             };
+            interactive?: boolean;
         };
     }): Promise<Repositories[]> {
         try {
             const { organizationAndTeamData } = params;
 
-            const bitbucketAuthDetail = await this.getAuthDetails(
+            const authDetail = await this.getAuthDetails(
                 organizationAndTeamData,
             );
 
-            if (!bitbucketAuthDetail) {
+            if (!authDetail) {
                 return [];
             }
+
+            const bitbucketAuthDetail = params.options?.interactive
+                ? this.withInteractiveFetch(authDetail)
+                : authDetail;
 
             const integration = await this.integrationService.findOne({
                 organization: {
@@ -1415,6 +1425,20 @@ export class BitbucketCloudService implements Omit<
             }
             throw new BadRequestException(error);
         }
+    }
+
+    private withInteractiveFetch(
+        authDetail: BitbucketAuthDetail,
+    ): BitbucketAuthDetail {
+        const copy = { ...authDetail };
+        Object.defineProperty(copy, LOG_CONTEXT, {
+            value: {
+                ...(authDetail as any)?.[LOG_CONTEXT],
+                interactive: true,
+            } satisfies FetchLogContext,
+            enumerable: false,
+        });
+        return copy;
     }
 
     private transformRepo(
@@ -3830,6 +3854,11 @@ export class BitbucketCloudService implements Omit<
     // delayed retry instead.
     private static readonly RATE_GATE_MAX_WAIT_MS = 5 * 60_000;
 
+    // A screen call (the repository picker) retries a 429 once after this
+    // wait and then gives the 429 back, instead of the ~2.5 min backoff a
+    // background job can afford. Also caps its wait on a parked credential.
+    private static readonly INTERACTIVE_429_WAIT_MS = 20_000;
+
     // Backoff for a 429 without Retry-After: starts at 10s and doubles per
     // 429 in a row on the same credential, up to a minute (Bitbucket's
     // burst windows are per minute).
@@ -3860,7 +3889,9 @@ export class BitbucketCloudService implements Omit<
             gateKey,
             {
                 minIntervalMs: BitbucketCloudService.RATE_GATE_MIN_INTERVAL_MS,
-                maxWaitMs: BitbucketCloudService.RATE_GATE_MAX_WAIT_MS,
+                maxWaitMs: logContext?.interactive
+                    ? BitbucketCloudService.INTERACTIVE_429_WAIT_MS
+                    : BitbucketCloudService.RATE_GATE_MAX_WAIT_MS,
             },
             () => this.rawFetch(url, options, gateKey, logContext),
         ).catch((error) => {
@@ -3916,6 +3947,9 @@ export class BitbucketCloudService implements Omit<
         // a transient 429 becomes a short wait instead of a failed review.
         // Only a sustained 429 (still limited after RATE_GATE_429_MAX_RETRIES
         // honoured waits) surfaces the 429 to the caller.
+        const maxRetries = logContext?.interactive
+            ? 1
+            : BitbucketCloudService.RATE_GATE_429_MAX_RETRIES;
         for (let attempt = 0; ; attempt++) {
             // Per-attempt timeout: the Bitbucket SDK exposes no timeout, so
             // without this one unresponsive call hangs the worker for the
@@ -3951,9 +3985,12 @@ export class BitbucketCloudService implements Omit<
                         response.headers.get('retry-after'),
                     ) ?? backoffMs;
                 parkRateGate(gateKey, Date.now() + waitMs);
-                if (attempt < BitbucketCloudService.RATE_GATE_429_MAX_RETRIES) {
+                if (attempt < maxRetries) {
+                    const retryInMs = logContext?.interactive
+                        ? BitbucketCloudService.INTERACTIVE_429_WAIT_MS
+                        : waitMs;
                     this.logger.warn({
-                        message: `Bitbucket 429 — waiting ${waitMs}ms then retrying (attempt ${attempt + 1}/${BitbucketCloudService.RATE_GATE_429_MAX_RETRIES})`,
+                        message: `Bitbucket 429 — waiting ${retryInMs}ms then retrying (attempt ${attempt + 1}/${maxRetries})`,
                         context: BitbucketCloudService.name,
                         metadata: {
                             organizationId: logContext?.organizationId,
@@ -3962,11 +3999,11 @@ export class BitbucketCloudService implements Omit<
                             gateKey,
                         },
                     });
-                    await new Promise((r) => setTimeout(r, waitMs));
+                    await new Promise((r) => setTimeout(r, retryInMs));
                     continue;
                 }
                 this.logger.warn({
-                    message: `Bitbucket 429 — still rate limited after ${BitbucketCloudService.RATE_GATE_429_MAX_RETRIES} retries, returning it to the caller`,
+                    message: `Bitbucket 429 — still rate limited after ${maxRetries} retries, returning it to the caller`,
                     context: BitbucketCloudService.name,
                     metadata: {
                         organizationId: logContext?.organizationId,
