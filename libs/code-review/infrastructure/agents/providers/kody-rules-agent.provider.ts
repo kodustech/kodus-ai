@@ -660,6 +660,15 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             shardsRun = result.shardsRun;
             shardsErrored = result.shardsErrored;
 
+            const { referenceStats } = result;
+            if (referenceStats?.shards > 0) {
+                this.shardLogger.log?.({
+                    message: `[kody-rules-shard] printed ${referenceStats.entries} reference file(s) across ${referenceStats.shards} shard(s); per-rule inlining would have printed ${referenceStats.perUnitCopies}`,
+                    context: this.getIdentity().name,
+                    metadata: { ...logMetadata, ...referenceStats },
+                });
+            }
+
             // Escalate a TOTAL shard failure. When every judge shard errored
             // (e.g. an OpenAI-strict wire-schema 400 for a BYOK org, which
             // 400s every shard identically — the #1523/#1526 regression), the

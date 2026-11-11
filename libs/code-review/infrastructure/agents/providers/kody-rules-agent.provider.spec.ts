@@ -621,6 +621,41 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         ]);
     });
 
+    it('logs the references the judge printed with the review they belong to', async () => {
+        const { provider } = makeProvider([{ violations: [] }]);
+        const log = jest.fn();
+        (provider as any).shardLogger = { warn: jest.fn(), log };
+        const read = jest.fn().mockResolvedValue('# the convention');
+        const atoms = Array.from({ length: 12 }, (_, i) => ({
+            uuid: 'parent',
+            title: `atom ${i}`,
+            rule: `spec ${i}`,
+            status: 'active',
+            severity: 'high',
+            path: '**/*.ts',
+            sourcePath: 'CLAUDE.md',
+        }));
+
+        await provider.execute(
+            input({ kodyRules: atoms, remoteCommands: { read } }) as any,
+        );
+
+        expect(log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining(
+                    'printed 1 reference file(s) across 1 shard(s); per-rule inlining would have printed 12',
+                ),
+                metadata: expect.objectContaining({
+                    organizationAndTeamData: input().organizationAndTeamData,
+                    prNumber: 1,
+                    shards: 1,
+                    entries: 1,
+                    perUnitCopies: 12,
+                }),
+            }),
+        );
+    });
+
     // ── language resolution + forwarding (customer-reported) ──────────
     // The sharded judge's system prompts have zero language templating on
     // their own; execute() must resolve `input.languageResultPrompt` via the

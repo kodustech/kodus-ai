@@ -111,6 +111,31 @@ describe('judgeKodyRulesSharded — a rule decomposed into atoms carries its ref
         }
     });
 
+    it('returns what it printed against what per-unit inlining would have, and leaves the logging to its caller', async () => {
+        const units = expandedRule(KodyRulesScope.FILE);
+        const { references } = await referencesFor(units);
+        const logger = { warn: jest.fn(), log: jest.fn() };
+
+        const result = await judgeKodyRulesSharded({
+            changedFiles: [
+                file('src/a.ts', '1 +const a = 1;'),
+                file('src/b.ts', '1 +const b = 2;'),
+            ],
+            rules: units,
+            runJudge: async () => [],
+            references,
+            logger,
+        });
+
+        expect(result.referenceStats).toEqual({
+            shards: 2,
+            entries: 4,
+            chars: expect.any(Number),
+            perUnitCopies: 48,
+        });
+        expect(logger.log).not.toHaveBeenCalled();
+    });
+
     it('prints each referenced file once in the PR-scope shard', async () => {
         const units = expandedRule(KodyRulesScope.PULL_REQUEST);
         const { references } = await referencesFor(units);

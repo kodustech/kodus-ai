@@ -438,10 +438,21 @@ export interface ShardedJudgeInput {
     previousDecisions?: PrDecisionRecord[];
 }
 
+/** What the shards' `<References>` blocks printed, summed over the review. */
+export interface ShardReferenceStats {
+    /** Shards that printed a `<References>` block. */
+    shards: number;
+    entries: number;
+    chars: number;
+    /** The copies appending each file to each unit's text would have printed. */
+    perUnitCopies: number;
+}
+
 export interface ShardedJudgeResult {
     violations: ShardViolation[];
     shardsRun: number;
     shardsErrored: number;
+    referenceStats: ShardReferenceStats;
 }
 
 // ── prompts (aligned with the validated batched eval prompt) ─────────────────
@@ -1230,7 +1241,7 @@ export async function judgeKodyRulesSharded(
     let shardsRun = 0;
     let shardsErrored = 0;
     const violations: ShardViolation[] = [];
-    const referenceStats = {
+    const referenceStats: ShardReferenceStats = {
         shards: 0,
         entries: 0,
         chars: 0,
@@ -1375,13 +1386,5 @@ export async function judgeKodyRulesSharded(
         }
     }
 
-    if (referenceStats.shards > 0) {
-        logger?.log?.({
-            message: `[kody-rules-shard] printed ${referenceStats.entries} reference file(s) across ${referenceStats.shards} shard(s); per-rule inlining would have printed ${referenceStats.perUnitCopies}`,
-            context: 'kody-rules-sharded',
-            metadata: referenceStats,
-        });
-    }
-
-    return { violations, shardsRun, shardsErrored };
+    return { violations, shardsRun, shardsErrored, referenceStats };
 }
