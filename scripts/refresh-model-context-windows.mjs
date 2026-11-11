@@ -178,6 +178,8 @@ keepPrevious(true);
 const overrideKeys = new Set(
     [
         ...readFileSync(RUNTIME, 'utf8')
+            // Comments blanked first, so a quoted example in one is not a key.
+            .replace(/\/\*[^]*?\*\/|\/\/[^\n]*/g, '')
             .match(/const MANUAL_OVERRIDES[^]*?\n};/)[0]
             .matchAll(/^\s*'([^']+)':/gm),
     ].map((m) => m[1]),

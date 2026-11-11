@@ -77,17 +77,10 @@ describe('production models resolve to a real context window', () => {
         // Until the two share one resolver, trust this one: it is the code that
         // actually decides a chunk size.
         //
-        // Raised to 685 with the 2026-11 refresh: the corpus was regenerated
+        // Raised to 689 with the 2026-11 refresh: the corpus was regenerated
         // (733 shapes) and 689 of them resolve. The gateway aliases (`auto`,
         // `coder`) and the floored models.dev rows sit at the default on purpose.
-        expect({
-            covered: known.length,
-            total: MODELS.length,
-        }).toEqual({
-            covered: expect.any(Number),
-            total: MODELS.length,
-        });
-        expect(known.length).toBeGreaterThanOrEqual(685);
+        expect(known.length).toBeGreaterThanOrEqual(689);
     });
 
     it('no production model resolves to something absurd', () => {
