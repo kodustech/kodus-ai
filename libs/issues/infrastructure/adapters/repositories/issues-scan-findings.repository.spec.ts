@@ -193,6 +193,33 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(model.findOneAndUpdate).toHaveBeenCalled();
     });
 
+    it('stores again a finding deleted between the read and the write', async () => {
+        const model = modelWith(null);
+        model.findOne
+            .mockImplementationOnce(() =>
+                exec({ _id: 'i-1', status: IssueStatus.OPEN }),
+            )
+            .mockImplementationOnce(() => exec(null));
+        model.findOneAndUpdate.mockResolvedValueOnce(null);
+        const repository = new IssuesRepository(model as any);
+
+        const { outcome } = await repository.upsertScanFinding(finding);
+
+        expect(outcome).toBe('created');
+        expect(model.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('fails, rather than guess an outcome, when the finding changes under every write', async () => {
+        const model = modelWith({ _id: 'i-1', status: IssueStatus.RESOLVED });
+        model.findOneAndUpdate.mockResolvedValue(null);
+        const repository = new IssuesRepository(model as any);
+
+        await expect(repository.upsertScanFinding(finding)).rejects.toThrow(
+            /kept changing/,
+        );
+        expect(model.findOneAndUpdate).toHaveBeenCalledTimes(3);
+    });
+
     const unseen = {
         'organizationId': 'org-1',
         'repository.id': 'repo-1',

@@ -21,8 +21,11 @@ import {
     getLimiterForSlot,
 } from '@libs/llm/byok-to-vercel';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
-import { readProviderUsage } from '@libs/llm/ai-sdk-usage';
-import { admitRequest } from '@libs/llm/usage-meter';
+import {
+    readAiSdkUsageFromError,
+    readProviderUsage,
+} from '@libs/llm/ai-sdk-usage';
+import { admitRequest, meterAdmitsRequests } from '@libs/llm/usage-meter';
 import {
     attachClassification,
     classifyLLMError,
@@ -293,11 +296,22 @@ export function wrapByokModel(
                         'llm-call',
                     );
                 } catch (err) {
-                    settle(undefined);
+                    // An error can still carry what the provider billed.
+                    settle(readAiSdkUsageFromError(err)?.usage);
                     throw err;
                 }
                 settle(readProviderUsage((result as any)?.usage));
                 return result;
+            },
+            // A stream's usage arrives only at its end, after the request was
+            // sent unchecked: a run with a spend cap does not stream.
+            wrapStream: async ({ doStream }: any) => {
+                if (meterAdmitsRequests()) {
+                    throw new Error(
+                        'A model request in a spend-capped run cannot stream',
+                    );
+                }
+                return doStream();
             },
         },
     });
