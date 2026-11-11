@@ -2,7 +2,10 @@ import type { BusinessValidationOutcome } from '@libs/agents/business-validation
 import { DEFAULT_BUSINESS_LOGIC_SETTINGS } from '@libs/agents/business-validation/settings';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
-import { BusinessLogicPublisher } from './business-logic-publisher.service';
+import {
+    BusinessLogicPublisher,
+    outcomeSignature,
+} from './business-logic-publisher.service';
 
 type Validated = Extract<BusinessValidationOutcome, { kind: 'validated' }>;
 
@@ -118,7 +121,7 @@ describe('BusinessLogicPublisher', () => {
             expect.objectContaining({
                 outcome: 'validated',
                 passed: false,
-                comment: { id: 501 },
+                comment: expect.objectContaining({ id: 501 }),
             }),
         );
     });
@@ -140,10 +143,20 @@ describe('BusinessLogicPublisher', () => {
                 expect.objectContaining({
                     label: 'business_logic',
                     deliveryStatus: 'sent',
-                    comment: { id: 501 },
+                    comment: expect.objectContaining({ id: 501 }),
                 }),
             ],
             request.organizationAndTeamData,
+        );
+
+        // The run carries the verdict it wrote, which the next re-check reads.
+        expect(first.runs.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                comment: expect.objectContaining({
+                    id: 501,
+                    signature: expect.stringMatching(/^[0-9a-f]{64}$/),
+                }),
+            }),
         );
 
         const edit = build({ comment: { comment: { id: 501 } } });
@@ -220,6 +233,63 @@ describe('BusinessLogicPublisher', () => {
         expect(code.updateIssueComment).toHaveBeenCalled();
         expect(code.createIssueComment).toHaveBeenCalled();
         expect(result.comment).toBe('created');
+    });
+
+    it('says whether a re-check changed the verdict it wrote', async () => {
+        const result = {
+            outcome: validated('missing'),
+            references: [],
+            attempts: [],
+            trackers: ['Linear'],
+        };
+
+        const same = build({
+            comment: {
+                comment: {
+                    id: 77,
+                    signature: outcomeSignature(validated('missing')),
+                },
+            },
+        });
+        const unchanged = await same.publisher.publish({ request, result });
+        expect(unchanged.comment).toBe('updated');
+        expect(unchanged.changed).toBe(false);
+        expect(same.code.getAllCommentsInPullRequest).not.toHaveBeenCalled();
+
+        const other = build({
+            comment: {
+                comment: {
+                    id: 77,
+                    signature: outcomeSignature(validated('met')),
+                },
+            },
+        });
+        const changed = await other.publisher.publish({ request, result });
+        expect(changed.changed).toBe(true);
+    });
+
+    it('compares the verdict, not the render: the run clock does not count as a change', () => {
+        const first = validated('missing');
+        first.checks[0].readAt = '2026-11-11T10:00:00.000Z';
+        const second = validated('missing');
+        second.checks[0].readAt = '2026-11-11T12:00:00.000Z';
+
+        expect(outcomeSignature(first)).toBe(outcomeSignature(second));
+
+        second.checks[0].verdict.requirements![0].state = 'met';
+        expect(outcomeSignature(first)).not.toBe(outcomeSignature(second));
+
+        // The comment names the commit it read: a new head is a new comment.
+        expect(outcomeSignature(validated('missing'), 'aaa1111')).not.toBe(
+            outcomeSignature(validated('missing'), 'bbb2222'),
+        );
+
+        // Every rendered field counts, not only the requirement states.
+        const reworded = validated('missing');
+        reworded.checks[0].verdict.summary = 'different words';
+        expect(outcomeSignature(reworded)).not.toBe(
+            outcomeSignature(validated('missing')),
+        );
     });
 
     it('previews the comment without writing anything', async () => {

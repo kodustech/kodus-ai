@@ -43,6 +43,39 @@ const run = {
     ],
 };
 
+const disputedOutcome = {
+    outcome: {
+        kind: 'validated',
+        checks: [
+            {
+                task: { tracker: 'Linear', id: 'SAA-96' },
+                verdict: {
+                    needsMoreInfo: false,
+                    summary: '',
+                    requirements: [
+                        {
+                            requirement: 'Keyboard reordering',
+                            state: 'missing',
+                            evidence: [],
+                            note: 'useDrag.ts handles pointer events only; no key handler.',
+                            confidence: 'high',
+                        },
+                    ],
+                    outOfScope: [],
+                },
+                passed: false,
+                readAt: 'x',
+            },
+        ],
+        thinTasks: [],
+        passed: false,
+        unseenFiles: [],
+    },
+    references: [],
+    attempts: [],
+    trackers: ['Linear'],
+};
+
 const request = {
     organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
     repository: { id: 'repo-1', name: 'notes' },
@@ -67,10 +100,19 @@ function build(intent: any, revalidated?: any, latest: any = run) {
         })),
         withRepository: jest.fn((r: unknown) => r),
         headShaOf: jest.fn(async () => 'def5678'),
-        publish: jest.fn(async (input: any) => ({
-            outcome: input.result.outcome,
-            comment: 'updated',
-        })),
+        publish: jest.fn(
+            async (
+                input: any,
+            ): Promise<{
+                outcome: any;
+                comment: 'created' | 'updated' | 'none';
+                changed?: boolean;
+            }> => ({
+                outcome: input.result.outcome,
+                comment: 'updated',
+                changed: true,
+            }),
+        ),
     };
     const runs = { latestForPullRequest: jest.fn(async () => latest) };
     return {
@@ -331,6 +373,40 @@ describe('BusinessLogicReplies', () => {
     });
 
     it('re-checks a dispute with what the author pointed at and says whether it changed (UC-38)', async () => {
+        const revalidated = disputedOutcome;
+        const { replies, service, publisher } = build({
+            intent: 'accept',
+            findings: [1],
+            movedTo: 'SAA-102',
+        });
+
+        const result = await replies.handle({
+            request,
+            message: 'Keyboard reordering is out of scope, split into SAA-102.',
+            sender: { login: 'nina' },
+        });
+
+        expect(service.tryRead).toHaveBeenCalledWith(
+            expect.anything(),
+            'SAA-102',
+            expect.anything(),
+        );
+        const published = publisher.publish.mock.calls[0][0];
+        expect(published.trigger).toBe('accepted');
+        const keyboard =
+            published.result.outcome.checks[0].verdict.requirements[1];
+        expect(keyboard.accepted).toMatchObject({
+            by: 'nina',
+            movedTo: 'SAA-102',
+        });
+        expect(published.result.outcome.passed).toBe(true);
+        expect(result).toMatchObject({
+            handled: true,
+            reply: expect.stringContaining('Nothing is left to merge'),
+        });
+    });
+
+    it('re-checks a dispute with what the author pointed at and says whether it changed (UC-38)', async () => {
         const revalidated = {
             outcome: {
                 kind: 'validated',
@@ -363,7 +439,7 @@ describe('BusinessLogicReplies', () => {
             attempts: [],
             trackers: ['Linear'],
         };
-        const { replies, service } = build(
+        const { replies, service, publisher } = build(
             {
                 intent: 'dispute',
                 findings: [1],
@@ -399,6 +475,55 @@ describe('BusinessLogicReplies', () => {
             handled: true,
             reply: expect.stringContaining('still MISSING'),
         });
+        expect(result).toMatchObject({
+            reply: expect.stringContaining(
+                'The Business Logic comment above is updated.',
+            ),
+        });
+
+        // Same verdict on the re-check: the reply must not claim an update.
+        publisher.publish.mockResolvedValueOnce({
+            outcome: revalidated.outcome,
+            comment: 'updated',
+            changed: false,
+        });
+        const unchanged = await replies.handle({
+            request,
+            message: 'Keyboard reordering is covered in useDrag.ts',
+            sender: { login: 'rafa' },
+        });
+        expect(unchanged).toMatchObject({
+            reply: expect.stringContaining(
+                'The Business Logic comment above says the same.',
+            ),
+        });
+    });
+
+    it('does not claim a change when the earlier run recorded no signature', async () => {
+        const { replies, publisher } = build(
+            {
+                intent: 'dispute',
+                findings: [1],
+                files: ['useDrag.ts'],
+                claim: 'covered in useDrag.ts',
+            },
+            disputedOutcome,
+        );
+        publisher.publish.mockResolvedValueOnce({
+            outcome: disputedOutcome.outcome,
+            comment: 'updated',
+        });
+
+        const legacy = await replies.handle({
+            request,
+            message: 'Keyboard reordering is covered in useDrag.ts',
+            sender: { login: 'rafa' },
+        });
+
+        expect(legacy.reply).not.toMatch(/says the same|is updated/);
+        expect(legacy.reply).toContain(
+            'The result is in the Business Logic comment above.',
+        );
     });
 
     it('re-checks a dispute with the id when the task link is not one the parser reads back', async () => {

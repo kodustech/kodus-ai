@@ -354,7 +354,11 @@ export class BusinessLogicReplies {
                 reply:
                     outcome.kind === 'skipped'
                         ? outcome.message
-                        : 'I re-checked, and the Business Logic comment above is updated.',
+                        : published.changed === false
+                          ? 'I re-checked, and the result did not change; the Business Logic comment above says the same.'
+                          : published.changed === true
+                            ? 'I re-checked, and the Business Logic comment above is updated.'
+                            : 'I re-checked, and the result is in the Business Logic comment above.',
             };
         }
         const lines = outcome.checks.flatMap((check) =>
@@ -374,7 +378,11 @@ export class BusinessLogicReplies {
                     `I re-checked${intent.files.length ? ` ${intent.files.map((f) => `\`${f}\``).join(', ')}` : ''}:`,
                     ...lines,
                     '',
-                    'The Business Logic comment above is updated. If a requirement that stays open is not needed in this PR, reply saying so and why, and I will mark it accepted.',
+                    published.changed === false
+                        ? 'The Business Logic comment above says the same. If a requirement that stays open is not needed in this PR, reply saying so and why, and I will mark it accepted.'
+                        : published.changed === true
+                          ? 'The Business Logic comment above is updated. If a requirement that stays open is not needed in this PR, reply saying so and why, and I will mark it accepted.'
+                          : 'The result is in the Business Logic comment above. If a requirement that stays open is not needed in this PR, reply saying so and why, and I will mark it accepted.',
                 ].join('\n'),
             ),
         };
