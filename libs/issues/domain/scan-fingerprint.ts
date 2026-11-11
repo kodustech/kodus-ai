@@ -42,6 +42,7 @@ const CWE_FAMILIES: Record<string, number[]> = {
     cookie: [384, 614, 1004, 1275],
     debug: [11, 16, 489, 693],
     cors: [346, 942],
+    exhaustion: [400, 405, 407, 409, 674, 770, 834, 1050, 1333],
 };
 
 const APP_WIDE_FAMILIES = new Set(['csrf', 'cookie', 'debug', 'cors']);
