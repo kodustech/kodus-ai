@@ -1492,7 +1492,9 @@ export class BitbucketDataCenterService implements Omit<
                                 ? 'modified'
                                 : file.type === 'ADD'
                                   ? 'added'
-                                  : 'removed',
+                                  : file.type === 'MOVE'
+                                    ? 'renamed'
+                                    : 'removed',
                         additions,
                         deletions,
                         changes: additions + deletions,
