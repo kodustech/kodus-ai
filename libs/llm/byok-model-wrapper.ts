@@ -130,9 +130,12 @@ export function wrapByokModel(
             wrapGenerate: async ({ doGenerate, params, model: inner }: any) => {
                 const slot = opts.byokConfig;
                 const namespace = optionsNamespace(slot);
+                // What is sent: the call's own params, or with the answer cap
+                // a spend-capped run enforces (below).
+                let callParams = params;
                 const generate = async () => {
                     const sent = withoutRefusedFields(
-                        params,
+                        callParams,
                         slot,
                         opts.organizationId,
                         Date.now(),
@@ -267,13 +270,25 @@ export function wrapByokModel(
                 // A metered run with a spend cap admits the request before it
                 // leaves, against the most it can cost: its prompt and tools,
                 // and the answer cap it asks for (#2451).
-                const settle = admitRequest(() => ({
+                const admission = admitRequest(() => ({
                     inputTokens: estimatePromptTokens({
                         prompt: params?.prompt,
                         tools: params?.tools,
                     }),
                     maxOutputTokens: params?.maxOutputTokens,
                 }));
+                // The answer cap it was admitted at is sent, so the provider
+                // cannot answer past what was reserved.
+                if (
+                    admission.maxOutputTokens &&
+                    params?.maxOutputTokens == null
+                ) {
+                    callParams = {
+                        ...params,
+                        maxOutputTokens: admission.maxOutputTokens,
+                    };
+                }
+                const settle = admission.settle;
 
                 // Pin T to the SDK's generate-result type so inference doesn't
                 // collapse to `unknown` (the middleware return type would then

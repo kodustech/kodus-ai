@@ -59,6 +59,7 @@ describe('computeScanFingerprint', () => {
             ...base,
             vulnerabilityClass: 'misconfiguration',
             cwe: 'CWE-352',
+            appWide: true,
         };
         expect(
             computeScanFingerprint({
@@ -81,6 +82,31 @@ describe('computeScanFingerprint', () => {
         );
     });
 
+    it('keeps two routes exempted from CSRF apart: each is fixed on its own', () => {
+        const exempt = {
+            ...base,
+            vulnerabilityClass: 'misconfiguration',
+            cwe: 'CWE-352',
+            filePath: 'bank/views.py',
+        };
+        expect(
+            computeScanFingerprint({ ...exempt, symbol: 'transfer' }),
+        ).not.toBe(
+            computeScanFingerprint({ ...exempt, symbol: 'change_email' }),
+        );
+    });
+
+    it('never folds a place-bound CWE, even when called app-wide', () => {
+        const fixation = (filePath: string) =>
+            computeScanFingerprint({
+                ...base,
+                cwe: 'CWE-384',
+                filePath,
+                appWide: true,
+            });
+        expect(fixation('a.py')).not.toBe(fixation('b.py'));
+    });
+
     it('keeps a broken login and unlimited guessing apart from a missing check', () => {
         const missing = computeScanFingerprint({ ...base, cwe: 'CWE-306' });
         expect(computeScanFingerprint({ ...base, cwe: 'CWE-287' })).not.toBe(
@@ -98,6 +124,7 @@ describe('computeScanFingerprint', () => {
                 vulnerabilityClass: 'misconfiguration',
                 cwe,
                 filePath,
+                appWide: true,
             });
         // Two missing cookie flags are two settings, each once per repository.
         expect(cookie('CWE-614', 'a.py')).toBe(cookie('CWE-614', 'b.py'));
