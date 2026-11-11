@@ -130,7 +130,10 @@ describe('judgeKodyRulesSharded — a rule decomposed into atoms carries its ref
         expect(result.referenceStats).toEqual({
             shards: 2,
             entries: 4,
-            chars: expect.any(Number),
+            // Two shards, each printing the source file cut at the 6,000-char
+            // budget and the Context OS file whole.
+            chars:
+                2 * (SOURCE_FILE.slice(0, 6000).length + CONTEXT_FILE.length),
             perUnitCopies: 48,
         });
         expect(logger.log).not.toHaveBeenCalled();
