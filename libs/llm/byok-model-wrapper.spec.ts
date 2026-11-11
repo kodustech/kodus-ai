@@ -701,7 +701,7 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
 
     it('admits each request with its prompt and answer cap, then settles what it billed', async () => {
         const settle = jest.fn();
-        const admit = jest.fn(() => settle);
+        const admit = jest.fn(() => ({ settle }));
         const model = answering({
             inputTokens: { total: 1000, cacheRead: 200, cacheWrite: 0 },
             outputTokens: { total: 50, reasoning: 10 },
@@ -741,7 +741,7 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         const settle = jest.fn();
 
         await runWithUsageMeter(
-            { record: jest.fn(), admit: () => settle },
+            { record: jest.fn(), admit: () => ({ settle }) },
             async () =>
                 wrap(
                     answering({ inputTokens: {}, outputTokens: {} }),
@@ -749,6 +749,24 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         );
 
         expect(settle.mock.calls[0][0].totalTokens).toBeUndefined();
+    });
+
+    it('sends the answer cap a request was admitted at when it set none', async () => {
+        const capped = answering({});
+        const admit = () => ({ settle: jest.fn(), maxOutputTokens: 4_000 });
+
+        await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+            wrap(capped).doGenerate({ prompt: PROMPT }),
+        );
+        expect(capped.doGenerate.mock.calls[0][0].maxOutputTokens).toBe(
+            4_000,
+        );
+
+        const own = answering({});
+        await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+            wrap(own).doGenerate({ prompt: PROMPT, maxOutputTokens: 900 }),
+        );
+        expect(own.doGenerate.mock.calls[0][0].maxOutputTokens).toBe(900);
     });
 
     it('never sends a request the meter refuses', async () => {
@@ -772,7 +790,7 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
 
         await expect(
             runWithUsageMeter(
-                { record: jest.fn(), admit: () => settle },
+                { record: jest.fn(), admit: () => ({ settle }) },
                 async () => wrap(model).doGenerate({ prompt: PROMPT }),
             ),
         ).rejects.toThrow('socket hang up');
@@ -780,7 +798,7 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
     });
 
     it('counts the prompt only inside a run that admits its requests', async () => {
-        const admit = jest.fn(() => jest.fn());
+        const admit = jest.fn(() => ({ settle: jest.fn() }));
         await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
             wrap(answering({})).doGenerate({ prompt: PROMPT }),
         );
@@ -806,7 +824,7 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
 
         await expect(
             runWithUsageMeter(
-                { record: jest.fn(), admit: () => settle },
+                { record: jest.fn(), admit: () => ({ settle }) },
                 async () => wrap(model).doGenerate({ prompt: PROMPT }),
             ),
         ).rejects.toThrow('no object generated');
@@ -821,7 +839,7 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
 
         await expect(
             runWithUsageMeter(
-                { record: jest.fn(), admit: () => jest.fn() },
+                { record: jest.fn(), admit: () => ({ settle: jest.fn() }) },
                 async () => wrap(model).doStream({ prompt: PROMPT }),
             ),
         ).rejects.toThrow(/spend-capped run cannot stream/);

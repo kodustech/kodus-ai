@@ -28,11 +28,24 @@ export interface UsageMeter {
     record(observation: UsageObservation): void;
     /**
      * Before a request leaves, with the most it can use. Throwing refuses the
-     * request. Returns what to call once it ends: with what the provider
-     * billed for it, or undefined when it failed unanswered. `record` still
-     * follows for an answered request, from the caller that reads its usage.
+     * request. `record` still follows for an answered request, from the
+     * caller that reads its usage.
      */
-    admit?(request: RequestCeiling): (answered: AiSdkUsage | undefined) => void;
+    admit?(request: RequestCeiling): Admission;
+}
+
+/** A request let through. */
+export interface Admission {
+    /**
+     * Called once it ends: with what the provider billed for it, or
+     * undefined when it failed unanswered.
+     */
+    settle: (answered: AiSdkUsage | undefined) => void;
+    /**
+     * The answer cap it was admitted at, for a request that set none: sent
+     * with it, so the provider cannot answer past what was reserved.
+     */
+    maxOutputTokens?: number;
 }
 
 /** The most one request can use, known before it leaves. */
@@ -75,7 +88,7 @@ export function reportUsage(
     record(readAiSdkUsage(usage), meta);
 }
 
-const NOTHING_TO_SETTLE = () => undefined;
+const ADMITTED_UNMETERED: Admission = { settle: () => undefined };
 
 /** Whether the run this code is in admits its requests (a spend cap). */
 export function meterAdmitsRequests(): boolean {
@@ -88,20 +101,21 @@ export function meterAdmitsRequests(): boolean {
  * refusal is thrown to the caller; a meter that fails to settle never breaks
  * the call it observes.
  */
-export function admitRequest(
-    ceiling: () => RequestCeiling,
-): (answered: AiSdkUsage | undefined) => void {
+export function admitRequest(ceiling: () => RequestCeiling): Admission {
     const store = meterStore.getStore();
     if (!store?.meter.admit) {
-        return NOTHING_TO_SETTLE;
+        return ADMITTED_UNMETERED;
     }
-    const settle = store.meter.admit(ceiling());
-    return (answered) => {
-        try {
-            settle(answered);
-        } catch (error) {
-            warnMeterFailure(store, undefined, error);
-        }
+    const admission = store.meter.admit(ceiling());
+    return {
+        maxOutputTokens: admission.maxOutputTokens,
+        settle: (answered) => {
+            try {
+                admission.settle(answered);
+            } catch (error) {
+                warnMeterFailure(store, undefined, error);
+            }
+        },
     };
 }
 

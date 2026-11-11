@@ -8,6 +8,11 @@ export interface ScanFingerprintInput {
     symbol?: string;
     /** The finding's CWE; only its family (cweFamily) enters the identity. */
     cwe?: string;
+    /**
+     * The weakness is one setting the whole application shares (CSRF
+     * protection off in the settings, not one route exempted from it).
+     */
+    appWide?: boolean;
 }
 
 /**
@@ -49,11 +54,13 @@ const CWE_FAMILIES: Record<string, number[]> = {
 };
 
 /**
- * CWEs that name one setting the whole application shares: CSRF protection
- * off, a session cookie flag missing, debug mode on, CORS open to any origin.
- * Each is one issue for the repository, not one per route that inherits it;
- * the CWE itself, not its family, says so, because a family also holds
- * weaknesses that live at one place (session fixation, an origin check).
+ * CWEs that can name one setting the whole application shares: CSRF
+ * protection off, a session cookie flag missing, debug mode on, CORS open to
+ * any origin. Such a setting is one issue for the repository, not one per
+ * route that inherits it. The CWE alone does not say so (one route exempted
+ * from CSRF is its own bug, fixed on its own): the finding must also say the
+ * cause is shared (`appWide`). The CWE, not its family, gates it, because a
+ * family also holds weaknesses that live at one place (session fixation).
  */
 const APP_WIDE_CWES = new Set([352, 489, 614, 942, 1004, 1275]);
 
@@ -95,7 +102,7 @@ export function cweFamily(cwe?: string): string {
  */
 export function computeScanFingerprint(input: ScanFingerprintInput): string {
     const id = cweId(input.cwe);
-    const appWide = id !== null && APP_WIDE_CWES.has(id);
+    const appWide = !!input.appWide && id !== null && APP_WIDE_CWES.has(id);
     const parts = [
         input.repositoryId,
         input.vulnerabilityClass.trim().toLowerCase(),
