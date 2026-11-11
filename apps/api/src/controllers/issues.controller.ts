@@ -4,6 +4,7 @@ import {
     Get,
     Param,
     Patch,
+    Post,
     Query,
     UseGuards,
 } from '@nestjs/common';
@@ -17,6 +18,7 @@ import {
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
 import { checkPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
+import { BuildFixPromptUseCase } from '@libs/issues/application/use-cases/build-fix-prompt.use-case';
 import { GetIssueByIdUseCase } from '@libs/issues/application/use-cases/get-issue-by-id.use-case';
 import { GetIssuesUseCase } from '@libs/issues/application/use-cases/get-issues.use-case';
 import { GetTotalIssuesUseCase } from '@libs/issues/application/use-cases/get-total-issues.use-case';
@@ -24,6 +26,10 @@ import { UpdateIssuePropertyUseCase } from '@libs/issues/application/use-cases/u
 import { IssuesEntity } from '@libs/issues/domain/entities/issues.entity';
 
 import { GetIssuesByFiltersDto } from '../dtos/get-issues-by-filters.dto';
+import {
+    IssuesFixPromptRequestDto,
+    IssuesFixPromptResponseDto,
+} from '../dtos/issues-fix-prompt.dto';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 import {
     ApiBearerAuth,
@@ -49,6 +55,7 @@ export class IssuesController {
         private readonly getTotalIssuesUseCase: GetTotalIssuesUseCase,
         private readonly getIssueByIdUseCase: GetIssueByIdUseCase,
         private readonly updateIssuePropertyUseCase: UpdateIssuePropertyUseCase,
+        private readonly buildFixPromptUseCase: BuildFixPromptUseCase,
     ) {}
 
     @Get()
@@ -83,6 +90,24 @@ export class IssuesController {
     @ApiOkResponse({ type: IssuesCountResponseDto })
     async countIssues(@Query() query: GetIssuesByFiltersDto) {
         return await this.getTotalIssuesUseCase.execute(query);
+    }
+
+    @Post('fix-prompt')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.Issues,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Build a fix prompt',
+        description:
+            "A prompt for the developer's own coding agent to fix the given issues: location, explanation, suggested fix, attack path and reproduction test. Only issues in repositories the caller may read are included.",
+    })
+    @ApiOkResponse({ type: IssuesFixPromptResponseDto })
+    async buildFixPrompt(@Body() body: IssuesFixPromptRequestDto) {
+        return await this.buildFixPromptUseCase.execute(body.ids);
     }
 
     @Get(':id')
