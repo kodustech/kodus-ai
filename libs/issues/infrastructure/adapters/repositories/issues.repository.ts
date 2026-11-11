@@ -247,6 +247,9 @@ export class IssuesRepository implements IIssuesRepository {
         // only if what was read still holds: another worker creating it, a
         // person dismissing or deleting it in between sends it round again.
         let existing = await this.issuesModel.findOne(filter).exec();
+        // A duplicate key with nothing under the filter: another index, or
+        // the winner deleted already. Retried, and thrown if it never clears.
+        let collision: unknown;
         for (let attempt = 0; attempt < 3; attempt++) {
             if (!existing) {
                 try {
@@ -264,15 +267,12 @@ export class IssuesRepository implements IIssuesRepository {
                     };
                 } catch (error) {
                     // Another worker wrote it first; the unique index turned
-                    // the race into this error. A collision on any other index
-                    // leaves nothing under the filter: that error is the real one.
+                    // the race into this error.
                     if (error?.code !== 11000) {
                         throw error;
                     }
                     existing = await this.issuesModel.findOne(filter).exec();
-                    if (!existing) {
-                        throw error;
-                    }
+                    collision = existing ? undefined : error;
                     continue;
                 }
             }
@@ -296,6 +296,9 @@ export class IssuesRepository implements IIssuesRepository {
             existing = await this.issuesModel.findOne(filter).exec();
         }
 
+        if (collision) {
+            throw collision;
+        }
         // It changed under every pass. Failing lets the scan store it again
         // when it runs again; a guessed outcome would leave the sighting
         // unrecorded.
