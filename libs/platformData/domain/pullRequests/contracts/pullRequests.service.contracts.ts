@@ -91,6 +91,11 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         organizationId: string,
         repositoryIds?: string[],
     ): Promise<Array<{ number: number; repositoryId: string }>>;
+    findPullRequestAuthorsOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>>;
     findDistinctAuthorsByRepositoryIds(
         organizationId: string,
         repositoryIds: string[] | undefined,
