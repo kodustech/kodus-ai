@@ -57,7 +57,7 @@ UNREACHED_PATH="reports/mutation/unreached.json"
 rm -f "$UNREACHED_PATH"
 record_unreached() {
     mkdir -p "${UNREACHED_PATH%/*}"
-    node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify(process.argv.slice(2)))' "$UNREACHED_PATH" "$@"
+    node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify([...new Set(process.argv.slice(2).filter(Boolean))]))' "$UNREACHED_PATH" "$@"
 }
 
 echo "[mutation:diff] Mutating ${#FILES[@]} changed file(s) vs ${MERGE_BASE}:"
@@ -87,11 +87,16 @@ add_spec() {
     SPECS+=("$escaped")
 }
 
+# A file whose only specs are integration suites has none this job runs: it is
+# left out of the mutation and reported, not mutated into NoCoverage.
+INTEGRATION_ONLY=()
 for f in "${FILES[@]}"; do
     directory="${f%/*}"
     stem="${f##*/}"
     stem="${stem%.ts}"
     prefix="${stem%%.*}"
+    unit=0
+    integration=0
     # Only `.spec.ts`: the root jest's testMatch. A `.test.ts` is vitest
     # (apps/cli) or e2e, and jest fails the dry run on it.
     for cand in \
@@ -99,9 +104,29 @@ for f in "${FILES[@]}"; do
         "${directory}/${prefix}"*.spec.ts \
         "${directory}/__tests__/${stem}"*.spec.ts \
         "${directory}/__tests__/${prefix}"*.spec.ts; do
+        [ -f "$cand" ] || continue
+        if [[ "$cand" == *.integration.spec.ts ]]; then
+            integration=1
+        else
+            unit=1
+        fi
         add_spec "$cand"
     done
+    [ "$integration" = 1 ] && [ "$unit" = 0 ] && INTEGRATION_ONLY+=("$f")
 done
+
+if [ -n "${INTEGRATION_ONLY[0]-}" ]; then
+    echo "[mutation:diff] Only integration suites cover these; left out of the mutation:"
+    printf '  - %s\n' "${INTEGRATION_ONLY[@]}"
+    KEPT=()
+    for f in "${FILES[@]}"; do
+        [[ " ${INTEGRATION_ONLY[*]} " == *" $f "* ]] || KEPT+=("$f")
+    done
+    FILES=("${KEPT[@]-}")
+    [ -n "${FILES[0]-}" ] || FILES=()
+    record_unreached "${INTEGRATION_ONLY[@]}"
+    [ -n "${FILES[0]-}" ] || exit 0
+fi
 
 # Naming misses a spec that reaches a file through another module (a mapper
 # tested through its index), so the specs jest's dependency graph relates to
@@ -119,7 +144,7 @@ done <<< "$related_specs"
 if [ -z "${SPECS[0]-}" ]; then
     echo "[mutation:diff] None of the changed files have a nearby spec — nothing to validate."
     echo "                (That is itself a signal: this change added/edited untested production code.)"
-    record_unreached "${FILES[@]}"
+    record_unreached "${FILES[@]}" "${INTEGRATION_ONLY[@]-}"
     exit 0
 fi
 
@@ -194,7 +219,7 @@ fi
 if [ -z "$shard_specs" ]; then
     echo "[mutation:diff] Shard ${SHARD_INDEX}/${SHARD_COUNT}: no scoped spec reaches these files — nothing to validate:"
     printf '  - %s\n' "${SHARD_FILES[@]}"
-    record_unreached "${SHARD_FILES[@]}"
+    record_unreached "${SHARD_FILES[@]}" "${INTEGRATION_ONLY[@]-}"
     exit 0
 fi
 
