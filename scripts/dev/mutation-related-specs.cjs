@@ -78,8 +78,15 @@ const specs = output
 const skipsItself = (spec) => {
     if (!/\.integration\.spec\.ts$/.test(spec)) return false;
     try {
-        return /SKIP_INTEGRATION|resolveMongoTestGate/.test(
-            fs.readFileSync(spec, 'utf8'),
+        // The gate as code — reading the variable or calling the Mongo gate —
+        // with comments stripped, so a spec that only mentions it still runs
+        // in its own position.
+        const code = fs
+            .readFileSync(spec, 'utf8')
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .replace(/^\s*\/\/.*$/gm, '');
+        return /process\.env\.SKIP_INTEGRATION\b|resolveMongoTestGate\s*\(/.test(
+            code,
         );
     } catch {
         return false;
