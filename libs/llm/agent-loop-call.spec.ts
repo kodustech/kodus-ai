@@ -57,6 +57,7 @@ import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { agentModelIdentity } from '@libs/llm/model-identity';
 import { readAiSdkUsage } from '@libs/llm/ai-sdk-usage';
 import { BYOKConcurrencyLimiter } from '@libs/llm/byok-limiter';
+import { runWithUsageMeter } from '@libs/llm/usage-meter';
 import {
     setLlmObservability,
     getLlmObservability,
@@ -667,5 +668,37 @@ describe('langfuse telemetry — conditional wiring', () => {
         });
         expect(toAiSdkTelemetryArgs).toHaveBeenCalled();
         expect(genArgs().experimental_telemetry).toEqual({ isEnabled: false });
+    });
+});
+
+describe('usage meter — the loop reports every step', () => {
+    it('reports each finished step to the meter of the work it runs in', async () => {
+        const record = jest.fn();
+        mockGenerate.mockImplementation(async (args: any) => {
+            await args.onStepFinish?.({
+                usage: { inputTokens: 100, outputTokens: 20 },
+            });
+            await args.onStepFinish?.({
+                usage: { inputTokens: 140, outputTokens: 30 },
+            });
+            return OK_RESULT();
+        });
+
+        await runWithUsageMeter({ record }, () =>
+            runAgentLoopCall(baseParams()),
+        );
+
+        expect(record).toHaveBeenCalledTimes(2);
+        expect(record).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+                usage: expect.objectContaining({
+                    inputTokens: 140,
+                    outputTokens: 30,
+                }),
+                modelName: 'openai:gpt-x',
+                runName: 'agent.run',
+            }),
+        );
     });
 });

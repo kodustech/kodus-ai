@@ -55,6 +55,7 @@ import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import { setLlmObservability } from '@libs/llm/llm-observability';
 import { retriesWereExhausted } from '@libs/llm/error-classifier';
 import { sleep } from '@libs/llm/retry-policy';
+import { runWithUsageMeter } from '@libs/llm/usage-meter';
 import {
     buildModelFromSlot,
     getLimiterForSlot,
@@ -1326,7 +1327,11 @@ const keepSchema = z.object({ keep: z.boolean() });
 /** Feed one raw text back on the reroute path and run the parse layer. */
 const parseReroute = <S extends z.ZodType>(schema: S, text: string) => {
     mockGenerate.mockResolvedValueOnce({ text, usage: {} });
-    return runStructuredReviewCall({ ...base, schema, byokConfig: zooKimiSlot });
+    return runStructuredReviewCall({
+        ...base,
+        schema,
+        byokConfig: zooKimiSlot,
+    });
 };
 
 describe('MATRIX A — output-shape zoo (E: json_object/reroute branch, full zoo in scope)', () => {
@@ -1402,7 +1407,9 @@ describe('reroute-json — a 429 is re-issued once, then handed to the fallback'
     it('429 twice → throws the second 429 marked exhausted', async () => {
         const second = rateLimited('Usage limit reached for 5 hour.');
         mockGenerate
-            .mockRejectedValueOnce(rateLimited('Usage limit reached for 5 hour.'))
+            .mockRejectedValueOnce(
+                rateLimited('Usage limit reached for 5 hour.'),
+            )
             .mockRejectedValueOnce(second);
 
         const thrown = await runStructuredReviewCall({
@@ -1470,7 +1477,10 @@ describe('MATRIX E/#1786 — a raw jsonSchema() caller (no validate fn) is STILL
     } as any);
 
     it('renamed keys are REJECTED (ensureValidatingSchema compiled an ajv validator) → SIGNALS', async () => {
-        mockGenerate.mockResolvedValueOnce({ text: '{"kept":true}', usage: {} });
+        mockGenerate.mockResolvedValueOnce({
+            text: '{"kept":true}',
+            usage: {},
+        });
         await expect(
             runStructuredReviewCall({
                 ...base,
@@ -1498,3 +1508,54 @@ describe('MATRIX D — input variants (request assembly threading, happy LLM.run
     });
 });
 
+describe('runStructuredReviewCall — usage meter', () => {
+    it('reports a call that succeeds', async () => {
+        const record = jest.fn();
+        mockGenerate.mockResolvedValueOnce({
+            experimental_output: { violations: [] },
+            usage: { inputTokens: 900, outputTokens: 80 },
+        });
+
+        await runWithUsageMeter({ record }, () =>
+            runStructuredReviewCall({ ...base }),
+        );
+
+        expect(record).toHaveBeenCalledWith(
+            expect.objectContaining({
+                usage: expect.objectContaining({
+                    inputTokens: 900,
+                    outputTokens: 80,
+                }),
+                runName: 'test.run',
+            }),
+        );
+    });
+
+    it('reports a call whose answer did not parse: it was still billed', async () => {
+        const record = jest.fn();
+        const unparsed = new NoObjectGeneratedError({
+            message: 'No object generated: could not parse the response.',
+            text: 'not json',
+            response: {} as any,
+            usage: { inputTokens: 700, outputTokens: 60 } as any,
+            finishReason: 'stop',
+        });
+        mockGenerate
+            .mockRejectedValueOnce(unparsed)
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        await runWithUsageMeter({ record }, () =>
+            runStructuredReviewCall({ ...base }),
+        );
+
+        expect(record).toHaveBeenCalledWith(
+            expect.objectContaining({
+                usage: expect.objectContaining({
+                    inputTokens: 700,
+                    outputTokens: 60,
+                }),
+                runName: expect.stringContaining('test.run'),
+            }),
+        );
+    });
+});
