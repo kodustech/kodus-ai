@@ -61,7 +61,12 @@ describe('ScanBudgetMeter', () => {
         ).toThrow(ScanBudgetReached);
         expect(meter.isExhausted()).toBe(true);
         expect(onExhausted).toHaveBeenCalledTimes(1);
+
+        // The aborted request gives its room back, but nothing else leaves.
         settle(undefined);
+        expect(() =>
+            meter.admit({ inputTokens: 10, maxOutputTokens: 10 }),
+        ).toThrow(ScanBudgetReached);
     });
 
     it('never spends past the cap with requests in flight at once, whatever came before', () => {
@@ -139,16 +144,20 @@ describe('ScanBudgetMeter', () => {
         ).not.toThrow();
     });
 
-    it('reserves an uncapped answer at the scan default', () => {
-        const meter = new ScanBudgetMeter(
-            { maxTokens: UNCAPPED_ANSWER_TOKENS },
-            null,
-        );
+    it('reserves an uncapped answer at twice the longest seen, never below the default', () => {
+        const meter = new ScanBudgetMeter({ maxTokens: 20_000 }, null);
 
-        // 1,250 tokens of prompt and the default answer do not fit.
+        // 1,250 tokens of prompt and the 8,000 default fit.
+        meter.admit({ inputTokens: 1_000 })({
+            inputTokens: 1_000,
+            outputTokens: 6_000,
+        });
+        meter.record(request(1_000, 6_000));
+        // 7,000 spent; now 1,250 and twice 6,000 do not.
         expect(() => meter.admit({ inputTokens: 1_000 })).toThrow(
             ScanBudgetReached,
         );
+        expect(UNCAPPED_ANSWER_TOKENS).toBe(8_000);
     });
 
     it('caps by tokens when the model has no price', () => {

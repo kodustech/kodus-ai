@@ -15,7 +15,8 @@ import type { SecurityScanBudget, SecurityScanSpend } from './security-scan.type
  * Every model request is admitted before it leaves (the model wrapper calls
  * `admit`), against the most it can cost: its prompt and tool definitions,
  * counted with the shared tokenizer plus a margin for a provider whose
- * tokenizer counts more, and its answer cap. What was spent, what the
+ * tokenizer counts more, and its answer cap (see UNCAPPED_ANSWER_TOKENS when
+ * it sets none). What was spent, what the
  * requests still in flight may cost, and this request's ceiling must fit
  * under the cap, or the request is refused and the scan stops. Each request
  * carries its own bound, so requests running at once, a planner smaller than
@@ -24,11 +25,12 @@ import type { SecurityScanBudget, SecurityScanSpend } from './security-scan.type
 const TOKENIZER_MARGIN = 1.25;
 
 /**
- * The answer a request is assumed to get when it sets no cap of its own: a
- * BYOK slot with a max output tokens gives the exact bound, otherwise a scan
- * request (a tool call or a short JSON object) is reserved at this.
+ * A request that sets no answer cap of its own (a BYOK slot with a max output
+ * tokens gives the exact bound) is reserved at twice the longest answer the
+ * scan has seen, and never below this: a scan's answers are tool calls and
+ * short JSON objects. That part is an estimate, not a bound.
  */
-export const UNCAPPED_ANSWER_TOKENS = 32_000;
+export const UNCAPPED_ANSWER_TOKENS = 8_000;
 
 /** Thrown to the model wrapper for a request the cap has no room for. */
 export class ScanBudgetReached extends Error {
@@ -50,6 +52,7 @@ export class ScanBudgetMeter implements UsageMeter {
      */
     private readonly answered: Array<Cost & { key: string }> = [];
     private refused = false;
+    private longestAnswer = 0;
     private readonly listeners: Array<() => void> = [];
 
     constructor(
@@ -64,8 +67,15 @@ export class ScanBudgetMeter implements UsageMeter {
     }
 
     admit(request: RequestCeiling): (answered: AiSdkUsage | undefined) => void {
+        // Once one is refused, none leaves: the requests aborted then give
+        // their reservation back, yet the provider may have billed them.
+        if (this.refused) {
+            throw new ScanBudgetReached();
+        }
         const input = Math.ceil(request.inputTokens * TOKENIZER_MARGIN);
-        const output = request.maxOutputTokens || UNCAPPED_ANSWER_TOKENS;
+        const output =
+            request.maxOutputTokens ||
+            Math.max(UNCAPPED_ANSWER_TOKENS, 2 * this.longestAnswer);
         const ceiling: Cost = {
             // Input priced at the dearer of a fresh read and a cache write.
             usd: Math.max(
@@ -107,6 +117,7 @@ export class ScanBudgetMeter implements UsageMeter {
         const input = usage.inputTokens ?? 0;
         // ai@7 counts reasoning inside outputTokens, and bills it as output.
         const output = usage.outputTokens ?? 0;
+        this.longestAnswer = Math.max(this.longestAnswer, output);
         this.spent = {
             usd: this.spent.usd + this.costOf(usage),
             inputTokens: this.spent.inputTokens + input,
