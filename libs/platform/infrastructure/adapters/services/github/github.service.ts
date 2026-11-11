@@ -3142,8 +3142,10 @@ export class GithubService
                 organizationAndTeamData,
             );
 
+            // The webhook mapper spreads GitHub's repository payload, so
+            // `owner` can arrive as the account object instead of its login.
             const owner =
-                repository.owner ??
+                (typeof repository.owner === 'string' && repository.owner) ||
                 (await this.getGithubAuthDetails(organizationAndTeamData))?.org;
 
             const { data } = await octokit.rest.pulls.get({
