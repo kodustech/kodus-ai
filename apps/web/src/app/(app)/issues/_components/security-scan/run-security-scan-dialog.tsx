@@ -142,7 +142,7 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                 variant: "success",
                 title: "Security scan started",
                 description:
-                    "Findings will show up here as Issues with the label Security.",
+                    "Findings appear on this page as the scan stores them.",
             });
 
             onClose();
@@ -177,8 +177,9 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                     <DialogDescription>
                         Kody reads the repository&apos;s default branch with
                         your organization&apos;s own model, and stops at a spend
-                        limit only if you set one. Findings show up as Issues
-                        with the label Security. In beta: check each finding
+                        limit only if you set one. Findings appear below as the
+                        scan stores them, and a scan that stopped before the end
+                        picks up where it stopped. In beta: check each finding
                         before acting on it.
                     </DialogDescription>
                 </DialogHeader>
