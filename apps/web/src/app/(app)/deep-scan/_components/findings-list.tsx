@@ -1,12 +1,14 @@
 "use client";
 
 import { IssueSeverityLevelBadge } from "@components/system/issue-severity-level-badge";
+import { FIX_PROMPT_MAX_ISSUES } from "@services/issues/fetch";
 import type { IssueListItem, IssueStatus } from "@services/issues/types";
 import { formatDistanceToNow } from "date-fns";
 import { useQueryState } from "nuqs";
 import { SeverityLevel } from "src/core/types";
 import { cn } from "src/core/utils/components";
 
+import { CopyFixPromptButton } from "../../issues/_components/copy-fix-prompt-button";
 import { StatusBadge } from "../../issues/_components/status-badge";
 
 const SEVERITY_RANK: Record<SeverityLevel, number> = {
@@ -67,27 +69,41 @@ export const FindingsList = ({
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-base font-semibold">Findings</h2>
 
-                <div
-                    role="tablist"
-                    className="bg-card-lv1 border-card-lv3/60 flex rounded-lg border p-0.5 text-xs">
-                    {STATUS_TABS.map((tab) => (
-                        <button
-                            key={tab.value}
-                            type="button"
-                            role="tab"
-                            aria-selected={status === tab.value}
-                            onClick={() => onStatusChange(tab.value)}
-                            className={cn(
-                                "text-text-secondary rounded-md px-3 py-1.5 transition-colors",
-                                status === tab.value &&
-                                    "bg-card-lv3 text-text-primary",
-                            )}>
-                            {tab.label}
-                            <span className="text-text-tertiary ml-1.5 tabular-nums">
-                                {countOf(tab.value)}
-                            </span>
-                        </button>
-                    ))}
+                <div className="flex flex-wrap items-center gap-3">
+                    {shown.length > 0 && (
+                        <CopyFixPromptButton
+                            size="sm"
+                            ids={shown.map((f) => f.uuid)}
+                            label={
+                                shown.length === 1
+                                    ? "Copy fix prompt"
+                                    : `Copy fix prompt for ${Math.min(shown.length, FIX_PROMPT_MAX_ISSUES)}`
+                            }
+                        />
+                    )}
+
+                    <div
+                        role="tablist"
+                        className="bg-card-lv1 border-card-lv3/60 flex rounded-lg border p-0.5 text-xs">
+                        {STATUS_TABS.map((tab) => (
+                            <button
+                                key={tab.value}
+                                type="button"
+                                role="tab"
+                                aria-selected={status === tab.value}
+                                onClick={() => onStatusChange(tab.value)}
+                                className={cn(
+                                    "text-text-secondary rounded-md px-3 py-1.5 transition-colors",
+                                    status === tab.value &&
+                                        "bg-card-lv3 text-text-primary",
+                                )}>
+                                {tab.label}
+                                <span className="text-text-tertiary ml-1.5 tabular-nums">
+                                    {countOf(tab.value)}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 

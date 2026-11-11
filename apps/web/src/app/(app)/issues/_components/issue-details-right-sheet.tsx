@@ -48,6 +48,7 @@ import { cn } from "src/core/utils/components";
 import { apiProxyPath } from "src/core/utils/api-proxy";
 import { generateQueryKey } from "src/core/utils/reactQuery";
 
+import { CopyFixPromptButton } from "./copy-fix-prompt-button";
 import {
     IssueSecurityEvidence,
     IssueSecurityFacts,
@@ -185,6 +186,8 @@ export const IssueDetailsRightSheet = ({
                     </div>
 
                     <div className="flex items-center gap-3">
+                        <CopyFixPromptButton ids={peek ? [peek] : []} />
+
                         <ButtonWithFeedback
                             size="xs"
                             variant="helper"
