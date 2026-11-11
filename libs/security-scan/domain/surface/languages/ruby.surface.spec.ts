@@ -63,6 +63,18 @@ describeSurfaceCases(RUBY_SURFACE, 'app/controllers/invoices_controller.rb', [
         patternId: 'rb.rails.auth',
         code: '    authorize @invoice',
     },
+    // Skipping the login filter opens the actions: an entry point.
+    {
+        role: 'entry_point',
+        match: true,
+        patternId: 'rb.rails.skip-auth',
+        code: '  skip_before_action :authenticate_user!, only: [:show]',
+    },
+    {
+        role: 'auth_check',
+        match: false,
+        code: '  skip_before_action :authenticate_user!, only: [:show]',
+    },
 
     // injection
     {

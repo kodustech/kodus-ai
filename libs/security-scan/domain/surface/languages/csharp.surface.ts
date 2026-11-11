@@ -55,9 +55,15 @@ export const CSHARP_SURFACE: LanguageSurface = {
             'cli',
         ),
 
+        // Opens an action or endpoint to anyone: an entry point, not a check.
+        entry(
+            'cs.aspnet.anonymous',
+            String.raw`\[AllowAnonymous\]|\.AllowAnonymous\(\)`,
+            'aspnet',
+        ),
         auth(
             'cs.aspnet.auth',
-            String.raw`\[Authorize\b|\[AllowAnonymous\]|\.RequireAuthorization\(|\.AllowAnonymous\(\)|\bUseAuthorization\(\)|\bUseAuthentication\(\)|\bAddAuthorization\(|\bIAuthorizationHandler\b|\bAuthorizationHandler<|\bUser\.IsInRole\(|\.AuthorizeAsync\(`,
+            String.raw`\[Authorize\b|\.RequireAuthorization\(|\bUseAuthorization\(\)|\bUseAuthentication\(\)|\bAddAuthorization\(|\bIAuthorizationHandler\b|\bAuthorizationHandler<|\bUser\.IsInRole\(|\.AuthorizeAsync\(`,
             'aspnet',
         ),
 

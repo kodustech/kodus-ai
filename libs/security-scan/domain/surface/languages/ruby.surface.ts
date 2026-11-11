@@ -58,9 +58,15 @@ export const RUBY_SURFACE: LanguageSurface = {
             'cli',
         ),
 
+        // Skipping the login filter opens the actions to anyone.
+        entry(
+            'rb.rails.skip-auth',
+            String.raw`\bskip_before_action\s+:(?:authenticate\w*|require_\w+)`,
+            'rails',
+        ),
         auth(
             'rb.rails.auth',
-            String.raw`\bbefore_action\s+:(?:authenticate\w*|require_\w+|authorize\w*|ensure_\w+|check_\w+|verify_\w+|logged_in\w*)|\bskip_before_action\s+:(?:authenticate\w*|verify_authenticity_token|require_\w+)|\bauthorize!?\s*\(?\s*[@:]?\w+|\bload_and_authorize_resource\b|\bverify_authorized\b|\bpolicy_scope\(|\bauthenticate_\w+!|\bhttp_basic_authenticate_with\b|\bauthenticate_or_request_with_http_\w+`,
+            String.raw`\bbefore_action\s+:(?:authenticate\w*|require_\w+|authorize\w*|ensure_\w+|check_\w+|verify_\w+|logged_in\w*)|\bauthorize!?\s*\(?\s*[@:]?\w+|\bload_and_authorize_resource\b|\bverify_authorized\b|\bpolicy_scope\(|(?:^|[^:\w])authenticate_\w+!|\bhttp_basic_authenticate_with\b|\bauthenticate_or_request_with_http_\w+`,
             'rails/devise/pundit/cancancan',
         ),
 

@@ -64,6 +64,18 @@ describeSurfaceCases(CSHARP_SURFACE, 'src/Api/Controllers/UsersController.cs', [
         patternId: 'cs.aspnet.auth',
         code: 'app.MapGet("/me", Me).RequireAuthorization();',
     },
+    // Anonymous access is an entry point, never an auth check.
+    {
+        role: 'entry_point',
+        match: true,
+        patternId: 'cs.aspnet.anonymous',
+        code: '    [AllowAnonymous]',
+    },
+    {
+        role: 'auth_check',
+        match: false,
+        code: 'app.MapGet("/health", Health).AllowAnonymous();',
+    },
 
     // injection
     {

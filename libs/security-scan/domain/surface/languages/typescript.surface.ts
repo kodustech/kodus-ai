@@ -81,9 +81,15 @@ export const TYPESCRIPT_SURFACE: LanguageSurface = {
             'cli',
         ),
 
+        // Marks a route open to anyone: an entry point, never an auth check.
+        entry(
+            'ts.nest.public',
+            String.raw`@(?:Public|AllowAnonymous|SkipAuth|IsPublic)\(`,
+            'nestjs',
+        ),
         auth(
             'ts.nest.guard',
-            String.raw`@UseGuards\(|@(?:Roles|CheckPolicies|Permissions|RequirePermissions|Authorized|Auth|Public)\(|\bimplements\s+CanActivate\b`,
+            String.raw`@UseGuards\(|@(?:Roles|CheckPolicies|Permissions|RequirePermissions|Authorized|Auth)\(|\bimplements\s+CanActivate\b`,
             'nestjs',
         ),
         auth(

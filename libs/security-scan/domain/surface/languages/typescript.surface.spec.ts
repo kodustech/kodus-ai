@@ -132,6 +132,18 @@ describeSurfaceCases(TYPESCRIPT_SURFACE, 'src/app.ts', [
         patternId: 'ts.nest.guard',
         code: '@UseGuards(JwtAuthGuard, PolicyGuard)',
     },
+    // A route marked open is an entry point, never an auth check.
+    {
+        role: 'entry_point',
+        match: true,
+        patternId: 'ts.nest.public',
+        code: '    @Public()',
+    },
+    {
+        role: 'auth_check',
+        match: false,
+        code: '    @Public()',
+    },
     {
         role: 'auth_check',
         match: true,
