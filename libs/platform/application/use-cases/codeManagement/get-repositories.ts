@@ -104,7 +104,7 @@ export class GetRepositoriesUseCase implements IUseCase {
                     },
                 },
             });
-            return [];
+            throw error;
         }
     }
 }
