@@ -1,9 +1,23 @@
 import modelData from './model-context-windows.json';
 
-const MODELS = modelData as Record<
-    string,
-    { max_input_tokens: number; litellm_provider?: string }
->;
+type MirrorRow = {
+    max_input_tokens: number;
+    litellm_provider?: string;
+    source?: 'models.dev';
+};
+
+const ALL_ROWS = modelData as Record<string, MirrorRow>;
+
+/** Rows from LiteLLM, current or kept from an earlier refresh. */
+const MODELS: Record<string, MirrorRow> = {};
+/** Rows filled from models.dev, read as `limit.context - limit.output` when
+ *  the host publishes no input limit. That is a floor, often well below the
+ *  real window, so they answer only a model every other step missed, and never
+ *  a substring match (see `scripts/refresh-model-context-windows.mjs`). */
+const MODELS_DEV: Record<string, MirrorRow> = {};
+for (const [name, row] of Object.entries(ALL_ROWS)) {
+    (row.source === 'models.dev' ? MODELS_DEV : MODELS)[name] = row;
+}
 
 /** Conservative default when the model is unknown. */
 export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
@@ -61,6 +75,16 @@ const MANUAL_OVERRIDES: Record<string, number> = {
     // Alibaba Qwen
     'qwen35': 262_144,
     'qwen3coder': 262_144,
+    // Short ids that step 4 sends to the longest key CONTAINING them, the least
+    // related row: `auto` lands on an autoglm phone model (65,536), `coder` on a
+    // 32k Qwen coder, `glm-4.7-flash` on a Cloudflare row (131,072, against
+    // Z.ai's 200,000), `meta/llama-3.3-70b-instruct` on a Cloudflare fp8 row
+    // (24,000). Gateway aliases (`auto`, `openrouter/auto`, `coder`) route to
+    // models we cannot know, so they keep the default.
+    'auto': DEFAULT_CONTEXT_WINDOW_TOKENS,
+    'coder': DEFAULT_CONTEXT_WINDOW_TOKENS,
+    'glm47flash': 200_000,
+    'metallama3370binstruct': 128_000,
 };
 
 /**
@@ -82,6 +106,10 @@ const NORMALIZED_INDEX = new Map<string, number>();
 for (const [name, info] of Object.entries(MODELS)) {
     NORMALIZED_INDEX.set(normalize(name), info.max_input_tokens);
 }
+const MODELS_DEV_INDEX = new Map<string, number>();
+for (const [name, info] of Object.entries(MODELS_DEV)) {
+    MODELS_DEV_INDEX.set(normalize(name), info.max_input_tokens);
+}
 
 /**
  * Resolves the max input tokens (context window) for a given model.
@@ -91,8 +119,9 @@ for (const [name, info] of Object.entries(MODELS)) {
  *   2. Normalized match (strips provider prefix, punctuation, case)
  *   3. Manual override, exact on the normalized name — only reachable for a
  *      model the mirror does not have
- *   4. Partial/substring match on normalized names
- *   5. Default (128k)
+ *   4. Partial/substring match on normalized names, LiteLLM rows only
+ *   5. models.dev row, exact or normalized
+ *   6. Default (128k)
  *
  * The overrides used to sit at position 1 AND match by substring, so a
  * hand-typed number for an older model silently overruled real data for a newer
@@ -119,6 +148,26 @@ export function getModelContextWindow(modelName?: string): number {
 export function lookupModelContextWindow(
     modelName?: string,
 ): number | undefined {
+    return lookupContextWindowWithSource(modelName)?.tokens;
+}
+
+/** Where a context window came from. `models.dev` is a floor that can sit below
+ *  the real window, so a caller that logs the window should say so. */
+export type ContextWindowSource =
+    | 'byok'
+    | 'litellm'
+    | 'override'
+    | 'models.dev'
+    | 'default';
+
+export type ResolvedContextWindow = {
+    tokens: number;
+    source: ContextWindowSource;
+};
+
+function lookupContextWindowWithSource(
+    modelName?: string,
+): ResolvedContextWindow | undefined {
     if (!modelName || typeof modelName !== 'string') {
         return undefined;
     }
@@ -128,19 +177,19 @@ export function lookupModelContextWindow(
     // 1. Exact match in the mirror — the model id as the vendor writes it.
     const direct = MODELS[modelName];
     if (direct?.max_input_tokens) {
-        return direct.max_input_tokens;
+        return { tokens: direct.max_input_tokens, source: 'litellm' };
     }
 
     // 2. Normalized match in the mirror.
     const normalizedHit = NORMALIZED_INDEX.get(normalized);
     if (normalizedHit) {
-        return normalizedHit;
+        return { tokens: normalizedHit, source: 'litellm' };
     }
 
     // 3. Manual override — a model upstream does not carry yet. Exact only: a
     //    substring match here is what pinned claude-opus-4-7 to its 4.x sibling.
     if (MANUAL_OVERRIDES[normalized]) {
-        return MANUAL_OVERRIDES[normalized];
+        return { tokens: MANUAL_OVERRIDES[normalized], source: 'override' };
     }
 
     // 4. Substring match on the mirror — find the longest normalized key that matches
@@ -156,29 +205,50 @@ export function lookupModelContextWindow(
         }
     }
     if (bestMatch > 0) {
-        return bestMatch;
+        return { tokens: bestMatch, source: 'litellm' };
     }
 
-    // 5. Unknown — the caller decides what to substitute.
+    // 5. models.dev — a floor for a model nobody else knows.
+    const modelsDevHit =
+        MODELS_DEV[modelName]?.max_input_tokens ??
+        MODELS_DEV_INDEX.get(normalized);
+    if (modelsDevHit) {
+        return { tokens: modelsDevHit, source: 'models.dev' };
+    }
+
+    // 6. Unknown — the caller decides what to substitute.
     return undefined;
 }
 
 /**
  * Resolves the effective context window with the full fallback chain:
  *   1. User's explicit `maxInputTokens` in BYOK config (highest priority)
- *   2. LiteLLM lookup by model name
+ *   2. Mirror lookup by model name
  *   3. Default 128k
  */
 export function resolveContextWindow(params: {
     byokMaxInputTokens?: number;
     modelName?: string;
 }): number {
+    return resolveContextWindowWithSource(params).tokens;
+}
+
+/** `resolveContextWindow`, plus which step answered. */
+export function resolveContextWindowWithSource(params: {
+    byokMaxInputTokens?: number;
+    modelName?: string;
+}): ResolvedContextWindow {
     if (
         typeof params.byokMaxInputTokens === 'number' &&
         params.byokMaxInputTokens > 0
     ) {
-        return params.byokMaxInputTokens;
+        return { tokens: params.byokMaxInputTokens, source: 'byok' };
     }
 
-    return getModelContextWindow(params.modelName);
+    return (
+        lookupContextWindowWithSource(params.modelName) ?? {
+            tokens: DEFAULT_CONTEXT_WINDOW_TOKENS,
+            source: 'default',
+        }
+    );
 }

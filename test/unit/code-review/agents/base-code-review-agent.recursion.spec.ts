@@ -48,13 +48,17 @@ jest.mock(
     () => ({
         buildModelFromSlot: jest.fn(() => ({ id: 'fake-model' })),
         getModelName: jest.fn(() => 'fake-model'),
+        getModelId: jest.fn(() => 'fake-model'),
     }),
 );
 
 jest.mock(
     '@libs/llm/model-context-window',
     () => ({
-        resolveContextWindow: jest.fn(() => 200_000),
+        resolveContextWindowWithSource: jest.fn(() => ({
+            tokens: 200_000,
+            source: 'litellm',
+        })),
     }),
 );
 
