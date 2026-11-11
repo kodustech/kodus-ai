@@ -21,6 +21,8 @@ import {
     getLimiterForSlot,
 } from '@libs/llm/byok-to-vercel';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
+import { readProviderUsage } from '@libs/llm/ai-sdk-usage';
+import { admitRequest } from '@libs/llm/usage-meter';
 import {
     attachClassification,
     classifyLLMError,
@@ -259,22 +261,43 @@ export function wrapByokModel(
                     ? estimatePromptTokens(params?.prompt)
                     : undefined;
 
+                // A metered run with a spend cap admits the request before it
+                // leaves, against the most it can cost: its prompt and tools,
+                // and the answer cap it asks for (#2451).
+                const settle = admitRequest(() => ({
+                    inputTokens: estimatePromptTokens({
+                        prompt: params?.prompt,
+                        tools: params?.tools,
+                    }),
+                    maxOutputTokens: params?.maxOutputTokens,
+                }));
+
                 // Pin T to the SDK's generate-result type so inference doesn't
                 // collapse to `unknown` (the middleware return type would then
                 // reject it). `run` yields exactly this, and `extractUsageTotal`
                 // takes `unknown`, so nothing else constrains T.
-                return runWithBYOKLimiter<ByokGenerateResult>(
-                    {
-                        slot,
-                        organizationId: opts.organizationId,
-                        abortSignal: params?.abortSignal,
-                        queueTimeoutMs: opts.queueTimeoutMs,
-                        estimatedTokens,
-                        getUsageTokens: hasTpm ? extractUsageTotal : undefined,
-                    },
-                    run,
-                    'llm-call',
-                );
+                let result: ByokGenerateResult;
+                try {
+                    result = await runWithBYOKLimiter<ByokGenerateResult>(
+                        {
+                            slot,
+                            organizationId: opts.organizationId,
+                            abortSignal: params?.abortSignal,
+                            queueTimeoutMs: opts.queueTimeoutMs,
+                            estimatedTokens,
+                            getUsageTokens: hasTpm
+                                ? extractUsageTotal
+                                : undefined,
+                        },
+                        run,
+                        'llm-call',
+                    );
+                } catch (err) {
+                    settle(undefined);
+                    throw err;
+                }
+                settle(readProviderUsage((result as any)?.usage));
+                return result;
             },
         },
     });

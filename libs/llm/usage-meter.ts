@@ -26,6 +26,21 @@ export interface UsageObservation {
  */
 export interface UsageMeter {
     record(observation: UsageObservation): void;
+    /**
+     * Before a request leaves, with the most it can use. Throwing refuses the
+     * request. Returns what to call once it ends: with what the provider
+     * billed for it, or undefined when it failed unanswered. `record` still
+     * follows for an answered request, from the caller that reads its usage.
+     */
+    admit?(request: RequestCeiling): (answered: AiSdkUsage | undefined) => void;
+}
+
+/** The most one request can use, known before it leaves. */
+export interface RequestCeiling {
+    /** Its prompt and tool definitions, counted with the shared tokenizer. */
+    inputTokens: number;
+    /** The cap the request puts on the answer, when it sets one. */
+    maxOutputTokens?: number;
 }
 
 /** Who installed a meter, on the warning a failing meter logs. */
@@ -58,6 +73,31 @@ export function reportUsage(
     meta: Omit<UsageObservation, 'usage'>,
 ): void {
     record(readAiSdkUsage(usage), meta);
+}
+
+const NOTHING_TO_SETTLE = () => undefined;
+
+/**
+ * Called by the model wrapper before each request leaves. Outside a metered
+ * run, or with a meter that does not admit, the ceiling is never computed. A
+ * refusal is thrown to the caller; a meter that fails to settle never breaks
+ * the call it observes.
+ */
+export function admitRequest(
+    ceiling: () => RequestCeiling,
+): (answered: AiSdkUsage | undefined) => void {
+    const store = meterStore.getStore();
+    if (!store?.meter.admit) {
+        return NOTHING_TO_SETTLE;
+    }
+    const settle = store.meter.admit(ceiling());
+    return (answered) => {
+        try {
+            settle(answered);
+        } catch (error) {
+            warnMeterFailure(store, undefined, error);
+        }
+    };
 }
 
 /** A request that failed after the provider answered it (a bad parse) was billed. */
@@ -95,18 +135,26 @@ function record(usage: AiSdkUsage, meta: Omit<UsageObservation, 'usage'>) {
     try {
         store.meter.record({ usage, ...meta });
     } catch (error) {
-        // Only named ids and the error's kind: the context is free-form and an
-        // error's text can carry a provider payload.
-        logger.warn({
-            message: 'Usage meter failed to record a model request',
-            context: 'UsageMeter',
-            metadata: {
-                organizationId: store.context?.organizationId,
-                teamId: store.context?.teamId,
-                repositoryId: store.context?.repositoryId,
-                runName: meta.runName,
-                errorName: error instanceof Error ? error.name : typeof error,
-            },
-        });
+        warnMeterFailure(store, meta.runName, error);
     }
+}
+
+function warnMeterFailure(
+    store: { context?: UsageMeterContext },
+    runName: string | undefined,
+    error: unknown,
+) {
+    // Only named ids and the error's kind: the context is free-form and an
+    // error's text can carry a provider payload.
+    logger.warn({
+        message: 'Usage meter failed to record a model request',
+        context: 'UsageMeter',
+        metadata: {
+            organizationId: store.context?.organizationId,
+            teamId: store.context?.teamId,
+            repositoryId: store.context?.repositoryId,
+            runName,
+            errorName: error instanceof Error ? error.name : typeof error,
+        },
+    });
 }
