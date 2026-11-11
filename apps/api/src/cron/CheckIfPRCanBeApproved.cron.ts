@@ -135,7 +135,14 @@ const TEAM_CONCURRENCY = 10;
 const PR_CONCURRENCY = 15;
 const FINAL_PROVIDER_TIMEOUT_MS = 15_000;
 const APPROVAL_REASON_LOOKUP_TIMEOUT_MS = 10_000;
-const APPROVAL_REASON_WRITE_TIMEOUT_MS = 15_000;
+// GitHub writes wait in a per-installation queue (one comment every 3s). A
+// raced write that loses still posts later, and the next run, not finding it
+// yet, posts a second one, so the bound must exceed the queue: at most
+// PR_CONCURRENCY writes ahead (45s). It only stops a stalled provider call from
+// outliving the 5-minute lock. No hold reason starts after the deadline, so the
+// last ones land inside the lock; the next run recomputes and posts the rest.
+const APPROVAL_REASON_WRITE_TIMEOUT_MS = 90_000;
+const APPROVAL_REASON_WRITE_DEADLINE_MS = 3 * 60 * 1000;
 const APPROVAL_FILES_TIMEOUT_MS = 10_000;
 const DIRECTORY_FILE_CACHE_TTL_MS = 10 * 60 * 1000;
 const SHARED_RISK_STALE_REASON =
@@ -154,6 +161,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
         string,
         IPullRequestMessages | null
     >();
+    private reasonWriteDeadline = Number.POSITIVE_INFINITY;
 
     constructor(
         @Inject(TEAM_SERVICE_TOKEN)
@@ -270,6 +278,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
         // Clear cache at start of each cron run
         this.pullRequestMessagesCache.clear();
+        this.reasonWriteDeadline =
+            Date.now() + APPROVAL_REASON_WRITE_DEADLINE_MS;
 
         try {
             this.logger.log({
@@ -1933,6 +1943,14 @@ export class CheckIfPRCanBeApprovedCronProvider {
         expectedFailure?: IApprovalReasonDeliveryFailure,
         publicationAttemptAt?: string,
     ): Promise<void> {
+        // A hold is recomputed on every run, so a late one waits for the next.
+        // An approval's reason is not: it is always posted.
+        if (
+            decision.kind !== 'approve' &&
+            Date.now() >= this.reasonWriteDeadline
+        ) {
+            return;
+        }
         const occurredAt = publicationAttemptAt ?? new Date().toISOString();
         const guard = {
             notAfter: occurredAt,

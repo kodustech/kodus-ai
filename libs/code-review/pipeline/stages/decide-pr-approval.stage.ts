@@ -162,18 +162,21 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
             prNumber: pullRequest.number,
             includeLabels: !!policy.labels?.length,
         });
-        if (
-            !livePr ||
-            (headSha && livePr.head?.sha !== headSha) ||
-            (pullRequest.base?.sha &&
-                livePr.base?.sha !== pullRequest.base.sha) ||
-            (policy.labels?.length && !livePr.labels)
-        ) {
+        // Each reason names what happened: a push during the review is routine
+        // and must not read like a failure to reach the provider.
+        const liveHold = !livePr
+            ? 'Kody could not read the current PR from the Git provider.'
+            : headSha && livePr.head?.sha !== headSha
+              ? 'A newer commit arrived while Kody reviewed this one; Kody decides on the next reviewed commit.'
+              : pullRequest.base?.sha &&
+                  livePr.base?.sha !== pullRequest.base.sha
+                ? 'The target branch changed during the review, so this review cannot approve the PR.'
+                : policy.labels?.length && !livePr.labels
+                  ? 'Kody could not read the PR labels from the Git provider.'
+                  : null;
+        if (liveHold) {
             return this.updateContext(context, (draft) => {
-                draft.approvalDecision = {
-                    kind: 'hold',
-                    reason: 'Kody could not verify the current PR head and labels.',
-                };
+                draft.approvalDecision = { kind: 'hold', reason: liveHold };
             });
         }
         labels = livePr.labels ?? labels;
