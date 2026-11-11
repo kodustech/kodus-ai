@@ -65,7 +65,7 @@ export class OrganizationMemberListService {
      */
     public async fetch(
         organizationAndTeamData: OrganizationAndTeamData,
-        options: { skipCache?: boolean } = {},
+        options: { skipCache?: boolean; requireAuthors?: boolean } = {},
     ): Promise<OrganizationMemberListResult> {
         const [memberResult, authorResult] = await Promise.allSettled([
             this.codeManagementService.getListMembers({
@@ -93,6 +93,12 @@ export class OrganizationMemberListService {
             memberResult.status === 'rejected' &&
             authorResult.status === 'rejected'
         ) {
+            return unavailable();
+        }
+
+        // A caller that revokes access on absence cannot read a missing
+        // author list as "nobody opened a PR".
+        if (options.requireAuthors && authorResult.status === 'rejected') {
             return unavailable();
         }
 

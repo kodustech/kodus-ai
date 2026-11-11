@@ -203,6 +203,40 @@ describe('OrganizationMemberListService', () => {
         });
     });
 
+    describe('when the caller requires pull request authors', () => {
+        it('is unavailable when the author lookup fails, even with members', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockRejectedValue(
+                new Error('Too Many Requests'),
+            );
+
+            const strict = await service.fetch(organizationAndTeamData, {
+                requireAuthors: true,
+            });
+            const lenient = await service.fetch(organizationAndTeamData);
+
+            expect(strict).toEqual({ status: 'unavailable', members: [] });
+            expect(lenient.status).toBe('ok');
+        });
+
+        it('stays ok when the lookup succeeds with no recent authors', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue(
+                [],
+            );
+
+            const result = await service.fetch(organizationAndTeamData, {
+                requireAuthors: true,
+            });
+
+            expect(result.status).toBe('ok');
+        });
+    });
+
     describe('when the member list cannot be trusted', () => {
         it('reports unavailable when every source throws', async () => {
             mockCodeManagementService.getListMembers.mockRejectedValue(
