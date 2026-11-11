@@ -32,5 +32,7 @@ describe('resolveScanModel', () => {
             expect.objectContaining({ model: 'deepseek-v4' }),
         );
         expect(model.slot?.fallback).toBeUndefined();
+        // The team picks the deep scan's model in routing, on a task of its own.
+        expect(resolveModel.mock.calls[0][2]).toBe('securityScan');
     });
 });

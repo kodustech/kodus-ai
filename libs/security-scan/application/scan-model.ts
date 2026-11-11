@@ -19,8 +19,9 @@ export interface ResolvedScanModel {
 
 /**
  * The model a scan runs on and what it costs, resolved the way a review
- * resolves its model: the organization's `codeReview` route (its BYOK model,
- * or the managed default), priced by the catalog or the organization's own
+ * resolves its model: the organization's `securityScan` route (the model it
+ * routes the deep scan to, else its default BYOK model, else the managed
+ * default), priced by the catalog or the organization's own
  * price for it. Shared by the API (to validate the cap), the job and the eval.
  */
 export async function resolveScanModel(params: {
@@ -32,7 +33,7 @@ export async function resolveScanModel(params: {
     const { byokConfig, main } = await resolveReviewAgentModel(
         { organizationAndTeamData: params.organizationAndTeamData },
         params.permissionValidationService,
-        LLM_TASK.codeReview,
+        LLM_TASK.securityScan,
     );
 
     const priceKey = byokConfig?.model ?? main.modelName.split(':').pop();
