@@ -68,8 +68,8 @@ const buildUseCase = (
 
         return {
             data: rows.slice(0, params.take ?? 30),
-            total: params.includeTotal ? executions.length : 0,
-            distinctPrTotal: params.includeTotal ? executions.length : 0,
+            total: 0,
+            distinctPrTotal: 0,
             teamAutomationIds: ['ta-1'],
         };
     });
@@ -155,7 +155,6 @@ describe('GetEnrichedPullRequestsUseCase — the list does not count by default'
         expect(third.pagination.hasNextPage).toBe(false);
 
         for (const [params] of findExecutions.mock.calls) {
-            expect(params.includeTotal).toBe(false);
             expect(params.countOnly).toBeUndefined();
         }
     });

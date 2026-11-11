@@ -358,7 +358,7 @@ type Seeded = { uuid: string; createdAt: string };
         it('lists only the team’s reviewed pull request executions, newest first', async () => {
             if (!canRun) return;
 
-            const result = await list({ includeTotal: false });
+            const result = await list();
 
             expect(uuids(result)).toEqual(reviewedNewestFirst());
             expect(result.data[0]).toMatchObject({
@@ -372,12 +372,11 @@ type Seeded = { uuid: string; createdAt: string };
         it('pages by limit and continues from a cursor without repeating or skipping rows', async () => {
             if (!canRun) return;
 
-            const firstPage = await list({ take: 3, includeTotal: false });
+            const firstPage = await list({ take: 3 });
             expect(uuids(firstPage)).toEqual(reviewedNewestFirst().slice(0, 3));
 
             const next = await list({
                 take: 3,
-                includeTotal: false,
                 cursor: {
                     createdAt: rows.apiPr7Success.createdAt,
                     uuid: rows.apiPr7Success.uuid,
@@ -387,7 +386,6 @@ type Seeded = { uuid: string; createdAt: string };
 
             // A cursor in the middle of two rows that share a timestamp.
             const afterTie = await list({
-                includeTotal: false,
                 cursor: {
                     createdAt: rows.tieHigh.createdAt,
                     uuid: rows.tieHigh.uuid,
@@ -405,7 +403,6 @@ type Seeded = { uuid: string; createdAt: string };
             const result = await list({
                 skip: 5,
                 take: 30,
-                includeTotal: false,
             });
 
             expect(uuids(result)).toEqual(reviewedNewestFirst().slice(5));
@@ -418,7 +415,6 @@ type Seeded = { uuid: string; createdAt: string };
                 uuids(
                     await list({
                         repositoryIds: [REPO_WEB],
-                        includeTotal: false,
                     }),
                 ),
             ).toEqual([rows.webPr3Success.uuid]);
@@ -428,23 +424,20 @@ type Seeded = { uuid: string; createdAt: string };
                     await list({
                         repositoryIds: [REPO_API, REPO_WEB],
                         status: 'error',
-                        includeTotal: false,
                     }),
                 ),
             ).toEqual([rows.apiPr7Error.uuid]);
 
-            expect(
-                uuids(
-                    await list({ pullRequestNumber: 7, includeTotal: false }),
-                ),
-            ).toEqual([rows.apiPr7Error.uuid, rows.apiPr7Success.uuid]);
+            expect(uuids(await list({ pullRequestNumber: 7 }))).toEqual([
+                rows.apiPr7Error.uuid,
+                rows.apiPr7Success.uuid,
+            ]);
 
             expect(
                 uuids(
                     await list({
                         createdAtFrom: at(15),
                         createdAtTo: at(35),
-                        includeTotal: false,
                     }),
                 ),
             ).toEqual([rows.apiPr7Success.uuid, rows.apiPr5Partial.uuid]);
@@ -456,7 +449,6 @@ type Seeded = { uuid: string; createdAt: string };
                             { number: 3, repositoryId: REPO_WEB },
                             { number: 2, repositoryId: REPO_API },
                         ],
-                        includeTotal: false,
                     }),
                 ),
             ).toEqual([rows.webPr3Success.uuid, rows.apiPr2Old.uuid]);
@@ -472,7 +464,6 @@ type Seeded = { uuid: string; createdAt: string };
             ];
 
             const result = await list({
-                includeTotal: false,
                 prFilters: [
                     { number: 3, repositoryId: REPO_WEB },
                     { number: 7, repositoryId: REPO_API },
@@ -490,7 +481,6 @@ type Seeded = { uuid: string; createdAt: string };
 
             // A key list far longer than the team's history.
             const many = await list({
-                includeTotal: false,
                 prFilters: [
                     ...Array.from({ length: 3000 }, (_, i) => ({
                         number: 100_000 + i,
@@ -502,7 +492,6 @@ type Seeded = { uuid: string; createdAt: string };
             expect(uuids(many)).toEqual([rows.apiPr2Old.uuid]);
 
             const none = await list({
-                includeTotal: false,
                 prFilters: [{ number: 4242, repositoryId: REPO_API }],
             });
             expect(none.data).toEqual([]);
@@ -518,14 +507,12 @@ type Seeded = { uuid: string; createdAt: string };
             ];
 
             const errorsOnly = await list({
-                includeTotal: false,
                 prFilters: keys,
                 status: 'error',
             });
             expect(uuids(errorsOnly)).toEqual([rows.apiPr7Error.uuid]);
 
             const afterCursor = await list({
-                includeTotal: false,
                 prFilters: keys,
                 take: 2,
                 cursor: {
@@ -555,7 +542,6 @@ type Seeded = { uuid: string; createdAt: string };
                             organizationId: org,
                             teamId: siblingTeam,
                         },
-                        includeTotal: false,
                         prFilters: [{ number: 7, repositoryId: REPO_API }],
                     },
                 );
@@ -569,7 +555,6 @@ type Seeded = { uuid: string; createdAt: string };
                             organizationId: org,
                             teamId: splitTeam,
                         },
-                        includeTotal: false,
                         prFilters: [
                             { number: 31, repositoryId: REPO_API },
                             { number: 33, repositoryId: REPO_API },
@@ -587,15 +572,22 @@ type Seeded = { uuid: string; createdAt: string };
         it('counts executions and distinct pull requests over the same filters', async () => {
             if (!canRun) return;
 
-            const all = await list({ take: 2 });
+            const all = await list({ countOnly: true });
             expect(all.total).toBe(7);
             // PRs 7, 3, 5, 4, 2 — PR 9 was only ever skipped.
             expect(all.distinctPrTotal).toBe(5);
-            expect(all.data).toHaveLength(2);
 
-            const filtered = await list({ repositoryIds: [REPO_API] });
+            const filtered = await list({
+                countOnly: true,
+                repositoryIds: [REPO_API],
+            });
             expect(filtered.total).toBe(6);
             expect(filtered.distinctPrTotal).toBe(4);
+
+            // A page reads its rows and counts nothing.
+            const page = await list({ take: 2 });
+            expect(page.data).toHaveLength(2);
+            expect(page.total).toBe(0);
         });
 
         it('answers only the totals when asked to count', async () => {
@@ -626,7 +618,6 @@ type Seeded = { uuid: string; createdAt: string };
                         },
                     },
                 );
-            expect(sibling.total).toBe(1);
             expect(sibling.data).toHaveLength(1);
 
             // The team exists, but not under this organization.
@@ -652,7 +643,6 @@ type Seeded = { uuid: string; createdAt: string };
                             organizationId: org,
                             teamId: randomUUID(),
                         },
-                        includeTotal: false,
                     },
                 );
             expect(unknownTeam.data).toEqual([]);
@@ -677,13 +667,17 @@ type Seeded = { uuid: string; createdAt: string };
                 'aaaaaaaa-0000-4000-8000-000000000002',
                 'aaaaaaaa-0000-4000-8000-000000000001',
             ]);
-            expect(result.total).toBe(3);
+            await expect(
+                repository.findPullRequestExecutionsByOrganizationAndTeam({
+                    ...scope,
+                    countOnly: true,
+                }),
+            ).resolves.toMatchObject({ total: 3, distinctPrTotal: 3 });
 
             const afterFirst =
                 await repository.findPullRequestExecutionsByOrganizationAndTeam(
                     {
                         ...scope,
-                        includeTotal: false,
                         cursor: {
                             createdAt: at(30),
                             uuid: 'aaaaaaaa-0000-4000-8000-000000000003',

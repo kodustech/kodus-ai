@@ -37,13 +37,12 @@ export interface IAutomationExecutionRepository {
         cursor?: { createdAt: string | Date; uuid: string };
         take?: number;
         order?: 'ASC' | 'DESC';
-        includeTotal?: boolean;
         countOnly?: boolean;
         teamAutomationIds?: string[];
     }): Promise<{
         data: AutomationExecutionEntity[];
         total: number;
-        // Distinct PRs matching the DB-level filters (only with includeTotal).
+        // Distinct PRs matching the DB-level filters (only with countOnly).
         distinctPrTotal: number;
         teamAutomationIds?: string[];
     }>;

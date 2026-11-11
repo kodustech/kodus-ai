@@ -108,7 +108,6 @@ describe('AutomationExecutionRepository — team automations of the pull request
 
         await repository.findPullRequestExecutionsByOrganizationAndTeam({
             organizationAndTeamData: ORG_TEAM,
-            includeTotal: false,
         });
 
         const predicates = teamAutomations.predicates as Recorded;
@@ -130,25 +129,50 @@ describe('AutomationExecutionRepository — team automations of the pull request
         );
     });
 
-    it('filters the executions by equality for a single automation', async () => {
+    it('filters a single automation with the same predicate as several', async () => {
         const { repository, predicate } = build({
             teamAutomationIds: ['ta-9'],
         });
 
         await repository.findPullRequestExecutionsByOrganizationAndTeam({
             organizationAndTeamData: ORG_TEAM,
-            includeTotal: false,
         });
 
-        // Equality is what lets (team_automation_id, createdAt, uuid) hand the
+        // No equality special case: Postgres plans a one-element IN as an
+        // equality, so (team_automation_id, createdAt, uuid) still hands the
         // rows over already ordered.
         expect(
-            predicate('"automation_execution"."team_automation_id" ='),
+            predicate('"automation_execution"."team_automation_id"'),
         ).toEqual({
-            sql: '"automation_execution"."team_automation_id" = :teamAutomationId',
-            params: { teamAutomationId: 'ta-9' },
+            sql: '"automation_execution"."team_automation_id" IN (:...teamAutomationIds)',
+            params: { teamAutomationIds: ['ta-9'] },
         });
-        expect(predicate('IN (:...teamAutomationIds)')).toBeUndefined();
+        expect(predicate('= :teamAutomationId')).toBeUndefined();
+    });
+
+    it('joins the list only to what it selects, and not to the organization', async () => {
+        const { repository, executions, predicate } = build({});
+
+        await repository.findPullRequestExecutionsByOrganizationAndTeam({
+            organizationAndTeamData: ORG_TEAM,
+        });
+
+        // teamAutomation.uuid and team.name are selected; the organization
+        // was already checked when the automations were resolved.
+        expect(executions.innerJoin.mock.calls).toEqual([
+            ['automation_execution.teamAutomation', 'teamAutomation'],
+            ['teamAutomation.team', 'team'],
+        ]);
+        expect(predicate('organization')).toBeUndefined();
+        expect(predicate('team.uuid = :teamId')?.params).toEqual({
+            teamId: 'team-1',
+        });
+        expect(
+            predicate('automation_execution.pullRequestNumber IS NOT NULL'),
+        ).toBeDefined();
+        expect(
+            predicate('automation_execution.repositoryId IS NOT NULL'),
+        ).toBeDefined();
     });
 
     it('filters by the whole set when the team has several', async () => {
@@ -158,7 +182,6 @@ describe('AutomationExecutionRepository — team automations of the pull request
 
         await repository.findPullRequestExecutionsByOrganizationAndTeam({
             organizationAndTeamData: ORG_TEAM,
-            includeTotal: false,
         });
 
         expect(predicate('IN (:...teamAutomationIds)')).toEqual({
@@ -222,7 +245,6 @@ describe('AutomationExecutionRepository — team automations of the pull request
         const first =
             await repository.findPullRequestExecutionsByOrganizationAndTeam({
                 organizationAndTeamData: ORG_TEAM,
-                includeTotal: false,
             });
         expect(first.teamAutomationIds).toEqual(['ta-1', 'ta-2']);
         expect(
@@ -232,7 +254,6 @@ describe('AutomationExecutionRepository — team automations of the pull request
         // The next batch of the same request passes them back.
         await repository.findPullRequestExecutionsByOrganizationAndTeam({
             organizationAndTeamData: ORG_TEAM,
-            includeTotal: false,
             teamAutomationIds: first.teamAutomationIds,
         });
 
@@ -250,9 +271,9 @@ describe('AutomationExecutionRepository — team automations of the pull request
             organizationAndTeamData: ORG_TEAM,
             repositoryIds: ['r1'],
         });
-        expect(reviewed.predicate('= :teamAutomationId')?.params).toEqual({
-            teamAutomationId: 'ta-3',
-        });
+        expect(
+            reviewed.predicate('IN (:...teamAutomationIds)')?.params,
+        ).toEqual({ teamAutomationIds: ['ta-3'] });
 
         const awaiting = build({ teamAutomationIds: ['ta-3', 'ta-4'] });
         await awaiting.repository.getAwaitingReviewPullRequestKeys({
@@ -262,6 +283,45 @@ describe('AutomationExecutionRepository — team automations of the pull request
         expect(
             awaiting.predicate('IN (:...teamAutomationIds)')?.params,
         ).toEqual({ teamAutomationIds: ['ta-3', 'ta-4'] });
+    });
+
+    it('reaches the team in the grouping queries through the automations alone, with no join', async () => {
+        const reviewed = build({});
+        await reviewed.repository.getDistinctReviewedPullRequestKeys({
+            organizationAndTeamData: ORG_TEAM,
+        });
+        const awaiting = build({});
+        await awaiting.repository.getAwaitingReviewPullRequestKeys({
+            organizationAndTeamData: ORG_TEAM,
+        });
+
+        for (const { executions, predicate, teamAutomations } of [
+            reviewed,
+            awaiting,
+        ]) {
+            expect(executions.innerJoin).not.toHaveBeenCalled();
+            expect(predicate('organization.uuid')).toBeUndefined();
+            expect(predicate('team.uuid')).toBeUndefined();
+            // The team and the organization are still checked — where the
+            // automations are resolved.
+            expect(
+                (teamAutomations.predicates as Recorded).map((p) => p.params),
+            ).toEqual([
+                { teamId: 'team-1' },
+                { organizationId: 'org-1' },
+                undefined,
+            ]);
+            expect(
+                predicate('"automation_execution"."team_automation_id"')
+                    ?.params,
+            ).toEqual({ teamAutomationIds: ['ta-1'] });
+            expect(
+                predicate('automation_execution.pullRequestNumber IS NOT NULL'),
+            ).toBeDefined();
+            expect(
+                predicate('automation_execution.repositoryId IS NOT NULL'),
+            ).toBeDefined();
+        }
     });
 });
 
@@ -274,13 +334,12 @@ describe('AutomationExecutionRepository.findPullRequestExecutionsByOrganizationA
         repositoryId: 'r1',
     };
 
-    it('does not count when told not to', async () => {
+    it('reads a page without counting', async () => {
         const { repository, executions } = build({ many: [execution] });
 
         const result =
             await repository.findPullRequestExecutionsByOrganizationAndTeam({
                 organizationAndTeamData: ORG_TEAM,
-                includeTotal: false,
                 take: 10,
             });
 
@@ -290,23 +349,7 @@ describe('AutomationExecutionRepository.findPullRequestExecutionsByOrganizationA
         expect(result).toMatchObject({ total: 0, distinctPrTotal: 0 });
     });
 
-    it('counts by default and returns the page with the totals', async () => {
-        const { repository, executions } = build({
-            many: [execution],
-            rawOne: { cnt: '12', prCnt: '5' },
-        });
-
-        const result =
-            await repository.findPullRequestExecutionsByOrganizationAndTeam({
-                organizationAndTeamData: ORG_TEAM,
-            });
-
-        expect(executions.getRawOne).toHaveBeenCalledTimes(1);
-        expect(result).toMatchObject({ total: 12, distinctPrTotal: 5 });
-        expect(result.data).toHaveLength(1);
-    });
-
-    it('answers only the totals in count-only mode, even if told not to count', async () => {
+    it('answers only the totals in count-only mode', async () => {
         const { repository, executions } = build({
             many: [execution],
             rawOne: { cnt: '12', prCnt: '5' },
@@ -316,25 +359,21 @@ describe('AutomationExecutionRepository.findPullRequestExecutionsByOrganizationA
             await repository.findPullRequestExecutionsByOrganizationAndTeam({
                 organizationAndTeamData: ORG_TEAM,
                 countOnly: true,
-                includeTotal: false,
             });
 
         expect(result).toEqual({ data: [], total: 12, distinctPrTotal: 5 });
         expect(executions.getMany).not.toHaveBeenCalled();
     });
 
-    it('answers empty, without reading a page, when the count is zero', async () => {
-        const { repository, executions } = build({
-            many: [execution],
-            rawOne: { cnt: '0', prCnt: '0' },
-        });
+    it('answers a zero count as zero', async () => {
+        const { repository } = build({ rawOne: { cnt: '0', prCnt: '0' } });
 
         await expect(
             repository.findPullRequestExecutionsByOrganizationAndTeam({
                 organizationAndTeamData: ORG_TEAM,
+                countOnly: true,
             }),
         ).resolves.toEqual({ data: [], total: 0, distinctPrTotal: 0 });
-        expect(executions.getMany).not.toHaveBeenCalled();
     });
 
     it('reads a failed list as empty, as it always did', async () => {
@@ -343,7 +382,6 @@ describe('AutomationExecutionRepository.findPullRequestExecutionsByOrganizationA
         await expect(
             repository.findPullRequestExecutionsByOrganizationAndTeam({
                 organizationAndTeamData: ORG_TEAM,
-                includeTotal: false,
             }),
         ).resolves.toEqual({ data: [], total: 0, distinctPrTotal: 0 });
     });
@@ -366,7 +404,6 @@ describe('AutomationExecutionRepository.findPullRequestExecutionsByOrganizationA
 
         await repository.findPullRequestExecutionsByOrganizationAndTeam({
             organizationAndTeamData: ORG_TEAM,
-            includeTotal: false,
             prFilters: [
                 { number: 7, repositoryId: 'r1' },
                 { number: 9, repositoryId: 'r2' },
@@ -391,7 +428,6 @@ describe('AutomationExecutionRepository.findPullRequestExecutionsByOrganizationA
             const { repository, predicate } = build({});
             await repository.findPullRequestExecutionsByOrganizationAndTeam({
                 organizationAndTeamData: ORG_TEAM,
-                includeTotal: false,
                 prFilters,
             });
             expect(predicate('"pr_key"')).toBeUndefined();

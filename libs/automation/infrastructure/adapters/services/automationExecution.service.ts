@@ -149,7 +149,6 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         cursor?: { createdAt: string | Date; uuid: string };
         take?: number;
         order?: 'ASC' | 'DESC';
-        includeTotal?: boolean;
         countOnly?: boolean;
         teamAutomationIds?: string[];
     }): Promise<{

@@ -299,12 +299,6 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             cursor: lastConsumed,
                             take: limit,
                             order: 'DESC',
-                            // The list never counts: counting walks every
-                            // execution that matches the filters, and the page
-                            // does not need it (`hasMoreExecutions` comes from the
-                            // scan). Totals are `countTotals`, on their own
-                            // endpoint.
-                            includeTotal: false,
                             teamAutomationIds,
                         },
                     );
@@ -592,7 +586,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                         // Severity filter: keep only PRs that delivered at least
                         // one suggestion of the requested severity. Applied
                         // post-aggregation like hasSentSuggestions (same caveat:
-                        // does not adjust totalItems, which counts executions).
+                        // `countTotals` counts executions and does not see it).
                         if (
                             severity &&
                             !(
@@ -605,7 +599,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
 
                         // Category filter: keep only PRs with a delivered
                         // suggestion of the requested category (same post-query
-                        // caveat as severity re: totalItems).
+                        // caveat as severity).
                         if (
                             category &&
                             !(
@@ -728,8 +722,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 accumulatedExecutions += executionsBatch.length;
 
                 if (stoppedMidBatch) {
-                    // Rows of this batch were never served — there is more,
-                    // whatever the totals say.
+                    // Rows of this batch were never served — there is more.
                     hasMoreExecutions = true;
                 } else if (!batchWasFull) {
                     hasMoreExecutions = false;
