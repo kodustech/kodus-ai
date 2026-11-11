@@ -96,9 +96,7 @@ export class BitbucketService implements Omit<
         }
     }
 
-    async listIssues(
-        params: ListIssuesParams,
-    ): Promise<CodeManagementIssue[]> {
+    async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
         const impl = await this.getImplementation(
             params.organizationAndTeamData,
         );
@@ -359,11 +357,32 @@ export class BitbucketService implements Omit<
             PULL_REQUESTS_SERVICE_TOKEN,
             { strict: false },
         );
-        const rows = await pullRequestsService.findPullRequestAuthorsOpenedSince(
-            since.toISOString(),
-            organizationAndTeamData.organizationId,
-            repositories.map((repo) => repo.id).filter(Boolean),
-        );
+        const repositoryIds = repositories
+            .map((repo) => repo.id)
+            .filter(Boolean);
+        const rows =
+            await pullRequestsService.findPullRequestAuthorsOpenedSince(
+                since.toISOString(),
+                organizationAndTeamData.organizationId,
+                repositoryIds,
+            );
+
+        // No recent author is a real answer only once PRs have been stored
+        // for these repositories. Before the first backfill or webhook it
+        // means "not loaded yet", and the seat prune must not read it as
+        // "nobody opened a PR".
+        if (
+            rows.length === 0 &&
+            repositoryIds.length > 0 &&
+            !(await pullRequestsService.hasStoredPullRequests(
+                organizationAndTeamData.organizationId,
+                repositoryIds,
+            ))
+        ) {
+            throw new Error(
+                'No pull requests stored yet for the configured Bitbucket repositories',
+            );
+        }
 
         // Stored ids come with or without braces depending on the path that
         // saved the PR; seats and workspace members carry them without.

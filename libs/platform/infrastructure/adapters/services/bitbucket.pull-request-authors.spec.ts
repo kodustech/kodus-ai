@@ -23,14 +23,17 @@ function build(host?: string) {
             .mockResolvedValue([{ id: 'repo-1' }, { id: 'repo-2' }]),
         getPullRequestAuthors: jest.fn(),
     };
-    const dataCenter = { getPullRequestAuthors: jest.fn().mockResolvedValue([]) };
+    const dataCenter = {
+        getPullRequestAuthors: jest.fn().mockResolvedValue([]),
+    };
     const integrationService = {
         getPlatformAuthDetails: jest.fn().mockResolvedValue({ host }),
     };
+    const hasStoredPullRequests = jest.fn().mockResolvedValue(true);
     const moduleRef = {
         get: jest.fn((token) =>
             token === PULL_REQUESTS_SERVICE_TOKEN
-                ? { findPullRequestAuthorsOpenedSince }
+                ? { findPullRequestAuthorsOpenedSince, hasStoredPullRequests }
                 : undefined,
         ),
     };
@@ -41,7 +44,13 @@ function build(host?: string) {
         {} as any,
         moduleRef as any,
     );
-    return { service, cloud, dataCenter, findPullRequestAuthorsOpenedSince };
+    return {
+        service,
+        cloud,
+        dataCenter,
+        findPullRequestAuthorsOpenedSince,
+        hasStoredPullRequests,
+    };
 }
 
 describe('BitbucketService.getPullRequestAuthors', () => {
@@ -80,6 +89,30 @@ describe('BitbucketService.getPullRequestAuthors', () => {
         ).rejects.toThrow('down');
     });
 
+    it('fails when no PR is stored yet for the configured repositories', async () => {
+        const {
+            service,
+            findPullRequestAuthorsOpenedSince,
+            hasStoredPullRequests,
+        } = build();
+        findPullRequestAuthorsOpenedSince.mockResolvedValue([]);
+        hasStoredPullRequests.mockResolvedValue(false);
+
+        await expect(
+            service.getPullRequestAuthors({ organizationAndTeamData: org }),
+        ).rejects.toThrow(/No pull requests stored yet/);
+    });
+
+    it('answers no authors when PRs are stored but none is recent', async () => {
+        const { service, findPullRequestAuthorsOpenedSince } = build();
+        findPullRequestAuthorsOpenedSince.mockResolvedValue([]);
+
+        await expect(
+            service.getPullRequestAuthors({ organizationAndTeamData: org }),
+        ).resolves.toEqual([]);
+    });
+
+    // Guard, not a regression pin: Data Center is untouched and must stay so.
     it('leaves Data Center on its own implementation', async () => {
         const { service, dataCenter, findPullRequestAuthorsOpenedSince } =
             build('https://bitbucket.example.com');

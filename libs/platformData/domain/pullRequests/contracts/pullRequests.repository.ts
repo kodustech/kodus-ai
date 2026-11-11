@@ -152,6 +152,10 @@ export interface IPullRequestsRepository {
         organizationId: string,
         repositoryIds: string[],
     ): Promise<Array<{ id: string; name: string; username: string }>>;
+    hasStoredPullRequests(
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<boolean>;
     // Distinct PR authors (by display name) for the Author search autocomplete.
     findDistinctAuthorsByRepositoryIds(
         organizationId: string,

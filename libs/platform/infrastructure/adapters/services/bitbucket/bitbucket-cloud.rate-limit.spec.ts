@@ -107,6 +107,29 @@ describe('BitbucketCloudService — 429 backoff and wait budget', () => {
         expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
+    it.each(['0', ' '])(
+        'backs off instead of retrying at once on Retry-After %j',
+        async (retryAfter) => {
+            jest.useFakeTimers();
+            const fetchMock = jest
+                .fn()
+                .mockResolvedValueOnce(
+                    respond(429, { 'retry-after': retryAfter }),
+                )
+                .mockResolvedValueOnce(respond(200));
+            global.fetch = fetchMock as any;
+            const { service } = makeService();
+
+            const result = safeFetch(service);
+            await jest.advanceTimersByTimeAsync(9_999);
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            await jest.advanceTimersByTimeAsync(1);
+
+            await expect(result).resolves.toMatchObject({ status: 200 });
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        },
+    );
+
     it('answers 429 without calling Bitbucket once the wait budget is spent', async () => {
         const fetchMock = jest.fn().mockResolvedValue(respond(200));
         global.fetch = fetchMock as any;

@@ -3571,7 +3571,10 @@ export class BitbucketCloudService implements Omit<
                 this.logger.log({
                     message: 'Bitbucket webhook created',
                     context: BitbucketCloudService.name,
-                    metadata: { organizationAndTeamData, repositoryId: repo.id },
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: repo.id,
+                    },
                 });
             },
             labels,
@@ -3996,7 +3999,9 @@ export class BitbucketCloudService implements Omit<
     private parseRetryAfterMs(raw: string | null): number | null {
         if (!raw) return null;
         const asSeconds = Number(raw);
-        if (Number.isFinite(asSeconds) && asSeconds >= 0) {
+        // A zero (or blank, which Number reads as 0) would retry at once
+        // into the same closed window; let the backoff decide instead.
+        if (Number.isFinite(asSeconds) && asSeconds > 0) {
             return Math.round(asSeconds * 1000);
         }
         const asDate = Date.parse(raw);

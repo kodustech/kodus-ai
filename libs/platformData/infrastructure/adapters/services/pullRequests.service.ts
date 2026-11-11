@@ -268,6 +268,16 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    hasStoredPullRequests(
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.hasStoredPullRequests(
+            organizationId,
+            repositoryIds,
+        );
+    }
+
     findDistinctAuthorsByRepositoryIds(
         organizationId: string,
         repositoryIds: string[] | undefined,

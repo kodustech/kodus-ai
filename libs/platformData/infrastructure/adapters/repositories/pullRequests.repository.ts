@@ -62,7 +62,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             {
                 organizationId,
                 'repository.id': repositoryId,
-                number: prNumber,
+                'number': prNumber,
                 // Clearing a notice that does not exist should leave the PR
                 // untouched, including its updatedAt timestamp.
                 ...(failure === null
@@ -846,6 +846,26 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             name: r.name ?? '',
             username: r.username ?? '',
         }));
+    }
+
+    async hasStoredPullRequests(
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<boolean> {
+        if (!repositoryIds?.length) {
+            return false;
+        }
+
+        const doc = await this.pullRequestsModel
+            .findOne(
+                { organizationId, 'repository.id': { $in: repositoryIds } },
+                { _id: 1 },
+            )
+            .lean()
+            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+            .exec();
+
+        return !!doc;
     }
 
     // Distinct PR authors (by display name) for the org/team repo scope — powers
