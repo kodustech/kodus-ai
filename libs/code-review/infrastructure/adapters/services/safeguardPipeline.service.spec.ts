@@ -312,6 +312,24 @@ describe('SafeguardPipelineService — LLM.run boundary contract (#1786 off-sche
 
             expect(r).toEqual({ keep: false, evidence: 'refuted by guard' });
         });
+
+        it('verifyWithPromptOnly keeps the suggestion and logs a warn when the call fails', async () => {
+            mockGenerate.mockRejectedValueOnce(new Error('provider 500'));
+            const warn = jest.spyOn((service as any).logger, 'warn');
+
+            const r = await (service as any).verifyWithPromptOnly(
+                { id: 's1', suggestionContent: 'c' },
+                mkFeatures({ has_resource_leak: true }),
+                baseParams([{ id: 's1' }]),
+            );
+
+            expect(r.keep).toBe(true);
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    metadata: expect.objectContaining({ suggestionId: 's1' }),
+                }),
+            );
+        });
     });
 
     // ---------------------------------------------------------------- Layer 2

@@ -26,6 +26,8 @@ import { ChatWithKodyFromGitUseCase } from '@libs/platform/application/use-cases
 import { GenerateIssuesFromPrClosedUseCase } from '@libs/issues/application/use-cases/generate-issues-from-pr-closed.use-case';
 import { EnqueueCodeReviewJobUseCase } from '@libs/core/workflow/application/use-cases/enqueue-code-review-job.use-case';
 import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
+import { CarryReviewCheckToMergeQueueUseCase } from '@libs/platform/application/use-cases/codeManagement/carry-review-check-to-merge-queue.use-case';
+import { SyncAllRepositoriesUseCase } from '@libs/platform/application/use-cases/codeManagement/sync-all-repositories.use-case';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { INTEGRATION_CONFIG_SERVICE_TOKEN } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
@@ -252,6 +254,14 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test', false);
                         useValue: {
                             execute: jest.fn().mockResolvedValue(null),
                         },
+                    },
+                    {
+                        provide: CarryReviewCheckToMergeQueueUseCase,
+                        useValue: { execute: jest.fn() },
+                    },
+                    {
+                        provide: SyncAllRepositoriesUseCase,
+                        useValue: { syncInstallation: jest.fn() },
                     },
                     {
                         provide: OUTBOX_MESSAGE_REPOSITORY_TOKEN,

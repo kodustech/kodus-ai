@@ -141,7 +141,16 @@ export class IntegrationService implements IIntegrationService {
                 return null;
             }
 
-            return { integrationId: integration?.uuid, ...authDetails } as T;
+            return {
+                integrationId: integration?.uuid,
+                ...authDetails,
+                // Identity of the stored credential, without reading it: the
+                // row id plus its last write. A rotated token rewrites the
+                // row (new updatedAt), a reconnect creates a new one. Set after
+                // the spread so a stored field can't shadow them.
+                authIntegrationId: integration?.authIntegration?.uuid,
+                authUpdatedAt: integration?.authIntegration?.updatedAt,
+            } as T;
         } catch (error) {
             this.logger.error({
                 message: 'Failed to get platform auth details',

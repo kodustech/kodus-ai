@@ -10,13 +10,14 @@ import {
 } from "@components/ui/tooltip";
 import { useEffectOnce } from "@hooks/use-effect-once";
 import { Undo2 } from "lucide-react";
-import { useFormContext, useWatch } from "react-hook-form";
+import { useFormContext, useFormState, useWatch } from "react-hook-form";
 
 import {
     CodeReviewFormType,
     FormattedConfigLevel,
     IFormattedConfigProperty,
 } from "../_types";
+import { isReviewSettingsInheritanceField } from "../_utils/review-settings-inheritance";
 import { useCodeReviewConfig } from "../../_components/context";
 import { useCurrentConfigLevel } from "../../_hooks";
 import {
@@ -34,12 +35,15 @@ function getNestedProperty<T>(
 type OverrideIndicatorFormProps = {
     fieldName: string;
     className?: string;
+    disabled?: boolean;
 };
 
 export const OverrideIndicatorForm = ({
     fieldName,
+    disabled = false,
 }: OverrideIndicatorFormProps) => {
     const form = useFormContext<CodeReviewFormType>();
+    const { disabled: formDisabled } = useFormState({ control: form.control });
     const config = useCodeReviewConfig();
     const currentLevel = useCurrentConfigLevel();
 
@@ -63,6 +67,13 @@ export const OverrideIndicatorForm = ({
         form.setValue(`${fieldName}.level` as any, level, {
             shouldDirty: true,
         });
+        if (isReviewSettingsInheritanceField(fieldName)) {
+            form.setValue(
+                `${fieldName}.inheritanceIntent` as any,
+                { value, level },
+                { shouldDirty: false },
+            );
+        }
         form.trigger(fieldName as any);
     };
 
@@ -70,7 +81,7 @@ export const OverrideIndicatorForm = ({
         <OverrideIndicator
             currentValue={currentValue}
             initialState={initialState}
-            handleRevert={handleRevert}
+            handleRevert={disabled || formDisabled ? undefined : handleRevert}
         />
     );
 };

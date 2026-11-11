@@ -1,4 +1,6 @@
 import { cliInstallProblem } from './cli-install';
+import type { RiskCriterion, RiskReviewRouting } from './risk-assessment';
+import type { NamedApprovalPolicy } from './approval-policies';
 import {
     cliBinaryExposureProblem,
     cliPrefixExposureProblem,
@@ -478,6 +480,8 @@ export const customAgentConfigSchema = z.object({
     id: z.string().min(1),
     name: z.string().min(1),
     enabled: z.boolean(),
+    /** Explicit commands bypass this automatic execution condition. */
+    runWhen: z.enum(['always', 'risk-found']).optional(),
     instructions: z.string().max(CUSTOM_AGENT_LIMITS.maxInstructionsLength),
     /** Globs over the changed files; the agent runs only when one matches. */
     scope: z.object({
@@ -825,14 +829,6 @@ export interface SuggestionControlConfig {
     };
 }
 
-export type ImplementedSuggestionsToAnalyze = {
-    id: string;
-    relevantFile: string;
-    language: string;
-    improvedCode: string;
-    existingCode: string;
-};
-
 /**
  * Business Logic settings as stored. Primitives and arrays only, so the
  * settings form tracks the level (global, repository, directory) per field.
@@ -877,6 +873,16 @@ export const SELECTABLE_REVIEW_MODES = ['balanced', 'heavy'] as const;
 export type CodeReviewConfig = {
     ignorePaths: string[];
     reviewMode?: ReviewMode;
+    /** Independent of automatic PR approval. */
+    riskAssessmentActive?: boolean;
+    riskCriteria?: RiskCriterion[];
+    riskReviewRouting?: RiskReviewRouting;
+    /** Runtime metadata; never a saved configuration choice. */
+    riskAssessmentMayBeActive?: boolean;
+    approvalSettingsMayVaryByDirectory?: boolean;
+    reviewSettingsError?: string;
+    approvalPolicySource?: 'legacy' | 'named';
+    riskAssessmentSource?: 'legacy' | 'independent';
     reviewOptions: ReviewOptions;
 
     /** How the PR is checked against the task it references (Business Logic). */
@@ -911,6 +917,8 @@ export type CodeReviewConfig = {
     kodyMemoryRules?: Partial<IKodyRule>[];
     suggestionControl?: SuggestionControlConfig;
     pullRequestApprovalActive: boolean;
+    /** Ordered OR of enabled policies; each policy's conditions are AND. */
+    approvalPolicies?: NamedApprovalPolicy[];
     /** Optional approval scope. Each list is OR internally; both lists together require both matches. */
     approvalLabels?: string[];
     approvalAuthors?: string[];

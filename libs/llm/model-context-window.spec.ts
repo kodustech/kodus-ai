@@ -1,6 +1,7 @@
 import {
     getModelContextWindow,
     resolveContextWindow,
+    resolveContextWindowWithSource,
 } from './model-context-window';
 
 describe('model-context-window', () => {
@@ -52,8 +53,9 @@ describe('model-context-window', () => {
         it('a model the mirror carries needs no override at all', () => {
             // claude-sonnet-4-5 sits only in the mirror now, so a refresh moves
             // its window on its own — which a duplicated override would have
-            // pinned in place.
-            expect(getModelContextWindow('claude-sonnet-4-5')).toBe(1_000_000);
+            // pinned in place. Upstream moved it from 1,000,000 (the beta
+            // long-context window) to 200,000 on the 2026-11 refresh.
+            expect(getModelContextWindow('claude-sonnet-4-5')).toBe(200_000);
         });
     });
 
@@ -83,6 +85,25 @@ describe('model-context-window', () => {
         });
     });
 
+    describe('getModelContextWindow — models.dev rows fill gaps only', () => {
+        it('answers for a model no other step knows', () => {
+            // Only models.dev carries it: 1,048,576 context minus 32,768 output.
+            expect(getModelContextWindow('kimi-for-coding')).toBe(1_015_808);
+        });
+
+        it('never answers ahead of a LiteLLM row, even a substring one', () => {
+            // models.dev reads this one as 104,858 (its smallest host); the
+            // LiteLLM family row holds the real 1,048,576. Ranked ahead of the
+            // substring step, models.dev answered the smaller number.
+            expect(getModelContextWindow('deepseek-v4.1-flash')).toBe(1_048_576);
+        });
+
+        it('keeps a row LiteLLM dropped instead of falling back to 128k', () => {
+            // LiteLLM deleted every openrouter/* row on 2026-10-09.
+            expect(getModelContextWindow('xiaomi/mimo-v2.6-pro')).toBe(1_048_576);
+        });
+    });
+
     describe('getModelContextWindow — normalize behavior (observable)', () => {
         it('lowercases and strips dash separators before matching', () => {
             // 'GPT-5' must normalize to 'gpt5' to hit the mirror. If either
@@ -98,6 +119,22 @@ describe('model-context-window', () => {
             expect(getModelContextWindow('totally-unknown-xyz-model')).toBe(
                 128_000,
             );
+        });
+    });
+
+    describe('resolveContextWindowWithSource', () => {
+        it.each([
+            ['byok', { byokMaxInputTokens: 999, modelName: 'gpt-5' }, 999],
+            ['litellm (exact)', { modelName: 'gpt-5' }, 272_000],
+            ['litellm (substring)', { modelName: 'jamba-instruct' }, 256_000],
+            ['override', { modelName: 'glm-4-7' }, 202_752],
+            ['models.dev', { modelName: 'kimi-for-coding' }, 1_015_808],
+            ['default', { modelName: 'totally-unknown-xyz-model' }, 128_000],
+        ])('names the step that answered: %s', (label, params, tokens) => {
+            expect(resolveContextWindowWithSource(params)).toEqual({
+                tokens,
+                source: label.split(' ')[0],
+            });
         });
     });
 

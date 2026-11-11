@@ -179,7 +179,11 @@ describe('reference detection — unchanged kody rule text', () => {
             expect(llmRun).toHaveBeenCalledTimes(1);
             expect(resolve).toHaveBeenCalledTimes(2);
             expect(resolve.mock.calls[1][0]).toEqual([
-                { filePath: 'docs/api.md', originalText: 'docs/api.md' },
+                {
+                    filePath: 'docs/api.md',
+                    fileName: 'docs/api.md',
+                    originalText: 'docs/api.md',
+                },
             ]);
         });
 

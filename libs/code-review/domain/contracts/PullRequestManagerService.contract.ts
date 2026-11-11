@@ -8,6 +8,18 @@ export const PULL_REQUEST_MANAGER_SERVICE_TOKEN = Symbol(
     'PullRequestManagerService',
 );
 
+/**
+ * Which diff `getChangedFiles` returned: the changes since the reviewed commit
+ * (`incremental`), the PR's changes since then rebuilt after a rebase
+ * (`interdiff`), the whole PR because neither could be read (`full`), or the
+ * whole PR because there was no reviewed commit to start from (`none`).
+ */
+export type ChangedFilesSource = 'incremental' | 'interdiff' | 'full' | 'none';
+
+export type ChangedFilesOptions = {
+    onDiffSource?: (source: ChangedFilesSource) => void;
+};
+
 export interface IPullRequestManagerService {
     getPullRequestDetails(
         organizationAndTeamData: OrganizationAndTeamData,
@@ -22,6 +34,7 @@ export interface IPullRequestManagerService {
         ignorePaths: string[],
         lastCommit?: string,
         reviewedBaseBranch?: string,
+        options?: ChangedFilesOptions,
     ): Promise<FileChange[]>;
 
     /**

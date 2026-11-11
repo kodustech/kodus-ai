@@ -14,9 +14,10 @@ import { withLangfuseObservation } from './langfuse';
 import { deriveTu } from './token-usage-tu';
 import { setLlmObservability } from '@libs/llm/llm-observability';
 import {
+    failedCallUsage,
     readAiSdkUsage,
-    readAiSdkUsageFromError,
     type AiSdkUsage,
+    type AiSdkUsageInput,
 } from '@libs/llm/ai-sdk-usage';
 
 export type TokenUsage = {
@@ -426,6 +427,14 @@ export class ObservabilityService implements OnModuleInit {
         traced?: boolean;
         attrs?: Record<string, any>;
         exec: () => Promise<T>;
+        /** On a throw, the usage the caller measured itself (an agent loop's
+         *  finished steps), recorded when it covers more than the error's own:
+         *  an abort carries none, and an output error only the last step's. */
+        usageOnError?: () => AiSdkUsageInput;
+        /** On a throw, attributes to stamp on the span besides usage (an
+         *  in-flight abort and its estimated input). Not part of `tu`, so
+         *  never billed. */
+        attrsOnError?: (err: unknown) => Record<string, unknown> | undefined;
     }): Promise<T> {
         // agentName/phase: prefer explicit attrs (the agent-loop path sets them so
         // the phase column is exact, e.g. 'conversation' not 'conversationAgent');
@@ -496,11 +505,18 @@ export class ObservabilityService implements OnModuleInit {
                     // rethrowing, else the span lands in Mongo with the error
                     // flag and zero tokens while Langfuse shows the real spend.
                     // runInSpan's own catch still stamps `error`/`exception.*`.
-                    const failed = readAiSdkUsageFromError(err);
+                    const failed = failedCallUsage(
+                        err,
+                        params.usageOnError?.(),
+                    );
                     if (failed) {
                         span?.setAttributes?.(
                             usageAttrs(failed.usage, failed.finishReason),
                         );
+                    }
+                    const extra = params.attrsOnError?.(err);
+                    if (extra) {
+                        span?.setAttributes?.(extra);
                     }
                     throw err;
                 }

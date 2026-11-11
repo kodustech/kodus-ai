@@ -305,7 +305,7 @@ describe('matrix A — output-shape zoo (submitResult artifact payload)', () => 
         expect(out.suggestions).toHaveLength(1);
     });
 
-    it.failing(
+    it(
         '[A3] suggestions as a single object (not array) → SHOULD recover',
         () => {
             const out = extractFindings(

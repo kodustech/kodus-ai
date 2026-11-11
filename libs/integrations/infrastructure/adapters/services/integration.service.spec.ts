@@ -64,3 +64,92 @@ describe('IntegrationService.getPlatformAuthDetails — error observability', ()
         consoleSpy.mockRestore();
     });
 });
+
+describe('IntegrationService.getPlatformAuthDetails — credential identity', () => {
+    const updatedAt = new Date('2026-11-10T15:30:00.000Z');
+    const makeService = (integration: unknown) =>
+        new IntegrationService(
+            { findOne: jest.fn().mockResolvedValue(integration) } as any,
+            {} as any,
+        );
+
+    it('returns the stored auth details unchanged, plus the row id and last write', async () => {
+        const authDetails = {
+            authToken: 'encrypted',
+            authMode: 'token',
+            org: 'acme',
+        };
+        const service = makeService({
+            uuid: 'integration-1',
+            authIntegration: { uuid: 'auth-row-1', updatedAt, authDetails },
+        });
+
+        const result = await service.getPlatformAuthDetails<any>(
+            { organizationId: 'org-1', teamId: 'team-1' },
+            PlatformType.GITHUB,
+        );
+
+        expect(result).toEqual({
+            integrationId: 'integration-1',
+            ...authDetails,
+            authIntegrationId: 'auth-row-1',
+            authUpdatedAt: updatedAt,
+        });
+    });
+
+    it('does not let a stored field shadow the row identity', async () => {
+        const service = makeService({
+            uuid: 'integration-1',
+            authIntegration: {
+                uuid: 'auth-row-1',
+                updatedAt,
+                authDetails: {
+                    authIntegrationId: 'spoofed',
+                    authUpdatedAt: 'spoofed',
+                },
+            },
+        });
+
+        const result = await service.getPlatformAuthDetails<any>(
+            { organizationId: 'org-1', teamId: 'team-1' },
+            PlatformType.GITHUB,
+        );
+
+        expect(result.authIntegrationId).toBe('auth-row-1');
+        expect(result.authUpdatedAt).toBe(updatedAt);
+    });
+
+    it('reflects the row as it is on each read, so a rewritten credential reads as a new identity', async () => {
+        const authDetails = { authToken: 'encrypted', authMode: 'token' };
+        const later = new Date('2026-11-11T09:00:00.000Z');
+        const findOne = jest
+            .fn()
+            .mockResolvedValueOnce({
+                uuid: 'integration-1',
+                authIntegration: { uuid: 'auth-row-1', updatedAt, authDetails },
+            })
+            .mockResolvedValueOnce({
+                uuid: 'integration-1',
+                authIntegration: {
+                    uuid: 'auth-row-1',
+                    updatedAt: later,
+                    authDetails,
+                },
+            });
+        const service = new IntegrationService({ findOne } as any, {} as any);
+        const tenant = { organizationId: 'org-1', teamId: 'team-1' };
+
+        const first = await service.getPlatformAuthDetails<any>(
+            tenant,
+            PlatformType.GITHUB,
+        );
+        const second = await service.getPlatformAuthDetails<any>(
+            tenant,
+            PlatformType.GITHUB,
+        );
+
+        expect(first.authUpdatedAt).toBe(updatedAt);
+        expect(second.authUpdatedAt).toBe(later);
+        expect(second.authIntegrationId).toBe('auth-row-1');
+    });
+});

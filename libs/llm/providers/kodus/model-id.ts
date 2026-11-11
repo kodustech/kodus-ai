@@ -44,6 +44,23 @@ const RETIRED_KODUS_MODELS: ReadonlyMap<string, string> = new Map([
         'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
         'fireworks/accounts/fireworks/models/deepseek-v4p1-flash',
     ],
+    // Fireworks: 404 "Model not found … not deployed" as of 2026-11-06 (off
+    // the serverless price list since 2026-11-03).
+    [
+        'fireworks/accounts/fireworks/models/deepseek-v4-pro-0813',
+        'fireworks/accounts/fireworks/models/deepseek-v4p1-flash',
+    ],
+    // Fireworks: 404 "Model not found … not deployed" as of 2026-11-06
+    // (deprecated on serverless 2026-09-25); GLM 5.3 is the successor
+    // Fireworks names, and the closest in price.
+    [
+        'fireworks/accounts/fireworks/models/glm-5p2',
+        'fireworks/accounts/fireworks/models/glm-5p3',
+    ],
+    [
+        'fireworks/accounts/fireworks/models/kimi-k2p7-code',
+        'fireworks/accounts/fireworks/models/glm-5p3',
+    ],
 ]);
 
 /** The id a saved Kodus model id runs as today (retired ids → replacement). */

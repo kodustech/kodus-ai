@@ -15,7 +15,9 @@ import { SavePullRequestUseCase } from '@libs/platformData/application/use-cases
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CodeManagementService } from '../../adapters/services/codeManagement.service';
+import { SyncAllRepositoriesUseCase } from '@libs/platform/application/use-cases/codeManagement/sync-all-repositories.use-case';
 import { GitHubPullRequestHandler } from './githubPullRequest.handler';
+import { CarryReviewCheckToMergeQueueUseCase } from '@libs/platform/application/use-cases/codeManagement/carry-review-check-to-merge-queue.use-case';
 
 describe('GitHubPullRequestHandler', () => {
     let handler: GitHubPullRequestHandler;
@@ -29,6 +31,8 @@ describe('GitHubPullRequestHandler', () => {
     let enqueueCodeReviewJobUseCase: { execute: jest.Mock };
     let enqueueImplementationCheckUseCase: { execute: jest.Mock };
     let outboxRepository: { create: jest.Mock };
+    let carryReviewCheckToMergeQueueUseCase: { execute: jest.Mock };
+    let syncAllRepositoriesUseCase: { syncInstallation: jest.Mock };
 
     const organizationAndTeamData = {
         organizationId: 'org-1',
@@ -91,6 +95,12 @@ describe('GitHubPullRequestHandler', () => {
         outboxRepository = {
             create: jest.fn().mockResolvedValue(undefined),
         };
+        carryReviewCheckToMergeQueueUseCase = {
+            execute: jest.fn().mockResolvedValue({ carried: true }),
+        };
+        syncAllRepositoriesUseCase = {
+            syncInstallation: jest.fn().mockResolvedValue(undefined),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -130,6 +140,14 @@ describe('GitHubPullRequestHandler', () => {
                 {
                     provide: OUTBOX_MESSAGE_REPOSITORY_TOKEN,
                     useValue: outboxRepository,
+                },
+                {
+                    provide: CarryReviewCheckToMergeQueueUseCase,
+                    useValue: carryReviewCheckToMergeQueueUseCase,
+                },
+                {
+                    provide: SyncAllRepositoriesUseCase,
+                    useValue: syncAllRepositoriesUseCase,
                 },
             ],
         }).compile();
@@ -264,6 +282,79 @@ describe('GitHubPullRequestHandler', () => {
             const [{ codeManagementPayload }] =
                 enqueueCodeReviewJobUseCase.execute.mock.calls[0];
             expect(codeManagementPayload.onlyCustomAgent).toBeUndefined();
+        });
+    });
+    describe('merge queue pushes', () => {
+        const queueRef =
+            'refs/heads/gh-readonly-queue/main/pr-42-b849a34be3d6e2b91399a6ddca1a4d3ea153839d';
+        const pushParams = (payload: Record<string, unknown>) => ({
+            platformType: PlatformType.GITHUB,
+            event: 'push',
+            payload: {
+                after: '8abdf355fd81b893471909152d4c95964c449407',
+                repository: {
+                    id: 12345,
+                    name: 'test-repo',
+                    full_name: 'org/test-repo',
+                },
+                ...payload,
+            },
+        });
+
+        it('accepts a push that creates a merge queue branch', () => {
+            expect(
+                handler.canHandle(pushParams({ ref: queueRef, created: true })),
+            ).toBe(true);
+        });
+
+        it.each([
+            ['an ordinary branch push', { ref: 'refs/heads/main' }],
+            ['a merge queue branch deletion', { ref: queueRef, deleted: true }],
+        ])('still ignores %s', (_label, payload) => {
+            expect(handler.canHandle(pushParams(payload))).toBe(false);
+        });
+
+        it('hands the queue push to the carry use case and starts no review', async () => {
+            const params = pushParams({ ref: queueRef, created: true });
+
+            await handler.execute(params);
+
+            expect(
+                carryReviewCheckToMergeQueueUseCase.execute,
+            ).toHaveBeenCalledWith(params);
+            expect(savePullRequestUseCase.execute).not.toHaveBeenCalled();
+            expect(enqueueCodeReviewJobUseCase.execute).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('new repository events', () => {
+        it.each([
+            ['installation_repositories', 'added'],
+            ['repository', 'created'],
+        ])('syncs the teams on the installation for %s/%s', async (event, action) => {
+            const params = {
+                platformType: PlatformType.GITHUB,
+                event,
+                payload: { action, installation: { id: 42 } },
+            };
+
+            expect(handler.canHandle(params as any)).toBe(true);
+            await handler.execute(params as any);
+
+            expect(
+                syncAllRepositoriesUseCase.syncInstallation,
+            ).toHaveBeenCalledWith('42');
+            expect(savePullRequestUseCase.execute).not.toHaveBeenCalled();
+        });
+
+        it('ignores a repository event other than creation', () => {
+            expect(
+                handler.canHandle({
+                    platformType: PlatformType.GITHUB,
+                    event: 'repository',
+                    payload: { action: 'archived', installation: { id: 42 } },
+                } as any),
+            ).toBe(false);
         });
     });
 });

@@ -1,5 +1,6 @@
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { LLM } from '@libs/llm/llm';
+import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
 import { Inject, Injectable } from '@nestjs/common';
 import {
     formatApprovalReasonComment,
@@ -47,7 +48,10 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
-import { ICommentManagerService } from '@libs/code-review/domain/contracts/CommentManagerService.contract';
+import {
+    ICommentManagerService,
+    type ApprovalReasonOptions,
+} from '@libs/code-review/domain/contracts/CommentManagerService.contract';
 import { LLMResponseProcessor } from '@libs/ai-engine/infrastructure/adapters/services/llmResponseProcessor.transform';
 import {
     MessageTemplateProcessor,
@@ -135,7 +139,80 @@ export class CommentManagerService implements ICommentManagerService {
         repository: { name: string; id: string },
         reason: string,
         kind: 'approve' | 'hold',
-        options?: { onlyIfPresent?: boolean },
+        options?: ApprovalReasonOptions,
+    ): Promise<void> {
+        const occurredAt =
+            options?.confirmedApproval?.occurredAt ?? new Date().toISOString();
+        try {
+            await this.publishApprovalReason(
+                organizationAndTeamData,
+                prNumber,
+                repository,
+                reason,
+                kind,
+                options,
+                occurredAt,
+            );
+        } catch (error) {
+            const confirmed = options?.confirmedApproval;
+            if (kind === 'approve' && confirmed?.headSha && confirmed.baseSha) {
+                try {
+                    const persisted =
+                        await this.pullRequestsService.setApprovalReasonDeliveryFailure(
+                            organizationAndTeamData.organizationId,
+                            repository.id,
+                            prNumber,
+                            {
+                                decision: 'approve',
+                                reason,
+                                occurredAt,
+                                reviewedHeadSha: confirmed.headSha,
+                                reviewedBaseSha: confirmed.baseSha,
+                            },
+                        );
+                    if (!persisted) {
+                        this.logger.warn({
+                            message:
+                                'Approval reason delivery status was not changed: PR missing or notice superseded',
+                            context: CommentManagerService.name,
+                            metadata: {
+                                organizationAndTeamData,
+                                repositoryId: repository.id,
+                                prNumber,
+                            },
+                        });
+                    }
+                } catch (persistenceError) {
+                    this.logger.warn({
+                        message:
+                            'Could not record approval reason delivery failure',
+                        context: CommentManagerService.name,
+                        error: persistenceError,
+                        metadata: {
+                            organizationAndTeamData,
+                            repositoryId: repository.id,
+                            prNumber,
+                        },
+                    });
+                    throw new AggregateError(
+                        [error, persistenceError],
+                        'Approval reason publication and delivery-state persistence failed',
+                        { cause: error },
+                    );
+                }
+            }
+            throw error;
+        }
+    }
+
+    private async publishApprovalReason(
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+        repository: { name: string; id: string },
+        reason: string,
+        kind: 'approve' | 'hold',
+        options: { onlyIfPresent?: boolean } | undefined,
+        occurredAt: string,
     ): Promise<void> {
         const request = {
             organizationAndTeamData,
@@ -204,6 +281,7 @@ export class CommentManagerService implements ICommentManagerService {
                 repository.id,
                 prNumber,
                 null,
+                { notAfter: occurredAt },
             );
         } catch (error) {
             this.logger.warn({
@@ -2446,6 +2524,19 @@ ${reviewOptions}
                     prNumber,
                     result,
                 );
+
+            const clusters = repeteadSuggetionsClustered?.codeSuggestions;
+            if (!Array.isArray(clusters) || clusters.length === 0) {
+                return codeSuggestions;
+            }
+            return await this.processSuggestions(codeSuggestions, {
+                codeSuggestions: this.sanitizeClusters(
+                    codeSuggestions,
+                    clusters,
+                    organizationAndTeamData,
+                    prNumber,
+                ),
+            });
         } catch (error) {
             this.logger.error({
                 message:
@@ -2461,18 +2552,61 @@ ${reviewOptions}
 
             return codeSuggestions;
         }
+    }
 
-        if (
-            !repeteadSuggetionsClustered.codeSuggestions ||
-            repeteadSuggetionsClustered.codeSuggestions.length === 0
-        ) {
-            return codeSuggestions;
-        } else {
-            return await this.processSuggestions(
-                codeSuggestions,
-                repeteadSuggetionsClustered,
+    /**
+     * Keep only what the clustering can apply: a cluster whose parent is one
+     * of the suggestions, with related ids that are too. `sameSuggestionsId`
+     * is optional in the schema, so a cluster may arrive without it.
+     */
+    private sanitizeClusters(
+        codeSuggestions: any[],
+        clusters: ClusteredSuggestion[],
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+    ): ClusteredSuggestion[] {
+        const known = new Set(codeSuggestions.map((s) => s?.id));
+        let droppedClusters = 0;
+        let droppedIds = 0;
+        const valid: ClusteredSuggestion[] = [];
+        for (const cluster of clusters) {
+            if (!cluster || !known.has(cluster.id)) {
+                droppedClusters++;
+                continue;
+            }
+            const related = Array.isArray(cluster.sameSuggestionsId)
+                ? cluster.sameSuggestionsId
+                : [];
+            const sameSuggestionsId = related.filter(
+                (id) => known.has(id) && id !== cluster.id,
             );
+            droppedIds += related.length - sameSuggestionsId.length;
+            // The parent's body becomes the problemDescription plus the list
+            // of places; without both there is nothing to merge.
+            if (
+                sameSuggestionsId.length === 0 ||
+                typeof cluster.problemDescription !== 'string' ||
+                !cluster.problemDescription.trim()
+            ) {
+                droppedClusters++;
+                continue;
+            }
+            valid.push({ ...cluster, sameSuggestionsId });
         }
+        if (droppedClusters > 0 || droppedIds > 0) {
+            this.logger.warn({
+                message: `${LLM_ENVELOPE_TAG} clustering reply had clusters that cannot be applied (unknown suggestions, no related ids or no problem description); ignored them`,
+                context: CommentManagerService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    prNumber,
+                    clusters: clusters.length,
+                    droppedClusters,
+                    droppedIds,
+                },
+            });
+        }
+        return valid;
     }
 
     private async enrichSuggestions(

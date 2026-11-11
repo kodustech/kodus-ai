@@ -1,8 +1,12 @@
+import type { ImplementationCheckRecord } from '@libs/platformData/domain/pullRequests/implementation-status';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
-import { ICommit } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import {
+    ICommit,
+    IApprovalReasonDeliveryFailure,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { ReviewModeResponse } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { CoreDocument } from '@libs/core/infrastructure/repositories/model/mongodb';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
@@ -14,11 +18,11 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 })
 export class PullRequestsModel extends CoreDocument {
     @Prop({ type: Object, required: false, default: null })
-    public approvalReasonDeliveryFailure?: {
-        decision: 'hold' | 'approve';
-        reason: string;
-        occurredAt: string;
-    } | null;
+    public approvalReasonDeliveryFailure?: IApprovalReasonDeliveryFailure | null;
+
+    /** Retained after a clear so a late older failure cannot reappear. */
+    @Prop({ type: String, required: false })
+    public approvalReasonDeliveryUpdatedAt?: string;
 
     @Prop({ type: String, required: true })
     public title: string;
@@ -120,6 +124,8 @@ export class PullRequestsModel extends CoreDocument {
                     'not_implemented',
                 ];
             };
+            // The last implementation check that looked at the suggestion.
+            implementationCheck?: ImplementationCheckRecord;
             comment: {
                 id: number;
                 pullRequestReviewId: number;
@@ -278,7 +284,7 @@ PullRequestsSchema.index(
 // the projection so the scope resolution stays index-only. Create with
 // `{ background: true }` on large prod collections before enabling the filter.
 PullRequestsSchema.index(
-    { organizationId: 1, 'repository.id': 1, createdAt: -1, number: 1 },
+    { 'organizationId': 1, 'repository.id': 1, 'createdAt': -1, 'number': 1 },
     { name: 'idx_org_repo_createdAt_number_for_token_usage' },
 );
 

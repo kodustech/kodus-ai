@@ -144,6 +144,15 @@ const SCENARIO_REQUIRED: Record<string, ScenarioRequirement> = {
     "trial-managed-review": {
         env: ["GH_REPO_ADMIN_TOKEN"],
     },
+    // The risk preview creates and archives its private per-run repository.
+    "risk-routing-pipeline": {
+        env: [
+            "GH_REPO_ADMIN_TOKEN",
+            "RUNO",
+            "HEAD_REF",
+            "CLOUD_RISK_POLICY_TENANT_EMAIL",
+        ],
+    },
 };
 
 function missingScenarioRequirements(scenarioId: string): string[] {

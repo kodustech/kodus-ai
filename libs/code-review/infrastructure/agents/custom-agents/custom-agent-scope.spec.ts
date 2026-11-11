@@ -7,6 +7,8 @@ import {
     namesFilesExplicitly,
     parseCustomAgentCommand,
     selectCustomAgents,
+    customAgentRiskSkipReason,
+    ignoredFilesForCustomAgents,
 } from './custom-agent-scope';
 
 const agent = (over: Partial<CustomAgentConfig> = {}) =>
@@ -24,6 +26,86 @@ const agent = (over: Partial<CustomAgentConfig> = {}) =>
         },
         ...over,
     }) as CustomAgentConfig;
+
+describe('risk-conditioned custom agent selection', () => {
+    const conditional = agent({ runWhen: 'risk-found' });
+    const risk = (riskIdentified: boolean) => ({
+        status: 'assessed' as const,
+        riskIdentified,
+        reason: 'Evidence.',
+        snapshot: {
+            organizationId: 'org',
+            repositoryId: 'repo',
+            prNumber: 1,
+            baseSha: 'base',
+            headSha: 'head',
+            assessmentKey: 'key',
+        },
+    });
+    it('runs an automatic conditional agent only for confirmed risk', () => {
+        expect(
+            selectCustomAgents([conditional], undefined, risk(true)),
+        ).toEqual([conditional]);
+        for (const result of [
+            undefined,
+            { status: 'disabled' } as const,
+            { status: 'unavailable', reason: 'Failed.' } as const,
+            risk(false),
+        ]) {
+            expect(
+                selectCustomAgents([conditional], undefined, result),
+            ).toEqual([]);
+            expect(
+                customAgentRiskSkipReason(conditional, result),
+            ).toBeDefined();
+        }
+    });
+    it('preserves existing activation and scopes without a risk condition', () => {
+        const normal = agent();
+        expect(selectCustomAgents([normal])).toEqual([normal]);
+        expect(
+            selectCustomAgents(
+                [{ ...normal, enabled: false }],
+                undefined,
+                risk(true),
+            ),
+        ).toEqual([]);
+    });
+    it('lets an explicit command test a disabled agent without confirmed risk', () => {
+        const disabled = { ...conditional, enabled: false };
+        expect(
+            selectCustomAgents([disabled], 'ledger-rules', {
+                status: 'disabled',
+            }),
+        ).toEqual([disabled]);
+        expect(
+            customAgentRiskSkipReason(disabled, undefined, 'ledger-rules'),
+        ).toBeUndefined();
+    });
+    it('makes file-based skip decisions using the same risk condition as dispatch', () => {
+        const scoped = { ...conditional, scope: { include: ['package.json'] } };
+        const review = { codeReviewConfig: { customAgents: [scoped] } };
+        const ignored = [{ filename: 'package.json', status: 'modified' }];
+        expect(
+            ignoredFilesForCustomAgents(
+                { ...review, riskAssessment: risk(false) },
+                ignored,
+            ),
+        ).toEqual([]);
+        expect(
+            ignoredFilesForCustomAgents(
+                { ...review, riskAssessment: risk(true) },
+                ignored,
+            ),
+        ).toEqual(ignored);
+        expect(
+            ignoredFilesForCustomAgents(
+                { ...review, onlyCustomAgent: 'ledger-rules' },
+                ignored,
+            ),
+        ).toEqual(ignored);
+    });
+});
 
 describe('customAgentSlug', () => {
     it.each([

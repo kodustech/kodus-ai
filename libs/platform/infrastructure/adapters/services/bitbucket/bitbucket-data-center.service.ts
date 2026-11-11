@@ -74,6 +74,12 @@ import {
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
 import { listingFailed } from '../repository-listing';
+import {
+    failWebhookSetupForAll,
+    runWebhookSetup,
+    WebhookSetupResult,
+} from '../webhook-setup/webhook-setup';
+import { recordWebhookSetupOutcome } from '../webhook-setup/webhook-setup-failures.service';
 
 const FILES_PAGE_SIZE = 1000;
 const MAX_FILE_PAGES = 200;
@@ -392,10 +398,26 @@ export class BitbucketDataCenterService implements Omit<
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
-            // Fetch repositories across all projects
-            // Note: In DC, 'repos' returns repositories the user has permission to see across projects
-            const response = await axiosClient.get('/repos?limit=1000');
-            const dataCenterRepos = response.data.values || [];
+            // `/repos` lists every repository the user can see, one page at
+            // a time; stopping at the first page silently drops the rest.
+            const dataCenterRepos: any[] = [];
+            let start = 0;
+            for (;;) {
+                const response = await axiosClient.get(
+                    `/repos?limit=1000&start=${start}`,
+                );
+                const page = response?.data;
+                dataCenterRepos.push(...(page?.values || []));
+
+                if (
+                    page?.isLastPage !== false ||
+                    typeof page?.nextPageStart !== 'number' ||
+                    page.nextPageStart <= start
+                ) {
+                    break;
+                }
+                start = page.nextPageStart;
+            }
 
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
@@ -434,6 +456,9 @@ export class BitbucketDataCenterService implements Omit<
                         name: repo.project.name ?? '',
                     },
                     lastActivityAt: undefined, // Requires separate calls in DC
+                    archived: Boolean(repo.archived),
+                    fork: Boolean(repo.origin),
+                    mirror: false,
                 };
             });
         } catch (error) {
@@ -903,83 +928,156 @@ export class BitbucketDataCenterService implements Omit<
         };
     }
 
+    /**
+     * Makes sure every selected repository has the Kodus hook and records
+     * the repositories that could not get one.
+     */
     async createWebhook(
         organizationAndTeamData: OrganizationAndTeamData,
+        integrationId?: string,
     ): Promise<void> {
+        const startedAt = new Date().toISOString();
+
+        const repositories = <Repositories[]>(
+            (
+                await this.integrationConfigService.findOne({
+                    team: { uuid: organizationAndTeamData.teamId },
+                    configKey: IntegrationConfigKey.REPOSITORIES,
+                })
+            )?.configValue || []
+        );
+
+        if (!repositories.length) {
+            return;
+        }
+
+        const result = await this.ensureRepositoryWebhooks({
+            organizationAndTeamData,
+            repositories,
+        });
+
+        const resolvedIntegrationId =
+            integrationId ??
+            (
+                await this.integrationService.findOne({
+                    organization: {
+                        uuid: organizationAndTeamData.organizationId,
+                    },
+                    team: { uuid: organizationAndTeamData.teamId },
+                    platform: PlatformType.BITBUCKET,
+                })
+            )?.uuid;
+
+        if (resolvedIntegrationId) {
+            await recordWebhookSetupOutcome(this.integrationConfigService, {
+                organizationAndTeamData,
+                integrationId: resolvedIntegrationId,
+                startedAt,
+                result,
+            });
+        }
+    }
+
+    async ensureRepositoryWebhooks(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositories: Repositories[];
+    }): Promise<WebhookSetupResult> {
+        const { organizationAndTeamData, repositories = [] } = params;
+        const labels = {
+            provider: 'Bitbucket Data Center',
+            permissionHint:
+                'Creating a repository webhook needs the Repository admin permission.',
+        };
+
+        if (!repositories.length) {
+            return { configured: [], failed: {}, notAttempted: [] };
+        }
+
+        const webhookUrl =
+            this.configService.get<string>(
+                'GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK',
+            ) ?? process.env.GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK;
+        let axiosClient: ReturnType<
+            BitbucketDataCenterService['getAxiosInstance']
+        >;
+
         try {
+            if (!webhookUrl) {
+                throw new Error(
+                    'The Bitbucket webhook URL is not configured (GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK)',
+                );
+            }
+
             const authDetails = await this.getAuthDetails(
                 organizationAndTeamData,
             );
-            if (!authDetails) return;
 
-            const axiosClient = this.getAxiosInstance(authDetails);
-            const repositories = <Repositories[]>(
-                    await this.integrationConfigService.findOne({
-                        team: { uuid: organizationAndTeamData.teamId },
-                        configKey: IntegrationConfigKey.REPOSITORIES,
-                    })
-                )?.configValue || [];
-
-            const webhookUrl =
-                this.configService.get<string>(
-                    'GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK',
-                ) ?? process.env.GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK;
-
-            if (!webhookUrl) {
-                this.logger.warn({
-                    message: 'No Webhook URL configured in environment.',
-                    context: BitbucketDataCenterService.name,
-                    metadata: { organizationAndTeamData },
-                });
-                return;
+            if (!authDetails) {
+                throw new Error(
+                    'No Bitbucket Data Center credential is stored for this team',
+                );
             }
 
-            for (const repo of repositories) {
-                const projectKey = repo.workspaceId;
-                const repoSlug = repo.name;
-
-                // 1. Check existing webhooks
-                const existingHooksRes = await axiosClient.get(
-                    `/projects/${projectKey}/repos/${repoSlug}/webhooks`,
-                );
-                const existingHooks = existingHooksRes.data.values || [];
-                const hookExists = existingHooks.some(
-                    (hook: any) => hook?.url === webhookUrl,
-                );
-
-                // 2. Create if it doesn't exist
-                if (!hookExists) {
-                    await axiosClient.post(
-                        `/projects/${projectKey}/repos/${repoSlug}/webhooks`,
-                        {
-                            name: 'Kodus Webhook',
-                            url: webhookUrl,
-                            active: true,
-                            events: [
-                                'pr:opened',
-                                'pr:modified',
-                                'pr:reviewer:updated',
-                                'pr:comment:added',
-                                'pr:merged',
-                                'pr:declined',
-                            ],
-                        },
-                    );
-
-                    this.logger.log({
-                        message: `Webhook created successfully for DC repo ${repoSlug}`,
-                        context: BitbucketDataCenterService.name,
-                    });
-                }
-            }
+            axiosClient = this.getAxiosInstance(authDetails);
         } catch (error) {
             this.logger.error({
-                message: 'Error creating webhook in Bitbucket Data Center',
+                message: 'Could not start Bitbucket Data Center webhook setup',
                 context: BitbucketDataCenterService.name,
                 error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryCount: repositories.length,
+                },
             });
-            throw error;
+            return failWebhookSetupForAll(repositories, error, labels);
         }
+
+        const result = await runWebhookSetup(
+            repositories,
+            async (repo) => {
+                const path = `/projects/${repo.workspaceId}/repos/${repo.name}/webhooks`;
+                const existingHooksRes = await axiosClient.get(path);
+                const existingHooks = existingHooksRes?.data?.values || [];
+
+                if (existingHooks.some((hook: any) => hook?.url === webhookUrl)) {
+                    return;
+                }
+
+                await axiosClient.post(path, {
+                    name: 'Kodus Webhook',
+                    url: webhookUrl,
+                    active: true,
+                    events: [
+                        'pr:opened',
+                        'pr:modified',
+                        'pr:reviewer:updated',
+                        'pr:comment:added',
+                        'pr:merged',
+                        'pr:declined',
+                    ],
+                });
+
+                this.logger.log({
+                    message: 'Bitbucket Data Center webhook created',
+                    context: BitbucketDataCenterService.name,
+                    metadata: { organizationAndTeamData, repositoryId: repo.id },
+                });
+            },
+            labels,
+        );
+
+        this.logger.log({
+            message: 'Bitbucket Data Center webhook setup finished',
+            context: BitbucketDataCenterService.name,
+            metadata: {
+                organizationAndTeamData,
+                configured: result.configured.length,
+                failed: Object.keys(result.failed).length,
+                notAttempted: result.notAttempted.length,
+            },
+        });
+
+        return result;
     }
 
     async isWebhookActive(params: {
@@ -2702,7 +2800,11 @@ export class BitbucketDataCenterService implements Omit<
                 repository.id || repository.name,
             );
 
-            if (!authDetails || !repoConfig) return null;
+            if (!authDetails || !repoConfig) {
+                throw new Error(
+                    `No Bitbucket Data Center credentials or repository config to update PR #${prNumber}`,
+                );
+            }
 
             const axiosClient = this.getAxiosInstance(authDetails);
             const prPath = `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/pull-requests/${prNumber}`;
@@ -2724,7 +2826,9 @@ export class BitbucketDataCenterService implements Omit<
                 context: BitbucketDataCenterService.name,
                 error,
             });
-            return null;
+            // The summary step reports a failed write only when it throws, as
+            // on GitHub and GitLab; returning null read as a success (#2380).
+            throw error;
         }
     }
 
@@ -3092,7 +3196,10 @@ export class BitbucketDataCenterService implements Omit<
                 params.configKey === IntegrationConfigKey.REPOSITORIES &&
                 !params.deferWebhooks
             ) {
-                this.createWebhook(params.organizationAndTeamData).catch(
+                this.createWebhook(
+                    params.organizationAndTeamData,
+                    integration?.uuid,
+                ).catch(
                     (err) => {
                         this.logger.warn({
                             message: 'Failed to background create webhooks',

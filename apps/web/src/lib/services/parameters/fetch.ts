@@ -126,6 +126,7 @@ export const createOrUpdateCodeReviewParameter = async (
     options?: {
         /** Revisions of the custom agents lists the save was made from. */
         expectedRevisions?: { customAgents?: string; knowledge?: string };
+        inheritFields?: string[];
     },
 ) => {
     try {
@@ -142,6 +143,7 @@ export const createOrUpdateCodeReviewParameter = async (
                 directoryId,
                 directoryPaths,
                 expectedRevisions: options?.expectedRevisions,
+                inheritFields: options?.inheritFields,
             },
         );
 

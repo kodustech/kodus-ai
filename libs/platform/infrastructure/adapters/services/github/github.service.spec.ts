@@ -320,7 +320,7 @@ describe('GithubService', () => {
         }
     });
 
-    it('updates the repository config before removing deselected webhooks and recreating selected ones', async () => {
+    it('updates the repository config before removing deselected webhooks and ensuring selected ones', async () => {
         jest.spyOn(
             service,
             'findOneByOrganizationAndTeamDataAndConfigKey',
@@ -363,6 +363,7 @@ describe('GithubService', () => {
         ).toBeLessThan(deleteWebhook.mock.invocationCallOrder[0]);
         expect(createPullRequestWebhook).toHaveBeenCalledWith({
             organizationAndTeamData,
+            integrationId: integration.uuid,
         });
     });
 

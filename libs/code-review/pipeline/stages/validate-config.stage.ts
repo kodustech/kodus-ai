@@ -37,7 +37,7 @@ import {
     shouldReviewBranches,
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
 import { routeCodeReviewModel } from './route-code-review-model';
-import { isHeavyReview } from '@libs/code-review/domain/review-mode';
+import { resolveRiskReviewMode } from '@libs/code-review/domain/review-mode';
 import {
     HEAVY_MODE_PLAN_REQUIRED,
     isHeavyModePlanAllowed,
@@ -164,73 +164,13 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 }
             }
 
-            //TODO: revisar logica
-            const byokConfig =
-                await this.organizationParametersService.findByKey(
-                    OrganizationParametersKey.BYOK_CONFIG,
-                    context.organizationAndTeamData,
-                );
-
-            // The mode the command asked for, else the one in settings. Heavy
-            // runs on Teams and Enterprise only; elsewhere the review runs
-            // Balanced, and a command that asked for heavy is told why.
-            const heavy =
-                isHeavyReview(
-                    context.requestedReviewMode,
-                    context.codeReviewConfig?.reviewMode,
-                ) && (await this.heavyModeAllowed(context));
-
-            // The review's routed slot, or none → the env/managed default
-            // resolves downstream, matching a missing config.
-            const routed = routeCodeReviewModel(
-                byokConfig?.configValue,
-                context.codeReviewConfig,
-                heavy,
-            );
-            if (routed.blocked) {
-                this.logger.warn({
-                    message: `BYOK routing BLOCKED for ${heavy ? 'codeReviewHeavy' : 'codeReview'} — falling back to env/managed default: ${routed.reason}`,
-                    context: this.stageName,
-                    metadata: {
-                        prNumber: context?.pullRequest?.number,
-                        repositoryName: context?.repository?.name,
-                        organizationAndTeamData:
-                            context?.organizationAndTeamData,
-                    },
-                });
+            // Shared risk must be known before selecting the review model.
+            // The early cadence/access checks still run before paying for it.
+            if (context.codeReviewConfig.riskAssessmentActive !== true) {
+                context = await this.resolveReviewRouting(context);
+                if (context.statusInfo?.status === AutomationStatus.SKIPPED)
+                    return context;
             }
-
-            if (
-                await this.routedKodusCreditsExhausted(
-                    context,
-                    byokConfig?.configValue,
-                    routed.resolvedModelSlot,
-                    heavy,
-                )
-            ) {
-                return this.updateContext(context, (draft) => {
-                    draft.statusInfo = {
-                        status: AutomationStatus.SKIPPED,
-                        message: StageMessageHelper.skippedWithReason(
-                            PipelineReasons.PREREQUISITES.CREDITS_EXHAUSTED,
-                        ),
-                    };
-                    if (!draft.pipelineMetadata) {
-                        draft.pipelineMetadata = {};
-                    }
-                    draft.pipelineMetadata.notificationHandled = true;
-                });
-            }
-
-            context = this.updateContext(context, (draft) => {
-                draft.heavy = heavy;
-                // Materialize the routed model into the resolved slot the pipeline
-                // threads downstream (the handle stages read their limit/telemetry
-                // metadata off).
-                draft.codeReviewConfig.resolvedModelSlot =
-                    routed.resolvedModelSlot;
-                draft.codeReviewConfig.byokConfig = routed.resolvedModelSlot;
-            });
 
             const cadenceResult = await this.evaluateReviewCadence(context);
 
@@ -287,6 +227,80 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 };
             });
         }
+    }
+
+    /** Re-resolve after shared risk; the same plan and credit gates still apply. */
+    async resolveReviewRouting(
+        context: CodeReviewPipelineContext,
+    ): Promise<CodeReviewPipelineContext> {
+        const byokConfig = await this.organizationParametersService.findByKey(
+            OrganizationParametersKey.BYOK_CONFIG,
+            context.organizationAndTeamData,
+        );
+
+        // The mode the command asked for, else the one in settings. Heavy
+        // runs on Teams and Enterprise only; elsewhere the review runs
+        // Balanced, and a command that asked for heavy is told why.
+        const heavy =
+            resolveRiskReviewMode({
+                requested: context.requestedReviewMode,
+                configured: context.codeReviewConfig?.reviewMode,
+                routing: context.codeReviewConfig?.riskReviewRouting,
+                risk: context.riskAssessment,
+                currentHeadSha: context.pullRequest.head?.sha ?? '',
+                heavyAllowed: true,
+            }) === 'heavy' && (await this.heavyModeAllowed(context));
+
+        // The review's routed slot, or none → the env/managed default
+        // resolves downstream, matching a missing config.
+        const routed = routeCodeReviewModel(
+            byokConfig?.configValue,
+            context.codeReviewConfig,
+            heavy,
+        );
+        if (routed.blocked) {
+            this.logger.warn({
+                message: `BYOK routing BLOCKED for ${heavy ? 'codeReviewHeavy' : 'codeReview'} — falling back to env/managed default: ${routed.reason}`,
+                context: this.stageName,
+                metadata: {
+                    prNumber: context?.pullRequest?.number,
+                    repositoryName: context?.repository?.name,
+                    organizationAndTeamData: context?.organizationAndTeamData,
+                },
+            });
+        }
+
+        if (
+            await this.routedKodusCreditsExhausted(
+                context,
+                byokConfig?.configValue,
+                routed.resolvedModelSlot,
+                heavy,
+            )
+        ) {
+            return this.updateContext(context, (draft) => {
+                draft.statusInfo = {
+                    status: AutomationStatus.SKIPPED,
+                    message: StageMessageHelper.skippedWithReason(
+                        PipelineReasons.PREREQUISITES.CREDITS_EXHAUSTED,
+                    ),
+                };
+                if (!draft.pipelineMetadata) {
+                    draft.pipelineMetadata = {};
+                }
+                draft.pipelineMetadata.notificationHandled = true;
+            });
+        }
+
+        context = this.updateContext(context, (draft) => {
+            draft.heavy = heavy;
+            // Materialize the routed model into the resolved slot the pipeline
+            // threads downstream (the handle stages read their limit/telemetry
+            // metadata off).
+            draft.codeReviewConfig.resolvedModelSlot = routed.resolvedModelSlot;
+            draft.codeReviewConfig.byokConfig = routed.resolvedModelSlot;
+        });
+        return context;
     }
 
     /**

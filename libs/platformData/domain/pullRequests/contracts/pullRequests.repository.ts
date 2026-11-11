@@ -1,3 +1,4 @@
+import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -6,6 +7,7 @@ import { PullRequestsEntity } from '../entities/pullRequests.entity';
 import { DeliveryStatus } from '../enums/deliveryStatus.enum';
 import {
     IApprovalReasonDeliveryFailure,
+    ApprovalReasonDeliveryGuard,
     IPullRequests,
     IFile,
     ISuggestion,
@@ -68,6 +70,7 @@ export interface IPullRequestsRepository {
         repositoryId: string,
         prNumber: number,
         failure: IApprovalReasonDeliveryFailure | null,
+        guard?: ApprovalReasonDeliveryGuard,
     ): Promise<boolean>;
 
     create(
@@ -342,6 +345,7 @@ export interface IPullRequestsRepository {
         suggestionId: string,
         updateData: Partial<ISuggestion>,
         organizationAndTeamData: OrganizationAndTeamData,
+        options?: UpdateSuggestionOptions,
     ): Promise<PullRequestsEntity | null>;
     updateSyncedSuggestionsFlag(
         pullRequestNumbers: number[],

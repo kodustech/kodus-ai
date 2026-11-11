@@ -111,6 +111,26 @@ export const InstructionsCard = ({
                 }
             />
         </Field>
+        <Field
+            label="Run automatically"
+            hint={
+                agent.runWhen === "risk-found"
+                    ? "Requires confirmed PR risk. Manual commands still run."
+                    : undefined
+            }>
+            <Choice
+                label="Automatic execution"
+                value={agent.runWhen ?? "always"}
+                disabled={!canEdit}
+                options={[
+                    { value: "always", label: "Every matching PR" },
+                    { value: "risk-found", label: "When risk is found" },
+                ]}
+                onChange={(runWhen) =>
+                    onChange((current) => ({ ...current, runWhen }))
+                }
+            />
+        </Field>
     </Section>
 );
 

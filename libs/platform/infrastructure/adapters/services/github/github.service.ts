@@ -1,3 +1,7 @@
+import type {
+    ApprovalTeamMembership,
+    ApprovalTeamMembershipParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/approvalTeamMembership.type';
 import {
     BadRequestException,
     Inject,
@@ -18,6 +22,8 @@ import {
     githubUserAuthorizationUrl,
     installationAuthorizationRedirectUri,
     InstallationAuthorizationError,
+    InstallationLinkProgress,
+    installationLinkLogMetadata,
     isInstallationId,
     openInstallationState,
     sealInstallationState,
@@ -153,6 +159,16 @@ import {
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 import { listingFailed } from '../repository-listing';
+import {
+    failWebhookSetupForAll,
+    runWebhookSetup,
+    WebhookSetupResult,
+} from '../webhook-setup/webhook-setup';
+import { recordWebhookSetupOutcome } from '../webhook-setup/webhook-setup-failures.service';
+import {
+    contentRateLimitGate,
+    contentRateLimitKey,
+} from './content-rate-limit-gate';
 
 interface GitHubAuthResponse {
     token: string;
@@ -515,6 +531,7 @@ export class GithubService
 
                 await this.createPullRequestWebhook({
                     organizationAndTeamData: params.organizationAndTeamData,
+                    integrationId: integration?.uuid,
                 });
             }
         } catch (err) {
@@ -623,6 +640,7 @@ export class GithubService
     private async assertCanLinkInstallation(
         appOctokit: Octokit,
         params: any,
+        progress: InstallationLinkProgress = { step: 'open-state' },
     ): Promise<void> {
         const installationId = params?.code;
         if (!isInstallationId(installationId)) {
@@ -630,6 +648,7 @@ export class GithubService
         }
         const organizationId = params?.organizationAndTeamData?.organizationId;
 
+        progress.step = 'open-state';
         let state: ReturnType<typeof openInstallationState>;
         try {
             state = openInstallationState(params?.githubState);
@@ -655,6 +674,7 @@ export class GithubService
             );
         }
 
+        progress.step = 'exchange-user-code';
         let userToken: string;
         try {
             const userAuth = (await appOctokit.auth({
@@ -669,16 +689,20 @@ export class GithubService
             );
         }
 
+        progress.step = 'list-user-installations';
         const installations = await this.createUserOctokit(userToken).paginate(
             'GET /user/installations',
             { per_page: 100 },
         );
-        if (!installations.some((i) => String(i.id) === installationId)) {
+        // GitHub's list can carry null entries; one must not end the link
+        // with "Cannot read properties of null (reading 'id')".
+        if (!installations.some((i) => String(i?.id) === installationId)) {
             throw new BadRequestException(
                 'Your GitHub account cannot access this installation of the Kodus app. Ask an owner of the GitHub organization to connect it.',
             );
         }
 
+        progress.step = 'check-existing-links';
         // Every active link, not one of them: an installation linked to the
         // caller's organization may also be linked to another one.
         const linked = (
@@ -711,17 +735,22 @@ export class GithubService
     async authenticateWithCodeOauth(
         params: any,
     ): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+        // Which step a failed link stopped at: the error below is rewrapped
+        // for the client, so without it the log only shows the catch.
+        const progress: InstallationLinkProgress = { step: 'check-env' };
         try {
             this.assertGithubOAuthEnv();
             const appOctokit = this.createOctokitInstance();
 
-            await this.assertCanLinkInstallation(appOctokit, params);
+            await this.assertCanLinkInstallation(appOctokit, params, progress);
 
+            progress.step = 'mint-installation-token';
             const installationAuthentication = await appOctokit.auth({
                 type: 'installation',
                 installationId: params.code,
             });
 
+            progress.step = 'get-installation';
             const installLogin = await appOctokit.rest.apps.getInstallation({
                 installation_id: parseInt(params.code),
             });
@@ -730,6 +759,8 @@ export class GithubService
             // Detectar tipo de conta e cachear no authDetails
             const installationData =
                 installLogin.data as GitHubInstallationData;
+            progress.targetType = installationData?.target_type;
+            progress.hasAccount = !!installationData?.account;
             const accountLogin = installationData.account.login;
             const accountType =
                 installationData.target_type.toLowerCase() === 'user'
@@ -756,14 +787,27 @@ export class GithubService
                 accountType: accountType as 'organization' | 'user',
             };
 
+            progress.step = 'list-repositories';
             const repoPermissions = await this.checkRepositoryPermissions({
                 organizationAndTeamData: params.organizationAndTeamData,
                 org: accountLogin,
                 authDetails,
             });
 
-            if (!repoPermissions.success) return repoPermissions;
+            if (!repoPermissions.success) {
+                this.logger.warn({
+                    message:
+                        'GitHub App installation not linked: no repository visible to it',
+                    context: GithubService.name,
+                    metadata: {
+                        ...installationLinkLogMetadata(params, progress),
+                        status: repoPermissions.status,
+                    },
+                });
+                return repoPermissions;
+            }
 
+            progress.step = 'find-integration';
             const integration = await this.integrationService.findOne({
                 organization: {
                     uuid: params.organizationAndTeamData.organizationId,
@@ -772,12 +816,16 @@ export class GithubService
                 platform: PlatformType.GITHUB,
             });
 
+            progress.step = integration
+                ? 'update-integration'
+                : 'create-integration';
             await this.handleIntegration(
                 integration,
                 authDetails,
                 params.organizationAndTeamData,
             );
 
+            progress.step = 'update-installation-status';
             const githubStatus = await this.findOneByOrganizationId(
                 params.organizationAndTeamData,
             );
@@ -793,14 +841,42 @@ export class GithubService
                 );
             }
 
+            this.logger.log({
+                message: 'GitHub App installation linked',
+                context: GithubService.name,
+                metadata: {
+                    ...installationLinkLogMetadata(params, progress),
+                    created: !integration,
+                },
+            });
+
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (err) {
-            if (err instanceof BadRequestException) throw err;
+            const metadata = installationLinkLogMetadata(params, progress);
+            if (err instanceof BadRequestException) {
+                // An expected refusal (state, access, another org's link):
+                // the reason is the message the user sees.
+                this.logger.warn({
+                    message: 'GitHub App installation link refused',
+                    context: GithubService.name,
+                    metadata: { ...metadata, reason: err.message },
+                });
+                throw err;
+            }
+            // Unexpected: keep the original error and its stack, which the
+            // client-facing BadRequestException below does not carry.
+            this.logger.error({
+                message: 'GitHub App installation link failed',
+                context: GithubService.name,
+                error: err,
+                metadata: { ...metadata, githubStatus: err?.status },
+            });
             throw new BadRequestException(
-                err.message || 'Error authenticating with OAUTH.',
+                err?.message || 'Error authenticating with OAUTH.',
+                { cause: err },
             );
         }
     }
@@ -2589,6 +2665,9 @@ export class GithubService
                         repository?.name === repo?.name,
                 ),
                 lastActivityAt: (repo as any)?.pushed_at || repo.updated_at,
+                archived: Boolean(repo?.archived),
+                fork: Boolean(repo?.fork),
+                mirror: Boolean(repo?.mirror_url),
             }));
         } catch (err) {
             throw new BadRequestException(err);
@@ -2927,6 +3006,13 @@ export class GithubService
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<Octokit> {
         return this.instanceOctokit(organizationAndTeamData);
+    }
+
+    /** Id of the GitHub App this deployment authenticates as, if set. */
+    public getGithubAppId(): number | undefined {
+        const raw = this.configService.get<string>('API_GITHUB_APP_ID')?.trim();
+        const appId = raw ? Number(raw) : NaN;
+        return Number.isInteger(appId) && appId > 0 ? appId : undefined;
     }
 
     async getCheckEvidence(
@@ -3846,6 +3932,49 @@ export class GithubService
         }
     }
 
+    async getApprovalTeamMembership(
+        params: ApprovalTeamMembershipParams,
+    ): Promise<ApprovalTeamMembership> {
+        try {
+            const auth = await this.getGithubAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!auth?.org || auth.accountType === 'user') return 'unavailable';
+            const segments = params.team.replace(/^@/, '').split('/');
+            const slug = segments.pop();
+            if (
+                !slug ||
+                segments.length > 1 ||
+                (segments.length === 1 &&
+                    segments[0].toLowerCase() !== auth.org.toLowerCase())
+            )
+                return 'unavailable';
+            const octokit = await this.instanceOctokit(
+                params.organizationAndTeamData,
+            );
+            // Verify visibility before treating a membership 404 as a nonmember.
+            await octokit.rest.teams.getByName({
+                org: auth.org,
+                team_slug: slug,
+            });
+            try {
+                const { data } =
+                    await octokit.rest.teams.getMembershipForUserInOrg({
+                        org: auth.org,
+                        team_slug: slug,
+                        username: params.author,
+                    });
+                return data.state === 'active' ? 'member' : 'not-member';
+            } catch (error) {
+                return this.statusOf(error) === 404
+                    ? 'not-member'
+                    : 'unavailable';
+            }
+        } catch {
+            return 'unavailable';
+        }
+    }
+
     async getAllMembersByOrg(organizationAndTeamData: OrganizationAndTeamData) {
         try {
             const githubAuthDetail = await this.getGithubAuthDetails(
@@ -4535,11 +4664,16 @@ export class GithubService
     }
 
     async getFilesByPullRequestId(params: any): Promise<any[] | null> {
-        const { organizationAndTeamData, repository, prNumber, headSha } =
-            params;
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            headSha,
+            baseSha,
+        } = params;
 
-        // Cache: the list of changed files for a PR at a specific HEAD
-        // SHA is immutable — pushing a new commit produces a new SHA.
+        // A full PR diff belongs to both refs. Retargeting can change its file
+        // list without a new head, so incomplete identities bypass the cache.
         // The pipeline calls this twice per job (PullRequestManagerService
         // `getChangedFiles` + `getChangedFilesMetadata`), and a paginated
         // PR can fan out into 5-15+ subrequests. Caching by (prNumber,
@@ -4548,9 +4682,10 @@ export class GithubService
         // Callers that don't pass `headSha` (legacy paths, cron jobs that
         // don't have the head SHA handy) skip the cache and pay the
         // original cost — same behavior as before.
-        const cacheKey = headSha
-            ? `gh:pr-files:${organizationAndTeamData?.organizationId ?? 'no-org'}:${repository?.id ?? repository?.name}:${prNumber}:${headSha}`
-            : null;
+        const cacheKey =
+            headSha && baseSha
+                ? `gh:pr-files:v2:${organizationAndTeamData?.organizationId ?? 'no-org'}:${repository?.id ?? repository?.name}:${prNumber}:${headSha}:${baseSha}`
+                : null;
         if (cacheKey) {
             const cached =
                 await this.cacheService.getFromCache<any[]>(cacheKey);
@@ -5361,6 +5496,9 @@ This is an experimental feature that generates committable changes. Review the d
     }
 
     async getRepositoryContentFile(params: any): Promise<any | null> {
+        // Set once the credential is known; the outer catch records a rate
+        // limit only for a read that got that far.
+        let rateLimitKey: string | undefined;
         try {
             const { organizationAndTeamData, repository, file, pullRequest } =
                 params;
@@ -5368,8 +5506,10 @@ This is an experimental feature that generates committable changes. Review the d
             const githubAuthDetail = await this.getGithubAuthDetails(
                 organizationAndTeamData,
             );
-
-            const octokit = await this.instanceOctokit(organizationAndTeamData);
+            rateLimitKey = contentRateLimitKey(
+                organizationAndTeamData,
+                githubAuthDetail,
+            );
 
             // Cache by BLOB sha (not branch+path) so the entry invalidates
             // automatically when the file content changes — pushing a new
@@ -5384,11 +5524,46 @@ This is an experimental feature that generates committable changes. Review the d
             const cacheKey = file?.sha
                 ? `gh:contents:${githubAuthDetail?.org}/${repository.name}:${file.sha}:${file.filename}`
                 : undefined;
-            if (cacheKey) {
-                const cached =
-                    await this.cacheService.getFromCache<any>(cacheKey);
+            const readCached = () =>
+                cacheKey
+                    ? this.cacheService.getFromCache<any>(cacheKey)
+                    : Promise.resolve(undefined);
+
+            // GitHub already said this credential's bucket is exhausted: any
+            // read until the reset fails with the same 403 and ends in the
+            // same `undefined` below. A cache hit still answers; otherwise
+            // skip the call, its two logs, and building the client.
+            const blockedForMs =
+                contentRateLimitGate.blockedForMs(rateLimitKey);
+            if (blockedForMs > 0) {
+                const cached = await readCached();
                 if (cached) return cached;
+                if (contentRateLimitGate.firstSkipInWindow(rateLimitKey)) {
+                    this.logger.warn({
+                        message:
+                            'GitHub rate limit open for this installation — skipping per-file content reads until it resets',
+                        context: GithubService.name,
+                        metadata: {
+                            organizationId:
+                                organizationAndTeamData?.organizationId,
+                            teamId: organizationAndTeamData?.teamId,
+                            repositoryName: repository?.name,
+                            prNumber: pullRequest?.number,
+                            resumeInSeconds: Math.ceil(blockedForMs / 1000),
+                        },
+                    });
+                }
+                return undefined;
             }
+
+            // Same order as before outside the window: client, then cache.
+            // The auth detail is already loaded; passing it saves a re-read.
+            const octokit = await this.instanceOctokit(
+                organizationAndTeamData,
+                githubAuthDetail,
+            );
+            const cached = await readCached();
+            if (cached) return cached;
 
             try {
                 // First, try to fetch from the head branch of the PR
@@ -5443,6 +5618,17 @@ This is an experimental feature that generates committable changes. Review the d
                     throw error;
                 }
 
+                // A rate limit on the head read arms the gate here, so the
+                // next files wait even when the base read below recovers.
+                contentRateLimitGate.record(rateLimitKey, error);
+
+                // Primary bucket empty: the base read hits the same exhausted
+                // bucket. A secondary (burst) limit still tries the base for
+                // this one file, as before.
+                if (contentRateLimitGate.isBucketExhausted(error)) {
+                    throw error;
+                }
+
                 // If it fails, try to fetch from the base branch
                 const lines = (await octokit.repos.getContent({
                     owner: githubAuthDetail?.org,
@@ -5454,6 +5640,7 @@ This is an experimental feature that generates committable changes. Review the d
                 return lines;
             }
         } catch (error) {
+            contentRateLimitGate.record(rateLimitKey, error);
             const status =
                 (error as any)?.status ?? (error as any)?.response?.status;
             if (status === 404) {
@@ -6164,105 +6351,207 @@ This is an experimental feature that generates committable changes. Review the d
         }
     }
 
-    async createPullRequestWebhook(params: any) {
+    /**
+     * Makes sure every selected repository has the Kodus hook (token mode;
+     * the GitHub App delivers through its app-level hook) and records the
+     * repositories that could not get one.
+     */
+    async createPullRequestWebhook(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        integrationId?: string;
+    }) {
         const { organizationAndTeamData } = params;
-
-        const githubAuthDetail = await this.getGithubAuthDetails(
-            organizationAndTeamData,
-        );
-
-        const octokit = await this.instanceOctokit(organizationAndTeamData);
+        const startedAt = new Date().toISOString();
 
         const repositories = <Repositories[]>(
             await this.findOneByOrganizationAndTeamDataAndConfigKey(
-                params?.organizationAndTeamData,
+                organizationAndTeamData,
                 IntegrationConfigKey.REPOSITORIES,
             )
         );
 
-        const webhookUrl = this.getGithubWebhookUrl();
-
-        if (!webhookUrl || !repositories?.length) {
+        if (!repositories?.length) {
             return;
         }
 
-        // Usar método centralizado para determinar o owner correto
-        const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
+        const result = await this.ensureRepositoryWebhooks({
+            organizationAndTeamData,
+            repositories,
+        });
+
+        if (result.managedByApp) {
+            return;
+        }
+
+        const integrationId =
+            params.integrationId ??
+            (
+                await this.integrationService.findOne({
+                    organization: {
+                        uuid: organizationAndTeamData.organizationId,
+                    },
+                    team: { uuid: organizationAndTeamData.teamId },
+                    platform: PlatformType.GITHUB,
+                })
+            )?.uuid;
+
+        if (integrationId) {
+            await recordWebhookSetupOutcome(this.integrationConfigService, {
+                organizationAndTeamData,
+                integrationId,
+                startedAt,
+                result,
+            });
+        }
+    }
+
+    async ensureRepositoryWebhooks(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositories: Repositories[];
+    }): Promise<WebhookSetupResult> {
+        const { organizationAndTeamData, repositories = [] } = params;
+        const labels = {
+            provider: 'GitHub',
+            permissionHint:
+                'The token needs read and write access to repository webhooks (admin:repo_hook, or "Webhooks: Read and write" on a fine-grained token).',
+        };
+
+        if (!repositories.length) {
+            return { configured: [], failed: {}, notAttempted: [] };
+        }
+
+        let octokit: any;
+        let webhookUrl: string | undefined;
 
         try {
-            for (const repo of repositories) {
-                // The hook lives under the REPO's namespace, not the
-                // integration account's. getCorrectOwner resolves personal
-                // PAT integrations to the authenticated user's login, which
-                // 404s ("Not Found - list-repository-webhooks") for every
-                // repo the account merely collaborates on — the whole
-                // registerRepo call then fails. Prefer the owner recorded on
-                // the repository itself; keep getCorrectOwner as a fallback
-                // for legacy configs missing both fields.
-                const repoOwner =
-                    repo.full_name?.split('/')[0] ||
-                    repo.organizationName ||
-                    owner;
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                organizationAndTeamData,
+            );
+
+            if (githubAuthDetail?.authMode !== AuthMode.TOKEN) {
+                return {
+                    configured: repositories.map((repo) => String(repo.id)),
+                    failed: {},
+                    notAttempted: [],
+                    managedByApp: true,
+                };
+            }
+
+            webhookUrl = this.getGithubWebhookUrl();
+
+            if (!webhookUrl) {
+                throw new Error(
+                    'The GitHub webhook URL is not configured (API_GITHUB_CODE_MANAGEMENT_WEBHOOK)',
+                );
+            }
+
+            octokit = await this.instanceOctokit(organizationAndTeamData);
+        } catch (error) {
+            this.logger.error({
+                message: 'Could not start GitHub webhook setup',
+                context: GithubService.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryCount: repositories.length,
+                },
+            });
+            return failWebhookSetupForAll(repositories, error, labels);
+        }
+
+        let fallbackOwner: string | undefined;
+        const ownerOf = async (repo: Repositories): Promise<string> => {
+            // The hook lives under the REPO's namespace, not the integration
+            // account's: a personal token's own login 404s on every
+            // repository the account only collaborates on.
+            const recorded =
+                repo.full_name?.split('/')[0] || repo.organizationName;
+            if (recorded) {
+                return recorded;
+            }
+            fallbackOwner ??= await this.getCorrectOwner(
+                await this.getGithubAuthDetails(organizationAndTeamData),
+                octokit,
+            );
+            return fallbackOwner;
+        };
+
+        const events = [
+            'push',
+            'pull_request',
+            'issue_comment',
+            'pull_request_review_comment',
+            'pull_request_review',
+        ];
+
+        const result = await runWebhookSetup(
+            repositories,
+            async (repo) => {
+                const owner = await ownerOf(repo);
                 const { data: webhooks } = await octokit.repos.listWebhooks({
-                    owner: repoOwner,
+                    owner,
                     repo: repo.name,
                 });
 
-                const webhookToDelete = webhooks.find(
-                    (webhook) =>
-                        webhook.config && webhook.config.url === webhookUrl,
+                const existing = (webhooks ?? []).find(
+                    (webhook: any) => webhook?.config?.url === webhookUrl,
                 );
 
-                if (webhookToDelete) {
-                    await octokit.repos.deleteWebhook({
-                        owner: repoOwner,
-                        repo: repo.name,
-                        hook_id: webhookToDelete.id,
-                    });
+                if (existing) {
+                    const missingEvents = Array.isArray(existing.events)
+                        ? events.filter((e) => !existing.events.includes(e))
+                        : [];
+
+                    if (existing.active === false || missingEvents.length) {
+                        await octokit.repos.updateWebhook({
+                            owner,
+                            repo: repo.name,
+                            hook_id: existing.id,
+                            events,
+                            active: true,
+                        });
+                    }
+                    return;
                 }
 
                 const response = await octokit.repos.createWebhook({
-                    owner: repoOwner,
+                    owner,
                     repo: repo.name,
                     config: {
                         url: webhookUrl,
                         content_type: 'json',
                         insecure_ssl: '0',
                     },
-                    events: [
-                        'push',
-                        'pull_request',
-                        'issue_comment',
-                        'pull_request_review_comment',
-                        'pull_request_review',
-                    ],
+                    events,
                     active: true,
                 });
 
                 this.logger.log({
-                    message: `Webhook adicionado ao repositório ${repo.name} (owner: ${repoOwner})`,
+                    message: 'GitHub webhook created',
                     context: GithubService.name,
                     metadata: {
-                        ...params,
-                        owner: repoOwner,
-                        repositoryName: repo.name,
+                        organizationAndTeamData,
+                        owner,
+                        repositoryId: repo.id,
                         webhookId: response?.data?.id,
                     },
                 });
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Error to create webhook:',
-                context: GithubService.name,
-                serviceName: 'Github service createPullRequestWebhook',
-                error: error,
-                metadata: {
-                    ...params,
-                    owner,
-                },
-            });
-            throw error;
-        }
+            },
+            labels,
+        );
+
+        this.logger.log({
+            message: 'GitHub webhook setup finished',
+            context: GithubService.name,
+            metadata: {
+                organizationAndTeamData,
+                configured: result.configured.length,
+                failed: Object.keys(result.failed).length,
+                notAttempted: result.notAttempted.length,
+            },
+        });
+
+        return result;
     }
 
     private getGithubWebhookUrl(): string | undefined {
@@ -6949,6 +7238,7 @@ This is an experimental feature that generates committable changes. Review the d
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
         repository: { id: string; name: string };
+        headSha?: string;
     }) {
         try {
             const { organizationAndTeamData, prNumber, repository } = params;
@@ -6964,6 +7254,7 @@ This is an experimental feature that generates committable changes. Review the d
                 repo: repository.name,
                 pull_number: prNumber,
                 event: 'APPROVE',
+                ...(params.headSha ? { commit_id: params.headSha } : {}),
             });
 
             this.logger.log({
@@ -8704,6 +8995,10 @@ This is an experimental feature that generates committable changes. Review the d
             organizationId: organizationAndTeamData?.organizationId ?? '',
             title: pullRequest?.title ?? '',
             body: pullRequest?.body ?? '',
+            ...('changed_files' in pullRequest &&
+            typeof pullRequest.changed_files === 'number'
+                ? { changedFilesCount: pullRequest.changed_files }
+                : {}),
             labels: (pullRequest?.labels ?? [])
                 .map((label) =>
                     typeof label === 'string' ? label : label?.name,

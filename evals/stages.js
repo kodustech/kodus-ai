@@ -202,7 +202,7 @@ const STAGES = [
         name: 'Heavy mode',
         short: 'Lenses next to the finder',
         group: 'The agents, side by side',
-        does: 'When a review is asked with --heavy, nine lenses run next to the finder, each looking for one kind of defect only (at most 3 steps and 4 findings each); their findings take the lens\'s label and go through the same verify and every step after it.',
+        does: "When a review is asked with --heavy, nine lenses run next to the finder, each looking for one kind of defect only (at most 3 steps and 4 findings each); their findings take the lens's label and go through the same verify and every step after it.",
         pipeline: ['AgentReviewStage'],
         tests: [
             {
@@ -226,7 +226,8 @@ const STAGES = [
             path: 'evals/heavy-recall',
             metric: 'of known bugs found',
             sets: {
-                controlled: '15 real PRs whose bugs we know, three per repository, reviewed in heavy mode',
+                controlled:
+                    '15 real PRs whose bugs we know, three per repository, reviewed in heavy mode',
                 full: 'the 30 real PRs of the light set, reviewed in heavy mode',
             },
             nightly: 'finder-recall',
@@ -315,7 +316,6 @@ const STAGES = [
                     'libs/code-review/infrastructure/agents/core/findings-schema.spec.ts',
                     'libs/code-review/infrastructure/agents/core/finder.agent.findings-parse.spec.ts',
                     'libs/llm/structured-output-repair.spec.ts',
-                    'test/unit/common/prompt-parser-extract-json.spec.ts',
                 ],
             },
             {
@@ -615,7 +615,8 @@ const STAGES = [
             path: 'evals/severity-levels',
             metric: 'of the 205 suggestions, rated at their defined level (and per level)',
             sets: {
-                controlled: '205 suggestions labeled from their own text: 50 low, 70 medium, 50 high, 35 critical',
+                controlled:
+                    '205 suggestions labeled from their own text: 50 low, 70 medium, 50 high, 35 critical',
                 full: null,
             },
             nightly: 'shared',
@@ -771,6 +772,34 @@ const STAGES = [
         note: 'Tests only for now: summaries once died for every client because the step went to a model nobody configured, and these catch that. Whether a summary is a good one is not measured yet.',
     },
     {
+        id: 'risk-assessment',
+        name: 'PR risk',
+        short: 'Shares PR risk with review and approval',
+        group: 'On the PR',
+        does: 'Assesses the complete PR snapshot once, before review mode and custom-agent selection; automatic approval consumes the same result.',
+        pipeline: ['AssessPrRiskStage', 'ResolveRiskRoutingStage'],
+        tests: [
+            {
+                kind: 'unit',
+                name: 'Risk contracts, complete snapshots and routing defaults',
+                specs: [
+                    'libs/code-review/domain/risk/risk-assessment.spec.ts',
+                    'libs/code-review/domain/risk/assess-pr-risk.spec.ts',
+                    'libs/code-review/domain/review-mode.spec.ts',
+                    'libs/code-review/pipeline/stages/assess-pr-risk.stage.spec.ts',
+                    'libs/code-review/application/use-cases/risk/preview-pr-risk.use-case.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: 'Shared production assessment and consumers through the configured model',
+                wiring: ['pr-risk', 'approval-risk-shared'],
+            },
+        ],
+        eval: null,
+        note: 'Scripted wiring contract only; routing quality/cost and approval safety require separate adjudicated comparisons, with no established human quality floor yet.',
+    },
+    {
         id: 'approval',
         name: 'Approval',
         short: 'Approves or requests changes',
@@ -799,6 +828,40 @@ const STAGES = [
         ],
         eval: null,
         note: 'The 200-PR risk quality eval is awaiting independent labels; the controlled pair only checks wiring.',
+    },
+    {
+        id: 'implementation-check',
+        name: 'Implementation check',
+        short: 'Records whether a suggestion was applied',
+        group: 'On the PR',
+        does: "After a push, decides for each delivered suggestion whether the developer made the change it asked for, records it as implemented, partially implemented or not, and resolves the threads of the applied ones. The Cockpit's implementation rate and the next review read it.",
+        pipeline: null,
+        tests: [
+            {
+                kind: 'unit',
+                name: 'The check, the processor and the model call',
+                specs: [
+                    'libs/code-review/infrastructure/adapters/services/suggestion.service.implementation-check.spec.ts',
+                    'libs/code-review/workflow/implementation-verification.processor.spec.ts',
+                    'libs/code-review/infrastructure/adapters/services/llmAnalysis.service.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: 'Suggestions and a push go through the check and its model call with a scripted model',
+                wiring: ['implementation-check'],
+            },
+        ],
+        eval: {
+            path: 'evals/implementation-check',
+            metric: 'of verdicts right (applied or not)',
+            sets: {
+                controlled:
+                    'suggestions on real public PR files and hand-written follow-up pushes: fixed, fixed another way, untouched, declined, partial',
+                full: null,
+            },
+            nightly: 'shared',
+        },
     },
     {
         id: 'rules-learned',
@@ -847,6 +910,28 @@ const STAGES = [
             },
         ],
         eval: null,
+    },
+    {
+        id: 'rule-references',
+        name: 'Files a rule cites',
+        short: 'Finds the files a rule cites',
+        group: 'Where rules and memories come from',
+        does: 'When a Kody Rule is saved, reads its text for the files it cites (@file:, paths) so the review can load them as the rule\'s context.',
+        pipeline: null,
+        tests: [
+            {
+                kind: 'unit',
+                name: 'The reply parser and its fail-safe',
+                specs: ['libs/ai-engine/infrastructure/adapters/services/reference-detector.service.spec.ts'],
+            },
+            {
+                kind: 'contract',
+                name: "Sends the rule to the org's model and reads its reply, with a scripted model",
+                wiring: ['reference-detection'],
+            },
+        ],
+        eval: null,
+        note: 'evals/reference-detection is run by hand (README): its #2409 cases leak only on Together.',
     },
     {
         id: 'thread-rule',
@@ -900,13 +985,21 @@ const STAGES = [
                     'libs/mcp-server/tools/tool-annotations.spec.ts',
                 ],
             },
-            { kind: 'contract', name: "Each thread runs end to end through production's MCP server", wiring: ['thread-rule-offers'] },
+            {
+                kind: 'contract',
+                name: "Each thread runs end to end through production's MCP server",
+                wiring: ['thread-rule-offers'],
+            },
         ],
         eval: {
             path: 'evals/thread-actions',
             catalog: 'evals/thread-actions/catalog.js#ruleOffers',
             metric: 'of offer checks right',
-            sets: { controlled: 'the threads of thread-rule that do not ask Kody to act', full: null },
+            sets: {
+                controlled:
+                    'the threads of thread-rule that do not ask Kody to act',
+                full: null,
+            },
             nightly: 'shared',
             caveat: 'Judged on the reply by a model: offers the rule when the thread calls for it, and nothing in the control threads. Run with --metric=offers. The wiring smoke runs it on the scripted model, which never offers, so that contract checks the wiring and passes on the control threads alone; what fails when the tools stop carrying the hint is libs/agents/infrastructure/services/ai-sdk/mcp-tools.spec.ts.',
         },
@@ -963,13 +1056,21 @@ const STAGES = [
                     'libs/mcp-server/tools/tool-annotations.spec.ts',
                 ],
             },
-            { kind: 'contract', name: "Each thread runs end to end through production's MCP server", wiring: ['thread-memory-offers'] },
+            {
+                kind: 'contract',
+                name: "Each thread runs end to end through production's MCP server",
+                wiring: ['thread-memory-offers'],
+            },
         ],
         eval: {
             path: 'evals/thread-actions',
             catalog: 'evals/thread-actions/catalog.js#memoryOffers',
             metric: 'of offer checks right',
-            sets: { controlled: 'the threads of thread-memory that do not ask Kody to act', full: null },
+            sets: {
+                controlled:
+                    'the threads of thread-memory that do not ask Kody to act',
+                full: null,
+            },
             nightly: 'shared',
             caveat: 'Judged on the reply by a model: offers the memory when the thread calls for it, and nothing in the control threads. Run with --metric=offers. The wiring smoke runs it on the scripted model, which never offers, so that contract checks the wiring and passes on the control threads alone; what fails when the tools stop carrying the hint is libs/agents/infrastructure/services/ai-sdk/mcp-tools.spec.ts.',
         },
