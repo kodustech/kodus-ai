@@ -631,8 +631,18 @@ const backoffHarness = () => {
             (db.state.listingFailures ?? 0) > 0 ||
             (db.state.retryAfter ?? null) !== null);
     const sync = {
-        findOne: jest.fn(() => ({
-            lean: () => ({ exec: async () => ({ ...db.state }) }),
+        findOne: jest.fn((_filter, projection?: Record<string, 0 | 1>) => ({
+            lean: () => ({
+                exec: async () => {
+                    const doc = { ...db.state };
+                    for (const [field, keep] of Object.entries(
+                        projection ?? {},
+                    )) {
+                        if (keep === 0) delete doc[field];
+                    }
+                    return doc;
+                },
+            }),
         })),
         updateOne: jest.fn(async (filter, update) => {
             if (matches(filter)) db.state = { ...db.state, ...update.$set };
@@ -732,6 +742,26 @@ it('clears a failure recorded while a successful listing was in flight', async (
             db.state.retryAfter = new Date(
                 Date.now() + 60 * 60 * 1000,
             ).toISOString();
+            return [];
+        },
+    );
+
+    await run();
+
+    expect(db.state.listingFailures).toBe(0);
+    expect(db.state.retryAfter).toBeNull();
+});
+
+// Another refresh cleared the backoff after this one read it; the batch's
+// closing whole-state write used to put the stale count and deadline back.
+it('does not write back a backoff another refresh cleared mid-batch', async () => {
+    const { db, codeManagement, run } = backoffHarness();
+    db.state.listingFailures = 1;
+    db.state.retryAfter = new Date(Date.now() - 60 * 1000).toISOString();
+    codeManagement.getPullRequestsByRepository.mockImplementationOnce(
+        async () => {
+            db.state.listingFailures = 0;
+            db.state.retryAfter = null;
             return [];
         },
     );

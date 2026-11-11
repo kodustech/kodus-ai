@@ -64,8 +64,6 @@ interface SyncState {
     discoveredMergedPrs: number;
     sampled: boolean;
     complete: boolean;
-    listingFailures?: number;
-    retryAfter?: string | null;
 }
 
 @Injectable()
@@ -149,8 +147,14 @@ export class RefreshCodeAreaRiskMapService {
         }
         const key = { organizationId, repositoryId: repository.id };
         let pruneBefore: string | null = null;
-        let state = (await this.sync.findOne(key).lean().exec()) as
-            (SyncState & typeof key) | null;
+        // The listing backoff is changed only by the targeted updates below.
+        // Leaving it out of the cursor state keeps the whole-state writes of
+        // this batch from writing back a value another refresh has changed.
+        const stored = await this.sync
+            .findOne(key, { listingFailures: 0, retryAfter: 0 })
+            .lean()
+            .exec();
+        let state = stored as (SyncState & typeof key) | null;
         if (!state || state.version !== SYNC_VERSION) {
             const now = new Date();
             const windowStart = new Date(
@@ -312,7 +316,6 @@ export class RefreshCodeAreaRiskMapService {
                         failedRuns: recovered.listingFailures,
                     },
                 });
-                state = { ...state, listingFailures: 0, retryAfter: null };
             }
             orderedNumbers = listed
                 .filter((pr) => Number.isInteger(pr.number ?? pr.pull_number))
