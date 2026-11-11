@@ -166,7 +166,6 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             needsAttention,
             author,
             prState,
-            includeTotal: wantTotal = false,
         } = query;
 
         if (!this.request.user?.organization?.uuid) {
@@ -240,11 +239,6 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             // offset as well would skip a whole page of rows past it.
             const initialSkip = resumeCursor ? 0 : (page - 1) * limit;
             let accumulatedExecutions = 0;
-            let totalExecutions = 0;
-            // Distinct PRs matching the DB-level filters — captured from the same
-            // first batch that computes totalExecutions. Surfaced so the header
-            // shows an accurate PR count instead of the loaded-window estimate.
-            let distinctPrTotal = 0;
             let hasMoreExecutions = true;
             // Keyset cursor for the intra-request loop. The page offset
             // (initialSkip) still positions the first batch, but once the
@@ -278,46 +272,44 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             // client fetches again; the list stays complete because the client
             // continues on the cursor alone and never on page length.
             let batchesRead = 0;
+            let teamAutomationIds: string[] | undefined;
             while (
                 enrichedPullRequests.length < limit &&
                 hasMoreExecutions &&
                 batchesRead < MAX_BATCHES_PER_REQUEST
             ) {
                 batchesRead++;
-                const {
-                    data: executionsBatch,
-                    total,
-                    distinctPrTotal: batchDistinctPrTotal,
-                } = await this.automationExecutionService.findPullRequestExecutionsByOrganizationAndTeam(
-                    {
-                        organizationAndTeamData: {
-                            organizationId,
-                            teamId,
+                const { data: executionsBatch, teamAutomationIds: resolved } =
+                    await this.automationExecutionService.findPullRequestExecutionsByOrganizationAndTeam(
+                        {
+                            organizationAndTeamData: {
+                                organizationId,
+                                teamId,
+                            },
+                            repositoryIds: allowedRepositoryIds,
+                            repositoryName: repositoryNameFilter,
+                            pullRequestNumber,
+                            prFilters,
+                            status,
+                            createdAtFrom,
+                            createdAtTo,
+                            // First batch: page offset. Subsequent batches:
+                            // keyset cursor (no OFFSET over-scan).
+                            skip: lastConsumed ? undefined : initialSkip,
+                            cursor: lastConsumed,
+                            take: limit,
+                            order: 'DESC',
+                            // The list never counts: counting walks every
+                            // execution that matches the filters, and the page
+                            // does not need it (`hasMoreExecutions` comes from the
+                            // scan). Totals are `countTotals`, on their own
+                            // endpoint.
+                            includeTotal: false,
+                            teamAutomationIds,
                         },
-                        repositoryIds: allowedRepositoryIds,
-                        repositoryName: repositoryNameFilter,
-                        pullRequestNumber,
-                        prFilters,
-                        status,
-                        createdAtFrom,
-                        createdAtTo,
-                        // First batch: page offset. Subsequent batches:
-                        // keyset cursor (no OFFSET over-scan).
-                        skip: lastConsumed ? undefined : initialSkip,
-                        cursor: lastConsumed,
-                        take: limit,
-                        order: 'DESC',
-                        // Counting walks every execution that matches the
-                        // filters, so it is opt-in: the page itself never
-                        // needs it (`hasMoreExecutions` comes from the scan).
-                        includeTotal: wantTotal && totalExecutions === 0,
-                    },
-                );
-
-                if (wantTotal && totalExecutions === 0) {
-                    totalExecutions = total;
-                    distinctPrTotal = batchDistinctPrTotal ?? 0;
-                }
+                    );
+                // Resolved by the first batch; the same for every batch.
+                teamAutomationIds = resolved;
 
                 if (!executionsBatch.length) {
                     hasMoreExecutions = false;
@@ -325,8 +317,8 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 }
 
                 // A batch smaller than the page size means the scan reached
-                // the end of the matching set. That — not arithmetic over
-                // `totalExecutions` — is what tells a keyset scan it is done,
+                // the end of the matching set. That — not arithmetic over a
+                // total — is what tells a keyset scan it is done,
                 // and it is the only signal that stays correct once a resume
                 // cursor makes the page offset meaningless.
                 const batchWasFull = executionsBatch.length >= limit;
@@ -741,25 +733,16 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                     hasMoreExecutions = true;
                 } else if (!batchWasFull) {
                     hasMoreExecutions = false;
-                } else if (
-                    wantTotal &&
-                    !resumeCursor &&
-                    initialSkip + accumulatedExecutions >= totalExecutions
-                ) {
-                    // Offset callers (no cursor) can still finish early on the
-                    // execution total, which is exact for them.
-                    hasMoreExecutions = false;
                 }
             }
 
-            // Nothing matched at all. Without a count this is known only when
-            // the scan started at the very beginning and read no row; a later
-            // page that comes back empty says nothing about the total.
-            const nothingMatched = wantTotal
-                ? totalExecutions === 0
-                : accumulatedExecutions === 0 &&
-                  !resumeCursor &&
-                  initialSkip === 0;
+            // Nothing matched at all. Known only when the scan started at the
+            // very beginning and read no row; a later page that comes back
+            // empty says nothing about the total.
+            const nothingMatched =
+                accumulatedExecutions === 0 &&
+                !resumeCursor &&
+                initialSkip === 0;
             if (nothingMatched) {
                 this.logger.warn({
                     message: 'No automation executions with PR data found',
@@ -773,19 +756,10 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
 
             const paginationMetadata: PaginationMetadata = {
                 currentPage: page,
-                ...(wantTotal
-                    ? {
-                          totalPages: Math.ceil(totalExecutions / limit),
-                          totalItems: totalExecutions,
-                          distinctPrTotal,
-                      }
-                    : {}),
                 itemsPerPage: limit,
-                // Whether the SCAN has more to give — not whether the page
-                // number is below a total counted in a different unit.
-                // `totalPages` divides executions by a page size measured in
-                // surviving rows, so `page < totalPages` promised pages that
-                // came back empty and, for the infinite list, never ended.
+                // Whether the SCAN has more to give. A page count derived from
+                // a total of executions promised pages that came back empty
+                // and, for the infinite list, never ended.
                 hasNextPage: hasMoreExecutions,
                 hasPreviousPage: page > 1 || Boolean(resumeCursor),
                 nextCursor: hasMoreExecutions
@@ -799,7 +773,6 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 context: GetEnrichedPullRequestsUseCase.name,
                 metadata: {
                     organizationId,
-                    totalExecutions: wantTotal ? totalExecutions : undefined,
                     returnedItems: paginatedData.length,
                     page,
                     limit,

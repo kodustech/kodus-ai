@@ -213,6 +213,37 @@ describe('AutomationExecutionRepository — team automations of the pull request
         expect(typeormRepository.createQueryBuilder).not.toHaveBeenCalled();
     });
 
+    it('hands the resolved automations back and does not resolve them twice', async () => {
+        const { repository, typeormRepository, predicate } = build({
+            teamAutomationIds: ['ta-1', 'ta-2'],
+            many: [],
+        });
+
+        const first =
+            await repository.findPullRequestExecutionsByOrganizationAndTeam({
+                organizationAndTeamData: ORG_TEAM,
+                includeTotal: false,
+            });
+        expect(first.teamAutomationIds).toEqual(['ta-1', 'ta-2']);
+        expect(
+            typeormRepository.manager.createQueryBuilder,
+        ).toHaveBeenCalledTimes(1);
+
+        // The next batch of the same request passes them back.
+        await repository.findPullRequestExecutionsByOrganizationAndTeam({
+            organizationAndTeamData: ORG_TEAM,
+            includeTotal: false,
+            teamAutomationIds: first.teamAutomationIds,
+        });
+
+        expect(
+            typeormRepository.manager.createQueryBuilder,
+        ).toHaveBeenCalledTimes(1);
+        expect(predicate('"team_automation_id" IN')?.params).toEqual({
+            teamAutomationIds: ['ta-1', 'ta-2'],
+        });
+    });
+
     it('scopes the two grouping queries to the same automations', async () => {
         const reviewed = build({ teamAutomationIds: ['ta-3'] });
         await reviewed.repository.getDistinctReviewedPullRequestKeys({

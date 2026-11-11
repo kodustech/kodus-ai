@@ -2,10 +2,9 @@ import { EnrichedPullRequestResponse } from './enriched-pull-request-response.dt
 
 export class PaginationMetadata {
     currentPage: number;
-    // The three totals below are present only when the request asked for them
-    // (`includeTotal=true`) or when the result is known to be empty. Counting
-    // walks every matching execution, so the list does not do it by default;
-    // GET /pull-requests/executions/totals answers the same numbers on its own.
+    // The totals below are present only when the result is known to be empty.
+    // Counting walks every matching execution, so the list does not do it;
+    // GET /pull-requests/executions/totals answers the numbers on its own.
     totalPages?: number;
     // Execution rows matching the DB-level filters (a PR reviewed N times counts
     // N here). NOT the PR count shown in the header.

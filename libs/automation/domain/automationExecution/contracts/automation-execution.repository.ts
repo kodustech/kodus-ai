@@ -39,11 +39,13 @@ export interface IAutomationExecutionRepository {
         order?: 'ASC' | 'DESC';
         includeTotal?: boolean;
         countOnly?: boolean;
+        teamAutomationIds?: string[];
     }): Promise<{
         data: AutomationExecutionEntity[];
         total: number;
         // Distinct PRs matching the DB-level filters (only with includeTotal).
         distinctPrTotal: number;
+        teamAutomationIds?: string[];
     }>;
     getDistinctReviewedPullRequestKeys(params: {
         organizationAndTeamData: OrganizationAndTeamData;

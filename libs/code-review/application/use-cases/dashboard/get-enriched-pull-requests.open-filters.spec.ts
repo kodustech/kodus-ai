@@ -88,6 +88,7 @@ const buildUseCase = (
             data: rows.slice(start, start + (params.take ?? 30)),
             total: 0,
             distinctPrTotal: 0,
+            teamAutomationIds: ['ta-1'],
         };
     });
 
@@ -234,6 +235,12 @@ describe('GetEnrichedPullRequestsUseCase — open pull requests resolved up fron
         expect(withScan.requests).toBe(4);
         expect(narrowed.findExecutions).toHaveBeenCalledTimes(1);
         expect(scanning.findExecutions).toHaveBeenCalledTimes(31);
+        // The team automations are resolved by the first batch of a request
+        // and handed to the rest: 4 requests, so 4 batches resolve them.
+        const resolving = scanning.findExecutions.mock.calls.filter(
+            ([params]: any[]) => params.teamAutomationIds === undefined,
+        );
+        expect(resolving).toHaveLength(4);
     });
 
     it('does the same for the open-PR filter, without the suggestion condition', async () => {

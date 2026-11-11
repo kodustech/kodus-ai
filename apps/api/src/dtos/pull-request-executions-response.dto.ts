@@ -129,8 +129,8 @@ export class PullRequestExecutionsPaginationDto {
     @ApiProperty()
     currentPage: number;
 
-    // Present only with `includeTotal=true` (or on an empty result): the list
-    // no longer counts by default. See GET /pull-requests/executions/totals.
+    // Present only on an empty result: the list no longer counts.
+    // See GET /pull-requests/executions/totals.
     @ApiProperty({ required: false })
     totalPages?: number;
 

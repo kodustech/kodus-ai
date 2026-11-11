@@ -151,10 +151,12 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         order?: 'ASC' | 'DESC';
         includeTotal?: boolean;
         countOnly?: boolean;
+        teamAutomationIds?: string[];
     }): Promise<{
         data: AutomationExecutionEntity[];
         total: number;
         distinctPrTotal: number;
+        teamAutomationIds?: string[];
     }> {
         return this.automationExecutionRepository.findPullRequestExecutionsByOrganizationAndTeam(
             params,

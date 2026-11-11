@@ -70,6 +70,7 @@ const buildUseCase = (
             data: rows.slice(0, params.take ?? 30),
             total: params.includeTotal ? executions.length : 0,
             distinctPrTotal: params.includeTotal ? executions.length : 0,
+            teamAutomationIds: ['ta-1'],
         };
     });
 
@@ -159,24 +160,15 @@ describe('GetEnrichedPullRequestsUseCase — the list does not count by default'
         }
     });
 
-    it('counts on the first batch only, when the request opts in', async () => {
-        const { useCase, findExecutions } = buildUseCase({
-            executions: makeExecutions(70),
-        });
+    it('carries no total on a page that has rows', async () => {
+        const { useCase } = buildUseCase({ executions: makeExecutions(70) });
 
-        const page = await useCase.execute({
-            teamId: 't1',
-            limit: 30,
-            includeTotal: true,
-        });
+        const page = await useCase.execute({ teamId: 't1', limit: 30 });
 
-        expect(page.pagination).toMatchObject({
-            totalItems: 70,
-            totalPages: 3,
-            distinctPrTotal: 70,
-            hasNextPage: true,
-        });
-        expect(findExecutions.mock.calls[0][0].includeTotal).toBe(true);
+        expect(page.pagination).not.toHaveProperty('totalItems');
+        expect(page.pagination).not.toHaveProperty('totalPages');
+        expect(page.pagination).not.toHaveProperty('distinctPrTotal');
+        expect(page.pagination.hasNextPage).toBe(true);
     });
 
     it('answers a zero total when the very first page has nothing', async () => {

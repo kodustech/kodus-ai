@@ -273,6 +273,10 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
         // Run only the count over the filters and skip the page query, for
         // callers that read the totals on their own. Implies `includeTotal`.
         countOnly?: boolean;
+        // From an earlier call for the SAME organization and team in this
+        // request (see the result). Trusted as given: only pass back what
+        // this method returned.
+        teamAutomationIds?: string[];
     }): Promise<{
         data: AutomationExecutionEntity[];
         total: number;
@@ -284,6 +288,9 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
         // later in the use-case, so callers must not present this as exact when
         // those are active.
         distinctPrTotal: number;
+        // The team automations the query was scoped to. Hand it back on the
+        // next batch of the same request to skip resolving them again.
+        teamAutomationIds?: string[];
     }> {
         const {
             organizationAndTeamData,
@@ -307,10 +314,11 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
             const { organizationId, teamId } = organizationAndTeamData;
 
             const teamAutomationIds =
-                await this.findPullRequestTeamAutomationIds(
+                params.teamAutomationIds ??
+                (await this.findPullRequestTeamAutomationIds(
                     organizationId,
                     teamId,
-                );
+                ));
             if (!teamAutomationIds.length) {
                 return { data: [], total: 0, distinctPrTotal: 0 };
             }
@@ -538,7 +546,7 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                     AutomationExecutionEntity,
                 ) as AutomationExecutionEntity[]) ?? [];
 
-            return { data: mapped, total, distinctPrTotal };
+            return { data: mapped, total, distinctPrTotal, teamAutomationIds };
         } catch (error) {
             this.logger.error({
                 message:
