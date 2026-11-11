@@ -761,6 +761,18 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         const sentCapped = (capped.doGenerate.mock.calls as unknown[][])[0];
         expect((sentCapped[0] as any).maxOutputTokens).toBe(4_000);
 
+        // Zero is no cap: the request goes as it was.
+        const zero = answering({});
+        await runWithUsageMeter(
+            {
+                record: jest.fn(),
+                admit: () => ({ settle: jest.fn(), maxOutputTokens: 0 }),
+            },
+            async () => wrap(zero).doGenerate({ prompt: PROMPT }),
+        );
+        const sentZero = (zero.doGenerate.mock.calls as unknown[][])[0];
+        expect((sentZero[0] as any).maxOutputTokens).toBeUndefined();
+
         const own = answering({});
         await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
             wrap(own).doGenerate({ prompt: PROMPT, maxOutputTokens: 900 }),
