@@ -36,10 +36,16 @@ export interface ResolveUnseenScanFindingsParams {
     repositoryId: string;
     scanId: string;
     /**
-     * Only files this scan actually examined. A scan stopped by its budget
-     * never looked at the rest, so an issue there was not "gone", just unseen.
+     * What this scan examined, class by class. A scan stopped by its budget
+     * never looked at the other files, and a lens that failed never looked
+     * for its class: an issue there was not "gone", just unseen.
      */
-    filePaths: string[];
+    examined: Array<{ vulnerabilityClass: string; filePaths: string[] }>;
+    /**
+     * Every file the scanned branch tracks, when the scan read the whole list:
+     * an open finding in a file outside it is resolved, the file is gone.
+     */
+    trackedFiles?: string[];
     /**
      * When this scan started. A finding another scan sighted after it is not
      * resolved by this one, even if their runs overlapped.
