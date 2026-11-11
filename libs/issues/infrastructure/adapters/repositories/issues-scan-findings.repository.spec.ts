@@ -42,6 +42,7 @@ function modelWith(existing: Record<string, unknown> | null) {
         })),
         findById: jest.fn(() => exec(existing)),
         updateMany: jest.fn(async () => ({ modifiedCount: 3 })),
+        distinct: jest.fn(() => exec(['src/a.ts', 'src/gone.ts', ''])),
         updateOne: jest.fn(async () => ({ modifiedCount: 1 })),
     };
 }
@@ -192,7 +193,17 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(model.findOneAndUpdate).toHaveBeenCalled();
     });
 
-    it('resolves only open scan issues in the files this scan examined and did not see again', async () => {
+    const unseen = {
+        'organizationId': 'org-1',
+        'repository.id': 'repo-1',
+        'source': IssueSource.SECURITY_SCAN,
+        'status': IssueStatus.OPEN,
+        'lastSeenScanId': { $ne: 'scan-2' },
+        // A newer, overlapping scan's sightings are not this one's to resolve.
+        'lastSeenAt': { $lt: '2026-11-08T10:00:00.000Z' },
+    };
+
+    it('resolves only open scan issues of a class in the files a lens of that class examined', async () => {
         const model = modelWith(null);
         const repository = new IssuesRepository(model as any);
 
@@ -201,24 +212,47 @@ describe('IssuesRepository — security-scan findings', () => {
             repositoryId: 'repo-1',
             scanId: 'scan-2',
             // A scan may spell a path as it was found; the issue stores it clean.
-            filePaths: ['./src/a.ts', 'src\\b.ts'],
+            examined: [
+                { vulnerabilityClass: 'authz', filePaths: ['./src/a.ts', 'src\\b.ts'] },
+                { vulnerabilityClass: 'injection', filePaths: [] },
+            ],
             scanStartedAt: '2026-11-08T10:00:00.000Z',
         });
 
         expect(resolved).toBe(3);
         expect((model.updateMany.mock.calls[0] as unknown[])[0]).toEqual({
-            'organizationId': 'org-1',
-            'repository.id': 'repo-1',
-            'source': IssueSource.SECURITY_SCAN,
-            'status': IssueStatus.OPEN,
-            'filePath': { $in: ['src/a.ts', 'src/b.ts'] },
-            'lastSeenScanId': { $ne: 'scan-2' },
-            // A newer, overlapping scan's sightings are not this one's to resolve.
-            'lastSeenAt': { $lt: '2026-11-08T10:00:00.000Z' },
+            ...unseen,
+            $or: [
+                {
+                    vulnerabilityClass: 'authz',
+                    filePath: { $in: ['src/a.ts', 'src/b.ts'] },
+                },
+            ],
+        });
+        expect(model.distinct).not.toHaveBeenCalled();
+    });
+
+    it('resolves the open findings of a file the scanned branch no longer tracks', async () => {
+        const model = modelWith(null);
+        const repository = new IssuesRepository(model as any);
+
+        await repository.resolveUnseenScanFindings({
+            organizationId: 'org-1',
+            repositoryId: 'repo-1',
+            scanId: 'scan-2',
+            examined: [],
+            trackedFiles: ['./src/a.ts'],
+            scanStartedAt: '2026-11-08T10:00:00.000Z',
+        });
+
+        expect(model.distinct).toHaveBeenCalledWith('filePath', unseen);
+        expect((model.updateMany.mock.calls[0] as unknown[])[0]).toEqual({
+            ...unseen,
+            $or: [{ filePath: { $in: ['src/gone.ts'] } }],
         });
     });
 
-    it('resolves nothing when the scan examined no file', async () => {
+    it('resolves nothing when the scan examined no file and read no file list', async () => {
         const model = modelWith(null);
         const repository = new IssuesRepository(model as any);
 
@@ -227,7 +261,8 @@ describe('IssuesRepository — security-scan findings', () => {
                 organizationId: 'org-1',
                 repositoryId: 'repo-1',
                 scanId: 'scan-2',
-                filePaths: [],
+                examined: [{ vulnerabilityClass: 'authz', filePaths: [] }],
+                trackedFiles: [],
                 scanStartedAt: '2026-11-08T10:00:00.000Z',
             }),
         ).resolves.toBe(0);

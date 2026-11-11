@@ -358,21 +358,40 @@ export class IssuesRepository implements IIssuesRepository {
     async resolveUnseenScanFindings(
         params: ResolveUnseenScanFindingsParams,
     ): Promise<number> {
-        if (!params.filePaths.length) {
+        const unseen = {
+            'organizationId': params.organizationId,
+            'repository.id': params.repositoryId,
+            'source': IssueSource.SECURITY_SCAN,
+            'status': IssueStatus.OPEN,
+            'lastSeenScanId': { $ne: params.scanId },
+            // Sighted by a newer scan that overlapped this one: not gone.
+            'lastSeenAt': { $lt: params.scanStartedAt },
+        };
+
+        const where: Record<string, unknown>[] = params.examined
+            .filter((e) => e.filePaths.length)
+            .map((e) => ({
+                vulnerabilityClass: e.vulnerabilityClass,
+                filePath: { $in: e.filePaths.map(normalizeScanPath) },
+            }));
+        if (params.trackedFiles?.length) {
+            const tracked = new Set(params.trackedFiles.map(normalizeScanPath));
+            const open: string[] = await this.issuesModel
+                .distinct('filePath', unseen)
+                .exec();
+            const gone = open.filter(
+                (path) => !!path && !tracked.has(normalizeScanPath(path)),
+            );
+            if (gone.length) {
+                where.push({ filePath: { $in: gone } });
+            }
+        }
+        if (!where.length) {
             return 0;
         }
 
         const result = await this.issuesModel.updateMany(
-            {
-                'organizationId': params.organizationId,
-                'repository.id': params.repositoryId,
-                'source': IssueSource.SECURITY_SCAN,
-                'status': IssueStatus.OPEN,
-                'filePath': { $in: params.filePaths.map(normalizeScanPath) },
-                'lastSeenScanId': { $ne: params.scanId },
-                // Sighted by a newer scan that overlapped this one: not gone.
-                'lastSeenAt': { $lt: params.scanStartedAt },
-            },
+            { ...unseen, $or: where },
             {
                 $set: {
                     status: IssueStatus.RESOLVED,
