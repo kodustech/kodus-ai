@@ -19,14 +19,15 @@ import {
     FindingsList,
     type FindingsStatusFilter,
 } from "./_components/findings-list";
-import { ScanHistory } from "./_components/scan-history";
+import { ScanHistoryButton } from "./_components/scan-history";
 import { ScanStatusBanner } from "./_components/scan-status-banner";
 import { SeveritySummary } from "./_components/severity-summary";
 
 /**
  * Deep scan: scan a whole repository for vulnerabilities and work through
  * what it found. Read top to bottom: where scanning stands, how much is open
- * at each severity, the findings themselves, then every scan run.
+ * at each severity, the findings themselves; every scan run opens from the
+ * header.
  */
 export default function DeepScanPage() {
     const permissions = usePermissions();
@@ -66,8 +67,8 @@ export default function DeepScanPage() {
                         Finds broken access control, injection, XSS, SSRF, data
                         exposure, leaked secrets and unsafe settings in a
                         repository&apos;s default branch, with your
-                        organization&apos;s model, within the spend limit you
-                        set.
+                        organization&apos;s model, within a spend limit if you
+                        set one.
                     </p>
                     <p className="text-text-tertiary max-w-2xl text-xs">
                         Deep scan is in beta and free on every plan while it is.
@@ -76,7 +77,10 @@ export default function DeepScanPage() {
                     </p>
                 </div>
 
-                <RunSecurityScanButton />
+                <div className="flex shrink-0 items-center gap-2">
+                    <ScanHistoryButton scans={scans} />
+                    <RunSecurityScanButton />
+                </div>
             </Page.Header>
 
             <Page.Content>
@@ -98,8 +102,6 @@ export default function DeepScanPage() {
                     onStatusChange={setStatus}
                     severity={severity}
                 />
-
-                <ScanHistory scans={scans} />
             </Page.Content>
 
             <IssueDetailsRightSheet issues={findings} />
