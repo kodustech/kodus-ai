@@ -80,6 +80,8 @@ describe('cweFamily', () => {
         ['CWE-943', 'sql'],
         ['cwe-79', 'xss'],
         ['CWE 1336', 'template'],
+        ['CWE-400', 'exhaustion'],
+        ['CWE-1333', 'exhaustion'],
         ['CWE-1234', 'cwe-1234'],
         [undefined, ''],
     ])('%s → %s', (cwe, family) => {
