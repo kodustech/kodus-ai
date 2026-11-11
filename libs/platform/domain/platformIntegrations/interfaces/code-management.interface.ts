@@ -36,6 +36,10 @@ import { Repositories } from '../types/codeManagement/repositories.type';
 import { RepositoryFile } from '../types/codeManagement/repositoryFile.type';
 import { RepositoryAccessDiagnosis } from '../types/codeManagement/repositoryAccessDiagnosis.type';
 import { ICommonPlatformIntegrationService } from './common.interface';
+import type {
+    ApprovalTeamMembership,
+    ApprovalTeamMembershipParams,
+} from '../types/codeManagement/approvalTeamMembership.type';
 
 type GitActor = {
     name: string;
@@ -57,6 +61,9 @@ export type CodeManagementConnectionStatus = {
 };
 
 export interface ICodeManagementService extends ICommonPlatformIntegrationService {
+    getApprovalTeamMembership?(
+        params: ApprovalTeamMembershipParams,
+    ): Promise<ApprovalTeamMembership>;
     /**
      * Read the host's native issue tracker. Optional: implemented per provider
      * as the generic issues MCP rolls out (GitHub first). The facade throws a

@@ -23,6 +23,10 @@ import {
     pickChangedConfig,
 } from "../_utils/changed-config";
 import {
+    getInheritedReviewFields,
+    withoutReviewInheritanceIntents,
+} from "../_utils/review-settings-inheritance";
+import {
     CodeReviewSettingsConflictError,
     CodeReviewSettingsValidationError,
     expectedCustomAgentsRevisions,
@@ -143,6 +147,9 @@ export const useCodeReviewSettingsMutation = (params: {
         options?: SaveOptions,
     ): Promise<SaveSettingsResult> => {
         const prepared = await (options?.prepare ?? defaultPrepare)(formData);
+        const savedFormData = withoutReviewInheritanceIntents(
+            withoutListRevisions(prepared.savedFormData),
+        );
 
         const { language: _language, ...formattedConfig } = formData;
         // `formState.defaultValues` is the snapshot of the last render and
@@ -151,11 +158,23 @@ export const useCodeReviewSettingsMutation = (params: {
             prepared.codeReviewConfig,
             getChangedConfigMask(formattedConfig, form.control._defaultValues),
         );
+        const inheritFields = getInheritedReviewFields(
+            formattedConfig,
+            form.control._defaultValues,
+            directoryId
+                ? "directory"
+                : repositoryId && repositoryId !== "global"
+                  ? "repository"
+                  : "global",
+        );
 
         // Nothing in the code-review config changed (e.g. only the language,
         // which `prepare` already saved).
-        if (Object.keys(changedConfig).length === 0) {
-            form.reset(withoutListRevisions(prepared.savedFormData));
+        if (
+            Object.keys(changedConfig).length === 0 &&
+            inheritFields.length === 0
+        ) {
+            form.reset(savedFormData);
             invalidateRelatedQueries();
             return {};
         }
@@ -167,9 +186,13 @@ export const useCodeReviewSettingsMutation = (params: {
             formattedConfig,
             changedConfig,
         );
+        const requestOptions = {
+            ...(expectedRevisions === undefined ? {} : { expectedRevisions }),
+            ...(inheritFields.length ? { inheritFields } : {}),
+        };
 
         // A save that writes neither list calls exactly as before.
-        const result = await (expectedRevisions === undefined
+        const result = await (Object.keys(requestOptions).length === 0
             ? createOrUpdateCodeReviewParameter(
                   changedConfig,
                   teamId,
@@ -182,7 +205,7 @@ export const useCodeReviewSettingsMutation = (params: {
                   repositoryId,
                   directoryId,
                   undefined,
-                  { expectedRevisions },
+                  requestOptions,
               ));
 
         // Someone else saved the lists this save was made from: nothing was
@@ -207,7 +230,6 @@ export const useCodeReviewSettingsMutation = (params: {
             );
         }
 
-        const savedFormData = withoutListRevisions(prepared.savedFormData);
         // A save of the lists changed their revisions: resolve once the
         // config carrying the new ones is loaded, or the next edit would
         // start from the old ones and be refused as if someone else saved.

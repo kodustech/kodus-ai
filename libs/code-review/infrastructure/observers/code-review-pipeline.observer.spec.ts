@@ -1,7 +1,7 @@
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { IAutomationExecutionService } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
-import { SUMMARY_GENERATION_FAILED_REASON } from '@libs/code-review/pipeline/stages/finish-comments.stage';
+import { SUMMARY_GENERATION_FAILED_REASON } from '@libs/code-review/pipeline/constants/error-reasons';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import {
     CheckConclusion,

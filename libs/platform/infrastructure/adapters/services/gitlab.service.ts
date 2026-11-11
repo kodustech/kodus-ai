@@ -1,3 +1,7 @@
+import type {
+    ApprovalTeamMembership,
+    ApprovalTeamMembershipParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/approvalTeamMembership.type';
 import {
     CommitSchema,
     ExpandedMergeRequestSchema,
@@ -2327,7 +2331,9 @@ export class GitlabService implements Omit<
                 deletions: changeCount.deletes,
                 changes: changeCount.adds + changeCount.deletes,
                 patch: file.diff,
-                previous_filename: file.renamed_file ? file.old_path : undefined,
+                previous_filename: file.renamed_file
+                    ? file.old_path
+                    : undefined,
             };
         });
     }
@@ -4615,6 +4621,7 @@ export class GitlabService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        headSha?: string;
     }) {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -4628,6 +4635,7 @@ export class GitlabService implements Omit<
             await gitlabAPI.MergeRequestApprovals.approve(
                 repository.id,
                 prNumber,
+                ...(params.headSha ? [{ sha: params.headSha }] : []),
             );
 
             this.logger.log({
@@ -4645,6 +4653,7 @@ export class GitlabService implements Omit<
                 error: error,
                 metadata: params,
             });
+            if (params.headSha) throw error;
             return null;
         }
     }
@@ -5392,6 +5401,44 @@ export class GitlabService implements Omit<
             });
 
             return false;
+        }
+    }
+
+    async getApprovalTeamMembership(
+        params: ApprovalTeamMembershipParams,
+    ): Promise<ApprovalTeamMembership> {
+        try {
+            const auth = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!auth?.accessToken) return 'unavailable';
+            const api = this.instanceGitlabApi(auth);
+            const group = await api.Groups.show(params.team.replace(/^@/, ''));
+            const users = await api.Users.all({ username: params.author });
+            const user = users.find(
+                (candidate) =>
+                    candidate.username.toLowerCase() ===
+                    params.author.toLowerCase(),
+            );
+            if (!group?.id || !user?.id) return 'unavailable';
+            try {
+                const member = await api.GroupMembers.show(group.id, user.id, {
+                    includeInherited: true,
+                });
+                if (member.state !== 'active') return 'not-member';
+                if (
+                    member.expires_at &&
+                    new Date(member.expires_at).getTime() < Date.now()
+                )
+                    return 'not-member';
+                return member.access_level > 0 ? 'member' : 'not-member';
+            } catch (error) {
+                return providerErrorStatus(error) === 404
+                    ? 'not-member'
+                    : 'unavailable';
+            }
+        } catch {
+            return 'unavailable';
         }
     }
 

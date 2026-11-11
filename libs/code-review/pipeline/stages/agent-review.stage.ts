@@ -108,6 +108,7 @@ import {
 import {
     customAgentSlug,
     ignoredFilesForCustomAgents,
+    selectCustomAgents,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { survivesSeverityFilter } from '@libs/code-review/infrastructure/agents/engine/survives-severity-filter';
@@ -762,7 +763,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     ): Promise<ReviewKnowledge> {
         return resolveReviewKnowledge({
             items: context.codeReviewConfig?.knowledge,
-            customAgents,
+            customAgents: selectCustomAgents(
+                customAgents,
+                context.onlyCustomAgent,
+                context.riskAssessment,
+            ),
             changedFiles,
             baseBranch:
                 context.pullRequest?.base?.ref ||

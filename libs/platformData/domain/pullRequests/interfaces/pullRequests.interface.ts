@@ -24,6 +24,16 @@ export interface IApprovalReasonDeliveryFailure {
     decision: 'hold' | 'approve';
     reason: string;
     occurredAt: string;
+    /** Snapshot whose approval was confirmed before the comment failed. */
+    reviewedHeadSha?: string;
+    reviewedBaseSha?: string;
+}
+
+export interface ApprovalReasonDeliveryGuard {
+    /** Logical publication attempt time, captured before provider I/O. */
+    notAfter?: string;
+    /** Repair only the notice that was read, never a replacement. */
+    expectedFailure?: IApprovalReasonDeliveryFailure;
 }
 
 export interface SuggestionCountsBySeverity {
@@ -278,6 +288,7 @@ export interface IDeliveredSuggestion {
 
 export interface IPullRequestWithDeliveredSuggestions {
     _id: string;
+    approvalReasonDeliveryFailure?: IApprovalReasonDeliveryFailure | null;
     number: number;
     organizationId: string;
     status: string;

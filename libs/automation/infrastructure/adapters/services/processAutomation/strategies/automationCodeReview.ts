@@ -883,6 +883,27 @@ export class AutomationCodeReviewService implements Omit<
             typeof result.lastAnalyzedCommit === 'object' &&
             Object.keys(result.lastAnalyzedCommit).length > 0;
 
+        // Risk belongs to the assessed snapshot even if a later review stage
+        // fails before it can advance lastAnalyzedCommit.
+        if (result.riskAssessment) {
+            Object.assign(baseData, { riskAssessment: result.riskAssessment });
+        }
+        if (result.approvalPolicyEligibility) {
+            Object.assign(baseData, {
+                approvalPolicyEligibility: result.approvalPolicyEligibility,
+            });
+        }
+        if (result.approvalReviewSummary) {
+            Object.assign(baseData, {
+                approvalReviewSummary: result.approvalReviewSummary,
+            });
+        }
+        if (result.customAgentRiskSkips?.length) {
+            Object.assign(baseData, {
+                customAgentRiskSkips: result.customAgentRiskSkips,
+            });
+        }
+
         if (validLastAnalyzedCommit) {
             Object.assign(baseData, {
                 lastAnalyzedCommit: result.lastAnalyzedCommit,

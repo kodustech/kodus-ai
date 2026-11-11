@@ -59,3 +59,11 @@ export function useApprovalLabelsUnavailable(): boolean {
         platforms.has(PlatformType.AZURE_REPOS)
     );
 }
+
+export function useApprovalTeamsUnavailable(): boolean {
+    const platforms = useCodeManagementPlatforms();
+    return (
+        platforms.has(PlatformType.BITBUCKET) ||
+        platforms.has(PlatformType.FORGEJO)
+    );
+}

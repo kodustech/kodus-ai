@@ -35,6 +35,7 @@ test("allScenarios: includes the registered release-gate scenarios", () => {
         "review-decision-memory",
         "review-decision-memory-kody-rules",
         "review-decision-memory-revert",
+        "risk-routing-pipeline",
         "rule-file-detection",
         "sso-cookie-domain",
         "sso-multi-user",

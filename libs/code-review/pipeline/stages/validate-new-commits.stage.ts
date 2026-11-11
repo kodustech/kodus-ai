@@ -72,6 +72,9 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
                 noteId: lastExecution?.dataExecution?.noteId,
                 threadId: lastExecution?.dataExecution?.threadId,
                 lastAnalyzedCommit: lastAnalyzedCommit,
+                riskAssessment: lastExecution?.dataExecution?.riskAssessment,
+                approvalPolicyEligibility:
+                    lastExecution?.dataExecution?.approvalPolicyEligibility,
                 reviewedBaseBranch:
                     lastExecution?.dataExecution?.reviewedBaseBranch,
             };

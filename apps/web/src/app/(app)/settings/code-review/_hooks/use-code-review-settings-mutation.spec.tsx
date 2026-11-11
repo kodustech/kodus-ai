@@ -42,10 +42,10 @@ const loaded = {
     knowledgeRevision: "knowledge-r1",
 };
 
-const setup = (client = new QueryClient()) => {
+const setup = (client = new QueryClient(), initial: any = loaded) => {
     const { result } = renderHook(
         () => {
-            const form = useForm<any>({ defaultValues: loaded });
+            const form = useForm<any>({ defaultValues: initial });
             const mutation = useCodeReviewSettingsMutation({
                 teamId: "team-1",
                 repositoryId: "repo-1",
@@ -111,6 +111,71 @@ describe("useCodeReviewSettingsMutation — stale custom agents", () => {
         });
         // Called exactly as before the revision check: no extra arguments.
         expect(createOrUpdateCodeReviewParameter.mock.calls[0]).toHaveLength(4);
+    });
+
+    it("sends restore intent separately from an explicit false or empty reset", async () => {
+        createOrUpdateCodeReviewParameter.mockResolvedValue(true);
+        const initial = {
+            ...loaded,
+            riskAssessmentActive: {
+                value: true,
+                level: "repository",
+                overriddenValue: false,
+            },
+            riskCriteria: {
+                value: [{ id: "access" }],
+                level: "repository",
+                overriddenValue: [],
+            },
+            approvalPolicies: {
+                value: [{ id: "docs" }],
+                level: "repository",
+                overriddenValue: [],
+            },
+        };
+        const result = setup(new QueryClient(), initial);
+        await act(async () => {
+            await result.current.saveSettings({
+                ...initial,
+                riskAssessmentActive: { value: false, level: "global" },
+                riskCriteria: { value: [], level: "global" },
+                approvalPolicies: { value: [], level: "global" },
+            } as any);
+        });
+        expect(sentOptions()).toEqual({
+            inheritFields: [
+                "riskAssessmentActive",
+                "riskCriteria",
+                "approvalPolicies",
+            ],
+        });
+    });
+
+    it("keeps an edit made after Undo as an explicit override", async () => {
+        createOrUpdateCodeReviewParameter.mockResolvedValue(true);
+        const initial = {
+            ...loaded,
+            riskAssessmentActive: {
+                value: true,
+                level: "repository",
+                overriddenValue: false,
+            },
+        };
+        const result = setup(new QueryClient(), initial);
+        await act(async () => {
+            await result.current.saveSettings({
+                ...initial,
+                riskAssessmentActive: {
+                    ...initial.riskAssessmentActive,
+                    value: true,
+                    level: "global",
+                },
+            } as any);
+        });
+        expect(sentOptions()).toBeUndefined();
+        expect(createOrUpdateCodeReviewParameter.mock.calls[0][0]).toEqual({
+            riskAssessmentActive: true,
+        });
     });
 
     it("throws a conflict on 409 and keeps the edits unsaved", async () => {
