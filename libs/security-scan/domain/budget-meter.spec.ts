@@ -1,7 +1,7 @@
 import {
     ScanBudgetMeter,
     ScanBudgetReached,
-    UNCAPPED_ANSWER_TOKENS,
+    SCAN_ANSWER_CAP_TOKENS,
     validateBudget,
 } from './budget-meter';
 
@@ -47,12 +47,12 @@ describe('ScanBudgetMeter', () => {
 
         // 400k tokens of prompt (500k with the tokenizer margin) and a 100k
         // answer cap: at most $0.70.
-        meter.admit({ inputTokens: 400_000, maxOutputTokens: 100_000 })(
+        meter.admit({ inputTokens: 400_000, maxOutputTokens: 100_000 }).settle(
             undefined,
         );
         expect(meter.isExhausted()).toBe(false);
 
-        const settle = meter.admit({
+        const { settle } = meter.admit({
             inputTokens: 400_000,
             maxOutputTokens: 100_000,
         });
@@ -77,7 +77,7 @@ describe('ScanBudgetMeter', () => {
             inputTokens: input,
             outputTokens: output,
         });
-        meter.admit({ inputTokens: 2_000, maxOutputTokens: 1_000 })(
+        meter.admit({ inputTokens: 2_000, maxOutputTokens: 1_000 }).settle(
             answer(2_000, 500),
         );
         meter.record(request(2_000, 500));
@@ -89,7 +89,7 @@ describe('ScanBudgetMeter', () => {
                     meter.admit({
                         inputTokens: 160_000,
                         maxOutputTokens: 32_000,
-                    }),
+                    }).settle,
                 );
             } catch (error) {
                 expect(error).toBeInstanceOf(ScanBudgetReached);
@@ -108,7 +108,7 @@ describe('ScanBudgetMeter', () => {
     it('holds an answered request until its caller records it, and counts it once', () => {
         const meter = new ScanBudgetMeter({ maxUsd: 1 }, RATES);
 
-        meter.admit({ inputTokens: 100_000, maxOutputTokens: 10_000 })({
+        meter.admit({ inputTokens: 100_000, maxOutputTokens: 10_000 }).settle({
             inputTokens: 300_000,
             outputTokens: 0,
         });
@@ -119,7 +119,7 @@ describe('ScanBudgetMeter', () => {
         ).toThrow(ScanBudgetReached);
 
         const fresh = new ScanBudgetMeter({ maxUsd: 1 }, RATES);
-        fresh.admit({ inputTokens: 100_000, maxOutputTokens: 10_000 })({
+        fresh.admit({ inputTokens: 100_000, maxOutputTokens: 10_000 }).settle({
             inputTokens: 300_000,
             outputTokens: 0,
         });
@@ -135,7 +135,7 @@ describe('ScanBudgetMeter', () => {
     it('gives back the reservation of a request that failed unanswered', () => {
         const meter = new ScanBudgetMeter({ maxUsd: 1 }, RATES);
 
-        meter.admit({ inputTokens: 600_000, maxOutputTokens: 10_000 })(
+        meter.admit({ inputTokens: 600_000, maxOutputTokens: 10_000 }).settle(
             undefined,
         );
 
@@ -144,26 +144,58 @@ describe('ScanBudgetMeter', () => {
         ).not.toThrow();
     });
 
-    it('reserves an uncapped answer at twice the longest seen, never below the default', () => {
-        const meter = new ScanBudgetMeter({ maxTokens: 20_000 }, null);
+    it('reserves an uncapped answer at the scan cap and sends that cap with it', () => {
+        const meter = new ScanBudgetMeter({ maxTokens: 100_000 }, null);
 
-        // 1,250 tokens of prompt and the 8,000 default fit.
-        meter.admit({ inputTokens: 1_000 })({
-            inputTokens: 1_000,
-            outputTokens: 6_000,
-        });
-        meter.record(request(1_000, 6_000));
-        // 7,000 spent; now 1,250 and twice 6,000 do not.
-        expect(() => meter.admit({ inputTokens: 1_000 })).toThrow(
+        const admission = meter.admit({ inputTokens: 1_000 });
+
+        // The provider is told the cap that was reserved.
+        expect(admission.maxOutputTokens).toBe(SCAN_ANSWER_CAP_TOKENS);
+        // A request with its own cap keeps it.
+        expect(
+            meter.admit({ inputTokens: 1_000, maxOutputTokens: 500 })
+                .maxOutputTokens,
+        ).toBeUndefined();
+        // 19,000 reserved in flight; 75,000 of prompt and the 16,000 cap
+        // would take it past 100k.
+        expect(() => meter.admit({ inputTokens: 60_000 })).toThrow(
             ScanBudgetReached,
         );
-        expect(UNCAPPED_ANSWER_TOKENS).toBe(8_000);
+    });
+
+    it('leaves the answer uncapped when the scan has no limit', () => {
+        const meter = new ScanBudgetMeter({}, RATES);
+
+        expect(
+            meter.admit({ inputTokens: 1_000 }).maxOutputTokens,
+        ).toBeUndefined();
+    });
+
+    it('prices a request at the tier its input falls in, when admitting and when spending', () => {
+        // Input doubles past 200k tokens of context.
+        const tiered = {
+            ...RATES,
+            input: { default: 1e-6, tiers: [{ threshold: 200_000, rate: 2e-6 }] },
+        };
+        const meter = new ScanBudgetMeter({ maxUsd: 0.5 }, tiered);
+
+        // 240k tokens of prompt (300k with the margin) cost $0.60 at the
+        // upper tier: refused under $0.50, where the flat rate said $0.30.
+        expect(() =>
+            meter.admit({ inputTokens: 240_000, maxOutputTokens: 1 }),
+        ).toThrow(ScanBudgetReached);
+
+        const spending = new ScanBudgetMeter({ maxUsd: 10 }, tiered);
+        spending.record(request(300_000, 0));
+        expect(spending.snapshot().usd).toBeCloseTo(0.6);
+        spending.record(request(100_000, 0));
+        expect(spending.snapshot().usd).toBeCloseTo(0.7);
     });
 
     it('caps by tokens when the model has no price', () => {
         const meter = new ScanBudgetMeter({ maxTokens: 10_000 }, null);
 
-        meter.admit({ inputTokens: 4_000, maxOutputTokens: 1_000 })({
+        meter.admit({ inputTokens: 4_000, maxOutputTokens: 1_000 }).settle({
             inputTokens: 4_000,
             outputTokens: 1_000,
         });
@@ -192,7 +224,7 @@ describe('ScanBudgetMeter', () => {
         const meter = new ScanBudgetMeter({}, RATES);
 
         for (let i = 0; i < 5; i++) {
-            meter.admit({ inputTokens: 10_000_000 })({
+            meter.admit({ inputTokens: 10_000_000 }).settle({
                 inputTokens: 1_000_000,
                 outputTokens: 0,
             });

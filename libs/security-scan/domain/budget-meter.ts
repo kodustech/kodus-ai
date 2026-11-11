@@ -2,6 +2,7 @@ import type { ModelTokenRates } from '@libs/analytics/domain/token-usage/types/p
 import { ModelCostCalculator } from '@libs/analytics/application/use-cases/usage/model-cost-calculator';
 import type { AiSdkUsage } from '@libs/llm/ai-sdk-usage';
 import type {
+    Admission,
     RequestCeiling,
     UsageMeter,
     UsageObservation,
@@ -15,7 +16,7 @@ import type { SecurityScanBudget, SecurityScanSpend } from './security-scan.type
  * Every model request is admitted before it leaves (the model wrapper calls
  * `admit`), against the most it can cost: its prompt and tool definitions,
  * counted with the shared tokenizer plus a margin for a provider whose
- * tokenizer counts more, and its answer cap (see UNCAPPED_ANSWER_TOKENS when
+ * tokenizer counts more, and its answer cap (see SCAN_ANSWER_CAP_TOKENS when
  * it sets none). What was spent, what the
  * requests still in flight may cost, and this request's ceiling must fit
  * under the cap, or the request is refused and the scan stops. Each request
@@ -25,12 +26,13 @@ import type { SecurityScanBudget, SecurityScanSpend } from './security-scan.type
 const TOKENIZER_MARGIN = 1.25;
 
 /**
- * A request that sets no answer cap of its own (a BYOK slot with a max output
- * tokens gives the exact bound) is reserved at twice the longest answer the
- * scan has seen, and never below this: a scan's answers are tool calls and
- * short JSON objects. That part is an estimate, not a bound.
+ * The answer cap of a request that sets none (a BYOK slot with a max output
+ * tokens sets its own): reserved, and sent with the request when the scan has
+ * a limit, so the provider cannot answer past it. A scan's answers are tool
+ * calls and short JSON objects, reasoning included (the longest measured was
+ * about 11k tokens); every current model accepts this cap.
  */
-export const UNCAPPED_ANSWER_TOKENS = 8_000;
+export const SCAN_ANSWER_CAP_TOKENS = 16_000;
 
 /** Thrown to the model wrapper for a request the cap has no room for. */
 export class ScanBudgetReached extends Error {
@@ -52,7 +54,6 @@ export class ScanBudgetMeter implements UsageMeter {
      */
     private readonly answered: Array<Cost & { key: string }> = [];
     private refused = false;
-    private longestAnswer = 0;
     private readonly listeners: Array<() => void> = [];
 
     constructor(
@@ -66,16 +67,14 @@ export class ScanBudgetMeter implements UsageMeter {
             : { usd: 0, inputTokens: 0, outputTokens: 0, requests: 0 };
     }
 
-    admit(request: RequestCeiling): (answered: AiSdkUsage | undefined) => void {
+    admit(request: RequestCeiling): Admission {
         // Once one is refused, none leaves: the requests aborted then give
         // their reservation back, yet the provider may have billed them.
         if (this.refused) {
             throw new ScanBudgetReached();
         }
         const input = Math.ceil(request.inputTokens * TOKENIZER_MARGIN);
-        const output =
-            request.maxOutputTokens ||
-            Math.max(UNCAPPED_ANSWER_TOKENS, 2 * this.longestAnswer);
+        const output = request.maxOutputTokens || SCAN_ANSWER_CAP_TOKENS;
         const ceiling: Cost = {
             // Input priced at the dearer of a fresh read and a cache write.
             usd: Math.max(
@@ -96,14 +95,30 @@ export class ScanBudgetMeter implements UsageMeter {
         this.inFlight = add(this.inFlight, ceiling, 1);
 
         let settled = false;
-        return (usage) => {
-            if (settled) return;
-            settled = true;
-            this.inFlight = add(this.inFlight, ceiling, -1);
-            if (usage) {
-                this.answered.push({ ...this.cost(usage), key: keyOf(usage) });
-            }
+        return {
+            ...(!request.maxOutputTokens && this.capped()
+                ? { maxOutputTokens: SCAN_ANSWER_CAP_TOKENS }
+                : {}),
+            settle: (usage) => {
+                if (settled) return;
+                settled = true;
+                this.inFlight = add(this.inFlight, ceiling, -1);
+                if (usage) {
+                    this.answered.push({
+                        ...this.cost(usage),
+                        key: keyOf(usage),
+                    });
+                }
+            },
         };
+    }
+
+    /** Whether the scan has a limit this meter can enforce. */
+    private capped(): boolean {
+        return (
+            (this.budget.maxUsd !== undefined && !!this.rates) ||
+            this.budget.maxTokens !== undefined
+        );
     }
 
     record(observation: UsageObservation): void {
@@ -117,7 +132,6 @@ export class ScanBudgetMeter implements UsageMeter {
         const input = usage.inputTokens ?? 0;
         // ai@7 counts reasoning inside outputTokens, and bills it as output.
         const output = usage.outputTokens ?? 0;
-        this.longestAnswer = Math.max(this.longestAnswer, output);
         this.spent = {
             usd: this.spent.usd + this.costOf(usage),
             inputTokens: this.spent.inputTokens + input,
@@ -203,8 +217,18 @@ export class ScanBudgetMeter implements UsageMeter {
                 cacheWrite: usage.cacheWriteTokens ?? 0,
             },
             this.rates,
-            0,
+            this.bracketOf(input),
         ).total;
+    }
+
+    /**
+     * A model priced by context size bills the whole request at the tier its
+     * input falls in: how many input thresholds it passes.
+     */
+    private bracketOf(inputTokens: number): number {
+        return (this.rates?.input.tiers ?? []).filter(
+            (tier) => inputTokens > tier.threshold,
+        ).length;
     }
 
     snapshot(): SecurityScanSpend {

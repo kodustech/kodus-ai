@@ -23,7 +23,10 @@ const RATES = {
  */
 function bill(inputTokens: number, outputTokens: number, runName: string) {
     const usage = { inputTokens, outputTokens } as any;
-    admitRequest(() => ({ inputTokens, maxOutputTokens: outputTokens }))(usage);
+    admitRequest(() => ({
+        inputTokens,
+        maxOutputTokens: outputTokens,
+    })).settle(usage);
     reportUsage(usage, { runName });
 }
 
@@ -108,6 +111,12 @@ function fakeSandbox(type: 'e2b' | 'local' = 'e2b') {
             })),
         },
         run: jest.fn(async (command: string) => {
+            if (command.startsWith('test -e')) {
+                const taken = Object.keys(FILES).some((f) =>
+                    command.includes(`'/repo/${f}'`),
+                );
+                return { stdout: '', exitCode: taken ? 0 : 1 };
+            }
             if (command.includes('ls-files')) {
                 return { stdout: Object.keys(FILES).join('\n'), exitCode: 0 };
             }
@@ -602,6 +611,48 @@ describe('SecurityScanEngine', () => {
         expect(sandbox.run).toHaveBeenCalledWith(
             "rm -f -- '/repo/src/orders/idor.repro.spec.ts'",
             expect.anything(),
+        );
+    });
+
+    it("never writes over, runs or removes a file the repository already has", async () => {
+        const sandbox = fakeSandbox('e2b');
+        const llm = fakeLlm({ units: [] });
+        const answer = llm.getMockImplementation()!;
+        llm.mockImplementation(async (req: any) =>
+            req.runName.endsWith('-repro')
+                ? {
+                      path: 'src/orders/orders.service.ts',
+                      content: 'test("idor", () => {})',
+                      command: 'npx jest src/orders/orders.service.ts',
+                  }
+                : answer(req),
+        );
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
+            ),
+            llm,
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(sandbox.writeFile).not.toHaveBeenCalled();
+        const commands = sandbox.run.mock.calls.map((c: any[]) => c[0]);
+        expect(commands.some((c: string) => c.startsWith('rm '))).toBe(false);
+        expect(commands.some((c: string) => c.includes('npx jest'))).toBe(false);
+        // The test is kept on the issue, marked as not run.
+        expect(result.findings[0].reproduction).toEqual(
+            expect.objectContaining({
+                path: 'src/orders/orders.service.ts',
+                executed: false,
+            }),
         );
     });
 

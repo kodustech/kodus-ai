@@ -306,7 +306,8 @@ Return:
 - severity: critical (remote, unauthenticated, full compromise or mass data access), high (authenticated user reaches other users' data or code execution), medium (limited data or needs unusual conditions), low (hardening with a concrete but small impact).
 - cwe: as "CWE-<number>", the usual id for the weakness. When it is one of these, use exactly this id: ${CANONICAL_CWES}. Otherwise the most common CWE for it, not a rare child.
 - attackPath: the steps from the entry point to the dangerous operation, each with file, line and a short note. Start with the entry point.
-- fix: two or three sentences on how to fix it in this code.`;
+- fix: two or three sentences on how to fix it in this code.
+- appWide: true only when the weakness is one setting the whole application shares, fixed in one place for every route (CSRF protection turned off for the app, debug mode on, CORS open to every origin, a session cookie flag missing from the settings). False when it lives at this location, even if the same kind of setting: one route exempted from CSRF, one cookie set here without a flag.`;
 }
 
 export const REPRO_SYSTEM_PROMPT = `You write one automated test that demonstrates a confirmed security vulnerability in a repository, using the test framework the repository already uses.

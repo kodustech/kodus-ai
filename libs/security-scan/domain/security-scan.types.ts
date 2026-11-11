@@ -138,6 +138,8 @@ export interface ScanFinding {
     symbol?: string;
     attackPath: { file: string; line: number; note: string }[];
     suggestedFix?: string;
+    /** One setting the whole application shares, not this place's own bug. */
+    appWide?: boolean;
     reproduction?: {
         path: string;
         content: string;

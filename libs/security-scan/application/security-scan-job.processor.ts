@@ -461,6 +461,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     filePath: finding.filePath,
                     symbol: finding.symbol,
                     cwe: finding.cwe,
+                    appWide: finding.appWide,
                 }),
                 cwe: finding.cwe,
                 vulnerabilityClass: finding.vulnerabilityClass,

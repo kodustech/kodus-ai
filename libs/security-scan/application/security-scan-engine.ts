@@ -169,6 +169,7 @@ const FINALIZE_SCHEMA = z.object({
         z.object({ file: z.string(), line: z.number(), note: z.string() }),
     ),
     fix: z.string(),
+    appWide: z.boolean(),
 });
 
 const REPRO_SCHEMA = z.object({
@@ -836,6 +837,7 @@ export class SecurityScanEngine {
                 .filter((s) => s?.file && Number.isFinite(s.line))
                 .slice(0, 12),
             suggestedFix: structured?.fix,
+            appWide: structured?.appWide === true,
         };
     }
 
@@ -881,10 +883,21 @@ export class SecurityScanEngine {
             if (sandbox.type !== 'e2b') {
                 return;
             }
-            await sandbox.writeFile(
-                `${sandbox.repoDir}/${path}`,
-                repro.content,
-            );
+            const target = `${sandbox.repoDir}/${path}`;
+            const quoted = `'${target.replace(/'/g, `'\\''`)}'`;
+            // A file (or link) already there is the repository's own: never
+            // written over, nor removed after. The test stays on the issue,
+            // not run.
+            const taken = await sandbox
+                .run(`test -e ${quoted} || test -L ${quoted}`, {
+                    timeoutMs: 10_000,
+                })
+                .then((r) => r.exitCode === 0)
+                .catch(() => true);
+            if (taken) {
+                return;
+            }
+            await sandbox.writeFile(target, repro.content);
             await this.ensureDependencies(sandbox, finding.language);
             const result = await sandbox
                 .run(`cd ${sandbox.repoDir} && ${record.command}`, {
@@ -910,10 +923,7 @@ export class SecurityScanEngine {
             // The test lives on the issue; left in the checkout, the next
             // units' lenses would read it as the repository's own code.
             await sandbox
-                .run(
-                    `rm -f -- '${`${sandbox.repoDir}/${path}`.replace(/'/g, `'\\''`)}'`,
-                    { timeoutMs: 10_000 },
-                )
+                .run(`rm -f -- ${quoted}`, { timeoutMs: 10_000 })
                 .catch(() => undefined);
         } catch (error) {
             logger.warn({
