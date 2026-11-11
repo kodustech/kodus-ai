@@ -242,8 +242,22 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             })
             .catch(() => undefined);
         const commitSha = head?.stdout?.trim() || scan.commitSha;
-        if (commitSha && commitSha !== scan.commitSha) {
-            await this.scans.update(scan.uuid, { commitSha });
+        // A plan carried from an earlier scan holds for the commit it was made
+        // at: past it, its done areas say nothing about this code and new
+        // files are missing from it, so the repository is mapped again.
+        const stalePlan =
+            !scan.commitSha &&
+            !!scan.planCommitSha &&
+            commitSha !== scan.planCommitSha;
+        if (stalePlan) {
+            scan.units = [];
+            scan.progress = [];
+        }
+        if ((commitSha && commitSha !== scan.commitSha) || stalePlan) {
+            await this.scans.update(scan.uuid, {
+                ...(commitSha ? { commitSha } : {}),
+                ...(stalePlan ? { units: [], progress: [] } : {}),
+            });
         }
 
         const owners = new ScanOwnerResolver(sandbox, {

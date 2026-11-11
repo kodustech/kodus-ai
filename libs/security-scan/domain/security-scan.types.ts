@@ -99,6 +99,11 @@ export interface SecurityScanRecord {
     spend: SecurityScanSpend;
     /** The commit scanned; set once the sandbox has the repository. */
     commitSha?: string;
+    /**
+     * The commit an inherited plan was made at, on a scan that carries on
+     * where an earlier one stopped: dropped if the branch has moved since.
+     */
+    planCommitSha?: string;
     units: ScanUnit[];
     progress: ScanUnitProgress[];
     /** What the scan reported so far, so a continuation does not report it again. */

@@ -210,6 +210,7 @@ function toRecord(doc: any): SecurityScanRecord {
         budget: o.budget ?? {},
         spend: o.spend,
         commitSha: o.commitSha,
+        planCommitSha: o.planCommitSha,
         units: o.units ?? [],
         progress: o.progress ?? [],
         reported: o.reported ?? [],

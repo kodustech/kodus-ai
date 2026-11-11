@@ -289,6 +289,45 @@ describe('SecurityScanJobProcessor', () => {
         expect(cloneParams.checkoutSha).toBe('first-sha');
     });
 
+    it('maps the repository again when the branch moved past an inherited plan', async () => {
+        const { processor, scans } = setup(
+            { result: finishedResult() },
+            scanRecord({
+                planCommitSha: 'old-sha',
+                units: [{ id: 'u1' }],
+                progress: [{ unitId: 'u1', state: 'done', findings: 0 }],
+            }),
+        );
+
+        await processor.process('job-1');
+
+        const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
+        expect(engine.run.mock.calls[0][0]).toEqual(
+            expect.objectContaining({ units: [], progress: [] }),
+        );
+        expect(scans.update).toHaveBeenCalledWith('scan-1', {
+            commitSha: 'abc123',
+            units: [],
+            progress: [],
+        });
+    });
+
+    it('keeps an inherited plan made at the commit it reads', async () => {
+        const { processor } = setup(
+            { result: finishedResult() },
+            scanRecord({
+                planCommitSha: 'abc123',
+                units: [{ id: 'u1' }],
+                progress: [{ unitId: 'u1', state: 'done', findings: 0 }],
+            }),
+        );
+
+        await processor.process('job-1');
+
+        const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
+        expect(engine.run.mock.calls[0][0].units).toEqual([{ id: 'u1' }]);
+    });
+
     it('starts a new scan at the branch tip', async () => {
         const { processor, leaseManager } = setup({ result: finishedResult() });
 

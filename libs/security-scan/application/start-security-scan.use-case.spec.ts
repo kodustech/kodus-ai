@@ -58,6 +58,7 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         ],
         reported: [{ title: 'IDOR', filePath: 'src/a.ts' }],
         coverage: { languages: ['typescript'], examinedFiles: ['src/a.ts'] },
+        commitSha: 'plan-sha',
     };
 
     it('carries on with the areas the scan stopped at its limit had not reached', async () => {
@@ -70,7 +71,11 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         expect(created.progress).toEqual([
             { unitId: 'a', state: 'done', findings: 1 },
         ]);
-        expect(created.reported).toEqual(stopped.reported);
+        // What the earlier scan reported was its sighting, not this one's: a
+        // unit that finds it again stores it, which keeps the issue open.
+        expect(created.reported).toBeUndefined();
+        // The job drops the plan if the branch moved past this commit.
+        expect(created.planCommitSha).toBe('plan-sha');
         // Files the earlier scan examined are not this scan's: none of their
         // findings is resolved for not being seen again.
         expect(created.coverage).toEqual(

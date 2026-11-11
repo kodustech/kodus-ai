@@ -6,7 +6,7 @@ jest.mock('@libs/llm/managed-slot', () => {
 
 import { ScanBudgetMeter } from '../domain/budget-meter';
 import type { SurfaceMap } from '../domain/surface/surface.types';
-import { reportUsage } from '@libs/llm/usage-meter';
+import { admitRequest, reportUsage } from '@libs/llm/usage-meter';
 
 import { SecurityScanEngine } from './security-scan-engine';
 
@@ -16,6 +16,16 @@ const RATES = {
     cacheRead: { default: 1e-7 },
     cacheWrite: { default: 1e-6 },
 };
+
+/**
+ * One model request as the model wrapper and its caller meter it: admitted
+ * with its prompt and answer cap, settled with what it billed, recorded.
+ */
+function bill(inputTokens: number, outputTokens: number, runName: string) {
+    const usage = { inputTokens, outputTokens } as any;
+    admitRequest(() => ({ inputTokens, maxOutputTokens: outputTokens }))(usage);
+    reportUsage(usage, { runName });
+}
 
 const FILES: Record<string, string> = {
     'src/orders/orders.controller.ts': `@Controller('orders')
@@ -117,16 +127,14 @@ function fakeSandbox(type: 'e2b' | 'local' = 'e2b') {
 /** A lens that reports what the test tells it to, and spends $0.10 per run. */
 function fakeLens(findingsFor: (file: string, cls: string) => any[]) {
     return jest.fn(async (input: any, _secrets: any) => {
-        reportUsage({ inputTokens: 90_000, outputTokens: 10_000 } as any, {
-            runName: input.usageRunName,
-        });
+        bill(90_000, 10_000, input.usageRunName);
         const file = /Start from this file:\n`{3,}\n(.+)\n/.exec(
             input.userPrompt,
         )[1];
         const cls = input.agentName.replace('security-scan-', '');
         return {
             findings: { reasoning: '', suggestions: findingsFor(file, cls) },
-            finishReason: 'stop',
+            finishReason: 'completed',
         } as any;
     });
 }
@@ -142,9 +150,7 @@ const FINALIZED_CWE: Record<string, string> = {
 
 function fakeLlm(plan?: any) {
     return jest.fn(async (req: any) => {
-        reportUsage({ inputTokens: 1000, outputTokens: 100 } as any, {
-            runName: req.runName,
-        });
+        bill(1000, 100, req.runName);
         if (req.runName.endsWith('-map')) {
             if (plan instanceof Error) throw plan;
             return plan;
@@ -487,7 +493,7 @@ describe('SecurityScanEngine', () => {
             now += 60_000;
             return {
                 findings: { suggestions: [] },
-                finishReason: 'stop',
+                finishReason: 'completed',
             } as any;
         });
         const engine = new SecurityScanEngine({
@@ -1008,7 +1014,10 @@ describe('SecurityScanEngine: what a scan may resolve', () => {
             if (input.agentName === 'security-scan-injection') {
                 throw new Error('provider 500');
             }
-            return { findings: { reasoning: '', suggestions: [] } } as any;
+            return {
+                findings: { reasoning: '', suggestions: [] },
+                finishReason: 'completed',
+            } as any;
         });
         const engine = new SecurityScanEngine({
             runLens,
@@ -1027,6 +1036,62 @@ describe('SecurityScanEngine: what a scan may resolve', () => {
         expect(classes).not.toContain('injection');
         expect(result.progress[0].state).toBe('done');
     });
+
+    it.each([
+        [
+            'ran out of steps',
+            {
+                finishReason: 'budget-exhausted',
+                incompleteReason: 'budget-exhausted',
+            },
+        ],
+        [
+            'was cut by the provider',
+            { finishReason: 'completed', incompleteReason: 'truncated' },
+        ],
+        [
+            'never submitted a result',
+            { finishReason: 'completed', submittedResult: false },
+        ],
+        [
+            'ended in a provider error',
+            { finishReason: 'error', errorName: 'APICallError' },
+        ],
+    ])(
+        'keeps what a lens that %s found, without counting its class as examined',
+        async (_case, ending) => {
+            const runLens = jest.fn(async (input: any) => ({
+                findings: {
+                    reasoning: '',
+                    suggestions:
+                        input.agentName === 'security-scan-authz' ? [IDOR] : [],
+                },
+                ...(input.agentName === 'security-scan-authz'
+                    ? ending
+                    : { finishReason: 'completed' }),
+            }));
+            const engine = new SecurityScanEngine({
+                runLens: runLens as any,
+                llm: fakeLlm(controllerOnly),
+                collectSurface: jest.fn(async () => SURFACE),
+            });
+
+            const result = await engine.run({
+                ...baseParams(),
+                sandbox: fakeSandbox(),
+                meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            } as any);
+
+            const classes = result.examinedByClass.map(
+                (e) => e.vulnerabilityClass,
+            );
+            expect(classes).not.toContain('authz');
+            expect(classes).toContain('injection');
+            expect(result.findings).toEqual([
+                expect.objectContaining({ vulnerabilityClass: 'authz' }),
+            ]);
+        },
+    );
 
     it('lists the tracked files only when git listed them all', async () => {
         const engine = new SecurityScanEngine({
@@ -1082,67 +1147,33 @@ describe('SecurityScanEngine: no request past the cap', () => {
         relevantLinesStart: line,
         relevantLinesEnd: line,
     });
-    // The map and each finalize report 1,100 tokens; the lens none. With
-    // the reserve (1.5 × the largest request × 4 in flight), the cap is
-    // reached by the first finalize: 1,100 + 6,600 < 8,000 ≤ 2,200 + 6,600.
-    const meter = () => new ScanBudgetMeter({ maxTokens: 8000 }, null);
-    const finalizeCalls = (llm: jest.Mock) =>
-        llm.mock.calls.filter(([req]) => req.runName.endsWith('-finalize'))
-            .length;
 
-    it("stops finalizing a lens's findings once the cap is reached", async () => {
-        const llm = fakeLlm(execOnly);
+    it("stops finalizing a lens's findings once the next request would cross the cap", async () => {
+        // The map and each finalize bill 1,100 tokens and are admitted at
+        // 1,350; the lens bills none. Room for the map and one finalize.
+        const meter = new ScanBudgetMeter({ maxTokens: 3000 }, null);
         const engine = new SecurityScanEngine({
             runLens: jest.fn(async () => ({
                 findings: {
                     reasoning: '',
                     suggestions: [atLine(1), atLine(2), atLine(3)],
                 },
-            })) as any,
-            llm,
-            collectSurface: jest.fn(async () => execSurface),
-        });
-
-        const result = await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: meter(),
-        } as any);
-
-        expect(finalizeCalls(llm)).toBe(1);
-        expect(result.stoppedByBudget).toBe(true);
-    });
-
-    it("skips the model's dedup once the cap is reached", async () => {
-        const dedup = jest.fn();
-        const engine = new SecurityScanEngine({
-            runLens: jest.fn(async () => ({
-                findings: { reasoning: '', suggestions: [atLine(2)] },
+                finishReason: 'completed',
             })) as any,
             llm: fakeLlm(execOnly),
             collectSurface: jest.fn(async () => execSurface),
-            dedup,
         });
 
         const result = await engine.run({
             ...baseParams(),
             sandbox: fakeSandbox(),
-            meter: meter(),
-            // Near the unit's file, so the dedup would otherwise be asked.
-            reported: [
-                {
-                    vulnerabilityClass: 'injection',
-                    title: 'Shell command from input',
-                    description: 'd',
-                    severity: 'high',
-                    filePath: 'src/admin/exec.ts',
-                    startLine: 40,
-                    endLine: 40,
-                },
-            ],
+            meter,
         } as any);
 
-        expect(dedup).not.toHaveBeenCalled();
-        expect(result.findings).toHaveLength(1);
+        expect(meter.snapshot().requests).toBe(2);
+        expect(
+            meter.snapshot().inputTokens + meter.snapshot().outputTokens,
+        ).toBeLessThanOrEqual(3000);
+        expect(result.stoppedByBudget).toBe(true);
     });
 });

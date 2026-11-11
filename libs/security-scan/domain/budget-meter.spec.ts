@@ -1,4 +1,9 @@
-import { ScanBudgetMeter, validateBudget } from './budget-meter';
+import {
+    ScanBudgetMeter,
+    ScanBudgetReached,
+    UNCAPPED_ANSWER_TOKENS,
+    validateBudget,
+} from './budget-meter';
 
 // $1 per 1M input tokens, $2 per 1M output, cache reads at a tenth.
 const RATES = {
@@ -35,89 +40,158 @@ describe('ScanBudgetMeter', () => {
         expect(meter.snapshot().usd).toBeCloseTo(0.1);
     });
 
-    it('stops before the next request could cross the cap', () => {
-        const meter = new ScanBudgetMeter({ maxUsd: 3 }, RATES);
+    it('refuses a request whose most it can cost would cross the cap', () => {
+        const meter = new ScanBudgetMeter({ maxUsd: 1 }, RATES);
         const onExhausted = jest.fn();
         meter.onExhausted(onExhausted);
 
-        meter.record(request(1_000_000, 0)); // $1 + $1.5 reserve
+        // 400k tokens of prompt (500k with the tokenizer margin) and a 100k
+        // answer cap: at most $0.70.
+        meter.admit({ inputTokens: 400_000, maxOutputTokens: 100_000 })(
+            undefined,
+        );
         expect(meter.isExhausted()).toBe(false);
-        meter.record(request(1_000_000, 0)); // $2 + $1.5 reserve > $3
+
+        const settle = meter.admit({
+            inputTokens: 400_000,
+            maxOutputTokens: 100_000,
+        });
+        expect(() =>
+            meter.admit({ inputTokens: 400_000, maxOutputTokens: 100_000 }),
+        ).toThrow(ScanBudgetReached);
         expect(meter.isExhausted()).toBe(true);
         expect(onExhausted).toHaveBeenCalledTimes(1);
-
-        meter.record(request(10, 0));
-        expect(onExhausted).toHaveBeenCalledTimes(1);
+        settle(undefined);
     });
 
-    it('never lets the spend pass the cap while each request grows like a loop step', () => {
-        const meter = new ScanBudgetMeter({ maxUsd: 5 }, RATES);
-        let input = 100_000;
-        // A request only goes out while the meter says there is room, as the
-        // engine aborts the loop the moment it is exhausted.
-        while (!meter.isExhausted()) {
-            meter.record(request(input, 20_000));
-            input = Math.round(input * 1.3);
+    it('never spends past the cap with requests in flight at once, whatever came before', () => {
+        // The case a reserve sized from earlier requests missed: a small
+        // planner first, then four large lens steps at once.
+        const meter = new ScanBudgetMeter({ maxUsd: 1 }, RATES);
+        const answer = (input: number, output: number) => ({
+            inputTokens: input,
+            outputTokens: output,
+        });
+        meter.admit({ inputTokens: 2_000, maxOutputTokens: 1_000 })(
+            answer(2_000, 500),
+        );
+        meter.record(request(2_000, 500));
+
+        const admitted: Array<(u: any) => void> = [];
+        for (let i = 0; i < 4; i++) {
+            try {
+                admitted.push(
+                    meter.admit({
+                        inputTokens: 160_000,
+                        maxOutputTokens: 32_000,
+                    }),
+                );
+            } catch (error) {
+                expect(error).toBeInstanceOf(ScanBudgetReached);
+            }
         }
-        expect(meter.snapshot().usd).toBeLessThanOrEqual(5);
-        expect(meter.snapshot().requests).toBeGreaterThan(3);
+        // Each uses all it was allowed.
+        for (const settle of admitted) {
+            settle(answer(200_000, 32_000));
+            meter.record(request(200_000, 32_000));
+        }
+
+        expect(admitted.length).toBeLessThan(4);
+        expect(meter.snapshot().usd).toBeLessThanOrEqual(1);
+    });
+
+    it('holds an answered request until its caller records it, and counts it once', () => {
+        const meter = new ScanBudgetMeter({ maxUsd: 1 }, RATES);
+
+        meter.admit({ inputTokens: 100_000, maxOutputTokens: 10_000 })({
+            inputTokens: 300_000,
+            outputTokens: 0,
+        });
+        // Answered, not recorded yet: its $0.30 already counts ($0.30 +
+        // $0.77 > $1).
+        expect(() =>
+            meter.admit({ inputTokens: 600_000, maxOutputTokens: 10_000 }),
+        ).toThrow(ScanBudgetReached);
+
+        const fresh = new ScanBudgetMeter({ maxUsd: 1 }, RATES);
+        fresh.admit({ inputTokens: 100_000, maxOutputTokens: 10_000 })({
+            inputTokens: 300_000,
+            outputTokens: 0,
+        });
+        fresh.record(request(300_000, 0));
+        expect(fresh.snapshot().usd).toBeCloseTo(0.3);
+        // Recorded, it counts once: $0.30 + $0.645 fits, where counting it
+        // twice would not.
+        expect(() =>
+            fresh.admit({ inputTokens: 500_000, maxOutputTokens: 10_000 }),
+        ).not.toThrow();
+    });
+
+    it('gives back the reservation of a request that failed unanswered', () => {
+        const meter = new ScanBudgetMeter({ maxUsd: 1 }, RATES);
+
+        meter.admit({ inputTokens: 600_000, maxOutputTokens: 10_000 })(
+            undefined,
+        );
+
+        expect(() =>
+            meter.admit({ inputTokens: 600_000, maxOutputTokens: 10_000 }),
+        ).not.toThrow();
+    });
+
+    it('reserves an uncapped answer at the scan default', () => {
+        const meter = new ScanBudgetMeter(
+            { maxTokens: UNCAPPED_ANSWER_TOKENS },
+            null,
+        );
+
+        // 1,250 tokens of prompt and the default answer do not fit.
+        expect(() => meter.admit({ inputTokens: 1_000 })).toThrow(
+            ScanBudgetReached,
+        );
     });
 
     it('caps by tokens when the model has no price', () => {
-        const meter = new ScanBudgetMeter({ maxTokens: 1200 }, null);
+        const meter = new ScanBudgetMeter({ maxTokens: 10_000 }, null);
 
-        meter.record(request(300, 100)); // 400 + 600 reserve
-        expect(meter.isExhausted()).toBe(false);
-        meter.record(request(300, 100)); // 800 + 600 reserve
-        expect(meter.isExhausted()).toBe(true);
+        meter.admit({ inputTokens: 4_000, maxOutputTokens: 1_000 })({
+            inputTokens: 4_000,
+            outputTokens: 1_000,
+        });
+        meter.record(request(4_000, 1_000));
+
         expect(meter.snapshot().usd).toBe(0);
+        expect(() =>
+            meter.admit({ inputTokens: 4_000, maxOutputTokens: 1_000 }),
+        ).toThrow(ScanBudgetReached);
     });
 
     it('resumes from what an earlier slice spent', () => {
-        const meter = new ScanBudgetMeter({ maxUsd: 3 }, RATES, {
-            usd: 2.5,
-            inputTokens: 2_500_000,
+        const meter = new ScanBudgetMeter({ maxUsd: 1 }, RATES, {
+            usd: 0.9,
+            inputTokens: 900_000,
             outputTokens: 0,
-            requests: 10,
+            requests: 3,
         });
 
-        meter.record(request(400_000, 0));
-        expect(meter.isExhausted()).toBe(true);
-    });
-
-    it('reserves room for the first request of a slice', () => {
-        const meter = new ScanBudgetMeter({ maxUsd: 1 }, RATES, undefined, {
-            usd: 1,
-            tokens: 0,
-        });
-        expect(meter.isExhausted()).toBe(true);
-    });
-
-    it('reserves room for every request that may be in flight at once', () => {
-        const alone = new ScanBudgetMeter({ maxUsd: 1 }, RATES);
-        const four = new ScanBudgetMeter({ maxUsd: 1 }, RATES);
-        four.expectInFlight(4);
-
-        // $0.10 spent, a request reserved at $0.15: one ($0.25) or four at
-        // once ($0.70) fit under $1. Then $0.40 spent, $0.45 per request:
-        // one still fits ($0.85), four ($2.20) do not.
-        alone.record(request(100_000, 0));
-        four.record(request(100_000, 0));
-        expect(alone.isExhausted()).toBe(false);
-        expect(four.isExhausted()).toBe(false);
-
-        alone.record(request(300_000, 0));
-        four.record(request(300_000, 0));
-        expect(alone.isExhausted()).toBe(false);
-        expect(four.isExhausted()).toBe(true);
+        expect(() =>
+            meter.admit({ inputTokens: 100_000, maxOutputTokens: 1_000 }),
+        ).toThrow(ScanBudgetReached);
     });
 
     it('never stops a scan without a limit, but still counts its spend', () => {
         const meter = new ScanBudgetMeter({}, RATES);
 
-        meter.record(request(50_000_000, 10_000_000));
+        for (let i = 0; i < 5; i++) {
+            meter.admit({ inputTokens: 10_000_000 })({
+                inputTokens: 1_000_000,
+                outputTokens: 0,
+            });
+            meter.record(request(1_000_000, 0));
+        }
+
         expect(meter.isExhausted()).toBe(false);
-        expect(meter.snapshot().usd).toBe(70);
+        expect(meter.snapshot().usd).toBe(5);
     });
 });
 

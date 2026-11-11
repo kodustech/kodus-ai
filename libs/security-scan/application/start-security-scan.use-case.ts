@@ -145,8 +145,8 @@ export class StartSecurityScanUseCase {
                 units: resumed?.units ?? [],
                 progress: resumed?.progress ?? [],
                 ...(resumed && {
-                    reported: resumed.reported,
                     coverage: resumed.coverage,
+                    planCommitSha: resumed.planCommitSha,
                 }),
                 modelName: model.modelName,
                 requestedBy: input.requestedBy,
@@ -182,13 +182,19 @@ export class StartSecurityScanUseCase {
      * from scratch and stopping at the same place. Areas already examined are
      * kept as done; their files are not counted as examined by the new scan,
      * so none of their findings is resolved for not being seen again.
+     *
+     * What the last scan reported is not carried: those issues were seen by
+     * it, not by this one. A unit that finds one again stores it, which is
+     * the sighting that keeps it open; the issue's own key keeps it one issue.
+     * The plan is tied to the commit it was made at (`planCommitSha`): the
+     * job drops it when the branch has moved since.
      */
     private async resumablePlan(
         organizationId: string,
         repositoryId: string,
     ): Promise<Pick<
         SecurityScanRecord,
-        'units' | 'progress' | 'reported' | 'coverage'
+        'units' | 'progress' | 'coverage' | 'planCommitSha'
     > | null> {
         const last = await this.scans.findLatest(organizationId, repositoryId);
         if (
@@ -207,7 +213,7 @@ export class StartSecurityScanUseCase {
         return {
             units: last.units,
             progress,
-            reported: last.reported ?? [],
+            planCommitSha: last.commitSha,
             coverage: {
                 examinedFiles: [],
                 examinedByClass: [],

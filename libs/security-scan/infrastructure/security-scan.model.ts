@@ -47,6 +47,9 @@ export class SecurityScanModel extends CoreDocument {
     @Prop({ type: String })
     public commitSha?: string;
 
+    @Prop({ type: String })
+    public planCommitSha?: string;
+
     @Prop({ type: [Object], default: [] })
     public units: ScanUnit[];
 

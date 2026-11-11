@@ -312,20 +312,14 @@ export class SecurityScanEngine {
             }
 
             // The unit ran beside units folded in after it started: what they
-            // reported was not in its view yet. Past the cap the model is not
-            // asked: the cheap check alone keeps duplicates out.
+            // reported was not in its view yet. Past the cap the meter refuses
+            // the dedup's request, and every finding is kept.
             const reported = [...(params.reported ?? []), ...findings];
-            const fresh = result.findings.filter(
-                (f) => !isDuplicate(reported, f),
+            result.findings = await this.withoutDuplicates(
+                params,
+                result.findings.filter((f) => !isDuplicate(reported, f)),
+                nearby(reported, unit, result.findings),
             );
-            result.findings =
-                budgetSignal.aborted || params.meter.isExhausted()
-                    ? fresh
-                    : await this.withoutDuplicates(
-                          params,
-                          fresh,
-                          nearby(reported, unit, result.findings),
-                      );
 
             const unitProgress: ScanUnitProgress = {
                 unitId: unit.id,
@@ -380,7 +374,6 @@ export class SecurityScanEngine {
                 await audit;
             }
         };
-        params.meter.expectInFlight(UNIT_CONCURRENCY);
         await Promise.all(Array.from({ length: UNIT_CONCURRENCY }, worker));
         await folded;
 
@@ -559,7 +552,8 @@ export class SecurityScanEngine {
     ): Promise<AuditResult> {
         const findings: ScanFinding[] = [];
         let failures = 0;
-        const failed = new Set<VulnClass>();
+        // Classes a lens did not read to the end: failed, or stopped short.
+        const unfinished = new Set<VulnClass>();
 
         const runs = unit.classes.flatMap((vulnClass) =>
             Array.from({ length: LENS_PASSES }, (_, pass) => ({
@@ -599,6 +593,28 @@ export class SecurityScanEngine {
                 });
                 if (signal.aborted) {
                     return { findings, aborted: true };
+                }
+                // The harness reports a provider error or a run out of steps
+                // in the result, not by throwing. What such a lens found is
+                // kept; its class was not looked at to the end.
+                if (output.finishReason === 'error') {
+                    failures++;
+                    unfinished.add(vulnClass);
+                    logger.warn({
+                        message: `Security lens ${vulnClass} ended in an error on ${unit.file}`,
+                        context: SecurityScanEngine.name,
+                        metadata: {
+                            repositoryId: params.repositoryId,
+                            unit: unit.id,
+                            errorName: output.errorName,
+                        },
+                    });
+                } else if (
+                    output.finishReason !== 'completed' ||
+                    output.incompleteReason ||
+                    output.submittedResult === false
+                ) {
+                    unfinished.add(vulnClass);
                 }
                 const kept = (output.findings?.suggestions ?? []) as any[];
                 for (const suggestion of kept) {
@@ -643,7 +659,7 @@ export class SecurityScanEngine {
                     return { findings, aborted: true };
                 }
                 failures++;
-                failed.add(vulnClass);
+                unfinished.add(vulnClass);
                 logger.warn({
                     message: `Security lens ${vulnClass} failed on ${unit.file}`,
                     context: SecurityScanEngine.name,
@@ -670,7 +686,7 @@ export class SecurityScanEngine {
             }
         }
 
-        const examinedClasses = unit.classes.filter((c) => !failed.has(c));
+        const examinedClasses = unit.classes.filter((c) => !unfinished.has(c));
         return failures === runs.length && runs.length > 0
             ? { findings, error: 'every lens failed', examinedClasses }
             : { findings, examinedClasses };
