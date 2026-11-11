@@ -73,11 +73,22 @@ export class ScanOwnerResolver {
         };
     }
 
+    /**
+     * Fetch the history the last-author fallback reads. Call it right after
+     * the clone, before any repository code runs in the sandbox: it is the
+     * only command that carries the provider token, and code that ran first
+     * (an install script, a reproduction test) could have planted a git hook
+     * or config that reads it. Without this call there is no last author.
+     */
+    async prepareHistory(): Promise<void> {
+        this.historyReady ??= this.deepen();
+        await this.historyReady;
+    }
+
     private async fromHistory(
         filePath: string,
     ): Promise<IIssueOwner | undefined> {
-        this.historyReady ??= this.deepen();
-        if (!(await this.historyReady)) {
+        if (!this.historyReady || !(await this.historyReady)) {
             return undefined;
         }
         const result = await this.sandbox
@@ -109,9 +120,11 @@ export class ScanOwnerResolver {
         const header = this.history.authHeader
             ? '-c http.extraHeader="$GIT_AUTH_HEADER" '
             : '';
+        // Nothing the repository could configure runs with the token in env.
+        const inert = '-c core.hooksPath=/dev/null -c core.fsmonitor= ';
         const result = await this.sandbox
             .run(
-                `git -C ${this.sandbox.repoDir} ${header}fetch --quiet --filter=blob:none --deepen=${HISTORY_DEPTH} ${shellQuote(this.history.cloneUrl)} ${shellQuote(`refs/heads/${this.history.branch}`)}`,
+                `git -C ${this.sandbox.repoDir} ${inert}${header}fetch --quiet --filter=blob:none --deepen=${HISTORY_DEPTH} ${shellQuote(this.history.cloneUrl)} ${shellQuote(`refs/heads/${this.history.branch}`)}`,
                 {
                     timeoutMs: 180_000,
                     ...(this.history.authHeader

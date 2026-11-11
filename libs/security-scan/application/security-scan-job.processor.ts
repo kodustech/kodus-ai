@@ -251,6 +251,8 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                   )
                 : undefined,
         });
+        // Before the engine runs any repository code in this sandbox.
+        await owners.prepareHistory();
 
         const counts: SecurityScanOutcomeCounts = {
             created: scan.outcome?.created ?? 0,
