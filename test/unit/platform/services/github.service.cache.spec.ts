@@ -55,9 +55,6 @@ function makeMockCache(): CacheService {
             store.has(String(key)),
         ),
         getMultipleFromCache: jest.fn(),
-        deleteByKeyPattern: jest.fn(async () => {
-            store.clear();
-        }),
     } as unknown as CacheService;
 }
 

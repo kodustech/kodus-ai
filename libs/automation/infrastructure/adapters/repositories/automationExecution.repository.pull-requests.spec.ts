@@ -369,28 +369,11 @@ describe('AutomationExecutionRepository.findPullRequestExecutionsByOrganizationA
 });
 
 describe('AutomationExecutionRepository — grouping queries on failure', () => {
-    it('answers an empty list by default', async () => {
+    it('rethrows, so "none" and "could not ask" stay different answers', async () => {
         const reviewed = build({ fail: new Error('statement timeout') });
         await expect(
             reviewed.repository.getDistinctReviewedPullRequestKeys({
                 organizationAndTeamData: ORG_TEAM,
-            }),
-        ).resolves.toEqual([]);
-
-        const awaiting = build({ fail: new Error('statement timeout') });
-        await expect(
-            awaiting.repository.getAwaitingReviewPullRequestKeys({
-                organizationAndTeamData: ORG_TEAM,
-            }),
-        ).resolves.toEqual([]);
-    });
-
-    it('rethrows for a caller that must tell "none" from "could not ask"', async () => {
-        const reviewed = build({ fail: new Error('statement timeout') });
-        await expect(
-            reviewed.repository.getDistinctReviewedPullRequestKeys({
-                organizationAndTeamData: ORG_TEAM,
-                failOnError: true,
             }),
         ).rejects.toThrow('statement timeout');
 
@@ -398,7 +381,6 @@ describe('AutomationExecutionRepository — grouping queries on failure', () => 
         await expect(
             awaiting.repository.getAwaitingReviewPullRequestKeys({
                 organizationAndTeamData: ORG_TEAM,
-                failOnError: true,
             }),
         ).rejects.toThrow('statement timeout');
     });

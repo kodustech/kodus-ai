@@ -165,7 +165,6 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryIds?: string[];
         createdAtFrom?: Date | string;
-        failOnError?: boolean;
     }): Promise<
         Array<{
             repositoryId: string;
@@ -182,7 +181,6 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryIds?: string[];
         createdAtFrom?: Date | string;
-        failOnError?: boolean;
     }): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>> {
         return this.automationExecutionRepository.getAwaitingReviewPullRequestKeys(
             params,

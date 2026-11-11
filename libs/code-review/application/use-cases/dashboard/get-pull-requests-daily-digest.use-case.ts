@@ -131,9 +131,6 @@ export class GetPullRequestsDailyDigestUseCase implements IUseCase {
                           organizationAndTeamData,
                           repositoryIds,
                           createdAtFrom: date,
-                          // A count that could not be read is not a zero:
-                          // the request fails and the card shows no number.
-                          failOnError: true,
                       },
                   )
                 : [];
@@ -187,7 +184,6 @@ export class GetPullRequestsDailyDigestUseCase implements IUseCase {
                           organizationAndTeamData,
                           repositoryIds,
                           createdAtFrom: date,
-                          failOnError: true,
                       },
                   )
                 : [];

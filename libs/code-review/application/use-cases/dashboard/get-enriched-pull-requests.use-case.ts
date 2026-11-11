@@ -23,6 +23,10 @@ import {
     isUnresolvedDeliveredSuggestion,
 } from './utils/pull-request-metrics';
 import {
+    intersectPullRequestKeys,
+    MAX_OPEN_PULL_REQUEST_KEYS,
+} from './utils/open-awaiting-pull-requests.util';
+import {
     IPullRequests,
     SuggestionCountsBySeverity,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
@@ -116,21 +120,6 @@ const decodeExecutionCursor = (raw?: string): ExecutionCursor | undefined => {
  */
 const MAX_BATCHES_PER_REQUEST = 10;
 
-/**
- * How many open pull requests are worth resolving up front for the "needs
- * attention" and "open" filters. Past this the keys stop being a shortcut —
- * most of the recent history is open anyway — and the scan is left alone.
- */
-const MAX_OPEN_PULL_REQUEST_KEYS = 5000;
-
-const intersectPullRequestKeys = (
-    left: Array<{ number: number; repositoryId: string }>,
-    right: Array<{ number: number; repositoryId: string }>,
-) => {
-    const keys = new Set(right.map((pr) => `${pr.repositoryId}#${pr.number}`));
-    return left.filter((pr) => keys.has(`${pr.repositoryId}#${pr.number}`));
-};
-
 @Injectable()
 export class GetEnrichedPullRequestsUseCase implements IUseCase {
     private readonly logger = createLogger(GetEnrichedPullRequestsUseCase.name);
@@ -206,10 +195,14 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         try {
             // Shared with `countTotals`, so the list and its totals can never
             // be resolved against different repositories or title matches.
-            const filters = await this.resolveExecutionFilters(
-                query,
-                organizationAndTeamData,
-            );
+            // Neither read depends on the other.
+            const [filters, authorPolicyConfig] = await Promise.all([
+                this.resolveExecutionFilters(query, organizationAndTeamData),
+                this.getCompiledAuthorPolicyConfig(
+                    authorPolicy,
+                    organizationAndTeamData,
+                ),
+            ]);
             if (!filters) {
                 return this.buildEmptyResponse(limit, page);
             }
@@ -270,10 +263,6 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             // mid-batch the remaining rows have not been served yet and must
             // not be skipped.
             let lastConsumed: ExecutionCursor | undefined = resumeCursor;
-            const authorPolicyConfig = await this.getCompiledAuthorPolicyConfig(
-                authorPolicy,
-                organizationAndTeamData,
-            );
 
             // A page is filled by scanning executions and discarding the ones
             // that fail a post-query filter, so a selective filter makes the

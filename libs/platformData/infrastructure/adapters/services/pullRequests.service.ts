@@ -274,18 +274,6 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
-    findOpenPullRequests(
-        organizationId: string,
-        repositoryIds: string[] | undefined,
-        limit: number,
-    ): Promise<PullRequestsEntity[] | null> {
-        return this.pullRequestsRepository.findOpenPullRequests(
-            organizationId,
-            repositoryIds,
-            limit,
-        );
-    }
-
     findDistinctAuthorsByRepositoryIds(
         organizationId: string,
         repositoryIds: string[] | undefined,

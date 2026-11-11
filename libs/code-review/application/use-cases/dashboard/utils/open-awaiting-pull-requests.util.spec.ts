@@ -3,8 +3,8 @@ import { findOpenAwaitingPullRequests } from './open-awaiting-pull-requests.util
 /**
  * "Kody skipped": PRs whose every run was skipped and that are still open.
  * The helper has two routes to the same answer — load the skipped-only PRs,
- * or read the open PRs and intersect — and picks by how many skipped-only PRs
- * there are. Both must answer the same PRs.
+ * or narrow them to the open PR keys first and load what is left — and picks
+ * by how many skipped-only PRs there are. Both must answer the same PRs.
  */
 
 const ORG = { organizationId: 'org-1', teamId: 'team-1' };
@@ -40,42 +40,44 @@ const build = (options: {
                 ),
             ),
     );
-    const findOpenPullRequests = jest.fn(
+    const findOpenPullRequestKeys = jest.fn(
         async (
             _organizationId: string,
             repositoryIds: string[] | undefined,
-            _limit: number,
-        ) =>
-            options.openLimitExceeded
-                ? null
-                : options.documents.filter(
-                      (doc) =>
-                          doc.merged !== true &&
-                          doc.status !== 'closed' &&
-                          (!repositoryIds ||
-                              repositoryIds.includes(doc.repository?.id)),
-                  ),
+            _opts: { limit: number },
+        ) => ({
+            truncated: Boolean(options.openLimitExceeded),
+            keys: options.documents
+                .filter(
+                    (doc) =>
+                        doc.merged !== true &&
+                        doc.status !== 'closed' &&
+                        (!repositoryIds ||
+                            repositoryIds.includes(doc.repository?.id)),
+                )
+                .map((doc) => ({
+                    number: doc.number,
+                    repositoryId: doc.repository.id,
+                })),
+        }),
     );
 
-    const run = (
-        extra: { repositoryIds?: string[]; failOnError?: boolean } = {},
-    ) =>
+    const run = (extra: { repositoryIds?: string[] } = {}) =>
         findOpenAwaitingPullRequests({
             automationExecutionService: { getAwaitingReviewPullRequestKeys },
             pullRequestsService: {
                 findManyByNumbersAndRepositoryIds,
-                findOpenPullRequests,
+                findOpenPullRequestKeys,
             } as any,
             organizationAndTeamData: ORG,
             repositoryIds: extra.repositoryIds ?? ['r1', 'r2'],
-            failOnError: extra.failOnError,
         });
 
     return {
         run,
         getAwaitingReviewPullRequestKeys,
         findManyByNumbersAndRepositoryIds,
-        findOpenPullRequests,
+        findOpenPullRequestKeys,
     };
 };
 
@@ -90,7 +92,7 @@ describe('findOpenAwaitingPullRequests', () => {
         expect(
             harness.findManyByNumbersAndRepositoryIds,
         ).not.toHaveBeenCalled();
-        expect(harness.findOpenPullRequests).not.toHaveBeenCalled();
+        expect(harness.findOpenPullRequestKeys).not.toHaveBeenCalled();
     });
 
     it('loads a short list of skipped PRs directly and keeps the open ones', async () => {
@@ -109,14 +111,14 @@ describe('findOpenAwaitingPullRequests', () => {
         const result = await harness.run();
 
         expect(numbersOf(result)).toEqual([1]);
-        expect(harness.findOpenPullRequests).not.toHaveBeenCalled();
+        expect(harness.findOpenPullRequestKeys).not.toHaveBeenCalled();
         expect(harness.findManyByNumbersAndRepositoryIds).toHaveBeenCalledWith(
             [1, 2, 3, 4, 5].map((number) => ({ number, repositoryId: 'r1' })),
             'org-1',
         );
     });
 
-    it('reads the open PRs instead when the skipped-only set is long', async () => {
+    it('narrows a long skipped-only set to the open PRs before loading', async () => {
         const skipped = Array.from({ length: 201 }, (_, i) => i + 1);
         const harness = build({
             awaiting: keysFor(skipped),
@@ -133,13 +135,16 @@ describe('findOpenAwaitingPullRequests', () => {
         const result = await harness.run();
 
         expect(numbersOf(result)).toEqual([1, 150]);
-        expect(
-            harness.findManyByNumbersAndRepositoryIds,
-        ).not.toHaveBeenCalled();
-        expect(harness.findOpenPullRequests).toHaveBeenCalledWith(
+        expect(harness.findOpenPullRequestKeys).toHaveBeenCalledWith(
             'org-1',
             ['r1', 'r2'],
-            5000,
+            { limit: 5000 },
+        );
+        // Only the PRs in both sets are loaded, not the 201 skipped ones.
+        // 201 is "Closed": open to MongoDB's exact match, not to the predicate.
+        expect(harness.findManyByNumbersAndRepositoryIds).toHaveBeenCalledWith(
+            [1, 150, 201].map((number) => ({ number, repositoryId: 'r1' })),
+            'org-1',
         );
     });
 
@@ -149,14 +154,14 @@ describe('findOpenAwaitingPullRequests', () => {
             documents: [pr(1)],
         });
         await atLimit.run();
-        expect(atLimit.findOpenPullRequests).not.toHaveBeenCalled();
+        expect(atLimit.findOpenPullRequestKeys).not.toHaveBeenCalled();
 
         const past = build({
             awaiting: keysFor(Array.from({ length: 201 }, (_, i) => i + 1)),
             documents: [pr(1)],
         });
         await past.run();
-        expect(past.findOpenPullRequests).toHaveBeenCalledTimes(1);
+        expect(past.findOpenPullRequestKeys).toHaveBeenCalledTimes(1);
     });
 
     it('answers the same PRs by either route', async () => {
@@ -189,16 +194,27 @@ describe('findOpenAwaitingPullRequests', () => {
         ).toHaveBeenCalledTimes(1);
     });
 
-    it('passes the scope and the failure mode to the execution query', async () => {
+    it('passes the scope to the execution query', async () => {
         const harness = build({ awaiting: [], documents: [] });
 
-        await harness.run({ repositoryIds: ['r7'], failOnError: true });
+        await harness.run({ repositoryIds: ['r7'] });
 
         expect(harness.getAwaitingReviewPullRequestKeys).toHaveBeenCalledWith({
             organizationAndTeamData: ORG,
             repositoryIds: ['r7'],
-            failOnError: true,
         });
+    });
+
+    it('loads nothing when no skipped PR is open', async () => {
+        const harness = build({
+            awaiting: keysFor(Array.from({ length: 300 }, (_, i) => i + 1)),
+            documents: [pr(1, { status: 'closed' }), pr(900)],
+        });
+
+        await expect(harness.run()).resolves.toEqual([]);
+        expect(
+            harness.findManyByNumbersAndRepositoryIds,
+        ).not.toHaveBeenCalled();
     });
 
     it('propagates a failed execution query', async () => {
@@ -207,8 +223,6 @@ describe('findOpenAwaitingPullRequests', () => {
             new Error('statement timeout'),
         );
 
-        await expect(harness.run({ failOnError: true })).rejects.toThrow(
-            'statement timeout',
-        );
+        await expect(harness.run()).rejects.toThrow('statement timeout');
     });
 });

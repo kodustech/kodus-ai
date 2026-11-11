@@ -49,7 +49,6 @@ export interface IAutomationExecutionRepository {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryIds?: string[];
         createdAtFrom?: Date | string;
-        failOnError?: boolean;
     }): Promise<
         Array<{
             repositoryId: string;
@@ -64,7 +63,6 @@ export interface IAutomationExecutionRepository {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryIds?: string[];
         createdAtFrom?: Date | string;
-        failOnError?: boolean;
     }): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>>;
     findCliReviewExecutionsByOrganization(params: {
         organizationAndTeamData: OrganizationAndTeamData;

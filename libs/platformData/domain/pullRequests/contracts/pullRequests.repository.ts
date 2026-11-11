@@ -159,12 +159,6 @@ export interface IPullRequestsRepository {
         keys: Array<{ number: number; repositoryId: string }>;
         truncated: boolean;
     }>;
-    // Open PRs without the heavy arrays; null when more than `limit` exist.
-    findOpenPullRequests(
-        organizationId: string,
-        repositoryIds: string[] | undefined,
-        limit: number,
-    ): Promise<PullRequestsEntity[] | null>;
     // Distinct PR authors (by display name) for the Author search autocomplete.
     findDistinctAuthorsByRepositoryIds(
         organizationId: string,

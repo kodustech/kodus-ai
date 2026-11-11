@@ -166,7 +166,6 @@ export class GetPullRequestsFacetsUseCase implements IUseCase {
                                       {
                                           organizationAndTeamData,
                                           repositoryIds,
-                                          failOnError: true,
                                       },
                                   ),
                           )
@@ -263,7 +262,6 @@ export class GetPullRequestsFacetsUseCase implements IUseCase {
             pullRequestsService: this.pullRequestsService,
             organizationAndTeamData,
             repositoryIds,
-            failOnError: true,
         });
 
         return awaiting.length;

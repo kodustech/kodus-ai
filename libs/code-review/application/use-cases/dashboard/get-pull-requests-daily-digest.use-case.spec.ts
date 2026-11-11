@@ -75,19 +75,6 @@ describe('GetPullRequestsDailyDigestUseCase', () => {
         expect(new Date(digest.date).getUTCHours()).toBe(0);
     });
 
-    it('asks both counts to fail rather than answer an empty list', async () => {
-        const harness = buildUseCase();
-
-        await harness.useCase.execute({ teamId: 't1' });
-
-        expect(harness.getDistinctReviewedPullRequestKeys).toHaveBeenCalledWith(
-            expect.objectContaining({ failOnError: true }),
-        );
-        expect(harness.getAwaitingReviewPullRequestKeys).toHaveBeenCalledWith(
-            expect.objectContaining({ failOnError: true }),
-        );
-    });
-
     it.each([
         ['reviewed', 'getDistinctReviewedPullRequestKeys'],
         ['awaiting', 'getAwaitingReviewPullRequestKeys'],

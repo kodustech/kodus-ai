@@ -24,9 +24,12 @@ const buildUseCase = (
             criteria.some((c) => c.number === doc.number),
         ),
     );
-    const findOpenPullRequests = jest.fn(async () =>
-        documents.filter((doc) => doc.status !== 'closed' && !doc.merged),
-    );
+    const findOpenPullRequestKeys = jest.fn(async () => ({
+        truncated: false,
+        keys: documents
+            .filter((doc) => doc.status !== 'closed' && !doc.merged)
+            .map((doc) => ({ number: doc.number, repositoryId: 'r1' })),
+    }));
 
     Object.assign(useCase, {
         logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -49,11 +52,15 @@ const buildUseCase = (
         },
         pullRequestsService: {
             findManyByNumbersAndRepositoryIds,
-            findOpenPullRequests,
+            findOpenPullRequestKeys,
         },
     });
 
-    return { useCase, findManyByNumbersAndRepositoryIds, findOpenPullRequests };
+    return {
+        useCase,
+        findManyByNumbersAndRepositoryIds,
+        findOpenPullRequestKeys,
+    };
 };
 
 const doc = (number: number, overrides: Record<string, unknown> = {}) => ({
@@ -110,15 +117,15 @@ describe('GetAwaitingPullRequestsUseCase', () => {
 
     it('keeps the newest 100 when more than 100 are open', async () => {
         const documents = Array.from({ length: 260 }, (_, i) => doc(i + 1));
-        const { useCase, findOpenPullRequests } = buildUseCase(documents);
+        const { useCase, findOpenPullRequestKeys } = buildUseCase(documents);
 
         const list = await useCase.execute({ teamId: 't1' });
 
         expect(list.map((pr: any) => pr.prNumber)).toEqual(
             Array.from({ length: 100 }, (_, i) => 260 - i),
         );
-        // 260 skipped PRs: resolved through the open PRs, not key by key.
-        expect(findOpenPullRequests).toHaveBeenCalledTimes(1);
+        // 260 skipped PRs: narrowed to the open ones before loading.
+        expect(findOpenPullRequestKeys).toHaveBeenCalledTimes(1);
     });
 
     it('answers an empty list when nothing was skipped', async () => {

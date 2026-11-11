@@ -431,11 +431,10 @@ export function PullRequestsPageClient() {
     const { data: digest, isPending: digestPending } =
         usePullRequestsDailyDigest(teamId, DIGEST_FIELDS);
 
+    // `filteredPrTotal` is only ever a number when `wantsExactFilteredTotal`
+    // asked for it, so the conditions of that rule are not repeated here.
     const canUseExactFilteredTotal =
-        hasActiveFilters &&
-        !isAwaiting &&
-        !hasMongoFilters &&
-        typeof filteredPrTotal === "number";
+        hasActiveFilters && typeof filteredPrTotal === "number";
     const totalCount = !hasActiveFilters
         ? typeof facets?.all === "number"
             ? facets.all

@@ -567,9 +567,6 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryIds?: string[];
         createdAtFrom?: Date | string;
-        // Rethrow a failed query instead of answering an empty list, for
-        // callers that must tell "none" apart from "could not ask".
-        failOnError?: boolean;
     }): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>> {
         const { organizationAndTeamData, repositoryIds, createdAtFrom } =
             params;
@@ -644,10 +641,9 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                 error,
                 metadata: { params },
             });
-            if (params.failOnError) {
-                throw error;
-            }
-            return [];
+            // Not an empty list: "none" and "could not ask" are different
+            // answers, and the caller decides what a failure means.
+            throw error;
         }
     }
 
@@ -659,8 +655,6 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryIds?: string[];
         createdAtFrom?: Date | string;
-        // See getAwaitingReviewPullRequestKeys.
-        failOnError?: boolean;
     }): Promise<
         Array<{
             repositoryId: string;
@@ -748,10 +742,7 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                 error,
                 metadata: { params },
             });
-            if (params.failOnError) {
-                throw error;
-            }
-            return [];
+            throw error;
         }
     }
 

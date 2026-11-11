@@ -7,15 +7,29 @@ import { isOpenPullRequest } from './pull-request-metrics';
 
 /**
  * Up to this many skipped-only PRs are simply loaded and checked for "still
- * open". Past it, the open PRs are read instead (see below).
+ * open". Past it, they are narrowed to the open ones first (see below).
  */
 const LOAD_BY_KEY_LIMIT = 200;
 
-/** More open PRs than this and reading them all is no longer the cheaper side. */
-const MAX_OPEN_PULL_REQUESTS = 5000;
+/**
+ * How many open pull request keys are worth reading to narrow a larger set.
+ * Past this the keys stop being a shortcut — most of the recent history is
+ * open anyway — and the caller keeps its own path.
+ */
+export const MAX_OPEN_PULL_REQUEST_KEYS = 5000;
 
-const keyOf = (repositoryId: unknown, number: unknown) =>
-    `${String(repositoryId)}#${String(number)}`;
+type PullRequestKey = { number: number; repositoryId: string };
+
+const keyOf = (key: PullRequestKey) => `${key.repositoryId}#${key.number}`;
+
+/** The keys of `left` that are also in `right`. */
+export const intersectPullRequestKeys = <T extends PullRequestKey>(
+    left: T[],
+    right: PullRequestKey[],
+): T[] => {
+    const keys = new Set(right.map(keyOf));
+    return left.filter((key) => keys.has(keyOf(key)));
+};
 
 /**
  * The pull requests Kody was triggered on, skipped every time, and that are
@@ -25,9 +39,9 @@ const keyOf = (repositoryId: unknown, number: unknown) =>
  * The skipped-only PRs come from the executions and span the team's whole
  * history; a team that runs without licences or on a manual cadence has
  * thousands, nearly all long closed. Loading every one of them to keep the
- * open few is what this used to do. When there are many, the open PRs are the
- * smaller set, so those are read and intersected instead. Both routes answer
- * the same PRs: in the skipped-only set, present in MongoDB, and open by
+ * open few is what this used to do. When there are many, the keys of the open
+ * PRs are read first and only the PRs in both sets are loaded. Either way the
+ * answer is the same: in the skipped-only set, present in MongoDB, and open by
  * `isOpenPullRequest`.
  */
 export async function findOpenAwaitingPullRequests(params: {
@@ -37,62 +51,49 @@ export async function findOpenAwaitingPullRequests(params: {
     >;
     pullRequestsService: Pick<
         IPullRequestsService,
-        'findManyByNumbersAndRepositoryIds' | 'findOpenPullRequests'
+        'findManyByNumbersAndRepositoryIds' | 'findOpenPullRequestKeys'
     >;
     organizationAndTeamData: OrganizationAndTeamData;
     repositoryIds: string[] | undefined;
-    /** Rethrow a failed execution query instead of reading it as "none". */
-    failOnError?: boolean;
 }): Promise<PullRequestsEntity[]> {
     const {
         automationExecutionService,
         pullRequestsService,
         organizationAndTeamData,
         repositoryIds,
-        failOnError,
     } = params;
+    const { organizationId } = organizationAndTeamData;
 
     const awaitingKeys =
         await automationExecutionService.getAwaitingReviewPullRequestKeys({
             organizationAndTeamData,
             repositoryIds,
-            failOnError,
         });
-    if (!awaitingKeys.length) {
-        return [];
+
+    let candidates: PullRequestKey[] = awaitingKeys.map((key) => ({
+        number: key.pullRequestNumber,
+        repositoryId: key.repositoryId,
+    }));
+
+    if (candidates.length > LOAD_BY_KEY_LIMIT) {
+        const open = await pullRequestsService.findOpenPullRequestKeys(
+            organizationId,
+            repositoryIds,
+            { limit: MAX_OPEN_PULL_REQUEST_KEYS },
+        );
+        if (!open.truncated) {
+            candidates = intersectPullRequestKeys(candidates, open.keys);
+        }
     }
 
-    if (awaitingKeys.length > LOAD_BY_KEY_LIMIT) {
-        const openPullRequests = await pullRequestsService.findOpenPullRequests(
-            organizationAndTeamData.organizationId,
-            repositoryIds,
-            MAX_OPEN_PULL_REQUESTS,
-        );
-
-        if (openPullRequests) {
-            const awaiting = new Set(
-                awaitingKeys.map((key) =>
-                    keyOf(key.repositoryId, key.pullRequestNumber),
-                ),
-            );
-
-            return openPullRequests.filter(
-                (pr) =>
-                    pr?.number != null &&
-                    pr?.repository?.id != null &&
-                    awaiting.has(keyOf(pr.repository.id, pr.number)) &&
-                    isOpenPullRequest(pr),
-            );
-        }
+    if (!candidates.length) {
+        return [];
     }
 
     const pullRequests =
         (await pullRequestsService.findManyByNumbersAndRepositoryIds(
-            awaitingKeys.map((key) => ({
-                number: key.pullRequestNumber,
-                repositoryId: key.repositoryId,
-            })),
-            organizationAndTeamData.organizationId,
+            candidates,
+            organizationId,
         )) ?? [];
 
     return pullRequests.filter(

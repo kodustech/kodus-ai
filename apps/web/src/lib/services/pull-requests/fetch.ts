@@ -48,85 +48,64 @@ export const PULL_REQUEST_SSE = {
     EXECUTION_EVENTS: pathToApiUrl("/pull-requests/executions/events"),
 };
 
+/**
+ * The filters the database applies, shared by the list and its totals so a
+ * filter added to one cannot be forgotten in the other and leave the header
+ * count disagreeing with the rows.
+ */
+const dbFilterParams = (filters?: PullRequestFilters) => {
+    const params = new URLSearchParams();
+
+    if (filters?.teamId) params.append("teamId", filters.teamId);
+    if (filters?.repositoryId)
+        params.append("repositoryId", filters.repositoryId);
+    if (filters?.repositoryName)
+        params.append("repositoryName", filters.repositoryName);
+    if (filters?.pullRequestTitle)
+        params.append("pullRequestTitle", filters.pullRequestTitle);
+    if (filters?.pullRequestNumber)
+        params.append("pullRequestNumber", filters.pullRequestNumber);
+    if (filters?.status) params.append("status", filters.status);
+    if (filters?.createdAtFrom)
+        params.append("createdAtFrom", filters.createdAtFrom);
+    if (filters?.createdAtTo) params.append("createdAtTo", filters.createdAtTo);
+
+    return params;
+};
+
+const withQuery = (path: string, params: URLSearchParams) => {
+    const queryString = params.toString();
+    return pathToApiUrl(queryString ? `${path}?${queryString}` : path);
+};
+
 export const PULL_REQUEST_API = {
     GET_EXECUTIONS: (filters?: PullRequestFilters) => {
-        const params = new URLSearchParams();
+        const params = dbFilterParams(filters);
 
-        if (filters?.teamId) params.append("teamId", filters.teamId);
-        if (filters?.repositoryId)
-            params.append("repositoryId", filters.repositoryId);
-        if (filters?.repositoryName)
-            params.append("repositoryName", filters.repositoryName);
         if (filters?.limit) params.append("limit", filters.limit.toString());
         if (filters?.cursor) params.append("cursor", filters.cursor);
         else if (filters?.page) params.append("page", filters.page.toString());
-        if (filters?.pullRequestTitle)
-            params.append("pullRequestTitle", filters.pullRequestTitle);
-        if (filters?.pullRequestNumber)
-            params.append("pullRequestNumber", filters.pullRequestNumber);
         if (typeof filters?.hasSentSuggestions === "boolean")
             params.append(
                 "hasSentSuggestions",
                 filters.hasSentSuggestions.toString(),
             );
-        if (filters?.authorPolicy) {
+        if (filters?.authorPolicy)
             params.append("authorPolicy", filters.authorPolicy);
-        }
-        if (filters?.status) {
-            params.append("status", filters.status);
-        }
-        if (filters?.createdAtFrom)
-            params.append("createdAtFrom", filters.createdAtFrom);
-        if (filters?.createdAtTo)
-            params.append("createdAtTo", filters.createdAtTo);
-        if (filters?.severity) {
-            params.append("severity", filters.severity);
-        }
-        if (filters?.category) {
-            params.append("category", filters.category);
-        }
-        if (filters?.needsAttention) {
-            params.append("needsAttention", "true");
-        }
-        if (filters?.author) {
-            params.append("author", filters.author);
-        }
-        if (filters?.prState) {
-            params.append("prState", filters.prState);
-        }
+        if (filters?.severity) params.append("severity", filters.severity);
+        if (filters?.category) params.append("category", filters.category);
+        if (filters?.needsAttention) params.append("needsAttention", "true");
+        if (filters?.author) params.append("author", filters.author);
+        if (filters?.prState) params.append("prState", filters.prState);
 
-        const queryString = params.toString();
-        return pathToApiUrl(
-            `/pull-requests/executions${queryString ? `?${queryString}` : ""}`,
-        );
+        return withQuery("/pull-requests/executions", params);
     },
     // Totals for the list's DB-level filters. The list itself no longer counts
     // (counting walks every matching execution and used to hold the rows back),
     // so a view that shows a number asks for it here. Paging and the
     // suggestion/author filters do not apply to a count and are not sent.
-    GET_EXECUTIONS_TOTALS: (filters?: PullRequestFilters) => {
-        const params = new URLSearchParams();
-
-        if (filters?.teamId) params.append("teamId", filters.teamId);
-        if (filters?.repositoryId)
-            params.append("repositoryId", filters.repositoryId);
-        if (filters?.repositoryName)
-            params.append("repositoryName", filters.repositoryName);
-        if (filters?.pullRequestTitle)
-            params.append("pullRequestTitle", filters.pullRequestTitle);
-        if (filters?.pullRequestNumber)
-            params.append("pullRequestNumber", filters.pullRequestNumber);
-        if (filters?.status) params.append("status", filters.status);
-        if (filters?.createdAtFrom)
-            params.append("createdAtFrom", filters.createdAtFrom);
-        if (filters?.createdAtTo)
-            params.append("createdAtTo", filters.createdAtTo);
-
-        const queryString = params.toString();
-        return pathToApiUrl(
-            `/pull-requests/executions/totals${queryString ? `?${queryString}` : ""}`,
-        );
-    },
+    GET_EXECUTIONS_TOTALS: (filters?: PullRequestFilters) =>
+        withQuery("/pull-requests/executions/totals", dbFilterParams(filters)),
     GET_DAILY_DIGEST: (
         teamId?: string,
         // The counts the view shows; the backend skips the rest.
@@ -135,10 +114,7 @@ export const PULL_REQUEST_API = {
         const params = new URLSearchParams();
         if (teamId) params.append("teamId", teamId);
         if (fields?.length) params.append("fields", fields.join(","));
-        const queryString = params.toString();
-        return pathToApiUrl(
-            `/pull-requests/executions/summary${queryString ? `?${queryString}` : ""}`,
-        );
+        return withQuery("/pull-requests/executions/summary", params);
     },
     GET_FACETS: (
         teamId?: string,
@@ -153,28 +129,19 @@ export const PULL_REQUEST_API = {
         // cache key / URL.
         if (scope === "mine") params.append("scope", "mine");
         if (fields?.length) params.append("fields", fields.join(","));
-        const queryString = params.toString();
-        return pathToApiUrl(
-            `/pull-requests/executions/facets${queryString ? `?${queryString}` : ""}`,
-        );
+        return withQuery("/pull-requests/executions/facets", params);
     },
     GET_AWAITING: (teamId?: string) => {
         const params = new URLSearchParams();
         if (teamId) params.append("teamId", teamId);
-        const queryString = params.toString();
-        return pathToApiUrl(
-            `/pull-requests/awaiting${queryString ? `?${queryString}` : ""}`,
-        );
+        return withQuery("/pull-requests/awaiting", params);
     },
     GET_AUTHORS: (teamId?: string, q?: string, limit?: number) => {
         const params = new URLSearchParams();
         if (teamId) params.append("teamId", teamId);
         if (q?.trim()) params.append("q", q.trim());
         if (limit) params.append("limit", String(limit));
-        const queryString = params.toString();
-        return pathToApiUrl(
-            `/pull-requests/authors${queryString ? `?${queryString}` : ""}`,
-        );
+        return withQuery("/pull-requests/authors", params);
     },
     GET_SUGGESTIONS: (params: {
         repositoryId: string;

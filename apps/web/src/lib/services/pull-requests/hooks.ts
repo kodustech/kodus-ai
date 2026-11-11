@@ -31,7 +31,6 @@ import type {
     PullRequestsFacetsResponse,
     PullRequestSuggestionsResponse,
 } from "./types";
-import { pollWhileVisible } from "./visible-polling";
 
 const normalizeExecutions = (
     payload: PullRequestExecutionsPayload,
@@ -59,6 +58,10 @@ const pickDistinctPrTotal = (
 };
 
 const DEFAULT_PAGE_SIZE = 30;
+
+/** Order-independent query-key part for a `fields` list. */
+const fieldsQueryKey = (fields?: readonly string[]) =>
+    fields?.length ? [...fields].sort().join(",") : "all";
 
 export const useInfinitePullRequestExecutions = (
     filters?: PullRequestFilters,
@@ -173,20 +176,14 @@ export const useInfinitePullRequestExecutions = (
             return payload.pagination?.nextCursor ?? undefined;
         },
         retry: false,
+        // Fallback refresh for views without SSE. React Query skips the ticks
+        // of a hidden tab (a hidden tab used to poll all day) and, with
+        // "always", refreshes as soon as the tab is looked at again. It
+        // refreshes every loaded page; the only poller left is the PR detail
+        // view, which loads one.
+        refetchInterval: poll ? 30_000 : false,
+        refetchOnWindowFocus: poll ? "always" : false,
     });
-
-    // Poll every 30s as a fallback refresh. Skipped when `poll` is false — the
-    // caller relies on SSE instead. (React Query v5 dropped the v4 `refetchPage`
-    // option, so refetch() refreshes all loaded pages; kept minimal since the
-    // only remaining poller is the PR detail view, which loads a single page.)
-    const { refetch } = query;
-    useEffect(() => {
-        if (!poll) return;
-        // Only while someone is looking: a hidden tab polled all day.
-        return pollWhileVisible(() => {
-            refetch();
-        }, 30_000);
-    }, [refetch, poll]);
 
     const items = useMemo(() => {
         const pages = infiniteData?.pages ?? [];
@@ -240,7 +237,7 @@ export const usePullRequestsDailyDigest = (
     // The counts this view renders — see usePullRequestsFacets. Omit for all.
     fields?: readonly PullRequestsDailyDigestField[],
 ) => {
-    const fieldsKey = fields?.length ? [...fields].sort().join(",") : "all";
+    const fieldsKey = fieldsQueryKey(fields);
     return useQuery({
         queryKey: [PULL_REQUEST_QUERY_ROOT.digest, teamId, fieldsKey],
         queryFn: () =>
@@ -262,7 +259,7 @@ export const usePullRequestsFacets = (
     // a view that shows two numbers from paying for five. Omit for all.
     fields?: readonly PullRequestsFacetName[],
 ) => {
-    const fieldsKey = fields?.length ? [...fields].sort().join(",") : "all";
+    const fieldsKey = fieldsQueryKey(fields);
     return useQuery({
         queryKey: [
             PULL_REQUEST_QUERY_ROOT.facets,

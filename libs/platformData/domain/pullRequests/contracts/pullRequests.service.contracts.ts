@@ -101,12 +101,6 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         keys: Array<{ number: number; repositoryId: string }>;
         truncated: boolean;
     }>;
-    // Open PRs without the heavy arrays; null when more than `limit` exist.
-    findOpenPullRequests(
-        organizationId: string,
-        repositoryIds: string[] | undefined,
-        limit: number,
-    ): Promise<PullRequestsEntity[] | null>;
     findDistinctAuthorsByRepositoryIds(
         organizationId: string,
         repositoryIds: string[] | undefined,

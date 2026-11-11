@@ -240,14 +240,6 @@ describe('GetPullRequestsFacetsUseCase', () => {
             awaiting: null,
             mine: null,
         });
-        // The repository answers [] on failure unless told otherwise; the
-        // facets must tell it otherwise, or a failure would read as zero.
-        expect(harness.getDistinctReviewedPullRequestKeys).toHaveBeenCalledWith(
-            expect.objectContaining({ failOnError: true }),
-        );
-        expect(harness.getAwaitingReviewPullRequestKeys).toHaveBeenCalledWith(
-            expect.objectContaining({ failOnError: true }),
-        );
     });
 
     it('answers real zeros when no repository is in scope', async () => {

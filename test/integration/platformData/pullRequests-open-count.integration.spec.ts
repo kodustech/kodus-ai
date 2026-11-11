@@ -315,40 +315,6 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
             });
         });
 
-        describe('findOpenPullRequests', () => {
-            it('reads the open PRs in scope', async () => {
-                const open = await repository.findOpenPullRequests(
-                    ORG,
-                    ['repo-1', 'repo-2'],
-                    100,
-                );
-
-                expect(
-                    open?.map((pr) => pr.number).sort((a, b) => a - b),
-                ).toEqual([1, 2, 3, 4, 8, 9, 10]);
-                expect(open?.find((pr) => pr.number === 2)?.repository).toEqual(
-                    { id: 'repo-2', name: 'web' },
-                );
-            });
-
-            it('answers null when there are more open PRs than the limit', async () => {
-                await expect(
-                    repository.findOpenPullRequests(
-                        ORG,
-                        ['repo-1', 'repo-2'],
-                        7,
-                    ),
-                ).resolves.toHaveLength(7);
-                await expect(
-                    repository.findOpenPullRequests(
-                        ORG,
-                        ['repo-1', 'repo-2'],
-                        6,
-                    ),
-                ).resolves.toBeNull();
-            });
-        });
-
         describe('findPRNumbersByTitleAndOrganization', () => {
             const search = (title: string, repositoryIds?: string[]) =>
                 repository
