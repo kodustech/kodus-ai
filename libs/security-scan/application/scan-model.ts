@@ -11,6 +11,13 @@ import { LLM_TASK } from '@libs/llm/byok-config';
 
 import type { SecurityScanModel } from './security-scan-engine';
 
+/**
+ * The deep scan runs only on the organization's own model (BYOK), never on
+ * the managed one: a whole-repository scan is the organization's spend.
+ */
+export const SCAN_NEEDS_BYOK_MESSAGE =
+    'Deep scan runs only on your own model. Connect one in AI providers to run it; you can route the Deep scan to a model of its own there.';
+
 export interface ResolvedScanModel {
     model: SecurityScanModel;
     /** Null when the model has no known price: then the scan is capped in tokens. */
@@ -20,8 +27,9 @@ export interface ResolvedScanModel {
 /**
  * The model a scan runs on and what it costs, resolved the way a review
  * resolves its model: the organization's `securityScan` route (the model it
- * routes the deep scan to, else its default BYOK model, else the managed
- * default), priced by the catalog or the organization's own
+ * routes the deep scan to, else its default BYOK model; without one the
+ * slot is empty and the scan refuses to run, SCAN_NEEDS_BYOK_MESSAGE),
+ * priced by the catalog or the organization's own
  * price for it. Shared by the API (to validate the cap), the job and the eval.
  */
 export async function resolveScanModel(params: {

@@ -19,6 +19,8 @@ import {
     scanErrorMessage,
 } from './security-scan-job.processor';
 import { SecurityScanStatus } from '../domain/security-scan.types';
+import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
+import { SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 
 const scanRecord = (overrides = {}) => ({
@@ -353,6 +355,25 @@ describe('SecurityScanJobProcessor', () => {
         );
         expect(progressWrites).toHaveLength(0);
         expect(lastUpdate(scans).status).toBe(SecurityScanStatus.FAILED);
+    });
+
+    it('fails, without running, a scan whose organization no longer has a model of its own', async () => {
+        const { processor, scans } = setup({ result: finishedResult() });
+        (resolveReviewAgentModel as jest.Mock).mockResolvedValueOnce({
+            byokConfig: undefined,
+            main: { role: 'main', modelName: 'managed:default' },
+        });
+        (SecurityScanEngine as unknown as jest.Mock).mockClear();
+
+        await processor.process('job-1');
+
+        expect(SecurityScanEngine).not.toHaveBeenCalled();
+        expect(lastUpdate(scans)).toEqual(
+            expect.objectContaining({
+                status: SecurityScanStatus.FAILED,
+                error: SCAN_NEEDS_BYOK_MESSAGE,
+            }),
+        );
     });
 
     it('records a failure on the scan, without the internal error', async () => {

@@ -55,7 +55,7 @@ import {
 } from '../infrastructure/security-scan.repository';
 import { SecurityScanEngine } from './security-scan-engine';
 import { ScanOwnerResolver } from './scan-owner-resolver';
-import { resolveScanModel } from './scan-model';
+import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 
 const logger = createLogger('SecurityScanJobProcessor');
 
@@ -182,6 +182,10 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 ?.modelPricing,
         });
 
+        // The organization's model may have been disconnected since the start.
+        if (!model.slot) {
+            throw new ScanFailure(SCAN_NEEDS_BYOK_MESSAGE);
+        }
         // Priced at start, the model may have lost its price since: a USD cap
         // it cannot compute would never stop the scan.
         const budgetError = validateBudget(scan.budget, !!rates);

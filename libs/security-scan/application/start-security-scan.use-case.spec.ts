@@ -1,12 +1,17 @@
 jest.mock('./scan-model', () => ({
+    ...jest.requireActual('./scan-model'),
     resolveScanModel: jest.fn(async () => ({
-        model: { modelName: 'fireworks:deepseek' },
+        model: {
+            modelName: 'fireworks:deepseek',
+            slot: { provider: 'openai_compatible', model: 'deepseek' },
+        },
         rates: { input: { default: 1e-6 }, output: { default: 2e-6 } },
     })),
 }));
 
 import { SecurityScanStatus } from '../domain/security-scan.types';
 import { StartSecurityScanUseCase } from './start-security-scan.use-case';
+import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 
 const unit = (id: string) => ({
     id,
@@ -106,5 +111,18 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         await start();
 
         expect(scans.create.mock.calls[0][0].units).toEqual([]);
+    });
+});
+
+describe('StartSecurityScanUseCase — own model only', () => {
+    it("refuses to scan on the managed model when the organization has none of its own", async () => {
+        (resolveScanModel as jest.Mock).mockResolvedValueOnce({
+            model: { modelName: 'managed:default', slot: undefined },
+            rates: null,
+        });
+        const { scans, start } = useCaseWith(null);
+
+        await expect(start()).rejects.toThrow(SCAN_NEEDS_BYOK_MESSAGE);
+        expect(scans.create).not.toHaveBeenCalled();
     });
 });

@@ -25,7 +25,7 @@ import { PricingResolver } from '@libs/analytics/application/use-cases/usage/pri
 import { SpendLimitConfigService } from '@libs/analytics/application/spend-limit/spend-limit-config.service';
 
 import { validateBudget } from '../domain/budget-meter';
-import { resolveScanModel } from './scan-model';
+import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 import { STALE_SCAN_AFTER } from './get-security-scans.use-case';
 import {
     SecurityScanBudget,
@@ -94,6 +94,9 @@ export class StartSecurityScanUseCase {
             pricingOverrides: (await this.spendLimitConfig.getConfig(orgTeam))
                 ?.modelPricing,
         });
+        if (!model.slot) {
+            throw new BadRequestException(SCAN_NEEDS_BYOK_MESSAGE);
+        }
         const budgetError = validateBudget(input.budget, !!rates);
         if (budgetError) {
             throw new BadRequestException(budgetError);
