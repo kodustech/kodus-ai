@@ -137,17 +137,22 @@ describe('usage meter', () => {
             },
             async () =>
                 reportUsage({ inputTokens: 1 } as any, { runName: 'x' }),
-            { organizationId: 'org-1', repositoryId: 'repo-1' },
+            {
+                organizationId: 'org-1',
+                repositoryId: 'repo-1',
+                requestBody: 'secret prompt',
+            },
         );
 
-        expect(warn).toHaveBeenCalledWith(
-            expect.objectContaining({
-                metadata: expect.objectContaining({
-                    organizationId: 'org-1',
-                    repositoryId: 'repo-1',
-                    runName: 'x',
-                }),
-            }),
-        );
+        const [entry] = warn.mock.calls[0];
+        expect(entry.metadata).toEqual({
+            organizationId: 'org-1',
+            teamId: undefined,
+            repositoryId: 'repo-1',
+            runName: 'x',
+            errorName: 'Error',
+        });
+        // Neither the raw error nor anything else from the context is logged.
+        expect(entry.error).toBeUndefined();
     });
 });
