@@ -25,6 +25,7 @@ import {
 } from '../repositories/schemas/code-area-history.model';
 import {
     CODE_AREA_RISK_MAP_SERVICE_TOKEN,
+    CodeAreaHistoryUnavailableError,
     type CodeAreaHistorySyncStatus,
     ICodeAreaRiskMapService,
 } from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
@@ -42,6 +43,11 @@ const MAX_FILES_PER_DIRECTORY = 3;
 const STRUCTURE_FETCH_CONCURRENCY = 5;
 const STRUCTURE_FETCH_TIMEOUT_MS = 15_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+// A repository whose PRs cannot be listed waits one scheduler run (2h), then
+// twice as long after each further failure, up to a day. The slack keeps a
+// run that starts a few seconds early from skipping it.
+const LISTING_RETRY_BASE_MS = 2 * 60 * 60 * 1000;
+const LISTING_RETRY_SLACK_MS = 10 * 60 * 1000;
 const CLOSING_REFERENCE =
     /\b(?:fix(?:es|ed)?|clos(?:e|es|ed)|resolv(?:e|es|ed))\b\s*:?\s*(?:#(\d+)|(https?:\/\/[^\s)]+?\/issues\/(\d+)))\b/gi;
 const BUG_LABEL = /\b(?:bug|defect|regression)\b/i;
@@ -58,6 +64,8 @@ interface SyncState {
     discoveredMergedPrs: number;
     sampled: boolean;
     complete: boolean;
+    listingFailures?: number;
+    retryAfter?: string | null;
 }
 
 @Injectable()
@@ -98,6 +106,7 @@ export class RefreshCodeAreaRiskMapService {
                     cursorEnd: 1,
                     discoveredMergedPrs: 1,
                     complete: 1,
+                    retryAfter: 1,
                 },
             )
             .lean()
@@ -110,6 +119,7 @@ export class RefreshCodeAreaRiskMapService {
             cursorEnd: state.cursorEnd,
             discoveredMergedPrs: state.discoveredMergedPrs,
             complete: state.complete,
+            retryAfter: state.retryAfter ?? null,
         };
     }
 
@@ -249,7 +259,36 @@ export class RefreshCodeAreaRiskMapService {
                 { maxAttempts: 4, baseDelayMs: 2_000, maxDelayMs: 30_000 },
             );
             if (!Array.isArray(listed)) {
-                throw new Error('Could not list PR history for area map');
+                // An uninstalled App or a deleted repository answers the same
+                // on every run: back off instead of asking again each time.
+                const attempt = (state.listingFailures ?? 0) + 1;
+                const retryAfter = new Date(
+                    Date.now() +
+                        Math.min(
+                            LISTING_RETRY_BASE_MS * 2 ** (attempt - 1),
+                            DAY_MS,
+                        ) -
+                        LISTING_RETRY_SLACK_MS,
+                ).toISOString();
+                await this.sync.updateOne(key, {
+                    $set: { listingFailures: attempt, retryAfter },
+                });
+                throw new CodeAreaHistoryUnavailableError(attempt, retryAfter);
+            }
+            if (state.listingFailures) {
+                await this.sync.updateOne(key, {
+                    $set: { listingFailures: 0, retryAfter: null },
+                });
+                this.logger.log({
+                    message: 'Code-area history listing recovered',
+                    context: RefreshCodeAreaRiskMapService.name,
+                    metadata: {
+                        organizationId,
+                        repositoryId: repository.id,
+                        failedRuns: state.listingFailures,
+                    },
+                });
+                state = { ...state, listingFailures: 0, retryAfter: null };
             }
             orderedNumbers = listed
                 .filter((pr) => Number.isInteger(pr.number ?? pr.pull_number))

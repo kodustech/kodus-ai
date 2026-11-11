@@ -581,3 +581,74 @@ it.each([false, true])(
         );
     },
 );
+
+it('backs off a repository whose PRs cannot be listed and clears it once they can', async () => {
+    const now = new Date();
+    const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    let state: Record<string, any> = {
+        version: 3,
+        source: PlatformType.GITHUB,
+        windowStart: start.toISOString(),
+        windowEnd: now.toISOString(),
+        cursorEnd: now.toISOString(),
+        scanFloor: start.toISOString(),
+        offset: 0,
+        discoveredMergedPrs: 0,
+        sampled: false,
+        complete: false,
+    };
+    const sync = {
+        findOne: jest.fn(() => ({ lean: () => ({ exec: async () => state }) })),
+        updateOne: jest.fn(async (_key, update) => {
+            state = { ...state, ...update.$set };
+        }),
+    };
+    const history = {
+        deleteMany: jest.fn(),
+        updateOne: jest.fn(),
+        find: jest.fn(() => ({ lean: () => ({ exec: async () => [] }) })),
+    };
+    const codeManagement = {
+        // GithubService answers an uninstalled App or a missing repository
+        // with null.
+        getPullRequestsByRepository: jest.fn().mockResolvedValue(null),
+        getPullRequest: jest.fn(),
+        isIssuesSupported: jest.fn().mockResolvedValue(false),
+        getDefaultBranch: jest.fn().mockResolvedValue(null),
+    };
+    const maps = { read: jest.fn().mockResolvedValue(null), save: jest.fn() };
+    const service = new RefreshCodeAreaRiskMapService(
+        codeManagement as any,
+        maps as any,
+        history as any,
+        sync as any,
+    );
+    const run = () =>
+        service.refreshOneBatch({
+            organizationAndTeamData: { organizationId: 'org', teamId: 'team' },
+            repository: { id: 'repo', name: 'api' },
+        });
+    const hoursUntil = (iso: string) =>
+        Math.round((Date.parse(iso) - Date.now()) / (60 * 60 * 1000));
+
+    await expect(run()).rejects.toMatchObject({ attempt: 1 });
+    expect(state.listingFailures).toBe(1);
+    expect(hoursUntil(state.retryAfter)).toBe(2);
+    expect((await service.readStatus('org', 'repo'))?.retryAfter).toBe(
+        state.retryAfter,
+    );
+
+    await expect(run()).rejects.toMatchObject({ attempt: 2 });
+    expect(hoursUntil(state.retryAfter)).toBe(4);
+
+    state.listingFailures = 9;
+    await expect(run()).rejects.toMatchObject({ attempt: 10 });
+    expect(hoursUntil(state.retryAfter)).toBe(24);
+    expect(maps.save).not.toHaveBeenCalled();
+
+    codeManagement.getPullRequestsByRepository.mockResolvedValue([]);
+    await run();
+    expect(state.listingFailures).toBe(0);
+    expect(state.retryAfter).toBeNull();
+    expect(maps.save).toHaveBeenCalled();
+});
