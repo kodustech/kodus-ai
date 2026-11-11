@@ -25,7 +25,7 @@ const GOLD = path.join(ROOT, 'evals/dedup/gold-v3');
 const BENCH_ROOT = process.env.BENCH_REPOS_ROOT || path.join(process.env.HOME || '', 'projects/benchmark');
 
 function parseArgs(argv) {
-    const out = { dump: '', out: '', concurrency: 4, dryRun: false, compareOrigins: [], gold: GOLD, anchor: false, excludeIssues: '' };
+    const out = { dump: '', out: '', concurrency: 4, dryRun: false, compareOrigins: [], gold: GOLD, anchor: false, excludeIssues: '', possibleIssues: '', onlyOrigins: false };
     for (const arg of argv.slice(2)) {
         const m = arg.match(/^--([^=]+)(?:=(.*))?$/);
         if (!m) continue;
@@ -36,9 +36,13 @@ function parseArgs(argv) {
         else if (m[1] === 'gold') out.gold = path.resolve(m[2]);
         else if (m[1] === 'anchor') out.anchor = true;
         else if (m[1] === 'exclude-issues') out.excludeIssues = path.resolve(m[2]);
-        else if (m[1] === 'compare-origins') out.compareOrigins = String(m[2] || '').split(',').map((s) => s.trim()).filter(Boolean);
+        else if (m[1] === 'possible-issues') out.possibleIssues = path.resolve(m[2]);
+        else if (m[1] === 'only-origins') {
+            out.compareOrigins = String(m[2] || '').split(',').map((s) => s.trim()).filter(Boolean);
+            out.onlyOrigins = true;
+        } else if (m[1] === 'compare-origins') out.compareOrigins = String(m[2] || '').split(',').map((s) => s.trim()).filter(Boolean);
         else {
-            console.error(`unknown flag --${m[1]}. Known: --dump --out --concurrency --dry-run --compare-origins --gold --anchor --exclude-issues`);
+            console.error(`unknown flag --${m[1]}. Known: --dump --out --concurrency --dry-run --compare-origins --only-origins --gold --anchor --exclude-issues --possible-issues`);
             process.exit(2);
         }
     }
@@ -117,12 +121,14 @@ function validIssues(goldItems, upstream) {
 
 // A line of one case: each valid TP counts once, however many comments name
 // it; every other comment (a repeat, a nit, a pending TP, "new") is a FP.
-function scoreLine(comments, answers, valid) {
+// A `possible` issue joins the ruler only when the line finds it: then it is a
+// TP and one more issue to find, never a bonus.
+function scoreLine(comments, answers, valid, possible = new Set()) {
     const found = new Set();
     const byOrigin = {};
     for (const c of comments) {
         const a = answers.get(c.id);
-        const hit = !!a && valid.has(a.match);
+        const hit = !!a && (valid.has(a.match) || possible.has(a.match));
         const first = hit && !found.has(a.match);
         if (hit) found.add(a.match);
         if (c.origin) {
@@ -135,7 +141,7 @@ function scoreLine(comments, answers, valid) {
         comments: comments.length,
         tp: found.size,
         fp: comments.length - found.size,
-        valid: valid.size,
+        valid: valid.size + [...found].filter((id) => possible.has(id)).length,
         found: [...found],
         byOrigin: Object.fromEntries(Object.entries(byOrigin).map(([k, v]) => [k, { comments: v.comments, issues: [...v.issues] }])),
     };
@@ -186,6 +192,7 @@ async function main() {
     }
     const ruleHash = crypto.createHash('sha256').update(RULE + JUDGE_MODEL + JUDGE_EFFORT).digest('hex').slice(0, 12);
     const excluded = new Set(args.excludeIssues ? JSON.parse(fs.readFileSync(args.excludeIssues, 'utf8')) : []);
+    const possibleAll = new Set(args.possibleIssues ? JSON.parse(fs.readFileSync(args.possibleIssues, 'utf8')) : []);
     const hunks = args.anchor ? JSON.parse(fs.readFileSync(path.join(args.gold, 'hunks.json'), 'utf8')) : null;
     const rows = [];
     const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0, ms: 0 };
@@ -242,6 +249,8 @@ async function main() {
         // matched one leaves the line too (neither a TP nor a FP).
         // --anchor: a comment production's anchoring would drop never ships.
         for (const id of excluded) valid.delete(id);
+        const possible = new Set([...valid].filter((id) => possibleAll.has(id)));
+        for (const id of possible) valid.delete(id);
         const caseHunks = hunks?.[caseId];
         const ships = (c) => {
             if (excluded.has(answers.get(c.id)?.match)) return false;
@@ -249,17 +258,19 @@ async function main() {
             return anchorSurvives(c, caseHunks);
         };
         for (const line of Object.keys(lines)) lines[line] = lines[line].filter(ships);
-        const scored = Object.fromEntries(Object.entries(lines).map(([line, list]) => [line, scoreLine(list, answers, valid)]));
+        const scored = Object.fromEntries(Object.entries(lines).map(([line, list]) => [line, scoreLine(list, answers, valid, possible)]));
         // --compare-origins: the same run read without some passes (`base`),
         // and with each of them added back, from the same judgments. Only the
         // finder and verify lines carry each comment's pass.
         const variants = {};
         if (args.compareOrigins.length) {
-            const keep = (allowed) => (c) => !args.compareOrigins.includes(c.origin) || allowed.includes(c.origin);
+            // --only-origins: each pass read alone (and all of them together),
+            // every other pass's comments dropped; `base` is then empty.
+            const keep = (allowed) => (c) => (args.onlyOrigins ? false : !args.compareOrigins.includes(c.origin)) || allowed.includes(c.origin);
             const sets = { base: [], ...Object.fromEntries(args.compareOrigins.map((o) => [`base+${o}`, [o]])), 'base+all': args.compareOrigins };
             for (const [name, allowed] of Object.entries(sets)) {
                 variants[name] = Object.fromEntries(
-                    ['finder', 'verify'].filter((l) => lines[l]).map((l) => [l, scoreLine(lines[l].filter(keep(allowed)), answers, valid)]),
+                    ['finder', 'verify'].filter((l) => lines[l]).map((l) => [l, scoreLine(lines[l].filter(keep(allowed)), answers, valid, possible)]),
                 );
             }
         }
@@ -326,7 +337,9 @@ async function main() {
         '',
         ...(Object.keys(variantMetrics).length
             ? [
-                  '**By passes** (`base` = the run without ' + args.compareOrigins.join(', ') + '; each line adds passes back)',
+                  args.onlyOrigins
+                      ? '**By passes, each alone** (every other pass dropped; `base+all` = ' + args.compareOrigins.join(', ') + ' together)'
+                      : '**By passes** (`base` = the run without ' + args.compareOrigins.join(', ') + '; each line adds passes back)',
                   '',
                   '| variant | finder R | finder P | verify R | verify P | new TPs vs base (finder / verify) |',
                   '|---|---:|---:|---:|---:|---:|',
