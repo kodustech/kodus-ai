@@ -439,42 +439,29 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                 const fileData = file;
                 if (!fileData) continue;
 
-                // Buscar issues abertas para o arquivo
-                const openIssues = await this.issuesService.findByFileAndStatus(
-                    context.organizationAndTeamData.organizationId,
-                    context.repository.id,
-                    file.path,
-                    IssueStatus.OPEN,
+                // A scan finding is about the branch the scan read. A closed
+                // pull request, merged or not, may target another branch or
+                // never land: only the next scan resolves a scan finding.
+                const openIssues = (
+                    await this.issuesService.findByFileAndStatus(
+                        context.organizationAndTeamData.organizationId,
+                        context.repository.id,
+                        file.path,
+                        IssueStatus.OPEN,
+                    )
+                )?.filter(
+                    (issue) => issue.source !== IssueSource.SECURITY_SCAN,
                 );
 
                 if (!openIssues?.length) continue;
 
                 if (fileData.status === 'removed') {
-                    // A scan finding goes with its file: resolved, so the
-                    // next scan reopens it if the code comes back. A review
-                    // issue keeps being dismissed.
-                    const byStatus = [
-                        [IssueStatus.RESOLVED, true],
-                        [IssueStatus.DISMISSED, false],
-                    ] as const;
-                    for (const [status, scan] of byStatus) {
-                        const ids = openIssues
-                            .filter(
-                                (issue) =>
-                                    (issue.source ===
-                                        IssueSource.SECURITY_SCAN) ===
-                                    scan,
-                            )
-                            .map((issue) => issue.uuid);
-                        if (ids.length) {
-                            updatePromises.push(
-                                this.issuesService.updateStatusByIds(
-                                    ids,
-                                    status,
-                                ),
-                            );
-                        }
-                    }
+                    updatePromises.push(
+                        this.issuesService.updateStatusByIds(
+                            openIssues.map((issue) => issue.uuid),
+                            IssueStatus.DISMISSED,
+                        ),
+                    );
                     continue;
                 }
 
