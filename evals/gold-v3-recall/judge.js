@@ -10,6 +10,8 @@ const Anthropic = require('@anthropic-ai/sdk');
 // Haiku 5.5 by default: it agreed with Opus 5.5 on 249 of 252 comments of two
 // earlier runs, at about a thirtieth of the cost (README.md, "The judge").
 const JUDGE_MODEL = process.env.GOLD_JUDGE_MODEL || 'claude-haiku-5-5';
+// GOLD_JUDGE_CLI=1: the judge runs through the claude CLI (subscription) instead of the API.
+const JUDGE_CLI = process.env.GOLD_JUDGE_CLI === '1';
 const JUDGE_EFFORT = process.env.GOLD_JUDGE_EFFORT || 'high';
 const RULE = fs.readFileSync(path.join(__dirname, 'judge-rule.md'), 'utf8');
 const MAX_TURNS = 30;
@@ -17,6 +19,7 @@ const MAX_READ_LINES = 400;
 const MAX_GREP_LINES = 200;
 
 function judgeKey() {
+    if (JUDGE_CLI) return 'cli';
     return process.env.API_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || null;
 }
 
@@ -108,7 +111,50 @@ function repoTools(repoDir, head) {
  * Returns { answers: Map id → { match, reason }, usage, ms, turns }.
  * Throws when the judge does not answer every comment (the case is not measured).
  */
-async function judgeCase({ caseId, prTitle, repoDir, head, issues, comments, model = JUDGE_MODEL, effort = JUDGE_EFFORT, client = new Anthropic({ apiKey: judgeKey() }) }) {
+
+const ANSWER_SCHEMA = TOOLS.find((t) => t.name === 'submit_matches').input_schema;
+
+function judgeCaseCli({ caseId, prTitle, repoDir, head, issues, comments, model = JUDGE_MODEL }) {
+    const { spawn } = require('child_process');
+    const issueIds = new Set(issues.map((i) => i.issueId));
+    const payload = {
+        pullRequest: { caseId, title: prTitle || null },
+        issues: issues.map((i) => ({ issueId: i.issueId, description: i.description, knownIssueText: i.knownIssueText || null, earlierComments: i.earlierComments || [] })),
+        newComments: comments,
+    };
+    const prompt = `${RULE}\n\nThe repository is the current directory; read the code at the pull request head with \`git show ${head}:<path>\` and \`git grep -n -E <pattern> ${head} -- <path>\` (read only). Answer with one entry per new comment id.\n\nGolden issues and new comments of one pull request:\n\n${JSON.stringify(payload, null, 1)}`;
+    const startedAt = Date.now();
+    return new Promise((resolve, reject) => {
+        const p = spawn('claude', ['-p', '--model', model, '--output-format', 'json', '--json-schema', JSON.stringify(ANSWER_SCHEMA), '--allowedTools', 'Bash(git show:*)', 'Bash(git grep:*)'], { cwd: repoDir });
+        let out = '';
+        let err = '';
+        p.stdout.on('data', (d) => (out += d));
+        p.stderr.on('data', (d) => (err += d));
+        p.on('error', reject);
+        p.stdin.end(prompt);
+        p.on('close', (code) => {
+            try {
+                const j = JSON.parse(out);
+                const res = j.structured_output || JSON.parse(j.result);
+                const answers = new Map();
+                for (const a of res.answers || []) answers.set(a.id, { match: a.match === 'new' || issueIds.has(a.match) ? a.match : 'new', reason: a.reason, rawMatch: a.match });
+                const missing = comments.filter((c) => !answers.has(c.id)).map((c) => c.id);
+                if (missing.length) throw new Error(`judge left ${missing.length} comment(s) unanswered: ${missing.join(', ')}`);
+                const u = j.usage || {};
+                resolve({ answers, usage: { input: u.input_tokens || 0, output: u.output_tokens || 0, cacheRead: u.cache_read_input_tokens || 0, cacheWrite: u.cache_creation_input_tokens || 0, calls: 1 }, ms: Date.now() - startedAt, turns: j.num_turns || 0 });
+            } catch (error) {
+                reject(new Error(`claude cli (exit ${code}): ${error.message} ${err.slice(0, 300)}`));
+            }
+        });
+    });
+}
+
+async function judgeCase(args) {
+    if (JUDGE_CLI) return judgeCaseCli(args);
+    return judgeCaseApi(args);
+}
+
+async function judgeCaseApi({ caseId, prTitle, repoDir, head, issues, comments, model = JUDGE_MODEL, effort = JUDGE_EFFORT, client = new Anthropic({ apiKey: judgeKey() }) }) {
     const tools = repoTools(repoDir, head);
     const issueIds = new Set(issues.map((i) => i.issueId));
     const payload = {
