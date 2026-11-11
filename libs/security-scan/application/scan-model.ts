@@ -1,4 +1,7 @@
-import type { ModelTokenRates, ManualPricingOverrides } from '@libs/analytics/domain/token-usage/types/pricing.types';
+import type {
+    ModelTokenRates,
+    ManualPricingOverrides,
+} from '@libs/analytics/domain/token-usage/types/pricing.types';
 import type { PricingResolver } from '@libs/analytics/application/use-cases/usage/pricing-resolver';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import type { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
@@ -41,7 +44,12 @@ export async function resolveScanModel(params: {
 
     return {
         model: {
-            slot: byokConfig,
+            // No failover to the organization's backup model: the spend cap
+            // prices every request at this model's rates, and a pricier
+            // fallback would spend past it uncounted.
+            slot: byokConfig
+                ? { ...byokConfig, fallback: undefined }
+                : byokConfig,
             modelName: main.modelName,
             contextWindowTokens: resolveContextWindow({
                 byokMaxInputTokens: main.maxInputTokens,
