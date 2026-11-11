@@ -149,7 +149,8 @@ function fakeLlm(plan?: any) {
         }
         if (req.runName.endsWith('-finalize')) {
             // Each lens's weakness gets its own CWE, as a real model gives.
-            const cls = /Vulnerability class: (\w+)/.exec(req.user)?.[1] ?? 'authz';
+            const cls =
+                /Vulnerability class: (\w+)/.exec(req.user)?.[1] ?? 'authz';
             return {
                 title: 'Any user reads any order',
                 severity: 'high',
@@ -510,6 +511,56 @@ describe('SecurityScanEngine', () => {
         ]);
     });
 
+    it('stops a unit between lenses at the deadline and keeps what it found for the next slice', async () => {
+        let now = 0;
+        const lens = fakeLens((file, cls) =>
+            file.endsWith('orders.controller.ts') && cls === 'authz'
+                ? [IDOR]
+                : [],
+        );
+        const runLens = jest.fn(async (input: any, secrets: any) => {
+            now += 60_000;
+            return lens(input, secrets);
+        });
+        const onUnitDone = jest.fn();
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({
+                units: [
+                    {
+                        file: 'src/orders/orders.controller.ts',
+                        relatedFiles: [],
+                        classes: ['authz', 'injection'],
+                        priority: 90,
+                        reason: '',
+                    },
+                ],
+            }),
+            collectSurface: jest.fn(async () => SURFACE),
+            now: () => now,
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            deadlineAt: 30_000,
+            onUnitDone,
+        } as any);
+
+        // The controller unit has several lenses; only the first ran.
+        expect(
+            runLens.mock.calls.filter(([input]: any[]) =>
+                input.userPrompt.includes('orders.controller.ts'),
+            ),
+        ).toHaveLength(1);
+        expect(result.progress[0].state).toBe('pending');
+        expect(onUnitDone).toHaveBeenCalledWith(
+            expect.objectContaining({ state: 'pending' }),
+            [expect.objectContaining({ vulnerabilityClass: 'authz' })],
+        );
+    });
+
     it('runs the reproduction test in an isolated sandbox', async () => {
         const sandbox = fakeSandbox('e2b');
         const engine = new SecurityScanEngine({
@@ -538,6 +589,11 @@ describe('SecurityScanEngine', () => {
                 reproduced: true,
                 command: 'npx jest src/orders/idor.repro.spec.ts',
             }),
+        );
+        // Removed once it ran: later lenses never read it as the repository's.
+        expect(sandbox.run).toHaveBeenCalledWith(
+            "rm -f -- '/repo/src/orders/idor.repro.spec.ts'",
+            expect.anything(),
         );
     });
 
@@ -632,14 +688,14 @@ describe('SecurityScanEngine', () => {
                     : []
                 : cls !== 'data_exposure'
                   ? []
-                : [
-                      {
-                          ...IDOR,
-                          relevantFile: 'src/orders/orders.service.ts',
-                          relevantLinesStart: 1,
-                          relevantLinesEnd: 1,
-                      },
-                  ],
+                  : [
+                        {
+                            ...IDOR,
+                            relevantFile: 'src/orders/orders.service.ts',
+                            relevantLinesStart: 1,
+                            relevantLinesEnd: 1,
+                        },
+                    ],
         );
         const dedup = jest.fn(async (_deps: any, suggestions: any[]) => ({
             // Keeps the first: the service finding is the controller's bug.
@@ -820,7 +876,13 @@ describe('SecurityScanEngine', () => {
             startLine: 2,
             endLine: 2,
         };
-        const near = { ...far, vulnerabilityClass: 'authz', filePath: 'src/orders/orders.controller.ts', startLine: 40, endLine: 41 };
+        const near = {
+            ...far,
+            vulnerabilityClass: 'authz',
+            filePath: 'src/orders/orders.controller.ts',
+            startLine: 40,
+            endLine: 41,
+        };
         const engine = new SecurityScanEngine({
             runLens: fakeLens((_file, cls) => (cls === 'authz' ? [IDOR] : [])),
             llm: fakeLlm(),
@@ -833,7 +895,15 @@ describe('SecurityScanEngine', () => {
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             units: [
-                { id: 'b', file: 'src/orders/orders.controller.ts', relatedFiles: [], language: 'typescript', classes: ['authz'], priority: 80, reasons: [] },
+                {
+                    id: 'b',
+                    file: 'src/orders/orders.controller.ts',
+                    relatedFiles: [],
+                    language: 'typescript',
+                    classes: ['authz'],
+                    priority: 80,
+                    reasons: [],
+                },
             ],
             reported: [far, near],
         } as any);
@@ -846,12 +916,25 @@ describe('SecurityScanEngine', () => {
     });
 
     it('keeps two different weaknesses on the same line apart', async () => {
-        const keepAll = jest.fn(async (_deps: any, suggestions: any[]) => ({ suggestions, trace: {} as any }));
+        const keepAll = jest.fn(async (_deps: any, suggestions: any[]) => ({
+            suggestions,
+            trace: {} as any,
+        }));
         const engine = new SecurityScanEngine({
             // An IDOR and a SQL injection in the same handler line.
-            runLens: fakeLens((_file, cls) => (cls === 'authz' || cls === 'injection' ? [IDOR] : [])),
+            runLens: fakeLens((_file, cls) =>
+                cls === 'authz' || cls === 'injection' ? [IDOR] : [],
+            ),
             llm: fakeLlm({
-                units: [{ file: 'src/orders/orders.controller.ts', relatedFiles: [], classes: ['authz', 'injection'], priority: 90, reason: '' }],
+                units: [
+                    {
+                        file: 'src/orders/orders.controller.ts',
+                        relatedFiles: [],
+                        classes: ['authz', 'injection'],
+                        priority: 90,
+                        reason: '',
+                    },
+                ],
             }),
             collectSurface: jest.fn(async () => SURFACE),
             dedup: keepAll as any,
@@ -863,7 +946,10 @@ describe('SecurityScanEngine', () => {
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        expect(result.findings.map((f) => f.cwe).sort()).toEqual(['CWE-639', 'CWE-89']);
+        expect(result.findings.map((f) => f.cwe).sort()).toEqual([
+            'CWE-639',
+            'CWE-89',
+        ]);
     });
 
     it('keeps every finding when the dedup fails', async () => {

@@ -524,7 +524,13 @@ export class SecurityScanEngine {
             })),
         );
         for (const { vulnClass, pass } of runs) {
-            if (signal.aborted) {
+            // Past the slice's deadline a lens could run into the job's hard
+            // cut, which fails the scan: stop here, and the unit resumes in
+            // the next slice with what it found so far kept.
+            if (
+                signal.aborted ||
+                (params.deadlineAt && this.now() >= params.deadlineAt)
+            ) {
                 return { findings, aborted: true };
             }
             try {
@@ -830,6 +836,14 @@ export class SecurityScanEngine {
                     .trim()
                     .slice(-4000),
             });
+            // The test lives on the issue; left in the checkout, the next
+            // units' lenses would read it as the repository's own code.
+            await sandbox
+                .run(
+                    `rm -f -- '${`${sandbox.repoDir}/${path}`.replace(/'/g, `'\\''`)}'`,
+                    { timeoutMs: 10_000 },
+                )
+                .catch(() => undefined);
         } catch (error) {
             logger.warn({
                 message: 'Reproduction test could not be produced',
