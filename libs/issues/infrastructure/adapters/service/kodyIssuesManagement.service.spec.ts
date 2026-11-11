@@ -350,7 +350,7 @@ describe('KodyIssuesManagementService', () => {
     });
 
     describe('resolveExistingIssues', () => {
-        it('resolves the scan findings of a removed file and dismisses its review issues', async () => {
+        it('leaves scan findings to the next scan when a closed pull request removes their file', async () => {
             jest.spyOn(service as any, 'getChangedFiles').mockResolvedValue([]);
             issuesServiceMock.findByFileAndStatus = jest
                 .fn()
@@ -368,14 +368,31 @@ describe('KodyIssuesManagementService', () => {
                 undefined,
             );
 
-            expect(issuesServiceMock.updateStatusByIds).toHaveBeenCalledWith(
-                ['scan-1'],
-                'resolved',
-            );
+            // The pull request may be closed without a merge, or merged into
+            // another branch than the one the scan read.
+            expect(issuesServiceMock.updateStatusByIds).toHaveBeenCalledTimes(1);
             expect(issuesServiceMock.updateStatusByIds).toHaveBeenCalledWith(
                 ['review-1'],
                 'dismissed',
             );
+        });
+
+        it('never asks the model whether a scan finding is still in the pull request', async () => {
+            jest.spyOn(service as any, 'getChangedFiles').mockResolvedValue([]);
+            issuesServiceMock.findByFileAndStatus = jest
+                .fn()
+                .mockResolvedValue([{ uuid: 'scan-1', source: 'security_scan' }]);
+            const resolve = jest.fn();
+            (service as any).kodyIssuesAnalysisService.resolveExistingIssues =
+                resolve;
+
+            await service.resolveExistingIssues(
+                baseParams,
+                [{ path: 'src/main.ts', status: 'modified', suggestions: [] }],
+                undefined,
+            );
+
+            expect(resolve).not.toHaveBeenCalled();
         });
     });
 
