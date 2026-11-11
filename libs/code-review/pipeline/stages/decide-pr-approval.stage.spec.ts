@@ -370,6 +370,37 @@ it('holds approval when a new commit arrives during review', async () => {
     });
     const result = await stage.execute(context({ approvalLabels: ['ready'] }));
 
-    expect(result.approvalDecision?.kind).toBe('hold');
+    expect(result.approvalDecision).toEqual({
+        kind: 'hold',
+        reason: 'A newer commit arrived while Kody reviewed this one; Kody decides on the next reviewed commit.',
+    });
     expect(LLM.run).not.toHaveBeenCalled();
+});
+
+it.each([
+    [
+        'the PR cannot be read',
+        null,
+        'Kody could not read the current PR from the Git provider.',
+    ],
+    [
+        'the target branch moved',
+        { head: { sha: 'head-1' }, base: { sha: 'base-2' }, labels: ['ready'] },
+        'The target branch changed during the review, so this review cannot approve the PR.',
+    ],
+    [
+        'labels cannot be read',
+        { head: { sha: 'head-1' }, base: { sha: 'base-1' } },
+        'Kody could not read the PR labels from the Git provider.',
+    ],
+])('holds with its own reason when %s', async (_case, livePr, reason) => {
+    codeManagement.getPullRequest.mockResolvedValueOnce(livePr);
+    const ctx = context({ approvalLabels: ['ready'] });
+
+    const result = await stage.execute({
+        ...ctx,
+        pullRequest: { ...ctx.pullRequest, base: { sha: 'base-1' } },
+    });
+
+    expect(result.approvalDecision).toEqual({ kind: 'hold', reason });
 });
