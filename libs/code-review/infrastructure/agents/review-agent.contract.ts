@@ -467,6 +467,10 @@ export interface AgentLoopInput {
     /** Heavy mode on a chunked review: the batch this run covers, so the
      *  lenses are not told one batch is the whole pull request. */
     lensBatch?: { index: number; total: number };
+    /** The pull request's title and description, for the heavy pass that
+     *  reads the change's intent (libs/ee/heavy-mode/intent-risks.ts). */
+    prTitle?: string;
+    prBody?: string;
     /** Gated A/B knob (default off): wrap readFile so a range-less read of a
      *  large file returns a symbol outline + expand hint instead of dumping the
      *  head — fewer model tokens. Off = current behavior. */

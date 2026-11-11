@@ -43,6 +43,8 @@ import {
     gapAgentMaxSteps,
 } from './gap-agents';
 import { bugHistoryLens, pastBugsFor, selectPastBugs } from './bug-history';
+import { buildRiskPlanPrompt, buildRiskPlanSpec, intentRisksLens, riskPlanOf } from './intent-risks';
+import type { RunState } from '@libs/agent-harness/domain/contracts/run-state.contract';
 import {
     HEAVY_LENS_MAX_FINDINGS,
     HEAVY_LENS_MAX_STEPS,
@@ -66,6 +68,12 @@ export interface HeavyLensPass {
     /** Whether the pass's findings stand, asked once the pass ends (the fuzz
      *  agent's stand only when a fuzzer run failed). */
     keepsFindings?: () => boolean;
+    /** A step that runs first and writes the pass's prompt (the intent-risks
+     *  agent's plan). No prompt → the pass ends with no findings. */
+    prepare?: (
+        params: Parameters<HeavyLensRun>[0],
+        ctx: ToolContext,
+    ) => Promise<{ prompt?: string; state: RunState }>;
 }
 
 /** What the lenses need from the finder's run environment. */
@@ -79,6 +87,8 @@ export interface HeavyLensEnvironment {
         | 'previousDecisions'
         | 'usageRunName'
         | 'agentName'
+        | 'prTitle'
+        | 'prBody'
     >;
     claudeWording: boolean;
     isSelfContained: boolean;
@@ -137,7 +147,78 @@ export function buildHeavyLensPasses(
             providerOptions: env.providerOptions,
             acceptsRevisions: !!input.previousDecisions?.length,
         }),
-    })), ...buildGapAgentPasses(env, lensDiff), ...buildBugHistoryPasses(env, lensDiff)];
+    })), ...buildGapAgentPasses(env, lensDiff), ...buildBugHistoryPasses(env, lensDiff), ...buildIntentRiskPasses(env, lensDiff)];
+}
+
+/**
+ * The intent-risks experiment (intent-risks.ts): a planning call lists the
+ * risks of the change's intent, then an agent with the gap agents' tools
+ * checks each one in the code. Needs the repository, so not self-contained.
+ */
+function buildIntentRiskPasses(env: HeavyLensEnvironment, lensDiff: string): HeavyLensPass[] {
+    const { input } = env;
+    const remote = env.remoteCommands;
+    if (env.isSelfContained || !remote) return [];
+    if (input.allowedLabels && !input.allowedLabels.includes('bug')) return [];
+    const changed = new Set((input.changedFiles ?? []).map((f) => String(f?.filename ?? '')));
+    const spec = buildFinderAgentSpec({
+        systemPrompt: GAP_AGENT_SYSTEM_PROMPT,
+        modelId: env.modelId,
+        fallbackModelId: env.fallbackModelId,
+        usageRunName: input.usageRunName,
+        agentName: input.agentName,
+        tools: new InMemoryToolRegistry([...env.tools.list(), buildFindReadersTool(remote, changed), buildFindSiblingsTool(remote)]),
+        labels: ['bug'],
+        compressor: env.contextWindowTokens
+            ? new ContextWindowCompressor(env.contextWindowTokens, { overheadTokens: env.overheadTokens })
+            : undefined,
+        maxSteps: gapAgentMaxSteps(changed.size),
+        providerOptions: env.providerOptions,
+        acceptsRevisions: !!input.previousDecisions?.length,
+    });
+    return [
+        {
+            label: 'lens-intent-risks',
+            findingLabel: 'bug',
+            maxFindings: GAP_AGENT_MAX_FINDINGS,
+            prompt: '',
+            spec,
+            prepare: async (params, ctx) => {
+                const state = await params.runner.run(
+                    buildRiskPlanSpec({
+                        modelId: env.modelId,
+                        usageRunName: input.usageRunName,
+                        agentName: input.agentName,
+                        providerOptions: env.providerOptions,
+                    }),
+                    {
+                        prompt: buildRiskPlanPrompt(input.prTitle, input.prBody, lensDiff),
+                        ...toAiSdkTelemetryArgs(
+                            buildLangfuseTelemetry(`${params.agentName ?? 'finder'}-intent-risks-plan`, params.telemetryMetadata),
+                        ),
+                    },
+                    ctx,
+                );
+                const plan = riskPlanOf(state);
+                finderLogger.log({
+                    message: `Heavy lens lens-intent-risks planned ${plan?.risks.length ?? 0} risks`,
+                    context: 'finder',
+                    metadata: {
+                        organizationId: params.telemetryMetadata?.organizationId,
+                        teamId: params.telemetryMetadata?.teamId,
+                        pullRequestId: params.telemetryMetadata?.pullRequestId,
+                        lens: 'lens-intent-risks',
+                        plan,
+                    },
+                });
+                if (!plan?.risks.length) return { state };
+                return {
+                    state,
+                    prompt: buildHeavyLensPrompt(intentRisksLens(plan), lensDiff, env.claudeWording, false, input.lensBatch),
+                };
+            },
+        },
+    ];
 }
 
 /**
@@ -256,10 +337,14 @@ export async function runHeavyLensPasses(
     const settled = await Promise.allSettled(
         passes.map(async (pass) => {
             const passT0 = Date.now();
+            const prep = pass.prepare ? await pass.prepare(params, ctx) : undefined;
+            if (prep && !prep.prompt) {
+                return { pass, state: prep.state, suggestions: [], ms: Date.now() - passT0, passT0, prepState: undefined };
+            }
             const state = await params.runner.run(
                 pass.spec,
                 {
-                    prompt: pass.prompt,
+                    prompt: prep?.prompt ?? pass.prompt,
                     ...toAiSdkTelemetryArgs(
                         buildLangfuseTelemetry(
                             `${params.agentName ?? 'finder'}-${pass.label}`,
@@ -320,6 +405,7 @@ export async function runHeavyLensPasses(
                 suggestions,
                 ms: Date.now() - passT0,
                 passT0,
+                prepState: prep?.state,
             };
         }),
     );
@@ -347,6 +433,7 @@ export async function runHeavyLensPasses(
         const { pass, state, ms, passT0 } = r.value;
         suggestions.push(...r.value.suggestions);
         usage = sumVerifyUsage(usage, usageOf(state.usage));
+        if (r.value.prepState) usage = sumVerifyUsage(usage, usageOf(r.value.prepState.usage));
         for (const f of strongFilesFromRun(state)) investigatedFiles.add(f);
         passStats.push(
             passStatOf(state, {

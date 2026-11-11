@@ -782,6 +782,11 @@ export abstract class BaseCodeReviewAgentProvider {
                                 total: input.batchTotal,
                             },
                         }),
+                    ...(this.runsHeavyLenses() &&
+                        input.heavy && {
+                            prTitle: input.prTitle,
+                            prBody: input.prBody,
+                        }),
                     outlineFirst: input.outlineFirst,
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,

@@ -76,7 +76,9 @@ describe('gap agents (exp/finder-gap-tools)', () => {
         expect(labels({ remoteCommands: r })).not.toContain('lens-code-exec');
         expect(labels({ remoteCommands: r })).not.toContain('lens-fuzz');
         expect(labels({ remoteCommands: r, sandboxCanRun: true })).toEqual(expect.arrayContaining(['lens-code-exec', 'lens-fuzz']));
-        expect(labels({ remoteCommands: r, sandboxCanRun: true })).toHaveLength(13);
+        expect(labels({ remoteCommands: r, sandboxCanRun: true })).toHaveLength(14);
+        expect(labels({ remoteCommands: r })).toContain('lens-intent-risks');
+        expect(labels({})).not.toContain('lens-intent-risks');
     });
 
     it('tells a failing fuzzer run from any other output', () => {
@@ -98,5 +100,18 @@ describe('gap agents (exp/finder-gap-tools)', () => {
         (extractFindingsWithRecovery as jest.Mock).mockResolvedValue({ suggestions: [finding] });
         expect((await runHeavyLensPasses([pass(false)], params, {} as never)).suggestions).toEqual([]);
         expect((await runHeavyLensPasses([pass(true)], params, {} as never)).suggestions).toHaveLength(1);
+    });
+
+    it('runs the intent-risks check only on the risks its plan listed', async () => {
+        const finding = { relevantFile: 'a.ts', relevantLinesStart: 1, relevantLinesEnd: 1, label: 'bug', suggestionContent: 'x' };
+        (extractFindingsWithRecovery as jest.Mock).mockResolvedValue({ suggestions: [finding] });
+        const run = jest.fn(async () => ({ steps: [], usage: {}, artifacts: [] }));
+        const pass = (prompt?: string) =>
+            ({ label: 'lens-intent-risks', findingLabel: 'bug', prompt: '', spec: {}, prepare: async () => ({ prompt, state: { steps: [], usage: {}, artifacts: [] } }) }) as never;
+        const params = { runner: { run }, recoverProse: undefined } as never;
+        expect((await runHeavyLensPasses([pass(undefined)], params, {} as never)).suggestions).toEqual([]);
+        expect(run).not.toHaveBeenCalled();
+        expect((await runHeavyLensPasses([pass('CHECK THESE')], params, {} as never)).suggestions).toHaveLength(1);
+        expect((run.mock.calls[0] as any[])[1].prompt).toBe('CHECK THESE');
     });
 });
