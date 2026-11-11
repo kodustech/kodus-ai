@@ -265,8 +265,12 @@ export class IssuesRepository implements IIssuesRepository {
                     };
                 } catch (error) {
                     // Another worker wrote it first; the unique index turned
-                    // the race into this error.
-                    if (error?.code !== 11000) {
+                    // the race into this error. A collision on any other index
+                    // leaves nothing under the filter: that error is the real one.
+                    if (
+                        error?.code !== 11000 ||
+                        !(await this.issuesModel.findOne(filter).exec())
+                    ) {
                         throw error;
                     }
                     continue;
