@@ -41,12 +41,14 @@ import { extractProviderMessage } from '@libs/llm/review-error-diagnostics';
 
 import { ScanBudgetMeter, validateBudget } from '../domain/budget-meter';
 import {
+    ScanExaminedClass,
     ScanFinding,
     ScanReportedFinding,
     SecurityScanOutcomeCounts,
     SecurityScanRecord,
     SecurityScanStatus,
 } from '../domain/security-scan.types';
+import type { VulnClass } from '../domain/surface/surface.types';
 import {
     ISecurityScanRepository,
     SECURITY_SCAN_REPOSITORY_TOKEN,
@@ -223,6 +225,9 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 authToken: cloneParams.auth?.token || '',
                 authUsername: cloneParams.auth?.username,
                 branch,
+                // A continuation reads the commit the first slice read: its
+                // plan, done units and findings belong to that commit.
+                ...(scan.commitSha ? { checkoutSha: scan.commitSha } : {}),
                 platform: scan.repository.platform as PlatformType,
                 sandboxMetadata: { stage: 'security-scan' },
             },
@@ -301,11 +306,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         commitSha,
                         owners,
                     );
-                    if (outcome) {
-                        counts[
-                            outcome === 'still_open' ? 'stillOpen' : outcome
-                        ]++;
-                    }
+                    counts[outcome === 'still_open' ? 'stillOpen' : outcome]++;
                 }
                 if (findings.length) {
                     // The issues list is cached per organization for 15 minutes.
@@ -354,6 +355,10 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         ]);
         const coverage = {
             examinedFiles: [...examined],
+            examinedByClass: mergeExamined(
+                scan.coverage?.examinedByClass ?? [],
+                result.examinedByClass,
+            ),
             unitsTotal: result.units.length,
             unitsDone: result.progress.filter((p) => p.state === 'done').length,
             unitsFailed: result.progress.filter((p) => p.state === 'failed')
@@ -389,7 +394,8 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             organizationId: scan.organizationId,
             repositoryId: scan.repository.id,
             scanId: scan.uuid,
-            filePaths: coverage.examinedFiles,
+            examined: coverage.examinedByClass,
+            trackedFiles: result.trackedFiles,
             scanStartedAt: scan.startedAt ?? new Date().toISOString(),
         });
 
@@ -457,6 +463,8 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             });
             return outcome;
         } catch (error) {
+            // Not swallowed: the unit is not recorded as done, the scan fails
+            // before resolving anything, and running it again retries it.
             logger.error({
                 message: 'Could not store a security-scan finding',
                 context: SecurityScanJobProcessor.name,
@@ -466,7 +474,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     filePath: finding.filePath,
                 },
             });
-            return undefined;
+            throw error;
         }
     }
 
@@ -565,4 +573,21 @@ export function scanErrorMessage(error: unknown): string {
         return `The model provider refused a request: ${provider}`;
     }
     return 'The scan stopped on an internal error. Its findings so far are kept; run it again, and contact support if it keeps failing.';
+}
+
+/** What earlier slices examined, with what this one did. */
+function mergeExamined(
+    earlier: ScanExaminedClass[],
+    now: ScanExaminedClass[],
+): ScanExaminedClass[] {
+    const byClass = new Map<VulnClass, Set<string>>();
+    for (const { vulnerabilityClass, filePaths } of [...earlier, ...now]) {
+        const files = byClass.get(vulnerabilityClass) ?? new Set<string>();
+        filePaths.forEach((f) => files.add(f));
+        byClass.set(vulnerabilityClass, files);
+    }
+    return [...byClass].map(([vulnerabilityClass, files]) => ({
+        vulnerabilityClass,
+        filePaths: [...files],
+    }));
 }

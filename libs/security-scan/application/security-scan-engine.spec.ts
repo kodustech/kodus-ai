@@ -989,3 +989,160 @@ describe('SecurityScanEngine', () => {
         expect(result.findings).toHaveLength(2);
     });
 });
+
+describe('SecurityScanEngine: what a scan may resolve', () => {
+    const controllerOnly = {
+        units: [
+            {
+                file: 'src/orders/orders.controller.ts',
+                relatedFiles: [],
+                classes: ['authz', 'injection'],
+                priority: 90,
+                reason: 'loads orders by id',
+            },
+        ],
+    };
+
+    it('does not count a class as examined where its lens failed', async () => {
+        const runLens = jest.fn(async (input: any) => {
+            if (input.agentName === 'security-scan-injection') {
+                throw new Error('provider 500');
+            }
+            return { findings: { reasoning: '', suggestions: [] } } as any;
+        });
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm(controllerOnly),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        const classes = result.examinedByClass.map((e) => e.vulnerabilityClass);
+        expect(classes).toContain('authz');
+        expect(classes).not.toContain('injection');
+        expect(result.progress[0].state).toBe('done');
+    });
+
+    it('lists the tracked files only when git listed them all', async () => {
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens(() => []),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+        const listed = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+        expect(listed.trackedFiles?.sort()).toEqual(Object.keys(FILES).sort());
+
+        const noGit = fakeSandbox();
+        noGit.run.mockImplementation(async () => ({
+            stdout: '',
+            exitCode: 128,
+        }));
+        noGit.remoteCommands.listDir.mockResolvedValue(
+            Object.keys(FILES).join('\n'),
+        );
+        const walked = await engine.run({
+            ...baseParams(),
+            sandbox: noGit,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+        expect(walked.trackedFiles).toBeUndefined();
+    });
+});
+
+describe('SecurityScanEngine: no request past the cap', () => {
+    const execOnly = {
+        units: [
+            {
+                file: 'src/admin/exec.ts',
+                relatedFiles: [],
+                classes: ['injection'],
+                priority: 90,
+                reason: 'shell',
+            },
+        ],
+    };
+    // Only the shell sink: one unit, one lens, nothing running beside it.
+    const execSurface: SurfaceMap = {
+        ...SURFACE,
+        hits: SURFACE.hits.filter((h) => h.file === 'src/admin/exec.ts'),
+        files: { 'src/admin/exec.ts': SURFACE.files['src/admin/exec.ts'] },
+    };
+    const atLine = (line: number) => ({
+        ...IDOR,
+        relevantFile: 'src/admin/exec.ts',
+        relevantLinesStart: line,
+        relevantLinesEnd: line,
+    });
+    // The map and each finalize report 1,100 tokens; the lens none. With
+    // the reserve (1.5 × the largest request × 4 in flight), the cap is
+    // reached by the first finalize: 1,100 + 6,600 < 8,000 ≤ 2,200 + 6,600.
+    const meter = () => new ScanBudgetMeter({ maxTokens: 8000 }, null);
+    const finalizeCalls = (llm: jest.Mock) =>
+        llm.mock.calls.filter(([req]) => req.runName.endsWith('-finalize'))
+            .length;
+
+    it("stops finalizing a lens's findings once the cap is reached", async () => {
+        const llm = fakeLlm(execOnly);
+        const engine = new SecurityScanEngine({
+            runLens: jest.fn(async () => ({
+                findings: {
+                    reasoning: '',
+                    suggestions: [atLine(1), atLine(2), atLine(3)],
+                },
+            })) as any,
+            llm,
+            collectSurface: jest.fn(async () => execSurface),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: meter(),
+        } as any);
+
+        expect(finalizeCalls(llm)).toBe(1);
+        expect(result.stoppedByBudget).toBe(true);
+    });
+
+    it("skips the model's dedup once the cap is reached", async () => {
+        const dedup = jest.fn();
+        const engine = new SecurityScanEngine({
+            runLens: jest.fn(async () => ({
+                findings: { reasoning: '', suggestions: [atLine(2)] },
+            })) as any,
+            llm: fakeLlm(execOnly),
+            collectSurface: jest.fn(async () => execSurface),
+            dedup,
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: meter(),
+            // Near the unit's file, so the dedup would otherwise be asked.
+            reported: [
+                {
+                    vulnerabilityClass: 'injection',
+                    title: 'Shell command from input',
+                    description: 'd',
+                    severity: 'high',
+                    filePath: 'src/admin/exec.ts',
+                    startLine: 40,
+                    endLine: 40,
+                },
+            ],
+        } as any);
+
+        expect(dedup).not.toHaveBeenCalled();
+        expect(result.findings).toHaveLength(1);
+    });
+});

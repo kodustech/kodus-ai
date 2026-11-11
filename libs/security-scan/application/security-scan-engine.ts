@@ -46,6 +46,7 @@ import {
 } from '../domain/scan-units';
 import { admitFindingPath } from '../domain/finding-path';
 import type {
+    ScanExaminedClass,
     ScanFinding,
     ScanReportedFinding,
     ScanUnit,
@@ -139,6 +140,13 @@ export interface SecurityScanEngineResult {
     finished: boolean;
     stoppedByBudget: boolean;
     examinedFiles: string[];
+    /** Per class, the files a lens of that class read to the end. */
+    examinedByClass: ScanExaminedClass[];
+    /**
+     * Every file the scanned commit tracks, when the whole list was read; a
+     * finding in a file outside it is gone with the file.
+     */
+    trackedFiles?: string[];
 }
 
 const MAP_SCHEMA = z.object({
@@ -209,7 +217,9 @@ export class SecurityScanEngine {
         signal: AbortSignal,
         budgetSignal: AbortSignal,
     ): Promise<SecurityScanEngineResult> {
-        const listing = await this.listFiles(params.sandbox);
+        const { files: listing, complete } = await this.listFiles(
+            params.sandbox,
+        );
         const existingFiles = new Set(listing);
         const languages = detectLanguages(listing);
 
@@ -243,6 +253,7 @@ export class SecurityScanEngine {
         );
         const findings: ScanFinding[] = [];
         const examined = new Set<string>();
+        const examinedByClass = new Map<VulnClass, Set<string>>();
         let stoppedByBudget = false;
         let stopped = false;
 
@@ -301,13 +312,20 @@ export class SecurityScanEngine {
             }
 
             // The unit ran beside units folded in after it started: what they
-            // reported was not in its view yet.
+            // reported was not in its view yet. Past the cap the model is not
+            // asked: the cheap check alone keeps duplicates out.
             const reported = [...(params.reported ?? []), ...findings];
-            result.findings = await this.withoutDuplicates(
-                params,
-                result.findings.filter((f) => !isDuplicate(reported, f)),
-                nearby(reported, unit, result.findings),
+            const fresh = result.findings.filter(
+                (f) => !isDuplicate(reported, f),
             );
+            result.findings =
+                budgetSignal.aborted || params.meter.isExhausted()
+                    ? fresh
+                    : await this.withoutDuplicates(
+                          params,
+                          fresh,
+                          nearby(reported, unit, result.findings),
+                      );
 
             const unitProgress: ScanUnitProgress = {
                 unitId: unit.id,
@@ -316,9 +334,15 @@ export class SecurityScanEngine {
                 ...(result.error ? { error: result.error } : {}),
             };
             progress.set(unit.id, unitProgress);
-            if (!result.error) {
-                examined.add(unit.file);
-                unit.relatedFiles.forEach((f) => examined.add(f));
+            // A class counts as examined only where its lens ran to the end:
+            // where it failed, that class's earlier findings stay open.
+            for (const vulnClass of result.examinedClasses ?? []) {
+                const files = examinedByClass.get(vulnClass) ?? new Set();
+                [unit.file, ...unit.relatedFiles].forEach((f) => {
+                    files.add(f);
+                    examined.add(f);
+                });
+                examinedByClass.set(vulnClass, files);
             }
             findings.push(...result.findings);
             await params.onUnitDone?.(unitProgress, result.findings);
@@ -342,7 +366,14 @@ export class SecurityScanEngine {
                 const turn = folded;
                 folded = audit.then(async (result) => {
                     await turn;
-                    await fold(unit, result);
+                    try {
+                        await fold(unit, result);
+                    } catch (error) {
+                        // A unit that could not be stored fails the scan: no
+                        // new unit starts, and nothing is resolved.
+                        stopped = true;
+                        throw error;
+                    }
                 });
                 // The worker takes its next unit once this one's audit ends,
                 // without waiting for earlier units to be folded in.
@@ -385,6 +416,13 @@ export class SecurityScanEngine {
             finished,
             stoppedByBudget,
             examinedFiles: [...examined],
+            examinedByClass: [...examinedByClass].map(
+                ([vulnerabilityClass, files]) => ({
+                    vulnerabilityClass,
+                    filePaths: [...files],
+                }),
+            ),
+            ...(complete ? { trackedFiles: listing } : {}),
         };
     }
 
@@ -442,19 +480,23 @@ export class SecurityScanEngine {
 
     private dedupDeps: ReturnType<typeof createFindingDedupDeps> | undefined;
 
-    private async listFiles(sandbox: SandboxInstance): Promise<string[]> {
+    /** `complete`: git listed every tracked file, none was cut. */
+    private async listFiles(
+        sandbox: SandboxInstance,
+    ): Promise<{ files: string[]; complete: boolean }> {
         const fromGit = await sandbox
             .run(`git -C ${sandbox.repoDir} ls-files`, { timeoutMs: 60_000 })
             .catch(() => undefined);
-        const raw =
-            fromGit?.exitCode === 0 && fromGit.stdout
-                ? fromGit.stdout
-                : await sandbox.remoteCommands.listDir('.', 25);
-        return raw
+        const tracked = fromGit?.exitCode === 0 && !!fromGit.stdout;
+        const raw = tracked
+            ? fromGit.stdout
+            : await sandbox.remoteCommands.listDir('.', 25);
+        const all = raw
             .split('\n')
             .map((l) => l.trim().replace(/^\.\//, ''))
-            .filter((l) => l && !l.startsWith('Error:'))
-            .slice(0, LISTING_LIMIT * 5);
+            .filter((l) => l && !l.startsWith('Error:'));
+        const files = all.slice(0, LISTING_LIMIT * 5);
+        return { files, complete: tracked && files.length === all.length };
     }
 
     private async plan(
@@ -517,6 +559,7 @@ export class SecurityScanEngine {
     ): Promise<AuditResult> {
         const findings: ScanFinding[] = [];
         let failures = 0;
+        const failed = new Set<VulnClass>();
 
         const runs = unit.classes.flatMap((vulnClass) =>
             Array.from({ length: LENS_PASSES }, (_, pass) => ({
@@ -559,6 +602,11 @@ export class SecurityScanEngine {
                 }
                 const kept = (output.findings?.suggestions ?? []) as any[];
                 for (const suggestion of kept) {
+                    // The cap aborts the lens, not the finalize calls after
+                    // it: each one is a request.
+                    if (signal.aborted) {
+                        return { findings, aborted: true };
+                    }
                     const path = admitFindingPath(
                         suggestion.relevantFile,
                         files,
@@ -595,6 +643,7 @@ export class SecurityScanEngine {
                     return { findings, aborted: true };
                 }
                 failures++;
+                failed.add(vulnClass);
                 logger.warn({
                     message: `Security lens ${vulnClass} failed on ${unit.file}`,
                     context: SecurityScanEngine.name,
@@ -621,9 +670,10 @@ export class SecurityScanEngine {
             }
         }
 
+        const examinedClasses = unit.classes.filter((c) => !failed.has(c));
         return failures === runs.length && runs.length > 0
-            ? { findings, error: 'every lens failed' }
-            : { findings };
+            ? { findings, error: 'every lens failed', examinedClasses }
+            : { findings, examinedClasses };
     }
 
     private lensInput(
@@ -1013,6 +1063,8 @@ function sampleListing(listing: string[], limit: number): string[] {
 
 interface AuditResult {
     findings: ScanFinding[];
+    /** The classes whose every lens ran to the end. */
+    examinedClasses?: VulnClass[];
     error?: string;
     /** The unit stopped halfway: the cap, or the job ended. */
     aborted?: boolean;

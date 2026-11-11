@@ -210,6 +210,7 @@ export class StartSecurityScanUseCase {
             reported: last.reported ?? [],
             coverage: {
                 examinedFiles: [],
+                examinedByClass: [],
                 unitsTotal: last.units.length,
                 unitsDone: progress.filter((p) => p.state === 'done').length,
                 unitsFailed: progress.filter((p) => p.state === 'failed')

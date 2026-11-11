@@ -141,6 +141,7 @@ const finishedResult = (overrides = {}) => ({
     finished: true,
     stoppedByBudget: false,
     examinedFiles: ['src/orders.controller.ts'],
+    examinedByClass: [{ vulnerabilityClass: 'authz', filePaths: ['src/orders.controller.ts'] }],
     ...overrides,
 });
 
@@ -167,7 +168,8 @@ describe('SecurityScanJobProcessor', () => {
             organizationId: 'org-1',
             repositoryId: 'repo-1',
             scanId: 'scan-1',
-            filePaths: ['src/orders.controller.ts'],
+            examined: [{ vulnerabilityClass: 'authz', filePaths: ['src/orders.controller.ts'] }],
+            trackedFiles: undefined,
             scanStartedAt: expect.any(String),
         });
         const last = lastUpdate(scans);
@@ -190,14 +192,20 @@ describe('SecurityScanJobProcessor', () => {
                 finished: false,
                 stoppedByBudget: true,
                 examinedFiles: [],
+                examinedByClass: [],
+                trackedFiles: ['src/orders.controller.ts'],
                 progress: [{ unitId: 'u1', state: 'skipped_budget', findings: 0 }],
             }),
         });
 
         await processor.process('job-1');
 
+        // Nothing examined, but a file gone from the branch is gone.
         expect(issuesService.resolveUnseenScanFindings).toHaveBeenCalledWith(
-            expect.objectContaining({ filePaths: [] }),
+            expect.objectContaining({
+                examined: [],
+                trackedFiles: ['src/orders.controller.ts'],
+            }),
         );
         expect(lastUpdate(scans).status).toBe(
             SecurityScanStatus.STOPPED_BY_BUDGET,
@@ -267,6 +275,45 @@ describe('SecurityScanJobProcessor', () => {
         await processor.process('job-1');
 
         expect(scans.update).not.toHaveBeenCalled();
+    });
+
+    it('reads the commit the first slice read when it continues a scan', async () => {
+        const { processor, leaseManager } = setup(
+            { result: finishedResult() },
+            scanRecord({ commitSha: 'first-sha' }),
+        );
+
+        await processor.process('job-1');
+
+        const [, , , cloneParams] = leaseManager.acquire.mock.calls[0] as unknown as any[];
+        expect(cloneParams.checkoutSha).toBe('first-sha');
+    });
+
+    it('starts a new scan at the branch tip', async () => {
+        const { processor, leaseManager } = setup({ result: finishedResult() });
+
+        await processor.process('job-1');
+
+        const [, , , cloneParams] = leaseManager.acquire.mock.calls[0] as unknown as any[];
+        expect(cloneParams.checkoutSha).toBeUndefined();
+    });
+
+    it('fails the scan, resolving nothing, when a finding cannot be stored', async () => {
+        const { processor, scans, issuesService } = setup({
+            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 1 }, [finding]]],
+            result: finishedResult(),
+        });
+        issuesService.upsertScanFinding.mockRejectedValue(new Error('mongo down'));
+
+        await processor.process('job-1');
+
+        expect(issuesService.resolveUnseenScanFindings).not.toHaveBeenCalled();
+        // The unit is not recorded as done, so running the scan again retries it.
+        const progressWrites = scans.update.mock.calls.filter(
+            (call: any[]) => call[1]?.progress,
+        );
+        expect(progressWrites).toHaveLength(0);
+        expect(lastUpdate(scans).status).toBe(SecurityScanStatus.FAILED);
     });
 
     it('records a failure on the scan, without the internal error', async () => {

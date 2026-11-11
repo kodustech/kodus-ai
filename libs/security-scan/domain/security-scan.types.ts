@@ -61,9 +61,20 @@ export interface SecurityScanOutcomeCounts {
     resolved: number;
 }
 
+/** The files a lens of one class read to the end. */
+export interface ScanExaminedClass {
+    vulnerabilityClass: VulnClass;
+    filePaths: string[];
+}
+
 export interface SecurityScanCoverage {
     /** Files at least one lens examined in this scan. */
     examinedFiles: string[];
+    /**
+     * Per class, what this scan examined: only these findings may be
+     * resolved for not being seen again. Absent on scans before it existed.
+     */
+    examinedByClass?: ScanExaminedClass[];
     unitsTotal: number;
     unitsDone: number;
     unitsFailed: number;
