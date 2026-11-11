@@ -617,7 +617,11 @@ describe('ChatWithKodyFromGitUseCase', () => {
             headShaOf: jest.fn().mockResolvedValue('abc1234'),
             publish: jest
                 .fn()
-                .mockResolvedValue({ outcome, comment: 'updated' }),
+                .mockResolvedValue({
+                    outcome,
+                    comment: 'updated',
+                    changed: true,
+                }),
         };
         (useCase as any).businessLogicPublisher = publisher;
 
@@ -641,7 +645,10 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 request: expect.objectContaining({ door: 'command' }),
             }),
         );
-        expect(response).toContain('comment on this pull request is updated');
+        expect(response).toContain('Business logic re-checked');
+        expect(response).toContain(
+            'The Kody · Business Logic comment is updated',
+        );
     });
 
     it('does not say the comment was updated when the command posts the first one', async () => {
