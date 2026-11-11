@@ -30,7 +30,7 @@ export const SelectRepositories = (props: {
     selectedRepositories: Repository[];
     onChangeSelectedRepositories: (repositories: Repository[]) => void;
     onFinishLoading?: (hasRepositories: boolean) => void;
-    onError?: (hasError: boolean) => void;
+    onError?: (hasError: boolean, message?: string) => void;
     teamId: string;
     /**
      * Optional predicate to narrow which repositories are OFFERED as choices
@@ -61,8 +61,8 @@ export const SelectRepositories = (props: {
     }, [isLoading, repositories.length]);
 
     useEffect(() => {
-        props.onError?.(isError);
-    }, [isError]);
+        props.onError?.(isError, isError ? apiErrorMessage(error) : undefined);
+    }, [isError, error]);
 
     const handleRetry = () => {
         void refetch();
