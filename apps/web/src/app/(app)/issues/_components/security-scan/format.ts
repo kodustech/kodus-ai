@@ -91,6 +91,7 @@ export const VULNERABILITY_CLASS_LABEL = {
     data_exposure: "Data exposure",
     secret_identity: "Secrets and identity",
     misconfiguration: "Misconfiguration",
+    resource_exhaustion: "Resource exhaustion",
 } as const satisfies Record<SecurityVulnerabilityClass, string>;
 
 export const OWNER_ORIGIN_NOTE = {
