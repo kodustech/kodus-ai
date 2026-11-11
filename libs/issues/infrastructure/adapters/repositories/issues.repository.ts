@@ -246,9 +246,8 @@ export class IssuesRepository implements IIssuesRepository {
         // Each pass reads the finding and writes it in one step that lands
         // only if what was read still holds: another worker creating it, a
         // person dismissing or deleting it in between sends it round again.
+        let existing = await this.issuesModel.findOne(filter).exec();
         for (let attempt = 0; attempt < 3; attempt++) {
-            const existing = await this.issuesModel.findOne(filter).exec();
-
             if (!existing) {
                 try {
                     const created = await this.issuesModel.create({
@@ -267,10 +266,11 @@ export class IssuesRepository implements IIssuesRepository {
                     // Another worker wrote it first; the unique index turned
                     // the race into this error. A collision on any other index
                     // leaves nothing under the filter: that error is the real one.
-                    if (
-                        error?.code !== 11000 ||
-                        !(await this.issuesModel.findOne(filter).exec())
-                    ) {
+                    if (error?.code !== 11000) {
+                        throw error;
+                    }
+                    existing = await this.issuesModel.findOne(filter).exec();
+                    if (!existing) {
                         throw error;
                     }
                     continue;
@@ -293,6 +293,7 @@ export class IssuesRepository implements IIssuesRepository {
                     outcome,
                 };
             }
+            existing = await this.issuesModel.findOne(filter).exec();
         }
 
         // It changed under every pass. Failing lets the scan store it again
