@@ -95,14 +95,17 @@ function record(usage: AiSdkUsage, meta: Omit<UsageObservation, 'usage'>) {
     try {
         store.meter.record({ usage, ...meta });
     } catch (error) {
+        // Only named ids and the error's kind: the context is free-form and an
+        // error's text can carry a provider payload.
         logger.warn({
             message: 'Usage meter failed to record a model request',
             context: 'UsageMeter',
-            error,
             metadata: {
-                ...store.context,
+                organizationId: store.context?.organizationId,
+                teamId: store.context?.teamId,
+                repositoryId: store.context?.repositoryId,
                 runName: meta.runName,
-                modelName: meta.modelName,
+                errorName: error instanceof Error ? error.name : typeof error,
             },
         });
     }

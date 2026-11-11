@@ -36,7 +36,7 @@ function modelWith(existing: Record<string, unknown> | null) {
     return {
         findOne: jest.fn(() => exec(existing)),
         create: jest.fn(async (doc) => ({ ...doc, _id: 'new-id' })),
-        findByIdAndUpdate: jest.fn(async (_id, update) => ({
+        findOneAndUpdate: jest.fn(async (_id, update) => ({
             ...existing,
             ...(update.$set ?? {}),
         })),
@@ -79,7 +79,7 @@ describe('IssuesRepository — security-scan findings', () => {
 
         await repository.upsertScanFinding(finding);
 
-        const update = model.findByIdAndUpdate.mock.calls[0][1];
+        const update = model.findOneAndUpdate.mock.calls[0][1];
         expect(update.$set.owner).toEqual(finding.owner);
     });
 
@@ -94,7 +94,7 @@ describe('IssuesRepository — security-scan findings', () => {
         const { outcome } = await repository.upsertScanFinding(finding);
 
         expect(outcome).toBe('still_open');
-        const update = model.findByIdAndUpdate.mock.calls[0][1];
+        const update = model.findOneAndUpdate.mock.calls[0][1];
         expect(update.$set).toEqual(
             expect.objectContaining({
                 lastSeenScanId: 'scan-2',
@@ -103,6 +103,45 @@ describe('IssuesRepository — security-scan findings', () => {
         );
         expect(update.$set.owner).toBeUndefined();
         expect(update.$set.status).toBeUndefined();
+    });
+
+    it('writes only while the status it decided on still holds', async () => {
+        const model = modelWith({ _id: 'i-1', status: IssueStatus.RESOLVED });
+        const repository = new IssuesRepository(model as any);
+
+        await repository.upsertScanFinding(finding);
+
+        expect(model.findOneAndUpdate.mock.calls[0][0]).toEqual({
+            _id: 'i-1',
+            status: IssueStatus.RESOLVED,
+        });
+    });
+
+    it('keeps a finding a person dismissed between the read and the write', async () => {
+        const model = modelWith({ _id: 'i-1', status: IssueStatus.RESOLVED });
+        // The resolved finding is dismissed just before the reopen lands.
+        model.findOneAndUpdate
+            .mockResolvedValueOnce(null)
+            .mockImplementationOnce(async (_filter: any, update: any) => ({
+                _id: 'i-1',
+                status: IssueStatus.DISMISSED,
+                ...update.$set,
+            }));
+        model.findOne
+            .mockReturnValueOnce(
+                exec({ _id: 'i-1', status: IssueStatus.RESOLVED }),
+            )
+            .mockReturnValueOnce(
+                exec({ _id: 'i-1', status: IssueStatus.DISMISSED }),
+            );
+        const repository = new IssuesRepository(model as any);
+
+        const { outcome } = await repository.upsertScanFinding(finding);
+
+        expect(outcome).toBe('dismissed');
+        const retry = model.findOneAndUpdate.mock.calls[1];
+        expect(retry[0]).toEqual({ _id: 'i-1', status: IssueStatus.DISMISSED });
+        expect(retry[1].$set.status).toBeUndefined();
     });
 
     it('reopens a finding a later change had resolved', async () => {
@@ -116,7 +155,7 @@ describe('IssuesRepository — security-scan findings', () => {
         const { outcome } = await repository.upsertScanFinding(finding);
 
         expect(outcome).toBe('reopened');
-        const update = model.findByIdAndUpdate.mock.calls[0][1];
+        const update = model.findOneAndUpdate.mock.calls[0][1];
         expect(update.$set.status).toBe(IssueStatus.OPEN);
         expect(update.$unset).toEqual({ resolvedAt: '' });
     });
@@ -128,7 +167,7 @@ describe('IssuesRepository — security-scan findings', () => {
         const { outcome } = await repository.upsertScanFinding(finding);
 
         expect(outcome).toBe('dismissed');
-        const update = model.findByIdAndUpdate.mock.calls[0][1];
+        const update = model.findOneAndUpdate.mock.calls[0][1];
         expect(Object.keys(update.$set).sort()).toEqual([
             'lastSeenAt',
             'lastSeenScanId',
@@ -150,7 +189,7 @@ describe('IssuesRepository — security-scan findings', () => {
         const { outcome } = await repository.upsertScanFinding(finding);
 
         expect(outcome).toBe('still_open');
-        expect(model.findByIdAndUpdate).toHaveBeenCalled();
+        expect(model.findOneAndUpdate).toHaveBeenCalled();
     });
 
     it('resolves only open scan issues in the files this scan examined and did not see again', async () => {
@@ -233,7 +272,42 @@ describe('IssuesRepository.addContributingSuggestions', () => {
     });
 });
 
+describe('IssuesRepository.updateStatusByIds', () => {
+    it('stamps resolvedAt when it resolves, as the scan does', async () => {
+        const model = {
+            updateMany: jest.fn(async (_filter: any, _update: any) => ({})),
+            find: jest.fn(async () => []),
+        };
+        const repository = new IssuesRepository(model as any);
+
+        await repository.updateStatusByIds(['i-1'], IssueStatus.RESOLVED);
+        await repository.updateStatusByIds(['i-2'], IssueStatus.DISMISSED);
+
+        expect(model.updateMany.mock.calls[0][1].$set).toEqual({
+            status: IssueStatus.RESOLVED,
+            resolvedAt: expect.any(String),
+        });
+        expect(model.updateMany.mock.calls[1][1].$set).toEqual({
+            status: IssueStatus.DISMISSED,
+        });
+    });
+});
+
 describe('IssuesRepository.findByFileAndStatus', () => {
+    it('does not throw on a file without a path', async () => {
+        const model = { find: jest.fn(async (_filter: any) => []) };
+        const repository = new IssuesRepository(model as any);
+
+        await repository.findByFileAndStatus(
+            'org-1',
+            'repo-1',
+            undefined as any,
+            IssueStatus.OPEN,
+        );
+
+        expect(model.find.mock.calls[0][0].filePath).toEqual({ $in: [''] });
+    });
+
     it('finds a scan issue stored normalized when the caller spells the path another way', async () => {
         const model = { find: jest.fn(async () => []) };
         const repository = new IssuesRepository(model as any);
