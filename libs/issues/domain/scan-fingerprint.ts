@@ -30,8 +30,11 @@ const CWE_FAMILIES: Record<string, number[]> = {
     query: [90, 91, 643],
     header: [93, 113],
     // A missing login check and a missing permission check on one route are
-    // one gap to the developer, whichever of the two a model names.
-    access: [284, 285, 287, 306, 307, 566, 639, 862, 863, 915],
+    // one gap to the developer, whichever of the two a model names. A broken
+    // login (287) or unlimited guessing (307) at the same place is another.
+    access: [284, 285, 306, 566, 639, 862, 863, 915],
+    authentication: [287, 290, 294, 1390],
+    bruteforce: [307],
     secret: [259, 321, 547, 798],
     password: [256, 257, 261, 312, 916],
     crypto: [326, 327, 328, 330, 331, 337, 338],
@@ -45,7 +48,14 @@ const CWE_FAMILIES: Record<string, number[]> = {
     exhaustion: [400, 405, 407, 409, 674, 770, 834, 1050, 1333],
 };
 
-const APP_WIDE_FAMILIES = new Set(['csrf', 'cookie', 'debug', 'cors']);
+/**
+ * CWEs that name one setting the whole application shares: CSRF protection
+ * off, a session cookie flag missing, debug mode on, CORS open to any origin.
+ * Each is one issue for the repository, not one per route that inherits it;
+ * the CWE itself, not its family, says so, because a family also holds
+ * weaknesses that live at one place (session fixation, an origin check).
+ */
+const APP_WIDE_CWES = new Set([352, 489, 614, 942, 1004, 1275]);
 
 const FAMILY_OF = new Map<number, string>(
     Object.entries(CWE_FAMILIES).flatMap(([family, ids]) =>
@@ -53,10 +63,23 @@ const FAMILY_OF = new Map<number, string>(
     ),
 );
 
+/**
+ * The CWE's number: the one after "CWE" when the text names it ("OWASP
+ * A03:2021 CWE-89" is 89, not 3), or a bare number.
+ */
+export function cweId(cwe?: string): number | null {
+    const text = String(cwe ?? '');
+    const id = Number(
+        text.match(/CWE[\s_:-]*(\d{1,5})/i)?.[1] ??
+            text.match(/^\s*(\d{1,5})\s*$/)?.[1],
+    );
+    return Number.isFinite(id) && id > 0 ? id : null;
+}
+
 /** The family of a CWE ("CWE-89" → "sql"), or the CWE itself when none is listed. */
 export function cweFamily(cwe?: string): string {
-    const id = Number(String(cwe ?? '').match(/(\d{1,5})/)?.[1]);
-    if (!Number.isFinite(id) || id <= 0) {
+    const id = cweId(cwe);
+    if (id === null) {
         return '';
     }
     return FAMILY_OF.get(id) ?? `cwe-${id}`;
@@ -71,16 +94,14 @@ export function cweFamily(cwe?: string): string {
  * family is part of it, so two kinds of bug in one function are two issues.
  */
 export function computeScanFingerprint(input: ScanFingerprintInput): string {
-    const family = cweFamily(input.cwe);
-    // A setting the whole app shares (CSRF off, cookie flags, debug, CORS) is
-    // one issue for the repository, not one per route that inherits it.
-    const appWide = APP_WIDE_FAMILIES.has(family);
+    const id = cweId(input.cwe);
+    const appWide = id !== null && APP_WIDE_CWES.has(id);
     const parts = [
         input.repositoryId,
         input.vulnerabilityClass.trim().toLowerCase(),
         appWide ? '' : normalizeScanPath(input.filePath),
         appWide ? '' : (input.symbol ?? '').trim(),
-        family,
+        appWide ? `cwe-${id}` : cweFamily(input.cwe),
     ];
 
     return createHash('sha256').update(parts.join('\u0000')).digest('hex');
