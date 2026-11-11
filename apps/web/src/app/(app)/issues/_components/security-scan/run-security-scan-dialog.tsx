@@ -172,15 +172,15 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
             <DialogContent className="max-w-lg">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        Run deep scan <Badge>Beta</Badge>
+                        Run deep scan <Badge>Alpha</Badge>
                     </DialogTitle>
                     <DialogDescription>
                         Kody reads the repository&apos;s default branch with
                         your organization&apos;s own model, and stops at a spend
                         limit only if you set one. Findings appear below as the
                         scan stores them, and a scan that stopped before the end
-                        picks up where it stopped. In beta: check each finding
-                        before acting on it.
+                        picks up where it stopped. Experimental alpha: check
+                        each finding before acting on it.
                     </DialogDescription>
                 </DialogHeader>
 

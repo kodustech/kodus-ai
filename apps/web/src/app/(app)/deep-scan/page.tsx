@@ -61,7 +61,7 @@ export default function DeepScanPage() {
                 <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2">
                         <Page.Title>Deep scan</Page.Title>
-                        <Badge>Beta</Badge>
+                        <Badge>Alpha</Badge>
                     </div>
                     <p className="text-text-secondary max-w-2xl text-sm">
                         Finds broken access control, injection, XSS, SSRF, data
@@ -71,9 +71,9 @@ export default function DeepScanPage() {
                         set one.
                     </p>
                     <p className="text-text-tertiary max-w-2xl text-xs">
-                        Deep scan is in beta and free on every plan while it is.
-                        Expect some findings that are not exploitable: check
-                        each before acting on it.
+                        Deep scan is an experimental alpha, free on every plan
+                        while it is: it changes often, and some findings will
+                        not be exploitable. Check each before acting on it.
                     </p>
                 </div>
 

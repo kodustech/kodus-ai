@@ -24,6 +24,13 @@ const BETA_BADGE = (
     </span>
 );
 
+/** Earlier than beta: shown on what is still experimental. */
+const ALPHA_BADGE = (
+    <span className="bg-warning/15 text-warning rounded-full px-1.5 py-px text-[10px] font-semibold tracking-wide uppercase">
+        Alpha
+    </span>
+);
+
 export type MainNavItem = {
     id:
         | "reviews"
@@ -116,7 +123,7 @@ export const useMainNavItems = () => {
                 icon: ShieldCheckIcon,
                 href: "/deep-scan",
                 visible: canReadSecurityScans,
-                badge: BETA_BADGE,
+                badge: ALPHA_BADGE,
                 matcher: (path) => path.startsWith("/deep-scan"),
             },
             {
