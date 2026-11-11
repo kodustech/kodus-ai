@@ -92,7 +92,20 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import { AuthorContribution } from '@libs/platformData/domain/pullRequests/interfaces/authorContributor.interface';
 import { IRepository } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+    BadRequestException,
+    HttpException,
+    HttpStatus,
+    Inject,
+    Injectable,
+} from '@nestjs/common';
+
+/**
+ * Who a credential belongs to, carried on the auth detail so the fetch hook,
+ * which only sees the request, can tag its rate-limit logs.
+ */
+const LOG_CONTEXT = Symbol('bitbucketLogContext');
+type FetchLogContext = { organizationId?: string; teamId?: string };
 import { ConfigService } from '@nestjs/config';
 import { APIClient, Bitbucket, Schema } from 'bitbucket';
 import { Response as BitbucketResponse } from 'bitbucket/src/request/types';
@@ -1198,13 +1211,27 @@ export class BitbucketCloudService implements Omit<
                 : this._prStateMapReversed.get(PullRequestState.ALL), // get all states if not specified
             sort: '-created_on', // Sort by creation date, descending
             fields: '+values.participants,+values.reviewers,+values.draft',
+            pagelen: 50,
         });
 
-        // Use the limited pagination method
+        // Newest first, so a page whose oldest PR predates startDate ends the
+        // window: later pages are older still. startDate is also enforced in
+        // the filter below for the boundary page.
         const pullRequests = await this.getPaginatedResults(
             bitbucketAPI,
             response,
-            { limit },
+            {
+                limit,
+                stopAfterPage: (page) => {
+                    if (!startDate || !page.length) {
+                        return false;
+                    }
+                    const oldest = page[page.length - 1];
+                    return oldest?.created_on
+                        ? new Date(oldest.created_on) < startDate
+                        : false;
+                },
+            },
         );
 
         return pullRequests.filter((pr) => {
@@ -1345,6 +1372,7 @@ export class BitbucketCloudService implements Omit<
                 username:
                     bitbucketAuthDetail.email ?? bitbucketAuthDetail.username,
                 token: decrypt(bitbucketAuthDetail.appPassword),
+                logContext: (bitbucketAuthDetail as any)?.[LOG_CONTEXT],
             });
 
             const workspacesWithRepos = await Promise.all(
@@ -1379,6 +1407,12 @@ export class BitbucketCloudService implements Omit<
                     params,
                 },
             });
+            if (is429Error(error)) {
+                throw new HttpException(
+                    'Bitbucket is rate limiting this account. Try again in a few minutes.',
+                    HttpStatus.TOO_MANY_REQUESTS,
+                );
+            }
             throw new BadRequestException(error);
         }
     }
@@ -3735,10 +3769,18 @@ export class BitbucketCloudService implements Omit<
                     PlatformType.BITBUCKET,
                 );
 
-            return {
+            const authDetail = {
                 ...bitbucketAuthDetail,
                 authMode: bitbucketAuthDetail?.authMode || AuthMode.TOKEN,
             };
+            Object.defineProperty(authDetail, LOG_CONTEXT, {
+                value: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                } satisfies FetchLogContext,
+                enumerable: false,
+            });
+            return authDetail;
         } catch (err) {
             this.logger.error({
                 message: 'Error to get auth details',
@@ -3793,7 +3835,11 @@ export class BitbucketCloudService implements Omit<
         maxMs: 60_000,
     };
 
-    private safeFetch(url: string, options: any): Promise<any> {
+    private safeFetch(
+        url: string,
+        options: any,
+        logContext?: FetchLogContext,
+    ): Promise<any> {
         // Gate every Bitbucket HTTP call through a single-slot, spaced
         // queue keyed by the app-password (carried in the Authorization
         // header). safeFetch is the one chokepoint the SDK routes through
@@ -3813,7 +3859,7 @@ export class BitbucketCloudService implements Omit<
                 minIntervalMs: BitbucketCloudService.RATE_GATE_MIN_INTERVAL_MS,
                 maxWaitMs: BitbucketCloudService.RATE_GATE_MAX_WAIT_MS,
             },
-            () => this.rawFetch(url, options, gateKey),
+            () => this.rawFetch(url, options, gateKey, logContext),
         ).catch((error) => {
             if (!(error instanceof RateGateWaitExceededError)) throw error;
             // The SDK turns anything fetch throws into a 500, so answer with
@@ -3822,6 +3868,8 @@ export class BitbucketCloudService implements Omit<
                 message: `Bitbucket rate gate: gave up after ${error.waitedMs}ms waiting for a parked credential`,
                 context: BitbucketCloudService.name,
                 metadata: {
+                    organizationId: logContext?.organizationId,
+                    teamId: logContext?.teamId,
                     url,
                     gateKey,
                     waitedMs: error.waitedMs,
@@ -3851,6 +3899,7 @@ export class BitbucketCloudService implements Omit<
         url: string,
         options: any,
         gateKey: string,
+        logContext?: FetchLogContext,
     ): Promise<any> {
         // Retry 429 in-place. EVERY Bitbucket SDK call funnels through here
         // (instanceBitbucketApi sets request.fetch = safeFetch → rawFetch),
@@ -3903,12 +3952,26 @@ export class BitbucketCloudService implements Omit<
                     this.logger.warn({
                         message: `Bitbucket 429 — waiting ${waitMs}ms then retrying (attempt ${attempt + 1}/${BitbucketCloudService.RATE_GATE_429_MAX_RETRIES})`,
                         context: BitbucketCloudService.name,
-                        metadata: { url, gateKey },
+                        metadata: {
+                            organizationId: logContext?.organizationId,
+                            teamId: logContext?.teamId,
+                            url,
+                            gateKey,
+                        },
                     });
                     await new Promise((r) => setTimeout(r, waitMs));
                     continue;
                 }
-                // Exhausted: fall through and return the 429 to the caller.
+                this.logger.warn({
+                    message: `Bitbucket 429 — still rate limited after ${BitbucketCloudService.RATE_GATE_429_MAX_RETRIES} retries, returning it to the caller`,
+                    context: BitbucketCloudService.name,
+                    metadata: {
+                        organizationId: logContext?.organizationId,
+                        teamId: logContext?.teamId,
+                        url,
+                        gateKey,
+                    },
+                });
             } else {
                 recordRateGateSuccess(gateKey);
             }
@@ -3954,6 +4017,7 @@ export class BitbucketCloudService implements Omit<
     private async listAccessibleWorkspaces(auth: {
         username: string;
         token: string;
+        logContext?: FetchLogContext;
     }): Promise<Schema.Workspace[]> {
         const basic = Buffer.from(`${auth.username}:${auth.token}`).toString(
             'base64',
@@ -3963,18 +4027,25 @@ export class BitbucketCloudService implements Omit<
             'https://api.bitbucket.org/2.0/user/workspaces?pagelen=50';
 
         while (nextUrl) {
-            const response = await this.safeFetch(nextUrl, {
-                method: 'GET',
-                headers: {
-                    accept: 'application/json',
-                    authorization: `Basic ${basic}`,
+            const response = await this.safeFetch(
+                nextUrl,
+                {
+                    method: 'GET',
+                    headers: {
+                        accept: 'application/json',
+                        authorization: `Basic ${basic}`,
+                    },
                 },
-            });
+                auth.logContext,
+            );
 
             if (!response.ok) {
                 const body = await response.text().catch(() => '');
-                throw new Error(
-                    `GET /2.0/user/workspaces failed with ${response.status}: ${body}`,
+                throw Object.assign(
+                    new Error(
+                        `GET /2.0/user/workspaces failed with ${response.status}: ${body}`,
+                    ),
+                    { status: response.status },
                 );
             }
 
@@ -4005,7 +4076,12 @@ export class BitbucketCloudService implements Omit<
                     password: decrypt(bitbucketAuthDetail.appPassword),
                 },
                 request: {
-                    fetch: this.safeFetch.bind(this),
+                    fetch: (url: string, options: any) =>
+                        this.safeFetch(
+                            url,
+                            options,
+                            (bitbucketAuthDetail as any)?.[LOG_CONTEXT],
+                        ),
                 },
             });
 
