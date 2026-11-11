@@ -792,6 +792,17 @@
     }
   },
   {
+    "key": "issues.controller.ts#buildFixPrompt",
+    "httpMethod": "POST",
+    "urlPath": "/issues/fix-prompt",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "issues.controller.ts#countIssues",
     "httpMethod": "GET",
     "urlPath": "/issues/count",
