@@ -30,6 +30,7 @@ const otherTasks: LlmTask[] = [
     "conversation",
     "businessValidation",
     "customAgent",
+    "securityScan",
 ];
 
 export function OrganizationModels({

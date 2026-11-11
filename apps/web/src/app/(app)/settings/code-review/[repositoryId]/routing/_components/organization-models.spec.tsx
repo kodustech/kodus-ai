@@ -263,6 +263,11 @@ it("keeps fallback distinct from default and lets the user remove it", async () 
     fireEvent.click(screen.getByRole("option", { name: "None" }));
     expect(draft().fallbackModelId).toBeUndefined();
 });
+it("offers the deep scan its own model among the other tasks", async () => {
+    mount();
+    await waitFor(() => expect(latest.canEdit).toBe(true));
+    expect(await screen.findByText("Deep scan")).toBeInTheDocument();
+});
 it("re-reads the config, preserves a new provider/model and unrelated routes, and never resubmits masks as keys", async () => {
     mount();
     await choose("Default model", /Model Gamma/);
