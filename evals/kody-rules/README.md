@@ -67,7 +67,7 @@ set is the ground truth. No judge, no circular labeling.
   code (`--dataset=reference-cases`). That rule spells its conventions out, so
   its recall does not show whether the reference reached the judge. The two
   `env-registry-*` cases do: one rule, one diff and one set of atoms, and a
-  Context OS reference (`docs/environment-variables.md`, supplied by the case's
+  Context OS reference (environment-variables.md, supplied by the case's
   `referenceFiles`) that only says which variables are registered or retired.
   Each registry makes a different pair of lines the violations, so a missing
   reference, or one linked to the other case's rule, misses every site.
