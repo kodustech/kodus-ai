@@ -30,13 +30,18 @@ describe('rankCandidates', () => {
         ]);
     });
 
-    it('checks an entry point for authorization, injection and misconfiguration even without a sink', () => {
+    it('checks an entry point for authorization, injection, misconfiguration and resource exhaustion even without a sink', () => {
         const [only] = rankCandidates(
             surface({
                 'src/routes.ts': { entryPoints: 1, authChecks: 0, sinks: 0, classes: [] },
             }),
         );
-        expect(only.classes).toEqual(['authz', 'injection', 'misconfiguration']);
+        expect(only.classes).toEqual([
+            'authz',
+            'injection',
+            'misconfiguration',
+            'resource_exhaustion',
+        ]);
     });
 
     it('drops a file with nothing to check', () => {
@@ -85,7 +90,12 @@ describe('mergeMapPlan', () => {
             expect.objectContaining({
                 file: 'src/api.ts',
                 relatedFiles: ['src/service.ts'],
-                classes: ['authz', 'injection', 'misconfiguration'],
+                classes: [
+                    'authz',
+                    'injection',
+                    'misconfiguration',
+                    'resource_exhaustion',
+                ],
                 priority: 95,
             }),
         );
@@ -111,6 +121,7 @@ describe('mergeMapPlan', () => {
             'injection',
             'ssrf',
             'misconfiguration',
+            'resource_exhaustion',
         ]);
     });
 

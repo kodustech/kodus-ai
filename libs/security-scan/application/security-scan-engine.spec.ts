@@ -243,9 +243,10 @@ describe('SecurityScanEngine', () => {
         expect(result.units[0].relatedFiles).toEqual([
             'src/orders/orders.service.ts',
         ]);
-        // The controller holds a route: its unit runs injection and
-        // misconfiguration besides the authz the plan asked for.
-        expect(runLens).toHaveBeenCalledTimes(4);
+        // The controller holds a route: its unit runs injection,
+        // misconfiguration and resource exhaustion besides the authz the
+        // plan asked for.
+        expect(runLens).toHaveBeenCalledTimes(5);
         expect(result.findings).toEqual([
             expect.objectContaining({
                 vulnerabilityClass: 'authz',
@@ -263,8 +264,8 @@ describe('SecurityScanEngine', () => {
             'src/orders/orders.service.ts',
         ]);
         // Every model request inside the scan was metered.
-        // Four lenses, the map and one finalize.
-        expect(meter.snapshot().requests).toBe(4 + 1 + 1);
+        // Five lenses, the map and one finalize.
+        expect(meter.snapshot().requests).toBe(5 + 1 + 1);
     });
 
     it('audits units at once and folds them in the order of the plan', async () => {
