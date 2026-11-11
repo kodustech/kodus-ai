@@ -8,6 +8,7 @@ export const VULN_CLASSES: VulnClass[] = [
     'data_exposure',
     'secret_identity',
     'misconfiguration',
+    'resource_exhaustion',
 ];
 
 export const DEFAULT_CWE: Record<VulnClass, string> = {
@@ -17,6 +18,7 @@ export const DEFAULT_CWE: Record<VulnClass, string> = {
     data_exposure: 'CWE-200',
     secret_identity: 'CWE-798',
     misconfiguration: 'CWE-16',
+    resource_exhaustion: 'CWE-400',
 };
 
 /** What each lens hunts, in the words the model reads. */
@@ -82,6 +84,14 @@ const CLASS_BRIEF: Record<VulnClass, { name: string; hunt: string; notIt: string
 - TLS certificate or hostname verification turned off on an outbound connection (verify=False, rejectUnauthorized: false, InsecureSkipVerify: true).
 - A file upload that stores any type under the web root, or an XML or YAML parser left in an unsafe default mode the code relies on.`,
         notIt: 'A setting read from the environment, a development-only file that is never deployed (a test settings module, a docker-compose for local runs), or a missing hardening header with no concrete attack is not a finding. "Add rate limiting" is not a finding.',
+    },
+    resource_exhaustion: {
+        name: 'Resource exhaustion (denial of service)',
+        hunt: `- Amplification an outside caller controls: one request that makes the server do far more work or hold far more memory than the request itself. Building a string, list or response whose size is a number the caller sends (size, count, page size, range, depth) with no upper bound; a loop or query bounded only by such a number; decompressing an archive or compressed body with no cap on the output (a zip or gzip bomb); fetching a remote resource of any size into memory.
+- A regular expression with nested or overlapping quantifiers applied to caller input (ReDoS), or recursion whose depth the caller controls.
+- An expensive operation run on caller input before any check: a password hash (bcrypt, scrypt, argon2) over a password of any length, image or document processing, a lookup that scans a whole table.
+- A credential check with no attempt limit: a login, password reset, OTP or 2FA code, or API-key verification that lets one caller keep guessing (no lockout, throttle or attempt counter for that account or that source), so the secret can be brute-forced.`,
+        notIt: 'A denial of service that follows from another kind of bug (an SSRF, an injection, a command run on caller input) is that bug, reported by its own lens, not a finding here. A request body or upload that is merely large is not a finding: its cost is proportional to what the attacker sends, and a size limit on it belongs to the server\'s configuration. "Add rate limiting" on an ordinary endpoint is not a finding, nor heavy work only an authenticated user can trigger on their own data, nor a limit the framework or a body-size setting already enforces (read its default before reporting). Report only what the code leaves open; a limit that may exist in infrastructure the repository does not show is not a reason to report it, nor to assume it.',
     },
 };
 
@@ -220,6 +230,10 @@ Return at most ${params.maxUnits} units, highest priority first. Each unit: file
  * the same CWE from scan to scan and from tool to tool.
  */
 const CANONICAL_CWES = [
+    'unbounded resource use (memory, CPU, decompression, parsing, query size) → CWE-400',
+    'regular expression denial of service (ReDoS) → CWE-1333',
+    'uncontrolled recursion → CWE-674',
+    'no limit on login, reset or OTP attempts → CWE-307',
     'IDOR / record of another user by id → CWE-639',
     'missing authorization check → CWE-862',
     'missing authentication → CWE-306',

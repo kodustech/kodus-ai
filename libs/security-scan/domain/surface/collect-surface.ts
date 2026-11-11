@@ -24,6 +24,7 @@ const VULN_CLASS_ORDER: VulnClass[] = [
     'data_exposure',
     'secret_identity',
     'misconfiguration',
+    'resource_exhaustion',
 ];
 
 export interface RgLine {

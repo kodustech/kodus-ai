@@ -81,6 +81,8 @@ export function rankCandidates(
             classes.add('injection');
             // A route served to a browser is where CSRF and cookie flags live.
             classes.add('misconfiguration');
+            // Work an outside caller can make the server do without bound.
+            classes.add('resource_exhaustion');
         }
         const score =
             (f.entryPoints > 0 && f.sinks > 0 ? 50 : 0) +

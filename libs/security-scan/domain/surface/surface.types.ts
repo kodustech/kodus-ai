@@ -4,7 +4,8 @@ export type VulnClass =
     | 'ssrf'
     | 'data_exposure'
     | 'secret_identity'
-    | 'misconfiguration';
+    | 'misconfiguration'
+    | 'resource_exhaustion';
 
 export type SurfaceRole = 'entry_point' | 'auth_check' | 'sink';
 
