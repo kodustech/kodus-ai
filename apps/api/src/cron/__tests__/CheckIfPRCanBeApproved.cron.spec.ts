@@ -258,6 +258,81 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         }
     });
 
+    describe('approval reason writes', () => {
+        const request = {
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            repository: { id: 'repo-a', name: 'repo-a' },
+            prNumber: 1,
+        };
+        const hold = { kind: 'hold', reason: 'The review is not clean.' };
+
+        // A comment queued behind GitHub's write throttle still posts after a
+        // raced timeout; recording it as failed let the next run post a
+        // second one.
+        it('waits for a slow write instead of recording it as failed', async () => {
+            jest.useFakeTimers();
+            try {
+                const { cron, deps } = makeCron();
+                deps.codeManagementService.createIssueComment.mockImplementation(
+                    () =>
+                        new Promise((resolve) =>
+                            setTimeout(() => resolve({ id: 7 }), 60_000),
+                        ),
+                );
+                const post = (cron as any).postConditionalApprovalReason(
+                    request,
+                    PlatformType.GITHUB,
+                    hold,
+                );
+                await jest.advanceTimersByTimeAsync(60_000);
+                await post;
+
+                expect(
+                    deps.codeManagementService.createIssueComment,
+                ).toHaveBeenCalledTimes(1);
+                expect(
+                    deps.pullRequestService.setApprovalReasonDeliveryFailure.mock.calls.every(
+                        (call) => call[3] === null,
+                    ),
+                ).toBe(true);
+            } finally {
+                jest.useRealTimers();
+            }
+        });
+
+        it('leaves a hold for the next run after the write deadline but still posts an approval', async () => {
+            const { cron, deps } = makeCron();
+            (cron as any).reasonWriteDeadline = Date.now() - 1;
+
+            await (cron as any).postConditionalApprovalReason(
+                request,
+                PlatformType.GITHUB,
+                hold,
+            );
+            expect(
+                deps.codeManagementService.getAllCommentsInPullRequest,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.pullRequestService.setApprovalReasonDeliveryFailure,
+            ).not.toHaveBeenCalled();
+
+            deps.codeManagementService.createIssueComment.mockResolvedValue({
+                id: 8,
+            });
+            await (cron as any).postConditionalApprovalReason(
+                request,
+                PlatformType.GITHUB,
+                { kind: 'approve', reason: 'Approved by policy “Docs”.' },
+            );
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalledTimes(1);
+        });
+    });
+
     it('approves a new named policy on its exact reviewed head and publishes the policy name', async () => {
         const { deps, run } = namedPolicyCase();
         expect(await run()).toBe(true);

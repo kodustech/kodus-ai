@@ -135,7 +135,12 @@ const TEAM_CONCURRENCY = 10;
 const PR_CONCURRENCY = 15;
 const FINAL_PROVIDER_TIMEOUT_MS = 15_000;
 const APPROVAL_REASON_LOOKUP_TIMEOUT_MS = 10_000;
-const APPROVAL_REASON_WRITE_TIMEOUT_MS = 15_000;
+// GitHub writes wait in a per-installation queue (one comment every 3s), so a
+// reason write is awaited instead of raced: a raced write that loses still
+// posts later, and the next run, not finding it yet, posts a second one. No
+// hold reason starts after this point of a run, leaving the queued writes time
+// to land inside the 5-minute lock; the next run recomputes and posts them.
+const APPROVAL_REASON_WRITE_DEADLINE_MS = 3 * 60 * 1000;
 const APPROVAL_FILES_TIMEOUT_MS = 10_000;
 const DIRECTORY_FILE_CACHE_TTL_MS = 10 * 60 * 1000;
 const SHARED_RISK_STALE_REASON =
@@ -154,6 +159,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
         string,
         IPullRequestMessages | null
     >();
+    private reasonWriteDeadline = Number.POSITIVE_INFINITY;
 
     constructor(
         @Inject(TEAM_SERVICE_TOKEN)
@@ -270,6 +276,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
         // Clear cache at start of each cron run
         this.pullRequestMessagesCache.clear();
+        this.reasonWriteDeadline =
+            Date.now() + APPROVAL_REASON_WRITE_DEADLINE_MS;
 
         try {
             this.logger.log({
@@ -1933,6 +1941,14 @@ export class CheckIfPRCanBeApprovedCronProvider {
         expectedFailure?: IApprovalReasonDeliveryFailure,
         publicationAttemptAt?: string,
     ): Promise<void> {
+        // A hold is recomputed on every run, so a late one waits for the next.
+        // An approval's reason is not: it is always posted.
+        if (
+            decision.kind !== 'approve' &&
+            Date.now() >= this.reasonWriteDeadline
+        ) {
+            return;
+        }
         const occurredAt = publicationAttemptAt ?? new Date().toISOString();
         const guard = {
             notAfter: occurredAt,
@@ -1974,8 +1990,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     existing?.body ?? existing?.note ?? existing?.content;
                 if (previous !== body) {
                     operation = 'updateIssueComment';
-                    const updatedComment = await runWithBoundedTimeout(
-                        this.codeManagementService.updateIssueComment(
+                    const updatedComment =
+                        await this.codeManagementService.updateIssueComment(
                             {
                                 ...request,
                                 body,
@@ -1984,10 +2000,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                 threadId: existing?.threadId,
                             },
                             platformType,
-                        ),
-                        APPROVAL_REASON_WRITE_TIMEOUT_MS,
-                        'conditional approval comment update',
-                    );
+                        );
                     if (updatedComment === null) {
                         throw new Error(
                             'Conditional approval comment update returned null',
@@ -1996,14 +2009,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 }
             } else {
                 operation = 'createIssueComment';
-                const createdComment = await runWithBoundedTimeout(
-                    this.codeManagementService.createIssueComment(
+                const createdComment =
+                    await this.codeManagementService.createIssueComment(
                         { ...request, body },
                         platformType,
-                    ),
-                    APPROVAL_REASON_WRITE_TIMEOUT_MS,
-                    'conditional approval comment create',
-                );
+                    );
                 if (createdComment === null) {
                     throw new Error(
                         'Conditional approval comment create returned null',
@@ -2022,7 +2032,6 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     prNumber: request.prNumber,
                     operation,
                     lookupTimeoutMs: APPROVAL_REASON_LOOKUP_TIMEOUT_MS,
-                    writeTimeoutMs: APPROVAL_REASON_WRITE_TIMEOUT_MS,
                 },
             });
             await this.recordApprovalReasonDelivery(

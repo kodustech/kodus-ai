@@ -302,6 +302,8 @@ export class GithubService
             doNotRetry: number[];
         };
         throttle?: {
+            /** Clients with the same id share the plugin's write queues. */
+            id?: string;
             onRateLimit: (
                 retryAfter: number,
                 options: { method: string; url: string },
@@ -3550,6 +3552,12 @@ export class GithubService
                         doNotRetry: [400, 401, 403, 404, 422, 451],
                     },
                     throttle: {
+                        // The plugin's write queues (one write a second, one
+                        // comment or review every three) are shared by every
+                        // client with the same id. Without one, all
+                        // organizations in the process queued behind each
+                        // other; GitHub limits each installation on its own.
+                        id: `installation:${githubAuthDetail.installationId}`,
                         onRateLimit: (
                             retryAfter,
                             options,
@@ -3677,6 +3685,8 @@ export class GithubService
                         doNotRetry: [400, 401, 403, 404, 422, 451],
                     },
                     throttle: {
+                        // One write queue per token owner, as on the App path.
+                        id: `token:${ns}`,
                         // NEVER sleep inside the octokit call (mirrors the App
                         // path above). A primary-rate-limit retryAfter is the
                         // time until the hourly bucket resets — up to ~59 min.
