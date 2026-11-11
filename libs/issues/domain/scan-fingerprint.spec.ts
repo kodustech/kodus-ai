@@ -96,6 +96,20 @@ describe('computeScanFingerprint', () => {
         );
     });
 
+    it('folds a shared-setting CWE only when the finding says it is shared', () => {
+        const csrf = (filePath: string, appWide?: boolean) =>
+            computeScanFingerprint({
+                ...base,
+                vulnerabilityClass: 'misconfiguration',
+                cwe: 'CWE-352',
+                filePath,
+                appWide,
+            });
+        // The CWE alone used to fold these two routes into one issue.
+        expect(csrf('a.py')).not.toBe(csrf('b.py'));
+        expect(csrf('a.py', true)).toBe(csrf('b.py', true));
+    });
+
     it('never folds a place-bound CWE, even when called app-wide', () => {
         const fixation = (filePath: string) =>
             computeScanFingerprint({

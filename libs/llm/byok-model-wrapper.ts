@@ -280,7 +280,7 @@ export function wrapByokModel(
                 // The answer cap it was admitted at is sent, so the provider
                 // cannot answer past what was reserved.
                 if (
-                    admission.maxOutputTokens &&
+                    admission.maxOutputTokens != null &&
                     params?.maxOutputTokens == null
                 ) {
                     callParams = {
