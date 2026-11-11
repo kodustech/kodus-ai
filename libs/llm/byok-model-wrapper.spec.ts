@@ -707,22 +707,34 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
             outputTokens: { total: 50, reasoning: 10 },
         });
 
-        await runWithUsageMeter({ record: jest.fn(), admit }, () =>
-            wrap(model).doGenerate({ prompt: PROMPT, maxOutputTokens: 500 }),
+        const tools = [
+            { type: 'function', name: 'readFile', inputSchema: {} },
+        ];
+
+        await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+            wrap(model).doGenerate({
+                prompt: PROMPT,
+                tools,
+                maxOutputTokens: 500,
+            } as any),
         );
 
+        // The ceiling counts the prompt and the tool definitions it sends.
+        const counted = estimateMock.mock.calls[0][0] as string;
+        expect(counted).toContain('hello world');
+        expect(counted).toContain('readFile');
         expect(admit).toHaveBeenCalledWith({
             inputTokens: 1200,
             maxOutputTokens: 500,
         });
-        expect(settle).toHaveBeenCalledWith(
-            expect.objectContaining({
-                inputTokens: 1000,
-                outputTokens: 50,
-                cacheReadTokens: 200,
-                reasoningTokens: 10,
-            }),
-        );
+        expect(settle).toHaveBeenCalledWith({
+            inputTokens: 1000,
+            outputTokens: 50,
+            totalTokens: 1050,
+            reasoningTokens: 10,
+            cacheReadTokens: 200,
+            cacheWriteTokens: 0,
+        });
     });
 
     it('never sends a request the meter refuses', async () => {
@@ -732,7 +744,7 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         });
 
         await expect(
-            runWithUsageMeter({ record: jest.fn(), admit }, () =>
+            runWithUsageMeter({ record: jest.fn(), admit }, async () =>
                 wrap(model).doGenerate({ prompt: PROMPT }),
             ),
         ).rejects.toThrow('spend cap reached');
@@ -745,15 +757,62 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         model.doGenerate.mockRejectedValue(new Error('socket hang up'));
 
         await expect(
-            runWithUsageMeter({ record: jest.fn(), admit: () => settle }, () =>
-                wrap(model).doGenerate({ prompt: PROMPT }),
+            runWithUsageMeter(
+                { record: jest.fn(), admit: () => settle },
+                async () => wrap(model).doGenerate({ prompt: PROMPT }),
             ),
         ).rejects.toThrow('socket hang up');
         expect(settle).toHaveBeenCalledWith(undefined);
     });
 
-    it('does not count the prompt outside a metered run', async () => {
+    it('counts the prompt only inside a run that admits its requests', async () => {
+        const admit = jest.fn(() => jest.fn());
+        await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+            wrap(answering({})).doGenerate({ prompt: PROMPT }),
+        );
+        expect(admit).toHaveBeenCalledTimes(1);
+        expect(estimateMock).toHaveBeenCalledTimes(1);
+
+        estimateMock.mockClear();
         await wrap(answering({})).doGenerate({ prompt: PROMPT });
+        await runWithUsageMeter({ record: jest.fn() }, async () =>
+            wrap(answering({})).doGenerate({ prompt: PROMPT }),
+        );
         expect(estimateMock).not.toHaveBeenCalled();
+    });
+
+    it('settles what a failed request was billed when the error carries it', async () => {
+        const settle = jest.fn();
+        const model = answering({});
+        model.doGenerate.mockRejectedValue(
+            Object.assign(new Error('no object generated'), {
+                usage: { inputTokens: 700, outputTokens: 30 },
+            }),
+        );
+
+        await expect(
+            runWithUsageMeter(
+                { record: jest.fn(), admit: () => settle },
+                async () => wrap(model).doGenerate({ prompt: PROMPT }),
+            ),
+        ).rejects.toThrow('no object generated');
+        expect(settle).toHaveBeenCalledWith(
+            expect.objectContaining({ inputTokens: 700, outputTokens: 30 }),
+        );
+    });
+
+    it('refuses to stream in a run that admits its requests, and streams elsewhere', async () => {
+        const model = answering({});
+        model.doStream.mockResolvedValue({ stream: 'ok' });
+
+        await expect(
+            runWithUsageMeter(
+                { record: jest.fn(), admit: () => jest.fn() },
+                async () => wrap(model).doStream({ prompt: PROMPT }),
+            ),
+        ).rejects.toThrow(/spend-capped run cannot stream/);
+        await expect(
+            wrap(model).doStream({ prompt: PROMPT }),
+        ).resolves.toEqual({ stream: 'ok' });
     });
 });

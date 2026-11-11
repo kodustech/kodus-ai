@@ -124,7 +124,10 @@ export function readProviderUsage(usage: unknown): AiSdkUsage | undefined {
     return {
         inputTokens,
         outputTokens,
-        totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
+        totalTokens:
+            inputTokens === undefined && outputTokens === undefined
+                ? undefined
+                : (inputTokens ?? 0) + (outputTokens ?? 0),
         reasoningTokens: u.outputTokens?.reasoning,
         cacheReadTokens: u.inputTokens?.cacheRead,
         cacheWriteTokens: u.inputTokens?.cacheWrite,

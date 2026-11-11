@@ -243,39 +243,36 @@ export class IssuesRepository implements IIssuesRepository {
             'fingerprint': finding.fingerprint,
         };
 
-        let existing = await this.issuesModel.findOne(filter).exec();
+        // Each pass reads the finding and writes it in one step that lands
+        // only if what was read still holds: another worker creating it, a
+        // person dismissing or deleting it in between sends it round again.
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const existing = await this.issuesModel.findOne(filter).exec();
 
-        if (!existing) {
-            try {
-                const created = await this.issuesModel.create({
-                    ...finding,
-                    filePath: normalizeScanPath(finding.filePath),
-                    source: IssueSource.SECURITY_SCAN,
-                    status: IssueStatus.OPEN,
-                    contributingSuggestions: [],
-                    lastSeenAt: now,
-                });
-                return {
-                    issue: mapSimpleModelToEntity(created, IssuesEntity),
-                    outcome: 'created',
-                };
-            } catch (error) {
-                // Another worker scanning the same repository wrote it first;
-                // the unique index turned the race into this error.
-                if (error?.code !== 11000) {
-                    throw error;
-                }
-                existing = await this.issuesModel.findOne(filter).exec();
-                if (!existing) {
-                    throw error;
+            if (!existing) {
+                try {
+                    const created = await this.issuesModel.create({
+                        ...finding,
+                        filePath: normalizeScanPath(finding.filePath),
+                        source: IssueSource.SECURITY_SCAN,
+                        status: IssueStatus.OPEN,
+                        contributingSuggestions: [],
+                        lastSeenAt: now,
+                    });
+                    return {
+                        issue: mapSimpleModelToEntity(created, IssuesEntity),
+                        outcome: 'created',
+                    };
+                } catch (error) {
+                    // Another worker wrote it first; the unique index turned
+                    // the race into this error.
+                    if (error?.code !== 11000) {
+                        throw error;
+                    }
+                    continue;
                 }
             }
-        }
 
-        // The outcome depends on the status read above; the write only lands
-        // if that status still holds, so a person dismissing the finding in
-        // between is never overwritten. When it moved, read it again.
-        for (let attempt = 0; attempt < 3 && existing; attempt++) {
             const { update, outcome } = this.scanSighting(
                 existing,
                 finding,
@@ -292,18 +289,12 @@ export class IssuesRepository implements IIssuesRepository {
                     outcome,
                 };
             }
-            existing = await this.issuesModel.findOne(filter).exec();
         }
-        if (!existing) {
-            throw new Error('Scan finding disappeared while it was updated');
-        }
-        return {
-            issue: mapSimpleModelToEntity(existing, IssuesEntity),
-            outcome:
-                existing.status === IssueStatus.DISMISSED
-                    ? 'dismissed'
-                    : 'still_open',
-        };
+
+        // It changed under every pass. Failing lets the scan store it again
+        // when it runs again; a guessed outcome would leave the sighting
+        // unrecorded.
+        throw new Error('Scan finding kept changing while it was stored');
     }
 
     /** What one more sighting of a stored finding changes, given its status. */

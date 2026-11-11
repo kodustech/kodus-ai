@@ -77,6 +77,11 @@ export function reportUsage(
 
 const NOTHING_TO_SETTLE = () => undefined;
 
+/** Whether the run this code is in admits its requests (a spend cap). */
+export function meterAdmitsRequests(): boolean {
+    return !!meterStore.getStore()?.meter.admit;
+}
+
 /**
  * Called by the model wrapper before each request leaves. Outside a metered
  * run, or with a meter that does not admit, the ceiling is never computed. A
