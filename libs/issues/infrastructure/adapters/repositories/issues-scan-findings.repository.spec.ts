@@ -203,9 +203,34 @@ describe('IssuesRepository — security-scan findings', () => {
         model.findOneAndUpdate.mockResolvedValueOnce(null);
         const repository = new IssuesRepository(model as any);
 
-        const { outcome } = await repository.upsertScanFinding(finding);
+        const { outcome, issue } = await repository.upsertScanFinding(finding);
 
         expect(outcome).toBe('created');
+        expect(model.create).toHaveBeenCalledTimes(1);
+        expect(model.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationId: 'org-1',
+                repository: expect.objectContaining({ id: 'repo-1' }),
+                fingerprint: 'fp-1',
+                source: IssueSource.SECURITY_SCAN,
+                status: IssueStatus.OPEN,
+                lastSeenScanId: 'scan-2',
+            }),
+        );
+        expect(issue.status).toBe(IssueStatus.OPEN);
+    });
+
+    it('fails with the real error when a different unique index refuses the create', async () => {
+        const model = modelWith(null);
+        const collision = Object.assign(new Error('E11000 on another index'), {
+            code: 11000,
+        });
+        model.create.mockRejectedValue(collision);
+        const repository = new IssuesRepository(model as any);
+
+        await expect(repository.upsertScanFinding(finding)).rejects.toBe(
+            collision,
+        );
         expect(model.create).toHaveBeenCalledTimes(1);
     });
 

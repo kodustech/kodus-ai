@@ -737,6 +737,20 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         });
     });
 
+    it('settles unknown totals as unknown, never as a zero', async () => {
+        const settle = jest.fn();
+
+        await runWithUsageMeter(
+            { record: jest.fn(), admit: () => settle },
+            async () =>
+                wrap(
+                    answering({ inputTokens: {}, outputTokens: {} }),
+                ).doGenerate({ prompt: PROMPT }),
+        );
+
+        expect(settle.mock.calls[0][0].totalTokens).toBeUndefined();
+    });
+
     it('never sends a request the meter refuses', async () => {
         const model = answering({});
         const admit = jest.fn(() => {
