@@ -278,20 +278,38 @@ export class RefreshCodeAreaRiskMapService {
                         ) -
                         LISTING_RETRY_SLACK_MS,
                 ).toISOString();
-                await this.sync.updateOne(key, { $set: { retryAfter } });
+                // Only while the count is still ours: a listing that succeeded
+                // in between cleared it, and its deadline must not come back.
+                await this.sync.updateOne(
+                    { ...key, listingFailures: attempt },
+                    { $set: { retryAfter } },
+                );
                 throw new CodeAreaHistoryUnavailableError(attempt, retryAfter);
             }
-            if (state.listingFailures) {
-                await this.sync.updateOne(key, {
-                    $set: { listingFailures: 0, retryAfter: null },
-                });
+            // Cleared from what is stored, not from this run's earlier read,
+            // so a failure recorded meanwhile cannot outlive the recovery.
+            const recovered = await this.sync
+                .findOneAndUpdate(
+                    {
+                        ...key,
+                        $or: [
+                            { listingFailures: { $gt: 0 } },
+                            { retryAfter: { $ne: null } },
+                        ],
+                    },
+                    { $set: { listingFailures: 0, retryAfter: null } },
+                    { projection: { listingFailures: 1 } },
+                )
+                .lean()
+                .exec();
+            if (recovered) {
                 this.logger.log({
                     message: 'Code-area history listing recovered',
                     context: RefreshCodeAreaRiskMapService.name,
                     metadata: {
                         organizationId,
                         repositoryId: repository.id,
-                        failedRuns: state.listingFailures,
+                        failedRuns: recovered.listingFailures,
                     },
                 });
                 state = { ...state, listingFailures: 0, retryAfter: null };
