@@ -77,9 +77,6 @@ glob_escape() { printf '%s' "$1" | sed -e 's/[][()*?{}]/[&]/g'; }
 SPECS=()
 add_spec() {
     [ -f "$1" ] || return 0
-    # Integration specs need a database this job does not start — see
-    # mutation-related-specs.cjs.
-    case "$1" in *.integration.spec.ts) return 0 ;; esac
     local escaped="<rootDir>/$(glob_escape "$1")"
     for existing in "${SPECS[@]-}"; do
         [ "$existing" = "$escaped" ] && return 0
@@ -122,6 +119,13 @@ if [ -z "${SPECS[0]-}" ]; then
     record_unreached "${FILES[@]}"
     exit 0
 fi
+
+# This job starts no database. Integration specs that need one skip themselves
+# under this opt-out (Postgres: describe.skip; Mongo: resolveMongoTestGate,
+# which otherwise throws on import in CI and fails the dry run), while the ones
+# that need none still run. Forced, not defaulted: Stryker's concurrent runners
+# would share one test database.
+export SKIP_INTEGRATION=true
 
 # Emit the spec list as a JSON array for jest.stryker.config.ts (node does the
 # quoting so a path with odd characters can't corrupt it).
