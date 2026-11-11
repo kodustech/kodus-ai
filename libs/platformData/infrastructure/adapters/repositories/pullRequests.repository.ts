@@ -826,6 +826,10 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     $match: {
                         organizationId,
                         'repository.id': { $in: repositoryIds },
+                        // A PR is stored after it opens, so createdAt >=
+                        // openedAt: this only bounds the index scan, openedAt
+                        // still decides the result.
+                        'createdAt': { $gte: new Date(since) },
                         'openedAt': { $gte: since },
                         'user.id': { $nin: [null, ''] },
                     },
