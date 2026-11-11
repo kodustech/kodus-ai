@@ -170,7 +170,10 @@ export class RabbitMQWrapperModule {
                             default: false,
                         },
                         'channel-security-scan': {
-                            prefetchCount: 2,
+                            prefetchCount:
+                                configService.get<number>(
+                                    'workflowQueue.WORKFLOW_QUEUE_SECURITY_SCAN_PREFETCH',
+                                ) ?? 5,
                             default: false,
                         },
                     },

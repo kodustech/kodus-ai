@@ -35,15 +35,27 @@ import {
     TASK_PROTECTION_SERVICE_TOKEN,
 } from '../domain/contracts/task-protection.service.contract';
 
-interface WorkflowJobMessage {
+export interface WorkflowJobMessage {
     jobId: string;
     correlationId?: string;
     [key: string]: unknown;
 }
 
+/** Log context of every workflow job consumer, as before the split. */
+const CONSUMER_CONTEXT = 'WorkflowJobConsumer';
+
+/**
+ * What every workflow job consumer does with a message: inbox claim and
+ * release, task protection while any job runs, the drain on shutdown. The
+ * queues it listens to are its subclass's: a worker role registers the
+ * consumer of the queues it owns (the code-review worker, or the deep scan
+ * worker, #2451), and only those are subscribed.
+ */
 @Injectable()
-export class WorkflowJobConsumer implements BeforeApplicationShutdown {
-    private readonly logger = createLogger(WorkflowJobConsumer.name);
+export abstract class WorkflowJobConsumerBase
+    implements BeforeApplicationShutdown
+{
+    private readonly logger = createLogger(CONSUMER_CONTEXT);
     private readonly instanceId = os.hostname();
     // Default ECS protection time in minutes
     private readonly JOB_PROTECTION_MINUTES = 60;
@@ -63,6 +75,400 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
         private readonly taskProtectionService: ITaskProtectionService,
     ) {}
 
+
+    /**
+     * Inbox claim timeout per queue, in minutes. Dimensioned as
+     * (workflow timeout + overhead) so a hard worker crash doesn't
+     * block retries for the default 2.5h while we wait for the reaper.
+     * Queues not listed fall back to 150 (2.5h).
+     */
+    private resolveClaimTimeoutMinutes(queueName: string): number {
+        if (queueName === 'workflow.jobs.ast_graph_build.queue') return 30;
+        if (queueName === 'workflow.jobs.ast_graph_incremental.queue')
+            return 15;
+        if (queueName === 'workflow.jobs.webhook.queue') return 20;
+        if (queueName === 'workflow.jobs.cli_code_review.queue') return 35;
+        if (queueName === 'workflow.jobs.security_scan.queue') return 45;
+        return 150;
+    }
+
+    protected async handleWorkflowJob(
+        consumerId: string,
+        queueName: string,
+        message: WorkflowJobMessage | MessagePayload<WorkflowJobMessage>,
+        amqpMsg: ConsumeMessage,
+    ): Promise<void> {
+        this.activeJobs++;
+        try {
+            await this.syncTaskProtection();
+            return await this.processWorkflowJob(
+                consumerId,
+                queueName,
+                message,
+                amqpMsg,
+            );
+        } finally {
+            this.activeJobs--;
+            await this.syncTaskProtection();
+        }
+    }
+
+    /**
+     * Task protection is per ECS task, not per job: it must stay on while
+     * ANY job runs. Unprotecting whenever one job finished left the task
+     * scale-in/deploy eligible with other jobs still in flight, and those
+     * were SIGKILLed mid-review.
+     *
+     * Calls are chained so protect/unprotect requests reach the ECS agent
+     * in order, and each one reads `activeJobs` when it runs — the last
+     * request always reflects the current state. Requests coalesce: while a
+     * call is queued but not started, later requests reuse it (it will read
+     * the newer state), so at most one call is in flight and one queued no
+     * matter how many jobs start or finish. Every job start still issues or
+     * joins a protect, which keeps refreshing the protection expiry.
+     */
+    private syncTaskProtection(): Promise<void> {
+        if (this.protectionSyncQueued) {
+            return this.protectionSync;
+        }
+        this.protectionSyncQueued = true;
+
+        this.protectionSync = this.protectionSync.then(async () => {
+            this.protectionSyncQueued = false;
+            try {
+                if (this.activeJobs > 0) {
+                    await this.taskProtectionService.protectTask(
+                        this.JOB_PROTECTION_MINUTES,
+                    );
+                } else {
+                    await this.taskProtectionService.unprotectTask();
+                }
+            } catch (error) {
+                // The service logs its own HTTP failures; this only catches
+                // the unexpected, and keeps the chain alive for the next call.
+                this.logger.error({
+                    message: 'Failed to sync ECS task protection',
+                    context: CONSUMER_CONTEXT,
+                    error,
+                    metadata: {
+                        activeJobs: this.activeJobs,
+                        instanceId: this.instanceId,
+                    },
+                });
+            }
+        });
+        return this.protectionSync;
+    }
+
+    private async processWorkflowJob(
+        consumerId: string,
+        queueName: string,
+        message: WorkflowJobMessage | MessagePayload<WorkflowJobMessage>,
+        amqpMsg: ConsumeMessage,
+    ): Promise<void> {
+        const unwrappedMessage: WorkflowJobMessage = this.isMessagePayload(
+            message,
+        )
+            ? message.payload
+            : message;
+
+        const messageId = amqpMsg.properties.messageId;
+        const correlationId =
+            (amqpMsg.properties.headers &&
+                amqpMsg.properties.headers['x-correlation-id']) ||
+            unwrappedMessage.correlationId ||
+            amqpMsg.properties.correlationId;
+
+        if (!messageId || !unwrappedMessage.jobId) {
+            this.logger.error({
+                message:
+                    'Invalid workflow job message: missing messageId or jobId',
+                context: CONSUMER_CONTEXT,
+                metadata: {
+                    message,
+                    unwrappedMessage,
+                    amqpMsg: {
+                        messageId,
+                        correlationId,
+                        queueName,
+                    },
+                },
+            });
+            throw new Error('Invalid message: missing messageId or jobId');
+        }
+
+        // 1. Atomic claim in Inbox
+        const claimed = await this.inboxRepository.claim(
+            messageId,
+            consumerId,
+            this.instanceId,
+            unwrappedMessage.jobId,
+            this.resolveClaimTimeoutMinutes(queueName),
+        );
+
+        if (!claimed) {
+            // If not claimed, it could be because it's already processed or being processed by another worker
+            const existing =
+                await this.inboxRepository.findByConsumerAndMessageId(
+                    consumerId,
+                    messageId,
+                );
+
+            if (existing?.status === InboxStatus.PROCESSED) {
+                this.logger.debug({
+                    message: 'Message already processed (Idempotency skip)',
+                    context: CONSUMER_CONTEXT,
+                    metadata: {
+                        messageId,
+                        jobId: unwrappedMessage.jobId,
+                        queueName,
+                    },
+                });
+                return;
+            }
+
+            // If it exists but isn't processed (and claim failed), throw error to trigger retry with backoff
+            // Isso evita o hot loop de Nack(true) e respeita o delivery-limit das quorum queues
+            this.logger.warn({
+                message:
+                    'Message already claimed by another worker, retrying with backoff',
+                context: CONSUMER_CONTEXT,
+                metadata: {
+                    messageId,
+                    jobId: unwrappedMessage.jobId,
+                    queueName,
+                },
+            });
+            throw new Error('Message already claimed but not finished');
+        }
+
+        // 2. Start observability span
+        if (correlationId) {
+            this.observability.setContext(correlationId);
+        }
+
+        return await this.observability.runInSpan(
+            'workflow.job.consume',
+            async (span) => {
+                span.setAttributes({
+                    'workflow.job.id': unwrappedMessage.jobId,
+                    'workflow.correlation.id': correlationId,
+                    'workflow.message.id': messageId,
+                    'workflow.queue.name': queueName,
+                });
+
+                try {
+                    await this.jobProcessor.process(unwrappedMessage.jobId);
+
+                    await this.inboxRepository.markAsProcessed(
+                        messageId,
+                        consumerId,
+                    );
+
+                    span.setAttributes({
+                        'workflow.job.processed': true,
+                    });
+                } catch (error) {
+                    span.setAttributes({
+                        'error': true,
+                        'exception.type': error.name,
+                        'exception.message': error.message,
+                    });
+
+                    this.logger.error({
+                        message: 'Failed to process workflow job',
+                        context: CONSUMER_CONTEXT,
+                        error,
+                        metadata: {
+                            messageId,
+                            jobId: unwrappedMessage.jobId,
+                            correlationId,
+                            queueName,
+                        },
+                    });
+
+                    // CRITICAL: Always mark job as FAILED to prevent stuck PENDING jobs
+                    try {
+                        await this.jobRepository.update(
+                            unwrappedMessage.jobId,
+                            {
+                                status: JobStatus.FAILED,
+                                errorClassification:
+                                    ErrorClassification.PERMANENT,
+                                lastError: error.message,
+                            },
+                        );
+
+                        this.logger.log({
+                            message:
+                                'Job marked as FAILED after processing error',
+                            context: CONSUMER_CONTEXT,
+                            metadata: {
+                                jobId: unwrappedMessage.jobId,
+                                error: error.message,
+                            },
+                        });
+                    } catch (updateError) {
+                        this.logger.error({
+                            message: 'Failed to update job status to FAILED',
+                            context: CONSUMER_CONTEXT,
+                            error: updateError,
+                            metadata: {
+                                jobId: unwrappedMessage.jobId,
+                                originalError: error.message,
+                            },
+                        });
+                    }
+
+                    // Release lock — bounded so a slow Mongo cannot keep the
+                    // AMQP message unacked. If it times out or fails, the
+                    // stale-claim reaper (claimTimeoutMinutes=150) reclaims it.
+                    // Retry scheduling for AMQP is handled by RabbitMQErrorHandler.
+                    try {
+                        await runWithBoundedTimeout(
+                            this.inboxRepository.releaseLock(
+                                messageId,
+                                consumerId,
+                                error.message,
+                            ),
+                            10_000,
+                            'inbox.releaseLock',
+                        );
+                    } catch (releaseErr) {
+                        this.logger.error({
+                            message:
+                                'releaseLock failed/timed out; deferring to stale-claim reaper',
+                            context: CONSUMER_CONTEXT,
+                            error: releaseErr,
+                            metadata: {
+                                messageId,
+                                jobId: unwrappedMessage.jobId,
+                            },
+                        });
+                    }
+
+                    // Re-throw so RabbitMQErrorHandler can republish with delay
+                    throw error;
+                }
+            },
+            {
+                'workflow.component': 'consumer',
+                'workflow.operation': 'process_job',
+            },
+        );
+    }
+
+    /**
+     * Drain active jobs and release this host's inbox locks. Runs in
+     * beforeApplicationShutdown: after WorkerDrainService cancelled the
+     * consumers (onModuleDestroy) and before it closes the AMQP connection
+     * (onApplicationShutdown), so running jobs can still ack.
+     */
+    async beforeApplicationShutdown(signal?: string): Promise<void> {
+        // Same reader as the worker's force-exit timer, so the two agree
+        const maxWaitMs = parseDrainTimeoutMs();
+
+        this.logger.log({
+            message: `Shutdown signal ${signal} received. Waiting for active jobs...`,
+            context: CONSUMER_CONTEXT,
+            metadata: {
+                activeJobs: this.activeJobs,
+                maxWaitMs,
+                configured: process.env.API_WORKER_DRAIN_TIMEOUT_MS ?? null,
+            },
+        });
+
+        const checkIntervalMs = 1_000;
+        const waitStart = Date.now();
+
+        while (this.activeJobs > 0 && Date.now() - waitStart < maxWaitMs) {
+            this.logger.log({
+                message: `Waiting for ${this.activeJobs} active jobs to complete...`,
+                context: CONSUMER_CONTEXT,
+            });
+            await new Promise((resolve) =>
+                setTimeout(resolve, checkIntervalMs),
+            );
+        }
+
+        const drainDurationMs = Date.now() - waitStart;
+        if (this.activeJobs > 0) {
+            this.logger.warn({
+                message: `Shutdown timeout reached with ${this.activeJobs} active jobs still running — releasing inbox locks anyway so other workers can reclaim the messages.`,
+                context: CONSUMER_CONTEXT,
+                metadata: {
+                    activeJobs: this.activeJobs,
+                    instanceId: this.instanceId,
+                    drainDurationMs,
+                    drainBudgetMs: maxWaitMs,
+                    drainBudgetExhausted: true,
+                },
+            });
+        } else {
+            this.logger.log({
+                message: 'All active jobs drained before shutdown timeout',
+                context: CONSUMER_CONTEXT,
+                metadata: {
+                    instanceId: this.instanceId,
+                    drainDurationMs,
+                    drainBudgetMs: maxWaitMs,
+                    drainBudgetExhausted: false,
+                },
+            });
+        }
+
+        // Release every PROCESSING lock held by this host. Prevents the
+        // "dead worker leaves locks" pattern we traced in prod: without
+        // this, orphan locks sit around until the reaper cron's 2.5h
+        // timeout, blocking other workers from picking up the messages.
+        // Bounded: a slow database must not hold up the AMQP close that follows
+        try {
+            const released = await runWithBoundedTimeout(
+                this.inboxRepository.releaseAllByInstance(this.instanceId),
+                INBOX_RELEASE_TIMEOUT_MS,
+                'inbox.releaseAllByInstance',
+            );
+            if (released > 0) {
+                this.logger.log({
+                    message: `Released ${released} inbox locks during shutdown`,
+                    context: CONSUMER_CONTEXT,
+                    metadata: {
+                        instanceId: this.instanceId,
+                        released,
+                    },
+                });
+            }
+        } catch (error) {
+            // Never throw from a shutdown hook — best-effort by design.
+            this.logger.error({
+                message: 'Failed to release inbox locks during shutdown',
+                context: CONSUMER_CONTEXT,
+                error,
+                metadata: { instanceId: this.instanceId },
+            });
+        }
+
+        this.logger.log({
+            message: 'Shutdown complete.',
+            context: CONSUMER_CONTEXT,
+        });
+    }
+
+    private isMessagePayload(
+        message: any,
+    ): message is MessagePayload<WorkflowJobMessage> {
+        return (
+            message &&
+            typeof message === 'object' &&
+            'event_name' in message &&
+            'payload' in message
+        );
+    }
+}
+
+/** The code-review worker's queues. */
+@Injectable()
+export class WorkflowJobConsumer extends WorkflowJobConsumerBase {
     /**
      * Webhook-processing jobs
      * Delayed exchange bindings are created by RabbitMQDLQInitializer.
@@ -265,426 +671,6 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
             'workflow.jobs.ast_graph_incremental.queue',
             message,
             amqpMsg,
-        );
-    }
-
-    /**
-     * Security scan slices (#2451). One slice per sandbox lifetime; a scan
-     * that needs more re-enqueues itself. Prefetch is low: every slice holds
-     * a sandbox and runs model calls for up to half an hour.
-     */
-    @RabbitSubscribe({
-        exchange: 'workflow.exchange',
-        routingKey: 'workflow.jobs.*.SECURITY_SCAN',
-        queue: 'workflow.jobs.security_scan.queue',
-        errorBehavior: MessageHandlerErrorBehavior.ACK,
-        errorHandler: createRabbitMQErrorHandlerWithFallback(
-            'workflow.job.failed',
-        ),
-        queueOptions: {
-            channel: 'channel-security-scan',
-            arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.security_scan.queue'],
-        },
-    })
-    async handleSecurityScanJob(
-        message: WorkflowJobMessage | MessagePayload<WorkflowJobMessage>,
-        amqpMsg: ConsumeMessage,
-    ): Promise<void> {
-        return this.handleWorkflowJob(
-            'workflow-job-consumer.security_scan',
-            'workflow.jobs.security_scan.queue',
-            message,
-            amqpMsg,
-        );
-    }
-
-    /**
-     * Inbox claim timeout per queue, in minutes. Dimensioned as
-     * (workflow timeout + overhead) so a hard worker crash doesn't
-     * block retries for the default 2.5h while we wait for the reaper.
-     * Queues not listed fall back to 150 (2.5h).
-     */
-    private resolveClaimTimeoutMinutes(queueName: string): number {
-        if (queueName === 'workflow.jobs.ast_graph_build.queue') return 30;
-        if (queueName === 'workflow.jobs.ast_graph_incremental.queue')
-            return 15;
-        if (queueName === 'workflow.jobs.webhook.queue') return 20;
-        if (queueName === 'workflow.jobs.cli_code_review.queue') return 35;
-        if (queueName === 'workflow.jobs.security_scan.queue') return 45;
-        return 150;
-    }
-
-    private async handleWorkflowJob(
-        consumerId: string,
-        queueName: string,
-        message: WorkflowJobMessage | MessagePayload<WorkflowJobMessage>,
-        amqpMsg: ConsumeMessage,
-    ): Promise<void> {
-        this.activeJobs++;
-        try {
-            await this.syncTaskProtection();
-            return await this.processWorkflowJob(
-                consumerId,
-                queueName,
-                message,
-                amqpMsg,
-            );
-        } finally {
-            this.activeJobs--;
-            await this.syncTaskProtection();
-        }
-    }
-
-    /**
-     * Task protection is per ECS task, not per job: it must stay on while
-     * ANY job runs. Unprotecting whenever one job finished left the task
-     * scale-in/deploy eligible with other jobs still in flight, and those
-     * were SIGKILLed mid-review.
-     *
-     * Calls are chained so protect/unprotect requests reach the ECS agent
-     * in order, and each one reads `activeJobs` when it runs — the last
-     * request always reflects the current state. Requests coalesce: while a
-     * call is queued but not started, later requests reuse it (it will read
-     * the newer state), so at most one call is in flight and one queued no
-     * matter how many jobs start or finish. Every job start still issues or
-     * joins a protect, which keeps refreshing the protection expiry.
-     */
-    private syncTaskProtection(): Promise<void> {
-        if (this.protectionSyncQueued) {
-            return this.protectionSync;
-        }
-        this.protectionSyncQueued = true;
-
-        this.protectionSync = this.protectionSync.then(async () => {
-            this.protectionSyncQueued = false;
-            try {
-                if (this.activeJobs > 0) {
-                    await this.taskProtectionService.protectTask(
-                        this.JOB_PROTECTION_MINUTES,
-                    );
-                } else {
-                    await this.taskProtectionService.unprotectTask();
-                }
-            } catch (error) {
-                // The service logs its own HTTP failures; this only catches
-                // the unexpected, and keeps the chain alive for the next call.
-                this.logger.error({
-                    message: 'Failed to sync ECS task protection',
-                    context: WorkflowJobConsumer.name,
-                    error,
-                    metadata: {
-                        activeJobs: this.activeJobs,
-                        instanceId: this.instanceId,
-                    },
-                });
-            }
-        });
-        return this.protectionSync;
-    }
-
-    private async processWorkflowJob(
-        consumerId: string,
-        queueName: string,
-        message: WorkflowJobMessage | MessagePayload<WorkflowJobMessage>,
-        amqpMsg: ConsumeMessage,
-    ): Promise<void> {
-        const unwrappedMessage: WorkflowJobMessage = this.isMessagePayload(
-            message,
-        )
-            ? message.payload
-            : message;
-
-        const messageId = amqpMsg.properties.messageId;
-        const correlationId =
-            (amqpMsg.properties.headers &&
-                amqpMsg.properties.headers['x-correlation-id']) ||
-            unwrappedMessage.correlationId ||
-            amqpMsg.properties.correlationId;
-
-        if (!messageId || !unwrappedMessage.jobId) {
-            this.logger.error({
-                message:
-                    'Invalid workflow job message: missing messageId or jobId',
-                context: WorkflowJobConsumer.name,
-                metadata: {
-                    message,
-                    unwrappedMessage,
-                    amqpMsg: {
-                        messageId,
-                        correlationId,
-                        queueName,
-                    },
-                },
-            });
-            throw new Error('Invalid message: missing messageId or jobId');
-        }
-
-        // 1. Atomic claim in Inbox
-        const claimed = await this.inboxRepository.claim(
-            messageId,
-            consumerId,
-            this.instanceId,
-            unwrappedMessage.jobId,
-            this.resolveClaimTimeoutMinutes(queueName),
-        );
-
-        if (!claimed) {
-            // If not claimed, it could be because it's already processed or being processed by another worker
-            const existing =
-                await this.inboxRepository.findByConsumerAndMessageId(
-                    consumerId,
-                    messageId,
-                );
-
-            if (existing?.status === InboxStatus.PROCESSED) {
-                this.logger.debug({
-                    message: 'Message already processed (Idempotency skip)',
-                    context: WorkflowJobConsumer.name,
-                    metadata: {
-                        messageId,
-                        jobId: unwrappedMessage.jobId,
-                        queueName,
-                    },
-                });
-                return;
-            }
-
-            // If it exists but isn't processed (and claim failed), throw error to trigger retry with backoff
-            // Isso evita o hot loop de Nack(true) e respeita o delivery-limit das quorum queues
-            this.logger.warn({
-                message:
-                    'Message already claimed by another worker, retrying with backoff',
-                context: WorkflowJobConsumer.name,
-                metadata: {
-                    messageId,
-                    jobId: unwrappedMessage.jobId,
-                    queueName,
-                },
-            });
-            throw new Error('Message already claimed but not finished');
-        }
-
-        // 2. Start observability span
-        if (correlationId) {
-            this.observability.setContext(correlationId);
-        }
-
-        return await this.observability.runInSpan(
-            'workflow.job.consume',
-            async (span) => {
-                span.setAttributes({
-                    'workflow.job.id': unwrappedMessage.jobId,
-                    'workflow.correlation.id': correlationId,
-                    'workflow.message.id': messageId,
-                    'workflow.queue.name': queueName,
-                });
-
-                try {
-                    await this.jobProcessor.process(unwrappedMessage.jobId);
-
-                    await this.inboxRepository.markAsProcessed(
-                        messageId,
-                        consumerId,
-                    );
-
-                    span.setAttributes({
-                        'workflow.job.processed': true,
-                    });
-                } catch (error) {
-                    span.setAttributes({
-                        'error': true,
-                        'exception.type': error.name,
-                        'exception.message': error.message,
-                    });
-
-                    this.logger.error({
-                        message: 'Failed to process workflow job',
-                        context: WorkflowJobConsumer.name,
-                        error,
-                        metadata: {
-                            messageId,
-                            jobId: unwrappedMessage.jobId,
-                            correlationId,
-                            queueName,
-                        },
-                    });
-
-                    // CRITICAL: Always mark job as FAILED to prevent stuck PENDING jobs
-                    try {
-                        await this.jobRepository.update(
-                            unwrappedMessage.jobId,
-                            {
-                                status: JobStatus.FAILED,
-                                errorClassification:
-                                    ErrorClassification.PERMANENT,
-                                lastError: error.message,
-                            },
-                        );
-
-                        this.logger.log({
-                            message:
-                                'Job marked as FAILED after processing error',
-                            context: WorkflowJobConsumer.name,
-                            metadata: {
-                                jobId: unwrappedMessage.jobId,
-                                error: error.message,
-                            },
-                        });
-                    } catch (updateError) {
-                        this.logger.error({
-                            message: 'Failed to update job status to FAILED',
-                            context: WorkflowJobConsumer.name,
-                            error: updateError,
-                            metadata: {
-                                jobId: unwrappedMessage.jobId,
-                                originalError: error.message,
-                            },
-                        });
-                    }
-
-                    // Release lock — bounded so a slow Mongo cannot keep the
-                    // AMQP message unacked. If it times out or fails, the
-                    // stale-claim reaper (claimTimeoutMinutes=150) reclaims it.
-                    // Retry scheduling for AMQP is handled by RabbitMQErrorHandler.
-                    try {
-                        await runWithBoundedTimeout(
-                            this.inboxRepository.releaseLock(
-                                messageId,
-                                consumerId,
-                                error.message,
-                            ),
-                            10_000,
-                            'inbox.releaseLock',
-                        );
-                    } catch (releaseErr) {
-                        this.logger.error({
-                            message:
-                                'releaseLock failed/timed out; deferring to stale-claim reaper',
-                            context: WorkflowJobConsumer.name,
-                            error: releaseErr,
-                            metadata: {
-                                messageId,
-                                jobId: unwrappedMessage.jobId,
-                            },
-                        });
-                    }
-
-                    // Re-throw so RabbitMQErrorHandler can republish with delay
-                    throw error;
-                }
-            },
-            {
-                'workflow.component': 'consumer',
-                'workflow.operation': 'process_job',
-            },
-        );
-    }
-
-    /**
-     * Drain active jobs and release this host's inbox locks. Runs in
-     * beforeApplicationShutdown: after WorkerDrainService cancelled the
-     * consumers (onModuleDestroy) and before it closes the AMQP connection
-     * (onApplicationShutdown), so running jobs can still ack.
-     */
-    async beforeApplicationShutdown(signal?: string): Promise<void> {
-        // Same reader as the worker's force-exit timer, so the two agree
-        const maxWaitMs = parseDrainTimeoutMs();
-
-        this.logger.log({
-            message: `Shutdown signal ${signal} received. Waiting for active jobs...`,
-            context: WorkflowJobConsumer.name,
-            metadata: {
-                activeJobs: this.activeJobs,
-                maxWaitMs,
-                configured: process.env.API_WORKER_DRAIN_TIMEOUT_MS ?? null,
-            },
-        });
-
-        const checkIntervalMs = 1_000;
-        const waitStart = Date.now();
-
-        while (this.activeJobs > 0 && Date.now() - waitStart < maxWaitMs) {
-            this.logger.log({
-                message: `Waiting for ${this.activeJobs} active jobs to complete...`,
-                context: WorkflowJobConsumer.name,
-            });
-            await new Promise((resolve) =>
-                setTimeout(resolve, checkIntervalMs),
-            );
-        }
-
-        const drainDurationMs = Date.now() - waitStart;
-        if (this.activeJobs > 0) {
-            this.logger.warn({
-                message: `Shutdown timeout reached with ${this.activeJobs} active jobs still running — releasing inbox locks anyway so other workers can reclaim the messages.`,
-                context: WorkflowJobConsumer.name,
-                metadata: {
-                    activeJobs: this.activeJobs,
-                    instanceId: this.instanceId,
-                    drainDurationMs,
-                    drainBudgetMs: maxWaitMs,
-                    drainBudgetExhausted: true,
-                },
-            });
-        } else {
-            this.logger.log({
-                message: 'All active jobs drained before shutdown timeout',
-                context: WorkflowJobConsumer.name,
-                metadata: {
-                    instanceId: this.instanceId,
-                    drainDurationMs,
-                    drainBudgetMs: maxWaitMs,
-                    drainBudgetExhausted: false,
-                },
-            });
-        }
-
-        // Release every PROCESSING lock held by this host. Prevents the
-        // "dead worker leaves locks" pattern we traced in prod: without
-        // this, orphan locks sit around until the reaper cron's 2.5h
-        // timeout, blocking other workers from picking up the messages.
-        // Bounded: a slow database must not hold up the AMQP close that follows
-        try {
-            const released = await runWithBoundedTimeout(
-                this.inboxRepository.releaseAllByInstance(this.instanceId),
-                INBOX_RELEASE_TIMEOUT_MS,
-                'inbox.releaseAllByInstance',
-            );
-            if (released > 0) {
-                this.logger.log({
-                    message: `Released ${released} inbox locks during shutdown`,
-                    context: WorkflowJobConsumer.name,
-                    metadata: {
-                        instanceId: this.instanceId,
-                        released,
-                    },
-                });
-            }
-        } catch (error) {
-            // Never throw from a shutdown hook — best-effort by design.
-            this.logger.error({
-                message: 'Failed to release inbox locks during shutdown',
-                context: WorkflowJobConsumer.name,
-                error,
-                metadata: { instanceId: this.instanceId },
-            });
-        }
-
-        this.logger.log({
-            message: 'Shutdown complete.',
-            context: WorkflowJobConsumer.name,
-        });
-    }
-
-    private isMessagePayload(
-        message: any,
-    ): message is MessagePayload<WorkflowJobMessage> {
-        return (
-            message &&
-            typeof message === 'object' &&
-            'event_name' in message &&
-            'payload' in message
         );
     }
 }

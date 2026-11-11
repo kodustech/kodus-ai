@@ -84,11 +84,12 @@
 
 | Variable | Required | Type | Scope | Description |
 | --- | --- | --- | --- | --- |
-| `WORKER_ROLE` | ✅ | enum(code-review,analytics) | ⚙️ Both | Selects which workload this worker container handles. The kodus-worker image refuses to boot without this — and the queues it owns (workflow.jobs.*) are created on its first connection, so if the worker dies on boot the api/webhooks fail with QueueBind 404 on every webhook event. Every deployment runs code-review; analytics is a separate Cockpit worker when that feature is enabled. |
+| `WORKER_ROLE` | ✅ | enum(code-review,analytics,security-scan) | ⚙️ Both | Selects which workload this worker container handles. The kodus-worker image refuses to boot without this — and the queues it owns (workflow.jobs.*) are created on its first connection, so if the worker dies on boot the api/webhooks fail with QueueBind 404 on every webhook event. Every deployment runs code-review; analytics is a separate Cockpit worker when that feature is enabled. security-scan is the cloud's deep scan worker: only that queue. |
 | `WORKFLOW_QUEUE_WORKER_PREFETCH` | – | number | ⚙️ Both |  |
 | `WORKFLOW_QUEUE_PUBLISHER_PREFETCH` | – | number | ⚙️ Both |  |
 | `WORKFLOW_QUEUE_WEBHOOK_PREFETCH` | – | number | ⚙️ Both |  |
 | `WORKFLOW_QUEUE_CODE_REVIEW_PREFETCH` | – | number | ⚙️ Both |  |
+| `WORKFLOW_QUEUE_SECURITY_SCAN_PREFETCH` | – | number | ☁️ Cloud | Deep scans one security-scan worker runs at once. Each holds a sandbox and four model loops for up to half an hour per slice. |
 | `WORKFLOW_QUEUE_WEBHOOK_PROCESS_TIMEOUT_MS` | – | number | ⚙️ Both |  |
 | `WORKFLOW_QUEUE_CODE_REVIEW_PROCESS_TIMEOUT_MS` | – | number | ⚙️ Both |  |
 | `WORKFLOW_OUTBOX_MAX_ATTEMPTS` | – | number | ⚙️ Both | Max retries before a message is marked FAILED. |

@@ -35,6 +35,10 @@
 import { NestFactory } from '@nestjs/core';
 
 import { ApiModule } from '../../apps/api/src/api.module';
+import { WorkerModule } from '../../apps/worker/src/worker.module';
+
+/** Every worker role that consumes queues builds its own module graph. */
+const WORKER_ROLES = ['code-review', 'security-scan'];
 
 /**
  * Belt-and-braces: the whole point of this job is to be fast and
@@ -70,11 +74,23 @@ async function main(): Promise<void> {
     });
 
     await context.close();
+
+    for (const role of WORKER_ROLES) {
+        console.log(
+            `[di-graph] building WorkerModule graph for WORKER_ROLE=${role}...`,
+        );
+        process.env.WORKER_ROLE = role;
+        const worker = await NestFactory.createApplicationContext(
+            WorkerModule.forRoot(),
+            { preview: true, abortOnError: false, logger: ['error', 'warn'] },
+        );
+        await worker.close();
+    }
     clearTimeout(timeout);
 
     const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
     console.log(
-        `[di-graph] OK — ApiModule resolves (${elapsedMs.toFixed(0)}ms).`,
+        `[di-graph] OK — ApiModule and the ${WORKER_ROLES.join(', ')} workers resolve (${elapsedMs.toFixed(0)}ms).`,
     );
 }
 
