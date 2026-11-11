@@ -108,6 +108,11 @@ export class StartSecurityScanUseCase {
             throw new ConflictException(ALREADY_RUNNING);
         }
 
+        const resumed = await this.resumablePlan(
+            orgTeam.organizationId,
+            String(repository.id),
+        );
+
         const platform =
             await this.codeManagementService.getTypeIntegration(orgTeam);
         const fullName =
@@ -137,8 +142,12 @@ export class StartSecurityScanUseCase {
                         : {}),
                 },
                 spend: { usd: 0, inputTokens: 0, outputTokens: 0, requests: 0 },
-                units: [],
-                progress: [],
+                units: resumed?.units ?? [],
+                progress: resumed?.progress ?? [],
+                ...(resumed && {
+                    reported: resumed.reported,
+                    coverage: resumed.coverage,
+                }),
                 modelName: model.modelName,
                 requestedBy: input.requestedBy,
             })
@@ -164,5 +173,54 @@ export class StartSecurityScanUseCase {
         });
 
         return scan;
+    }
+
+    /**
+     * The plan of the repository's last scan when it stopped before the end
+     * (its spend limit, or a stopped worker): running the scan again carries
+     * on with the areas it had not reached instead of mapping the repository
+     * from scratch and stopping at the same place. Areas already examined are
+     * kept as done; their files are not counted as examined by the new scan,
+     * so none of their findings is resolved for not being seen again.
+     */
+    private async resumablePlan(
+        organizationId: string,
+        repositoryId: string,
+    ): Promise<Pick<
+        SecurityScanRecord,
+        'units' | 'progress' | 'reported' | 'coverage'
+    > | null> {
+        const [last] = await this.scans.findRecent(
+            organizationId,
+            [repositoryId],
+            1,
+        );
+        if (
+            !last?.units?.length ||
+            (last.status !== SecurityScanStatus.STOPPED_BY_BUDGET &&
+                last.status !== SecurityScanStatus.FAILED)
+        ) {
+            return null;
+        }
+        const progress = (last.progress ?? []).filter(
+            (p) => p.state === 'done' || p.state === 'failed',
+        );
+        if (progress.length >= last.units.length) {
+            return null;
+        }
+        return {
+            units: last.units,
+            progress,
+            reported: last.reported ?? [],
+            coverage: {
+                examinedFiles: [],
+                unitsTotal: last.units.length,
+                unitsDone: progress.filter((p) => p.state === 'done').length,
+                unitsFailed: progress.filter((p) => p.state === 'failed')
+                    .length,
+                unitsSkippedByBudget: 0,
+                languages: last.coverage?.languages ?? [],
+            },
+        };
     }
 }
