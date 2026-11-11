@@ -176,10 +176,14 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
 
     describe('findPRNumbersByTitleAndOrganization (PR list title search)', () => {
         it('matches the typed title as literal text, case-insensitive', async () => {
-            const findExec = jest.fn().mockResolvedValue([]);
-            const maxTimeMS = jest.fn().mockReturnValue({ exec: findExec });
-            const lean = jest.fn().mockReturnValue({ maxTimeMS });
-            model.find = jest.fn().mockReturnValue({ lean });
+            // Chainable in any order, like the mongoose query it stands for.
+            const query: Record<string, jest.Mock> = {
+                exec: jest.fn().mockResolvedValue([]),
+            };
+            for (const method of ['hint', 'lean', 'maxTimeMS']) {
+                query[method] = jest.fn(() => query);
+            }
+            model.find = jest.fn().mockReturnValue(query);
 
             await repo.findPRNumbersByTitleAndOrganization(
                 'fix(api) .*',

@@ -149,6 +149,16 @@ export interface IPullRequestsRepository {
         organizationId: string,
         repositoryIds?: string[],
     ): Promise<Array<{ number: number; repositoryId: string }>>;
+    // Keys of open PRs, optionally only those with an unresolved delivered
+    // suggestion. `truncated` = more than `limit` exist; the keys are partial.
+    findOpenPullRequestKeys(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: { unresolvedOnly?: boolean; limit: number },
+    ): Promise<{
+        keys: Array<{ number: number; repositoryId: string }>;
+        truncated: boolean;
+    }>;
     // Distinct PR authors (by display name) for the Author search autocomplete.
     findDistinctAuthorsByRepositoryIds(
         organizationId: string,

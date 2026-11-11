@@ -259,6 +259,21 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    findOpenPullRequestKeys(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: { unresolvedOnly?: boolean; limit: number },
+    ): Promise<{
+        keys: Array<{ number: number; repositoryId: string }>;
+        truncated: boolean;
+    }> {
+        return this.pullRequestsRepository.findOpenPullRequestKeys(
+            organizationId,
+            repositoryIds,
+            opts,
+        );
+    }
+
     findDistinctAuthorsByRepositoryIds(
         organizationId: string,
         repositoryIds: string[] | undefined,
