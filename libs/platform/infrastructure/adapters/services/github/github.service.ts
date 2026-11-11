@@ -51,6 +51,7 @@ import {
     formatTitleLine,
 } from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
+import { createHash } from 'node:crypto';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
 import {
     isFileMatchingGlob,
@@ -3685,8 +3686,9 @@ export class GithubService
                         doNotRetry: [400, 401, 403, 404, 422, 451],
                     },
                     throttle: {
-                        // One write queue per token owner, as on the App path.
-                        id: `token:${ns}`,
+                        // One write queue per token, as on the App path: teams
+                        // sharing a PAT share GitHub's per-user limit too.
+                        id: `token:${createHash('sha256').update(decryptedPAT).digest('hex').slice(0, 16)}`,
                         // NEVER sleep inside the octokit call (mirrors the App
                         // path above). A primary-rate-limit retryAfter is the
                         // time until the hourly bucket resets — up to ~59 min.

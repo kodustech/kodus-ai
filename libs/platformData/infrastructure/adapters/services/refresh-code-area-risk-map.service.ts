@@ -261,7 +261,15 @@ export class RefreshCodeAreaRiskMapService {
             if (!Array.isArray(listed)) {
                 // An uninstalled App or a deleted repository answers the same
                 // on every run: back off instead of asking again each time.
-                const attempt = (state.listingFailures ?? 0) + 1;
+                const counted = await this.sync
+                    .findOneAndUpdate(
+                        key,
+                        { $inc: { listingFailures: 1 } },
+                        { new: true, projection: { listingFailures: 1 } },
+                    )
+                    .lean()
+                    .exec();
+                const attempt = Math.max(1, counted?.listingFailures ?? 1);
                 const retryAfter = new Date(
                     Date.now() +
                         Math.min(
@@ -270,9 +278,7 @@ export class RefreshCodeAreaRiskMapService {
                         ) -
                         LISTING_RETRY_SLACK_MS,
                 ).toISOString();
-                await this.sync.updateOne(key, {
-                    $set: { listingFailures: attempt, retryAfter },
-                });
+                await this.sync.updateOne(key, { $set: { retryAfter } });
                 throw new CodeAreaHistoryUnavailableError(attempt, retryAfter);
             }
             if (state.listingFailures) {

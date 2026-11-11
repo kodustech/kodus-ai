@@ -602,6 +602,16 @@ it('backs off a repository whose PRs cannot be listed and clears it once they ca
         updateOne: jest.fn(async (_key, update) => {
             state = { ...state, ...update.$set };
         }),
+        findOneAndUpdate: jest.fn((_key, update) => ({
+            lean: () => ({
+                exec: async () => {
+                    state.listingFailures =
+                        (state.listingFailures ?? 0) +
+                        update.$inc.listingFailures;
+                    return state;
+                },
+            }),
+        })),
     };
     const history = {
         deleteMany: jest.fn(),

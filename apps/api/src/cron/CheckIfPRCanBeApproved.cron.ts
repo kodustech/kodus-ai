@@ -135,11 +135,13 @@ const TEAM_CONCURRENCY = 10;
 const PR_CONCURRENCY = 15;
 const FINAL_PROVIDER_TIMEOUT_MS = 15_000;
 const APPROVAL_REASON_LOOKUP_TIMEOUT_MS = 10_000;
-// GitHub writes wait in a per-installation queue (one comment every 3s), so a
-// reason write is awaited instead of raced: a raced write that loses still
-// posts later, and the next run, not finding it yet, posts a second one. No
-// hold reason starts after this point of a run, leaving the queued writes time
-// to land inside the 5-minute lock; the next run recomputes and posts them.
+// GitHub writes wait in a per-installation queue (one comment every 3s). A
+// raced write that loses still posts later, and the next run, not finding it
+// yet, posts a second one, so the bound must exceed the queue: at most
+// PR_CONCURRENCY writes ahead (45s). It only stops a stalled provider call from
+// outliving the 5-minute lock. No hold reason starts after the deadline, so the
+// last ones land inside the lock; the next run recomputes and posts the rest.
+const APPROVAL_REASON_WRITE_TIMEOUT_MS = 90_000;
 const APPROVAL_REASON_WRITE_DEADLINE_MS = 3 * 60 * 1000;
 const APPROVAL_FILES_TIMEOUT_MS = 10_000;
 const DIRECTORY_FILE_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -1990,8 +1992,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     existing?.body ?? existing?.note ?? existing?.content;
                 if (previous !== body) {
                     operation = 'updateIssueComment';
-                    const updatedComment =
-                        await this.codeManagementService.updateIssueComment(
+                    const updatedComment = await runWithBoundedTimeout(
+                        this.codeManagementService.updateIssueComment(
                             {
                                 ...request,
                                 body,
@@ -2000,7 +2002,10 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                 threadId: existing?.threadId,
                             },
                             platformType,
-                        );
+                        ),
+                        APPROVAL_REASON_WRITE_TIMEOUT_MS,
+                        'conditional approval comment update',
+                    );
                     if (updatedComment === null) {
                         throw new Error(
                             'Conditional approval comment update returned null',
@@ -2009,11 +2014,14 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 }
             } else {
                 operation = 'createIssueComment';
-                const createdComment =
-                    await this.codeManagementService.createIssueComment(
+                const createdComment = await runWithBoundedTimeout(
+                    this.codeManagementService.createIssueComment(
                         { ...request, body },
                         platformType,
-                    );
+                    ),
+                    APPROVAL_REASON_WRITE_TIMEOUT_MS,
+                    'conditional approval comment create',
+                );
                 if (createdComment === null) {
                     throw new Error(
                         'Conditional approval comment create returned null',
@@ -2032,6 +2040,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     prNumber: request.prNumber,
                     operation,
                     lookupTimeoutMs: APPROVAL_REASON_LOOKUP_TIMEOUT_MS,
+                    writeTimeoutMs: APPROVAL_REASON_WRITE_TIMEOUT_MS,
                 },
             });
             await this.recordApprovalReasonDelivery(
