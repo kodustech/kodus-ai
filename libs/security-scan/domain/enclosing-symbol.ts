@@ -30,7 +30,21 @@ const KEYWORDS = new Set([
     'await',
     'yield',
     'throw',
+    // Closures and blocks a function holds, never the function itself.
+    'func',
+    'go',
+    'defer',
+    'synchronized',
 ]);
+
+/** Longer lines are generated or minified: no declaration is read on them. */
+const MAX_DECLARATION_CHARS = 2000;
+
+/** A decorator or attribute line belongs to the declaration below it. */
+const DECORATOR = /^\s*(?:@[A-Za-z_][\w.]*|\[[A-Za-z_][\w.]*(?:\(.*\))?\])/;
+
+/** `new Foo<T>() {`: an anonymous class, not a declaration. */
+const ANONYMOUS_CLASS = /\bnew\s+[A-Za-z_][\w.]*\s*(?:<[^>]*>)?\s*\(/;
 
 const MEMBER_MODIFIERS =
     '(?:public|private|protected|static|readonly|async|override|abstract|virtual|final|synchronized|internal|sealed|extern|inline|constexpr|get|set)';
@@ -39,11 +53,11 @@ const TYPE_TOKEN = '[\\w<>[\\],.?*&:]+';
 // Each pattern captures the declared name in group 1. Order matters: the
 // specific forms first, the generic "type name(...) {" form last.
 const FUNCTION_PATTERNS: RegExp[] = [
-    // Go method: func (r *Repo) FindByID(  → Repo.FindByID
-    /^\s*func\s+\(\s*\w+\s+\*?([A-Za-z_]\w*)\s*\)\s*([A-Za-z_]\w*)\s*\(/,
+    // Go method: func (r *Repo) FindByID(  → Repo.FindByID; Repo[T] too.
+    /^\s*func\s+\(\s*\w+\s+\*?([A-Za-z_]\w*)(?:\[[^\]]*\])?\s*\)\s*([A-Za-z_]\w*)\s*[([]/,
     // Go / Swift / Rust / Kotlin / Python / Ruby / Elixir / PHP / JS
     /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+([A-Za-z_]\w*)/,
-    /^\s*func\s+([A-Za-z_]\w*)\s*[(<]/,
+    /^\s*func\s+([A-Za-z_]\w*)\s*[(<[]/,
     /^\s*(?:(?:override|suspend|private|public|internal|protected|inline|open)\s+)*fun\s+(?:<[^>]*>\s*)?(?:[\w.]+\.)?([A-Za-z_]\w*)\s*\(/,
     /^\s*(?:async\s+)?def\s+([A-Za-z_]\w*[?!]?)/,
     /^\s*defp?\s+([a-z_]\w*[?!]?)/,
@@ -57,6 +71,8 @@ const FUNCTION_PATTERNS: RegExp[] = [
         `^\\s*(?:${MEMBER_MODIFIERS}\\s+)*(?:${TYPE_TOKEN}\\s+)*?([A-Za-z_$][\\w$]*)\\s*(?:<[^>]*>)?\\s*\\(.*\\)\\s*(?::\\s*[^{=;]+)?(?:throws\\s+[\\w., ]+)?\\s*\\{\\s*$`,
     ),
     // A signature split over lines needs a modifier to tell it from a call.
+    // (A one-line signature whose brace opens on the next line, Allman
+    // style, is read by allmanDeclaration.)
     new RegExp(
         `^\\s*(?:${MEMBER_MODIFIERS}\\s+)+(?:${TYPE_TOKEN}\\s+)*?([A-Za-z_$][\\w$]*)\\s*(?:<[^>]*>)?\\s*\\([^;)]*$`,
     ),
@@ -71,6 +87,9 @@ function indentOf(line: string): number {
 }
 
 function matchFunction(line: string): string | undefined {
+    if (line.length > MAX_DECLARATION_CHARS || ANONYMOUS_CLASS.test(line)) {
+        return undefined;
+    }
     for (const pattern of FUNCTION_PATTERNS) {
         const match = line.match(pattern);
         if (!match) {
@@ -85,6 +104,33 @@ function matchFunction(line: string): string | undefined {
         return name;
     }
     return undefined;
+}
+
+/** A complete signature with no brace, whose body opens on the next code line. */
+const ALLMAN_SIGNATURE = new RegExp(
+    `^\\s*(?:${MEMBER_MODIFIERS}\\s+)*(?:${TYPE_TOKEN}\\s+)*?([A-Za-z_$][\\w$]*)\\s*(?:<[^>]*>)?\\s*\\(.*\\)\\s*(?::\\s*[^{=;]+)?(?:throws\\s+[\\w., ]+)?\\s*$`,
+);
+
+function allmanDeclaration(code: string[], i: number): string | undefined {
+    const line = code[i];
+    if (line.length > MAX_DECLARATION_CHARS || ANONYMOUS_CLASS.test(line)) {
+        return undefined;
+    }
+    const match = line.match(ALLMAN_SIGNATURE);
+    if (!match || KEYWORDS.has(match[1])) {
+        return undefined;
+    }
+    for (let j = i + 1; j < code.length; j++) {
+        const next = code[j].trim();
+        if (next) {
+            return next.startsWith('{') ? match[1] : undefined;
+        }
+    }
+    return undefined;
+}
+
+function declarationAt(code: string[], i: number): string | undefined {
+    return matchFunction(code[i]) ?? allmanDeclaration(code, i);
 }
 
 /**
@@ -194,11 +240,20 @@ function encloses(code: string[], decl: number, target: number): boolean {
         }
         return true;
     }
+    // Braces inside the signature's parentheses (a destructured parameter,
+    // a default `{}`) are not the body's.
     let depth = 0;
+    let parens = 0;
     let opened = false;
     for (let i = decl; i < target; i++) {
         for (const ch of code[i]) {
-            if (ch === '{') {
+            if (ch === '(') {
+                parens++;
+            } else if (ch === ')') {
+                parens = Math.max(0, parens - 1);
+            } else if (parens > 0) {
+                continue;
+            } else if (ch === '{') {
                 depth++;
                 opened = true;
             } else if (ch === '}' && --depth <= 0 && opened) {
@@ -214,9 +269,24 @@ export function enclosingSymbol(
     line: number,
 ): string | undefined {
     const lines = codeLines(source);
-    const start = Math.min(Math.max(line, 1), lines.length) - 1;
+    let start = Math.min(Math.max(line, 1), lines.length) - 1;
     if (start < 0) {
         return undefined;
+    }
+    // A decorator or attribute names the declaration it sits on.
+    if (DECORATOR.test(lines[start])) {
+        let j = start;
+        while (
+            j + 1 < lines.length &&
+            (DECORATOR.test(lines[j]) || !lines[j].trim())
+        ) {
+            j++;
+        }
+        start = j;
+    }
+    // A blank line has no indent of its own: it takes the code above it.
+    while (start > 0 && !lines[start].trim()) {
+        start--;
     }
 
     let fn: string | undefined;
@@ -231,7 +301,7 @@ export function enclosingSymbol(
         ) {
             continue;
         }
-        const name = matchFunction(text);
+        const name = declarationAt(lines, i);
         if (name && encloses(lines, i, start)) {
             fn = name;
             fnIndent = indentOf(text);
@@ -252,13 +322,16 @@ export function enclosingSymbol(
         if (!text.trim() || indentOf(text) >= fnIndent) {
             continue;
         }
+        if (text.length > MAX_DECLARATION_CHARS) {
+            continue;
+        }
         const match = text.match(CLASS_PATTERN);
         if (match) {
             return `${match[1]}.${fn}`;
         }
         // A less-indented line that is not a class closes the search: the
         // function is top level (or nested in another function).
-        if (matchFunction(text)) {
+        if (declarationAt(lines, j)) {
             return fn;
         }
     }

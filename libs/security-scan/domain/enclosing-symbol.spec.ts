@@ -182,3 +182,122 @@ result = eval(user_input)  # SINK`;
         expect(enclosingSymbol(src, lineOf(src, 'SINK'))).toBeUndefined();
     });
 });
+
+describe('enclosingSymbol — every line of one function gives one name', () => {
+    const controller = `@Controller('orders')
+export class OrdersController {
+    @Get(':id') // DECORATOR
+    @UseGuards(AuthGuard)
+    async findOne(@Param('id') id: string) {
+        const order = await this.orders.findById(id);
+
+        return order; // AFTER-BLANK
+    }
+}`;
+
+    it('names a blank line inside the body like the lines around it', () => {
+        const blank =
+            controller
+                .split('\n')
+                .findIndex((l, i, all) => !l.trim() && i > 4) + 1;
+        expect(enclosingSymbol(controller, blank)).toBe(
+            'OrdersController.findOne',
+        );
+        expect(
+            enclosingSymbol(controller, lineOf(controller, 'AFTER-BLANK')),
+        ).toBe('OrdersController.findOne');
+    });
+
+    it('names a decorator line by the method it decorates', () => {
+        expect(
+            enclosingSymbol(controller, lineOf(controller, 'DECORATOR')),
+        ).toBe('OrdersController.findOne');
+    });
+
+    it('names a method whose brace opens on the next line (Allman)', () => {
+        const src = `public class OrdersController : Controller
+{
+    [HttpGet("{id}")]
+    public IActionResult Get(int id)
+    {
+        var order = _db.Orders.Find(id); // SINK
+        return Ok(order);
+    }
+}`;
+        expect(enclosingSymbol(src, lineOf(src, 'SINK'))).toBe(
+            'OrdersController.Get',
+        );
+    });
+
+    it('does not let braces inside a multi-line signature close the body', () => {
+        const src = `export class UsersService {
+    async update(
+        { id, role }: UpdateUserDto,
+        options = {},
+    ) {
+        return this.repo.save({ id, role }); // SINK
+    }
+}`;
+        expect(enclosingSymbol(src, lineOf(src, 'SINK'))).toBe(
+            'UsersService.update',
+        );
+    });
+
+    it.each([
+        ['go func', 'go func() {'],
+        ['defer func', 'defer func() {'],
+    ])(
+        'names the function around a %s closure, not the closure',
+        (_name, opener) => {
+            const src = `func (s *Server) Handle(w http.ResponseWriter, r *http.Request) {
+	${opener}
+		exec.Command("sh", "-c", r.URL.Query().Get("q")) // SINK
+	}()
+}`;
+            expect(enclosingSymbol(src, lineOf(src, 'SINK'))).toBe(
+                'Server.Handle',
+            );
+        },
+    );
+
+    it('names the method around a synchronized block or an anonymous class', () => {
+        const src = `public class Jobs {
+    public void run(String cmd) {
+        synchronized (lock) {
+            Runtime.getRuntime().exec(cmd); // SYNC
+        }
+        pool.submit(new Callable<String>() {
+            public String call() {
+                return "x"; // ANON
+            }
+        });
+    }
+}`;
+        expect(enclosingSymbol(src, lineOf(src, 'SYNC'))).toBe('Jobs.run');
+        // A method of the anonymous class is named by itself, like any
+        // function nested in another; the `new Callable()` line never is.
+        expect(enclosingSymbol(src, lineOf(src, 'ANON'))).toBe('call');
+    });
+
+    it('names Go generic functions and methods', () => {
+        const fn = `func Map[T any](items []T) []T {
+	return items // SINK
+}`;
+        const method = `func (r *Repo[T]) Find(id string) T {
+	return r.db.Get(id) // SINK
+}`;
+        expect(enclosingSymbol(fn, lineOf(fn, 'SINK'))).toBe('Map');
+        expect(enclosingSymbol(method, lineOf(method, 'SINK'))).toBe(
+            'Repo.Find',
+        );
+    });
+
+    it('stays fast on a very long line', () => {
+        const src = `function render(input) {
+    return "${'a('.repeat(40000)}"; // SINK
+}`;
+        const started = Date.now();
+        expect(enclosingSymbol(src, lineOf(src, 'SINK'))).toBe('render');
+        expect(Date.now() - started).toBeLessThan(200);
+    });
+});
