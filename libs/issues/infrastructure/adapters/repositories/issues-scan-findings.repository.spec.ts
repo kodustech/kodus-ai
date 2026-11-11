@@ -220,7 +220,7 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(issue.status).toBe(IssueStatus.OPEN);
     });
 
-    it('fails with the real error when a different unique index refuses the create', async () => {
+    it('fails with the real error when a different unique index keeps refusing the create', async () => {
         const model = modelWith(null);
         const collision = Object.assign(new Error('E11000 on another index'), {
             code: 11000,
@@ -231,7 +231,20 @@ describe('IssuesRepository — security-scan findings', () => {
         await expect(repository.upsertScanFinding(finding)).rejects.toBe(
             collision,
         );
-        expect(model.create).toHaveBeenCalledTimes(1);
+        expect(model.create).toHaveBeenCalledTimes(3);
+    });
+
+    it('stores a finding whose create raced a write deleted right after', async () => {
+        const model = modelWith(null);
+        model.create.mockRejectedValueOnce(
+            Object.assign(new Error('E11000 duplicate key'), { code: 11000 }),
+        );
+        const repository = new IssuesRepository(model as any);
+
+        const { outcome } = await repository.upsertScanFinding(finding);
+
+        expect(outcome).toBe('created');
+        expect(model.create).toHaveBeenCalledTimes(2);
     });
 
     it('fails, rather than guess an outcome, when the finding changes under every write', async () => {
