@@ -16,7 +16,6 @@ describe('hasParentDirSegment', () => {
         'src/foo..bar.ts',
         'notes..',
         '..hidden/file.ts',
-        '.../x',
         'src/./a.ts',
         '.',
         '',
@@ -37,6 +36,11 @@ describe('hasParentDirSegment', () => {
         'a/..\\x',
         'app/[...slug]/../../secret',
         'a//../x',
+        // A win32 host trims trailing spaces and dots from a segment.
+        '.. /x',
+        'sub/.. /.. /secret',
+        'a/.. .\\x',
+        '.../x',
     ])('treats %p as traversal', (path) => {
         expect(hasParentDirSegment(path)).toBe(true);
     });
