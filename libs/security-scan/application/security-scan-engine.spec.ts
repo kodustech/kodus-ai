@@ -585,6 +585,7 @@ describe('SecurityScanEngine', () => {
         expect(onUnitDone).toHaveBeenCalledWith(
             expect.objectContaining({ state: 'pending' }),
             [expect.objectContaining({ vulnerabilityClass: 'authz' })],
+            [],
         );
     });
 
@@ -1652,6 +1653,45 @@ describe('SecurityScanEngine: across slices and units', () => {
         expect(result.filesBeyondPlan).toBe(Object.keys(surface.files).length - 2);
     });
 
+    it('says which earlier finding a unit found again, so the job can sight it', async () => {
+        const onUnitDone = jest.fn(async () => undefined);
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => onlyController),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            // The earlier scan's report of the same bug, carried on.
+            reported: [
+                {
+                    vulnerabilityClass: 'authz',
+                    cwe: 'CWE-639',
+                    title: 'Any user reads any order',
+                    description: 'No owner check.',
+                    severity: 'high',
+                    filePath: 'src/orders/orders.controller.ts',
+                    startLine: 6,
+                    endLine: 8,
+                    fingerprint: 'fp-earlier',
+                },
+            ],
+            onUnitDone,
+        } as any);
+
+        expect(result.findings).toEqual([]);
+        expect(onUnitDone).toHaveBeenCalledWith(
+            expect.objectContaining({ state: 'done' }),
+            [],
+            ['fp-earlier'],
+        );
+    });
+
     it('keeps a finding in a file listed past the first 20,000, and lists it as tracked', async () => {
         const controller = 'src/orders/orders.controller.ts';
         const filler = Array.from({ length: 20_000 }, (_, i) => `vendor/f${i}.ts`);
@@ -1892,6 +1932,67 @@ describe('SecurityScanEngine: across slices and units', () => {
                 .filter((f) => f.filePath.startsWith('src/orders'))
                 .map((f) => f.filePath),
         ).toEqual(['src/orders/orders.controller.ts']);
+    });
+
+    it('says which carried-on finding the dedup folded a fresh one into', async () => {
+        const service = 'src/orders/orders.service.ts';
+        const runLens = fakeLens((file, cls) =>
+            file === service && cls === 'data_exposure'
+                ? [{ ...IDOR, relevantFile: service, relevantLinesStart: 1, relevantLinesEnd: 1 }]
+                : [],
+        );
+        const summary = (x: any) => ({
+            relevantFile: x.relevantFile,
+            relevantLinesStart: x.relevantLinesStart,
+            relevantLinesEnd: x.relevantLinesEnd,
+            oneSentenceSummary: x.oneSentenceSummary,
+        });
+        // The earlier scan's report and the fresh one are one bug: keeps the earlier.
+        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => {
+            const [earlier, fresh] = suggestions;
+            return {
+                suggestions: [earlier],
+                trace: { groups: [{ keep: summary(earlier), duplicates: [summary(fresh)] }] } as any,
+            };
+        });
+        const onUnitDone = jest.fn(async () => undefined);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({
+                units: [{ file: service, relatedFiles: [], classes: ['data_exposure'], priority: 80, reason: '' }],
+            }),
+            collectSurface: jest.fn(async () => SURFACE),
+            dedup: dedup as any,
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            maxUnits: 1,
+            // Not an overlap the cheap check catches: another kind, other lines.
+            reported: [
+                {
+                    vulnerabilityClass: 'data_exposure',
+                    cwe: 'CWE-200',
+                    title: 'Orders leak to any caller',
+                    description: 'The service returns any order.',
+                    severity: 'high',
+                    filePath: service,
+                    startLine: 40,
+                    endLine: 41,
+                    fingerprint: 'fp-carried',
+                },
+            ],
+            onUnitDone,
+        } as any);
+
+        expect(result.findings.filter((f) => f.filePath === service)).toEqual([]);
+        expect(onUnitDone).toHaveBeenCalledWith(
+            expect.objectContaining({ state: 'done' }),
+            [],
+            ['fp-carried'],
+        );
     });
 });
 

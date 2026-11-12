@@ -115,8 +115,8 @@ function setup(engineResult: any, scan = scanRecord()) {
     (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
         run: jest.fn(async (params: any) => {
             await params.onPlanned?.([], ['typescript']);
-            for (const [progress, findings] of engineResult.unitEvents ?? []) {
-                await params.onUnitDone(progress, findings);
+            for (const [progress, findings, sighted] of engineResult.unitEvents ?? []) {
+                await params.onUnitDone(progress, findings, sighted);
             }
             return engineResult.result;
         }),
@@ -418,30 +418,46 @@ describe('SecurityScanJobProcessor', () => {
         );
     });
 
-    it("sights the findings a carried-on plan holds before resolving what was not seen", async () => {
+    it("sights a carried-on finding in an area this scan did not read again, and leaves a reread one to the resolver", async () => {
         const { processor, issuesService } = setup(
             { result: finishedResult() },
             scanRecord({
                 reported: [
-                    { title: 'IDOR', filePath: 'src/a.ts', fingerprint: 'fp-earlier' },
+                    // Its area was not read again: held as found.
+                    { vulnerabilityClass: 'authz', title: 'IDOR', filePath: 'src/a.ts', fingerprint: 'fp-held' },
+                    // Read again (authz on the controller) and not found: gone.
+                    { vulnerabilityClass: 'authz', title: 'IDOR', filePath: './src/orders.controller.ts', fingerprint: 'fp-reread' },
                     // Reported before fingerprints were kept: nothing to sight.
-                    { title: 'SQLi', filePath: 'src/b.ts' },
+                    { vulnerabilityClass: 'injection', title: 'SQLi', filePath: 'src/b.ts' },
                 ] as any,
             }),
         );
 
         await processor.process('job-1');
 
-        expect(issuesService.markScanFindingsSeen).toHaveBeenCalledWith({
+        expect(issuesService.markScanFindingsSeen).toHaveBeenLastCalledWith({
             organizationId: 'org-1',
             repositoryPlatform: 'GITHUB',
             repositoryId: 'repo-1',
-            fingerprints: ['fp-earlier'],
+            fingerprints: ['fp-held'],
             scanId: 'scan-1',
         });
         expect(
-            issuesService.markScanFindingsSeen.mock.invocationCallOrder[0],
+            issuesService.markScanFindingsSeen.mock.invocationCallOrder.at(-1),
         ).toBeLessThan(issuesService.resolveUnseenScanFindings.mock.invocationCallOrder[0]);
+    });
+
+    it('sights at once an earlier finding a unit found again', async () => {
+        const { processor, issuesService } = setup({
+            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 0 }, [], ['fp-again']]],
+            result: finishedResult(),
+        });
+
+        await processor.process('job-1');
+
+        expect(issuesService.markScanFindingsSeen).toHaveBeenCalledWith(
+            expect.objectContaining({ fingerprints: ['fp-again'], scanId: 'scan-1' }),
+        );
     });
 
     it('records each area alone, with live counts, without reading the scan back', async () => {

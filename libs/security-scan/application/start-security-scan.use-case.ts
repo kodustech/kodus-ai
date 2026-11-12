@@ -263,7 +263,9 @@ export class StartSecurityScanUseCase {
             units: last.units,
             progress,
             planCommitSha: last.commitSha,
-            reported: last.reported ?? [],
+            // Only what can be sighted: a finding the dedup drops must be one
+            // the job can mark seen, or its issue would be resolved as unseen.
+            reported: (last.reported ?? []).filter((r) => r.fingerprint),
             coverage: {
                 examinedFiles: [],
                 examinedByClass: [],

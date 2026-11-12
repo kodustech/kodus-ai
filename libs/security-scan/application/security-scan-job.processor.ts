@@ -29,7 +29,10 @@ import {
     IIssuesService,
     ISSUES_SERVICE_TOKEN,
 } from '@libs/issues/domain/contracts/issues.service.contract';
-import { computeScanFingerprint } from '@libs/issues/domain/scan-fingerprint';
+import {
+    computeScanFingerprint,
+    normalizeScanPath,
+} from '@libs/issues/domain/scan-fingerprint';
 import {
     IKodyIssuesManagementService,
     KODY_ISSUES_MANAGEMENT_SERVICE_TOKEN,
@@ -352,7 +355,18 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     coverage: liveCoverage,
                 });
             },
-            onUnitDone: async (progress, findings) => {
+            onUnitDone: async (progress, findings, sighted) => {
+                // An earlier finding a unit found again is seen by this scan.
+                if (sighted?.length) {
+                    await this.issuesService.markScanFindingsSeen({
+                        organizationId: scan.organizationId,
+                        repositoryPlatform: scan.repository
+                            .platform as PlatformType,
+                        repositoryId: scan.repository.id,
+                        fingerprints: sighted,
+                        scanId: scan.uuid,
+                    });
+                }
                 for (const finding of findings) {
                     const outcome = await this.storeFinding(
                         scan,
@@ -457,13 +471,29 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             throw new ScanFailure(SCAN_NO_AREA_EXAMINED_MESSAGE);
         }
 
-        // What this scan carries from an earlier one's plan it holds without
-        // reading again: sighted by it, so not resolved below as unseen.
+        // What this scan carries from an earlier one's plan, in an area it
+        // did not read again, it holds as found: seen by it, not resolved
+        // below. Where it did read the area again, the unit decided: found
+        // again (sighted above) or gone.
+        const readAgain = new Set(
+            coverage.examinedByClass.flatMap((e) =>
+                e.filePaths.map(
+                    (f) =>
+                        `${e.vulnerabilityClass}\u0000${normalizeScanPath(f)}`,
+                ),
+            ),
+        );
         await this.issuesService.markScanFindingsSeen({
             organizationId: scan.organizationId,
             repositoryPlatform: scan.repository.platform as PlatformType,
             repositoryId: scan.repository.id,
             fingerprints: (scan.reported ?? [])
+                .filter(
+                    (r) =>
+                        !readAgain.has(
+                            `${r.vulnerabilityClass}\u0000${normalizeScanPath(r.filePath)}`,
+                        ),
+                )
                 .map((r) => r.fingerprint)
                 .filter((fp): fp is string => !!fp),
             scanId: scan.uuid,

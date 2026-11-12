@@ -134,6 +134,11 @@ export interface SecurityScanEngineParams {
     onUnitDone?: (
         progress: ScanUnitProgress,
         findings: ScanFinding[],
+        /**
+         * Fingerprints of earlier findings a fresh one was dropped as a
+         * duplicate of: found again, so seen by this scan.
+         */
+        sighted?: string[],
     ) => Promise<void>;
 }
 
@@ -398,6 +403,7 @@ export class SecurityScanEngine {
                     await params.onUnitDone?.(
                         progress.get(unit.id),
                         result.findings,
+                        fingerprintsOf(result.sighted),
                     );
                 } else {
                     // The slice ended mid-unit: the unit runs again in the
@@ -411,8 +417,12 @@ export class SecurityScanEngine {
                         lensesExamined: result.lensesExamined,
                     };
                     progress.set(unit.id, pending);
-                    if (result.findings.length) {
-                        await params.onUnitDone?.(pending, result.findings);
+                    if (result.findings.length || result.sighted?.length) {
+                        await params.onUnitDone?.(
+                            pending,
+                            result.findings,
+                            fingerprintsOf(result.sighted),
+                        );
                     }
                 }
                 return;
@@ -422,10 +432,18 @@ export class SecurityScanEngine {
             // reported was not in its view yet. Past the cap the meter refuses
             // the dedup's request, and every finding is kept.
             const reported = [...(params.reported ?? []), ...findings];
+            // Earlier findings a fresh one turns out to repeat: found again.
+            const sighted = [...(result.sighted ?? [])];
+            const fresh = result.findings.filter((f) => {
+                const repeats = duplicatesOf(reported, f);
+                sighted.push(...repeats);
+                return !repeats.length;
+            });
             result.findings = await this.withoutDuplicates(
                 params,
-                result.findings.filter((f) => !isDuplicate(reported, f)),
+                fresh,
                 nearby(reported, unit, result.findings),
+                sighted,
             );
 
             const unitProgress: ScanUnitProgress = {
@@ -446,7 +464,11 @@ export class SecurityScanEngine {
                 examinedByClass.set(vulnClass, files);
             }
             findings.push(...result.findings);
-            await params.onUnitDone?.(unitProgress, result.findings);
+            await params.onUnitDone?.(
+                unitProgress,
+                result.findings,
+                fingerprintsOf(sighted),
+            );
         };
 
         const worker = async () => {
@@ -545,6 +567,8 @@ export class SecurityScanEngine {
         params: SecurityScanEngineParams,
         fresh: ScanFinding[],
         earlier: ScanReportedFinding[],
+        /** Receives the earlier findings a dropped fresh one repeated. */
+        sighted: ScanReportedFinding[] = [],
     ): Promise<ScanFinding[]> {
         if (!fresh.length || fresh.length + earlier.length < 2) {
             return fresh;
@@ -592,6 +616,21 @@ export class SecurityScanEngine {
                 if (replacesEarlier) {
                     for (const i of indicesOf.get(dedupKey(group.keep)) ?? []) {
                         if (i >= earlier.length) kept.delete(`scan-${i}`);
+                    }
+                }
+            }
+            // An earlier finding grouped with a fresh one dropped here was
+            // found again.
+            for (const group of trace?.groups ?? []) {
+                const members = [group.keep, ...group.duplicates].flatMap(
+                    (m) => indicesOf.get(dedupKey(m)) ?? [],
+                );
+                const droppedFresh = members.some(
+                    (i) => i >= earlier.length && !kept.has(`scan-${i}`),
+                );
+                if (droppedFresh) {
+                    for (const i of members) {
+                        if (i < earlier.length) sighted.push(earlier[i]);
                     }
                 }
             }
@@ -720,7 +759,10 @@ export class SecurityScanEngine {
         // Classes whose lens ended, in this slice or an earlier one.
         const ran = new Set<VulnClass>(resume?.lensesRun ?? []);
         const examinedBefore = resume?.lensesExamined ?? [];
+        // Earlier findings one of this unit's repeated.
+        const sighted: ScanReportedFinding[] = [];
         const progressSoFar = () => ({
+            sighted,
             lensesRun: [...ran],
             lensesExamined: [
                 ...new Set([
@@ -830,10 +872,14 @@ export class SecurityScanEngine {
                         vulnClass,
                         { ...suggestion, relevantFile: path.file },
                     );
+                    const repeats = finding
+                        ? duplicatesOf(earlier, finding)
+                        : [];
+                    sighted.push(...repeats);
                     if (
                         finding &&
-                        !isDuplicate(findings, finding) &&
-                        !isDuplicate(earlier, finding)
+                        !repeats.length &&
+                        !isDuplicate(findings, finding)
                     ) {
                         findings.push(finding);
                     }
@@ -897,9 +943,10 @@ export class SecurityScanEngine {
                       ? 'every lens failed'
                       : 'no lens read the area to the end',
                 examinedClasses,
+                sighted,
             };
         }
-        return { findings, examinedClasses };
+        return { findings, examinedClasses, sighted };
     }
 
     private lensInput(
@@ -1231,7 +1278,15 @@ function isDuplicate(
     existing: ScanReportedFinding[],
     candidate: ScanReportedFinding,
 ): boolean {
-    return existing.some(
+    return duplicatesOf(existing, candidate).length > 0;
+}
+
+/** The existing findings `candidate` repeats. */
+function duplicatesOf(
+    existing: ScanReportedFinding[],
+    candidate: ScanReportedFinding,
+): ScanReportedFinding[] {
+    return existing.filter(
         (f) =>
             sameKind(f, candidate) &&
             ((f.filePath === candidate.filePath &&
@@ -1285,6 +1340,17 @@ const DEDUP_EARLIER_LIMIT = 40;
  * unit read or one of its findings' attack paths crosses, newest first. The
  * dedup call's size stays bounded however long the scan runs.
  */
+/** The stored identities of the findings, where they have one. */
+function fingerprintsOf(findings: ScanReportedFinding[] = []): string[] {
+    return [
+        ...new Set(
+            findings
+                .map((f) => f.fingerprint)
+                .filter((fp): fp is string => !!fp),
+        ),
+    ];
+}
+
 function nearby(
     earlier: ScanReportedFinding[],
     unit: ScanUnit,
@@ -1313,6 +1379,8 @@ function sampleListing(listing: string[], limit: number): string[] {
 
 interface AuditResult {
     findings: ScanFinding[];
+    /** Earlier findings one of the unit's repeated, so dropped. */
+    sighted?: ScanReportedFinding[];
     /** The classes whose every lens ran to the end. */
     examinedClasses?: VulnClass[];
     /** On a unit that stopped halfway, where to pick it up. */

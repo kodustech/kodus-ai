@@ -71,7 +71,11 @@ describe('StartSecurityScanUseCase — running again continues', () => {
             { unitId: 'b', state: 'skipped_budget', findings: 0 },
             { unitId: 'c', state: 'skipped_budget', findings: 0 },
         ],
-        reported: [{ title: 'IDOR', filePath: 'src/a.ts' }],
+        reported: [
+            { title: 'IDOR', filePath: 'src/a.ts', fingerprint: 'fp-a' },
+            // Reported before fingerprints were kept: no way to sight it.
+            { title: 'SQLi', filePath: 'src/b.ts' },
+        ],
         coverage: { languages: ['typescript'], examinedFiles: ['src/a.ts'] },
         commitSha: 'plan-sha',
     };
@@ -87,8 +91,11 @@ describe('StartSecurityScanUseCase — running again continues', () => {
             { unitId: 'a', state: 'done', findings: 1 },
         ]);
         // What the plan's finished areas found: the dedup compares against
-        // it, and the job sights those issues as this scan's.
-        expect(created.reported).toEqual([{ title: 'IDOR', filePath: 'src/a.ts' }]);
+        // it, and the job sights those issues as this scan's. Only what can
+        // be sighted is carried.
+        expect(created.reported).toEqual([
+            { title: 'IDOR', filePath: 'src/a.ts', fingerprint: 'fp-a' },
+        ]);
         // The job drops the plan if the branch moved past this commit.
         expect(created.planCommitSha).toBe('plan-sha');
         // Files the earlier scan examined are not this scan's: none of their
