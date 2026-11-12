@@ -918,6 +918,28 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         expect(settle).toHaveBeenCalledWith(undefined);
     });
 
+    it('settles a request aborted before it left as unbilled', async () => {
+        const settle = jest.fn();
+        const model = answering({});
+        model.doGenerate.mockRejectedValue(
+            Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }),
+        );
+        const aborted = new AbortController();
+        aborted.abort();
+
+        await expect(
+            runWithUsageMeter(
+                { record: jest.fn(), admit: () => ({ settle }) },
+                async () =>
+                    wrap(model).doGenerate({
+                        prompt: PROMPT,
+                        abortSignal: aborted.signal,
+                    } as any),
+            ),
+        ).rejects.toThrow('aborted');
+        expect(settle).toHaveBeenCalledWith(undefined);
+    });
+
     it('holds a request until the meter has room for it', async () => {
         const settle = jest.fn();
         let grant!: (a: any) => void;
