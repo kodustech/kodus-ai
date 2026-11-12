@@ -482,6 +482,40 @@ export function isCodeFileSource(
 }
 
 /**
+ * The code-file citations (`isCodeFileSource`) whose quoted code is in the
+ * cited file on the target branch, read with the reader the quote gate uses
+ * for guides. The verifier compares the finding with that pattern; a quote
+ * the file does not hold (a made-up line, a wrong file) is dropped.
+ */
+export async function checkCodeFileQuotes(
+    findings: readonly FinderSuggestion[],
+    readGuide: GuideFileReader,
+): Promise<{
+    passed: FinderSuggestion[];
+    rejected: ConventionCheckRejected[];
+}> {
+    const passed: FinderSuggestion[] = [];
+    const rejected: ConventionCheckRejected[] = [];
+    for (const finding of findings) {
+        const file = stripLeading((finding.source?.file ?? '').trim());
+        const quote = finding.source?.quote ?? '';
+        const content = quote.trim()
+            ? await readGuide(file).catch(() => null)
+            : null;
+        if (content != null && findQuoteSection(content, quote) != null) {
+            passed.push(finding);
+        } else {
+            rejected.push({
+                finding,
+                reason: QUOTE_NOT_FOUND,
+                detail: `quoted code not found in ${file} on the target branch`,
+            });
+        }
+    }
+    return { passed, rejected };
+}
+
+/**
  * A finding resting on a record in one of the team's systems the agent can
  * read (`Tracker__get_issue` → "Tracker issue IRR-12"). The prompt tells the
  * agent to cite that record; it quotes no guide, so the quote gate would drop
