@@ -275,6 +275,20 @@ describe('withRevisits', () => {
         expect(new Set(second.map((u) => u.id)).size).toBe(3);
     });
 
+    it("never adds to an unfinished unit a class another unit of the file reads", () => {
+        const done = unit('src/api.ts', ['authz', 'injection']);
+        const pending = { ...unit('src/api.ts', ['ssrf']), id: 'revisit' };
+
+        const units = withRevisits(
+            [done, pending],
+            [{ filePath: 'src/api.ts', vulnerabilityClass: 'authz' }],
+            new Set(['src/api.ts']),
+            new Set([done.id]),
+        );
+
+        expect(units).toEqual([done, pending]);
+    });
+
     it('returns a unit that already covers its open findings untouched', () => {
         const covered = unit('src/api.ts', ['authz']);
 

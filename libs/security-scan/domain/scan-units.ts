@@ -252,7 +252,11 @@ export function withRevisits(
     const merged: ScanUnit[] = [];
     for (const unit of units) {
         const want = wanted.get(unit.file);
-        const missing = want ? lacking(new Set(unit.classes), want) : [];
+        // Missing from every unit of the file, not just this one: a class
+        // another unit reads is not read twice.
+        const missing = want
+            ? lacking(coveredByFile.get(unit.file) ?? new Set(), want)
+            : [];
         if (!missing.length || finished.has(unit.id)) {
             merged.push(unit);
             continue;
