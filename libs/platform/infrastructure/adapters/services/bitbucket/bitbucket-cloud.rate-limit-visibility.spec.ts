@@ -262,6 +262,30 @@ describe('BitbucketCloudService — workspace members for the seat prune', () =>
             service.getListMembers({ organizationAndTeamData: org }),
         ).resolves.toEqual([{ id: 'u1', name: 'Ana', type: 'user' }]);
     });
+
+    it.each([
+        ['no repository is configured', []],
+        ['no repository names a workspace', [{ id: 'r1' }]],
+    ])(
+        'fails for a caller that needs the full list when %s',
+        async (_case, repositories) => {
+            const { service } = makeService();
+            jest.spyOn(
+                service,
+                'findOneByOrganizationAndTeamDataAndConfigKey',
+            ).mockResolvedValue(repositories as any);
+
+            await expect(
+                service.getListMembers({
+                    organizationAndTeamData: org,
+                    requireComplete: true,
+                }),
+            ).rejects.toThrow();
+            await expect(
+                service.getListMembers({ organizationAndTeamData: org }),
+            ).resolves.toEqual([]);
+        },
+    );
 });
 
 describe('BitbucketCloudService — author scan paging', () => {

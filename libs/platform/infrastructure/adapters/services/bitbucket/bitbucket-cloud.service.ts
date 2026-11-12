@@ -1503,6 +1503,9 @@ export class BitbucketCloudService implements Omit<
             );
 
             if (!repositories?.length) {
+                if (params.requireComplete) {
+                    throw new Error('No Bitbucket repositories configured');
+                }
                 return [];
             }
 
@@ -1529,6 +1532,11 @@ export class BitbucketCloudService implements Omit<
             );
 
             if (!workspaceIdentifiers.length) {
+                if (params.requireComplete) {
+                    throw new Error(
+                        'No Bitbucket workspace to read members from',
+                    );
+                }
                 return [];
             }
 

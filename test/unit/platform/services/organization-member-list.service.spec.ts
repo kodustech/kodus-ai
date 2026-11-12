@@ -265,6 +265,11 @@ describe('OrganizationMemberListService', () => {
             });
 
             expect(result.status).toBe('ok');
+            expect(
+                mockCodeManagementService.getPullRequestAuthors,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({ requireLoaded: true }),
+            );
         });
     });
 
@@ -364,7 +369,9 @@ describe('OrganizationMemberListService', () => {
             mockCodeManagementService.getListMembers.mockResolvedValue([
                 { id: 1, name: 'Alice' },
             ]);
-            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue(
+                [],
+            );
 
             await service.fetch(organizationAndTeamData, { skipCache: true });
 
@@ -400,7 +407,9 @@ describe('OrganizationMemberListService', () => {
             mockCodeManagementService.getListMembers.mockResolvedValue([
                 { id: 1, name: 'Alice' },
             ]);
-            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue(
+                [],
+            );
 
             await service.fetch(organizationAndTeamData);
 
@@ -414,7 +423,9 @@ describe('OrganizationMemberListService', () => {
             mockCacheService.getFromCache.mockRejectedValue(
                 new Error('redis down'),
             );
-            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue(
+                [],
+            );
 
             const result = await service.fetch(organizationAndTeamData);
 
