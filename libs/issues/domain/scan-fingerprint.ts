@@ -2,6 +2,11 @@ import { createHash } from 'crypto';
 
 export interface ScanFingerprintInput {
     repositoryId: string;
+    /**
+     * The lens that reported it. Only a finding without a CWE is told apart
+     * by it: two lenses report one bug (a hard-coded secret is both a secret
+     * and a misconfiguration), so the lens is no part of what the bug is.
+     */
     vulnerabilityClass: string;
     filePath: string;
     /** The function or method holding the vulnerable operation. */
@@ -93,22 +98,27 @@ export function cweFamily(cwe?: string): string {
 }
 
 /**
- * The identity a security-scan finding keeps across scans. Line numbers are
- * left out on purpose: an edit above the finding moves every line, and the
- * same finding would come back as a new issue while the old one is resolved.
- * Renaming the file or the function does change the identity — the old issue
- * is resolved and a new one opened, which is the honest outcome. The CWE's
- * family is part of it, so two kinds of bug in one function are two issues.
+ * The identity a security-scan finding keeps across scans: where it is (file
+ * and function) and what kind of weakness (the CWE's family). Line numbers
+ * are left out on purpose: an edit above the finding moves every line, and
+ * the same finding would come back as a new issue while the old one is
+ * resolved. Renaming the file or the function does change the identity — the
+ * old issue is resolved and a new one opened, which is the honest outcome.
+ * The lens is left out too: the same bug reported by another lens in a later
+ * scan is the same issue, never a second one.
  */
 export function computeScanFingerprint(input: ScanFingerprintInput): string {
     const id = cweId(input.cwe);
     const appWide = !!input.appWide && id !== null && APP_WIDE_CWES.has(id);
+    const kind = appWide
+        ? `cwe-${id}`
+        : cweFamily(input.cwe) ||
+          `class:${input.vulnerabilityClass.trim().toLowerCase()}`;
     const parts = [
         input.repositoryId,
-        input.vulnerabilityClass.trim().toLowerCase(),
         appWide ? '' : normalizeScanPath(input.filePath),
         appWide ? '' : (input.symbol ?? '').trim(),
-        appWide ? `cwe-${id}` : cweFamily(input.cwe),
+        kind,
     ];
 
     return createHash('sha256').update(parts.join('\u0000')).digest('hex');
