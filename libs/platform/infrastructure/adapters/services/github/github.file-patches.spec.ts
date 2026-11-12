@@ -34,7 +34,7 @@ describe('GithubService — getFilePatches', () => {
         '',
     ].join('\n');
 
-    it('falls back to the integration org when owner is the webhook account object', async () => {
+    it('reads the login of the webhook account object', async () => {
         const get = jest.fn().mockResolvedValue({ data: diff });
 
         const out = await makeService(get).getFilePatches({
@@ -42,31 +42,40 @@ describe('GithubService — getFilePatches', () => {
             repository: {
                 id: '1',
                 name: 'widget-api',
-                owner: { login: 'acme', type: 'Organization' } as never,
+                owner: { login: 'webhook-account', type: 'User' } as never,
             },
             prNumber: 7,
             paths: ['yarn.lock'],
         });
 
         expect(get).toHaveBeenCalledWith(
-            expect.objectContaining({ owner: 'acme', repo: 'widget-api' }),
+            expect.objectContaining({
+                owner: 'webhook-account',
+                repo: 'widget-api',
+            }),
         );
         expect(out).toHaveLength(1);
         expect(out[0].path).toBe('yarn.lock');
     });
 
-    it('keeps an explicit owner string', async () => {
+    it('falls back to the integration org when the owner object has no login', async () => {
         const get = jest.fn().mockResolvedValue({ data: diff });
+        const service = makeService(get);
 
-        await makeService(get).getFilePatches({
+        await service.getFilePatches({
             organizationAndTeamData,
-            repository: { id: '1', name: 'widget-api', owner: 'other' },
+            repository: {
+                id: '1',
+                name: 'widget-api',
+                owner: { type: 'Organization' } as never,
+            },
             prNumber: 7,
             paths: ['yarn.lock'],
         });
 
+        expect(service.getGithubAuthDetails).toHaveBeenCalled();
         expect(get).toHaveBeenCalledWith(
-            expect.objectContaining({ owner: 'other' }),
+            expect.objectContaining({ owner: 'acme' }),
         );
     });
 });
