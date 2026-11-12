@@ -68,12 +68,16 @@ function cites(file: string, quote: string): FinderSuggestion {
 
 // The quote gate as a local-sandbox review builds it: the sandbox's
 // target-branch reads, then the knowledge reader.
-async function gate(finding: FinderSuggestion, guides = [SKILL]) {
+async function gate(
+    finding: FinderSuggestion,
+    guides = [SKILL],
+    commands: { exec: (command: string) => Promise<unknown> } = refusesGit,
+) {
     const sources = guideSourcesFor(
         guides,
         knowledgeReader,
-        makeTargetBranchGuideReader(refusesGit as never, 'main'),
-        makeTargetBranchGuideLister(refusesGit as never, 'main'),
+        makeTargetBranchGuideReader(commands as never, 'main'),
+        makeTargetBranchGuideLister(commands as never, 'main'),
     );
     if (!sources) throw new Error('no guide sources for a review with guides');
     return checkConventionQuotes(
@@ -103,6 +107,28 @@ describe('quote gate on the local sandbox', () => {
                 REFERENCE,
                 'Brake tests are recorded before the tram leaves the bay.',
             ),
+        );
+
+        expect(result.rejected).toEqual([]);
+        expect(result.passed).toHaveLength(1);
+    });
+
+    // A command that times out, or a sandbox that died mid-review, rejects
+    // instead of returning a non-zero exit.
+    it('passes the quote when the sandbox read fails outright', async () => {
+        const sandboxDown = {
+            exec: async () => {
+                throw new Error('command timed out');
+            },
+        };
+
+        const result = await gate(
+            cites(
+                SKILL,
+                'A job books a tram only after checking that the tram is parked in the depot.',
+            ),
+            [SKILL],
+            sandboxDown,
         );
 
         expect(result.rejected).toEqual([]);

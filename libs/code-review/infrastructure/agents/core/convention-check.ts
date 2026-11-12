@@ -623,8 +623,15 @@ export function guideSourcesFor(
         knowledgeReader.listFiles(stripLeading(dir).replace(/\/+$/, ''));
     // The reviewed repository's guides: the sandbox's target-branch reads,
     // and the knowledge reader when those come back empty or fail.
-    const readLocal: GuideFileReader = async (file) =>
-        (await targetBranchReader?.(file)) ?? fromKnowledge(file);
+    const readLocal: GuideFileReader = async (file) => {
+        try {
+            const read = await targetBranchReader?.(file);
+            if (read != null) return read;
+        } catch {
+            // A timed-out command or a dead sandbox: same target branch below.
+        }
+        return fromKnowledge(file);
+    };
     const listLocal: GuideDirLister = targetBranchLister
         ? async (dir) => {
               try {
