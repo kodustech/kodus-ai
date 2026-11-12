@@ -62,11 +62,16 @@ describe('readReference — branch selection and not-found answers', () => {
     });
 
     it('reads the default branch when no branch is given (no hardcoded main)', async () => {
-        const calls = stubFetch(() => ({
-            status: 200,
-            statusText: 'OK',
-            body: '# Brewery style guide',
-        }));
+        // A repository whose default branch is `master`: it has no `main`.
+        const calls = stubFetch((url) =>
+            url.includes('ref=main')
+                ? { status: 404, statusText: 'Not Found' }
+                : {
+                      status: 200,
+                      statusText: 'OK',
+                      body: '# Brewery style guide',
+                  },
+        );
 
         const out = await readReference().execute({
             repo: 'acme-brewery/style-guide',
