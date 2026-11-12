@@ -30,6 +30,7 @@ import { reasoningBudgetFrom } from '@libs/llm/reasoning-budget';
 import {
     attachClassification,
     classifyLLMError,
+    extractHttpStatus,
     LlmErrorCategory,
     type ClassifiedErrorInfo,
 } from '@libs/llm/error-classifier';
@@ -147,9 +148,13 @@ function promptTokensUpperBound(prompt: unknown): number {
     return Buffer.byteLength(text ?? '', 'utf8') + PROVIDER_FRAMING_TOKENS;
 }
 
-/** The provider answered with an error status: it refused the request, unbilled. */
+/**
+ * The provider answered with an error status: it refused the request,
+ * unbilled. Read wherever an error carries it (status, statusCode, the
+ * response, the cause, a retry's last attempt).
+ */
 function refusedByProvider(err: unknown): boolean {
-    const status = (err as { statusCode?: unknown } | null)?.statusCode;
+    const status = extractHttpStatus(err);
     return typeof status === 'number' && status >= 400;
 }
 
@@ -363,22 +368,26 @@ export function wrapByokModel(
                 // A metered run with a spend cap admits the request before it
                 // leaves, against the most it can cost: its prompt and tools,
                 // and the answer cap it asks for (#2451).
-                const admission = await admitRequest(() => ({
-                    inputTokens: estimatePromptTokens({
-                        prompt: params?.prompt,
-                        tools: params?.tools,
+                const admission = await admitRequest(
+                    () => ({
+                        inputTokens: estimatePromptTokens({
+                            prompt: params?.prompt,
+                            tools: params?.tools,
+                        }),
+                        inputTokensUpperBound: promptTokensUpperBound({
+                            prompt: params?.prompt,
+                            tools: params?.tools,
+                        }),
+                        maxOutputTokens: params?.maxOutputTokens,
+                        reasoningBudgetTokens: budgetAddedToAnswerCap(
+                            params?.providerOptions,
+                            slot,
+                            namespace,
+                        ),
                     }),
-                    inputTokensUpperBound: promptTokensUpperBound({
-                        prompt: params?.prompt,
-                        tools: params?.tools,
-                    }),
-                    maxOutputTokens: params?.maxOutputTokens,
-                    reasoningBudgetTokens: budgetAddedToAnswerCap(
-                        params?.providerOptions,
-                        slot,
-                        namespace,
-                    ),
-                }));
+                    // A request whose caller gave up stops waiting for room.
+                    params?.abortSignal,
+                );
                 // The answer cap it was admitted at is sent, so the provider
                 // cannot answer past what was reserved. Zero is no cap a
                 // provider accepts.

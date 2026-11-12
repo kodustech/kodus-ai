@@ -16,14 +16,19 @@ describe('GetIssuesUseCase — a cached list another process made stale', () => 
             contributingSuggestions: [],
         }) as any;
 
-    function useCaseWith(changed: boolean) {
+    function useCaseWith(changed: boolean | Error) {
         const store = new Map<string, unknown>([
-            [`issues_${org}`, [issue('cached')]],
-            [`issues_${org}_asOf`, '2026-11-12T10:00:00.000Z'],
+            [
+                `issues_${org}`,
+                { issues: [issue('cached')], readAt: '2026-11-12T10:00:00.000Z' },
+            ],
         ]);
         const issuesService = {
             find: jest.fn(async () => [issue('fresh')]),
-            changedSince: jest.fn(async () => changed),
+            changedSince: jest.fn(async () => {
+                if (changed instanceof Error) throw changed;
+                return changed;
+            }),
         };
         const useCase = new GetIssuesUseCase(
             issuesService as any,
@@ -34,7 +39,7 @@ describe('GetIssuesUseCase — a cached list another process made stale', () => 
             } as any,
             { getRepositoryScope: jest.fn(async () => null) } as any,
         );
-        return { useCase, issuesService };
+        return { useCase, issuesService, store };
     }
 
     it('reads the list again when an issue changed after it was cached', async () => {
@@ -48,6 +53,26 @@ describe('GetIssuesUseCase — a cached list another process made stale', () => 
         );
         expect(issuesService.find).toHaveBeenCalledWith(org);
         expect(issues.map((i) => i.uuid)).toEqual(['fresh']);
+    });
+
+    it('stores the list and when it was read as one entry', async () => {
+        const { useCase, store } = useCaseWith(true);
+        const before = Date.now();
+
+        await useCase.execute({} as any);
+
+        const entry = store.get(`issues_${org}`) as { issues: any[]; readAt: string };
+        expect(entry.issues.map((i) => i.uuid)).toEqual(['fresh']);
+        expect(new Date(entry.readAt).getTime()).toBeGreaterThanOrEqual(before - 1000);
+    });
+
+    it('serves the cached list when the check for a later write fails', async () => {
+        const { useCase, issuesService } = useCaseWith(new Error('mongo blip'));
+
+        const issues = await useCase.execute({} as any);
+
+        expect(issuesService.find).not.toHaveBeenCalled();
+        expect(issues.map((i) => i.uuid)).toEqual(['cached']);
     });
 
     it('serves the cached list while nothing changed', async () => {

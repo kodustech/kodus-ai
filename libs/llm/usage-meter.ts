@@ -121,12 +121,14 @@ export function meterAdmitsRequests(): boolean {
  */
 export async function admitRequest(
     ceiling: () => RequestCeiling,
+    /** Aborting while the request waits for room rejects with its reason. */
+    signal?: AbortSignal,
 ): Promise<Admission> {
     const store = meterStore.getStore();
     if (!store?.meter.admit) {
         return ADMITTED_UNMETERED;
     }
-    const admission = await store.meter.admit(ceiling());
+    const admission = await untilAborted(store.meter.admit(ceiling()), signal);
     return {
         maxOutputTokens: admission.maxOutputTokens,
         settle: (answered) => {
@@ -137,6 +139,43 @@ export async function admitRequest(
             }
         },
     };
+}
+
+/**
+ * The admission, or the signal's reason if it aborts first. A room granted
+ * after the caller gave up is given back at once, never held unsettled.
+ */
+function untilAborted(
+    admission: Admission | Promise<Admission>,
+    signal?: AbortSignal,
+): Admission | Promise<Admission> {
+    if (!signal || !(admission instanceof Promise)) {
+        return admission;
+    }
+    if (signal.aborted) {
+        admission.then((a) => a.settle(undefined)).catch(() => undefined);
+        return Promise.reject(signal.reason);
+    }
+    return new Promise<Admission>((resolve, reject) => {
+        const onAbort = () => {
+            admission.then((a) => a.settle(undefined)).catch(() => undefined);
+            reject(signal.reason);
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+        admission.then(
+            (a) => {
+                signal.removeEventListener('abort', onAbort);
+                if (signal.aborted) {
+                    return;
+                }
+                resolve(a);
+            },
+            (error) => {
+                signal.removeEventListener('abort', onAbort);
+                reject(error);
+            },
+        );
+    });
 }
 
 /** A request that failed after the provider answered it (a bad parse) was billed. */

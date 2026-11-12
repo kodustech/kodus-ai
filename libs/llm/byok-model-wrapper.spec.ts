@@ -922,19 +922,47 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         expect(settle).toHaveBeenCalledWith({});
     });
 
-    it('settles a request the provider refused with an error status as unbilled', async () => {
-        const settle = jest.fn();
-        const model = answering({});
-        model.doGenerate.mockRejectedValue(
-            Object.assign(new Error('Too Many Requests'), { statusCode: 429 }),
-        );
-
-        await expect(
-            runWithUsageMeter(
+    it('settles a request the provider refused with an error status as unbilled, and one lost after it left as billed', async () => {
+        const run = async (error: Error) => {
+            const settle = jest.fn();
+            const model = answering({});
+            model.doGenerate.mockRejectedValue(error);
+            await runWithUsageMeter(
                 { record: jest.fn(), admit: () => ({ settle }) },
                 async () => wrap(model).doGenerate({ prompt: PROMPT }),
-            ),
-        ).rejects.toThrow('Too Many Requests');
+            ).catch(() => undefined);
+            return settle.mock.calls[0][0];
+        };
+
+        // The provider answered with a status: refused, nothing billed,
+        // wherever the error carries it.
+        expect(await run(Object.assign(new Error('Too Many Requests'), { statusCode: 429 }))).toBeUndefined();
+        expect(
+            await run(Object.assign(new Error('retries exhausted'), {
+                lastError: Object.assign(new Error('Overloaded'), { status: 529 }),
+            })),
+        ).toBeUndefined();
+        // No answer at all: it may have been processed, so it is billed.
+        expect(await run(new Error('socket hang up'))).toEqual({});
+    });
+
+    it('stops waiting for room when the caller aborts, giving back room granted later', async () => {
+        const settle = jest.fn();
+        let grant!: (a: any) => void;
+        const admit = jest.fn(() => new Promise((resolve) => (grant = resolve)));
+        const model = answering({});
+        const caller = new AbortController();
+
+        const call = runWithUsageMeter({ record: jest.fn(), admit } as any, async () =>
+            wrap(model).doGenerate({ prompt: PROMPT, abortSignal: caller.signal } as any),
+        );
+        await new Promise((r) => setImmediate(r));
+        caller.abort(new Error('caller gave up'));
+
+        await expect(call).rejects.toThrow('caller gave up');
+        grant({ settle });
+        await new Promise((r) => setImmediate(r));
+        expect(model.doGenerate).not.toHaveBeenCalled();
         expect(settle).toHaveBeenCalledWith(undefined);
     });
 
