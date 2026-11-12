@@ -49,6 +49,30 @@ const logger = createLogger('ByokModelWrapper');
 
 /** The provider-options key the slot's adapter reads, so an effort the call
  *  never carried can be added there when the upstream asks for it. */
+/**
+ * Adapters that send max_tokens = answer cap + reasoning budget, read in
+ * their source: @ai-sdk/anthropic (`maxTokens + thinkingBudget`) and
+ * @ai-sdk/amazon-bedrock (`maxTokens += thinkingBudget`). Others hold the
+ * reasoning inside the answer cap (OpenAI, Gemini).
+ */
+const ADDS_BUDGET_TO_ANSWER_CAP = new Set(['anthropic', 'amazonBedrock']);
+
+/**
+ * The reasoning budget a request adds on top of its answer cap: read only from
+ * the namespace the served adapter reads, and only for an adapter that adds it.
+ */
+function budgetAddedToAnswerCap(
+    providerOptions: Record<string, unknown> | undefined,
+    namespace: string | undefined,
+): number | undefined {
+    if (!namespace || !ADDS_BUDGET_TO_ANSWER_CAP.has(namespace)) {
+        return undefined;
+    }
+    return reasoningBudgetFrom(
+        providerOptions?.[namespace] as Record<string, unknown> | undefined,
+    );
+}
+
 function optionsNamespace(
     slot: NormalizedModel | undefined,
 ): string | undefined {
@@ -277,8 +301,9 @@ export function wrapByokModel(
                         tools: params?.tools,
                     }),
                     maxOutputTokens: params?.maxOutputTokens,
-                    reasoningBudgetTokens: reasoningBudgetFrom(
+                    reasoningBudgetTokens: budgetAddedToAnswerCap(
                         params?.providerOptions,
+                        namespace,
                     ),
                 }));
                 // The answer cap it was admitted at is sent, so the provider
