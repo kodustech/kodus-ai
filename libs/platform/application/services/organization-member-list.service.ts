@@ -71,6 +71,7 @@ export class OrganizationMemberListService {
             this.codeManagementService.getListMembers({
                 organizationAndTeamData,
                 determineBots: true,
+                requireComplete: options.requireAuthors === true,
             }),
             this.fetchPullRequestAuthors(organizationAndTeamData, options),
         ]);
@@ -97,8 +98,13 @@ export class OrganizationMemberListService {
         }
 
         // A caller that revokes access on absence cannot read a missing
-        // author list as "nobody opened a PR".
-        if (options.requireAuthors && authorResult.status === 'rejected') {
+        // author list as "nobody opened a PR", nor a missing member list as
+        // "left the workspace".
+        if (
+            options.requireAuthors &&
+            (authorResult.status === 'rejected' ||
+                memberResult.status === 'rejected')
+        ) {
             return unavailable();
         }
 

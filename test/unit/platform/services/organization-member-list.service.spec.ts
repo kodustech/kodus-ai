@@ -153,6 +153,7 @@ describe('OrganizationMemberListService', () => {
             ).toHaveBeenCalledWith({
                 organizationAndTeamData,
                 determineBots: true,
+                requireComplete: false,
             });
         });
 
@@ -224,6 +225,29 @@ describe('OrganizationMemberListService', () => {
             expect(
                 mockCodeManagementService.getPullRequestAuthors.mock.calls.map(
                     ([params]) => params.requireLoaded,
+                ),
+            ).toEqual([true, false]);
+        });
+
+        it('is unavailable when the member read fails, even with stored authors', async () => {
+            mockCodeManagementService.getListMembers.mockRejectedValue(
+                new Error('Too Many Requests'),
+            );
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([
+                { id: '7', name: 'Recent Author' },
+            ]);
+
+            const strict = await service.fetch(organizationAndTeamData, {
+                requireAuthors: true,
+            });
+            const lenient = await service.fetch(organizationAndTeamData);
+
+            expect(strict).toEqual({ status: 'unavailable', members: [] });
+            expect(lenient.status).toBe('ok');
+            // Only the strict caller asks the provider for a complete list
+            expect(
+                mockCodeManagementService.getListMembers.mock.calls.map(
+                    ([params]) => params.requireComplete,
                 ),
             ).toEqual([true, false]);
         });

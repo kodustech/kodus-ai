@@ -1475,6 +1475,11 @@ export class BitbucketCloudService implements Omit<
 
     async getListMembers(params: {
         organizationAndTeamData: OrganizationAndTeamData;
+        // Fail instead of answering a partial list. For callers that revoke
+        // on absence (the seat prune): authors come from stored PRs and keep
+        // working while Bitbucket is down, so a partial member list would
+        // read as "left the workspace".
+        requireComplete?: boolean;
     }): Promise<{ name: string; id: string | number }[]> {
         try {
             const { organizationAndTeamData } = params;
@@ -1484,6 +1489,9 @@ export class BitbucketCloudService implements Omit<
             );
 
             if (!bitbucketAuthDetail) {
+                if (params.requireComplete) {
+                    throw new Error('Bitbucket credentials unavailable');
+                }
                 return [];
             }
 
@@ -1567,6 +1575,15 @@ export class BitbucketCloudService implements Omit<
                 )
                 .map((result) => result.value);
 
+            if (
+                params.requireComplete &&
+                allMembers.length < settledMembers.length
+            ) {
+                throw new Error(
+                    'Bitbucket workspace members could not all be read',
+                );
+            }
+
             const uniqueMembers = new Map<
                 string,
                 { name: string; id: string; type: string }
@@ -1622,6 +1639,9 @@ export class BitbucketCloudService implements Omit<
                     params,
                 },
             });
+            if (params.requireComplete) {
+                throw error;
+            }
             return [];
         }
     }

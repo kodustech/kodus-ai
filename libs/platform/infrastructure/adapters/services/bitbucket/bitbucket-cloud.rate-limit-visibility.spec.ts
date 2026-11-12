@@ -197,6 +197,73 @@ describe('BitbucketCloudService — rate limit visibility', () => {
     });
 });
 
+describe('BitbucketCloudService — workspace members for the seat prune', () => {
+    const realFetch = global.fetch;
+
+    beforeEach(() => {
+        __resetRateGatesForTest();
+    });
+
+    afterEach(() => {
+        global.fetch = realFetch;
+        jest.restoreAllMocks();
+    });
+
+    function withTwoWorkspaces() {
+        const { service } = makeService();
+        jest.spyOn(
+            service,
+            'findOneByOrganizationAndTeamDataAndConfigKey',
+        ).mockResolvedValue([
+            { id: 'r1', organizationName: 'ws-ok' },
+            { id: 'r2', organizationName: 'ws-down' },
+        ] as any);
+        global.fetch = jest.fn(async (url: string) =>
+            String(url).includes('ws-down')
+                ? new Response('', {
+                      status: 500,
+                      headers: { 'content-type': 'application/json' },
+                  })
+                : new Response(
+                      JSON.stringify({
+                          values: [
+                              {
+                                  user: {
+                                      uuid: '{u1}',
+                                      display_name: 'Ana',
+                                  },
+                              },
+                          ],
+                      }),
+                      {
+                          status: 200,
+                          headers: { 'content-type': 'application/json' },
+                      },
+                  ),
+        ) as any;
+        return service;
+    }
+
+    it('fails when one workspace cannot be read and the caller needs the full list', async () => {
+        const service = withTwoWorkspaces();
+
+        await expect(
+            service.getListMembers({
+                organizationAndTeamData: org,
+                requireComplete: true,
+            }),
+        ).rejects.toThrow(/could not all be read/);
+    });
+
+    it('keeps the partial list for everyone else', async () => {
+        const service = withTwoWorkspaces();
+
+        await expect(
+            service.getListMembers({ organizationAndTeamData: org }),
+        ).resolves.toEqual([{ id: 'u1', name: 'Ana', type: 'user' }]);
+    });
+});
+
 describe('BitbucketCloudService — author scan paging', () => {
     it('stops paging a repository once a page reaches past the window', async () => {
         const { service } = makeService();
