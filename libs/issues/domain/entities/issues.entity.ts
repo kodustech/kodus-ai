@@ -42,6 +42,7 @@ export class IssuesEntity implements Entity<IIssue> {
     public endLine?: number;
     public evidence?: IIssueEvidence;
     public lastSeenScanId?: string;
+    public lastSeenCommitSha?: string;
     public lastSeenAt?: string;
     public resolvedAt?: string;
 
@@ -70,6 +71,7 @@ export class IssuesEntity implements Entity<IIssue> {
         this.endLine = issue.endLine;
         this.evidence = issue.evidence;
         this.lastSeenScanId = issue.lastSeenScanId;
+        this.lastSeenCommitSha = issue.lastSeenCommitSha;
         this.lastSeenAt = issue.lastSeenAt;
         this.resolvedAt = issue.resolvedAt;
     }
@@ -104,6 +106,7 @@ export class IssuesEntity implements Entity<IIssue> {
             endLine: this.endLine,
             evidence: this.evidence,
             lastSeenScanId: this.lastSeenScanId,
+            lastSeenCommitSha: this.lastSeenCommitSha,
             lastSeenAt: this.lastSeenAt,
             resolvedAt: this.resolvedAt,
         };
@@ -135,6 +138,7 @@ export class IssuesEntity implements Entity<IIssue> {
             endLine: this.endLine,
             evidence: this.evidence,
             lastSeenScanId: this.lastSeenScanId,
+            lastSeenCommitSha: this.lastSeenCommitSha,
             lastSeenAt: this.lastSeenAt,
             resolvedAt: this.resolvedAt,
         };

@@ -48,6 +48,16 @@ function modelWith(existing: Record<string, unknown> | null) {
 }
 
 describe('IssuesRepository — security-scan findings', () => {
+    it('points a sighted issue at the commit the sighting scan read', async () => {
+        const model = modelWith({ _id: 'i-1', status: IssueStatus.OPEN, lastSeenCommitSha: 'old' });
+        const repository = new IssuesRepository(model as any);
+
+        await repository.upsertScanFinding({ ...finding, lastSeenCommitSha: 'abc123' } as any);
+
+        const [, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [any, any];
+        expect(update.$set.lastSeenCommitSha).toBe('abc123');
+    });
+
     it('creates an open security-scan issue the first time a finding is seen', async () => {
         const model = modelWith(null);
         const repository = new IssuesRepository(model as any);
@@ -489,5 +499,38 @@ describe('IssuesRepository.findByFileAndStatus', () => {
                 filePath: { $in: ['./src/a.ts', 'src/a.ts'] },
             }),
         );
+    });
+});
+
+describe('IssuesRepository.findOpenScanFindingAreas', () => {
+    it("lists each file and class of the repository's open scan findings once", async () => {
+        const find = jest.fn(() => ({
+            lean: () => exec([
+                { filePath: './src/a.ts', vulnerabilityClass: 'authz' },
+                { filePath: 'src/a.ts', vulnerabilityClass: 'authz' },
+                { filePath: 'src/a.ts', vulnerabilityClass: 'injection' },
+                { filePath: 'src/b.ts' },
+            ]),
+        }));
+        const repository = new IssuesRepository({ find } as any);
+
+        const areas = await repository.findOpenScanFindingAreas({
+            organizationId: 'org-1',
+            repositoryPlatform: PlatformType.GITLAB,
+            repositoryId: 'repo-1',
+        });
+
+        expect(areas).toEqual([
+            { filePath: 'src/a.ts', vulnerabilityClass: 'authz' },
+            { filePath: 'src/a.ts', vulnerabilityClass: 'injection' },
+        ]);
+        const [filter] = find.mock.calls[0] as unknown as [any];
+        expect(filter).toEqual({
+            'organizationId': 'org-1',
+            'repository.platform': PlatformType.GITLAB,
+            'repository.id': 'repo-1',
+            'source': IssueSource.SECURITY_SCAN,
+            'status': IssueStatus.OPEN,
+        });
     });
 });

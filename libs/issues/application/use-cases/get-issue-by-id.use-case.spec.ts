@@ -1,0 +1,58 @@
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { IssueSource } from '@libs/issues/domain/interfaces/issues.interface';
+
+import { GetIssueByIdUseCase } from './get-issue-by-id.use-case';
+
+function useCaseFor(issue: Record<string, unknown>) {
+    return new GetIssueByIdUseCase(
+        { findById: jest.fn(async () => issue) } as any,
+        { getByOrganizationId: jest.fn(async () => []) } as any,
+        {
+            enrichContributingSuggestions: jest.fn(async () => []),
+            ageCalculation: jest.fn(async () => '1 day'),
+        } as any,
+        { findOne: jest.fn(async () => null) } as any,
+        { user: { uuid: 'u-1', organization: { uuid: 'org-1' } } } as any,
+        { ensure: jest.fn(async () => undefined) } as any,
+    );
+}
+
+const base = {
+    uuid: 'i-1',
+    organizationId: 'org-1',
+    title: 'IDOR',
+    filePath: 'src/orders.controller.ts',
+    contributingSuggestions: [],
+    repository: {
+        id: 'repo-1',
+        name: 'shop',
+        full_name: 'acme/shop',
+        platform: PlatformType.GITHUB,
+        url: 'https://github.com/acme/shop',
+    },
+};
+
+describe('GetIssueByIdUseCase — file link', () => {
+    it('links a scan finding to the commit its last scan read, not to main', async () => {
+        const details = await useCaseFor({
+            ...base,
+            source: IssueSource.SECURITY_SCAN,
+            lastSeenCommitSha: 'abc123',
+        }).execute('i-1');
+
+        expect(details?.fileLink.url).toBe(
+            'https://github.com/acme/shop/blob/abc123/src/orders.controller.ts',
+        );
+    });
+
+    it('keeps the main link for a review issue', async () => {
+        const details = await useCaseFor({
+            ...base,
+            lastSeenCommitSha: 'abc123',
+        }).execute('i-1');
+
+        expect(details?.fileLink.url).toBe(
+            'https://github.com/acme/shop/blob/main/src/orders.controller.ts',
+        );
+    });
+});

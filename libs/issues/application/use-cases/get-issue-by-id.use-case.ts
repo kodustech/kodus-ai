@@ -137,7 +137,15 @@ export class GetIssueByIdUseCase implements IUseCase {
             ),
             fileLink: {
                 label: issue.filePath,
-                url: this.buildFileUrl(dataToBuildUrls, issue.filePath),
+                // A scan finding is at the commit its last scan read, which
+                // may be on any branch; a review issue keeps the main link.
+                url: this.buildFileUrl(
+                    dataToBuildUrls,
+                    issue.filePath,
+                    issue.source === IssueSource.SECURITY_SCAN
+                        ? issue.lastSeenCommitSha
+                        : undefined,
+                ),
             },
             prLinks: prUrls.map((pr) => ({
                 label: pr.number,
@@ -266,11 +274,12 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryUrl?: string;
         },
         filePath: string,
-        branch: string = 'main',
+        commitSha?: string,
     ): string {
         const cleanFilePath = filePath.startsWith('/')
             ? filePath.substring(1)
             : filePath;
+        const branch = commitSha || 'main';
 
         const repositoryUrl = this.buildRepositoryUrl(data);
 
@@ -280,7 +289,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             case PlatformType.GITLAB:
                 return `${repositoryUrl}/-/blob/${branch}/${cleanFilePath}`;
             case PlatformType.AZURE_REPOS:
-                return `${data.httpUrl}?path=/${cleanFilePath}`;
+                return `${data.httpUrl}?path=/${cleanFilePath}${commitSha ? `&version=GC${commitSha}` : ''}`;
             case PlatformType.BITBUCKET:
                 return `https://bitbucket.org/${data.repositoryFullName}/src/${branch}/${cleanFilePath}`;
             default:

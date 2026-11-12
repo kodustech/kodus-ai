@@ -737,6 +737,17 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         });
     });
 
+    it('settles an answer that carried no usage as answered, with its totals unknown', async () => {
+        const settle = jest.fn();
+
+        await runWithUsageMeter(
+            { record: jest.fn(), admit: () => ({ settle }) },
+            async () => wrap(answering(undefined)).doGenerate({ prompt: PROMPT }),
+        );
+
+        expect(settle).toHaveBeenCalledWith({});
+    });
+
     it('settles unknown totals as unknown, never as a zero', async () => {
         const settle = jest.fn();
 

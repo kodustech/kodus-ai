@@ -40,11 +40,20 @@ export type ScanFindingUpsert = Omit<
     lastSeenScanId: string;
 };
 
-export interface ResolveUnseenScanFindingsParams {
+/** One repository, as a scan names it: an id is only unique on its platform. */
+export interface ScanRepositoryScope {
     organizationId: string;
-    /** An id is only unique on its platform. */
     repositoryPlatform: PlatformType;
     repositoryId: string;
+}
+
+/** A file and a class an open scan finding sits at. */
+export interface OpenScanFindingArea {
+    filePath: string;
+    vulnerabilityClass: string;
+}
+
+export interface ResolveUnseenScanFindingsParams extends ScanRepositoryScope {
     scanId: string;
     /**
      * What this scan examined, class by class. A scan stopped by its budget
@@ -113,6 +122,15 @@ export interface IIssuesRepository {
     upsertScanFinding(
         finding: ScanFindingUpsert,
     ): Promise<{ issue: IssuesEntity; outcome: ScanFindingOutcome }>;
+
+    /**
+     * Where the repository's open scan findings sit. A scan reads these again
+     * even when nothing there draws the pattern scan any more: a fix that
+     * removed the dangerous operation is how a finding gets resolved.
+     */
+    findOpenScanFindingAreas(
+        params: ScanRepositoryScope,
+    ): Promise<OpenScanFindingArea[]>;
 
     resolveUnseenScanFindings(
         params: ResolveUnseenScanFindingsParams,

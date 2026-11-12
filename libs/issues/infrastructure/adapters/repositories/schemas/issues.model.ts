@@ -87,6 +87,9 @@ export class IssuesModel extends CoreDocument {
     public lastSeenScanId?: string;
 
     @Prop({ type: String, required: false })
+    public lastSeenCommitSha?: string;
+
+    @Prop({ type: String, required: false })
     public lastSeenAt?: string;
 
     @Prop({ type: String, required: false })
