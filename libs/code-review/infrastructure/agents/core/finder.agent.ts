@@ -35,6 +35,7 @@ import { LlmVerifier } from '@libs/code-review/infrastructure/agents/core/verifi
 import { ConventionVerifier } from '@libs/code-review/infrastructure/agents/core/convention-verifier.agent';
 import {
     checkConventionQuotes,
+    isCodeFileSource,
     isTeamSystemSource,
     isToolSource,
     isProvenByAstGrep,
@@ -1446,12 +1447,14 @@ async function routeByKind(
     sectionOf: Map<FinderSuggestion, string>;
     rejected: ConventionCheckRejected[];
 }> {
-    // A "convention" sourced from a tool's output (e.g. a CLI) or from a
-    // record in one of the team's systems quotes no rule, so the quote gate
-    // would drop it: it is checked as a bug instead.
+    // A "convention" sourced from a tool's output (e.g. a CLI), from a
+    // record in one of the team's systems or from a code file (a line shown
+    // as the pattern to follow) quotes no rule, so the quote gate would drop
+    // it: it is checked as a bug instead.
     const notAGuide = (s: FinderSuggestion) =>
         isToolSource(s, check.guideFiles) ||
-        isTeamSystemSource(s, teamSystemTools);
+        isTeamSystemSource(s, teamSystemTools) ||
+        isCodeFileSource(s, check.guideFiles, check.teamInstructions);
     const toolSourced = suggestions.filter(
         (s) => s.kind === 'convention' && notAGuide(s),
     );

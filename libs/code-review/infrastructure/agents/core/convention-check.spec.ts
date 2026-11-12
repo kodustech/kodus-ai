@@ -13,6 +13,7 @@ import {
     AstGrepOutputLog,
     checkConventionQuotes,
     findQuoteSection,
+    isCodeFileSource,
     isLinkedGuide,
     isProvenByAstGrep,
     isTeamSystemSource,
@@ -934,6 +935,75 @@ describe('isToolSource', () => {
         );
         expect(isToolSource(cites('docs/style.md'))).toBe(false);
         expect(isToolSource(cites('TeamInstructions'))).toBe(false);
+    });
+});
+
+// A convention that cites a source-code file quotes a line of code as the
+// pattern to follow, not a rule the team wrote: it is checked as a bug. A
+// document, a linked guide or the agent's instructions keep the quote gate.
+describe('isCodeFileSource', () => {
+    const quote = 'return { status: result.status };';
+    const cites = (file: string) =>
+        ({
+            kind: 'convention',
+            source: { file, section: '', quote },
+        }) as unknown as FinderSuggestion;
+
+    it('takes a source-code file cited as the rule', () => {
+        expect(isCodeFileSource(cites('src/valves/open.ts'))).toBe(true);
+        expect(isCodeFileSource(cites('./pumps/schedule.py'))).toBe(true);
+        expect(isCodeFileSource(cites('greenhouse/Drain.kt'))).toBe(true);
+    });
+
+    it('never takes a document, an agent or rule file, a tool or the instructions', () => {
+        for (const file of [
+            'docs/guides/valve-api.md',
+            'docs/guides/valve-api.mdx',
+            'notes/valves.txt',
+            'docs/valves.rst',
+            'docs/valves.adoc',
+            'skills/pumps/SKILL.md',
+            '.cursor/rules/valves.mdc',
+            '.cursorrules',
+            '.kody/rules/valves.yaml',
+            'TeamInstructions',
+            'jscpd',
+            'ast-grep:no-bare-boolean',
+            '',
+        ]) {
+            expect([file, isCodeFileSource(cites(file))]).toEqual([
+                file,
+                false,
+            ]);
+        }
+    });
+
+    it('keeps a linked guide that is a code file on the quote gate', () => {
+        expect(
+            isCodeFileSource(cites('src/valves/RULES.ts'), [
+                'src/valves/RULES.ts',
+            ]),
+        ).toBe(false);
+        expect(isCodeFileSource(cites('src/valves/a.ts'), ['src/valves'])).toBe(
+            false,
+        );
+    });
+
+    it("keeps a quote from the agent's instructions on the quote gate, which re-points it", () => {
+        expect(
+            isCodeFileSource(
+                cites('src/valves/open.ts'),
+                [],
+                `Valves:\n${quote}\n`,
+            ),
+        ).toBe(false);
+        expect(
+            isCodeFileSource(
+                cites('src/valves/open.ts'),
+                [],
+                'Close valves in a finally block.',
+            ),
+        ).toBe(true);
     });
 });
 

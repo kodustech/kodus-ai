@@ -411,6 +411,56 @@ describe('convention findings sourced from a tool', () => {
     });
 });
 
+describe('convention findings sourced from a code file', () => {
+    // Production shape: the model marked a finding "convention" and cited a
+    // line of the repository's code as the pattern to follow. That is not a
+    // team rule, so the quote gate dropped it as "not a guide linked to this
+    // review"; it is a claim about the code, checked as a bug.
+    const CODE = {
+        relevantFile: 'src/valves/drain-valve.handler.ts',
+        suggestionContent:
+            'CODE-PATTERN: drain returns a bare status while open wraps it in ValveResult.',
+        existingCode: 'return status;',
+        improvedCode: 'return { status } as ValveResult;',
+        oneSentenceSummary: 'Return ValveResult like the open handler does',
+        kind: 'convention',
+        source: {
+            file: 'src/valves/open-valve.handler.ts',
+            quote: 'return { status: result.status } as ValveResult;',
+        },
+    };
+
+    it('checks it as a bug instead of dropping it at the quote gate', async () => {
+        submitted = { reasoning: 'one pattern', suggestions: [CODE, BUG] };
+        const { r, readGuide } = await run(true);
+        expect(r.droppedByQuoteCheck).toEqual([]);
+        expect(r.kept.map(tagOf)).toEqual(['BUG', 'CODE-PATTERN']);
+        const code = r.kept.find((f) => tagOf(f) === 'CODE-PATTERN')!;
+        expect(code.kind).toBe('bug');
+        expect(code.source).toBeUndefined();
+        expect(readGuide).not.toHaveBeenCalled();
+    });
+
+    it('still drops a document that is not linked', async () => {
+        const DOC = {
+            ...CODE,
+            suggestionContent: 'DOC-RULE: drain returns a bare status.',
+            source: {
+                file: 'docs/valves/unlinked.md',
+                quote: 'Handlers return ValveResult, never a bare status.',
+            },
+        };
+        submitted = { reasoning: 'one rule', suggestions: [DOC, BUG] };
+        const { r } = await run(true);
+        expect(r.droppedByQuoteCheck.map((q) => tagOf(q.finding))).toEqual([
+            'DOC-RULE',
+        ]);
+        expect(r.droppedByQuoteCheck[0].detail).toBe(
+            'docs/valves/unlinked.md is not a guide linked to this review',
+        );
+    });
+});
+
 describe('convention findings sourced from a team system record (#2384)', () => {
     // Production shape: the agent's prompt tells it to cite the tracker issue
     // a finding rests on; the model marked it "convention" with the issue as
