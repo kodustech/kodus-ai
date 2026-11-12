@@ -465,8 +465,14 @@ export class IssuesRepository implements IIssuesRepository {
             'source': IssueSource.SECURITY_SCAN,
             'fingerprint': { $in: [...new Set(params.fingerprints)] },
         };
+        // One this scan already sighted (stored it, or marked it before) is
+        // not counted again.
         const sighted = await this.issuesModel.updateMany(
-            { ...theseFindings, status: IssueStatus.OPEN },
+            {
+                ...theseFindings,
+                status: IssueStatus.OPEN,
+                lastSeenScanId: { $ne: params.scanId },
+            },
             { $set: { lastSeenScanId: params.scanId, lastSeenAt: now } },
         );
         // Found again after a scan resolved it: back open. A dismissed one
