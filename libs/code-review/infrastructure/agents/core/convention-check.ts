@@ -523,14 +523,14 @@ export async function checkCodeFileQuotes(
     for (const finding of findings) {
         const file = stripLeading((finding.source?.file ?? '').trim());
         const quote = finding.source?.quote ?? '';
-        const content = quote.trim()
-            ? await readGuide(file).catch(() => null)
-            : null;
+        // A quote of markdown marks alone normalizes to nothing: no pattern.
+        const needle = normalizeQuoteText(quote);
+        const content = needle ? await readGuide(file).catch(() => null) : null;
         // Code holds "..." (spread, rest), so the whole quote is looked up
         // first; a quote the model shortened with "..." still matches by parts.
         const holds =
             content != null &&
-            (normalizeQuoteText(content).includes(normalizeQuoteText(quote)) ||
+            (normalizeQuoteText(content).includes(needle) ||
                 findQuoteSection(content, quote) != null);
         if (holds) {
             passed.push(finding);

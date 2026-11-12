@@ -478,6 +478,24 @@ describe('convention findings sourced from a code file', () => {
         expect(r.kept.map(tagOf)).toEqual(['BUG', 'CODE-PATTERN']);
     });
 
+    // Markdown marks alone normalize to nothing, which every file "holds".
+    it('drops it when the quote is only markdown marks', async () => {
+        const MARKS = {
+            ...CODE,
+            source: { file: 'src/valves/open-valve.handler.ts', quote: '**' },
+        };
+        submitted = { reasoning: 'one pattern', suggestions: [MARKS, BUG] };
+        const { r } = await run(
+            true,
+            {},
+            { 'src/valves/open-valve.handler.ts': OPEN_HANDLER },
+        );
+        expect(r.kept.map(tagOf)).toEqual(['BUG']);
+        expect(r.droppedByQuoteCheck.map((q) => tagOf(q.finding))).toEqual([
+            'CODE-PATTERN',
+        ]);
+    });
+
     // A pattern the model made up has nothing for the verifier to compare.
     it.each([
         [
