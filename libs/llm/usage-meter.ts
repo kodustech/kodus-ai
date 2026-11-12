@@ -27,20 +27,24 @@ export interface UsageObservation {
 export interface UsageMeter {
     record(observation: UsageObservation): void;
     /**
-     * Before a request leaves, with the most it can use. Throwing refuses the
-     * request. `record` still follows for an answered request, from the
-     * caller that reads its usage.
+     * Before a request leaves, with the most it can use. Throwing (or
+     * rejecting) refuses the request; a promise holds it until there is room,
+     * as when requests in flight still hold what they reserved. `record`
+     * still follows for an answered request, from the caller that reads its
+     * usage.
      */
-    admit?(request: RequestCeiling): Admission;
+    admit?(request: RequestCeiling): Admission | Promise<Admission>;
 }
 
 /** A request let through. */
 export interface Admission {
     /**
      * Called once it ends: with what the provider billed for it, or
-     * undefined when it failed unanswered. An answer whose provider reported
-     * no totals settles with them undefined, never as undefined: it was
-     * billed, and a cap must not count it as free.
+     * undefined when it provably never reached the provider, or the provider
+     * refused it with an error status. Anything else that may have been
+     * billed (an answer with no totals, a connection lost after sending)
+     * settles with the unknown totals undefined, never as undefined: a cap
+     * must not count it as free.
      */
     settle: (answered: AiSdkUsage | undefined) => void;
     /**
@@ -54,6 +58,13 @@ export interface Admission {
 export interface RequestCeiling {
     /** Its prompt and tool definitions, counted with the shared tokenizer. */
     inputTokens: number;
+    /**
+     * A count no model's tokenizer can exceed for the same prompt: every
+     * token of a byte-level tokenizer is at least one byte, so the UTF-8 size
+     * of what is sent bounds it, plus what the provider frames it with. A
+     * shared tokenizer's count can fall short of the served model's.
+     */
+    inputTokensUpperBound?: number;
     /** The cap the request puts on the answer, when it sets one. */
     maxOutputTokens?: number;
     /**
@@ -108,12 +119,14 @@ export function meterAdmitsRequests(): boolean {
  * refusal is thrown to the caller; a meter that fails to settle never breaks
  * the call it observes.
  */
-export function admitRequest(ceiling: () => RequestCeiling): Admission {
+export async function admitRequest(
+    ceiling: () => RequestCeiling,
+): Promise<Admission> {
     const store = meterStore.getStore();
     if (!store?.meter.admit) {
         return ADMITTED_UNMETERED;
     }
-    const admission = store.meter.admit(ceiling());
+    const admission = await store.meter.admit(ceiling());
     return {
         maxOutputTokens: admission.maxOutputTokens,
         settle: (answered) => {

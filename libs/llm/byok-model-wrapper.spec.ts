@@ -725,8 +725,12 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         expect(counted).toContain('readFile');
         expect(admit).toHaveBeenCalledWith({
             inputTokens: 1200,
+            // No tokenizer makes more tokens than the bytes sent, plus framing.
+            inputTokensUpperBound: expect.any(Number),
             maxOutputTokens: 500,
         });
+        const { inputTokensUpperBound } = (admit.mock.calls[0] as any[])[0];
+        expect(inputTokensUpperBound).toBe(Buffer.byteLength(counted, 'utf8') + 2_000);
         expect(settle).toHaveBeenCalledWith({
             inputTokens: 1000,
             outputTokens: 50,
@@ -883,9 +887,10 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         expect(model.doGenerate).not.toHaveBeenCalled();
     });
 
-    it('settles a failed request with nothing billed', async () => {
+    it('settles a request lost after it left as billed, its totals unknown', async () => {
         const settle = jest.fn();
         const model = answering({});
+        // The provider may have processed it before the connection dropped.
         model.doGenerate.mockRejectedValue(new Error('socket hang up'));
 
         await expect(
@@ -894,7 +899,40 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
                 async () => wrap(model).doGenerate({ prompt: PROMPT }),
             ),
         ).rejects.toThrow('socket hang up');
+        expect(settle).toHaveBeenCalledWith({});
+    });
+
+    it('settles a request the provider refused with an error status as unbilled', async () => {
+        const settle = jest.fn();
+        const model = answering({});
+        model.doGenerate.mockRejectedValue(
+            Object.assign(new Error('Too Many Requests'), { statusCode: 429 }),
+        );
+
+        await expect(
+            runWithUsageMeter(
+                { record: jest.fn(), admit: () => ({ settle }) },
+                async () => wrap(model).doGenerate({ prompt: PROMPT }),
+            ),
+        ).rejects.toThrow('Too Many Requests');
         expect(settle).toHaveBeenCalledWith(undefined);
+    });
+
+    it('holds a request until the meter has room for it', async () => {
+        const settle = jest.fn();
+        let grant!: (a: any) => void;
+        const admit = jest.fn(() => new Promise((resolve) => (grant = resolve)));
+        const model = answering({});
+
+        const call = runWithUsageMeter({ record: jest.fn(), admit } as any, async () =>
+            wrap(model).doGenerate({ prompt: PROMPT }),
+        );
+        await new Promise((r) => setImmediate(r));
+        expect(model.doGenerate).not.toHaveBeenCalled();
+
+        grant({ settle });
+        await call;
+        expect(model.doGenerate).toHaveBeenCalledTimes(1);
     });
 
     it('counts the prompt only inside a run that admits its requests', async () => {
