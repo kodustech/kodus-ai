@@ -66,9 +66,10 @@ const FUNCTION_PATTERNS: RegExp[] = [
     /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(?:async\s+)?(?:function\b|\([^)]*\)\s*(?::[^=]+)?=>|[A-Za-z_$][\w$]*\s*=>)/,
     // Class members: TS/JS methods, Java/C#/Kotlin/Scala/Dart/C++ methods.
     // A one-line signature must open its body on the same line, so a bare
-    // call like `print(x)` is not read as a declaration.
+    // call like `print(x)` is not read as a declaration. The body may go on
+    // on that line (`find(id) { return db.get(id); }`).
     new RegExp(
-        `^\\s*(?:${MEMBER_MODIFIERS}\\s+)*(?:${TYPE_TOKEN}\\s+)*?([A-Za-z_$][\\w$]*)\\s*(?:<[^>]*>)?\\s*\\(.*\\)\\s*(?::\\s*[^{=;]+)?(?:throws\\s+[\\w., ]+)?\\s*\\{\\s*$`,
+        `^\\s*(?:${MEMBER_MODIFIERS}\\s+)*(?:${TYPE_TOKEN}\\s+)*?([A-Za-z_$][\\w$]*)\\s*(?:<[^>]*>)?\\s*\\(.*\\)\\s*(?::\\s*[^{=;]+)?(?:throws\\s+[\\w., ]+)?\\s*\\{`,
     ),
     // A signature split over lines needs a modifier to tell it from a call.
     // (A one-line signature whose brace opens on the next line, Allman

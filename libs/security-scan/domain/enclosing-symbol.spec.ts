@@ -333,4 +333,23 @@ describe('codeLines: trailing comments', () => {
         );
         expect(codeLines(src)[3]).not.toContain('}');
     });
+
+    it('names two methods whose bodies sit on their signature line apart', () => {
+        const source = [
+            'class OrdersRepo {',
+            '    find(id) { return db.query(`SELECT * FROM o WHERE id = ${id}`); }',
+            '    remove(id) { return db.query(`DELETE FROM o WHERE id = ${id}`); }',
+            '}',
+        ].join('\n');
+
+        expect(enclosingSymbol(source, 2)).toBe('OrdersRepo.find');
+        expect(enclosingSymbol(source, 3)).toBe('OrdersRepo.remove');
+    });
+
+    it('still reads a call on a line of its own as no declaration', () => {
+        const source = ['function run() {', '    print(x)', '    go(y)', '}'].join('\n');
+
+        expect(enclosingSymbol(source, 2)).toBe('run');
+    });
 });
+

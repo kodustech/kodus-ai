@@ -15,14 +15,16 @@ import type { SecurityScanBudget, SecurityScanSpend } from './security-scan.type
  *
  * Every model request is admitted before it leaves (the model wrapper calls
  * `admit`), against the most it can cost: its prompt and tool definitions,
- * counted with the shared tokenizer plus a margin for a provider whose
- * tokenizer counts more, and its answer cap (see SCAN_ANSWER_CAP_TOKENS when
- * it sets none). What was spent, what the
- * requests still in flight may cost, and this request's ceiling must fit
- * under the cap, or the request is refused and the scan stops. Each request
- * carries its own bound, so requests running at once, a planner smaller than
- * a lens, or a new slice never loosen it.
+ * bounded by their size in bytes (no model's tokenizer makes more tokens than
+ * that), and its answer cap (see SCAN_ANSWER_CAP_TOKENS when it sets none).
+ * What was spent, what the requests still in flight may cost, and this
+ * request's ceiling must fit under the cap. A request that only the
+ * reservations in flight crowd out waits for them to settle; one that does
+ * not fit even then is refused and the scan stops. Each request carries its
+ * own bound, so requests running at once, a planner smaller than a lens, or a
+ * new slice never loosen it.
  */
+/** For a caller that sends no byte bound: the shared tokenizer's count, plus a margin. */
 const TOKENIZER_MARGIN = 1.25;
 
 /**
@@ -43,6 +45,8 @@ export class ScanBudgetReached extends Error {
 }
 
 type Cost = { usd: number; tokens: number };
+/** A request's most, and the input and answer it was reserved for. */
+type Ceiling = Cost & { input: number; output: number };
 
 export class ScanBudgetMeter implements UsageMeter {
     private spent: SecurityScanSpend;
@@ -55,6 +59,15 @@ export class ScanBudgetMeter implements UsageMeter {
     private readonly answered: Array<Cost & { key: string }> = [];
     private refused = false;
     private readonly listeners: Array<() => void> = [];
+    /** How many requests are in flight. */
+    private inFlightCount = 0;
+    /** Requests waiting for those in flight to give their room back. */
+    private readonly waiting: Array<{
+        ceiling: Ceiling;
+        request: RequestCeiling;
+        resolve: (admission: Admission) => void;
+        reject: (error: Error) => void;
+    }> = [];
 
     constructor(
         private readonly budget: SecurityScanBudget,
@@ -67,19 +80,38 @@ export class ScanBudgetMeter implements UsageMeter {
             : { usd: 0, inputTokens: 0, outputTokens: 0, requests: 0 };
     }
 
-    admit(request: RequestCeiling): Admission {
+    admit(request: RequestCeiling): Admission | Promise<Admission> {
         // Once one is refused, none leaves: the requests aborted then give
         // their reservation back, yet the provider may have billed them.
         if (this.refused) {
             throw new ScanBudgetReached();
         }
-        const input = Math.ceil(request.inputTokens * TOKENIZER_MARGIN);
+        const ceiling = this.ceilingOf(request);
+        if (!this.wouldCross(ceiling)) {
+            return this.grant(ceiling, request);
+        }
+        if (this.inFlightCount > 0 && !this.wouldCross(ceiling, false)) {
+            return new Promise((resolve, reject) =>
+                this.waiting.push({ ceiling, request, resolve, reject }),
+            );
+        }
+        this.refuse();
+        throw new ScanBudgetReached();
+    }
+
+    /** The most a request can cost: its input bound and its answer cap. */
+    private ceilingOf(request: RequestCeiling): Ceiling {
+        const input =
+            request.inputTokensUpperBound ??
+            Math.ceil(request.inputTokens * TOKENIZER_MARGIN);
         // The answer cap, plus any reasoning budget the provider grants on
         // top of it (Anthropic's thinking).
         const output =
             (request.maxOutputTokens || SCAN_ANSWER_CAP_TOKENS) +
             (request.reasoningBudgetTokens ?? 0);
-        const ceiling: Cost = {
+        return {
+            input,
+            output,
             // Input priced at the dearer of a fresh read and a cache write.
             usd: Math.max(
                 this.costOf({ inputTokens: input, outputTokens: output }),
@@ -91,12 +123,11 @@ export class ScanBudgetMeter implements UsageMeter {
             ),
             tokens: input + output,
         };
-        if (this.wouldCross(ceiling)) {
-            this.refused = true;
-            this.notify();
-            throw new ScanBudgetReached();
-        }
+    }
+
+    private grant(ceiling: Ceiling, request: RequestCeiling): Admission {
         this.inFlight = add(this.inFlight, ceiling, 1);
+        this.inFlightCount++;
 
         let settled = false;
         return {
@@ -107,15 +138,54 @@ export class ScanBudgetMeter implements UsageMeter {
                 if (settled) return;
                 settled = true;
                 this.inFlight = add(this.inFlight, ceiling, -1);
+                this.inFlightCount--;
                 if (usage) {
-                    this.chargeUnreported(usage, input, output);
+                    this.chargeUnreported(usage, ceiling.input, ceiling.output);
                     this.answered.push({
                         ...this.cost(usage),
                         key: keyOf(usage),
                     });
                 }
+                this.admitWaiting();
             },
         };
+    }
+
+    /** Lets in, in order, the waiting requests that fit now. */
+    private admitWaiting(): void {
+        while (this.waiting.length) {
+            const next = this.waiting[0];
+            if (this.refused) {
+                break;
+            }
+            if (!this.wouldCross(next.ceiling)) {
+                this.waiting.shift();
+                next.resolve(this.grant(next.ceiling, next.request));
+                continue;
+            }
+            if (
+                this.inFlightCount > 0 &&
+                !this.wouldCross(next.ceiling, false)
+            ) {
+                return;
+            }
+            // Nothing left in flight to wait for, and it still does not fit.
+            this.refuse();
+            break;
+        }
+        if (this.refused) {
+            for (const w of this.waiting.splice(0)) {
+                w.reject(new ScanBudgetReached());
+            }
+        }
+    }
+
+    private refuse(): void {
+        this.refused = true;
+        this.notify();
+        for (const w of this.waiting.splice(0)) {
+            w.reject(new ScanBudgetReached());
+        }
     }
 
     /**
@@ -218,8 +288,14 @@ export class ScanBudgetMeter implements UsageMeter {
         });
     }
 
-    private wouldCross(ceiling: Cost): boolean {
-        const after = add(this.committed(), ceiling, 1);
+    /** With `withInFlight` false, as if every request in flight was free. */
+    private wouldCross(ceiling: Cost, withInFlight = true): boolean {
+        const committed = this.committed();
+        const after = add(
+            withInFlight ? committed : add(committed, this.inFlight, -1),
+            ceiling,
+            1,
+        );
         return (
             (this.budget.maxUsd !== undefined &&
                 !!this.rates &&

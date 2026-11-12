@@ -82,6 +82,12 @@ export interface SecurityScanCoverage {
      * resolved for not being seen again. Absent on scans before it existed.
      */
     examinedByClass?: ScanExaminedClass[];
+    /**
+     * A carried-on plan's finished areas, read by the scan that finished
+     * them at this same commit: this scan does not read them again, yet
+     * resolves what they no longer hold.
+     */
+    inheritedExaminedByClass?: ScanExaminedClass[];
     unitsTotal: number;
     unitsDone: number;
     unitsFailed: number;

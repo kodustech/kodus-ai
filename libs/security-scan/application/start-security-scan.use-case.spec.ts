@@ -153,6 +153,57 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         );
     });
 
+    it('keeps the commit a plan was made at through a scan that failed before reading HEAD', async () => {
+        // B carried A's plan on and failed before cloning: no commit of its own.
+        const { scans, start } = useCaseWith({
+            ...stopped,
+            status: SecurityScanStatus.FAILED,
+            commitSha: undefined,
+            planCommitSha: 'plan-sha',
+        });
+
+        await start();
+
+        expect(scans.create.mock.calls[0][0].planCommitSha).toBe('plan-sha');
+    });
+
+    it('never carries on a plan nothing ties to a commit', async () => {
+        const { scans, start } = useCaseWith({
+            ...stopped,
+            commitSha: undefined,
+            planCommitSha: undefined,
+        });
+
+        await start();
+
+        const created = scans.create.mock.calls[0][0];
+        expect(created.units).toEqual([]);
+        expect(created.progress).toEqual([]);
+    });
+
+    it("carries what the finished areas read, so this scan resolves what they no longer hold", async () => {
+        const { scans, start } = useCaseWith({
+            ...stopped,
+            units: [unit('a'), unit('b'), { ...unit('d'), classes: ['injection'] }],
+            progress: [
+                { unitId: 'a', state: 'done', findings: 1 },
+                { unitId: 'b', state: 'skipped_budget', findings: 0 },
+                { unitId: 'd', state: 'done', findings: 0 },
+            ],
+            reported: [
+                { vulnerabilityClass: 'authz', title: 'IDOR', filePath: 'src/a.ts', fingerprint: 'fp-a' },
+                // Unsightable: its area is left out, so it is not resolved as unseen.
+                { vulnerabilityClass: 'injection', title: 'SQLi', filePath: 'src/d.ts' },
+            ],
+        });
+
+        await start();
+
+        expect(scans.create.mock.calls[0][0].coverage.inheritedExaminedByClass).toEqual([
+            { vulnerabilityClass: 'authz', filePaths: ['src/a.ts'] },
+        ]);
+    });
+
     it('runs again the areas a provider outage failed', async () => {
         const { scans, start } = useCaseWith({
             ...stopped,

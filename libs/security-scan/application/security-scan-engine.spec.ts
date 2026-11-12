@@ -28,12 +28,14 @@ const RATES = {
  * One model request as the model wrapper and its caller meter it: admitted
  * with its prompt and answer cap, settled with what it billed, recorded.
  */
-function bill(inputTokens: number, outputTokens: number, runName: string) {
+async function bill(inputTokens: number, outputTokens: number, runName: string) {
     const usage = { inputTokens, outputTokens } as any;
-    admitRequest(() => ({
-        inputTokens,
-        maxOutputTokens: outputTokens,
-    })).settle(usage);
+    (
+        await admitRequest(() => ({
+            inputTokens,
+            maxOutputTokens: outputTokens,
+        }))
+    ).settle(usage);
     reportUsage(usage, { runName });
 }
 
@@ -146,7 +148,7 @@ function fakeSandbox(type: 'e2b' | 'local' = 'e2b') {
 /** A lens that reports what the test tells it to, and spends $0.10 per run. */
 function fakeLens(findingsFor: (file: string, cls: string) => any[]) {
     return jest.fn(async (input: any, _secrets: any) => {
-        bill(90_000, 10_000, input.usageRunName);
+        await bill(90_000, 10_000, input.usageRunName);
         const file = /Start from this file:\n`{3,}\n(.+)\n/.exec(
             input.userPrompt,
         )[1];
@@ -169,7 +171,7 @@ const FINALIZED_CWE: Record<string, string> = {
 
 function fakeLlm(plan?: any) {
     return jest.fn(async (req: any) => {
-        bill(1000, 100, req.runName);
+        await bill(1000, 100, req.runName);
         if (req.runName.endsWith('-map')) {
             if (plan instanceof Error) throw plan;
             return plan;

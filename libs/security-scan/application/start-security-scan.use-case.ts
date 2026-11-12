@@ -24,7 +24,10 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { PricingResolver } from '@libs/analytics/application/use-cases/usage/pricing-resolver';
 import { SpendLimitConfigService } from '@libs/analytics/application/spend-limit/spend-limit-config.service';
 
+import { normalizeScanPath } from '@libs/issues/domain/scan-fingerprint';
+
 import { validateBudget } from '../domain/budget-meter';
+import type { VulnClass } from '../domain/surface/surface.types';
 import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 import { STALE_SCAN_AFTER } from './get-security-scans.use-case';
 import {
@@ -259,16 +262,57 @@ export class StartSecurityScanUseCase {
         if (progress.length >= last.units.length) {
             return null;
         }
+        // The commit the plan was made at: the last scan's own, or the one
+        // it carried on (a scan that failed before reading HEAD has none of
+        // its own). Without one, nothing ties the plan to a commit, and a
+        // plan that cannot be checked against HEAD is not carried on.
+        const planCommitSha = last.commitSha ?? last.planCommitSha;
+        if (!planCommitSha) {
+            return null;
+        }
+        // Only what can be sighted: a finding the dedup drops must be one
+        // the job can mark seen, or its issue would be resolved as unseen.
+        const reported = (last.reported ?? []).filter((r) => r.fingerprint);
+        const unsightable = new Set(
+            (last.reported ?? [])
+                .filter((r) => !r.fingerprint)
+                .map(
+                    (r) =>
+                        `${r.vulnerabilityClass}\u0000${normalizeScanPath(r.filePath)}`,
+                ),
+        );
+        // What the finished areas read, at this same commit: this scan does
+        // not read them again, yet resolves what they no longer hold. An area
+        // holding a finding it cannot sight is left out, so that finding is
+        // not resolved for being unseen.
+        const unitById = new Map(last.units.map((u) => [u.id, u]));
+        const inherited = new Map<VulnClass, Set<string>>();
+        for (const p of progress) {
+            const unit = unitById.get(p.unitId);
+            if (!unit) continue;
+            for (const vulnClass of unit.classes) {
+                const file = normalizeScanPath(unit.file);
+                if (unsightable.has(`${vulnClass}\u0000${file}`)) continue;
+                inherited.set(
+                    vulnClass,
+                    (inherited.get(vulnClass) ?? new Set()).add(file),
+                );
+            }
+        }
         return {
             units: last.units,
             progress,
-            planCommitSha: last.commitSha,
-            // Only what can be sighted: a finding the dedup drops must be one
-            // the job can mark seen, or its issue would be resolved as unseen.
-            reported: (last.reported ?? []).filter((r) => r.fingerprint),
+            planCommitSha,
+            reported,
             coverage: {
                 examinedFiles: [],
                 examinedByClass: [],
+                inheritedExaminedByClass: [...inherited].map(
+                    ([vulnerabilityClass, files]) => ({
+                        vulnerabilityClass,
+                        filePaths: [...files],
+                    }),
+                ),
                 unitsTotal: last.units.length,
                 unitsDone: progress.length,
                 unitsFailed: 0,

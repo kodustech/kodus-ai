@@ -341,8 +341,8 @@ describe('SecurityScanJobProcessor', () => {
             { result: finishedResult() },
             scanRecord({ planCommitSha: 'plan-sha', units: [{ id: 'u1' }] as any, reported: reported as any }),
         );
-        const run = sandbox.run.getMockImplementation()!;
-        sandbox.run.mockImplementation(async (command: string) =>
+        const run = sandbox.run.getMockImplementation() as any;
+        (sandbox.run as jest.Mock).mockImplementation(async (command: string) =>
             command.includes('rev-parse HEAD') ? { stdout: '', exitCode: 128 } : run(command),
         );
 
@@ -510,6 +510,75 @@ describe('SecurityScanJobProcessor', () => {
         expect(
             (issuesService.markScanFindingsSeen.mock.calls as any[]).flatMap((c) => c[0].fingerprints),
         ).not.toContain('fp-old');
+    });
+
+    it("resolves with what a carried-on plan's finished areas read, and keeps it through the plan", async () => {
+        const inherited = [{ vulnerabilityClass: 'injection', filePaths: ['src/done.ts'] }];
+        const { processor, scans, issuesService } = setup(
+            { result: finishedResult() },
+            scanRecord({
+                planCommitSha: 'abc123',
+                units: [{ id: 'u1' }] as any,
+                coverage: {
+                    examinedFiles: [],
+                    examinedByClass: [],
+                    inheritedExaminedByClass: inherited,
+                    unitsTotal: 2,
+                    unitsDone: 1,
+                    unitsFailed: 0,
+                    unitsSkippedByBudget: 0,
+                    languages: ['typescript'],
+                },
+            }),
+        );
+
+        await processor.process('job-1');
+
+        expect(issuesService.resolveUnseenScanFindings).toHaveBeenCalledWith(
+            expect.objectContaining({
+                examined: expect.arrayContaining([
+                    { vulnerabilityClass: 'injection', filePaths: ['src/done.ts'] },
+                    { vulnerabilityClass: 'authz', filePaths: ['src/orders.controller.ts'] },
+                ]),
+            }),
+        );
+        expect(lastUpdate(scans).coverage.inheritedExaminedByClass).toEqual(inherited);
+        // The plan's own fake onPlanned write keeps it too.
+        expect(
+            (scans.update.mock.calls as any[]).filter((c) => c[1]?.units && c[1]?.coverage),
+        ).toEqual(
+            expect.arrayContaining([
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        coverage: expect.objectContaining({ inheritedExaminedByClass: inherited }),
+                    }),
+                ]),
+            ]),
+        );
+    });
+
+    it("drops a stale plan's inherited coverage with its areas", async () => {
+        const { processor, scans } = setup(
+            { result: finishedResult() },
+            scanRecord({
+                planCommitSha: 'old-sha',
+                units: [{ id: 'u1' }] as any,
+                coverage: {
+                    examinedFiles: [],
+                    examinedByClass: [],
+                    inheritedExaminedByClass: [{ vulnerabilityClass: 'authz', filePaths: ['src/a.ts'] }],
+                    unitsTotal: 1,
+                    unitsDone: 0,
+                    unitsFailed: 0,
+                    unitsSkippedByBudget: 0,
+                    languages: [],
+                },
+            }),
+        );
+
+        await processor.process('job-1');
+
+        expect(lastUpdate(scans).coverage.inheritedExaminedByClass).toEqual([]);
     });
 
     it('records each area alone, with live counts, without reading the scan back', async () => {

@@ -272,16 +272,29 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             !!headSha &&
             headSha !== scan.planCommitSha;
         if (stalePlan) {
-            // What the plan's areas found is of that commit too: neither
-            // compared against nor sighted on this one.
+            // What the plan's areas found and read is of that commit too:
+            // neither compared against, sighted nor resolved on this one.
             scan.units = [];
             scan.progress = [];
             scan.reported = [];
+            if (scan.coverage) {
+                scan.coverage = {
+                    ...scan.coverage,
+                    inheritedExaminedByClass: [],
+                };
+            }
         }
         if ((commitSha && commitSha !== scan.commitSha) || stalePlan) {
             await this.scans.update(scan.uuid, {
                 ...(commitSha ? { commitSha } : {}),
-                ...(stalePlan ? { units: [], progress: [], reported: [] } : {}),
+                ...(stalePlan
+                    ? {
+                          units: [],
+                          progress: [],
+                          reported: [],
+                          ...(scan.coverage && { coverage: scan.coverage }),
+                      }
+                    : {}),
             });
         }
 
@@ -347,8 +360,11 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                       }),
             reproduce: true,
             onPlanned: async (units, languages) => {
-                // A carried-on plan keeps the areas it already finished.
+                // A carried-on plan keeps the areas it already finished, and
+                // what they read.
                 liveCoverage = {
+                    inheritedExaminedByClass:
+                        scan.coverage?.inheritedExaminedByClass ?? [],
                     examinedFiles: [],
                     unitsTotal: units.length,
                     unitsDone: countIn('done'),
@@ -440,6 +456,8 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 scan.coverage?.examinedByClass ?? [],
                 result.examinedByClass,
             ),
+            inheritedExaminedByClass:
+                scan.coverage?.inheritedExaminedByClass ?? [],
             unitsTotal: result.units.length,
             unitsDone: result.progress.filter((p) => p.state === 'done').length,
             unitsFailed: result.progress.filter((p) => p.state === 'failed')
@@ -517,7 +535,12 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             repositoryPlatform: scan.repository.platform as PlatformType,
             repositoryId: scan.repository.id,
             scanId: scan.uuid,
-            examined: coverage.examinedByClass,
+            // What this scan read, and what a carried-on plan's finished
+            // areas read at this commit.
+            examined: mergeExamined(
+                coverage.examinedByClass,
+                coverage.inheritedExaminedByClass,
+            ),
             trackedFiles: result.trackedFiles,
             scanStartedAt: scan.startedAt ?? new Date().toISOString(),
         });
