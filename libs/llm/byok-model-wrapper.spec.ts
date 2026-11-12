@@ -751,6 +751,29 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         expect(settle.mock.calls[0][0].totalTokens).toBeUndefined();
     });
 
+    it('admits a request with the reasoning budget its provider adds on top of the answer cap', async () => {
+        const admit = jest.fn(() => ({ settle: jest.fn() }));
+
+        await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+            wrap(answering({})).doGenerate({
+                prompt: PROMPT,
+                maxOutputTokens: 16_000,
+                providerOptions: {
+                    anthropic: {
+                        thinking: { type: 'enabled', budgetTokens: 32_000 },
+                    },
+                },
+            } as any),
+        );
+
+        expect(admit).toHaveBeenCalledWith(
+            expect.objectContaining({
+                maxOutputTokens: 16_000,
+                reasoningBudgetTokens: 32_000,
+            }),
+        );
+    });
+
     it('sends the answer cap a request was admitted at when it set none', async () => {
         const capped = answering({});
         const admit = () => ({ settle: jest.fn(), maxOutputTokens: 4_000 });
