@@ -1,4 +1,5 @@
 import { createThreadId } from '@libs/common/utils/thread-id';
+import { forgejoWebhookSource } from '@libs/common/utils/webhooks/webhook-source-host';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
@@ -285,9 +286,16 @@ export class ChatWithKodyFromGitUseCase {
             claim = delivery.claim;
 
             const repository = this.getRepository(params);
+            // Forgejo repository ids are per instance: resolve the team on
+            // the instance that sent the comment.
+            const source =
+                params.platformType === PlatformType.FORGEJO
+                    ? forgejoWebhookSource(params.payload)
+                    : undefined;
             const integrationConfig = await this.getIntegrationConfig(
                 params.platformType,
                 repository,
+                source?.host,
             );
 
             // A repository connected in more than one organization: answer as
@@ -295,7 +303,11 @@ export class ChatWithKodyFromGitUseCase {
             // does, not as whichever integration is found first.
             const reviewing = this.webhookContextService
                 ? await this.webhookContextService
-                      .getContext(params.platformType, String(repository.id))
+                      .getContext(
+                          params.platformType,
+                          String(repository.id),
+                          source,
+                      )
                       .catch((error) => {
                           this.logger.warn({
                               message:
@@ -1642,11 +1654,10 @@ export class ChatWithKodyFromGitUseCase {
     private async getIntegrationConfig(
         platformType: PlatformType,
         repository: Repository,
+        host?: string,
     ): Promise<IntegrationConfigEntity> {
         return await this.codeManagementService.findTeamAndOrganizationIdByConfigKey(
-            {
-                repository: repository,
-            },
+            host ? { repository, host } : { repository },
             platformType,
         );
     }
@@ -1655,7 +1666,9 @@ export class ChatWithKodyFromGitUseCase {
         integrationConfig: IntegrationConfigEntity,
     ): OrganizationAndTeamData {
         return {
-            organizationId: integrationConfig?.integration?.organization?.uuid,
+            organizationId:
+                integrationConfig?.integration?.organization?.uuid ??
+                integrationConfig?.team?.organization?.uuid,
             teamId: integrationConfig?.team?.uuid,
         };
     }
@@ -1709,6 +1722,20 @@ export class ChatWithKodyFromGitUseCase {
                             ?.at(0) ||
                         '',
                 };
+            case PlatformType.FORGEJO: {
+                // ForgejoService reads `owner/repo` from `name`, as the
+                // Forgejo webhook handler passes it.
+                const fullName = params.payload?.repository?.full_name ?? '';
+                return {
+                    name: fullName,
+                    id: params.payload?.repository?.id?.toString() ?? '',
+                    fullName,
+                    owner:
+                        params.payload?.repository?.owner?.login ||
+                        fullName.split('/').at(0) ||
+                        '',
+                };
+            }
             case PlatformType.AZURE_REPOS:
                 return {
                     name: params.payload?.resource?.pullRequest?.repository
