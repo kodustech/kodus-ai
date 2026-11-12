@@ -70,7 +70,11 @@ const logger = createLogger('SecurityScanJobProcessor');
  */
 export const SCAN_SLICE_MS = 20 * 60 * 1000;
 const LEASE_TTL_MS = 34 * 60 * 1000;
-export const SCAN_MAX_UNITS = 400;
+/**
+ * The most areas one plan holds. It bounds the stored plan, not the scan's
+ * length: a plan runs across as many slices as it needs.
+ */
+export const SCAN_MAX_UNITS = 2000;
 
 export interface SecurityScanJobPayload {
     scanId: string;

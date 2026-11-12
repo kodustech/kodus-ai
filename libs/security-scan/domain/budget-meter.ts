@@ -74,7 +74,11 @@ export class ScanBudgetMeter implements UsageMeter {
             throw new ScanBudgetReached();
         }
         const input = Math.ceil(request.inputTokens * TOKENIZER_MARGIN);
-        const output = request.maxOutputTokens || SCAN_ANSWER_CAP_TOKENS;
+        // The answer cap, plus any reasoning budget the provider grants on
+        // top of it (Anthropic's thinking).
+        const output =
+            (request.maxOutputTokens || SCAN_ANSWER_CAP_TOKENS) +
+            (request.reasoningBudgetTokens ?? 0);
         const ceiling: Cost = {
             // Input priced at the dearer of a fresh read and a cache write.
             usd: Math.max(

@@ -1090,7 +1090,14 @@ describe('SecurityScanEngine: what a scan may resolve', () => {
         const classes = result.examinedByClass.map((e) => e.vulnerabilityClass);
         expect(classes).toContain('authz');
         expect(classes).not.toContain('injection');
-        expect(result.progress[0].state).toBe('done');
+        // The area failed for the class it could not read, so it shows and
+        // runs again; what it did read still counts.
+        expect(result.progress[0]).toEqual(
+            expect.objectContaining({
+                state: 'failed',
+                error: 'not read to the end: injection',
+            }),
+        );
     });
 
     it.each([
@@ -1612,5 +1619,64 @@ describe('SecurityScanEngine: across slices and units', () => {
                 .filter((f) => f.filePath.startsWith('src/orders'))
                 .map((f) => f.filePath),
         ).toEqual(['src/orders/orders.controller.ts']);
+    });
+});
+
+describe('SecurityScanEngine: a unit that cannot be stored', () => {
+    it('stops the lenses still running, not only new units', async () => {
+        const started: string[] = [];
+        const runLens = jest.fn(async (input: any) => {
+            const file = /Start from this file:\n`{3,}\n(.+)\n/.exec(
+                input.userPrompt,
+            )![1];
+            started.push(file);
+            // The controller's lenses are slow; the shell unit's are not.
+            if (file.endsWith('orders.controller.ts')) {
+                await new Promise((r) => setTimeout(r, 30));
+            }
+            return {
+                findings: { reasoning: '', suggestions: [] },
+                finishReason: 'completed',
+            };
+        });
+        const engine = new SecurityScanEngine({
+            runLens: runLens as any,
+            llm: fakeLlm({
+                units: [
+                    {
+                        file: 'src/admin/exec.ts',
+                        relatedFiles: [],
+                        classes: ['injection'],
+                        priority: 90,
+                        reason: '',
+                    },
+                    {
+                        file: 'src/orders/orders.controller.ts',
+                        relatedFiles: [],
+                        classes: ['authz'],
+                        priority: 80,
+                        reason: '',
+                    },
+                ],
+            }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        await expect(
+            engine.run({
+                ...baseParams(),
+                sandbox: fakeSandbox(),
+                meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+                onUnitDone: async () => {
+                    throw new Error('mongo down');
+                },
+            } as any),
+        ).rejects.toThrow('mongo down');
+
+        // The controller's unit has four lenses; only the one already
+        // running when the store failed ever started.
+        expect(
+            started.filter((f) => f.endsWith('orders.controller.ts')),
+        ).toHaveLength(1);
     });
 });

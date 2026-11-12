@@ -61,7 +61,8 @@ export interface MapCandidate {
  */
 export function rankCandidates(
     surface: SurfaceMap,
-    limit = 300,
+    /** The plan's own limit; no default cut, so no file falls out unseen. */
+    limit = Number.POSITIVE_INFINITY,
 ): MapCandidate[] {
     const hitsByFile = new Map<string, SurfaceHit[]>();
     for (const hit of surface.hits) {

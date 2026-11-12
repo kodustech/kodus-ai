@@ -178,3 +178,17 @@ describe('languageOf', () => {
         expect(languageOf(file)).toBe(language);
     });
 });
+
+describe('rankCandidates: the plan sees every candidate it can hold', () => {
+    it('cuts at the limit it is given, and nowhere below it', () => {
+        const files = Object.fromEntries(
+            Array.from({ length: 450 }, (_, i) => [
+                `src/f${String(i).padStart(3, '0')}.ts`,
+                { entryPoints: 0, authChecks: 0, sinks: 1, classes: ['injection'] },
+            ]),
+        );
+
+        expect(rankCandidates(surface(files as any))).toHaveLength(450);
+        expect(rankCandidates(surface(files as any), 400)).toHaveLength(400);
+    });
+});

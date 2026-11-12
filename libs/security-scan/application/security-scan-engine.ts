@@ -201,11 +201,21 @@ export class SecurityScanEngine {
         // lens that is running and no new one starts.
         const budgetAbort = new AbortController();
         params.meter.onExhausted(() => budgetAbort.abort(new Error('budget')));
-        const signal = anySignal([params.signal, budgetAbort.signal]);
+        // A unit that could not be stored fails the scan: the lenses still
+        // running stop too, instead of spending on work nothing will keep.
+        const failureAbort = new AbortController();
+        const signal = anySignal([
+            params.signal,
+            budgetAbort.signal,
+            failureAbort.signal,
+        ]);
 
         return runWithUsageMeter(
             params.meter,
-            () => this.runMetered(params, signal, budgetAbort.signal),
+            () =>
+                this.runMetered(params, signal, budgetAbort.signal, () =>
+                    failureAbort.abort(new Error('a unit could not be stored')),
+                ),
             {
                 organizationId: params.organizationId,
                 teamId: params.teamId,
@@ -218,6 +228,7 @@ export class SecurityScanEngine {
         params: SecurityScanEngineParams,
         signal: AbortSignal,
         budgetSignal: AbortSignal,
+        abortAll: () => void,
     ): Promise<SecurityScanEngineResult> {
         const { files: listing, complete } = await this.listFiles(
             params.sandbox,
@@ -391,11 +402,17 @@ export class SecurityScanEngine {
                         await fold(unit, result);
                     } catch (error) {
                         // A unit that could not be stored fails the scan: no
-                        // new unit starts, and nothing is resolved.
+                        // new unit starts, the ones running stop, and nothing
+                        // is resolved.
                         stopped = true;
+                        abortAll();
                         throw error;
                     }
                 });
+                // The next unit's fold awaits this one only once its own
+                // audit ends; until then a failure here has no handler. The
+                // error still reaches the run through the last fold.
+                folded.catch(() => undefined);
                 // The worker takes its next unit once this one's audit ends,
                 // without waiting for earlier units to be folded in.
                 await audit;
@@ -551,7 +568,19 @@ export class SecurityScanEngine {
         existingFiles: Set<string>,
         languages: string[],
     ): Promise<ScanUnit[]> {
-        const candidates = rankCandidates(surface);
+        // As many candidates as the plan may hold: a cut below it would drop
+        // files from the plan, and from every scan run after it.
+        const candidates = rankCandidates(surface, params.maxUnits);
+        if (Object.keys(surface.files).length > params.maxUnits) {
+            logger.warn({
+                message: `Security scan plan holds ${params.maxUnits} of the repository's candidate files`,
+                context: SecurityScanEngine.name,
+                metadata: {
+                    repositoryId: params.repositoryId,
+                    candidates: Object.keys(surface.files).length,
+                },
+            });
+        }
         if (!candidates.length) {
             return [];
         }
@@ -773,14 +802,21 @@ export class SecurityScanEngine {
         // Not one class read to the end (lenses failed, ran out of steps or
         // could not verify): the unit failed, so it runs again rather than
         // passing for a clean area.
+        // A class no lens read to the end (failed, cut short, unverified)
+        // fails the unit: it is shown and runs again, while the classes that
+        // were read still count as examined.
         const { lensesExamined: examinedClasses } = progressSoFar();
-        if (!examinedClasses.length) {
+        const missing = unit.classes.filter(
+            (c) => !examinedClasses.includes(c),
+        );
+        if (missing.length) {
             return {
                 findings,
-                error:
-                    runs.length > 0 && failures === runs.length
-                        ? 'every lens failed'
-                        : 'no lens read the area to the end',
+                error: examinedClasses.length
+                    ? `not read to the end: ${missing.join(', ')}`
+                    : runs.length > 0 && failures === runs.length
+                      ? 'every lens failed'
+                      : 'no lens read the area to the end',
                 examinedClasses,
             };
         }

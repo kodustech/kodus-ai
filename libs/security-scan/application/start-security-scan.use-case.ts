@@ -223,11 +223,14 @@ export class StartSecurityScanUseCase {
         'units' | 'progress' | 'coverage' | 'planCommitSha'
     > | null> {
         const last = await this.scans.findLatest(organizationId, repositoryId);
-        if (
-            !last?.units?.length ||
-            (last.status !== SecurityScanStatus.STOPPED_BY_BUDGET &&
-                last.status !== SecurityScanStatus.FAILED)
-        ) {
+        // Stopped before the end, or completed with areas that failed (a
+        // lens the provider refused): either way some areas were not read.
+        const unfinished =
+            last?.status === SecurityScanStatus.STOPPED_BY_BUDGET ||
+            last?.status === SecurityScanStatus.FAILED ||
+            (last?.status === SecurityScanStatus.COMPLETED &&
+                (last.progress ?? []).some((p) => p.state === 'failed'));
+        if (!last?.units?.length || !unfinished) {
             return null;
         }
         // Areas that failed (a provider outage) run again, with the rest.

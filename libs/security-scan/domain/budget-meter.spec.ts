@@ -181,6 +181,26 @@ describe('ScanBudgetMeter', () => {
         );
     });
 
+    it('reserves the reasoning budget the provider adds on top of the answer cap', () => {
+        const meter = new ScanBudgetMeter({ maxTokens: 30_000 }, null);
+
+        // 16k of answer and a 32k thinking budget: max_tokens 48k on the wire.
+        expect(() =>
+            meter.admit({
+                inputTokens: 100,
+                maxOutputTokens: 16_000,
+                reasoningBudgetTokens: 32_000,
+            }),
+        ).toThrow(ScanBudgetReached);
+        // Without the budget the same request fits.
+        expect(() =>
+            new ScanBudgetMeter({ maxTokens: 30_000 }, null).admit({
+                inputTokens: 100,
+                maxOutputTokens: 16_000,
+            }),
+        ).not.toThrow();
+    });
+
     it('leaves the answer uncapped when the scan has no limit', () => {
         const meter = new ScanBudgetMeter({}, RATES);
 

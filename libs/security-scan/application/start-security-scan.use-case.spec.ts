@@ -116,6 +116,24 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         );
     });
 
+    it('runs again the areas of a completed scan whose lenses failed', async () => {
+        const { scans, start } = useCaseWith({
+            ...stopped,
+            status: SecurityScanStatus.COMPLETED,
+            progress: [
+                { unitId: 'a', state: 'done', findings: 1 },
+                { unitId: 'b', state: 'done', findings: 0 },
+                { unitId: 'c', state: 'failed', findings: 0 },
+            ],
+        });
+
+        await start();
+
+        const created = scans.create.mock.calls[0][0];
+        expect(created.units.map((u: any) => u.id)).toEqual(['a', 'b', 'c']);
+        expect(created.progress.map((p: any) => p.unitId)).toEqual(['a', 'b']);
+    });
+
     it('starts from scratch after a scan that completed', async () => {
         const { scans, start } = useCaseWith({
             ...stopped,
