@@ -268,13 +268,16 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             !!scan.planCommitSha &&
             commitSha !== scan.planCommitSha;
         if (stalePlan) {
+            // What the plan's areas found is of that commit too: neither
+            // compared against nor sighted on this one.
             scan.units = [];
             scan.progress = [];
+            scan.reported = [];
         }
         if ((commitSha && commitSha !== scan.commitSha) || stalePlan) {
             await this.scans.update(scan.uuid, {
                 ...(commitSha ? { commitSha } : {}),
-                ...(stalePlan ? { units: [], progress: [] } : {}),
+                ...(stalePlan ? { units: [], progress: [], reported: [] } : {}),
             });
         }
 
@@ -358,14 +361,18 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             onUnitDone: async (progress, findings, sighted) => {
                 // An earlier finding a unit found again is seen by this scan.
                 if (sighted?.length) {
-                    await this.issuesService.markScanFindingsSeen({
-                        organizationId: scan.organizationId,
-                        repositoryPlatform: scan.repository
-                            .platform as PlatformType,
-                        repositoryId: scan.repository.id,
-                        fingerprints: sighted,
-                        scanId: scan.uuid,
-                    });
+                    // Found again: one resolved since is reopened.
+                    const { reopened } =
+                        await this.issuesService.markScanFindingsSeen({
+                            organizationId: scan.organizationId,
+                            repositoryPlatform: scan.repository
+                                .platform as PlatformType,
+                            repositoryId: scan.repository.id,
+                            fingerprints: sighted,
+                            scanId: scan.uuid,
+                            foundAgain: true,
+                        });
+                    counts.reopened += reopened;
                 }
                 for (const finding of findings) {
                     const outcome = await this.storeFinding(

@@ -453,15 +453,18 @@ export class SecurityScanEngine {
                 ...(result.error ? { error: result.error } : {}),
             };
             progress.set(unit.id, unitProgress);
-            // A class counts as examined only where its lens ran to the end:
-            // where it failed, that class's earlier findings stay open.
+            // A class counts as examined only where its lens ran to the end,
+            // and only in the unit's own file: a related file was followed
+            // for this unit's flow, never audited whole, and its findings are
+            // resolved only by its own unit.
             for (const vulnClass of result.examinedClasses ?? []) {
                 const files = examinedByClass.get(vulnClass) ?? new Set();
-                [unit.file, ...unit.relatedFiles].forEach((f) => {
-                    files.add(f);
-                    examined.add(f);
-                });
+                files.add(unit.file);
                 examinedByClass.set(vulnClass, files);
+                // Shown as read; never used to resolve a finding.
+                [unit.file, ...unit.relatedFiles].forEach((f) =>
+                    examined.add(f),
+                );
             }
             findings.push(...result.findings);
             await params.onUnitDone?.(

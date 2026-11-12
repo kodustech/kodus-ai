@@ -1692,6 +1692,33 @@ describe('SecurityScanEngine: across slices and units', () => {
         );
     });
 
+    it("counts a related file as examined for resolution only in its own unit", async () => {
+        const controller = 'src/orders/orders.controller.ts';
+        const service = 'src/orders/orders.service.ts';
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens(() => []),
+            llm: fakeLlm({
+                units: [
+                    { file: controller, relatedFiles: [service], classes: ['authz'], priority: 90, reason: '' },
+                ],
+            }),
+            collectSurface: jest.fn(async () => onlyController),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            maxUnits: 1,
+        } as any);
+
+        // The service was followed for the controller's flow, not audited.
+        expect(
+            result.examinedByClass.find((e) => e.vulnerabilityClass === 'authz')?.filePaths,
+        ).toEqual([controller]);
+        expect(result.examinedFiles).toContain(service);
+    });
+
     it('keeps a finding in a file listed past the first 20,000, and lists it as tracked', async () => {
         const controller = 'src/orders/orders.controller.ts';
         const filler = Array.from({ length: 20_000 }, (_, i) => `vendor/f${i}.ts`);

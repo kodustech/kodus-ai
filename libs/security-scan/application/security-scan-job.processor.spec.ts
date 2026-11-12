@@ -105,7 +105,7 @@ function setup(engineResult: any, scan = scanRecord()) {
     const issuesService = {
         upsertScanFinding: jest.fn(async () => ({ outcome: 'created' })),
         resolveUnseenScanFindings: jest.fn(async () => 2),
-        markScanFindingsSeen: jest.fn(async () => 0),
+        markScanFindingsSeen: jest.fn(async (..._args: unknown[]) => ({ sighted: 0, reopened: 0 })),
         findOpenScanFindingAreas: jest.fn(async () => [
             { filePath: 'src/orders.ts', vulnerabilityClass: 'authz' },
         ]),
@@ -331,6 +331,7 @@ describe('SecurityScanJobProcessor', () => {
             commitSha: 'abc123',
             units: [],
             progress: [],
+            reported: [],
         });
     });
 
@@ -447,17 +448,44 @@ describe('SecurityScanJobProcessor', () => {
         ).toBeLessThan(issuesService.resolveUnseenScanFindings.mock.invocationCallOrder[0]);
     });
 
-    it('sights at once an earlier finding a unit found again', async () => {
-        const { processor, issuesService } = setup({
+    it('sights at once an earlier finding a unit found again, reopening it if resolved since', async () => {
+        const { processor, scans, issuesService } = setup({
             unitEvents: [[{ unitId: 'u1', state: 'done', findings: 0 }, [], ['fp-again']]],
-            result: finishedResult(),
+            result: finishedResult({ findings: [] }),
         });
+        issuesService.markScanFindingsSeen.mockResolvedValueOnce({ sighted: 0, reopened: 1 });
 
         await processor.process('job-1');
 
         expect(issuesService.markScanFindingsSeen).toHaveBeenCalledWith(
-            expect.objectContaining({ fingerprints: ['fp-again'], scanId: 'scan-1' }),
+            expect.objectContaining({ fingerprints: ['fp-again'], scanId: 'scan-1', foundAgain: true }),
         );
+        expect(lastUpdate(scans).outcome).toEqual(expect.objectContaining({ reopened: 1 }));
+    });
+
+    it("drops a stale plan's reports with it: of another commit, neither compared against nor sighted", async () => {
+        const { processor, scans, issuesService } = setup(
+            { result: finishedResult({ findings: [] }) },
+            scanRecord({
+                planCommitSha: 'old-sha',
+                units: [{ id: 'u1' }] as any,
+                reported: [
+                    { vulnerabilityClass: 'authz', filePath: 'src/removed.ts', fingerprint: 'fp-old' },
+                ] as any,
+            }),
+        );
+
+        await processor.process('job-1');
+
+        expect(scans.update).toHaveBeenCalledWith(
+            'scan-1',
+            expect.objectContaining({ units: [], progress: [], reported: [] }),
+        );
+        const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
+        expect(engine.run.mock.calls[0][0].reported).toEqual([]);
+        expect(
+            (issuesService.markScanFindingsSeen.mock.calls as any[]).flatMap((c) => c[0].fingerprints),
+        ).not.toContain('fp-old');
     });
 
     it('records each area alone, with live counts, without reading the scan back', async () => {
