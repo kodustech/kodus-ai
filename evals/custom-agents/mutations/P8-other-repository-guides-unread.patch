@@ -1,16 +1,20 @@
 diff --git a/libs/code-review/infrastructure/agents/core/convention-check.ts b/libs/code-review/infrastructure/agents/core/convention-check.ts
-index 6509d9da4..d132f82c8 100644
+index 6509d9da4..528b64b45 100644
 --- a/libs/code-review/infrastructure/agents/core/convention-check.ts
 +++ b/libs/code-review/infrastructure/agents/core/convention-check.ts
-@@ -646,9 +646,9 @@ export function guideSourcesFor(
+@@ -646,9 +646,13 @@ export function guideSourcesFor(
      }
      return {
          readGuide: (file) =>
 -            isOther(file) ? fromKnowledge(file) : readLocal(file),
-+            readLocal(file),
++            isOther(file)
++                ? (targetBranchReader?.(file) ?? Promise.resolve(null))
++                : readLocal(file),
          listGuideDir: (dir) =>
 -            isOther(dir) ? listFromKnowledge(dir) : listLocal(dir),
-+            listLocal(dir),
++            isOther(dir)
++                ? (targetBranchLister?.(dir) ?? Promise.resolve([]))
++                : listLocal(dir),
      };
  }
  

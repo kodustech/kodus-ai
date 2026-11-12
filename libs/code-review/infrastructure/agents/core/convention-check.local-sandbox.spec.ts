@@ -30,10 +30,19 @@ const REFERENCE_TEXT = `# Brakes
 Brake tests are recorded before the tram leaves the bay.
 `;
 
-// What the base branch holds, as the knowledge reader reads it.
+// A skill of the team's rules repository, linked to the agent.
+const OTHER_SKILL = 'depot-co/rules:skills/shunting/SKILL.md';
+const OTHER_SKILL_TEXT = `# Shunting
+
+- A tram is shunted only with the yard signal set to stop.
+`;
+
+// What the base branch holds, as the knowledge reader reads it (another
+// repository's skill at that repository's ref).
 const onTarget: Record<string, string> = {
     [SKILL]: SKILL_TEXT,
     [REFERENCE]: REFERENCE_TEXT,
+    [OTHER_SKILL]: OTHER_SKILL_TEXT,
 };
 const knowledgeReader = {
     readFile: async (path: string) =>
@@ -129,6 +138,19 @@ describe('quote gate on the local sandbox', () => {
             ),
             [SKILL],
             sandboxDown,
+        );
+
+        expect(result.rejected).toEqual([]);
+        expect(result.passed).toHaveLength(1);
+    });
+
+    it('passes a quote from a linked skill of another repository', async () => {
+        const result = await gate(
+            cites(
+                OTHER_SKILL,
+                'A tram is shunted only with the yard signal set to stop.',
+            ),
+            [SKILL, OTHER_SKILL],
         );
 
         expect(result.rejected).toEqual([]);

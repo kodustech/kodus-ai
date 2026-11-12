@@ -119,7 +119,7 @@ const MUTATIONS = [
         property: 'P8',
         patch: 'P8-other-repository-guides-unread.patch',
         break: 'the quote gate reads a guide of another repository from the reviewed one, where it is not',
-        checks: [{ jest: [SPEC.otherRepoKnowledge] }],
+        checks: [{ jest: [SPEC.otherRepoKnowledge, SPEC.localSandboxQuote] }],
     },
     {
         property: 'P8',
