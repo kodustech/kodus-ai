@@ -1,6 +1,8 @@
+diff --git a/libs/code-review/infrastructure/agents/core/convention-check.ts b/libs/code-review/infrastructure/agents/core/convention-check.ts
+index 08b3dcebd..e3fef110d 100644
 --- a/libs/code-review/infrastructure/agents/core/convention-check.ts
 +++ b/libs/code-review/infrastructure/agents/core/convention-check.ts
-@@ -282,9 +282,7 @@
+@@ -282,9 +282,7 @@ export function isLinkedGuide(
   * it read the rule from. With `listGuideDir`, a quote missing from a cited
   * SKILL.md is looked up in that same skill's text files, and the finding is
   * re-pointed at the file that holds it. Other skills and repository files
@@ -11,7 +13,7 @@
   */
  export async function checkConventionQuotes(
      candidates: readonly FinderSuggestion[],
-@@ -292,7 +290,6 @@
+@@ -292,7 +290,6 @@ export async function checkConventionQuotes(
      guideFiles: readonly string[] = [],
      listGuideDir?: GuideDirLister,
      teamInstructions?: string,
@@ -19,13 +21,21 @@
  ): Promise<ConventionCheckResult> {
      const passed: ConventionCheckPassed[] = [];
      const rejected: ConventionCheckRejected[] = [];
-@@ -382,28 +379,8 @@
+@@ -308,9 +305,6 @@ export async function checkConventionQuotes(
+     };
+     const reject = (finding: FinderSuggestion, detail: string) =>
+         rejected.push({ finding, reason: QUOTE_NOT_FOUND, detail });
+-    const instructionByPath = new Map(
+-        instructionFiles.map((f) => [stripLeading(f.path), f]),
+-    );
+ 
+     for (const cited of candidates) {
+         const file = canonicalGuideCitation(
+@@ -385,26 +379,8 @@ export async function checkConventionQuotes(
              return true;
          };
          if (!isLinkedGuide(file, guideFiles)) {
--            const instruction = instructionFiles.find(
--                (f) => stripLeading(f.path) === file,
--            );
+-            const instruction = instructionByPath.get(file);
 -            const instructionSection = instruction
 -                ? findQuoteSection(instruction.content, quote)
 -                : null;
