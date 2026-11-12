@@ -370,6 +370,18 @@ describe('SecurityScanJobProcessor', () => {
         expect(continued.issuesService.findOpenScanFindingAreas).not.toHaveBeenCalled();
     });
 
+    it('reads open findings on a later job that still has no plan stored', async () => {
+        // The first job stored its commit, then stopped before planning.
+        const { processor, issuesService } = setup(
+            { result: finishedResult() },
+            scanRecord({ commitSha: 'abc123' }),
+        );
+
+        await processor.process('job-1');
+
+        expect(issuesService.findOpenScanFindingAreas).toHaveBeenCalledTimes(1);
+    });
+
     it('records each area alone, with live counts, without reading the scan back', async () => {
         const { processor, scans } = setup({
             unitEvents: [

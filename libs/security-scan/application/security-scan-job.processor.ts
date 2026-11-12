@@ -323,17 +323,18 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             units: scan.units,
             progress: scan.progress,
             reported: scan.reported,
-            // Read on the scan's first job, whether it maps the repository
-            // or carries on an earlier scan's plan; its continuations hold
-            // them in the plan already.
-            revisit: !firstJob
-                ? []
-                : await this.issuesService.findOpenScanFindingAreas({
-                      organizationId: scan.organizationId,
-                      repositoryPlatform: scan.repository
-                          .platform as PlatformType,
-                      repositoryId: scan.repository.id,
-                  }),
+            // Read whenever a plan is made or first carried on: the scan's
+            // first job, or any job with no plan stored yet. A continuation
+            // holds them in its plan already.
+            revisit:
+                !firstJob && scan.units?.length
+                    ? []
+                    : await this.issuesService.findOpenScanFindingAreas({
+                          organizationId: scan.organizationId,
+                          repositoryPlatform: scan.repository
+                              .platform as PlatformType,
+                          repositoryId: scan.repository.id,
+                      }),
             reproduce: true,
             onPlanned: async (units, languages) => {
                 // A carried-on plan keeps the areas it already finished.

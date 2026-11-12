@@ -221,11 +221,15 @@ function clampPriority(value: number | undefined): number {
  * class's findings. A file no longer in the repository is left out (the
  * scan resolves its findings as gone). Added after the plan, so they never
  * push a new candidate out of it.
+ *
+ * `finished`: units of a carried-on plan already done. They stay done, and
+ * the classes they lack go to a unit of their own, so only those run.
  */
 export function withRevisits(
     units: ScanUnit[],
     revisit: Array<{ filePath: string; vulnerabilityClass: string }>,
     existingFiles: ReadonlySet<string>,
+    finished: ReadonlySet<string> = new Set(),
 ): ScanUnit[] {
     const wanted = new Map<string, Set<string>>();
     for (const { filePath, vulnerabilityClass } of revisit) {
@@ -236,22 +240,39 @@ export function withRevisits(
             (wanted.get(file) ?? new Set()).add(vulnerabilityClass),
         );
     }
-    const merged = units.map((unit) => {
-        const classes = wanted.get(unit.file);
+    const lacking = (have: readonly string[], want: Set<string>) =>
+        VULN_CLASSES.filter((c) => want.has(c) && !have.includes(c));
+    const merged: ScanUnit[] = [];
+    for (const unit of units) {
+        const want = wanted.get(unit.file);
+        const missing = want ? lacking(unit.classes, want) : [];
+        if (!missing.length || finished.has(unit.id)) {
+            merged.push(unit);
+            if (want && !missing.length) wanted.delete(unit.file);
+            continue;
+        }
         wanted.delete(unit.file);
-        if (!classes) return unit;
-        const all = new Set<string>([...unit.classes, ...classes]);
-        return { ...unit, classes: VULN_CLASSES.filter((c) => all.has(c)) };
-    });
-    for (const [file, classes] of wanted) {
-        const known = VULN_CLASSES.filter((c) => classes.has(c));
-        if (!known.length) continue;
+        const all = new Set<string>([...unit.classes, ...missing]);
         merged.push({
-            id: unitId(file),
+            ...unit,
+            classes: VULN_CLASSES.filter((c) => all.has(c)),
+        });
+    }
+    for (const [file, want] of wanted) {
+        // Classes no unfinished unit of the file covers.
+        const covered = units
+            .filter((u) => u.file === file)
+            .flatMap((u) => u.classes);
+        const classes = lacking(covered, want);
+        if (!classes.length) continue;
+        const revisitId = covered.length ? unitId(`${file}#revisit`) : unitId(file);
+        if (merged.some((u) => u.id === revisitId)) continue;
+        merged.push({
+            id: revisitId,
             file,
             relatedFiles: [],
             language: languageOf(file),
-            classes: known,
+            classes,
             priority: 0,
             reasons: [
                 'an open finding is here: read again to see if it was fixed',

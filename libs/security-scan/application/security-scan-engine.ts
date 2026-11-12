@@ -292,24 +292,26 @@ export class SecurityScanEngine {
         );
         if (params.units?.length && params.revisit?.length) {
             // A plan carried on from an earlier scan: findings opened since
-            // it was made are read again too. An area it already finished
-            // that gains a class runs that class alone.
-            const before = new Map(units.map((u) => [u.id, u.classes]));
-            units = withRevisits(units, params.revisit, existingFiles);
-            const grown = units.filter((u) => before.get(u.id) !== u.classes);
-            for (const unit of grown) {
-                const done = progress.get(unit.id);
-                if (done?.state === 'done') {
-                    progress.set(unit.id, {
-                        unitId: unit.id,
-                        state: 'pending',
-                        findings: done.findings,
-                        lensesRun: before.get(unit.id),
-                        lensesExamined: [],
-                    });
-                }
-            }
-            if (grown.length) {
+            // it was made are read again too. An area it finished stays
+            // finished; the classes it lacks run in an area of their own.
+            const finished = new Set(
+                [...progress.values()]
+                    .filter((p) => p.state === 'done')
+                    .map((p) => p.unitId),
+            );
+            const before = units;
+            units = withRevisits(
+                units,
+                params.revisit,
+                existingFiles,
+                finished,
+            );
+            const changed =
+                units.length !== before.length ||
+                units.some(
+                    (u, i) => u.classes.length !== before[i].classes.length,
+                );
+            if (changed) {
                 await params.onPlanned?.(units, languages);
             }
         }

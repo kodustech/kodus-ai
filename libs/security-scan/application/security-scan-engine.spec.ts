@@ -1537,13 +1537,54 @@ describe('SecurityScanEngine: across slices and units', () => {
         } as any);
 
         expect(lensClasses).toEqual(['injection']);
+        // The finished area stays finished; the new class is an area of its own.
         expect(onPlanned).toHaveBeenCalledWith(
-            [expect.objectContaining({ id: 'u-controller', classes: ['authz', 'injection'] })],
+            [
+                expect.objectContaining({ id: 'u-controller', classes: ['authz'] }),
+                expect.objectContaining({ file: controller, classes: ['injection'] }),
+            ],
             expect.any(Array),
         );
+        expect(result.progress.find((p) => p.unitId === 'u-controller')?.state).toBe('done');
+        expect(result.progress.every((p) => p.state === 'done')).toBe(true);
         expect(
             result.examinedByClass.find((e) => e.vulnerabilityClass === 'injection')?.filePaths,
         ).toEqual([controller]);
+    });
+
+    it('leaves a carried-on plan as it is when its areas already cover the open findings', async () => {
+        const controller = 'src/orders/orders.controller.ts';
+        const runLens = jest.fn();
+        const onPlanned = jest.fn(async () => undefined);
+        const engine = new SecurityScanEngine({
+            runLens: runLens as any,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => onlyController),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            units: [
+                {
+                    id: 'u-controller',
+                    file: controller,
+                    relatedFiles: [],
+                    language: 'typescript',
+                    classes: ['authz'],
+                    priority: 90,
+                    reasons: [],
+                },
+            ],
+            progress: [{ unitId: 'u-controller', state: 'done', findings: 0 }],
+            revisit: [{ filePath: controller, vulnerabilityClass: 'authz' }],
+            onPlanned,
+        } as any);
+
+        expect(runLens).not.toHaveBeenCalled();
+        expect(onPlanned).not.toHaveBeenCalled();
+        expect(result.progress).toEqual([{ unitId: 'u-controller', state: 'done', findings: 0 }]);
     });
 
     it('keeps a finding in a file listed past the first 20,000, and lists it as tracked', async () => {

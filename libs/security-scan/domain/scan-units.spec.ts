@@ -234,5 +234,35 @@ describe('withRevisits', () => {
             ['src/orders.ts', ['authz']],
         ]);
     });
+
+    it('keeps a finished unit as it is, its missing classes in a unit of their own', () => {
+        const done = unit('src/api.ts', ['injection']);
+        const units = withRevisits(
+            [done],
+            [
+                { filePath: 'src/api.ts', vulnerabilityClass: 'authz' },
+                { filePath: 'src/api.ts', vulnerabilityClass: 'injection' },
+            ],
+            new Set(['src/api.ts']),
+            new Set([done.id]),
+        );
+
+        expect(units[0]).toBe(done);
+        expect(units.slice(1).map((u) => [u.file, u.classes])).toEqual([['src/api.ts', ['authz']]]);
+        expect(units[1].id).not.toBe(done.id);
+    });
+
+    it('returns a unit that already covers its open findings untouched', () => {
+        const covered = unit('src/api.ts', ['authz']);
+
+        const units = withRevisits(
+            [covered],
+            [{ filePath: 'src/api.ts', vulnerabilityClass: 'authz' }],
+            new Set(['src/api.ts']),
+        );
+
+        expect(units).toEqual([covered]);
+        expect(units[0]).toBe(covered);
+    });
 });
 
