@@ -210,11 +210,6 @@ function answersNothing(result: string): boolean {
     );
 }
 
-/**
- * What readReference tells the model when GitHub refuses a read: which
- * repository, path and ref failed, and what to change on the next call. A
- * bare "Could not read" left the model retrying the same wrong branch.
- */
 /** `owner/repo`, each part a GitHub name: no other path, query or segment. */
 const REFERENCE_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
@@ -245,6 +240,11 @@ export function refuseReadReference(
     return null;
 }
 
+/**
+ * What readReference tells the model when GitHub refuses a read: which
+ * repository, path and ref failed, and what to change on the next call. A
+ * bare "Could not read" left the model retrying the same wrong branch.
+ */
 function describeReadReferenceFailure(
     repo: string,
     path: string,

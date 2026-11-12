@@ -370,6 +370,14 @@ function isFinderSuggestion(s: Partial<CodeSuggestion>): boolean {
     );
 }
 
+function isGithubDotCom(cloneUrl: string | undefined): boolean {
+    try {
+        return new URL(cloneUrl ?? '').hostname.toLowerCase() === 'github.com';
+    } catch {
+        return false;
+    }
+}
+
 @Injectable()
 export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContext> {
     readonly stageName = 'AgentReviewStage';
@@ -4012,7 +4020,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         try {
             if (context.getFreshCloneParams) {
                 const params = await context.getFreshCloneParams();
-                return params?.authToken;
+                // readReference calls api.github.com: a GitHub Enterprise
+                // Server token belongs to its own host.
+                return isGithubDotCom(params?.cloneUrl)
+                    ? params?.authToken
+                    : undefined;
             }
         } catch {
             // Best effort — tool just won't be available
