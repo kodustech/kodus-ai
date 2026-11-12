@@ -3985,10 +3985,13 @@ export class BitbucketCloudService implements Omit<
                         response.headers.get('retry-after'),
                     ) ?? backoffMs;
                 parkRateGate(gateKey, Date.now() + waitMs);
-                if (attempt < maxRetries) {
-                    const retryInMs = logContext?.interactive
-                        ? BitbucketCloudService.INTERACTIVE_429_WAIT_MS
-                        : waitMs;
+                // A screen call retries only when the credential reopens
+                // within its 20s; a longer park would make the retry fail
+                // and spend one more request of the quota.
+                const retryInMs = logContext?.interactive
+                    ? BitbucketCloudService.INTERACTIVE_429_WAIT_MS
+                    : waitMs;
+                if (attempt < maxRetries && waitMs <= retryInMs) {
                     this.logger.warn({
                         message: `Bitbucket 429 — waiting ${retryInMs}ms then retrying (attempt ${attempt + 1}/${maxRetries})`,
                         context: BitbucketCloudService.name,
@@ -4003,7 +4006,7 @@ export class BitbucketCloudService implements Omit<
                     continue;
                 }
                 this.logger.warn({
-                    message: `Bitbucket 429 — still rate limited after ${maxRetries} retries, returning it to the caller`,
+                    message: `Bitbucket 429 — still rate limited after ${attempt} retries, returning it to the caller`,
                     context: BitbucketCloudService.name,
                     metadata: {
                         organizationId: logContext?.organizationId,

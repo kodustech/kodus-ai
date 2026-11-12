@@ -43,10 +43,10 @@ function makeService(authDetails: any = { email: 'a@b.c', appPassword: 'p' }) {
     return { service, logger };
 }
 
-const respond = (status: number) =>
+const respond = (status: number, headers: Record<string, string> = {}) =>
     new Response(status === 200 ? '{"values":[]}' : '', {
         status,
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...headers },
     });
 
 describe('BitbucketCloudService — rate limit visibility', () => {
@@ -151,10 +151,30 @@ describe('BitbucketCloudService — rate limit visibility', () => {
             const { service } = makeService();
 
             const listing = listInteractive(service);
-            await jest.advanceTimersByTimeAsync(20_000);
+            // The retry waits the full 20s; the background backoff retries at 10s
+            await jest.advanceTimersByTimeAsync(19_999);
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            await jest.advanceTimersByTimeAsync(1);
 
             await expect(listing).resolves.toEqual({ repos: [] });
             expect(fetchMock).toHaveBeenCalledTimes(2);
+        });
+
+        it('gives the 429 back at once when the credential stays closed past 20s', async () => {
+            jest.useFakeTimers();
+            const fetchMock = jest
+                .fn()
+                .mockResolvedValueOnce(respond(429, { 'retry-after': '60' }))
+                .mockResolvedValue(respond(200));
+            global.fetch = fetchMock as any;
+            const { service } = makeService();
+
+            const listing = listInteractive(service);
+            await jest.advanceTimersByTimeAsync(0);
+            const { error } = (await listing) as any;
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(error?.getStatus?.()).toBe(HttpStatus.TOO_MANY_REQUESTS);
         });
 
         it('keeps the full backoff for a listing nobody waits on', async () => {
