@@ -79,7 +79,6 @@ const LENS_PASSES = 1;
  * model requests can be in flight; the budget reserve scales with it.
  */
 export const UNIT_CONCURRENCY = 4;
-const LISTING_LIMIT = 4000;
 const MAP_LISTING_SAMPLE = 600;
 
 export interface SecurityScanModel {
@@ -537,7 +536,12 @@ export class SecurityScanEngine {
 
     private dedupDeps: ReturnType<typeof createFindingDedupDeps> | undefined;
 
-    /** `complete`: git listed every tracked file, none was cut. */
+    /**
+     * Every file, never cut: a finding is kept only when its file is listed,
+     * so a cut would drop real findings in the files past it, mark them
+     * examined, and let the scan resolve their issues. `complete`: git listed
+     * the tracked files.
+     */
     private async listFiles(
         sandbox: SandboxInstance,
     ): Promise<{ files: string[]; complete: boolean }> {
@@ -548,7 +552,7 @@ export class SecurityScanEngine {
             .run(`git -C ${sandbox.repoDir} ls-files -z`, { timeoutMs: 60_000 })
             .catch(() => undefined);
         const tracked = fromGit?.exitCode === 0 && !!fromGit.stdout;
-        const all = (
+        const files = (
             tracked
                 ? fromGit.stdout.split('\0')
                 : (await sandbox.remoteCommands.listDir('.', 25))
@@ -557,8 +561,7 @@ export class SecurityScanEngine {
         )
             .map((l) => l.replace(/^\.\//, ''))
             .filter((l) => l && !l.startsWith('Error:'));
-        const files = all.slice(0, LISTING_LIMIT * 5);
-        return { files, complete: tracked && files.length === all.length };
+        return { files, complete: tracked };
     }
 
     private async plan(

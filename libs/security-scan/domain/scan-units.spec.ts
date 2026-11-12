@@ -107,6 +107,24 @@ describe('mergeMapPlan', () => {
         expect(units[1].priority).toBeLessThanOrEqual(10);
     });
 
+    it('fills the room the plan left in risk order, not by file name', () => {
+        const ranked = rankCandidates(
+            surface({
+                'src/a-internal.ts': { entryPoints: 0, authChecks: 0, sinks: 1, classes: ['ssrf'] },
+                'src/z-public.ts': { entryPoints: 3, authChecks: 0, sinks: 3, classes: ['injection'] },
+            }),
+        );
+
+        const units = mergeMapPlan({
+            plan: [],
+            candidates: ranked,
+            existingFiles: new Set(['src/a-internal.ts', 'src/z-public.ts']),
+            maxUnits: 10,
+        });
+
+        expect(units.map((u) => u.file)).toEqual(['src/z-public.ts', 'src/a-internal.ts']);
+    });
+
     it('never drops a class the pattern scan saw on a file the planner kept', () => {
         const units = mergeMapPlan({
             // The planner kept the file but only asked for SSRF.

@@ -195,16 +195,19 @@ export function mergeMapPlan(params: {
         }
     }
 
+    units.sort(
+        (a, b) => b.priority - a.priority || a.file.localeCompare(b.file),
+    );
+    // The heuristic fills the room the plan left, after it and in its own
+    // risk order: units run in this order, and sorting these in would tie
+    // them all at one priority and run them by file name.
     for (const unit of heuristicUnits(
         params.candidates.filter((c) => !seen.has(c.file)),
         params.maxUnits - units.length,
     )) {
         units.push({ ...unit, priority: Math.min(unit.priority, 10) });
     }
-
-    return units.sort(
-        (a, b) => b.priority - a.priority || a.file.localeCompare(b.file),
-    );
+    return units;
 }
 
 function clampPriority(value: number | undefined): number {

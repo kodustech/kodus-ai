@@ -1407,6 +1407,34 @@ describe('SecurityScanEngine: across slices and units', () => {
         expect(result.findings.map((f) => f.filePath)).toContain(accented);
     });
 
+    it('keeps a finding in a file listed past the first 20,000, and lists it as tracked', async () => {
+        const controller = 'src/orders/orders.controller.ts';
+        const filler = Array.from({ length: 20_000 }, (_, i) => `vendor/f${i}.ts`);
+        const sandbox = fakeSandbox();
+        const run = sandbox.run.getMockImplementation()!;
+        sandbox.run.mockImplementation(async (command: string) =>
+            command.includes('ls-files -z')
+                ? { stdout: [...filler, ...Object.keys(FILES)].join('\0'), exitCode: 0 }
+                : run(command),
+        );
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file === controller && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => onlyController),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.findings.map((f) => f.filePath)).toContain(controller);
+        expect(result.trackedFiles).toContain(controller);
+    });
+
     it('fails a unit no lens read to the end, instead of calling it done', async () => {
         // Every lens finishes, but its verifier could not check what it found.
         const runLens = jest.fn(async () => ({
