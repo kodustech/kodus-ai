@@ -76,6 +76,11 @@ export interface IIssue {
     endLine?: number;
     evidence?: IIssueEvidence;
     lastSeenScanId?: string;
+    /**
+     * The commit the scan that last saw it read: the issue's lines and its
+     * link point there, whatever branch was scanned.
+     */
+    lastSeenCommitSha?: string;
     lastSeenAt?: string;
     resolvedAt?: string;
 }

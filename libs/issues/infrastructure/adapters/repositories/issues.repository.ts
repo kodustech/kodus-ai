@@ -9,7 +9,9 @@ import {
 } from '@libs/core/infrastructure/repositories/mappers';
 import {
     IIssuesRepository,
+    OpenScanFindingArea,
     ResolveUnseenScanFindingsParams,
+    ScanRepositoryScope,
     ScanFindingOutcome,
     ScanFindingUpsert,
 } from '@libs/issues/domain/contracts/issues.repository';
@@ -374,6 +376,7 @@ export class IssuesRepository implements IIssuesRepository {
             endLine: finding.endLine,
             evidence: finding.evidence,
             lastSeenScanId: finding.lastSeenScanId,
+            lastSeenCommitSha: finding.lastSeenCommitSha,
             lastSeenAt: now,
             // An owner the scan decided (CODEOWNERS, last author) follows the
             // repository as it changes; one a person set is kept.
@@ -390,6 +393,34 @@ export class IssuesRepository implements IIssuesRepository {
             };
         }
         return { outcome: 'still_open', update: { $set: refreshed } };
+    }
+
+    async findOpenScanFindingAreas(
+        params: ScanRepositoryScope,
+    ): Promise<OpenScanFindingArea[]> {
+        const docs = await this.issuesModel
+            .find(
+                {
+                    'organizationId': params.organizationId,
+                    'repository.platform': params.repositoryPlatform,
+                    'repository.id': params.repositoryId,
+                    'source': IssueSource.SECURITY_SCAN,
+                    'status': IssueStatus.OPEN,
+                },
+                { filePath: 1, vulnerabilityClass: 1 },
+            )
+            .lean()
+            .exec();
+        const areas = new Map<string, OpenScanFindingArea>();
+        for (const doc of docs as Array<Partial<IIssue>>) {
+            if (!doc.filePath || !doc.vulnerabilityClass) continue;
+            const filePath = normalizeScanPath(doc.filePath);
+            areas.set(`${filePath}\u0000${doc.vulnerabilityClass}`, {
+                filePath,
+                vulnerabilityClass: doc.vulnerabilityClass,
+            });
+        }
+        return [...areas.values()];
     }
 
     async resolveUnseenScanFindings(

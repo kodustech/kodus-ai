@@ -6,7 +6,9 @@ import { IssueStatus } from '@libs/core/infrastructure/config/types/general/issu
 import {
     IIssuesRepository,
     ISSUES_REPOSITORY_TOKEN,
+    OpenScanFindingArea,
     ResolveUnseenScanFindingsParams,
+    ScanRepositoryScope,
     ScanFindingOutcome,
     ScanFindingUpsert,
 } from '@libs/issues/domain/contracts/issues.repository';
@@ -145,6 +147,12 @@ export class IssuesService implements IIssuesService {
             ...finding,
             language: finding.language?.trim() || 'unknown',
         });
+    }
+
+    async findOpenScanFindingAreas(
+        params: ScanRepositoryScope,
+    ): Promise<OpenScanFindingArea[]> {
+        return this.issuesRepository.findOpenScanFindingAreas(params);
     }
 
     async resolveUnseenScanFindings(
