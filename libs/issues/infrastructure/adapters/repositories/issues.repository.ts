@@ -277,13 +277,13 @@ export class IssuesRepository implements IIssuesRepository {
                 }
             }
 
-            const { update, outcome } = this.scanSighting(
+            const { update, outcome, guard } = this.scanSighting(
                 existing,
                 finding,
                 now,
             );
             const doc = await this.issuesModel.findOneAndUpdate(
-                { _id: existing._id, status: existing.status },
+                { _id: existing._id, status: existing.status, ...guard },
                 update,
                 { new: true },
             );
@@ -307,10 +307,43 @@ export class IssuesRepository implements IIssuesRepository {
 
     /** What one more sighting of a stored finding changes, given its status. */
     private scanSighting(
-        existing: { status?: IssueStatus; owner?: IIssueOwner },
+        existing: {
+            status?: IssueStatus;
+            owner?: IIssueOwner;
+            lastSeenScanId?: string;
+            description?: string;
+            severity?: string;
+        },
         finding: ScanFindingUpsert,
         now: string,
-    ): { update: Record<string, unknown>; outcome: ScanFindingOutcome } {
+    ): {
+        update: Record<string, unknown>;
+        outcome: ScanFindingOutcome;
+        /** More of the read state the write must still find. */
+        guard?: Record<string, unknown>;
+    } {
+        if (
+            existing.status !== IssueStatus.DISMISSED &&
+            existing.lastSeenScanId === finding.lastSeenScanId
+        ) {
+            // This scan already stored a finding under this identity: a
+            // second weakness of the same kind in the same function. Both
+            // stay on the one issue; neither overwrites the other.
+            return {
+                outcome: 'merged',
+                guard: { description: existing.description },
+                update: {
+                    $set: {
+                        description: `${existing.description ?? ''}\n\n---\n\n### Also in this function: ${finding.title}\n\nLines ${finding.startLine}-${finding.endLine}.\n\n${finding.description}`,
+                        severity: moreSevere(
+                            existing.severity,
+                            finding.severity,
+                        ),
+                        lastSeenAt: now,
+                    },
+                },
+            };
+        }
         if (existing.status === IssueStatus.DISMISSED) {
             // Dismissed by a person: keep it dismissed, only record the sighting.
             return {
@@ -401,4 +434,15 @@ export class IssuesRepository implements IIssuesRepository {
 
         return result?.modifiedCount ?? 0;
     }
+}
+
+const SEVERITY_RANK = new Map(
+    ['low', 'medium', 'high', 'critical'].map((s, i) => [s, i] as const),
+);
+
+/** The worse of two severities; an unknown one ranks lowest. */
+function moreSevere(a: string | undefined, b: string): string {
+    return (SEVERITY_RANK.get(a ?? '') ?? -1) > (SEVERITY_RANK.get(b) ?? -1)
+        ? (a as string)
+        : b;
 }

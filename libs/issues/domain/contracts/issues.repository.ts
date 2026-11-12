@@ -13,8 +13,16 @@ export const ISSUES_REPOSITORY_TOKEN = Symbol.for('IssuesRepository');
  * it still open, reopened one a later change had resolved, or left alone one a
  * person dismissed.
  */
+/**
+ * `merged`: a second finding with the same identity in the same scan (two
+ * injections in one function), added to the issue as another occurrence.
+ */
 export type ScanFindingOutcome =
-    'created' | 'still_open' | 'reopened' | 'dismissed';
+    | 'created'
+    | 'still_open'
+    | 'reopened'
+    | 'dismissed'
+    | 'merged';
 
 export type ScanFindingUpsert = Omit<
     IIssue,

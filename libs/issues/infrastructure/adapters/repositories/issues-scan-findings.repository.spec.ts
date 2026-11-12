@@ -193,6 +193,45 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(model.findOneAndUpdate).toHaveBeenCalled();
     });
 
+    it('keeps a second weakness of the same identity in one scan as another occurrence', async () => {
+        // Two SQL injections in one function: the first is stored by this
+        // scan, the second arrives with the same identity.
+        const first = {
+            _id: 'i-1',
+            status: IssueStatus.OPEN,
+            lastSeenScanId: 'scan-2',
+            description: 'Injection in the name filter.',
+            severity: SeverityLevel.MEDIUM,
+        };
+        const model = modelWith(first);
+        const repository = new IssuesRepository(model as any);
+
+        const { outcome } = await repository.upsertScanFinding({
+            ...finding,
+            title: 'Injection in the sort column',
+            description: 'The sort column is concatenated into the query.',
+            startLine: 30,
+            endLine: 31,
+        });
+
+        expect(outcome).toBe('merged');
+        const [filter, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [any, any];
+        // Written only if no other occurrence landed since the read.
+        expect(filter).toEqual({
+            _id: 'i-1',
+            status: IssueStatus.OPEN,
+            description: 'Injection in the name filter.',
+        });
+        expect(update.$set.description).toContain('Injection in the name filter.');
+        expect(update.$set.description).toContain(
+            'Also in this function: Injection in the sort column',
+        );
+        expect(update.$set.description).toContain('Lines 30-31');
+        // The worse of the two.
+        expect(update.$set.severity).toBe(SeverityLevel.HIGH);
+        expect(update.$set.title).toBeUndefined();
+    });
+
     it('stores again a finding deleted between the read and the write', async () => {
         const model = modelWith(null);
         model.findOne
