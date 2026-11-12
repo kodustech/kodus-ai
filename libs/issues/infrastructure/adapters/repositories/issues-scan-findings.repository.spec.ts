@@ -201,7 +201,7 @@ describe('IssuesRepository — security-scan findings', () => {
             status: IssueStatus.OPEN,
             lastSeenScanId: 'scan-2',
             description: 'Injection in the name filter.',
-            severity: SeverityLevel.MEDIUM,
+            severity: SeverityLevel.HIGH,
         };
         const model = modelWith(first);
         const repository = new IssuesRepository(model as any);
@@ -210,6 +210,7 @@ describe('IssuesRepository — security-scan findings', () => {
             ...finding,
             title: 'Injection in the sort column',
             description: 'The sort column is concatenated into the query.',
+            severity: SeverityLevel.MEDIUM,
             startLine: 30,
             endLine: 31,
         });
@@ -227,9 +228,28 @@ describe('IssuesRepository — security-scan findings', () => {
             'Also in this function: Injection in the sort column',
         );
         expect(update.$set.description).toContain('Lines 30-31');
-        // The worse of the two.
+        // The worse of the two: the stored one here, not the incoming.
         expect(update.$set.severity).toBe(SeverityLevel.HIGH);
         expect(update.$set.title).toBeUndefined();
+        expect(update.$set.status).toBeUndefined();
+    });
+
+    it('reopens an issue resolved between two occurrences of one scan', async () => {
+        const model = modelWith({
+            _id: 'i-1',
+            status: IssueStatus.RESOLVED,
+            lastSeenScanId: 'scan-2',
+            description: 'Injection in the name filter.',
+            severity: SeverityLevel.HIGH,
+        });
+        const repository = new IssuesRepository(model as any);
+
+        const { outcome } = await repository.upsertScanFinding(finding);
+
+        expect(outcome).toBe('merged');
+        const update = (model.findOneAndUpdate.mock.calls[0] as unknown as [any, any])[1];
+        expect(update.$set.status).toBe(IssueStatus.OPEN);
+        expect(update.$unset).toEqual({ resolvedAt: '' });
     });
 
     it('stores again a finding deleted between the read and the write', async () => {

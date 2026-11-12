@@ -328,12 +328,16 @@ export class IssuesRepository implements IIssuesRepository {
         ) {
             // This scan already stored a finding under this identity: a
             // second weakness of the same kind in the same function. Both
-            // stay on the one issue; neither overwrites the other.
+            // stay on the one issue; neither overwrites the other. Resolved
+            // since the first one was stored, it is plainly still there.
+            const reopen = existing.status === IssueStatus.RESOLVED;
             return {
                 outcome: 'merged',
                 guard: { description: existing.description },
                 update: {
+                    ...(reopen ? { $unset: { resolvedAt: '' } } : {}),
                     $set: {
+                        ...(reopen ? { status: IssueStatus.OPEN } : {}),
                         description: `${existing.description ?? ''}\n\n---\n\n### Also in this function: ${finding.title}\n\nLines ${finding.startLine}-${finding.endLine}.\n\n${finding.description}`,
                         severity: moreSevere(
                             existing.severity,
