@@ -1323,9 +1323,16 @@ export class SecurityScanEngine {
                 .catch(() => undefined);
             // Anything that appeared is taken back before a lens reads it:
             // changed files restored, new ones removed.
-            const after = before ? await status() : null;
-            const appeared =
-                before && after ? after.filter((e) => !before.has(e)) : [];
+            // A changed tracked file is restored on the later read alone
+            // (checking it out again is always safe); a new untracked one is
+            // removed only against a baseline, which tells it from the
+            // install.
+            const after = (await status()) ?? [];
+            const appeared = after.filter(
+                (e) =>
+                    !before?.has(e) &&
+                    (before !== null || !e.startsWith('?? ')),
+            );
             if (appeared.length) {
                 logger.warn({
                     message:

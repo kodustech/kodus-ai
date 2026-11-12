@@ -723,17 +723,18 @@ describe('SecurityScanEngine', () => {
         expect(tampered).toBe(false);
     });
 
-    it('removes nothing after a reproduction when the checkout could not be read before it', async () => {
+    it('removes no untracked file, but restores tracked ones, when the checkout could not be read before', async () => {
         const sandbox = fakeSandbox('e2b');
         const run = sandbox.run.getMockImplementation()!;
         let reads = 0;
         sandbox.run.mockImplementation(async (command: string) => {
             if (command.includes('status --porcelain')) {
                 reads++;
-                // The baseline read fails; the next one lists the install.
+                // The baseline read fails; the next one lists the install and
+                // a tracked file the command patched.
                 return reads === 1
                     ? { stdout: '', exitCode: 128 }
-                    : { stdout: '?? node_modules/\0', exitCode: 0 };
+                    : { stdout: '?? node_modules/\0 M src/auth.ts\0', exitCode: 0 };
             }
             return run(command);
         });
@@ -753,6 +754,8 @@ describe('SecurityScanEngine', () => {
 
         const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
         expect(commands.some((c) => c.startsWith('rm -rf'))).toBe(false);
+        // The patched tracked file is still put back.
+        expect(commands).toContain("git -C '/repo' checkout -- .");
     });
 
     it('never writes over, runs or removes a file the repository already has', async () => {
