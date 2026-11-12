@@ -903,7 +903,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         organizationId: string,
         repositoryIds: string[],
     ): Promise<Array<{ id: string; name: string; username: string }>> {
-        if (!repositoryIds?.length) {
+        if (!repositoryIds.length) {
             return [];
         }
 
@@ -943,7 +943,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         organizationId: string,
         repositoryIds: string[],
     ): Promise<boolean> {
-        if (!repositoryIds?.length) {
+        if (!repositoryIds.length) {
             return false;
         }
 
