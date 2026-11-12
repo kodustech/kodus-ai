@@ -544,6 +544,51 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         expect(lastCall.previousDecisions).toBe(previousDecisions);
     });
 
+    // #2509: the provider's mechanical-atom filter reads the review unit, not the
+    // rule's uuid. The atoms of one rule share that uuid, so a uuid-keyed read
+    // sends an atom whose own detector fired nowhere into the sweep.
+    it('judges only the atom whose own detector fired', async () => {
+        const { provider } = makeProvider([{ violations: [] }]);
+        const atom = (over: any) => ({
+            uuid: 'parent-1',
+            title: 'atom',
+            rule: 'condition',
+            status: 'active',
+            severity: 'high',
+            path: '**/*.ts',
+            ...over,
+        });
+        const units = [
+            atom({
+                reviewUnitId: 'parent-1-atom-1',
+                parentTitle: 'Parent rule',
+                title: 'Console log',
+                detector: { type: 'regex', pattern: 'console\\.log' },
+            }),
+            atom({
+                reviewUnitId: 'parent-1-atom-2',
+                parentTitle: 'Parent rule',
+                title: 'No debugger',
+                detector: { type: 'regex', pattern: '\\bdebugger\\b' },
+            }),
+            atom({
+                reviewUnitId: 'parent-1-atom-3',
+                parentTitle: 'Parent rule',
+                title: 'No eval',
+            }),
+        ];
+
+        await provider.execute(input({ kodyRules: units }) as any);
+
+        const sent = mockJudge.mock.calls[mockJudge.mock.calls.length - 1][0];
+        // The atom with no detector is semantic, so it always goes in (the
+        // semantic half is listed first). The `\bdebugger\b` atom fired nowhere
+        // in src/a.ts and must not.
+        expect(sent.rules.map((rule: any) => rule.reviewUnitId).sort()).toEqual(
+            ['parent-1-atom-1', 'parent-1-atom-3'],
+        );
+    });
+
     // #2508: a rule decomposed into atoms reaches the provider as one unit per
     // atom, all carrying the parent's uuid and sourcePath.
     it('keeps the references that loaded and warns with the review when the other source fails', async () => {
