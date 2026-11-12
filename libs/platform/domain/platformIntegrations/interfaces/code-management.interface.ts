@@ -364,6 +364,9 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     getPullRequestAuthors(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         determineBots?: boolean;
+        // Fail rather than answer [] when the provider cannot tell "no recent
+        // author" from "not loaded yet". For callers that revoke on absence.
+        requireLoaded?: boolean;
     }): Promise<PullRequestAuthor[]>;
 
     checkIfPullRequestShouldBeApproved(params: {

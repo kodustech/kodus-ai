@@ -134,6 +134,7 @@ describe('OrganizationMemberListService', () => {
             ).toHaveBeenCalledWith({
                 organizationAndTeamData,
                 determineBots: true,
+                requireLoaded: false,
             });
         });
 
@@ -219,6 +220,12 @@ describe('OrganizationMemberListService', () => {
 
             expect(strict).toEqual({ status: 'unavailable', members: [] });
             expect(lenient.status).toBe('ok');
+            // Only the strict caller asks the provider to fail on "not loaded yet"
+            expect(
+                mockCodeManagementService.getPullRequestAuthors.mock.calls.map(
+                    ([params]) => params.requireLoaded,
+                ),
+            ).toEqual([true, false]);
         });
 
         it('stays ok when the lookup succeeds with no recent authors', async () => {

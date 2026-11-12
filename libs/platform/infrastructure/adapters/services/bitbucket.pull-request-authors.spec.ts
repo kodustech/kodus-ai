@@ -89,7 +89,24 @@ describe('BitbucketService.getPullRequestAuthors', () => {
         ).rejects.toThrow('down');
     });
 
-    it('fails when no PR is stored yet for the configured repositories', async () => {
+    it('fails for a caller that requires loaded authors when no PR is stored yet', async () => {
+        const {
+            service,
+            findPullRequestAuthorsOpenedSince,
+            hasStoredPullRequests,
+        } = build();
+        findPullRequestAuthorsOpenedSince.mockResolvedValue([]);
+        hasStoredPullRequests.mockResolvedValue(false);
+
+        await expect(
+            service.getPullRequestAuthors({
+                organizationAndTeamData: org,
+                requireLoaded: true,
+            }),
+        ).rejects.toThrow(/No pull requests stored yet/);
+    });
+
+    it('answers an empty list to everyone else when no PR is stored yet', async () => {
         const {
             service,
             findPullRequestAuthorsOpenedSince,
@@ -100,7 +117,8 @@ describe('BitbucketService.getPullRequestAuthors', () => {
 
         await expect(
             service.getPullRequestAuthors({ organizationAndTeamData: org }),
-        ).rejects.toThrow(/No pull requests stored yet/);
+        ).resolves.toEqual([]);
+        expect(hasStoredPullRequests).not.toHaveBeenCalled();
     });
 
     it('answers no authors when PRs are stored but none is recent', async () => {

@@ -139,7 +139,7 @@ export class OrganizationMemberListService {
      */
     private async fetchPullRequestAuthors(
         organizationAndTeamData: OrganizationAndTeamData,
-        options: { skipCache?: boolean },
+        options: { skipCache?: boolean; requireAuthors?: boolean },
     ): Promise<RawMember[]> {
         const cacheKey = `org_member_pr_authors_${organizationAndTeamData.organizationId}_${organizationAndTeamData.teamId}`;
 
@@ -165,6 +165,7 @@ export class OrganizationMemberListService {
         const authors = await this.codeManagementService.getPullRequestAuthors({
             organizationAndTeamData,
             determineBots: true,
+            requireLoaded: options.requireAuthors === true,
         });
 
         if (authors?.length) {

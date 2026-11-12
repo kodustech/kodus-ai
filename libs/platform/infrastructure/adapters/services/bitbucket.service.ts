@@ -330,6 +330,7 @@ export class BitbucketService implements Omit<
         if (impl === this.bitbucketCloudService) {
             return this.getCloudPullRequestAuthors(
                 params.organizationAndTeamData,
+                params.requireLoaded === true,
             );
         }
         return impl.getPullRequestAuthors(params);
@@ -343,6 +344,7 @@ export class BitbucketService implements Omit<
      */
     private async getCloudPullRequestAuthors(
         organizationAndTeamData: OrganizationAndTeamData,
+        requireLoaded: boolean,
     ): Promise<PullRequestAuthor[]> {
         const repositories =
             ((await this.bitbucketCloudService.findOneByOrganizationAndTeamDataAndConfigKey(
@@ -369,9 +371,10 @@ export class BitbucketService implements Omit<
 
         // No recent author is a real answer only once PRs have been stored
         // for these repositories. Before the first backfill or webhook it
-        // means "not loaded yet", and the seat prune must not read it as
-        // "nobody opened a PR".
+        // means "not loaded yet": fine for everyone else, but the seat prune
+        // (requireLoaded) must not read it as "nobody opened a PR".
         if (
+            requireLoaded &&
             rows.length === 0 &&
             repositoryIds.length > 0 &&
             !(await pullRequestsService.hasStoredPullRequests(

@@ -605,6 +605,7 @@ export class CodeManagementService implements ICodeManagementService {
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
             determineBots?: boolean;
+            requireLoaded?: boolean;
         },
         type?: PlatformType,
     ): Promise<PullRequestAuthor[]> {
