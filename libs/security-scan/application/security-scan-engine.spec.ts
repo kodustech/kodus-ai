@@ -1428,6 +1428,47 @@ describe('SecurityScanEngine: across slices and units', () => {
         expect(result.examinedByClass).toEqual([]);
     });
 
+    it('names a unit with no lens left to run for what it is, not every lens failed', async () => {
+        // A pending unit whose every lens already ran, none read to the end.
+        const runLens = jest.fn();
+        const engine = new SecurityScanEngine({
+            runLens: runLens as any,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => onlyController),
+        });
+        const first = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            deadlineAt: -1,
+        } as any);
+        const unit = first.units[0];
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            units: first.units,
+            progress: [
+                {
+                    unitId: unit.id,
+                    state: 'pending',
+                    findings: 0,
+                    lensesRun: unit.classes,
+                    lensesExamined: [],
+                },
+            ],
+        } as any);
+
+        expect(runLens).not.toHaveBeenCalled();
+        expect(result.progress[0]).toEqual(
+            expect.objectContaining({
+                state: 'failed',
+                error: 'no lens read the area to the end',
+            }),
+        );
+    });
+
     it('picks a long unit up at its next lens in the next slice, so it gets through', async () => {
         let now = 0;
         const lensOf = (input: any) =>

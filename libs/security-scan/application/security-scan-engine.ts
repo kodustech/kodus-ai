@@ -778,7 +778,7 @@ export class SecurityScanEngine {
             return {
                 findings,
                 error:
-                    failures === runs.length
+                    runs.length > 0 && failures === runs.length
                         ? 'every lens failed'
                         : 'no lens read the area to the end',
                 examinedClasses,
