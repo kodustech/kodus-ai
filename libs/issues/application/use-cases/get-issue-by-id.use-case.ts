@@ -87,7 +87,12 @@ export class GetIssueByIdUseCase implements IUseCase {
 
         let httpUrl = issue.repository.url ?? null;
 
-        if (issue.repository.platform === PlatformType.AZURE_REPOS) {
+        // Azure and Forgejo links are built from the repository's own URL,
+        // which only its integration config holds.
+        if (
+            issue.repository.platform === PlatformType.AZURE_REPOS ||
+            issue.repository.platform === PlatformType.FORGEJO
+        ) {
             const integrationConfig =
                 await this.integrationConfigService.findOne({
                     configKey: IntegrationConfigKey.REPOSITORIES,
@@ -292,6 +297,10 @@ export class GetIssueByIdUseCase implements IUseCase {
                 return `${data.httpUrl}?path=/${cleanFilePath}${commitSha ? `&version=GC${commitSha}` : ''}`;
             case PlatformType.BITBUCKET:
                 return `https://bitbucket.org/${data.repositoryFullName}/src/${branch}/${cleanFilePath}`;
+            case PlatformType.FORGEJO:
+                return commitSha
+                    ? `${repositoryUrl}/src/commit/${commitSha}/${cleanFilePath}`
+                    : `${repositoryUrl}/src/branch/${branch}/${cleanFilePath}`;
             default:
                 throw new Error(`Platform not supported: ${data.platform}`);
         }
@@ -318,6 +327,8 @@ export class GetIssueByIdUseCase implements IUseCase {
                 return `${data.httpUrl}/pullrequest/${prNumber}`;
             case PlatformType.BITBUCKET:
                 return `https://bitbucket.org/${data.repositoryFullName}/pull-requests/${prNumber}`;
+            case PlatformType.FORGEJO:
+                return `${repositoryUrl}/pulls/${prNumber}`;
             default:
                 throw new Error(`Platform not supported: ${data.platform}`);
         }
@@ -351,6 +362,14 @@ export class GetIssueByIdUseCase implements IUseCase {
                 return data.httpUrl;
             case PlatformType.BITBUCKET:
                 return `https://bitbucket.org/${data.repositoryFullName}`;
+            case PlatformType.FORGEJO: {
+                // The clone URL, without its `.git`.
+                const url = data.repositoryUrl || data.httpUrl;
+                if (!url) {
+                    throw new Error('Forgejo repository has no URL');
+                }
+                return url.replace(/\.git$/, '').replace(/\/$/, '');
+            }
             default:
                 throw new Error(`Platform not supported: ${data.platform}`);
         }

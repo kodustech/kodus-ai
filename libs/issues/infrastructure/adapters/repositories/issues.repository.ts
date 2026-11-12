@@ -83,6 +83,12 @@ export class IssuesRepository implements IIssuesRepository {
         return issues ? mapSimpleModelsToEntities(issues, IssuesEntity) : null;
     }
 
+    async changedSince(organizationId: string, since: Date): Promise<boolean> {
+        return !!(await this.issuesModel
+            .exists({ organizationId, updatedAt: { $gt: since } })
+            .exec());
+    }
+
     async findByFilters(filter?: Partial<IIssue>): Promise<IssuesEntity[]> {
         const query = this.issuesModel.find(filter);
 

@@ -3,7 +3,10 @@ import { IssueSource } from '@libs/issues/domain/interfaces/issues.interface';
 
 import { GetIssueByIdUseCase } from './get-issue-by-id.use-case';
 
-function useCaseFor(issue: Record<string, unknown>) {
+function useCaseFor(
+    issue: Record<string, unknown>,
+    httpUrl = 'https://dev.azure.com/acme/shop/_git/shop',
+) {
     return new GetIssueByIdUseCase(
         { findById: jest.fn(async () => issue) } as any,
         { getByOrganizationId: jest.fn(async () => []) } as any,
@@ -17,7 +20,7 @@ function useCaseFor(issue: Record<string, unknown>) {
                 configValue: [
                     {
                         id: 'repo-1',
-                        http_url: 'https://dev.azure.com/acme/shop/_git/shop',
+                        http_url: httpUrl,
                     },
                 ],
             })),
@@ -81,4 +84,23 @@ describe('GetIssueByIdUseCase — file link', () => {
             'https://dev.azure.com/acme/shop/_git/shop?path=/src/orders.controller.ts&version=GCabc123',
         );
     });
+
+    it('links a Forgejo scan finding to its commit, from the clone URL', async () => {
+        const details = await useCaseFor({
+            ...base,
+            repository: {
+                ...base.repository,
+                platform: PlatformType.FORGEJO,
+                url: undefined,
+            },
+            source: IssueSource.SECURITY_SCAN,
+            lastSeenCommitSha: 'abc123',
+        }, 'https://git.acme.dev/acme/shop.git').execute('i-1');
+
+        expect(details?.fileLink.url).toBe(
+            'https://git.acme.dev/acme/shop/src/commit/abc123/src/orders.controller.ts',
+        );
+        expect(details?.repositoryLink.url).toBe('https://git.acme.dev/acme/shop');
+    });
 });
+

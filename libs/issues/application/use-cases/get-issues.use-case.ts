@@ -39,11 +39,30 @@ export class GetIssuesUseCase implements IUseCase {
             };
 
             const cacheKey = `issues_${filters.organizationId}`;
+            const asOfKey = `${cacheKey}_asOf`;
 
             let allIssues =
                 await this.cacheService.getFromCache<IIssue[]>(cacheKey);
+            // The cache is this process's own: a worker storing or resolving
+            // issues (a deep scan, a closed PR) clears only its own copy.
+            // A list read before the last write is read again.
+            if (allIssues) {
+                const asOf =
+                    await this.cacheService.getFromCache<string>(asOfKey);
+                if (
+                    !asOf ||
+                    (await this.issuesService.changedSince(
+                        filters.organizationId,
+                        new Date(asOf),
+                    ))
+                ) {
+                    allIssues = undefined;
+                }
+            }
 
             if (!allIssues) {
+                // Taken before the read, so a write during it is not missed.
+                const readAt = new Date().toISOString();
                 allIssues = await this.issuesService.find(
                     filters.organizationId,
                 );
@@ -69,6 +88,7 @@ export class GetIssuesUseCase implements IUseCase {
                 );
 
                 await this.cacheService.addToCache(cacheKey, allIssues, 900000); //15 minutos
+                await this.cacheService.addToCache(asOfKey, readAt, 900000);
             }
 
             if (!allIssues || allIssues.length === 0) {

@@ -98,6 +98,12 @@ export interface IIssuesRepository {
         status?: IssueStatus,
     ): Promise<IssuesEntity[] | null>;
     find(organizationId: string): Promise<IssuesEntity[]>;
+    /**
+     * Whether any of the organization's issues changed after `since`: a
+     * process holding a list in memory reads it before trusting it, since
+     * another process (a worker) may have written in between.
+     */
+    changedSince(organizationId: string, since: Date): Promise<boolean>;
     findByFilters(filter?: Partial<IIssue>): Promise<IssuesEntity[]>;
 
     count(filter?: Partial<IIssue>): Promise<number>;
