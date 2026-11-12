@@ -14,7 +14,7 @@
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { PATTERNS, inScope, addedLines } = require('./patterns');
+const { PATTERNS, COMPOUND_PATTERNS, inScope, addedLines } = require('./patterns');
 
 const args = Object.fromEntries(
     process.argv.slice(2).map((a) => {
@@ -63,7 +63,7 @@ function fetchPr(repositoryFullName, number) {
 // not fire anywhere in the PR (polyglot-cases: a Ruby rule over JS, CSS and
 // templates), so every file of the PR is clean.
 function groundTruth(pr, ruleUuid) {
-    const spec = PATTERNS[ruleUuid];
+    const spec = PATTERNS[ruleUuid] ?? COMPOUND_PATTERNS[ruleUuid];
     // A Ruby rule does apply to Ruby sources, whose hits take a judgment this
     // corpus has no answer for: they are not scored. Templates (.erb) are: the
     // incident's hits there were JavaScript.

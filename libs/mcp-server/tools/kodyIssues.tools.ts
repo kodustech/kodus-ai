@@ -256,12 +256,17 @@ export class KodyIssuesTools {
                 data: z.array(z.looseObject({})),
             }),
             execute: wrapToolHandler(async (args: InputType) => {
-                // The input says `repositoryName`; documents store it as
-                // `repository.name`. Passing args straight through matched
-                // nothing and forced a collection scan on every call.
-                const { repositoryName, ...rest } = args;
+                // Build the filter from the fields this tool declares. The
+                // input says `repositoryName` where documents store
+                // `repository.name`; the authorizer pins `teamId` onto
+                // team-key calls and no issue document carries it, so a spread
+                // filter returned nothing (#2388).
+                const { organizationId, repositoryName, severity, label } =
+                    args;
                 const issues = await this.issuesService.findByFilters({
-                    ...rest,
+                    organizationId,
+                    ...(severity && { severity }),
+                    ...(label && { label }),
                     ...(repositoryName && {
                         'repository.name': repositoryName,
                     }),

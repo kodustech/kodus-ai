@@ -18,4 +18,8 @@ export type Repositories = {
     directories?: Array<any>;
     recentPullRequestsCount?: number;
     recentPullRequestsWindowDays?: number;
+    /** Read-only on the provider (archived, or disabled on Azure DevOps). */
+    archived?: boolean;
+    fork?: boolean;
+    mirror?: boolean;
 };

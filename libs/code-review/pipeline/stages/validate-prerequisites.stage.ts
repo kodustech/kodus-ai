@@ -60,6 +60,14 @@ import {
     USER_SERVICE_TOKEN,
 } from '@libs/identity/domain/user/contracts/user.service.contract';
 
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import {
+    IPullRequestManagerService,
+    PULL_REQUEST_MANAGER_SERVICE_TOKEN,
+} from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
 
@@ -116,6 +124,10 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         private readonly usersService: IUsersService,
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService: ILicenseService,
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
+        @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
+        private readonly pullRequestManagerService: IPullRequestManagerService,
     ) {
         super();
     }
@@ -321,6 +333,39 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                     draft.pipelineMetadata.subscriptionStatus =
                         validationResult.subscriptionStatus;
                 }
+            });
+        }
+
+        // An automatic trigger on a repository whose effective setting turns
+        // automated review off must not assign a seat: ValidateConfigStage
+        // would skip the review anyway. Explicit commands keep auto-assign.
+        if (
+            validationResult.errorType ===
+                ValidationErrorType.USER_NOT_LICENSED &&
+            !this.isCommandOrigin(context) &&
+            !(await this.isEffectiveAutomatedReviewActive(context))
+        ) {
+            this.logger.log({
+                message:
+                    'Automated review is off for this repository, skipping without license auto-assign',
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: context.repository?.id,
+                    prNumber: pullRequest?.number,
+                    userGitId,
+                    origin: context.origin,
+                },
+            });
+
+            return this.updateContext(context, (draft) => {
+                applyShowStatusFeedbackMetadata(draft);
+                draft.statusInfo = {
+                    status: AutomationStatus.SKIPPED,
+                    message: StageMessageHelper.skippedWithReason(
+                        PipelineReasons.CONFIG.DISABLED,
+                    ),
+                };
             });
         }
 
@@ -1049,6 +1094,53 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             'Please configure your API keys in [AI Providers](https://app.kodus.io/byok).\n\n' +
             '<!-- kody-codereview -->'
         );
+    }
+
+    private isCommandOrigin(context: CodeReviewPipelineContext): boolean {
+        return Boolean(context.origin?.startsWith('command'));
+    }
+
+    /**
+     * The value ValidateConfigStage will act on: global, repository and
+     * directory settings merged with the repository's kodus-config.yml, the
+     * directory picked from the PR's files. Falls back to the repository and
+     * global settings when the PR or the config cannot be read.
+     */
+    private async isEffectiveAutomatedReviewActive(
+        context: CodeReviewPipelineContext,
+    ): Promise<boolean> {
+        try {
+            const files =
+                await this.pullRequestManagerService.getChangedFilesMetadata(
+                    context.organizationAndTeamData,
+                    context.repository,
+                    context.pullRequest,
+                );
+
+            const config = await this.codeBaseConfigService.getConfig(
+                context.organizationAndTeamData,
+                context.repository,
+                files ?? [],
+            );
+
+            if (typeof config?.automatedReviewActive === 'boolean') {
+                return config.automatedReviewActive;
+            }
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve the effective automatedReviewActive, using repository and global settings',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    repositoryId: context.repository?.id,
+                    prNumber: context.pullRequest?.number,
+                },
+            });
+        }
+
+        return this.isAutomatedReviewActive(context);
     }
 
     private async isAutomatedReviewActive(

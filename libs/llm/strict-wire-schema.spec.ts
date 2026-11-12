@@ -10,6 +10,8 @@ import { decomposeOutputSchema } from '@libs/kodyRules/infrastructure/adapters/s
 import { shardViolationsWireSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
 import { REPEAT_CHECK_SCHEMA } from '@libs/code-review/infrastructure/agents/engine/repeat-check';
 import { approvalRiskOutputSchema } from '@libs/code-review/domain/approval/assess-approval-risk';
+import { prRiskOutputSchema } from '@libs/code-review/domain/risk/assess-pr-risk';
+import { policyEligibilityOutputSchema } from '@libs/code-review/domain/approval/assess-policy-eligibility';
 
 // Phase 3 consumer-migration call sites — schemas defined INLINE in the
 // consumer files (now exported so this governance suite can prove them
@@ -18,7 +20,7 @@ import { LLMDecisionExtractionSchema as llmDecisionExtractionSchemaSession } fro
 import { repeatedClusteringSchema } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
 import {
     severityAnalysisSchema,
-    validateImplementedSchema,
+    implementationCheckSchema,
 } from '@libs/code-review/infrastructure/adapters/services/llmAnalysis.service';
 import { documentationSearchExaFormatSchema } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import {
@@ -94,6 +96,8 @@ describe('zodToStrictWireSchema', () => {
     // BEFORE it 400s a BYOK-OpenAI customer's shards.
     const realSchemas: Array<[string, z.ZodType]> = [
         ['approvalRiskOutputSchema', approvalRiskOutputSchema],
+        ['prRiskOutputSchema', prRiskOutputSchema],
+        ['policyEligibilityOutputSchema', policyEligibilityOutputSchema],
         [
             'kodyRulesIDEGeneratorSchema (guidance-file extraction)',
             kodyRulesIDEGeneratorSchema,
@@ -115,7 +119,7 @@ describe('zodToStrictWireSchema', () => {
             repeatedClusteringSchema,
         ],
         ['severityAnalysisSchema (llmAnalysis)', severityAnalysisSchema],
-        ['validateImplementedSchema (llmAnalysis)', validateImplementedSchema],
+        ['implementationCheckSchema (llmAnalysis)', implementationCheckSchema],
         [
             'documentationSearchExaFormatSchema (exa formatter)',
             documentationSearchExaFormatSchema,
@@ -305,7 +309,8 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
     // covered above. Keep this in lockstep with the schema lists — the scan
     // below fails if a call site appears in a file that isn't listed here.
     const REGISTERED_CALL_SITE_FILES = new Set<string>([
-        'libs/code-review/domain/approval/assess-approval-risk.ts', // approvalRiskOutputSchema
+        'libs/code-review/domain/risk/assess-change-risk.ts', // approvalRiskOutputSchema (shared evaluator)
+        'libs/code-review/domain/approval/assess-policy-eligibility.ts', // policyEligibilityOutputSchema
         'libs/ee/kodyRules/service/kody-rule-detector-compiler.service.ts', // compilerOutputSchema
         'libs/ee/kodyRules/service/kodyRules.service.ts', // kodyRulesRecommendationSchema, kodyMemoryResolutionSchema
         'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts', // shardViolationsWireSchema
@@ -317,7 +322,7 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/code-review/infrastructure/adapters/services/commentAnalysis.service.ts', // commentCategorizerSchema, commentIrrelevanceFilterSchema, kodyRulesGenerator{,DuplicateFilter,QualityFilter}Schema
         'libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service.ts', // DocumentationPlannerSchema
         'libs/code-review/infrastructure/adapters/services/documentation-search-exa.service.ts', // documentationSearchExaFormatSchema
-        'libs/code-review/infrastructure/adapters/services/llmAnalysis.service.ts', // severityAnalysisSchema, validateImplementedSchema
+        'libs/code-review/infrastructure/adapters/services/llmAnalysis.service.ts', // severityAnalysisSchema, implementationCheckSchema
         'libs/code-review/infrastructure/adapters/services/safeguardPipeline.service.ts', // safeguardFeatureExtractionSchema, safeguardVerificationSchema, agentTurnSchema
         'libs/code-review/infrastructure/adapters/services/suggestionLLMValidator.service.ts', // validateCodeSemanticsSchema, checkSuggestionSimplicitySchema
         'libs/ee/analytics-warehouse/classification/pull-request-classifier.service.ts', // classificationBatchSchema

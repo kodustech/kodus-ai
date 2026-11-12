@@ -28,6 +28,10 @@ import type { TeamAutomationModel } from './teamAutomation.model';
     },
 )
 @Index('IDX_automation_exec_created_desc', { synchronize: false }) // Typeorm does not support DESC indexes natively, so we set synchronize to false and create it manually in migrations
+// The Reviews screen. Created in the PullRequestListIndexes migration: neither
+// a DESC key nor INCLUDE columns can be declared here.
+@Index('IDX_automation_exec_team_created_uuid', { synchronize: false }) // (team_automation_id, createdAt DESC, uuid DESC)
+@Index('IDX_automation_exec_team_pr_cover', { synchronize: false }) // (team_automation_id, repositoryId, pullRequestNumber) INCLUDE (status, uuid), PR executions only
 @Index(
     'idx_automation_exec_inprogress_lookup',
     ['teamAutomation', 'status', 'repositoryId', 'pullRequestNumber'],

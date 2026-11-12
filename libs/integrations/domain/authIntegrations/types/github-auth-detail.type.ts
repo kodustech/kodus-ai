@@ -7,4 +7,8 @@ export type GithubAuthDetail = {
     authMode?: AuthMode;
     host?: string;
     accountType?: 'organization' | 'user'; // Cache para evitar verificações repetidas
+    /** Row id of the stored credential (not secret). Set on read. */
+    authIntegrationId?: string;
+    /** Last write of the stored credential row. Set on read. */
+    authUpdatedAt?: Date | string;
 };

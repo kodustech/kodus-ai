@@ -11,8 +11,15 @@ import type { BYOKConfig, BYOKCredential } from './byok-config';
 // get-llm-config-status.use-case.spec.ts.
 describe('isByokSlotConfigured — provider-aware auth-material check', () => {
     it('most providers: configured iff an apiKey is present', () => {
-        expect(isByokSlotConfigured({ provider: BYOKProvider.OPENAI, apiKey: 'k' })).toBe(true);
-        expect(isByokSlotConfigured({ provider: BYOKProvider.OPENAI })).toBe(false);
+        expect(
+            isByokSlotConfigured({
+                provider: BYOKProvider.OPENAI,
+                apiKey: 'k',
+            }),
+        ).toBe(true);
+        expect(isByokSlotConfigured({ provider: BYOKProvider.OPENAI })).toBe(
+            false,
+        );
     });
 
     it('Amazon Bedrock: bearer token OR static IAM pair, never apiKey', () => {
@@ -46,27 +53,62 @@ describe('isByokSlotConfigured — provider-aware auth-material check', () => {
 
 describe('isV2ModelResolvable — per-model resolvability', () => {
     const cred = (over: Partial<BYOKCredential> = {}): BYOKCredential =>
-        ({ id: 'c1', provider: 'openai', apiKey: 'k', ...over }) as BYOKCredential;
+        ({
+            id: 'c1',
+            provider: 'openai',
+            apiKey: 'k',
+            ...over,
+        }) as BYOKCredential;
 
     it('managed credential → resolves iff the env-default LLM is reachable', () => {
         const managed = cred({ managed: true, apiKey: undefined });
-        expect(isV2ModelResolvable({ model: 'm', credentialId: 'c1' }, managed, true)).toBe(true);
-        expect(isV2ModelResolvable({ model: 'm', credentialId: 'c1' }, managed, false)).toBe(false);
+        expect(
+            isV2ModelResolvable(
+                { model: 'm', credentialId: 'c1' },
+                managed,
+                true,
+            ),
+        ).toBe(true);
+        expect(
+            isV2ModelResolvable(
+                { model: 'm', credentialId: 'c1' },
+                managed,
+                false,
+            ),
+        ).toBe(false);
     });
 
     it('real BYOK credential → resolves iff provider + model + usable material', () => {
-        expect(isV2ModelResolvable({ model: 'gpt-x', credentialId: 'c1' }, cred(), false)).toBe(true);
+        expect(
+            isV2ModelResolvable(
+                { model: 'gpt-x', credentialId: 'c1' },
+                cred(),
+                false,
+            ),
+        ).toBe(true);
         // no apiKey → not resolvable
         expect(
-            isV2ModelResolvable({ model: 'gpt-x', credentialId: 'c1' }, cred({ apiKey: undefined }), false),
+            isV2ModelResolvable(
+                { model: 'gpt-x', credentialId: 'c1' },
+                cred({ apiKey: undefined }),
+                false,
+            ),
         ).toBe(false);
         // no model name → not resolvable
-        expect(isV2ModelResolvable({ model: '', credentialId: 'c1' }, cred(), false)).toBe(false);
+        expect(
+            isV2ModelResolvable(
+                { model: '', credentialId: 'c1' },
+                cred(),
+                false,
+            ),
+        ).toBe(false);
     });
 
     it('missing model or credential → false', () => {
         expect(isV2ModelResolvable(null, cred(), true)).toBe(false);
-        expect(isV2ModelResolvable({ model: 'm', credentialId: 'c1' }, null, true)).toBe(false);
+        expect(
+            isV2ModelResolvable({ model: 'm', credentialId: 'c1' }, null, true),
+        ).toBe(false);
     });
 });
 
@@ -126,7 +168,12 @@ describe('isByokSlotConfigured — boundary + logic mutants', () => {
 
 describe('isV2ModelResolvable — provider/material reconstruction from settings', () => {
     const cred = (over: Partial<BYOKCredential> = {}): BYOKCredential =>
-        ({ id: 'c1', provider: 'openai', apiKey: 'k', ...over }) as BYOKCredential;
+        ({
+            id: 'c1',
+            provider: 'openai',
+            apiKey: 'k',
+            ...over,
+        }) as BYOKCredential;
 
     it('empty-string provider → not resolvable (asString guard)', () => {
         expect(
@@ -145,7 +192,11 @@ describe('isV2ModelResolvable — provider/material reconstruction from settings
             settings: { awsBearerToken: 'tok' },
         });
         expect(
-            isV2ModelResolvable({ model: 'anthropic.claude', credentialId: 'c1' }, bedrock, false),
+            isV2ModelResolvable(
+                { model: 'anthropic.claude', credentialId: 'c1' },
+                bedrock,
+                false,
+            ),
         ).toBe(true);
     });
 
@@ -156,7 +207,11 @@ describe('isV2ModelResolvable — provider/material reconstruction from settings
             settings: { awsAccessKeyId: 'a', awsSecretAccessKey: 's' },
         });
         expect(
-            isV2ModelResolvable({ model: 'm', credentialId: 'c1' }, pair, false),
+            isV2ModelResolvable(
+                { model: 'm', credentialId: 'c1' },
+                pair,
+                false,
+            ),
         ).toBe(true);
 
         const loneAccess = cred({
@@ -165,7 +220,11 @@ describe('isV2ModelResolvable — provider/material reconstruction from settings
             settings: { awsAccessKeyId: 'a' },
         });
         expect(
-            isV2ModelResolvable({ model: 'm', credentialId: 'c1' }, loneAccess, false),
+            isV2ModelResolvable(
+                { model: 'm', credentialId: 'c1' },
+                loneAccess,
+                false,
+            ),
         ).toBe(false);
     });
 
@@ -176,8 +235,20 @@ describe('isV2ModelResolvable — provider/material reconstruction from settings
             provider: '',
             apiKey: undefined,
         });
-        expect(isV2ModelResolvable({ model: '', credentialId: 'c1' }, managed, true)).toBe(true);
-        expect(isV2ModelResolvable({ model: '', credentialId: 'c1' }, managed, false)).toBe(false);
+        expect(
+            isV2ModelResolvable(
+                { model: '', credentialId: 'c1' },
+                managed,
+                true,
+            ),
+        ).toBe(true);
+        expect(
+            isV2ModelResolvable(
+                { model: '', credentialId: 'c1' },
+                managed,
+                false,
+            ),
+        ).toBe(false);
     });
 });
 
@@ -239,7 +310,9 @@ describe('describeLLMConfigStatus — effective config projection', () => {
                     settings: { baseURL: 'https://proxy.example/v1' },
                 },
             ],
-            models: [{ id: 'model-1', credentialId: 'cred-1', model: 'gpt-4o' }],
+            models: [
+                { id: 'model-1', credentialId: 'cred-1', model: 'gpt-4o' },
+            ],
             routing: { defaultModelId: 'model-1' },
         };
 
@@ -248,6 +321,7 @@ describe('describeLLMConfigStatus — effective config projection', () => {
             models: [
                 {
                     modelId: 'model-1',
+                    credentialId: 'cred-1',
                     model: 'gpt-4o',
                     providerId: 'openai',
                     baseUrl: 'https://proxy.example/v1',
@@ -268,6 +342,14 @@ describe('describeLLMConfigStatus — effective config projection', () => {
             reviewModels: {
                 balanced: { modelId: 'model-1', inherited: true },
                 heavy: { modelId: 'model-1', inherited: true },
+            },
+            reviewModelsByOverride: {
+                'model-1': { balanced: 'model-1', heavy: 'model-1' },
+            },
+            modelRouting: {
+                defaultModelId: 'model-1',
+                fallbackModelId: undefined,
+                riskAssessment: { modelId: 'model-1', inherited: true },
             },
         });
     });
@@ -290,6 +372,31 @@ describe('describeLLMConfigStatus — effective config projection', () => {
             balanced: { modelId: 'model-2', inherited: false },
             heavy: { modelId: 'model-1', inherited: true },
         });
+    });
+
+    it('projects the actual scope-pin fallback through production routing without credentials', () => {
+        const config: BYOKConfig = {
+            version: 2,
+            credentials: [
+                { id: 'key', provider: 'openai', apiKey: 'private-key' },
+            ],
+            models: [
+                { id: 'default', credentialId: 'key', model: 'gpt-4o' },
+                { id: 'balanced', credentialId: 'key', model: 'gpt-4o-mini' },
+                { id: 'missing-key', credentialId: 'deleted', model: 'gpt-4o' },
+            ],
+            routing: {
+                defaultModelId: 'default',
+                taskOverrides: { codeReview: 'balanced' },
+            },
+        };
+        const result = describeLLMConfigStatus(config);
+        expect(result.reviewModelsByOverride).toEqual({
+            'default': { balanced: 'default', heavy: 'default' },
+            'balanced': { balanced: 'balanced', heavy: 'balanced' },
+            'missing-key': { balanced: 'balanced', heavy: 'default' },
+        });
+        expect(JSON.stringify(result)).not.toContain('private-key');
     });
 
     it('no BYOK slot + env configured → source "env", env fields surfaced, models []', () => {
@@ -326,6 +433,8 @@ describe('describeLLMConfigStatus — effective config projection', () => {
         expect(unreachable.models).toEqual([
             {
                 modelId: 'mm1',
+                credentialId: 'm1',
+                managed: true,
                 model: 'gpt-4o',
                 providerId: 'openai',
                 baseUrl: undefined,
@@ -361,7 +470,11 @@ describe('describeLLMConfigStatus — effective config projection', () => {
                 { id: 'm1', credentialId: 'c1', model: 'gpt-4o' },
                 // id-less entry must be filtered out entirely
                 { id: '', credentialId: 'c1', model: 'skip-me' } as any,
-                { id: 'm2', credentialId: 'c2', model: 'claude-3-5-sonnet-20241022' },
+                {
+                    id: 'm2',
+                    credentialId: 'c2',
+                    model: 'claude-3-5-sonnet-20241022',
+                },
                 // dangling credential ref → not resolvable, no provider/caps
                 { id: 'm3', credentialId: 'missing', model: 'ghost' },
             ],
@@ -374,15 +487,20 @@ describe('describeLLMConfigStatus — effective config projection', () => {
 
         expect(models[0]).toEqual({
             modelId: 'm1',
+            credentialId: 'c1',
             model: 'gpt-4o',
             providerId: 'openai',
             baseUrl: 'https://a/v1',
             resolvable: true,
-            capabilities: { structuredOutput: 'json_schema', toolCalling: 'native' },
+            capabilities: {
+                structuredOutput: 'json_schema',
+                toolCalling: 'native',
+            },
         });
 
         expect(models[1]).toEqual({
             modelId: 'm2',
+            credentialId: 'c2',
             model: 'claude-3-5-sonnet-20241022',
             providerId: 'anthropic',
             baseUrl: undefined, // no settings.baseURL on c2
@@ -420,13 +538,19 @@ describe('describeLLMConfigStatus — effective config projection', () => {
             models: [{ id: 'm1', credentialId: 'c1', model: 'gpt-4o' }],
         };
 
-        expect(describeLLMConfigStatus(config).models[0].baseUrl).toBeUndefined();
+        expect(
+            describeLLMConfigStatus(config).models[0].baseUrl,
+        ).toBeUndefined();
     });
 });
 
 describe('isByokSlotConfigured — platform-funded (`kodus`) needs no material', () => {
     it('answers true with no apiKey (Kodus routes with its own upstream key)', () => {
-        expect(isByokSlotConfigured({ provider: BYOKProvider.KODUS })).toBe(true);
-        expect(isByokSlotConfigured({ provider: BYOKProvider.KODUS, apiKey: '' })).toBe(true);
+        expect(isByokSlotConfigured({ provider: BYOKProvider.KODUS })).toBe(
+            true,
+        );
+        expect(
+            isByokSlotConfigured({ provider: BYOKProvider.KODUS, apiKey: '' }),
+        ).toBe(true);
     });
 });

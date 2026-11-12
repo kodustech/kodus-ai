@@ -15,6 +15,8 @@ import { CODE_MANAGEMENT_API_PATHS } from "./types";
 export type WebhookCreationFailure = {
     reason: string;
     at: string;
+    /** Absent on records written before failures were classified. */
+    kind?: "permission" | "rate_limited" | "error" | "deferred";
 };
 
 export const getWebhookCreationFailures = async (

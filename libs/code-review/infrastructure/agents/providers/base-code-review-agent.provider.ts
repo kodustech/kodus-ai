@@ -29,7 +29,7 @@ import {
     listsRepoInstructions,
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
-import { resolveContextWindow } from '@libs/llm/model-context-window';
+import { resolveContextWindowWithSource } from '@libs/llm/model-context-window';
 import {
     buildPathMismatchWarning,
     buildVerifyUnavailableWarning,
@@ -347,9 +347,28 @@ export abstract class BaseCodeReviewAgentProvider {
         // and needs chunking. The measurement accounts for diff + callGraph
         // + PR context + coverage list + static overhead (system prompt +
         // tool schemas) — not just the diff.
-        const contextWindow = resolveContextWindow({
-            byokMaxInputTokens: mainModel.maxInputTokens,
-            modelName,
+        // Looked up by the bare model id: the `provider:model` label misses the
+        // mirror's exact and normalized keys.
+        const windowModelId = mainModel.modelId ?? modelName;
+        const { tokens: contextWindow, source: contextWindowSource } =
+            resolveContextWindowWithSource({
+                byokMaxInputTokens: mainModel.maxInputTokens,
+                modelName: windowModelId,
+            });
+        // The window is otherwise invisible: a model the mirror does not know
+        // gets the 128k default with no error, and the review plans against it.
+        this.agentLogger.log({
+            message: `[AGENT] ${identity.name} context window: ${contextWindow} tokens for ${modelName}`,
+            context: identity.name,
+            metadata: {
+                organizationId: input.organizationAndTeamData?.organizationId,
+                teamId: input.organizationAndTeamData?.teamId,
+                prNumber: input.prNumber,
+                modelName,
+                modelId: windowModelId,
+                contextWindowTokens: contextWindow,
+                contextWindowSource,
+            },
         });
         // Resolve adaptive-fit profile from the same context window the
         // preflight will check against. Prefer the stage-supplied profile

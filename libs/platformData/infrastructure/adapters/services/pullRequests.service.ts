@@ -1,3 +1,4 @@
+import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import {
     BulkApplyResult,
     FileBulkOp,
@@ -8,6 +9,7 @@ import { IPullRequestsService } from '@libs/platformData/domain/pullRequests/con
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 import {
     IApprovalReasonDeliveryFailure,
+    ApprovalReasonDeliveryGuard,
     ICommit,
     IFile,
     IPullRequests,
@@ -111,12 +113,14 @@ export class PullRequestsService implements IPullRequestsService {
         repositoryId: string,
         prNumber: number,
         failure: IApprovalReasonDeliveryFailure | null,
+        guard?: ApprovalReasonDeliveryGuard,
     ): Promise<boolean> {
         return this.pullRequestsRepository.setApprovalReasonDeliveryFailure(
             organizationId,
             repositoryId,
             prNumber,
             failure,
+            guard,
         );
     }
 
@@ -252,6 +256,21 @@ export class PullRequestsService implements IPullRequestsService {
             since,
             organizationId,
             repositoryIds,
+        );
+    }
+
+    findOpenPullRequestKeys(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: { unresolvedOnly?: boolean; limit: number },
+    ): Promise<{
+        keys: Array<{ number: number; repositoryId: string }>;
+        truncated: boolean;
+    }> {
+        return this.pullRequestsRepository.findOpenPullRequestKeys(
+            organizationId,
+            repositoryIds,
+            opts,
         );
     }
 
@@ -613,11 +632,13 @@ export class PullRequestsService implements IPullRequestsService {
         suggestionId: string,
         updateData: Partial<ISuggestion>,
         organizationAndTeamData: OrganizationAndTeamData,
+        options?: UpdateSuggestionOptions,
     ): Promise<PullRequestsEntity | null> {
         return this.pullRequestsRepository.updateSuggestion(
             suggestionId,
             updateData,
             organizationAndTeamData,
+            options,
         );
     }
 

@@ -1,3 +1,4 @@
+import { prRiskDescriptionKey } from '@libs/code-review/domain/risk/risk-configuration';
 import { LLM } from '@libs/llm/llm';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -22,6 +23,7 @@ const stage = new DecidePrApprovalStage(
     codeManagement as unknown as CodeManagementService,
     areaMaps as unknown as CodeAreaRiskMapService,
     conditionalApprovalAccess as any,
+    { evaluate: jest.fn() } as any,
 );
 
 const context = (
@@ -75,6 +77,56 @@ beforeEach(() => {
             deletions: 1,
         },
     ]);
+});
+
+it.each([true, false])(
+    'consumes shared risk=%s without another risk model call',
+    async (riskIdentified) => {
+        const ctx = {
+            ...context({ riskAssessmentActive: true }),
+            riskAssessment: {
+                status: 'assessed' as const,
+                riskIdentified,
+                reason: 'Shared risk explanation.',
+                snapshot: {
+                    organizationId: 'org-1',
+                    repositoryId: 'repo-1',
+                    prNumber: 42,
+                    baseSha: 'base',
+                    headSha: 'head-1',
+                    assessmentKey: 'key',
+                    descriptionKey: prRiskDescriptionKey({}),
+                },
+            },
+        };
+        const result = await stage.execute(ctx);
+        expect(result.approvalDecision.kind).toBe(
+            riskIdentified ? 'hold' : 'approve',
+        );
+        expect(LLM.run).not.toHaveBeenCalled();
+        expect(areaMaps.read).not.toHaveBeenCalled();
+    },
+);
+
+it('uses fixed approval conditions without legacy risk when the independent toggle is off', async () => {
+    const result = await stage.execute(
+        context({
+            riskAssessmentActive: false,
+            approvalRiskActive: true,
+            approvalLabels: ['ready'],
+        }),
+    );
+    expect(result.approvalDecision.kind).toBe('approve');
+    expect(LLM.run).not.toHaveBeenCalled();
+});
+
+it('blocks approval on shared assessment failure while leaving the review available', async () => {
+    const result = await stage.execute({
+        ...context({ riskAssessmentActive: true }),
+        riskAssessment: { status: 'unavailable', reason: 'Timeout.' },
+    });
+    expect(result.approvalDecision.kind).toBe('hold');
+    expect(LLM.run).not.toHaveBeenCalled();
 });
 
 it('holds a saved conditional policy when beta or paid access is unavailable', async () => {
@@ -318,6 +370,37 @@ it('holds approval when a new commit arrives during review', async () => {
     });
     const result = await stage.execute(context({ approvalLabels: ['ready'] }));
 
-    expect(result.approvalDecision?.kind).toBe('hold');
+    expect(result.approvalDecision).toEqual({
+        kind: 'hold',
+        reason: 'A newer commit arrived while Kody reviewed this one; Kody decides on the next reviewed commit.',
+    });
     expect(LLM.run).not.toHaveBeenCalled();
+});
+
+it.each([
+    [
+        'the PR cannot be read',
+        null,
+        'Kody could not read the current PR from the Git provider.',
+    ],
+    [
+        'the target branch moved',
+        { head: { sha: 'head-1' }, base: { sha: 'base-2' }, labels: ['ready'] },
+        'The target branch changed during the review, so this review cannot approve the PR.',
+    ],
+    [
+        'labels cannot be read',
+        { head: { sha: 'head-1' }, base: { sha: 'base-1' } },
+        'Kody could not read the PR labels from the Git provider.',
+    ],
+])('holds with its own reason when %s', async (_case, livePr, reason) => {
+    codeManagement.getPullRequest.mockResolvedValueOnce(livePr);
+    const ctx = context({ approvalLabels: ['ready'] });
+
+    const result = await stage.execute({
+        ...ctx,
+        pullRequest: { ...ctx.pullRequest, base: { sha: 'base-1' } },
+    });
+
+    expect(result.approvalDecision).toEqual({ kind: 'hold', reason });
 });

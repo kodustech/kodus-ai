@@ -122,14 +122,19 @@ export interface LeadTimeBreakdownRow {
 
 /** sent / implemented counters plus the derived 0..1 rate. */
 export interface ImplementationRateBreakdown {
+    /** Delivered suggestions the rate counts: those the last check could not decide are left out. */
     sent: number;
     implemented: number;
     rate: number;
+    /** Delivered suggestions the last implementation check could not decide. */
+    notMeasured?: number;
 }
 
 export interface ImplementationRateWeeklyRow
-    extends ImplementationRateBreakdown {
+    extends Omit<ImplementationRateBreakdown, 'rate'> {
     weekStart: string;
+    /** null when the check decided nothing that week. */
+    rate: number | null;
     /** keyed by lowercase severity (`critical`, `high`, `medium`, `low`). */
     bySeverity: Record<string, ImplementationRateBreakdown>;
 }
@@ -317,7 +322,8 @@ export interface SuggestionsExplorerQuery {
     implementationStatus?:
         | 'implemented'
         | 'partially_implemented'
-        | 'not_implemented';
+        | 'not_implemented'
+        | 'not_measured';
     search?: string;
     page?: number;
     pageSize?: number;
@@ -331,6 +337,8 @@ export interface SuggestionsExplorerItem {
     category: string | null;
     severity: string | null;
     implementationStatus: string | null;
+    /** The last implementation check could not decide this suggestion. */
+    notMeasured: boolean;
     summary: string | null;
     existingCode: string | null;
     improvedCode: string | null;

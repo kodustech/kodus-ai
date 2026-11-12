@@ -8,4 +8,6 @@ export interface IAuthIntegration<TIntegration = any> {
     organization?: Partial<IOrganization>;
     team?: Partial<ITeam>;
     integration?: Partial<TIntegration>;
+    /** Set by TypeORM on every write of the row (CoreModel). */
+    updatedAt?: Date;
 }

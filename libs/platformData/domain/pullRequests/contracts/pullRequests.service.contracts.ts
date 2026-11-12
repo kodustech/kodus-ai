@@ -1,3 +1,4 @@
+import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
@@ -29,6 +30,7 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         suggestionId: string,
         updateData: Partial<ISuggestion>,
         organizationAndTeamData: OrganizationAndTeamData,
+        options?: UpdateSuggestionOptions,
     ): Promise<PullRequestsEntity | null>;
 
     aggregateAndSaveDataStructure(
@@ -89,6 +91,16 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         organizationId: string,
         repositoryIds?: string[],
     ): Promise<Array<{ number: number; repositoryId: string }>>;
+    // Keys of open PRs, optionally only those with an unresolved delivered
+    // suggestion. `truncated` = more than `limit` exist; the keys are partial.
+    findOpenPullRequestKeys(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: { unresolvedOnly?: boolean; limit: number },
+    ): Promise<{
+        keys: Array<{ number: number; repositoryId: string }>;
+        truncated: boolean;
+    }>;
     findDistinctAuthorsByRepositoryIds(
         organizationId: string,
         repositoryIds: string[] | undefined,

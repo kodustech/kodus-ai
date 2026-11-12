@@ -1,0 +1,37 @@
+---
+title: "Routing"
+description: "Choose review depth and see which models apply."
+---
+
+Open **Code review → Routing** at Global, Repository or Directory scope. **General** shows the resolved modes and models so you can check them without opening Routing.
+
+## Review mode
+
+- **Balanced:** the standard review.
+- **Heavy:** a deeper review with specialist reviewers. Available on Teams and Enterprise, including trials.
+
+With risk assessment on, choose a mode for **No risk found** and **Risk found**. Under **Default review mode**, choose what to use if assessment is unavailable. Balanced is the default; a failed assessment does not automatically switch to Heavy.
+
+With risk assessment off, one mode applies to **All PRs**. There is always a default.
+
+Explicit `--heavy` and `--balanced` review commands override routing. Plan restrictions still apply. The review command does not bypass risk checks for automatic approval.
+
+## Models
+
+The top card shows the organization's default, fallback and risk-assessment model. Organization owners can follow **Edit models** to **AI providers → Routing** and change them. Model selection is explicit.
+
+Balanced and Heavy can use different organization models. A repository or directory model override applies to both review modes; it does not change the risk-assessment model. Clear the override to inherit its parent configuration.
+
+## YAML
+
+```yaml
+riskAssessmentActive: true
+reviewMode: balanced
+riskReviewRouting:
+  noRisk: balanced
+  riskFound: heavy
+```
+
+`reviewMode` is used when risk assessment is off or unavailable. Scoped routing can override one outcome while inheriting the other.
+
+The CLI keeps its separate review pipeline; this PR-risk routing applies to provider PR reviews, including custom-agent runs.

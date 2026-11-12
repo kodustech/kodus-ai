@@ -1,0 +1,50 @@
+[
+    {
+        "id": "control-rule-with-reference",
+        "checks": "Finds the one file a plain rule cites, and nothing else (control: must find)",
+        "input": {
+            "rule": "Every public endpoint must return errors in the shape defined in @file:docs/api-errors.md. Do not invent new error codes."
+        },
+        "expected": {
+            "items": [
+                "docs/api-errors.md"
+            ]
+        }
+    },
+    {
+        "id": "control-rule-without-reference",
+        "checks": "Returns an empty, reliable answer for a rule that cites no file (control: nothing to find)",
+        "input": {
+            "rule": "Functions longer than 60 lines must be split. Prefer early returns over nested conditionals."
+        },
+        "expected": {
+            "items": []
+        }
+    },
+    {
+        "id": "think-tag-rule-centred",
+        "checks": "Finds both files of a rule about reasoning tags, whose text quotes </think> throughout (#2409)",
+        "input": {
+            "rule": "Reasoning tags: a model reply may open with `<think>` and close the block with `</think>`; some replies use `<thinking>` and `</thinking>`. Every parser must treat text after the matching `</think>` as the answer, ignore a `</think>` that appears inside a code span, and never treat `</think>` inside the answer as the end of a block. The exact list of accepted closing tags (`</think>`, `</thinking>`, `</reasoning>`) is defined in @file:docs/reasoning-tags.md and the edge cases with a quoted `</think>` are in @file:libs/llm/think-tag.fixtures.json."
+        },
+        "expected": {
+            "items": [
+                "docs/reasoning-tags.md",
+                "libs/llm/think-tag.fixtures.json"
+            ]
+        }
+    },
+    {
+        "id": "think-tag-rule-mention",
+        "checks": "Finds both files of a rule that mentions </think> once, in passing (#2409)",
+        "input": {
+            "rule": "When a function strips model reasoning (`<think>…</think>` or `<thinking>…</thinking>` blocks) before parsing JSON, it must balance the closing tag against the opening one, never cut at the first `</think>`. Follow the parsing contract in @file:docs/llm-output-contract.md and the examples in @file:libs/llm/structured-output-repair.spec.ts."
+        },
+        "expected": {
+            "items": [
+                "docs/llm-output-contract.md",
+                "libs/llm/structured-output-repair.spec.ts"
+            ]
+        }
+    }
+]

@@ -7,6 +7,9 @@ jest.mock('@libs/llm/byok-to-vercel', () => ({
     getModelName: jest.fn((slot: any, override?: string) =>
         slot ? `${slot.provider}:${slot.model}` : (override ?? 'default:model'),
     ),
+    getModelId: jest.fn((slot: any, override?: string) =>
+        slot ? slot.model : (override ?? 'model'),
+    ),
 }));
 
 import { resolveReviewAgentModel } from './model-factory';
@@ -45,6 +48,7 @@ describe('resolveReviewAgentModel', () => {
         expect(resolved.byokConfig).toBeUndefined();
         expect(resolved.main.role).toBe('main');
         expect(resolved.main.modelName).toBe('default:model');
+        expect(resolved.main.modelId).toBe('model');
         expect(resolved.main.byokProvider).toBeUndefined();
         expect(resolved).not.toHaveProperty('fallback');
     });
@@ -68,6 +72,9 @@ describe('resolveReviewAgentModel', () => {
         expect(resolved.main).toEqual({
             role: 'main',
             modelName: 'open_router:moonshotai/kimi-k2',
+            // The bare id, which the context-window lookup is keyed by; the
+            // provider-prefixed label misses it.
+            modelId: 'moonshotai/kimi-k2',
             maxInputTokens: 128000,
             reasoningEffort: 'medium',
             reasoningConfigOverride: 'cfg-or',

@@ -136,9 +136,9 @@ function enclosingScopeStart(
 
 /**
  * Needs this module retrieves, narrowest first. `diff-only` needs nothing and
- * `cited-file` is already served upstream by the reference inliners, so neither
- * appears here. The order is also the budget order: the narrower, more local
- * slice is spent first.
+ * `cited-file` is already served by the shard's `<References>` block
+ * (`kody-rules-references.ts`), so neither appears here. The order is also the
+ * budget order: the narrower, more local slice is spent first.
  */
 const RETRIEVAL_ORDER: KodyRuleContextNeed[] = [
     'full-file',

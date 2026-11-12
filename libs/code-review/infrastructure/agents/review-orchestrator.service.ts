@@ -19,7 +19,8 @@ import {
     filesInAgentScope,
     ignoredFilesInAgentScope,
     scopeCallGraph,
-    selectCustomAgents,
+    customAgentCandidates,
+    customAgentRiskSkipReason,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type { CustomAgentRun } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
 import type { ResolvedKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
@@ -275,7 +276,7 @@ export class ReviewOrchestratorService {
                     },
                 });
             }
-            for (const agent of selectCustomAgents(
+            for (const agent of customAgentCandidates(
                 customAgents,
                 onlyCustomAgent,
             )) {
@@ -295,6 +296,16 @@ export class ReviewOrchestratorService {
                     droppedByVerify: 0,
                 };
                 customAgentRuns.push(run);
+                const riskSkip = customAgentRiskSkipReason(
+                    agent,
+                    agentInput.riskAssessment,
+                    onlyCustomAgent,
+                );
+                if (riskSkip) {
+                    run.status = 'risk-condition-not-met';
+                    run.reason = riskSkip;
+                    continue;
+                }
                 if (files.length === 0) {
                     run.status = 'no-matching-files';
                     this.logger.log({

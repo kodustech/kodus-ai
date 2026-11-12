@@ -48,7 +48,10 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
-import { ICommentManagerService } from '@libs/code-review/domain/contracts/CommentManagerService.contract';
+import {
+    ICommentManagerService,
+    type ApprovalReasonOptions,
+} from '@libs/code-review/domain/contracts/CommentManagerService.contract';
 import { LLMResponseProcessor } from '@libs/ai-engine/infrastructure/adapters/services/llmResponseProcessor.transform';
 import {
     MessageTemplateProcessor,
@@ -136,7 +139,80 @@ export class CommentManagerService implements ICommentManagerService {
         repository: { name: string; id: string },
         reason: string,
         kind: 'approve' | 'hold',
-        options?: { onlyIfPresent?: boolean },
+        options?: ApprovalReasonOptions,
+    ): Promise<void> {
+        const occurredAt =
+            options?.confirmedApproval?.occurredAt ?? new Date().toISOString();
+        try {
+            await this.publishApprovalReason(
+                organizationAndTeamData,
+                prNumber,
+                repository,
+                reason,
+                kind,
+                options,
+                occurredAt,
+            );
+        } catch (error) {
+            const confirmed = options?.confirmedApproval;
+            if (kind === 'approve' && confirmed?.headSha && confirmed.baseSha) {
+                try {
+                    const persisted =
+                        await this.pullRequestsService.setApprovalReasonDeliveryFailure(
+                            organizationAndTeamData.organizationId,
+                            repository.id,
+                            prNumber,
+                            {
+                                decision: 'approve',
+                                reason,
+                                occurredAt,
+                                reviewedHeadSha: confirmed.headSha,
+                                reviewedBaseSha: confirmed.baseSha,
+                            },
+                        );
+                    if (!persisted) {
+                        this.logger.warn({
+                            message:
+                                'Approval reason delivery status was not changed: PR missing or notice superseded',
+                            context: CommentManagerService.name,
+                            metadata: {
+                                organizationAndTeamData,
+                                repositoryId: repository.id,
+                                prNumber,
+                            },
+                        });
+                    }
+                } catch (persistenceError) {
+                    this.logger.warn({
+                        message:
+                            'Could not record approval reason delivery failure',
+                        context: CommentManagerService.name,
+                        error: persistenceError,
+                        metadata: {
+                            organizationAndTeamData,
+                            repositoryId: repository.id,
+                            prNumber,
+                        },
+                    });
+                    throw new AggregateError(
+                        [error, persistenceError],
+                        'Approval reason publication and delivery-state persistence failed',
+                        { cause: error },
+                    );
+                }
+            }
+            throw error;
+        }
+    }
+
+    private async publishApprovalReason(
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+        repository: { name: string; id: string },
+        reason: string,
+        kind: 'approve' | 'hold',
+        options: { onlyIfPresent?: boolean } | undefined,
+        occurredAt: string,
     ): Promise<void> {
         const request = {
             organizationAndTeamData,
@@ -205,6 +281,7 @@ export class CommentManagerService implements ICommentManagerService {
                 repository.id,
                 prNumber,
                 null,
+                { notAfter: occurredAt },
             );
         } catch (error) {
             this.logger.warn({

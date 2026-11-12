@@ -810,7 +810,12 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
 
 describe('judgeKodyRulesSharded — input edge cases', () => {
     it('runs no shard for an empty PR or an empty rule set', async () => {
-        const empty = { violations: [], shardsRun: 0, shardsErrored: 0 };
+        const empty = {
+            violations: [],
+            shardsRun: 0,
+            shardsErrored: 0,
+            referenceStats: { shards: 0, entries: 0, chars: 0, perUnitCopies: 0 },
+        };
         const noFiles = fakeJudge({});
         expect(
             await judgeKodyRulesSharded({

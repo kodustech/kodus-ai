@@ -16,7 +16,9 @@
  * mismatching value.
  *
  * Requires docker. Skips itself when the daemon is unavailable (CI
- * runners without docker, etc.).
+ * runners without docker, etc.) and under SKIP_INTEGRATION=true: the
+ * container has one fixed name and port, so runners in parallel (the mutation
+ * gate) would remove each other's database.
  */
 import { execSync } from 'child_process';
 
@@ -29,6 +31,7 @@ import { PullRequestIngestionService } from '@libs/ee/analytics-warehouse/ingest
 import { InitAnalyticsSchema2026042000000 } from '@libs/ee/analytics-warehouse/migrations/2026042000000-InitAnalyticsSchema';
 import { AddRuleIdsAndPrNumber2026060612000000 } from '@libs/ee/analytics-warehouse/migrations/2026060612000000-AddRuleIdsAndPrNumber';
 import { AddSuggestionFeedback2026060613000000 } from '@libs/ee/analytics-warehouse/migrations/2026060613000000-AddSuggestionFeedback';
+import { AddSuggestionImplementationCheckOutcome2026110700000000 } from '@libs/ee/analytics-warehouse/migrations/2026110700000000-AddSuggestionImplementationCheckOutcome';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 jest.setTimeout(240_000);
@@ -207,7 +210,9 @@ const Q = {
     endDate: '2026-06-01',
 };
 
-(dockerAvailable() ? describe : describe.skip)(
+const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
+
+(!skipIntegration && dockerAvailable() ? describe : describe.skip)(
     'review analytics — real Postgres end-to-end',
     () => {
         let ds: DataSource;
@@ -268,6 +273,9 @@ const Q = {
             await new InitAnalyticsSchema2026042000000().up(qr);
             await new AddRuleIdsAndPrNumber2026060612000000().up(qr);
             await new AddSuggestionFeedback2026060613000000().up(qr);
+            await new AddSuggestionImplementationCheckOutcome2026110700000000().up(
+                qr,
+            );
             await qr.release();
 
             // ---- ingest fixtures through the REAL ingestion services ----
@@ -346,9 +354,24 @@ const Q = {
             // week of pr-1: s1..s4 → 4 sent, 2 impl (s1 + s4 partial)
             expect(rows[1]).toMatchObject({ sent: 4, implemented: 2, rate: 0.5 });
             expect(rows[1].bySeverity).toEqual({
-                critical: { sent: 2, implemented: 1, rate: 0.5 },
-                low: { sent: 1, implemented: 0, rate: 0 },
-                medium: { sent: 1, implemented: 1, rate: 1 },
+                critical: {
+                    sent: 2,
+                    implemented: 1,
+                    notMeasured: 0,
+                    rate: 0.5,
+                },
+                low: {
+                    sent: 1,
+                    implemented: 0,
+                    notMeasured: 0,
+                    rate: 0,
+                },
+                medium: {
+                    sent: 1,
+                    implemented: 1,
+                    notMeasured: 0,
+                    rate: 1,
+                },
             });
 
             // week of pr-2: s5,s6,s13,s14,s15 → 5 sent, 1 impl (s7 excluded!)

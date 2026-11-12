@@ -17,6 +17,27 @@ import {
 import { KodyRulesModel } from '@libs/kodyRules/infrastructure/adapters/repositories/schemas/kodyRules.model';
 import { KodyRulesValidationService } from '../service/kody-rules-validation.service';
 
+/**
+ * Field-level $set (`rules.$.field`) instead of replacing the whole matched
+ * element (`rules.$`). Replacing the element means a caller that passes a
+ * Partial silently wipes every field it omitted. Per-field $set also narrows
+ * the concurrency window: two edits touching DIFFERENT fields of the same
+ * rule no longer clobber each other (only same-field edits race,
+ * last-write-wins, which is expected). Undefined fields are skipped, `null`
+ * is written. Null when nothing is left to set (Mongo rejects an empty $set).
+ */
+function ruleFieldSet(
+    updateData: Partial<IKodyRule>,
+): Record<string, unknown> | null {
+    const setFields: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(updateData)) {
+        if (value !== undefined) {
+            setFields[`rules.$.${key}`] = value;
+        }
+    }
+    return Object.keys(setFields).length > 0 ? setFields : null;
+}
+
 @Injectable()
 export class KodyRulesRepository implements IKodyRulesRepository {
     private readonly kodyRulesValidationService: KodyRulesValidationService;
@@ -309,23 +330,11 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         ruleId: string,
         updateData: Partial<IKodyRule>,
     ): Promise<KodyRulesEntity | null> {
-        // Field-level $set (`rules.$.field`) instead of replacing the whole
-        // matched element (`rules.$`). Replacing the element means a caller
-        // that passes a Partial — which the signature explicitly allows —
-        // silently wipes every field it omitted. Per-field $set also narrows
-        // the concurrency window: two edits touching DIFFERENT fields of the
-        // same rule no longer clobber each other (only same-field edits race,
-        // last-write-wins, which is expected). `uuid` is undefined-safe.
-        const setFields: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(updateData)) {
-            if (value !== undefined) {
-                setFields[`rules.$.${key}`] = value;
-            }
-        }
+        const setFields = ruleFieldSet(updateData);
 
         // Nothing concrete to set (all-undefined patch) — avoid an empty $set,
         // which Mongo rejects. Return the current doc unchanged.
-        if (Object.keys(setFields).length === 0) {
+        if (!setFields) {
             const current = await this.kodyRulesModel
                 .findOne({ '_id': uuid, 'rules.uuid': ruleId })
                 .exec();
@@ -344,6 +353,62 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         return updated
             ? mapSimpleModelToEntity(updated, KodyRulesEntity)
             : null;
+    }
+
+    /**
+     * Same field-level `$set` as `updateRule`, addressed by organization and
+     * rule id, and returning only the touched rule.
+     *
+     * Why not findByOrganizationId + updateRule: that pair loads the
+     * organization's whole document (every rule) to find one rule, then
+     * `{ new: true }` deserializes the whole document a second time. For an
+     * organization with hundreds of rules, a sync that touches each rule paid
+     * that per rule, synchronously, on the worker event loop. The
+     * `rules.uuid` index serves this filter; the `$elemMatch` projection
+     * brings back the one rule.
+     */
+    async updateRuleFieldsByOrganization(
+        organizationId: string,
+        ruleId: string,
+        updateData: Partial<IKodyRule>,
+    ): Promise<Partial<IKodyRule> | null> {
+        const setFields = ruleFieldSet(updateData);
+        const filter = { organizationId, 'rules.uuid': ruleId };
+        const projection = { rules: { $elemMatch: { uuid: ruleId } } };
+
+        // All-undefined patch: Mongo rejects an empty $set, so read instead.
+        const doc = !setFields
+            ? await this.kodyRulesModel
+                  .findOne(filter, projection)
+                  .lean()
+                  .exec()
+            : await this.kodyRulesModel
+                  .findOneAndUpdate(
+                      filter,
+                      { $set: setFields },
+                      { new: true, projection },
+                  )
+                  .lean()
+                  .exec();
+
+        const rule = (doc as { rules?: Partial<IKodyRule>[] } | null)
+            ?.rules?.[0];
+        if (!rule) {
+            return null;
+        }
+        // Same normalization the entity applies when a caller reads
+        // `entity.rules` (scope defaults to FILE).
+        return KodyRulesEntity.create({
+            organizationId,
+            rules: [rule],
+        } as IKodyRules).rules[0];
+    }
+
+    async existsForOrganization(organizationId: string): Promise<boolean> {
+        const found = await this.kodyRulesModel
+            .exists({ organizationId })
+            .exec();
+        return !!found;
     }
     //#endregion
 

@@ -5,7 +5,11 @@ import pLimit from 'p-limit';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { IPullRequestManagerService } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
+import {
+    ChangedFilesOptions,
+    ChangedFilesSource,
+    IPullRequestManagerService,
+} from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CacheService } from '@libs/core/cache/cache.service';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
@@ -67,6 +71,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         ignorePaths?: string[],
         lastCommit?: string,
         reviewedBaseBranch?: string,
+        options?: ChangedFilesOptions,
     ): Promise<FileChange[]> {
         try {
             let changedFiles: FileChange[];
@@ -78,10 +83,12 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                     pullRequest,
                     lastCommit,
                     reviewedBaseBranch,
+                    options?.onDiffSource,
                 );
             } else {
+                options?.onDiffSource?.('none');
                 // Retrieve all files changed in the pull request. Pass
-                // `headSha` so the GitHub adapter can memoize by (PR, SHA)
+                // `headSha` and `baseSha` so the adapter binds cached files to both refs
                 // — `getChangedFilesMetadata` will hit the same key in the
                 // same job, halving the GitHub fan-out.
                 changedFiles =
@@ -90,6 +97,9 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                         repository,
                         prNumber: pullRequest?.number,
                         headSha: pullRequest?.head?.sha,
+                        ...(pullRequest?.base?.sha
+                            ? { baseSha: pullRequest.base.sha }
+                            : {}),
                     });
             }
 
@@ -318,9 +328,12 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                         prNumber: pullRequest?.number,
                         // Memoization key (see GithubService.getFilesByPullRequestId).
                         // The same call lands in `getChangedFiles` earlier in
-                        // the pipeline; same (PR, SHA) → cache hit, no extra
+                        // the pipeline; same (PR, head, base) → cache hit, no extra
                         // GitHub round-trip on this second hop.
                         headSha: pullRequest?.head?.sha,
+                        ...(pullRequest?.base?.sha
+                            ? { baseSha: pullRequest.base.sha }
+                            : {}),
                     });
             }
 
@@ -351,6 +364,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         pullRequest: any,
         lastCommit: string | Commit,
         reviewedBaseBranch?: string,
+        onDiffSource?: (source: ChangedFilesSource) => void,
     ): Promise<FileChange[]> {
         const lastCommitSha =
             typeof lastCommit === 'string' ? lastCommit : lastCommit?.sha;
@@ -365,7 +379,10 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                         ? { sha: lastCommit }
                         : lastCommit,
             });
-        if (changedFiles) return changedFiles;
+        if (changedFiles) {
+            onDiffSource?.('incremental');
+            return changedFiles;
+        }
 
         // The earlier diff would be read against the new base branch, as in
         // ValidateNewCommitsStage.
@@ -394,6 +411,9 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                   repository,
                   prNumber: pullRequest?.number,
                   headSha: pullRequest?.head?.sha,
+                  ...(pullRequest?.base?.sha
+                      ? { baseSha: pullRequest.base.sha }
+                      : {}),
               })));
         // Not `[]`: that would skip the review as a PR with nothing new.
         // Readers answer an unreadable whole-PR list with `[]` too.
@@ -403,6 +423,8 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                 lastCommitSha,
             );
         }
+
+        onDiffSource?.(useInterdiff ? 'interdiff' : 'full');
 
         this.logger.warn({
             message: `Diff of PR#${pullRequest?.number} since the last review was unreadable; reviewing ${useInterdiff ? 'its changes since then' : 'the whole PR'}`,
@@ -414,6 +436,9 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                 prNumber: pullRequest?.number,
                 lastCommitSha,
                 headSha: pullRequest?.head?.sha,
+                ...(pullRequest?.base?.sha
+                    ? { baseSha: pullRequest.base.sha }
+                    : {}),
                 fallback: useInterdiff ? 'interdiff' : 'full',
                 retargeted,
                 revertedFiles: interdiff?.revertedFiles.length ?? 0,

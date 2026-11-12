@@ -1,15 +1,23 @@
 "use client";
 
-import { ComponentProps, useEffect, useMemo, useState } from "react";
+import {
+    ComponentProps,
+    useCallback,
+    useEffect,
+    useMemo,
+    useState,
+} from "react";
+import Link from "next/link";
+import { SkeletonCard } from "@components/system/page-skeletons";
 import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
-import { SkeletonCard } from "@components/system/page-skeletons";
 import { Card, CardContent, CardHeader } from "@components/ui/card";
 import { Input } from "@components/ui/input";
 import { Label } from "@components/ui/label";
 import { Switch } from "@components/ui/switch";
 import { toast } from "@components/ui/toaster/use-toast";
+import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import {
     getSpendLimitConfig,
     getSpendLimitStatus,
@@ -25,8 +33,7 @@ import {
 import { formatUsd } from "@services/usage/format";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangleIcon, ArrowUpRightIcon, WalletIcon } from "lucide-react";
-import Link from "next/link";
-import * as ToggleGroup from "@radix-ui/react-toggle-group";
+import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
 import { cn } from "src/core/utils/components";
 
 const TOKENS_PER_MILLION = 1_000_000;
@@ -151,7 +158,7 @@ export const SpendLimitSection = ({
 
     // Seed editable state from the fetched config. External-data sync, so an
     // effect is appropriate; keyed on the payload identity.
-    useEffect(() => {
+    const reset = useCallback(() => {
         if (!data) return;
         setEnabled(data.enabled);
         setMonthlyLimit(
@@ -164,15 +171,14 @@ export const SpendLimitSection = ({
             ),
         );
     }, [data]);
+    useEffect(reset, [reset]);
 
     const models = data?.models ?? [];
 
     // Month-to-date spend keyed by model — annotates the per-model breakdown.
     const spendByModel = useMemo(
         () =>
-            new Map(
-                (status?.byModel ?? []).map((s) => [s.model, s.spentUsd]),
-            ),
+            new Map((status?.byModel ?? []).map((s) => [s.model, s.spentUsd])),
         [status],
     );
 
@@ -213,6 +219,18 @@ export const SpendLimitSection = ({
             !priceMapsEqual(prices, seededPrices)
         );
     }, [data, enabled, monthlyLimit, scope, prices]);
+
+    useUnsavedChangesGuard({
+        id: `byok-budget-${teamId}`,
+        isDirty,
+        onBlock: () =>
+            toast({
+                variant: "warning",
+                title: "Unsaved budget changes",
+                description:
+                    "Save or discard your budget changes before leaving.",
+            }),
+    });
 
     const updatePrice = (model: string, field: PriceField, value: string) => {
         setPrices((prev) => ({
@@ -325,8 +343,8 @@ export const SpendLimitSection = ({
                         Get alerted as spend on your own provider keys
                         approaches a cap. Alerts only — reviews keep running.
                         Set a hard cap with your provider to actually stop
-                        spend. Models routed by Kodus are paid from your
-                        credits instead, and pause on their own at zero.
+                        spend. Models routed by Kodus are paid from your credits
+                        instead, and pause on their own at zero.
                     </p>
                 </div>
             </div>
@@ -444,7 +462,10 @@ export const SpendLimitSection = ({
                                         </ToggleGroup.Root>
                                     </div>
                                 </div>
-                                <ScopeBreakdown scope={scope} status={status ?? null} />
+                                <ScopeBreakdown
+                                    scope={scope}
+                                    status={status ?? null}
+                                />
                             </div>
                         </CardContent>
                     </Card>
@@ -485,9 +506,9 @@ export const SpendLimitSection = ({
                         </summary>
                         <div className="flex flex-col gap-2 px-4 pb-4">
                             <p className="text-text-tertiary text-xs text-pretty">
-                                Prices we found per model — used only to estimate
-                                spend. Check them against your provider and adjust
-                                if needed.
+                                Prices we found per model — used only to
+                                estimate spend. Check them against your provider
+                                and adjust if needed.
                             </p>
                             {models.map((model) => (
                                 <ModelPricingCard
@@ -518,6 +539,16 @@ export const SpendLimitSection = ({
                             Open Costs
                             <ArrowUpRightIcon size={13} />
                         </Link>
+                        {isDirty && (
+                            <Button
+                                type="button"
+                                size="md"
+                                variant="helper"
+                                disabled={isSaving}
+                                onClick={reset}>
+                                Discard changes
+                            </Button>
+                        )}
                         <Button
                             type="button"
                             size="md"

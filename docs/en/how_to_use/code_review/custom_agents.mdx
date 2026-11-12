@@ -17,6 +17,9 @@ A custom agent is a reviewer your team writes for one concern: architecture boun
 
 Agents run beside Kody's own review. Each one reports only its own focus, and its comments carry a tag with its name, so the team knows who is speaking.
 
+Under **Run when**, choose **Every matching PR** or **When risk is found**. The latter runs automatically only after a shared, confirmed risk result; disabled or unavailable assessment does not satisfy it. Agents also receive the risk result as context. An explicit `@kody -v <agent>` ignores this condition while keeping the agent's files, permissions and plan checks. An agent-only run never approves the PR.
+
+
 Available on **Teams and Enterprise** plans, and during the trial. On the Free plan no custom agent runs: not in reviews, not with `@kody -v`, not in **Try it**. Saved agents, skills and docs are kept and run again after an upgrade.
 
 <CardGroup cols={2}>

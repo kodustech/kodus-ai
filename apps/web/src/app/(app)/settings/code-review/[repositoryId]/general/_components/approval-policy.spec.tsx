@@ -1,8 +1,15 @@
 /** @jest-environment jsdom */
 import "@testing-library/jest-dom";
 
+import type { ApprovalPolicy } from "@services/approval-policies/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+    fireEvent,
+    render,
+    screen,
+    waitFor,
+    within,
+} from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
 
 import { useCodeReviewSettingsMutation } from "../../../_hooks/use-code-review-settings-mutation";
@@ -18,25 +25,38 @@ jest.mock("@services/parameters/fetch", () => ({
 }));
 jest.mock(
     "src/app/(app)/settings/_components/use-code-management-platform",
-    () => ({ useApprovalLabelsUnavailable: () => false }),
+    () => ({
+        useApprovalLabelsUnavailable: () => false,
+        useApprovalTeamsUnavailable: () => false,
+    }),
 );
 jest.mock("src/app/(app)/settings/code-review/_components/override", () => ({
     OverrideIndicatorForm: () => null,
 }));
 
+const docs: ApprovalPolicy = {
+    id: "docs",
+    name: "Docs",
+    enabled: true,
+    labels: ["ready"],
+};
 function Settings({
-    repositoryId,
+    repositoryId = "repo",
     directoryId,
+    policies = [docs],
+    disabled = false,
 }: {
-    repositoryId: string;
+    repositoryId?: string;
     directoryId?: string;
+    policies?: ApprovalPolicy[];
+    disabled?: boolean;
 }) {
     const form = useForm<any>({
+        disabled,
         defaultValues: {
             pullRequestApprovalActive: { value: false, level: "global" },
-            approvalRiskActive: { value: false, level: "global" },
-            approvalLabels: { value: [], level: "global" },
-            approvalAuthors: { value: [], level: "global" },
+            riskAssessmentActive: { value: true, level: "global" },
+            approvalPolicies: { value: policies, level: "global" },
             approvalSensitivePaths: { value: [], level: "global" },
         },
     });
@@ -57,9 +77,13 @@ function Settings({
         </FormProvider>
     );
 }
-
+const mount = (props: Parameters<typeof Settings>[0] = {}) =>
+    render(
+        <QueryClientProvider client={new QueryClient()}>
+            <Settings {...props} />
+        </QueryClientProvider>,
+    );
 beforeEach(() => save.mockReset().mockResolvedValue(true));
-
 beforeAll(() => {
     globalThis.ResizeObserver = class {
         observe() {}
@@ -72,61 +96,148 @@ it.each([
     { repositoryId: "global" },
     { repositoryId: "repo" },
     { repositoryId: "repo", directoryId: "directory" },
-])("saves risk and automatic approval together for %j", async (scope) => {
-    render(
-        <QueryClientProvider client={new QueryClient()}>
-            <Settings {...scope} />
-        </QueryClientProvider>,
-    );
-    fireEvent.click(screen.getByRole("switch", { name: "Assess PR risk" }));
-    expect(
-        screen.getByRole("switch", { name: "Automatic PR approval" }),
-    ).toBeChecked();
+])("saves named policy changes in the current scope: %j", async (scope) => {
+    mount(scope);
+    fireEvent.click(screen.getByRole("switch", { name: "Enable Docs" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0][0]).toEqual({
-        approvalRiskActive: true,
-        pullRequestApprovalActive: true,
+        approvalPolicies: [{ ...docs, enabled: false }],
     });
-});
-
-it("undoes unsaved automatic activation and respects subsequent explicit parent choices", () => {
-    render(
-        <QueryClientProvider client={new QueryClient()}>
-            <Settings repositoryId="repo" />
-        </QueryClientProvider>,
-    );
-    const risk = screen.getByRole("switch", { name: "Assess PR risk" });
-    const approval = screen.getByRole("switch", {
-        name: "Automatic PR approval",
-    });
-    fireEvent.click(risk);
-    fireEvent.click(risk);
-    expect(approval).not.toBeChecked();
-    fireEvent.click(risk);
-    fireEvent.click(approval);
-    expect(approval).not.toBeChecked();
-    expect(risk).toBeChecked();
-    fireEvent.click(approval);
-    fireEvent.click(risk);
-    expect(approval).toBeChecked();
-});
-
-it("keeps saved approval enabled when risk is subsequently switched off", async () => {
-    render(
-        <QueryClientProvider client={new QueryClient()}>
-            <Settings repositoryId="repo" />
-        </QueryClientProvider>,
-    );
-    const risk = screen.getByRole("switch", { name: "Assess PR risk" });
-    fireEvent.click(risk);
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    fireEvent.click(risk);
     expect(
         screen.getByRole("switch", { name: "Automatic PR approval" }),
-    ).toBeChecked();
+    ).not.toBeChecked();
+});
+
+it("keeps risk in its own screen and never enables automatic approval when policies change", () => {
+    mount();
+    expect(
+        screen.queryByRole("switch", { name: "Assess PR risk" }),
+    ).not.toBeInTheDocument();
+    expect(
+        screen.getByText(
+            "Policies are saved. Turn on automatic approval to use them.",
+        ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Paused")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Enable Docs" })).toBeChecked();
+    fireEvent.click(screen.getByRole("switch", { name: "Enable Docs" }));
+    expect(
+        screen.getByRole("switch", { name: "Automatic PR approval" }),
+    ).not.toBeChecked();
+    fireEvent.click(
+        screen.getByRole("switch", { name: "Automatic PR approval" }),
+    );
+    expect(
+        screen.getByRole("switch", { name: "Enable Docs" }),
+    ).not.toBeChecked();
+    expect(screen.queryByText("Paused")).not.toBeInTheDocument();
+    expect(
+        screen.getByText(/Risk found or unavailable blocks approval/),
+    ).toBeInTheDocument();
+});
+
+it("shows All clean PRs immediately when the last filter is removed, without another all-PRs control", () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("data-slot", "sheet-content");
+    fireEvent.click(
+        within(dialog).getByRole("button", {
+            name: "Remove pr labels condition",
+        }),
+    );
+    expect(within(dialog).getByText("All clean PRs")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+    expect(screen.getByText("All clean PRs")).toBeInTheDocument();
+});
+
+it("starts a new policy disabled and shows its unrestricted scope before applying", () => {
+    mount({ policies: [] });
+    fireEvent.click(screen.getByRole("button", { name: "Add policy" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Name"), {
+        target: { value: "Small changes" },
+    });
+    expect(within(dialog).getByText("All clean PRs")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+    expect(
+        screen.getByRole("switch", { name: "Enable Small changes" }),
+    ).not.toBeChecked();
+    expect(
+        screen.getByRole("switch", { name: "Automatic PR approval" }),
+    ).not.toBeChecked();
+});
+
+it("does not apply an empty or duplicate policy name", () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Add policy" }));
+    const dialog = screen.getByRole("dialog");
+    expect(
+        within(dialog).getByRole("button", { name: "Apply" }),
+    ).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText("Name"), {
+        target: { value: "docs" },
+    });
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+        "distinct policy name",
+    );
+    expect(
+        within(dialog).getByRole("button", { name: "Apply" }),
+    ).toBeDisabled();
+});
+
+it("preserves the chosen policy order when saving", async () => {
+    const second = {
+        id: "bots",
+        name: "Bots",
+        enabled: true,
+        authors: ["dependabot[bot]"],
+    };
+    mount({ policies: [docs, second] });
+    fireEvent.click(screen.getByRole("button", { name: "Move Bots up" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
-    expect(save.mock.calls[1][0]).toEqual({ approvalRiskActive: false });
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][0]).toEqual({ approvalPolicies: [second, docs] });
+});
+
+it("preserves explicit deletion instead of recreating an unrestricted policy", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Delete Docs" }));
+    expect(screen.getByText(/No policies/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][0]).toEqual({ approvalPolicies: [] });
+});
+
+it("does not allow policy mutations without settings permission", () => {
+    mount({ disabled: true });
+    expect(screen.getByRole("button", { name: "Add policy" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Enable Docs" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete Docs" })).toBeDisabled();
+});
+
+it("makes human approval file restrictions explicit and edits them without opening a dialog", async () => {
+    mount();
+    const section = screen.getByRole("region", { name: "Human approval" });
+    expect(within(section).getByText("No files selected")).toBeInTheDocument();
+    fireEvent.click(
+        within(section).getByRole("button", { name: "Edit files" }),
+    );
+    const pattern = within(section).getByRole("textbox", {
+        name: "Add or search file patterns",
+    });
+    fireEvent.change(pattern, { target: { value: "src/access/**" } });
+    fireEvent.click(within(section).getByRole("button", { name: "Add" }));
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][0]).toEqual({
+        approvalSensitivePaths: ["src/access/**"],
+    });
+    expect(
+        screen.getByRole("switch", { name: "Automatic PR approval" }),
+    ).not.toBeChecked();
 });
