@@ -161,14 +161,13 @@ export function mergeMapPlan(params: {
         if (!file || seen.has(file) || !params.existingFiles.has(file)) {
             continue;
         }
-        const classes = VULN_CLASSES.filter((c) =>
-            (item.classes ?? []).includes(c),
-        );
         // The model adds classes; it never drops what the pattern scan saw.
-        const seenByPatterns = candidateByFile.get(file)?.classes ?? [];
-        const finalClasses = VULN_CLASSES.filter(
-            (c) => classes.includes(c) || seenByPatterns.includes(c),
-        );
+        // VULN_CLASSES keeps the order.
+        const wanted = new Set<string>([
+            ...(item.classes ?? []),
+            ...(candidateByFile.get(file)?.classes ?? []),
+        ]);
+        const finalClasses = VULN_CLASSES.filter((c) => wanted.has(c));
         if (!finalClasses.length) {
             continue;
         }

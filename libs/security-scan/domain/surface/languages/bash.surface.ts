@@ -97,7 +97,9 @@ export const BASH_SURFACE: LanguageSurface = {
             'sh.tls.verification-disabled',
             'secret_identity',
             'CWE-295',
-            String.raw`\bcurl\b.*\s(?:-k|--insecure)\b|\bwget\b.*--no-check-certificate|\bhttp\.sslVerify=false|\bGIT_SSL_NO_VERIFY\b`,
+            // A flag ends at whitespace or the line's end: --insecure-skip-*
+            // and --no-check-certificate-foo are other options.
+            String.raw`\bcurl\b.*\s(?:-k|--insecure)(?:\s|$)|\bwget\b.*\s--no-check-certificate(?:\s|$)|\bhttp\.sslVerify=false|\bGIT_SSL_NO_VERIFY\b`,
         ),
         ...commonSinks('sh', { ldap: false, xpath: false, sqlById: false }),
     ],

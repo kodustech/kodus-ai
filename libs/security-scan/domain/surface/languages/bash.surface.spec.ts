@@ -172,4 +172,25 @@ describeSurfaceCases(BASH_SURFACE, 'scripts/deploy.sh', [
         match: false,
         code: 'TOKEN=$(openssl rand -hex 32)',
     },
+    {
+        role: 'sink',
+        vulnClass: 'secret_identity',
+        match: true,
+        patternId: 'sh.tls.verification-disabled',
+        code: 'curl -sS --insecure https://internal.example.com/api',
+    },
+    {
+        role: 'sink',
+        vulnClass: 'secret_identity',
+        match: true,
+        patternId: 'sh.tls.verification-disabled',
+        code: 'wget --no-check-certificate https://internal.example.com/a.tgz',
+    },
+    {
+        // Another option that only starts like --insecure.
+        role: 'sink',
+        vulnClass: 'secret_identity',
+        match: false,
+        code: 'curl --insecure-skip-tls-verify=false https://example.com',
+    },
 ]);

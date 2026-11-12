@@ -28,9 +28,6 @@ export function parseCodeowners(content: string): CodeownersRule[] {
             continue;
         }
         const [pattern, ...owners] = line.split(/\s+/);
-        if (!pattern) {
-            continue;
-        }
         rules.push({
             pattern,
             owners: owners.filter((o) => o.startsWith('@') || o.includes('@')),

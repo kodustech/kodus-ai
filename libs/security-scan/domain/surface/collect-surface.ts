@@ -402,9 +402,10 @@ export async function collectSurface(
             }
         }
     }
+    const classRank = new Map(VULN_CLASS_ORDER.map((c, i) => [c, i]));
     for (const f of Object.values(files)) {
         f.classes.sort(
-            (a, b) => VULN_CLASS_ORDER.indexOf(a) - VULN_CLASS_ORDER.indexOf(b),
+            (a, b) => (classRank.get(a) ?? 0) - (classRank.get(b) ?? 0),
         );
     }
 

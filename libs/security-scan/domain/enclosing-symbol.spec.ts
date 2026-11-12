@@ -317,3 +317,20 @@ describe('codeLines', () => {
         expect(enclosingSymbol(src, lineOf(src, 'SINK'))).toBe('handler');
     });
 });
+
+describe('codeLines: trailing comments', () => {
+    it('reads a declaration with a comment after its colon', () => {
+        const src = [
+            'class Handler:',
+            '    def handle(self):  # entry point',
+            "        data = {'q': request.args['q']}",
+            '        run(data)  # SINK }',
+            '',
+        ].join('\n');
+
+        expect(enclosingSymbol(src, lineOf(src, 'SINK'))).toBe(
+            'Handler.handle',
+        );
+        expect(codeLines(src)[3]).not.toContain('}');
+    });
+});

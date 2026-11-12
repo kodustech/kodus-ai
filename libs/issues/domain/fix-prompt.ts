@@ -22,7 +22,9 @@ export type FixPromptIssue = Pick<
     | 'contributingSuggestions'
 >;
 
-const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low'];
+const SEVERITY_RANK = new Map(
+    ['critical', 'high', 'medium', 'low'].map((s, i) => [s, i] as const),
+);
 
 /**
  * A prompt a developer pastes into their own coding agent (Claude Code,
@@ -34,8 +36,8 @@ const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low'];
 export function buildFixPrompt(issues: FixPromptIssue[]): string {
     const ordered = [...issues].sort(
         (a, b) =>
-            SEVERITY_ORDER.indexOf(String(a.severity)) -
-            SEVERITY_ORDER.indexOf(String(b.severity)),
+            (SEVERITY_RANK.get(String(a.severity)) ?? -1) -
+            (SEVERITY_RANK.get(String(b.severity)) ?? -1),
     );
     const many = ordered.length > 1;
     const anyTest = ordered.some((i) => i.evidence?.reproduction);

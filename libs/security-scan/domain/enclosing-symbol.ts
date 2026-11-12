@@ -196,9 +196,14 @@ export function codeLines(source: string): string[] {
             i += rest - 1;
             continue;
         }
-        if (ch === '#' && !line.trim() && source[i + 1] !== '[') {
-            // A line comment (Python, Ruby, shell); a C directive is no
-            // declaration either.
+        if (
+            ch === '#' &&
+            (!line.trim() || /\s$/.test(line)) &&
+            source[i + 1] !== '['
+        ) {
+            // A comment (Python, Ruby, shell), at the line's start or after
+            // code (`def handle(self):  # entry`); a C directive is no
+            // declaration either. Rust's `#[attr]` is code.
             const end = source.indexOf('\n', i);
             const rest = (end < 0 ? source.length : end) - i;
             line += ' '.repeat(rest);
@@ -282,10 +287,8 @@ export function enclosingSymbol(
     line: number,
 ): string | undefined {
     const lines = codeLines(source);
+    // codeLines returns at least one line, so this is a valid index.
     let start = Math.min(Math.max(line, 1), lines.length) - 1;
-    if (start < 0) {
-        return undefined;
-    }
     // A decorator or attribute names the declaration it sits on.
     if (DECORATOR.test(lines[start])) {
         let j = start;
@@ -340,7 +343,9 @@ export function enclosingSymbol(
         }
         const match = text.match(CLASS_PATTERN);
         if (match) {
-            return `${match[1]}.${fn}`;
+            // `ns::Class` keeps its colons; a Python `class Handler:` sheds
+            // the one that opens its body.
+            return `${match[1].replace(/:+$/, '')}.${fn}`;
         }
         // A less-indented line that is not a class closes the search: the
         // function is top level (or nested in another function).
