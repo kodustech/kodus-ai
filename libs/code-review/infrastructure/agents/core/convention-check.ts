@@ -585,6 +585,9 @@ export function makeTargetBranchGuideLister(
  * through the knowledge reader, which reads that repository at its
  * configured ref or default branch; the reviewed repository's guides keep
  * the sandbox reader, or the knowledge reader when there is no sandbox.
+ * A sandbox whose command channel cannot read the target branch (the local
+ * sandbox refuses git) falls back to the knowledge reader, which reads the
+ * same target branch the guides were loaded from.
  */
 export function guideSourcesFor(
     guideFiles: readonly string[],
@@ -610,31 +613,48 @@ export function guideSourcesFor(
               }
             : undefined;
     }
-    if (!hasOtherRepository) {
-        return targetBranchReader
-            ? {
-                  readGuide: targetBranchReader,
-                  listGuideDir: targetBranchLister,
+    if (!hasOtherRepository && !targetBranchReader) return undefined;
+    const fromKnowledge: GuideFileReader | undefined = knowledgeReader
+        ? async (file) => {
+              const read = await knowledgeReader.readFile(stripLeading(file));
+              return read.status === 'ok' ? read.content : null;
+          }
+        : undefined;
+    const listFromKnowledge: GuideDirLister | undefined = knowledgeReader
+        ? (dir) =>
+              knowledgeReader.listFiles(stripLeading(dir).replace(/\/+$/, ''))
+        : undefined;
+    // The reviewed repository's guides: the sandbox's target-branch reads,
+    // and the knowledge reader when those come back empty or fail.
+    const readLocal: GuideFileReader = async (file) => {
+        const content = targetBranchReader
+            ? await targetBranchReader(file)
+            : null;
+        if (content != null || !fromKnowledge) return content;
+        return fromKnowledge(file);
+    };
+    const listLocal: GuideDirLister | undefined =
+        targetBranchLister || listFromKnowledge
+            ? async (dir) => {
+                  if (!targetBranchLister) return listFromKnowledge!(dir);
+                  try {
+                      return await targetBranchLister(dir);
+                  } catch (error) {
+                      if (!listFromKnowledge) throw error;
+                      return listFromKnowledge(dir);
+                  }
               }
             : undefined;
+    if (!hasOtherRepository) {
+        return { readGuide: readLocal, listGuideDir: listLocal };
     }
-    const fromKnowledge: GuideFileReader = async (file) => {
-        const read = await knowledgeReader.readFile(stripLeading(file));
-        return read.status === 'ok' ? read.content : null;
-    };
     const isOther = (path: string) =>
         parseKnowledgeSourcePath(stripLeading(path)) != null;
     return {
         readGuide: (file) =>
-            isOther(file) || !targetBranchReader
-                ? fromKnowledge(file)
-                : targetBranchReader(file),
+            isOther(file) ? fromKnowledge!(file) : readLocal(file),
         listGuideDir: (dir) =>
-            isOther(dir) || !targetBranchLister
-                ? knowledgeReader.listFiles(
-                      stripLeading(dir).replace(/\/+$/, ''),
-                  )
-                : targetBranchLister(dir),
+            isOther(dir) ? listFromKnowledge!(dir) : listLocal!(dir),
     };
 }
 

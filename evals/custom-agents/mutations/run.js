@@ -52,12 +52,15 @@ const SPEC = {
         'libs/code-review/infrastructure/agents/core/incomplete-and-unverified.spec.ts',
     recovery:
         'libs/code-review/infrastructure/agents/core/finder.recovery-nulls.spec.ts',
+    localSandboxQuote:
+        'libs/code-review/infrastructure/agents/core/convention-check.local-sandbox.spec.ts',
 };
 
 // The cases whose checks a model-judged property owns, so its run pays only for them.
 const MODEL_CASES = {
     P1: 'money-float-tax,money-discount-decimal,money-cents-helpers,api-error-leak,api-error-contract',
     P2: 'money-float-tax,api-error-leak,api-only-general-bug',
+    P11: 'guide-skill-violated,guide-doc-violated-among-other-changes,guide-near-miss',
 };
 
 const MUTATIONS = [
@@ -147,6 +150,15 @@ const MUTATIONS = [
         patch: 'P10-recovery-null-required.patch',
         break: 'prose recovery requires the label key, so an answer with "label": null fails and asks the model again (#2384)',
         checks: [{ jest: [SPEC.recovery] }],
+    },
+    {
+        property: 'P11',
+        patch: 'P11-local-sandbox-guides-unread.patch',
+        break: 'the quote gate reads a guide of the reviewed repository only through the sandbox command channel, which the local sandbox refuses for git, so every finding quoting it is dropped',
+        checks: [
+            { jest: [SPEC.localSandboxQuote] },
+            { model: MODEL_CASES.P11 },
+        ],
     },
 ];
 

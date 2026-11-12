@@ -72,6 +72,8 @@ function teamConfig(c) {
     const defaults = getDefaultKodusConfigFile();
     return {
         customAgents: agentsOf(c),
+        // The skills and docs linked to its agents (P11), as the team saved them.
+        ...(c.team.knowledge && { knowledge: c.team.knowledge }),
         reviewOptions: {
             ...(defaults.reviewOptions || {}),
             bug: false,
