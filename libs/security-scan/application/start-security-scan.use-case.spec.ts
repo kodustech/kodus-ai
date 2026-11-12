@@ -29,10 +29,12 @@ function useCaseWith(last: Record<string, unknown> | null) {
         findActive: jest.fn(async () => null),
         findLatest: jest.fn(async () => last),
         create: jest.fn(async (scan: any) => ({ uuid: 'scan-2', ...scan })),
+        update: jest.fn(async () => null),
     };
+    const jobQueue = { enqueue: jest.fn() };
     const useCase = new StartSecurityScanUseCase(
         scans as any,
-        { enqueue: jest.fn() } as any,
+        jobQueue as any,
         {
             findIntegrationConfigFormatted: jest.fn(async () => [
                 { id: 'repo-1', name: 'shop', full_name: 'acme/shop' },
@@ -49,7 +51,7 @@ function useCaseWith(last: Record<string, unknown> | null) {
             repositoryId: 'repo-1',
             budget: { maxUsd: 5 },
         } as any);
-    return { scans, start };
+    return { scans, start, jobQueue };
 }
 
 describe('StartSecurityScanUseCase — running again continues', () => {
@@ -124,5 +126,18 @@ describe('StartSecurityScanUseCase — own model only', () => {
 
         await expect(start()).rejects.toThrow(SCAN_NEEDS_BYOK_MESSAGE);
         expect(scans.create).not.toHaveBeenCalled();
+    });
+});
+
+describe('StartSecurityScanUseCase — a scan that cannot be queued', () => {
+    it('fails the record, so the repository is free for the next start', async () => {
+        const { scans, start, jobQueue } = useCaseWith(null);
+        jobQueue.enqueue.mockRejectedValue(new Error('postgres down'));
+
+        await expect(start()).rejects.toThrow('postgres down');
+        expect(scans.update).toHaveBeenCalledWith(
+            'scan-2',
+            expect.objectContaining({ status: SecurityScanStatus.FAILED }),
+        );
     });
 });

@@ -56,6 +56,7 @@ import {
 import { SecurityScanEngine } from './security-scan-engine';
 import { ScanOwnerResolver } from './scan-owner-resolver';
 import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
+import { ScanFailure } from '../domain/scan-failure';
 
 const logger = createLogger('SecurityScanJobProcessor');
 
@@ -324,7 +325,12 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         commitSha,
                         owners,
                     );
-                    counts[outcome === 'still_open' ? 'stillOpen' : outcome]++;
+                    // A merged occurrence adds to an issue this scan counted.
+                    if (outcome !== 'merged') {
+                        counts[
+                            outcome === 'still_open' ? 'stillOpen' : outcome
+                        ]++;
+                    }
                 }
                 if (findings.length) {
                     // The issues list is cached per organization for 15 minutes.
@@ -574,8 +580,7 @@ function toReported(finding: ScanFinding): ScanReportedFinding {
     };
 }
 
-/** A failure whose message is written for the person who ran the scan. */
-export class ScanFailure extends Error {}
+export { ScanFailure };
 
 /**
  * What a failed scan shows. Its error is returned by the API to everyone who

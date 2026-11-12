@@ -163,17 +163,33 @@ export class StartSecurityScanUseCase {
                 throw error;
             });
 
-        await this.jobQueue.enqueue({
-            correlationId: scan.uuid,
-            workflowType: WorkflowType.SECURITY_SCAN,
-            handlerType: HandlerType.SIMPLE_FUNCTION,
-            payload: { scanId: scan.uuid, organizationAndTeamData: orgTeam },
-            organizationAndTeamData: orgTeam,
-            status: JobStatus.PENDING,
-            priority: 0,
-            retryCount: 0,
-            maxRetries: 2,
-        });
+        try {
+            await this.jobQueue.enqueue({
+                correlationId: scan.uuid,
+                workflowType: WorkflowType.SECURITY_SCAN,
+                handlerType: HandlerType.SIMPLE_FUNCTION,
+                payload: {
+                    scanId: scan.uuid,
+                    organizationAndTeamData: orgTeam,
+                },
+                organizationAndTeamData: orgTeam,
+                status: JobStatus.PENDING,
+                priority: 0,
+                retryCount: 0,
+                maxRetries: 2,
+            });
+        } catch (error) {
+            // No job will ever run it: fail the record, which frees the
+            // repository for the next start instead of holding it "running".
+            await this.scans
+                .update(scan.uuid, {
+                    status: SecurityScanStatus.FAILED,
+                    error: 'The scan could not be queued. Run it again.',
+                    finishedAt: new Date().toISOString(),
+                })
+                .catch(() => undefined);
+            throw error;
+        }
 
         return scan;
     }

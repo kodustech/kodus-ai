@@ -45,6 +45,7 @@ import {
     rankCandidates,
 } from '../domain/scan-units';
 import { admitFindingPath } from '../domain/finding-path';
+import { SCAN_MAP_FAILED_MESSAGE, ScanFailure } from '../domain/scan-failure';
 import type {
     ScanExaminedClass,
     ScanFinding,
@@ -230,6 +231,23 @@ export class SecurityScanEngine {
             params.sandbox.remoteCommands.grep as GrepFn,
             { languages },
         );
+        // Every search that ran failed: an empty map is a broken sandbox, not
+        // a clean repository, and a scan of nothing must not end "completed".
+        const searchFailures = surface.errors.filter(
+            (e) => !e.message.startsWith('truncated'),
+        );
+        if (searchFailures.length && !surface.hits.length) {
+            logger.error({
+                message: 'Security scan could not map the repository',
+                context: SecurityScanEngine.name,
+                metadata: {
+                    repositoryId: params.repositoryId,
+                    failures: searchFailures.length,
+                    languages: searchFailures.map((e) => e.language),
+                },
+            });
+            throw new ScanFailure(SCAN_MAP_FAILED_MESSAGE);
+        }
         const hitsByFile = new Map<string, SurfaceHit[]>();
         for (const hit of surface.hits) {
             const list = hitsByFile.get(hit.file);
@@ -674,16 +692,22 @@ export class SecurityScanEngine {
         }
 
         if (params.reproduce) {
+            // Past the slice's deadline a test install could outlive the
+            // sandbox: the finding ships with its attack path, no test.
+            // Checked again once its turn comes: other units' tests may have
+            // held the sandbox until past the deadline.
+            const pastDeadline = () =>
+                signal.aborted ||
+                (!!params.deadlineAt && this.now() >= params.deadlineAt);
             for (const finding of findings) {
-                // Past the slice's deadline a test install could outlive the
-                // sandbox: the finding ships with its attack path, no test.
-                if (
-                    signal.aborted ||
-                    (params.deadlineAt && this.now() >= params.deadlineAt)
-                ) {
+                if (pastDeadline()) {
                     break;
                 }
-                await oneAtATime(() => this.reproduce(params, finding));
+                await oneAtATime(async () => {
+                    if (!pastDeadline()) {
+                        await this.reproduce(params, finding);
+                    }
+                });
             }
         }
 

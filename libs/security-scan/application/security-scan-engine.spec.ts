@@ -1228,3 +1228,102 @@ describe('SecurityScanEngine: no request past the cap', () => {
         expect(result.stoppedByBudget).toBe(true);
     });
 });
+
+describe('SecurityScanEngine: failures that must not pass for a clean scan', () => {
+    it('fails the scan when every search of the repository failed', async () => {
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens(() => []),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => ({
+                ...SURFACE,
+                hits: [],
+                files: {},
+                errors: [
+                    {
+                        language: 'typescript',
+                        patternIds: ['ts.exec'],
+                        message: 'grep failed: sandbox unreachable',
+                    },
+                ],
+            })),
+        });
+
+        await expect(
+            engine.run({
+                ...baseParams(),
+                sandbox: fakeSandbox(),
+                meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            } as any),
+        ).rejects.toThrow(/could not read the repository/);
+    });
+
+    it('carries on when a search was only cut short', async () => {
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens(() => []),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => ({
+                ...SURFACE,
+                errors: [
+                    {
+                        language: 'typescript',
+                        patternIds: ['ts.exec'],
+                        message: 'truncated: kept 200 hits, dropped 5',
+                    },
+                ],
+            })),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.finished).toBe(true);
+    });
+
+    it('never starts a queued reproduction test once the slice deadline passed', async () => {
+        let now = 0;
+        const sandbox = fakeSandbox('e2b');
+        const run = sandbox.run.getMockImplementation()!;
+        // Each test run takes the sandbox for 20 minutes.
+        sandbox.run.mockImplementation(async (command: string) => {
+            if (command.includes('npx jest')) now += 20 * 60_000;
+            return run(command);
+        });
+        const exec = {
+            ...IDOR,
+            relevantFile: 'src/admin/exec.ts',
+            relevantLinesStart: 2,
+            relevantLinesEnd: 2,
+            suggestionContent:
+                'Entry: src/admin/exec.ts:1\nThe dir query parameter reaches exec.',
+        };
+        const engine = new SecurityScanEngine({
+            // Two units at once, one finding each: both queue a test before
+            // the first one has run.
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : file.endsWith('exec.ts') && cls === 'injection'
+                      ? [exec]
+                      : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+            now: () => now,
+        });
+
+        await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            deadlineAt: 10 * 60_000,
+        } as any);
+
+        const testRuns = sandbox.run.mock.calls.filter(([c]: any[]) =>
+            c.includes('npx jest'),
+        );
+        expect(testRuns).toHaveLength(1);
+    });
+});
