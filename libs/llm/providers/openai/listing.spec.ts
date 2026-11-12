@@ -98,9 +98,9 @@ describe('openAiModelListing — openai_compatible bare-array /models body', () 
     });
 
     it('skips entries without a string id', () => {
-        expect(ids([{ id: 'my-model' }, { object: 'model' }, null, 'x'])).toEqual(
-            ['my-model'],
-        );
+        expect(
+            ids([{ id: 'my-model' }, { object: 'model' }, null, 'x']),
+        ).toEqual(['my-model']);
     });
 
     it('rejects a body whose data field is not a list', () => {
