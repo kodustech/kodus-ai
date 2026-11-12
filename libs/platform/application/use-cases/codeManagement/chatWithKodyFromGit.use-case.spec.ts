@@ -235,12 +235,20 @@ describe('ChatWithKodyFromGitUseCase', () => {
         expect(
             codeManagementService.findTeamAndOrganizationIdByConfigKey,
         ).toHaveBeenCalledWith(
-            expect.objectContaining({ host: 'git.beta.example' }),
+            {
+                repository: {
+                    id: '26',
+                    name: 'beta/api',
+                    fullName: 'beta/api',
+                    owner: 'beta',
+                },
+                host: 'git.beta.example',
+            },
             PlatformType.FORGEJO,
         );
         expect(webhookContextService.getContext).toHaveBeenCalledWith(
             PlatformType.FORGEJO,
-            expect.any(String),
+            '26',
             { host: 'git.beta.example' },
         );
     });

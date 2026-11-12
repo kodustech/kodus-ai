@@ -256,8 +256,11 @@ describe('WebhookContextService', () => {
         const beta = buildConfig('org-beta', 'team-beta', 'git.beta.example');
 
         it('routes the webhook to the integration on the instance that sent it', async () => {
+            // A config with no host stored made the shared disambiguation
+            // fall back to every candidate, and the first one took it.
+            const noHost = buildConfig('org-other', 'team-other');
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
-                [alpha, beta],
+                [noHost, alpha, beta],
             );
 
             const result = await service.getContext(

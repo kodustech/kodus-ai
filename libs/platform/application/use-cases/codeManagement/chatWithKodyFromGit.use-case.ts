@@ -1722,6 +1722,20 @@ export class ChatWithKodyFromGitUseCase {
                             ?.at(0) ||
                         '',
                 };
+            case PlatformType.FORGEJO: {
+                // ForgejoService reads `owner/repo` from `name`, as the
+                // Forgejo webhook handler passes it.
+                const fullName = params.payload?.repository?.full_name ?? '';
+                return {
+                    name: fullName,
+                    id: params.payload?.repository?.id?.toString() ?? '',
+                    fullName,
+                    owner:
+                        params.payload?.repository?.owner?.login ||
+                        fullName.split('/').at(0) ||
+                        '',
+                };
+            }
             case PlatformType.AZURE_REPOS:
                 return {
                     name: params.payload?.resource?.pullRequest?.repository
