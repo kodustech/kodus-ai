@@ -257,16 +257,20 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 timeoutMs: 10_000,
             })
             .catch(() => undefined);
-        const commitSha = head?.stdout?.trim() || scan.commitSha;
+        const headSha = head?.stdout?.trim();
+        const commitSha = headSha || scan.commitSha;
         // The scan's first job: the one that sets its commit.
         const firstJob = !scan.commitSha;
         // A plan carried from an earlier scan holds for the commit it was made
         // at: past it, its done areas say nothing about this code and new
         // files are missing from it, so the repository is mapped again.
+        // Only a HEAD actually read can say the branch moved: an unread one
+        // keeps the plan.
         const stalePlan =
             firstJob &&
             !!scan.planCommitSha &&
-            commitSha !== scan.planCommitSha;
+            !!headSha &&
+            headSha !== scan.planCommitSha;
         if (stalePlan) {
             // What the plan's areas found is of that commit too: neither
             // compared against nor sighted on this one.

@@ -335,6 +335,30 @@ describe('SecurityScanJobProcessor', () => {
         });
     });
 
+    it('keeps an inherited plan, and what it reported, when HEAD cannot be read', async () => {
+        const reported = [{ vulnerabilityClass: 'authz', filePath: 'src/a.ts', fingerprint: 'fp-a' }];
+        const { processor, scans, sandbox } = setup(
+            { result: finishedResult() },
+            scanRecord({ planCommitSha: 'plan-sha', units: [{ id: 'u1' }] as any, reported: reported as any }),
+        );
+        const run = sandbox.run.getMockImplementation()!;
+        sandbox.run.mockImplementation(async (command: string) =>
+            command.includes('rev-parse HEAD') ? { stdout: '', exitCode: 128 } : run(command),
+        );
+
+        await processor.process('job-1');
+
+        const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
+        expect(engine.run.mock.calls[0][0]).toEqual(
+            expect.objectContaining({ units: [{ id: 'u1' }], reported }),
+        );
+        // The wipe a moved branch writes never happens.
+        expect(scans.update).not.toHaveBeenCalledWith(
+            'scan-1',
+            expect.objectContaining({ reported: [] }),
+        );
+    });
+
     it('keeps an inherited plan made at the commit it reads', async () => {
         const { processor } = setup(
             { result: finishedResult() },
