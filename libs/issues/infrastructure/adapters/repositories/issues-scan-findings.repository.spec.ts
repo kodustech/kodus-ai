@@ -586,7 +586,12 @@ describe('IssuesRepository.markScanFindingsSeen', () => {
         // Not found again: a resolved one stays resolved.
         expect(updateMany).toHaveBeenCalledTimes(1);
         const [filter, update] = updateMany.mock.calls[0] as unknown as [any, any];
-        expect(filter).toEqual({ ...identity, status: IssueStatus.OPEN });
+        // Sighted once per scan: one it already sighted is not counted again.
+        expect(filter).toEqual({
+            ...identity,
+            status: IssueStatus.OPEN,
+            lastSeenScanId: { $ne: 'scan-2' },
+        });
         expect(update.$set.lastSeenScanId).toBe('scan-2');
         expect(typeof update.$set.lastSeenAt).toBe('string');
     });
