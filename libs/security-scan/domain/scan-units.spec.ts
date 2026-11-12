@@ -252,6 +252,29 @@ describe('withRevisits', () => {
         expect(units[1].id).not.toBe(done.id);
     });
 
+    it('adds the class a plan carried on twice still lacks, beside its earlier revisit of the file', () => {
+        const done = unit('src/api.ts', ['injection']);
+        // The first carry-on read authz again in an area of its own.
+        const first = withRevisits(
+            [done],
+            [{ filePath: 'src/api.ts', vulnerabilityClass: 'authz' }],
+            new Set(['src/api.ts']),
+            new Set([done.id]),
+        );
+        const second = withRevisits(
+            first,
+            [
+                { filePath: 'src/api.ts', vulnerabilityClass: 'authz' },
+                { filePath: 'src/api.ts', vulnerabilityClass: 'ssrf' },
+            ],
+            new Set(['src/api.ts']),
+            new Set(first.map((u) => u.id)),
+        );
+
+        expect(second.map((u) => u.classes)).toEqual([['injection'], ['authz'], ['ssrf']]);
+        expect(new Set(second.map((u) => u.id)).size).toBe(3);
+    });
+
     it('returns a unit that already covers its open findings untouched', () => {
         const covered = unit('src/api.ts', ['authz']);
 

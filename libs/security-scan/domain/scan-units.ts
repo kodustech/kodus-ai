@@ -240,17 +240,24 @@ export function withRevisits(
             (wanted.get(file) ?? new Set()).add(vulnerabilityClass),
         );
     }
-    const lacking = (have: readonly string[], want: Set<string>) =>
-        VULN_CLASSES.filter((c) => want.has(c) && !have.includes(c));
+    const lacking = (have: ReadonlySet<string>, want: Set<string>) =>
+        VULN_CLASSES.filter((c) => want.has(c) && !have.has(c));
+    // Every class each file's units read, finished or not.
+    const coveredByFile = new Map<string, Set<string>>();
+    for (const unit of units) {
+        const covered = coveredByFile.get(unit.file) ?? new Set<string>();
+        unit.classes.forEach((c) => covered.add(c));
+        coveredByFile.set(unit.file, covered);
+    }
     const merged: ScanUnit[] = [];
     for (const unit of units) {
         const want = wanted.get(unit.file);
-        const missing = want ? lacking(unit.classes, want) : [];
+        const missing = want ? lacking(new Set(unit.classes), want) : [];
         if (!missing.length || finished.has(unit.id)) {
             merged.push(unit);
-            if (want && !missing.length) wanted.delete(unit.file);
             continue;
         }
+        // An unfinished unit takes the classes it lacks: they run with it.
         wanted.delete(unit.file);
         const all = new Set<string>([...unit.classes, ...missing]);
         merged.push({
@@ -258,19 +265,20 @@ export function withRevisits(
             classes: VULN_CLASSES.filter((c) => all.has(c)),
         });
     }
+    const ids = new Set(merged.map((u) => u.id));
     for (const [file, want] of wanted) {
-        // Classes no unfinished unit of the file covers.
-        const covered = units
-            .filter((u) => u.file === file)
-            .flatMap((u) => u.classes);
-        const classes = lacking(covered, want);
+        const covered = coveredByFile.get(file);
+        const classes = lacking(covered ?? new Set(), want);
         if (!classes.length) continue;
-        const revisitId = covered.length
-            ? unitId(`${file}#revisit`)
+        // Named by its classes: a plan carried on twice can already hold an
+        // earlier revisit of the file, for other classes.
+        const id = covered
+            ? unitId(`${file}#revisit:${classes.join(',')}`)
             : unitId(file);
-        if (merged.some((u) => u.id === revisitId)) continue;
+        if (ids.has(id)) continue;
+        ids.add(id);
         merged.push({
-            id: revisitId,
+            id,
             file,
             relatedFiles: [],
             language: languageOf(file),
