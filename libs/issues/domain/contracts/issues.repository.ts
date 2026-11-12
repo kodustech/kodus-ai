@@ -132,6 +132,19 @@ export interface IIssuesRepository {
         params: ScanRepositoryScope,
     ): Promise<OpenScanFindingArea[]>;
 
+    /**
+     * Marks the repository's open scan findings with these fingerprints as
+     * seen by this scan. A scan that carries on an earlier one's plan holds
+     * its findings without reading their areas again: they are this scan's
+     * sightings too, and not resolved as unseen.
+     */
+    markScanFindingsSeen(
+        params: ScanRepositoryScope & {
+            fingerprints: string[];
+            scanId: string;
+        },
+    ): Promise<number>;
+
     resolveUnseenScanFindings(
         params: ResolveUnseenScanFindingsParams,
     ): Promise<number>;
