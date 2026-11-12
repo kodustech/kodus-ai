@@ -121,8 +121,11 @@ function fakeSandbox(type: 'e2b' | 'local' = 'e2b') {
         },
         run: jest.fn(async (command: string) => {
             if (command.startsWith('test -e')) {
-                const taken = Object.keys(FILES).some((f) =>
-                    command.includes(`'/repo/${f}'`),
+                // The reproduction worktree holds the same tracked files.
+                const taken = Object.keys(FILES).some(
+                    (f) =>
+                        command.includes(`'/repo/${f}'`) ||
+                        command.includes(`'/repo.repro/${f}'`),
                 );
                 return { stdout: '', exitCode: taken ? 0 : 1 };
             }
@@ -204,6 +207,14 @@ function fakeLlm(plan?: any) {
         throw new Error(`unexpected ${req.runName}`);
     }) as any;
 }
+
+/** A suggestion as the dedup's trace names it. */
+const summaryOf = (x: any) => ({
+    relevantFile: x.relevantFile,
+    relevantLinesStart: x.relevantLinesStart,
+    relevantLinesEnd: x.relevantLinesEnd,
+    oneSentenceSummary: x.oneSentenceSummary,
+});
 
 const IDOR = {
     label: 'security',
@@ -591,6 +602,43 @@ describe('SecurityScanEngine', () => {
         );
     });
 
+    it('never stores twice a bug a unit stopped mid-way repeats from one folded before it', async () => {
+        let now = 0;
+        const lens = fakeLens((file, cls) =>
+            cls === 'authz' ? [IDOR] : [],
+        );
+        const runLens = jest.fn(async (input: any, secrets: any) => {
+            now += 60_000;
+            return lens(input, secrets);
+        });
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({
+                units: [
+                    { file: 'src/orders/orders.controller.ts', relatedFiles: [], classes: ['authz'], priority: 90, reason: '' },
+                    // Reports the controller's bug too, then the slice ends.
+                    { file: 'src/orders/orders.service.ts', relatedFiles: [], classes: ['authz', 'injection'], priority: 80, reason: '' },
+                ],
+            }),
+            collectSurface: jest.fn(async () => SURFACE),
+            now: () => now,
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            deadlineAt: 90_000,
+        } as any);
+
+        expect(result.progress.find((p) => p.state === 'pending')).toBeDefined();
+        expect(
+            result.findings.filter(
+                (f) => f.filePath === 'src/orders/orders.controller.ts' && f.startLine === 7,
+            ),
+        ).toHaveLength(1);
+    });
+
     it('runs the reproduction test in an isolated sandbox', async () => {
         const sandbox = fakeSandbox('e2b');
         const engine = new SecurityScanEngine({
@@ -609,9 +657,18 @@ describe('SecurityScanEngine', () => {
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
+        // Written and run in a worktree of the same commit, never in the
+        // checkout the lenses read; the worktree goes once it ran.
+        expect(sandbox.written['/repo/src/orders/idor.repro.spec.ts']).toBeUndefined();
         expect(
-            sandbox.written['/repo/src/orders/idor.repro.spec.ts'],
+            sandbox.written['/repo.repro/src/orders/idor.repro.spec.ts'],
         ).toBeDefined();
+        const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
+        expect(commands).toContain("cd '/repo.repro' && npx jest src/orders/idor.repro.spec.ts");
+        expect(
+            commands.some((c) => c.includes("worktree add --detach '/repo.repro' HEAD")),
+        ).toBe(true);
+        expect(commands).toContain("git -C '/repo' worktree remove --force '/repo.repro'");
         expect(result.findings[0].reproduction).toEqual(
             expect.objectContaining({
                 executed: true,
@@ -620,11 +677,42 @@ describe('SecurityScanEngine', () => {
                 command: 'npx jest src/orders/idor.repro.spec.ts',
             }),
         );
-        // Removed once it ran: later lenses never read it as the repository's.
-        expect(sandbox.run).toHaveBeenCalledWith(
-            "rm -f -- '/repo/src/orders/idor.repro.spec.ts'",
-            expect.anything(),
-        );
+    });
+
+    it('puts back what a reproduction command changed in the checkout', async () => {
+        const sandbox = fakeSandbox('e2b');
+        const run = sandbox.run.getMockImplementation()!;
+        let tampered = false;
+        sandbox.run.mockImplementation(async (command: string) => {
+            if (command.includes('npx jest')) {
+                // A command steered to patch the code the lenses read.
+                tampered = true;
+                return { stdout: 'PASS', exitCode: 0 };
+            }
+            if (command.includes('status --porcelain')) {
+                return { stdout: tampered ? ' M src/auth.ts' : '', exitCode: 0 };
+            }
+            if (command.includes('checkout -- .')) {
+                tampered = false;
+            }
+            return run(command);
+        });
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(sandbox.run).toHaveBeenCalledWith("git -C '/repo' checkout -- .", expect.anything());
+        expect(tampered).toBe(false);
     });
 
     it('never writes over, runs or removes a file the repository already has', async () => {
@@ -702,16 +790,20 @@ describe('SecurityScanEngine', () => {
         // The review's dedup folds what lands on the same line (deterministic
         // here; the real one asks the model).
         const sameLine = jest.fn(async (_deps: any, suggestions: any[]) => {
-            const seen = new Set<string>();
-            return {
-                suggestions: suggestions.filter((x) => {
-                    const key = `${x.relevantFile}:${x.relevantLinesStart}`;
-                    if (seen.has(key)) return false;
-                    seen.add(key);
-                    return true;
-                }),
-                trace: {} as any,
-            };
+            // As the real dedup does, each fold is a group in its trace.
+            const keepOf = new Map<string, any>();
+            const groups: any[] = [];
+            const kept = suggestions.filter((x) => {
+                const key = `${x.relevantFile}:${x.relevantLinesStart}`;
+                const keep = keepOf.get(key);
+                if (keep) {
+                    groups.push({ keep: summaryOf(keep), duplicates: [summaryOf(x)] });
+                    return false;
+                }
+                keepOf.set(key, x);
+                return true;
+            });
+            return { suggestions: kept, trace: { groups } as any };
         });
         const engine = new SecurityScanEngine({
             dedup: sameLine as any,
@@ -774,7 +866,11 @@ describe('SecurityScanEngine', () => {
         const dedup = jest.fn(async (_deps: any, suggestions: any[]) => ({
             // Keeps the first: the service finding is the controller's bug.
             suggestions: suggestions.slice(0, 1),
-            trace: {} as any,
+            trace: {
+                groups: suggestions.length > 1
+                    ? [{ keep: summaryOf(suggestions[0]), duplicates: suggestions.slice(1).map(summaryOf) }]
+                    : [],
+            } as any,
         }));
         const engine = new SecurityScanEngine({
             runLens,
@@ -1629,6 +1725,27 @@ describe('SecurityScanEngine: across slices and units', () => {
         expect(result.filesBeyondPlan).toBe(rankCandidates(SURFACE).length - 1);
     });
 
+    it('counts a candidate a planner-added file crowded out of a full plan', async () => {
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens(() => []),
+            // The planner spends the one place on a file the patterns missed.
+            llm: fakeLlm({
+                units: [{ file: 'src/admin/exec.ts', relatedFiles: [], classes: ['injection'], priority: 90, reason: '' }],
+            }),
+            collectSurface: jest.fn(async () => onlyController),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            maxUnits: 1,
+        } as any);
+
+        expect(result.units.map((u) => u.file)).toEqual(['src/admin/exec.ts']);
+        expect(result.filesBeyondPlan).toBe(1);
+    });
+
     it('never counts a file the plan would not take as left out by its limit', async () => {
         // Two candidates and a file whose only hit is an auth check.
         const surface = {
@@ -1961,6 +2078,104 @@ describe('SecurityScanEngine: across slices and units', () => {
                 .filter((f) => f.filePath.startsWith('src/orders'))
                 .map((f) => f.filePath),
         ).toEqual(['src/orders/orders.controller.ts']);
+    });
+
+    it("reads a merge the dedup's trace does not name from where the kept finding says it was", async () => {
+        const service = 'src/orders/orders.service.ts';
+        const runLens = fakeLens((file, cls) =>
+            file === service && cls === 'data_exposure'
+                ? [{ ...IDOR, relevantFile: service, relevantLinesStart: 1, relevantLinesEnd: 1 }]
+                : [],
+        );
+        // A malformed answer: the earlier report absorbed the fresh one, but
+        // no group says so; the kept one lists where the other was.
+        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => {
+            const [earlier, fresh] = suggestions;
+            return {
+                suggestions: [
+                    {
+                        ...earlier,
+                        alsoFoundIn: [`${fresh.relevantFile}:${fresh.relevantLinesStart}-${fresh.relevantLinesEnd}`],
+                    },
+                ],
+                trace: { groups: [] } as any,
+            };
+        });
+        const onUnitDone = jest.fn(async () => undefined);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({
+                units: [{ file: service, relatedFiles: [], classes: ['data_exposure'], priority: 80, reason: '' }],
+            }),
+            collectSurface: jest.fn(async () => SURFACE),
+            dedup: dedup as any,
+        });
+
+        await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            maxUnits: 1,
+            reported: [
+                {
+                    vulnerabilityClass: 'data_exposure',
+                    cwe: 'CWE-200',
+                    title: 'Orders leak to any caller',
+                    description: 'The service returns any order.',
+                    severity: 'high',
+                    filePath: service,
+                    startLine: 40,
+                    endLine: 41,
+                    fingerprint: 'fp-carried',
+                },
+            ],
+            onUnitDone,
+        } as any);
+
+        // Dropped, and the earlier finding it repeats is sighted.
+        expect(onUnitDone).toHaveBeenCalledWith(expect.anything(), [], ['fp-carried']);
+    });
+
+    it('keeps a fresh finding the dedup dropped without saying what it repeats', async () => {
+        const service = 'src/orders/orders.service.ts';
+        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => ({
+            suggestions: suggestions.slice(0, 1),
+            trace: { groups: [] } as any,
+        }));
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file === service && cls === 'data_exposure'
+                    ? [{ ...IDOR, relevantFile: service, relevantLinesStart: 1, relevantLinesEnd: 1 }]
+                    : [],
+            ),
+            llm: fakeLlm({
+                units: [{ file: service, relatedFiles: [], classes: ['data_exposure'], priority: 80, reason: '' }],
+            }),
+            collectSurface: jest.fn(async () => SURFACE),
+            dedup: dedup as any,
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            maxUnits: 1,
+            reported: [
+                {
+                    vulnerabilityClass: 'data_exposure',
+                    cwe: 'CWE-200',
+                    title: 'Orders leak to any caller',
+                    description: 'The service returns any order.',
+                    severity: 'high',
+                    filePath: service,
+                    startLine: 40,
+                    endLine: 41,
+                },
+            ],
+        } as any);
+
+        // A duplicate costs less than a miss.
+        expect(result.findings.filter((f) => f.filePath === service)).toHaveLength(1);
     });
 
     it('says which carried-on finding the dedup folded a fresh one into', async () => {

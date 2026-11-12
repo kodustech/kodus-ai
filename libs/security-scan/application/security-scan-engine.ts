@@ -11,7 +11,7 @@ import { LLM } from '@libs/llm/llm';
 import { redactSecrets } from '@libs/llm/review-error-diagnostics';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { runWithUsageMeter } from '@libs/llm/usage-meter';
-import { cweFamily } from '@libs/issues/domain/scan-fingerprint';
+import { cweFamily, cweId } from '@libs/issues/domain/scan-fingerprint';
 import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
 import type {
     AgentLoopInput,
@@ -294,12 +294,8 @@ export class SecurityScanEngine {
                 mapFailedLanguages: [
                     ...new Set(searchFailures.map((e) => e.language)),
                 ],
-                // Only files a lens would read: an auth check alone is no
-                // candidate, so its file is not one the limit left out.
-                filesBeyondPlan: Math.max(
-                    0,
-                    rankCandidates(surface).length - params.maxUnits,
-                ),
+                // Counted once the plan is made, below.
+                filesBeyondPlan: 0,
             };
             if (planGaps.mapFailedLanguages.length) {
                 logger.warn({
@@ -325,6 +321,13 @@ export class SecurityScanEngine {
                 params.revisit ?? [],
                 existingFiles,
             );
+            // Candidates the plan does not hold: past its limit, or crowded
+            // out by files the planner added. Only files a lens would read
+            // count; an auth check alone is no candidate.
+            const planned = new Set(units.map((u) => u.file));
+            planGaps.filesBeyondPlan = rankCandidates(surface).filter(
+                (c) => !planned.has(c.file),
+            ).length;
             await params.onPlanned?.(units, languages);
         }
 
@@ -392,6 +395,17 @@ export class SecurityScanEngine {
                 // only partly read, so nothing there may be resolved
                 // as gone.
                 stopped = true;
+                // Compared with what was folded before it, as a finished
+                // unit is (the model's dedup needs a request the stop may no
+                // longer allow): a bug another unit reported is sighted, not
+                // stored twice.
+                const reportedSoFar = [...(params.reported ?? []), ...findings];
+                result.sighted = [...(result.sighted ?? [])];
+                result.findings = result.findings.filter((f) => {
+                    const repeats = duplicatesOf(reportedSoFar, f);
+                    result.sighted!.push(...repeats);
+                    return !repeats.length;
+                });
                 findings.push(...result.findings);
                 if (budgetSignal.aborted || params.meter.isExhausted()) {
                     stoppedByBudget = true;
@@ -624,10 +638,12 @@ export class SecurityScanEngine {
             }
             // An earlier finding grouped with a fresh one dropped here was
             // found again.
+            const named = new Set<number>();
             for (const group of trace?.groups ?? []) {
                 const members = [group.keep, ...group.duplicates].flatMap(
                     (m) => indicesOf.get(dedupKey(m)) ?? [],
                 );
+                members.forEach((i) => named.add(i));
                 const droppedFresh = members.some(
                     (i) => i >= earlier.length && !kept.has(`scan-${i}`),
                 );
@@ -635,6 +651,37 @@ export class SecurityScanEngine {
                     for (const i of members) {
                         if (i < earlier.length) sighted.push(earlier[i]);
                     }
+                }
+            }
+            // A merge the trace does not name (a keep the model repeated
+            // across groups): the kept finding lists where the absorbed one
+            // was. Read from there; without it, a dropped fresh finding is
+            // kept, a duplicate costing less than a miss.
+            const locationOf = (i: number) => {
+                const s = asSuggestion(all[i], i);
+                return `${s.relevantFile}:${s.relevantLinesStart}-${s.relevantLinesEnd}`;
+            };
+            const holderOf = (i: number): number | undefined => {
+                const holder = suggestions.find((s: any) =>
+                    (s.alsoFoundIn ?? []).includes(locationOf(i)),
+                ) as { id?: string } | undefined;
+                const at = Number(holder?.id?.replace(/^scan-/, ''));
+                return Number.isInteger(at) ? at : undefined;
+            };
+            for (let i = 0; i < all.length; i++) {
+                if (named.has(i) || kept.has(`scan-${i}`)) continue;
+                const holder = holderOf(i);
+                if (i >= earlier.length) {
+                    if (holder === undefined) {
+                        kept.add(`scan-${i}`);
+                    } else if (holder < earlier.length) {
+                        sighted.push(earlier[holder]);
+                    }
+                } else if (holder !== undefined && holder >= earlier.length) {
+                    // An earlier finding absorbed into a fresh one: the bug
+                    // keeps the identity it has.
+                    kept.delete(`scan-${holder}`);
+                    sighted.push(earlier[i]);
                 }
             }
             return fresh.filter((_, i) =>
@@ -874,6 +921,7 @@ export class SecurityScanEngine {
                         unit,
                         vulnClass,
                         { ...suggestion, relevantFile: path.file },
+                        files,
                     );
                     const repeats = finding
                         ? duplicatesOf(earlier, finding)
@@ -1029,6 +1077,8 @@ export class SecurityScanEngine {
             suggestionContent?: string;
             language?: string;
         },
+        /** The tracked files, to spell the attack path's steps as they are. */
+        files: ReadonlySet<string> = new Set(),
     ): Promise<ScanFinding | null> {
         const filePath = (suggestion.relevantFile ?? '').replace(/^\.?\//, '');
         if (!filePath || !suggestion.suggestionContent) {
@@ -1092,9 +1142,24 @@ export class SecurityScanEngine {
             endLine,
             language: unit.language,
             symbol: whole ? enclosingSymbol(whole, startLine) : undefined,
+            // Spelled as the listing spells them: the dedup matches a finding
+            // against another's steps by file.
             attackPath: (structured?.attackPath ?? [])
                 .filter((s) => s?.file && Number.isFinite(s.line))
-                .slice(0, 12),
+                .slice(0, 12)
+                .map((step) => {
+                    const admitted = admitFindingPath(step.file, files);
+                    return {
+                        ...step,
+                        file:
+                            'file' in admitted
+                                ? admitted.file
+                                : step.file
+                                      .trim()
+                                      .replace(/\\/g, '/')
+                                      .replace(/^(?:\.\/)+/, ''),
+                    };
+                }),
             suggestedFix: structured?.fix,
             appWide: structured?.appWide === true,
         };
@@ -1142,11 +1207,66 @@ export class SecurityScanEngine {
             if (sandbox.type !== 'e2b') {
                 return;
             }
-            const target = `${sandbox.repoDir}/${path}`;
-            const quoted = `'${target.replace(/'/g, `'\\''`)}'`;
+            await this.runReproduction(sandbox, finding.language, record);
+        } catch (error) {
+            logger.warn({
+                message: 'Reproduction test could not be produced',
+                context: SecurityScanEngine.name,
+                error,
+                metadata: {
+                    repositoryId: params.repositoryId,
+                    filePath: finding.filePath,
+                },
+            });
+        }
+    }
+
+    /**
+     * Runs a reproduction test where it cannot touch what the lenses read.
+     * The test and its command are model output written while reading the
+     * repository: they run in a separate worktree of the same commit, with
+     * the installed dependencies linked in, never in the checkout. Anything
+     * the command changes in the checkout anyway is put back.
+     */
+    private async runReproduction(
+        sandbox: SandboxInstance,
+        language: string,
+        record: NonNullable<ScanFinding['reproduction']>,
+    ): Promise<void> {
+        const repo = shellQuote(sandbox.repoDir);
+        const workdir = `${sandbox.repoDir}.repro`;
+        const work = shellQuote(workdir);
+        const target = `${workdir}/${record.path}`;
+        const quoted = shellQuote(target);
+
+        await this.ensureDependencies(sandbox, language);
+        // Reproductions run one at a time, so one worktree serves them all.
+        const added = await sandbox
+            .run(
+                `git -C ${repo} worktree remove --force ${work} >/dev/null 2>&1; git -C ${repo} worktree add --detach ${work} HEAD`,
+                { timeoutMs: 60_000 },
+            )
+            .catch(() => ({ exitCode: 1 }));
+        if (added.exitCode !== 0) {
+            return;
+        }
+        const tracked = () =>
+            sandbox
+                .run(`git -C ${repo} status --porcelain --untracked-files=no`, {
+                    timeoutMs: 30_000,
+                })
+                .then((r) => r.stdout ?? '')
+                .catch(() => '');
+        const before = await tracked();
+        try {
+            await sandbox
+                .run(
+                    `for d in node_modules .venv vendor/bundle; do [ -e ${repo}/$d ] && [ ! -e ${work}/$d ] && ln -s ${repo}/$d ${work}/$d; done; true`,
+                    { timeoutMs: 10_000 },
+                )
+                .catch(() => undefined);
             // A file (or link) already there is the repository's own: never
-            // written over, nor removed after. The test stays on the issue,
-            // not run.
+            // written over. The test stays on the issue, not run.
             const taken = await sandbox
                 .run(`test -e ${quoted} || test -L ${quoted}`, {
                     timeoutMs: 10_000,
@@ -1156,10 +1276,9 @@ export class SecurityScanEngine {
             if (taken) {
                 return;
             }
-            await sandbox.writeFile(target, repro.content);
-            await this.ensureDependencies(sandbox, finding.language);
+            await sandbox.writeFile(target, record.content);
             const result = await sandbox
-                .run(`cd ${sandbox.repoDir} && ${record.command}`, {
+                .run(`cd ${work} && ${record.command}`, {
                     timeoutMs: 180_000,
                 })
                 .catch((error) => ({
@@ -1179,21 +1298,23 @@ export class SecurityScanEngine {
                     `${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim(),
                 ).slice(-4000),
             });
-            // The test lives on the issue; left in the checkout, the next
-            // units' lenses would read it as the repository's own code.
+        } finally {
             await sandbox
-                .run(`rm -f -- ${quoted}`, { timeoutMs: 10_000 })
+                .run(`git -C ${repo} worktree remove --force ${work}`, {
+                    timeoutMs: 30_000,
+                })
                 .catch(() => undefined);
-        } catch (error) {
-            logger.warn({
-                message: 'Reproduction test could not be produced',
-                context: SecurityScanEngine.name,
-                error,
-                metadata: {
-                    repositoryId: params.repositoryId,
-                    filePath: finding.filePath,
-                },
-            });
+            if ((await tracked()) !== before) {
+                logger.warn({
+                    message:
+                        'A reproduction command changed the checkout; putting it back',
+                    context: SecurityScanEngine.name,
+                    metadata: { command: record.command.slice(0, 200) },
+                });
+                await sandbox
+                    .run(`git -C ${repo} checkout -- .`, { timeoutMs: 30_000 })
+                    .catch(() => undefined);
+            }
         }
     }
 
@@ -1264,9 +1385,14 @@ const INSTALL_COMMANDS: Record<string, string> = {
     php: 'composer install --no-interaction --quiet',
 };
 
+/** "OWASP A03:2021 / CWE-89" is CWE-89: the number after "CWE", not the first. */
 function normalizeCwe(value?: string): string | undefined {
-    const match = value?.match(/(\d{1,5})/);
-    return match ? `CWE-${match[1]}` : undefined;
+    const id = cweId(value);
+    return id ? `CWE-${id}` : undefined;
+}
+
+function shellQuote(value: string): string {
+    return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 /**

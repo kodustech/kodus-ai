@@ -20,7 +20,7 @@ export const formatTokenCount = (value: number) =>
         maximumFractionDigits: 1,
     }).format(value);
 
-/** "$3.12 of $20" or "1.2M of 2M tokens". */
+/** "$3.12 of $20", "1.2M of 2M tokens", or "1.2M tokens" for an unpriced model. */
 export const formatScanSpend = ({
     budget,
     spend,
@@ -29,9 +29,15 @@ export const formatScanSpend = ({
         return `${usd(spend.usd)} of ${usd(budget.maxUsd)}`;
     }
 
+    const tokens = spend.inputTokens + spend.outputTokens;
     if (budget.maxTokens !== undefined) {
-        const tokens = spend.inputTokens + spend.outputTokens;
         return `${formatTokenCount(tokens)} of ${formatTokenCount(budget.maxTokens)} tokens`;
+    }
+
+    // A model with no known price costs $0 here however much it used: its
+    // tokens are what was spent.
+    if (spend.usd === 0 && tokens > 0) {
+        return `${formatTokenCount(tokens)} tokens`;
     }
 
     return usd(spend.usd);

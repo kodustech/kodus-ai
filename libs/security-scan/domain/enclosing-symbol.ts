@@ -87,8 +87,15 @@ function indentOf(line: string): number {
     return match ? match[0].replace(/\t/g, '    ').length : 0;
 }
 
+/** A statement that returns or yields a value: never a declaration. */
+const EXPRESSION_START = /^\s*(?:return|await|yield|throw)\b/;
+
 function matchFunction(line: string): string | undefined {
-    if (line.length > MAX_DECLARATION_CHARS || ANONYMOUS_CLASS.test(line)) {
+    if (
+        line.length > MAX_DECLARATION_CHARS ||
+        ANONYMOUS_CLASS.test(line) ||
+        EXPRESSION_START.test(line)
+    ) {
         return undefined;
     }
     for (const pattern of FUNCTION_PATTERNS) {
@@ -132,6 +139,34 @@ function allmanDeclaration(code: string[], i: number): string | undefined {
 
 function declarationAt(code: string[], i: number): string | undefined {
     return matchFunction(code[i]) ?? allmanDeclaration(code, i);
+}
+
+/**
+ * A name first on its line, with no modifier, type or keyword before it
+ * (`find(id) {`): a method of a class or object, or a call taking a block
+ * (Kotlin's `withContext(io) {`, a Ktor `get("/x") {`). Only the first sits
+ * directly in a class or object, never inside a function's body.
+ */
+const BARE_SIGNATURE = /^\s*[A-Za-z_$][\w$]*\s*(?:<[^>]*>)?\s*\(/;
+
+function isBlockCall(code: string[], i: number): boolean {
+    if (!BARE_SIGNATURE.test(code[i])) {
+        return false;
+    }
+    const indent = indentOf(code[i]);
+    for (let j = i - 1; j >= 0; j--) {
+        const text = code[j];
+        if (!text.trim() || indentOf(text) >= indent) {
+            continue;
+        }
+        if (text.length <= MAX_DECLARATION_CHARS && CLASS_PATTERN.test(text)) {
+            return false;
+        }
+        if (declarationAt(code, j) && encloses(code, j, i)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -319,7 +354,7 @@ export function enclosingSymbol(
             continue;
         }
         const name = declarationAt(lines, i);
-        if (name && encloses(lines, i, start)) {
+        if (name && encloses(lines, i, start) && !isBlockCall(lines, i)) {
             fn = name;
             fnIndent = indentOf(text);
             break;

@@ -95,7 +95,7 @@ describe('buildFixPrompt', () => {
         expect(prompt).toContain(`${fence}\n${hostile}\n${fence}`);
     });
 
-    it('says so when the reproduction test never reproduced', () => {
+    it('never hands over a test that did not reproduce as one to run', () => {
         const prompt = buildFixPrompt([
             {
                 ...scanFinding,
@@ -109,7 +109,28 @@ describe('buildFixPrompt', () => {
             },
         ]);
 
-        expect(prompt).toContain('has not reproduced the issue yet');
+        expect(prompt).toContain('has not reproduced the issue');
+        expect(prompt).toContain('review it, and the command it was written for, before running anything');
+        expect(prompt).not.toContain('Run it with');
+    });
+
+    it('never hands over a test written where nothing ran as one to run', () => {
+        const prompt = buildFixPrompt([
+            {
+                ...scanFinding,
+                evidence: {
+                    ...scanFinding.evidence,
+                    // A sandbox that cannot execute: the model's own claim only.
+                    reproduction: {
+                        ...scanFinding.evidence.reproduction,
+                        executed: false,
+                        reproduced: true,
+                    },
+                },
+            },
+        ]);
+
+        expect(prompt).not.toContain('Run it with');
     });
 
     it('numbers several issues, most severe first, and keeps a review suggestion', () => {

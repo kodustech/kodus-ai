@@ -26,6 +26,13 @@ describe('admitFindingPath', () => {
         });
     });
 
+    it('never matches a relative path to another file by its tail', () => {
+        // The model wrote api/ for app/: not the root views.py.
+        expect(admitFindingPath('api/views.py', new Set(['app/views.py', 'views.py']))).toEqual({
+            rejected: 'missing',
+        });
+    });
+
     it('drops a path no tracked file matches', () => {
         expect(admitFindingPath('app/controllers.py', FILES)).toEqual({
             rejected: 'missing',

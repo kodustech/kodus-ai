@@ -49,7 +49,7 @@ export function buildFixPrompt(issues: FixPromptIssue[]): string {
         'For each one: read the code at the location given and confirm the problem is there before changing anything. If it is not, say so and move on.',
         'Fix the cause, not the symptom: change the code the issue points at, keep the change as small as the fix needs, and do not refactor around it.',
         anyTest
-            ? 'Where an issue comes with a reproduction test, add it to the repository, run it to see it pass on the current code (it proves the problem), apply the fix, and run it again: it must now fail, which proves the fix. Then turn it into a regression test that passes on the fixed code and keep it.'
+            ? 'Where an issue comes with a reproduction test that reproduced it, add it to the repository, run it to see it pass on the current code (it proves the problem), apply the fix, and run it again: it must now fail, which proves the fix. Then turn it into a regression test that passes on the fixed code and keep it. A test marked as not reproduced is to be reviewed before running anything from it.'
             : 'Add or update a test that would have caught the problem, and run it.',
         'When you finish, list each issue with what you changed, or why you left it.',
     ].join('\n');
@@ -100,11 +100,15 @@ function section(issue: FixPromptIssue, n: number): string {
 
     const test = issue.evidence?.reproduction;
     if (test?.content) {
-        const status = test.reproduced
-            ? 'It ran in an isolated sandbox and reproduced the issue.'
-            : 'It was written but has not reproduced the issue yet; check it before relying on it.';
+        // The test and its command are model output written while reading
+        // the repository. Only one that ran in the scan's sandbox and
+        // reproduced the issue is handed over to run; any other is to be
+        // read first, never run as given on the developer's machine.
+        const proven = !!test.executed && !!test.reproduced;
         out.push(
-            `Reproduction test (${test.path}). ${status} Run it with:\n${fenced(test.command)}\n\n${fenced(test.content.trim())}`,
+            proven
+                ? `Reproduction test (${test.path}). It ran in an isolated sandbox and reproduced the issue. Run it with:\n${fenced(test.command)}\n\n${fenced(test.content.trim())}`
+                : `Reproduction test (${test.path}). It has not reproduced the issue: review it, and the command it was written for, before running anything.\n${fenced(test.command)}\n\n${fenced(test.content.trim())}`,
         );
     }
 

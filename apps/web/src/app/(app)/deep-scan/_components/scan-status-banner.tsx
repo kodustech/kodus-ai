@@ -79,10 +79,14 @@ export const ScanStatusBanner = ({ scans }: { scans: SecurityScan[] }) => {
         );
     }
 
+    // Completed, but areas failed (a provider refused a lens): not a clean
+    // pass, and running it again retries them.
+    const failedAreas =
+        last.status === "completed" ? (last.coverage?.unitsFailed ?? 0) : 0;
     const tone =
         last.status === "failed"
             ? "danger"
-            : last.status === "stopped_by_budget"
+            : last.status === "stopped_by_budget" || failedAreas > 0
               ? "warning"
               : "success";
     const icon =
@@ -108,6 +112,9 @@ export const ScanStatusBanner = ({ scans }: { scans: SecurityScan[] }) => {
                   last.status === "stopped_by_budget" &&
                   last.coverage?.unitsSkippedByBudget
                       ? `${last.coverage.unitsSkippedByBudget} areas not reached; run it again to continue`
+                      : "",
+                  failedAreas > 0
+                      ? `${failedAreas} ${failedAreas === 1 ? "area" : "areas"} failed; run it again to retry`
                       : "",
               ]
                   .filter(Boolean)

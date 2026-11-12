@@ -351,5 +351,39 @@ describe('codeLines: trailing comments', () => {
 
         expect(enclosingSymbol(source, 2)).toBe('run');
     });
+
+    it('names the method, not a call that takes a block inside it', () => {
+        const source = [
+            'class OrdersRepo {',
+            '    suspend fun find(id: String): Order {',
+            '        return withContext(Dispatchers.IO) {',
+            '            db.query("SELECT * FROM o WHERE id = $id")',
+            '        }',
+            '    }',
+            '    suspend fun remove(id: String) {',
+            '        withContext(Dispatchers.IO) {',
+            '            db.exec("DELETE FROM o WHERE id = $id")',
+            '        }',
+            '    }',
+            '}',
+        ].join('\n');
+
+        expect(enclosingSymbol(source, 4)).toBe('OrdersRepo.find');
+        expect(enclosingSymbol(source, 9)).toBe('OrdersRepo.remove');
+    });
+
+    it('names the function around Ktor route blocks', () => {
+        const source = [
+            'fun Application.routes() {',
+            '    routing {',
+            '        get("/users/{id}") {',
+            '            call.respond(db.user(call.parameters["id"]))',
+            '        }',
+            '    }',
+            '}',
+        ].join('\n');
+
+        expect(enclosingSymbol(source, 4)).toBe('routes');
+    });
 });
 

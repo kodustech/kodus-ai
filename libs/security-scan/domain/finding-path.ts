@@ -12,13 +12,14 @@ export function admitFindingPath(
     path: string | undefined,
     files: ReadonlySet<string>,
 ): { file: string } | { rejected: 'missing' | 'not_app_code' } {
-    const p = (path ?? '')
-        .trim()
-        .replace(/\\/g, '/')
-        .replace(/^(?:\.\/)+/, '')
-        .replace(/^\/+/, '');
+    const spelled = (path ?? '').trim().replace(/\\/g, '/');
+    // Only an absolute path can carry the checkout's prefix; a relative one
+    // the listing does not hold is wrong, not prefixed (`api/views.py` is
+    // not the root `views.py`).
+    const absolute = spelled.startsWith('/');
+    const p = spelled.replace(/^(?:\.\/)+/, '').replace(/^\/+/, '');
     let file = files.has(p) ? p : null;
-    if (!file && p) {
+    if (!file && p && absolute) {
         for (const f of files) {
             if (p.endsWith(`/${f}`) && (!file || f.length > file.length)) {
                 file = f;
