@@ -1,5 +1,8 @@
 import { createLogger } from '@libs/core/log/logger';
-import { getMappedPlatform } from '@libs/common/utils/webhooks';
+import {
+    forgejoConfigsOnHost,
+    getMappedPlatform,
+} from '@libs/common/utils/webhooks';
 import { IntegrationConfigKey, PlatformType } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { with429Retry } from '@libs/core/infrastructure/http/rate-limit-retry';
@@ -77,12 +80,18 @@ export class SavePullRequestUseCase {
             let organizationAndTeamData: OrganizationAndTeamData | null = null;
 
             try {
-                const configs =
+                const foundConfigs =
                     await this.integrationConfigService.findIntegrationConfigWithTeams(
                         IntegrationConfigKey.REPOSITORIES,
                         repository.id,
                         platformType,
                     );
+                // Forgejo repository ids are per instance: keep the
+                // integrations of the instance that sent the webhook.
+                const configs =
+                    platformType === PlatformType.FORGEJO
+                        ? forgejoConfigsOnHost(foundConfigs, repository.url)
+                        : foundConfigs;
 
                 if (!configs || !configs.length) {
                     this.logger.warn({
@@ -180,7 +189,9 @@ export class SavePullRequestUseCase {
                                 },
                                 platformType,
                             ),
-                        { label: `saveSync:getFiles PR#${pullRequest?.number}` },
+                        {
+                            label: `saveSync:getFiles PR#${pullRequest?.number}`,
+                        },
                     );
                     pullRequestCommits = await with429Retry(
                         () =>

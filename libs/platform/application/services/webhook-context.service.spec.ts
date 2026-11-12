@@ -244,6 +244,64 @@ describe('WebhookContextService', () => {
         });
     });
 
+    describe('Forgejo', () => {
+        // Forgejo numbers repositories per instance: repository 26 is
+        // alpha/app on git.alpha.example and beta/api on
+        // git.beta.example.
+        const alpha = buildConfig(
+            'org-alpha',
+            'team-alpha',
+            'https://git.alpha.example',
+        );
+        const beta = buildConfig('org-beta', 'team-beta', 'git.beta.example');
+
+        it('routes the webhook to the integration on the instance that sent it', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [alpha, beta],
+            );
+
+            const result = await service.getContext(
+                PlatformType.FORGEJO,
+                '26',
+                {
+                    host: 'git.beta.example',
+                },
+            );
+
+            expect(result?.organizationAndTeamData).toEqual({
+                organizationId: 'org-beta',
+                teamId: 'team-beta',
+            });
+        });
+
+        it('ignores the webhook when only another instance has the repository id', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [alpha],
+            );
+
+            const result = await service.getContext(
+                PlatformType.FORGEJO,
+                '26',
+                {
+                    host: 'git.beta.example',
+                },
+            );
+
+            expect(result).toBeNull();
+            expect(teamAutomationServiceMock.find).not.toHaveBeenCalled();
+        });
+
+        it('ignores the webhook when the sending host is unknown', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [alpha],
+            );
+
+            const result = await service.getContext(PlatformType.FORGEJO, '26');
+
+            expect(result).toBeNull();
+        });
+    });
+
     describe('observability', () => {
         it('logs a warning when a connected repository has no active code review automation', async () => {
             const config = buildConfig('org-uuid', 'team-uuid');

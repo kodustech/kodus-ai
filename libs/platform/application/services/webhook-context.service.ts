@@ -16,6 +16,10 @@ import {
     IAutomationService,
 } from '@libs/automation/domain/automation/contracts/automation.service';
 import { AutomationType } from '@libs/automation/domain/automation/enum/automation-type';
+import {
+    forgejoConfigsOnHost,
+    normalizeHost,
+} from '@libs/common/utils/webhooks/webhook-source-host';
 
 export type WebhookDisambiguator = {
     /**
@@ -63,7 +67,26 @@ export class WebhookContextService {
             return null;
         }
 
-        const candidates = this.disambiguateConfigs(configs, disambiguator);
+        const candidates =
+            platformType === PlatformType.FORGEJO
+                ? forgejoConfigsOnHost(configs, disambiguator?.host)
+                : this.disambiguateConfigs(configs, disambiguator);
+
+        if (!candidates.length) {
+            // Forgejo repository ids are per instance: the configs found
+            // belong to other instances that reached the same number.
+            this.logger.warn({
+                message:
+                    'Webhook ignored: the repository id is connected only on other Forgejo instances',
+                context: WebhookContextService.name,
+                metadata: {
+                    platformType,
+                    repositoryId,
+                    host: disambiguator?.host,
+                },
+            });
+            return null;
+        }
 
         const automations = await this.automationService.find({
             automationType: AutomationType.AUTOMATION_CODE_REVIEW,
@@ -162,23 +185,5 @@ export class WebhookContextService {
         );
 
         return filtered.length === 1 ? filtered : configs;
-    }
-}
-
-function normalizeHost(value: string | undefined | null): string | undefined {
-    if (!value) {
-        return undefined;
-    }
-    const trimmed = String(value).trim();
-    if (!trimmed) {
-        return undefined;
-    }
-    try {
-        const url = new URL(
-            trimmed.includes('://') ? trimmed : `https://${trimmed}`,
-        );
-        return url.hostname.toLowerCase();
-    } catch {
-        return trimmed.toLowerCase().replace(/\/.*$/, '');
     }
 }
