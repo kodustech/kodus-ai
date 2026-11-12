@@ -54,6 +54,11 @@ export interface RequestCeiling {
     inputTokens: number;
     /** The cap the request puts on the answer, when it sets one. */
     maxOutputTokens?: number;
+    /**
+     * A reasoning budget the provider grants on top of the answer cap
+     * (Anthropic's thinking: the SDK sends max_tokens = cap + budget).
+     */
+    reasoningBudgetTokens?: number;
 }
 
 /** Who installed a meter, on the warning a failing meter logs. */

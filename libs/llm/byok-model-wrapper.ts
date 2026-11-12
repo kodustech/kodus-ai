@@ -26,6 +26,7 @@ import {
     readProviderUsage,
 } from '@libs/llm/ai-sdk-usage';
 import { admitRequest, meterAdmitsRequests } from '@libs/llm/usage-meter';
+import { reasoningBudgetFrom } from '@libs/llm/reasoning-budget';
 import {
     attachClassification,
     classifyLLMError,
@@ -276,6 +277,9 @@ export function wrapByokModel(
                         tools: params?.tools,
                     }),
                     maxOutputTokens: params?.maxOutputTokens,
+                    reasoningBudgetTokens: reasoningBudgetFrom(
+                        params?.providerOptions,
+                    ),
                 }));
                 // The answer cap it was admitted at is sent, so the provider
                 // cannot answer past what was reserved. Zero is no cap a
