@@ -255,11 +255,13 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             })
             .catch(() => undefined);
         const commitSha = head?.stdout?.trim() || scan.commitSha;
+        // The scan's first job: the one that sets its commit.
+        const firstJob = !scan.commitSha;
         // A plan carried from an earlier scan holds for the commit it was made
         // at: past it, its done areas say nothing about this code and new
         // files are missing from it, so the repository is mapped again.
         const stalePlan =
-            !scan.commitSha &&
+            firstJob &&
             !!scan.planCommitSha &&
             commitSha !== scan.planCommitSha;
         if (stalePlan) {
@@ -321,8 +323,10 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             units: scan.units,
             progress: scan.progress,
             reported: scan.reported,
-            // Only a new plan needs them: a continuation's plan has them.
-            revisit: scan.units?.length
+            // Read on the scan's first job, whether it maps the repository
+            // or carries on an earlier scan's plan; its continuations hold
+            // them in the plan already.
+            revisit: !firstJob
                 ? []
                 : await this.issuesService.findOpenScanFindingAreas({
                       organizationId: scan.organizationId,
@@ -332,12 +336,13 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                   }),
             reproduce: true,
             onPlanned: async (units, languages) => {
+                // A carried-on plan keeps the areas it already finished.
                 liveCoverage = {
                     examinedFiles: [],
                     unitsTotal: units.length,
-                    unitsDone: 0,
-                    unitsFailed: 0,
-                    unitsSkippedByBudget: 0,
+                    unitsDone: countIn('done'),
+                    unitsFailed: countIn('failed'),
+                    unitsSkippedByBudget: countIn('skipped_budget'),
                     languages,
                 };
                 await this.scans.update(scan.uuid, {

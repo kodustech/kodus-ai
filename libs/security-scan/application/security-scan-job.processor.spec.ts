@@ -356,6 +356,20 @@ describe('SecurityScanJobProcessor', () => {
         expect(cloneParams.checkoutSha).toBeUndefined();
     });
 
+    it("reads open findings on a scan's first job, carried-on plan or not, and not on its continuations", async () => {
+        const unit = { id: 'u1', file: 'src/a.ts', relatedFiles: [], language: 'typescript', classes: ['authz'], priority: 50, reasons: [] };
+        const carried = setup({ result: finishedResult() }, scanRecord({ units: [unit] as any }));
+        await carried.processor.process('job-1');
+        expect(carried.issuesService.findOpenScanFindingAreas).toHaveBeenCalledTimes(1);
+
+        const continued = setup(
+            { result: finishedResult() },
+            scanRecord({ units: [unit] as any, commitSha: 'abc123' }),
+        );
+        await continued.processor.process('job-1');
+        expect(continued.issuesService.findOpenScanFindingAreas).not.toHaveBeenCalled();
+    });
+
     it('records each area alone, with live counts, without reading the scan back', async () => {
         const { processor, scans } = setup({
             unitEvents: [

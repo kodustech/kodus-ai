@@ -290,6 +290,29 @@ export class SecurityScanEngine {
         const progress = new Map<string, ScanUnitProgress>(
             (params.progress ?? []).map((p) => [p.unitId, p]),
         );
+        if (params.units?.length && params.revisit?.length) {
+            // A plan carried on from an earlier scan: findings opened since
+            // it was made are read again too. An area it already finished
+            // that gains a class runs that class alone.
+            const before = new Map(units.map((u) => [u.id, u.classes]));
+            units = withRevisits(units, params.revisit, existingFiles);
+            const grown = units.filter((u) => before.get(u.id) !== u.classes);
+            for (const unit of grown) {
+                const done = progress.get(unit.id);
+                if (done?.state === 'done') {
+                    progress.set(unit.id, {
+                        unitId: unit.id,
+                        state: 'pending',
+                        findings: done.findings,
+                        lensesRun: before.get(unit.id),
+                        lensesExamined: [],
+                    });
+                }
+            }
+            if (grown.length) {
+                await params.onPlanned?.(units, languages);
+            }
+        }
         const findings: ScanFinding[] = [];
         const examined = new Set<string>();
         const examinedByClass = new Map<VulnClass, Set<string>>();

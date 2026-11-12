@@ -1499,6 +1499,53 @@ describe('SecurityScanEngine: across slices and units', () => {
         ).toContain('src/orders/orders.service.ts');
     });
 
+    it("adds an open finding's class to a carried-on plan, running that class alone in an area it finished", async () => {
+        const controller = 'src/orders/orders.controller.ts';
+        const lensClasses: string[] = [];
+        const runLens = jest.fn(async (input: any) => {
+            lensClasses.push(input.agentName.replace('security-scan-', ''));
+            return {
+                findings: { reasoning: '', suggestions: [] },
+                finishReason: 'completed',
+            } as any;
+        });
+        const onPlanned = jest.fn(async () => undefined);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => onlyController),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            units: [
+                {
+                    id: 'u-controller',
+                    file: controller,
+                    relatedFiles: [],
+                    language: 'typescript',
+                    classes: ['authz'],
+                    priority: 90,
+                    reasons: [],
+                },
+            ],
+            progress: [{ unitId: 'u-controller', state: 'done', findings: 0 }],
+            revisit: [{ filePath: controller, vulnerabilityClass: 'injection' }],
+            onPlanned,
+        } as any);
+
+        expect(lensClasses).toEqual(['injection']);
+        expect(onPlanned).toHaveBeenCalledWith(
+            [expect.objectContaining({ id: 'u-controller', classes: ['authz', 'injection'] })],
+            expect.any(Array),
+        );
+        expect(
+            result.examinedByClass.find((e) => e.vulnerabilityClass === 'injection')?.filePaths,
+        ).toEqual([controller]);
+    });
+
     it('keeps a finding in a file listed past the first 20,000, and lists it as tracked', async () => {
         const controller = 'src/orders/orders.controller.ts';
         const filler = Array.from({ length: 20_000 }, (_, i) => `vendor/f${i}.ts`);
