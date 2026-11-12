@@ -723,6 +723,38 @@ describe('SecurityScanEngine', () => {
         expect(tampered).toBe(false);
     });
 
+    it('removes nothing after a reproduction when the checkout could not be read before it', async () => {
+        const sandbox = fakeSandbox('e2b');
+        const run = sandbox.run.getMockImplementation()!;
+        let reads = 0;
+        sandbox.run.mockImplementation(async (command: string) => {
+            if (command.includes('status --porcelain')) {
+                reads++;
+                // The baseline read fails; the next one lists the install.
+                return reads === 1
+                    ? { stdout: '', exitCode: 128 }
+                    : { stdout: '?? node_modules/\0', exitCode: 0 };
+            }
+            return run(command);
+        });
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
+        expect(commands.some((c) => c.startsWith('rm -rf'))).toBe(false);
+    });
+
     it('never writes over, runs or removes a file the repository already has', async () => {
         const sandbox = fakeSandbox('e2b');
         const llm = fakeLlm({ units: [] });

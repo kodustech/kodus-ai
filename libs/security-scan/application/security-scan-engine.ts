@@ -1265,9 +1265,16 @@ export class SecurityScanEngine {
                     `git -C ${repo} status --porcelain -z --untracked-files=normal`,
                     { timeoutMs: 30_000 },
                 )
-                .then((r) => (r.stdout ?? '').split('\0').filter(Boolean))
-                .catch(() => [] as string[]);
-        const before = new Set(await status());
+                .then((r) =>
+                    r.exitCode === 0
+                        ? (r.stdout ?? '').split('\0').filter(Boolean)
+                        : null,
+                )
+                .catch(() => null);
+        // Unread, nothing tells a planted file from one that was there (the
+        // install): then nothing is removed.
+        const baseline = await status();
+        const before = baseline ? new Set(baseline) : null;
         try {
             await sandbox
                 .run(
@@ -1316,7 +1323,9 @@ export class SecurityScanEngine {
                 .catch(() => undefined);
             // Anything that appeared is taken back before a lens reads it:
             // changed files restored, new ones removed.
-            const appeared = (await status()).filter((e) => !before.has(e));
+            const after = before ? await status() : null;
+            const appeared =
+                before && after ? after.filter((e) => !before.has(e)) : [];
             if (appeared.length) {
                 logger.warn({
                     message:

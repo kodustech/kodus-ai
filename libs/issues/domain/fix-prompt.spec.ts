@@ -151,4 +151,25 @@ describe('buildFixPrompt', () => {
         expect(prompt).toContain('Add or update a test that would have caught');
         expect(prompt).not.toContain('reproduction test');
     });
+
+    it('says so when whether the test ran was not recorded, never that it did not run', () => {
+        const prompt = buildFixPrompt([
+            {
+                ...scanFinding,
+                evidence: {
+                    ...scanFinding.evidence,
+                    reproduction: {
+                        ...scanFinding.evidence.reproduction,
+                        executed: undefined as any,
+                        reproduced: true,
+                    },
+                },
+            },
+        ]);
+
+        expect(prompt).toContain('Whether it ran and reproduced the issue was not recorded');
+        expect(prompt).not.toContain('It was not run');
+        expect(prompt).not.toContain('Run it with');
+    });
 });
+

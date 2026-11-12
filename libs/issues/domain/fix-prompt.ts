@@ -105,12 +105,13 @@ function section(issue: FixPromptIssue, n: number): string {
         // reproduced the issue is handed over to run; any other is to be
         // read first, never run as given on the developer's machine.
         const proven = test.executed === true && test.reproduced === true;
-        // Ran and did not reproduce, or never ran (no sandbox, or not
-        // recorded): said as it is, and never handed over to run.
+        // Each other state said as it is, and never handed over to run.
         const status =
-            test.executed === true
+            test.executed === true && test.reproduced === false
                 ? 'It ran in an isolated sandbox and did not reproduce the issue'
-                : 'It was not run, so it has not reproduced the issue';
+                : test.executed === false
+                  ? 'It was not run, so it has not reproduced the issue'
+                  : 'Whether it ran and reproduced the issue was not recorded';
         out.push(
             proven
                 ? `Reproduction test (${test.path}). It ran in an isolated sandbox and reproduced the issue. Run it with:\n${fenced(test.command)}\n\n${fenced(test.content.trim())}`
