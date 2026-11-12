@@ -3,6 +3,7 @@ import {
     heuristicUnits,
     languageOf,
     mergeMapPlan,
+    withRevisits,
     rankCandidates,
     unitId,
 } from './scan-units';
@@ -210,3 +211,28 @@ describe('rankCandidates: the plan sees every candidate it can hold', () => {
         expect(rankCandidates(surface(files as any), 400)).toHaveLength(400);
     });
 });
+
+describe('withRevisits', () => {
+    const unit = (file: string, classes: string[]) =>
+        ({ id: file, file, relatedFiles: [], language: 'typescript', classes, priority: 50, reasons: [] }) as any;
+
+    it("reads again every open finding's file for its class, signal or not", () => {
+        const units = withRevisits(
+            [unit('src/api.ts', ['injection'])],
+            [
+                { filePath: 'src/api.ts', vulnerabilityClass: 'authz' },
+                // The fix removed the only signal: nothing else plans it.
+                { filePath: './src/orders.ts', vulnerabilityClass: 'authz' },
+                // Deleted: the scan resolves it as gone instead.
+                { filePath: 'src/gone.ts', vulnerabilityClass: 'ssrf' },
+            ],
+            new Set(['src/api.ts', 'src/orders.ts']),
+        );
+
+        expect(units.map((u) => [u.file, u.classes])).toEqual([
+            ['src/api.ts', ['authz', 'injection']],
+            ['src/orders.ts', ['authz']],
+        ]);
+    });
+});
+

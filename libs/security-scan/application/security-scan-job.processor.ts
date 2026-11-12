@@ -321,6 +321,15 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             units: scan.units,
             progress: scan.progress,
             reported: scan.reported,
+            // Only a new plan needs them: a continuation's plan has them.
+            revisit: scan.units?.length
+                ? []
+                : await this.issuesService.findOpenScanFindingAreas({
+                      organizationId: scan.organizationId,
+                      repositoryPlatform: scan.repository
+                          .platform as PlatformType,
+                      repositoryId: scan.repository.id,
+                  }),
             reproduce: true,
             onPlanned: async (units, languages) => {
                 liveCoverage = {
@@ -510,6 +519,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         : {}),
                 },
                 lastSeenScanId: scan.uuid,
+                ...(commitSha ? { lastSeenCommitSha: commitSha } : {}),
             });
             return outcome;
         } catch (error) {

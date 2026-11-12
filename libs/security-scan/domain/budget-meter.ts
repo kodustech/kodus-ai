@@ -108,6 +108,7 @@ export class ScanBudgetMeter implements UsageMeter {
                 settled = true;
                 this.inFlight = add(this.inFlight, ceiling, -1);
                 if (usage) {
+                    this.chargeUnreported(usage, input, output);
                     this.answered.push({
                         ...this.cost(usage),
                         key: keyOf(usage),
@@ -115,6 +116,42 @@ export class ScanBudgetMeter implements UsageMeter {
                 }
             },
         };
+    }
+
+    /**
+     * An answer whose provider left a total out was billed all the same:
+     * that part is charged at what was reserved for it, never as zero, or a
+     * provider that reports no usage would spend past any cap.
+     */
+    private chargeUnreported(
+        usage: AiSdkUsage,
+        reservedInput: number,
+        reservedOutput: number,
+    ): void {
+        const unreported = {
+            inputTokens: usage.inputTokens === undefined ? reservedInput : 0,
+            outputTokens: usage.outputTokens === undefined ? reservedOutput : 0,
+        };
+        if (!unreported.inputTokens && !unreported.outputTokens) {
+            return;
+        }
+        this.spent = {
+            ...this.spent,
+            usd:
+                this.spent.usd +
+                Math.max(
+                    this.costOf(unreported),
+                    this.costOf({
+                        ...unreported,
+                        cacheWriteTokens: unreported.inputTokens,
+                    }),
+                ),
+            inputTokens: this.spent.inputTokens + unreported.inputTokens,
+            outputTokens: this.spent.outputTokens + unreported.outputTokens,
+        };
+        if (this.isExhausted()) {
+            this.notify();
+        }
     }
 
     /** Whether the scan has a limit this meter can enforce. */

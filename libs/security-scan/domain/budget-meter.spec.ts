@@ -40,6 +40,39 @@ describe('ScanBudgetMeter', () => {
         expect(meter.snapshot().usd).toBeCloseTo(0.1);
     });
 
+    it('charges an answer that reported no usage at what was reserved for it', () => {
+        // A 100-token cap; each request asks for at most 63 (60 of answer).
+        const meter = new ScanBudgetMeter({ maxTokens: 100 }, RATES);
+        let answered = 0;
+        for (let i = 0; i < 10; i++) {
+            try {
+                meter.admit({ inputTokens: 2, maxOutputTokens: 60 }).settle({});
+                answered++;
+            } catch (error) {
+                expect(error).toBeInstanceOf(ScanBudgetReached);
+            }
+        }
+
+        expect(answered).toBe(1);
+        expect(meter.snapshot()).toEqual(
+            expect.objectContaining({ inputTokens: 3, outputTokens: 60 }),
+        );
+    });
+
+    it('charges only the total the provider left out', () => {
+        const meter = new ScanBudgetMeter({ maxUsd: 10 }, RATES);
+
+        meter.admit({ inputTokens: 1_000, maxOutputTokens: 500 }).settle({
+            inputTokens: 1_000,
+        });
+        meter.record({ usage: { inputTokens: 1_000 } });
+
+        // The input is what it reported; the answer, its reserved cap.
+        expect(meter.snapshot()).toEqual(
+            expect.objectContaining({ inputTokens: 1_000, outputTokens: 500 }),
+        );
+    });
+
     it('refuses a request whose most it can cost would cross the cap', () => {
         const meter = new ScanBudgetMeter({ maxUsd: 1 }, RATES);
         const onExhausted = jest.fn();

@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { isValidObjectId } from 'mongoose';
 import { REQUEST } from '@nestjs/core';
 
+import { KODY_ISSUES_MANAGEMENT_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/KodyIssuesManagement.contract';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
@@ -17,6 +18,7 @@ import {
     buildFixPrompt,
     FIX_PROMPT_MAX_ISSUES,
 } from '@libs/issues/domain/fix-prompt';
+import { KodyIssuesManagementService } from '@libs/issues/infrastructure/adapters/service/kodyIssuesManagement.service';
 
 export interface FixPromptResult {
     prompt: string;
@@ -40,6 +42,8 @@ export class BuildFixPromptUseCase implements IUseCase {
         @Inject(REQUEST)
         private readonly request: UserRequest,
         private readonly authorizationService: AuthorizationService,
+        @Inject(KODY_ISSUES_MANAGEMENT_SERVICE_TOKEN)
+        private readonly kodyIssuesManagementService: KodyIssuesManagementService,
     ) {}
 
     async execute(ids: string[]): Promise<FixPromptResult> {
@@ -65,6 +69,22 @@ export class BuildFixPromptUseCase implements IUseCase {
                 !!issue?.repository?.id &&
                 issue.organizationId === organizationId &&
                 (readableIds === null || readableIds.has(issue.repository.id)),
+        );
+        // A review issue keeps only a reference to each suggestion: the code
+        // Kody suggested is read from the suggestion itself, as the issue
+        // page does. Without it the prompt still carries the issue.
+        await Promise.all(
+            kept
+                .filter((issue) => issue.contributingSuggestions?.length)
+                .map(async (issue) => {
+                    issue.contributingSuggestions =
+                        await this.kodyIssuesManagementService
+                            .enrichContributingSuggestions(
+                                issue.contributingSuggestions,
+                                organizationId,
+                            )
+                            .catch(() => issue.contributingSuggestions);
+                }),
         );
         const included = kept.map((issue) => issue.uuid);
         const includedIds = new Set(included);

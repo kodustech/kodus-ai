@@ -1472,6 +1472,33 @@ describe('SecurityScanEngine: across slices and units', () => {
         expect(buildPlatformEmbedder).not.toHaveBeenCalled();
     });
 
+    it("reads an open finding's file for its class again when no pattern draws it any more", async () => {
+        // The fix removed the service's only signal: the pattern scan sees
+        // the controller alone.
+        const runLens = fakeLens(() => []);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => onlyController),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            revisit: [
+                { filePath: 'src/orders/orders.service.ts', vulnerabilityClass: 'authz' },
+            ],
+        } as any);
+
+        const service = result.units.find((u) => u.file === 'src/orders/orders.service.ts');
+        expect(service?.classes).toEqual(['authz']);
+        // Examined for that class: its finding, gone now, can be resolved.
+        expect(
+            result.examinedByClass.find((e) => e.vulnerabilityClass === 'authz')?.filePaths,
+        ).toContain('src/orders/orders.service.ts');
+    });
+
     it('keeps a finding in a file listed past the first 20,000, and lists it as tracked', async () => {
         const controller = 'src/orders/orders.controller.ts';
         const filler = Array.from({ length: 20_000 }, (_, i) => `vendor/f${i}.ts`);

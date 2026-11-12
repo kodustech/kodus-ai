@@ -43,6 +43,7 @@ import {
     heuristicUnits,
     mergeMapPlan,
     rankCandidates,
+    withRevisits,
 } from '../domain/scan-units';
 import { admitFindingPath } from '../domain/finding-path';
 import { SCAN_MAP_FAILED_MESSAGE, ScanFailure } from '../domain/scan-failure';
@@ -122,6 +123,11 @@ export interface SecurityScanEngineParams {
     progress?: ScanUnitProgress[];
     /** What earlier runs of the same scan reported: not reported again. */
     reported?: ScanReportedFinding[];
+    /**
+     * Where the repository's open findings of earlier scans sit: read again
+     * whatever the pattern scan draws, so a fix can resolve them.
+     */
+    revisit?: Array<{ filePath: string; vulnerabilityClass: string }>;
     /** Write and run a reproduction test for each finding (needs E2B). */
     reproduce: boolean;
     onPlanned?: (units: ScanUnit[], languages: string[]) => Promise<void>;
@@ -267,12 +273,16 @@ export class SecurityScanEngine {
 
         let units = params.units;
         if (!units?.length) {
-            units = await this.plan(
-                params,
-                surface,
-                listing,
+            units = withRevisits(
+                await this.plan(
+                    params,
+                    surface,
+                    listing,
+                    existingFiles,
+                    languages,
+                ),
+                params.revisit ?? [],
                 existingFiles,
-                languages,
             );
             await params.onPlanned?.(units, languages);
         }

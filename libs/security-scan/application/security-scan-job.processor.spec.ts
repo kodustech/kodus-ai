@@ -105,6 +105,9 @@ function setup(engineResult: any, scan = scanRecord()) {
     const issuesService = {
         upsertScanFinding: jest.fn(async () => ({ outcome: 'created' })),
         resolveUnseenScanFindings: jest.fn(async () => 2),
+        findOpenScanFindingAreas: jest.fn(async () => [
+            { filePath: 'src/orders.ts', vulnerabilityClass: 'authz' },
+        ]),
     };
     const kodyIssuesManagement = { clearIssuesCache: jest.fn(async () => undefined) };
 
@@ -165,9 +168,21 @@ describe('SecurityScanJobProcessor', () => {
                 label: 'security',
                 cwe: 'CWE-639',
                 lastSeenScanId: 'scan-1',
+                // What the sandbox checked out: the issue links there.
+                lastSeenCommitSha: 'abc123',
                 symbol: 'OrdersController.findOne',
             }),
         );
+        // A new plan reads the repository's open findings again.
+        const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
+        expect(engine.run.mock.calls[0][0].revisit).toEqual([
+            { filePath: 'src/orders.ts', vulnerabilityClass: 'authz' },
+        ]);
+        expect(issuesService.findOpenScanFindingAreas).toHaveBeenCalledWith({
+            organizationId: 'org-1',
+            repositoryPlatform: 'GITHUB',
+            repositoryId: 'repo-1',
+        });
         expect(issuesService.resolveUnseenScanFindings).toHaveBeenCalledWith({
             organizationId: 'org-1',
             repositoryPlatform: 'GITHUB',

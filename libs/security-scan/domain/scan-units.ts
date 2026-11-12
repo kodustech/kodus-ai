@@ -213,3 +213,50 @@ export function mergeMapPlan(params: {
 function clampPriority(value: number | undefined): number {
     return Math.max(0, Math.min(100, Math.round(value ?? 50)));
 }
+
+/**
+ * The plan with every open finding's file read again for its class: a fix
+ * that removed the dangerous operation leaves the pattern scan nothing to
+ * draw it back, and a file no lens reads for a class never resolves that
+ * class's findings. A file no longer in the repository is left out (the
+ * scan resolves its findings as gone). Added after the plan, so they never
+ * push a new candidate out of it.
+ */
+export function withRevisits(
+    units: ScanUnit[],
+    revisit: Array<{ filePath: string; vulnerabilityClass: string }>,
+    existingFiles: ReadonlySet<string>,
+): ScanUnit[] {
+    const wanted = new Map<string, Set<string>>();
+    for (const { filePath, vulnerabilityClass } of revisit) {
+        const file = filePath.trim().replace(/^\.?\//, '');
+        if (!existingFiles.has(file)) continue;
+        wanted.set(
+            file,
+            (wanted.get(file) ?? new Set()).add(vulnerabilityClass),
+        );
+    }
+    const merged = units.map((unit) => {
+        const classes = wanted.get(unit.file);
+        wanted.delete(unit.file);
+        if (!classes) return unit;
+        const all = new Set<string>([...unit.classes, ...classes]);
+        return { ...unit, classes: VULN_CLASSES.filter((c) => all.has(c)) };
+    });
+    for (const [file, classes] of wanted) {
+        const known = VULN_CLASSES.filter((c) => classes.has(c));
+        if (!known.length) continue;
+        merged.push({
+            id: unitId(file),
+            file,
+            relatedFiles: [],
+            language: languageOf(file),
+            classes: known,
+            priority: 0,
+            reasons: [
+                'an open finding is here: read again to see if it was fixed',
+            ],
+        });
+    }
+    return merged;
+}
