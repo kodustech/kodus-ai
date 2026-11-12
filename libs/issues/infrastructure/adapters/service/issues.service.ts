@@ -6,6 +6,7 @@ import { IssueStatus } from '@libs/core/infrastructure/config/types/general/issu
 import {
     IIssuesRepository,
     ISSUES_REPOSITORY_TOKEN,
+    MarkScanFindingsSeenParams,
     OpenScanFindingArea,
     ResolveUnseenScanFindingsParams,
     ScanRepositoryScope,
@@ -156,11 +157,8 @@ export class IssuesService implements IIssuesService {
     }
 
     async markScanFindingsSeen(
-        params: ScanRepositoryScope & {
-            fingerprints: string[];
-            scanId: string;
-        },
-    ): Promise<number> {
+        params: MarkScanFindingsSeenParams,
+    ): Promise<{ sighted: number; reopened: number }> {
         return this.issuesRepository.markScanFindingsSeen(params);
     }
 
