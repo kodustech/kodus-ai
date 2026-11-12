@@ -47,8 +47,6 @@ import { REGISTRY } from '@libs/llm/providers/kernel/registry';
 
 const logger = createLogger('ByokModelWrapper');
 
-/** The provider-options key the slot's adapter reads, so an effort the call
- *  never carried can be added there when the upstream asks for it. */
 /**
  * Adapters that send max_tokens = answer cap + reasoning budget, read in
  * their source: @ai-sdk/anthropic (`maxTokens + thinkingBudget`) and
@@ -59,20 +57,34 @@ const ADDS_BUDGET_TO_ANSWER_CAP = new Set(['anthropic', 'amazonBedrock']);
 
 /**
  * The reasoning budget a request adds on top of its answer cap: read only from
- * the namespace the served adapter reads, and only for an adapter that adds it.
+ * the options the served adapter parses, and only for an adapter that adds it.
+ * An adapter parses its own key, or else a legacy alias (Bedrock's `bedrock`),
+ * so the first of them present is the one sent.
  */
 function budgetAddedToAnswerCap(
     providerOptions: Record<string, unknown> | undefined,
+    slot: NormalizedModel | undefined,
     namespace: string | undefined,
 ): number | undefined {
     if (!namespace || !ADDS_BUDGET_TO_ANSWER_CAP.has(namespace)) {
         return undefined;
     }
-    return reasoningBudgetFrom(
-        providerOptions?.[namespace] as Record<string, unknown> | undefined,
+    const aliases =
+        REGISTRY.get(slot!.provider).providerOptionsNamespaceAliases?.(
+            slot!.provider,
+        ) ?? [];
+    const parsed = [namespace, ...aliases].find(
+        (key) => providerOptions?.[key] != null,
     );
+    return parsed
+        ? reasoningBudgetFrom(
+              providerOptions![parsed] as Record<string, unknown>,
+          )
+        : undefined;
 }
 
+/** The provider-options key the slot's adapter reads, so an effort the call
+ *  never carried can be added there when the upstream asks for it. */
 function optionsNamespace(
     slot: NormalizedModel | undefined,
 ): string | undefined {
@@ -303,6 +315,7 @@ export function wrapByokModel(
                     maxOutputTokens: params?.maxOutputTokens,
                     reasoningBudgetTokens: budgetAddedToAnswerCap(
                         params?.providerOptions,
+                        slot,
                         namespace,
                     ),
                 }));

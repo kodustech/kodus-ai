@@ -768,8 +768,14 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
 
     it('admits an Anthropic request with the thinking budget its adapter adds to max_tokens', async () => {
         const slot = { provider: BYOKProvider.ANTHROPIC, apiKey: 'k-anthropic-budget', model: 'claude-sonnet-4-5' } as NormalizedModel;
+        // A larger budget under a key the Anthropic adapter never reads is not
+        // counted.
+        const elsewhere = {
+            ...thinking,
+            amazonBedrock: { reasoningConfig: { type: 'enabled', budgetTokens: 64_000 } },
+        };
 
-        expect(await admittedWith(slot, thinking)).toEqual(
+        expect(await admittedWith(slot, elsewhere)).toEqual(
             expect.objectContaining({
                 maxOutputTokens: 16_000,
                 reasoningBudgetTokens: 32_000,
@@ -783,6 +789,43 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         const openai = tpmSlot('k-openai-budget');
 
         expect((await admittedWith(openai, thinking)).reasoningBudgetTokens).toBeUndefined();
+    });
+
+    it('never counts a budget under the own key of an adapter that keeps it inside the answer cap', async () => {
+        // The shape the OpenAI-compatible module sends a thinking model.
+        const compatible = {
+            provider: BYOKProvider.OPENAI_COMPATIBLE,
+            apiKey: 'k-compatible-budget',
+            model: 'deepseek-v4',
+            baseURL: 'https://api.deepseek.com/v1',
+        } as NormalizedModel;
+
+        const admitted = await admittedWith(compatible, {
+            openaiCompatible: { thinking: { type: 'enabled', budget_tokens: 32_000 } },
+        });
+
+        expect(admitted.reasoningBudgetTokens).toBeUndefined();
+    });
+
+    it("counts a Bedrock budget under the adapter's legacy alias, and its own key over the alias", async () => {
+        const bedrock = {
+            provider: BYOKProvider.AMAZON_BEDROCK,
+            awsAccessKeyId: 'k-bedrock-budget',
+            awsSecretAccessKey: 's',
+            awsRegion: 'us-east-1',
+            model: 'anthropic.claude-sonnet-4-5-20250929-v1:0',
+        } as unknown as NormalizedModel;
+        const budget = (budgetTokens: number) => ({
+            reasoningConfig: { type: 'enabled', budgetTokens },
+        });
+
+        expect((await admittedWith(bedrock, { bedrock: budget(24_000) })).reasoningBudgetTokens).toBe(24_000);
+        // @ai-sdk/amazon-bedrock parses `amazonBedrock` and reads `bedrock`
+        // only when it is absent.
+        expect(
+            (await admittedWith(bedrock, { amazonBedrock: budget(8_000), bedrock: budget(24_000) }))
+                .reasoningBudgetTokens,
+        ).toBe(8_000);
     });
 
     it('sends the answer cap a request was admitted at when it set none', async () => {
