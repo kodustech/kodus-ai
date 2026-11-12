@@ -123,6 +123,18 @@ describe('forgejoConfigsForWebhook', () => {
         ).toEqual([]);
     });
 
+    it('keeps nothing when the config holds that owner/repo under another id', () => {
+        const internal = {
+            ...configOn('http://forgejo:3000', 'beta'),
+            configValue: [
+                { id: '26', name: 'beta/other' },
+                { id: '27', name: 'beta/api' },
+            ],
+        };
+
+        expect(forgejoConfigsForWebhook([internal], fromBeta)).toEqual([]);
+    });
+
     it('keeps nothing for a config stored at another address whose repository was renamed', () => {
         // Neither the host nor `owner/repo` ties it to the sending
         // instance; the id alone is what other instances share.
