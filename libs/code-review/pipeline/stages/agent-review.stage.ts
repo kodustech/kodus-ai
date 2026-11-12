@@ -487,9 +487,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // categories is on; a custom agent's quote gate checks rules quoted
         // from them, so an enabled custom agent needs them too.
         const options = context.codeReviewConfig?.reviewOptions;
-        const customAgentRuns = (
-            context.codeReviewConfig?.customAgents ?? []
-        ).some((agent) => agent?.enabled !== false);
+        const customAgentRuns = this.customAgentsToRun(context).length > 0;
         if (
             options?.bug === false &&
             options?.security === false &&
@@ -677,14 +675,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     async resolveCustomAgents(
         context: CodeReviewPipelineContext,
     ): Promise<CustomAgentConfig[]> {
+        return this.customAgentsToRun(context);
+    }
+
+    private customAgentsToRun(
+        context: CodeReviewPipelineContext,
+    ): CustomAgentConfig[] {
         const configured = context.codeReviewConfig?.customAgents ?? [];
-        const wanted = context.onlyCustomAgent
+        return context.onlyCustomAgent
             ? configured
             : configured.filter((agent) => agent?.enabled);
-        if (!wanted.length) {
-            return [];
-        }
-        return wanted;
     }
 
     /**

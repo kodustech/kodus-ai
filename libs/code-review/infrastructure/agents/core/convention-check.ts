@@ -308,6 +308,9 @@ export async function checkConventionQuotes(
     };
     const reject = (finding: FinderSuggestion, detail: string) =>
         rejected.push({ finding, reason: QUOTE_NOT_FOUND, detail });
+    const instructionByPath = new Map(
+        instructionFiles.map((f) => [stripLeading(f.path), f]),
+    );
 
     for (const cited of candidates) {
         const file = canonicalGuideCitation(
@@ -382,9 +385,7 @@ export async function checkConventionQuotes(
             return true;
         };
         if (!isLinkedGuide(file, guideFiles)) {
-            const instruction = instructionFiles.find(
-                (f) => stripLeading(f.path) === file,
-            );
+            const instruction = instructionByPath.get(file);
             const instructionSection = instruction
                 ? findQuoteSection(instruction.content, quote)
                 : null;

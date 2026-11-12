@@ -98,6 +98,18 @@ describe('AgentReviewStage — repo instructions source branch', () => {
                 customAgents: [{ id: 'conventions', enabled: false }],
             },
         ],
+        [
+            'the categories are off and the only custom agent was never turned on',
+            {
+                repoInstructionsEnabled: true,
+                reviewOptions: {
+                    bug: false,
+                    security: false,
+                    performance: false,
+                },
+                customAgents: [{ id: 'conventions', name: 'Conventions' }],
+            },
+        ],
     ])('reads nothing when %s', async (_label, codeReviewConfig) => {
         const { stage, codeManagementService } = makeStage();
 
@@ -119,6 +131,41 @@ describe('AgentReviewStage — repo instructions source branch', () => {
 
     // A custom agent quotes rules from these files (its quote gate checks the
     // quote against them), so a team running only custom agents still gets them.
+    // `@kody -v <agent>` runs the agent it names even when it is off.
+    it('reads them when the categories are off and @kody -v names a disabled custom agent', async () => {
+        const { stage, codeManagementService } = makeStage();
+
+        const result = await (stage as any).resolveRepoInstructions(
+            {
+                ...context,
+                onlyCustomAgent: 'conventions',
+                codeReviewConfig: {
+                    repoInstructionsEnabled: true,
+                    reviewOptions: {
+                        bug: false,
+                        security: false,
+                        performance: false,
+                    },
+                    customAgents: [
+                        {
+                            id: 'conventions',
+                            name: 'Conventions',
+                            enabled: false,
+                        },
+                    ],
+                },
+            },
+            [{ filename: 'src/a.ts' }],
+            { kind: 'full' },
+            7,
+        );
+
+        expect(result.files.map((f: { path: string }) => f.path)).toEqual([
+            'CLAUDE.md',
+        ]);
+        expect(codeManagementService.getRepositoryAllFiles).toHaveBeenCalled();
+    });
+
     it('reads them when the categories are off but a custom agent runs', async () => {
         const { stage, codeManagementService } = makeStage();
 
