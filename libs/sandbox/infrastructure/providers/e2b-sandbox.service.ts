@@ -21,6 +21,7 @@ import {
 } from '@libs/sandbox/infrastructure/providers/review-user-privileges';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
+import { hasParentDirSegment } from './path-segments';
 import { readWithinRootCommand } from './read-within-root';
 import {
     fetchSubmodules,
@@ -92,7 +93,7 @@ function resolveRepoPath(path: string, root: string = REPO_DIR): string {
     if (path.startsWith('/')) {
         throw new Error('Absolute paths are not allowed');
     }
-    if (path.includes('..')) {
+    if (hasParentDirSegment(path)) {
         throw new Error('Path traversal using ".." is not allowed');
     }
     return `${root}/${path}`;
@@ -105,7 +106,7 @@ function readRoot(root: string | undefined): string {
     if (root === undefined || root === REPO_DIR) return REPO_DIR;
     if (
         root.startsWith(`${LINKED_DIR}/`) &&
-        !root.includes('..') &&
+        !hasParentDirSegment(root) &&
         root.length > LINKED_DIR.length + 1
     ) {
         return root;

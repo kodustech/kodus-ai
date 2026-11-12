@@ -75,6 +75,30 @@ describe('agent tools — model input is never an option', () => {
         expect(exec).not.toHaveBeenCalled();
     });
 
+    it('refuses a grep path that climbs out with backslashes', async () => {
+        const grep = jest.fn();
+        const out = await buildAgentTools({
+            grep,
+            read: async () => '',
+            listDir: async () => '',
+        }).grep.execute({ pattern: 'TOKEN', path: '..\\..\\proc' });
+
+        expect(out).toBe('Error: Path traversal using ".." is not allowed');
+        expect(grep).not.toHaveBeenCalled();
+    });
+
+    it('greps a Next.js route directory whose name holds ".."', async () => {
+        const grep = jest.fn().mockResolvedValue('page.tsx:1:Page');
+        const out = await buildAgentTools({
+            grep,
+            read: async () => '',
+            listDir: async () => '',
+        }).grep.execute({ pattern: 'Page', path: 'app/(..)photo' });
+
+        expect(out).not.toContain('Path traversal');
+        expect(grep).toHaveBeenCalledWith('Page', 'app/(..)photo', undefined);
+    });
+
     it('anchors a findFile path starting with "-" to the checkout', async () => {
         const commands: string[] = [];
         await buildAgentTools({
