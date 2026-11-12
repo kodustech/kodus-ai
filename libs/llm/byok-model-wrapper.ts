@@ -209,7 +209,11 @@ export function wrapByokModel(
                         namespace,
                     );
                     const call = (p: any) => {
-                        reachedProvider = true;
+                        // An already aborted request is refused by the
+                        // transport before anything is sent.
+                        if (!p?.abortSignal?.aborted) {
+                            reachedProvider = true;
+                        }
                         return p === params
                             ? doGenerate()
                             : inner.doGenerate(p);
