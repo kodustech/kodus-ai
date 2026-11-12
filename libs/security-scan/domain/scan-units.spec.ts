@@ -286,7 +286,10 @@ describe('withRevisits', () => {
             new Set([done.id]),
         );
 
-        expect(units).toEqual([done, pending]);
+        expect(units.map((u) => [u.id, u.classes])).toEqual([
+            [done.id, ['authz', 'injection']],
+            ['revisit', ['ssrf']],
+        ]);
     });
 
     it('returns a unit that already covers its open findings untouched', () => {
