@@ -249,7 +249,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
         expect(webhookContextService.getContext).toHaveBeenCalledWith(
             PlatformType.FORGEJO,
             '26',
-            { host: 'git.beta.example' },
+            { host: 'git.beta.example', repositoryFullName: 'beta/api' },
         );
     });
 

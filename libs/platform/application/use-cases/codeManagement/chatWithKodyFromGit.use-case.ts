@@ -1,5 +1,5 @@
 import { createThreadId } from '@libs/common/utils/thread-id';
-import { forgejoWebhookHost } from '@libs/common/utils/webhooks/webhook-source-host';
+import { forgejoWebhookSource } from '@libs/common/utils/webhooks/webhook-source-host';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
@@ -288,14 +288,14 @@ export class ChatWithKodyFromGitUseCase {
             const repository = this.getRepository(params);
             // Forgejo repository ids are per instance: resolve the team on
             // the instance that sent the comment.
-            const host =
+            const source =
                 params.platformType === PlatformType.FORGEJO
-                    ? forgejoWebhookHost(params.payload)
+                    ? forgejoWebhookSource(params.payload)
                     : undefined;
             const integrationConfig = await this.getIntegrationConfig(
                 params.platformType,
                 repository,
-                host,
+                source?.host,
             );
 
             // A repository connected in more than one organization: answer as
@@ -306,7 +306,7 @@ export class ChatWithKodyFromGitUseCase {
                       .getContext(
                           params.platformType,
                           String(repository.id),
-                          host ? { host } : undefined,
+                          source,
                       )
                       .catch((error) => {
                           this.logger.warn({

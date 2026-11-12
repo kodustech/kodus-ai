@@ -11,7 +11,7 @@ import {
     parseCustomAgentCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import {
-    forgejoWebhookHost,
+    forgejoWebhookSource,
     getMappedPlatform,
 } from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
@@ -146,7 +146,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.FORGEJO,
             String(payload?.repository?.id),
-            { host: forgejoWebhookHost(payload) },
+            forgejoWebhookSource(payload),
         );
 
         // If no active automation found, complete the webhook processing immediately
@@ -403,7 +403,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.FORGEJO,
             repository.id,
-            { host: forgejoWebhookHost(payload) },
+            forgejoWebhookSource(payload),
         );
         if (!context?.organizationAndTeamData) {
             return;
@@ -568,7 +568,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                     const context = await this.webhookContextService.getContext(
                         PlatformType.FORGEJO,
                         String(repository.id),
-                        { host: forgejoWebhookHost(payload) },
+                        forgejoWebhookSource(payload),
                     );
 
                     if (!context?.organizationAndTeamData) {

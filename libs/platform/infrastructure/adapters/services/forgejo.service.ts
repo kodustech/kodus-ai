@@ -1,4 +1,4 @@
-import { forgejoConfigsOnHost } from '@libs/common/utils/webhooks/webhook-source-host';
+import { forgejoConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
@@ -1327,12 +1327,13 @@ export class ForgejoService implements Omit<
     }
 
     /**
-     * The repositories config of `repository` on the instance at `host`.
-     * Forgejo numbers repositories per instance, so the id alone matches
+     * The repositories config of `repository` on the instance that sent the
+     * webhook (`host`, or the same `owner/repo` under that id). Forgejo
+     * numbers repositories per instance, so the id alone matches
      * repositories of other connected instances.
      */
     async findTeamAndOrganizationIdByConfigKey(params: {
-        repository: { id?: string | number };
+        repository: { id?: string | number; name?: string };
         host?: string;
     }): Promise<IntegrationConfigEntity | null> {
         try {
@@ -1348,7 +1349,13 @@ export class ForgejoService implements Omit<
                     PlatformType.FORGEJO,
                 );
 
-            return forgejoConfigsOnHost(configs, params.host)[0] ?? null;
+            return (
+                forgejoConfigsForWebhook(configs, {
+                    host: params.host,
+                    repositoryId,
+                    repositoryFullName: params.repository.name,
+                })[0] ?? null
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Error finding team and organization by config key',

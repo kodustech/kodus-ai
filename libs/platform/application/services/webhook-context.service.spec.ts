@@ -248,17 +248,29 @@ describe('WebhookContextService', () => {
         // Forgejo numbers repositories per instance: repository 26 is
         // alpha/app on git.alpha.example and beta/api on
         // git.beta.example.
-        const alpha = buildConfig(
-            'org-alpha',
-            'team-alpha',
+        const forgejoConfig = (
+            org: string,
+            host: string | undefined,
+            repositoryFullName: string,
+        ) => ({
+            ...buildConfig(`org-${org}`, `team-${org}`, host),
+            configValue: [{ id: '26', name: repositoryFullName }],
+        });
+        const alpha = forgejoConfig(
+            'alpha',
             'https://git.alpha.example',
+            'alpha/app',
         );
-        const beta = buildConfig('org-beta', 'team-beta', 'git.beta.example');
+        const beta = forgejoConfig('beta', 'git.beta.example', 'beta/api');
+        const fromBeta = {
+            host: 'git.beta.example',
+            repositoryFullName: 'beta/api',
+        };
 
         it('routes the webhook to the integration on the instance that sent it', async () => {
             // A config with no host stored made the shared disambiguation
             // fall back to every candidate, and the first one took it.
-            const noHost = buildConfig('org-other', 'team-other');
+            const noHost = forgejoConfig('other', undefined, 'other/app');
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
                 [noHost, alpha, beta],
             );
@@ -266,9 +278,7 @@ describe('WebhookContextService', () => {
             const result = await service.getContext(
                 PlatformType.FORGEJO,
                 '26',
-                {
-                    host: 'git.beta.example',
-                },
+                fromBeta,
             );
 
             expect(result?.organizationAndTeamData).toEqual({
@@ -277,24 +287,63 @@ describe('WebhookContextService', () => {
             });
         });
 
-        it('ignores the webhook when only another instance has the repository id', async () => {
+        it('routes the webhook to an instance stored at another address when it keeps the same repository', async () => {
+            // Kodus reaches the instance at a docker service name while
+            // Forgejo builds its URLs from ROOT_URL.
+            const internal = forgejoConfig(
+                'beta',
+                'http://forgejo:3000',
+                'Beta/API',
+            );
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
-                [alpha],
+                [alpha, internal],
             );
 
             const result = await service.getContext(
                 PlatformType.FORGEJO,
                 '26',
-                {
-                    host: 'git.beta.example',
-                },
+                fromBeta,
+            );
+
+            expect(result?.organizationAndTeamData.organizationId).toBe(
+                'org-beta',
+            );
+        });
+
+        it('ignores the webhook when only another instance has the repository id', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [alpha],
+            );
+            const warnSpy = jest
+                .spyOn((service as any).logger, 'warn')
+                .mockImplementation(() => undefined);
+
+            const result = await service.getContext(
+                PlatformType.FORGEJO,
+                '26',
+                fromBeta,
             );
 
             expect(result).toBeNull();
             expect(teamAutomationServiceMock.find).not.toHaveBeenCalled();
+            expect(warnSpy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    metadata: expect.objectContaining({
+                        host: 'git.beta.example',
+                        repositoryFullName: 'beta/api',
+                        connected: [
+                            {
+                                organizationId: 'org-alpha',
+                                host: 'https://git.alpha.example',
+                                repositoryFullName: 'alpha/app',
+                            },
+                        ],
+                    }),
+                }),
+            );
         });
 
-        it('ignores the webhook when the sending host is unknown', async () => {
+        it('ignores the webhook when the payload names neither host nor repository', async () => {
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
                 [alpha],
             );

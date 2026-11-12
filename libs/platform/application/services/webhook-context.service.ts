@@ -17,8 +17,9 @@ import {
 } from '@libs/automation/domain/automation/contracts/automation.service';
 import { AutomationType } from '@libs/automation/domain/automation/enum/automation-type';
 import {
-    forgejoConfigsOnHost,
+    forgejoConfigsForWebhook,
     normalizeHost,
+    storedHostOf,
 } from '@libs/common/utils/webhooks/webhook-source-host';
 
 export type WebhookDisambiguator = {
@@ -29,6 +30,12 @@ export type WebhookDisambiguator = {
      * `integration.authIntegration.authDetails.host`.
      */
     host?: string;
+    /**
+     * `owner/repo` the webhook names. Forgejo only: resolves the repository
+     * when the integration stores another address for the instance than
+     * the one in the payload.
+     */
+    repositoryFullName?: string;
 };
 
 @Injectable()
@@ -69,12 +76,17 @@ export class WebhookContextService {
 
         const candidates =
             platformType === PlatformType.FORGEJO
-                ? forgejoConfigsOnHost(configs, disambiguator?.host)
+                ? forgejoConfigsForWebhook(configs, {
+                      ...disambiguator,
+                      repositoryId,
+                  })
                 : this.disambiguateConfigs(configs, disambiguator);
 
         if (!candidates.length) {
-            // Forgejo repository ids are per instance: the configs found
-            // belong to other instances that reached the same number.
+            // Forgejo repository ids are per instance: no config found is on
+            // the sending host or keeps the same `owner/repo`. Both sides are
+            // logged, so an instance stored at another address than its
+            // ROOT_URL, whose repository was also renamed, shows up here.
             this.logger.warn({
                 message:
                     'Webhook ignored: the repository id is connected only on other Forgejo instances',
@@ -83,6 +95,15 @@ export class WebhookContextService {
                     platformType,
                     repositoryId,
                     host: disambiguator?.host,
+                    repositoryFullName: disambiguator?.repositoryFullName,
+                    connected: configs.map((config) => ({
+                        organizationId: config?.team?.organization?.uuid,
+                        host: storedHostOf(config),
+                        repositoryFullName: (config?.configValue ?? []).find(
+                            (repository: any) =>
+                                String(repository?.id) === repositoryId,
+                        )?.name,
+                    })),
                 },
             });
             return null;

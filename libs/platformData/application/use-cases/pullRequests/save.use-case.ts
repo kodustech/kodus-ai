@@ -1,6 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
 import {
-    forgejoConfigsOnHost,
+    forgejoConfigsForWebhook,
     getMappedPlatform,
 } from '@libs/common/utils/webhooks';
 import { IntegrationConfigKey, PlatformType } from '@libs/core/domain/enums';
@@ -90,7 +90,11 @@ export class SavePullRequestUseCase {
                 // integrations of the instance that sent the webhook.
                 const configs =
                     platformType === PlatformType.FORGEJO
-                        ? forgejoConfigsOnHost(foundConfigs, repository.url)
+                        ? forgejoConfigsForWebhook(foundConfigs, {
+                              host: repository.url,
+                              repositoryId: repository.id,
+                              repositoryFullName: repository.fullName,
+                          })
                         : foundConfigs;
 
                 if (!configs || !configs.length) {

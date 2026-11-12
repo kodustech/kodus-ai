@@ -199,7 +199,7 @@ describe('ForgejoPullRequestHandler push events', () => {
         expect(webhookContextService.getContext).toHaveBeenCalledWith(
             PlatformType.FORGEJO,
             '12345',
-            { host: 'git.example.com' },
+            { host: 'git.example.com', repositoryFullName: 'org/test-repo' },
         );
     });
 

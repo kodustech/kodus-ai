@@ -11,7 +11,7 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
-    forgejoConfigsOnHost,
+    forgejoConfigsForWebhook,
     getMappedPlatform,
 } from '@libs/common/utils/webhooks';
 import {
@@ -279,7 +279,11 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
         // the instance that sent the webhook.
         const configs =
             platformType === PlatformType.FORGEJO
-                ? forgejoConfigsOnHost(foundConfigs, repository.url)
+                ? forgejoConfigsForWebhook(foundConfigs, {
+                              host: repository.url,
+                              repositoryId: repository.id,
+                              repositoryFullName: repository.full_name,
+                          })
                 : foundConfigs;
 
         if (!configs || !configs.length) {

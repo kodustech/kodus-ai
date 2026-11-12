@@ -33,23 +33,70 @@ export function forgejoWebhookHost(payload: any): string | undefined {
     );
 }
 
+/** The instance and the `owner/repo` a Forgejo webhook comes from. */
+export type ForgejoWebhookSource = {
+    host?: string;
+    repositoryFullName?: string;
+};
+
+export function forgejoWebhookSource(payload: any): ForgejoWebhookSource {
+    return {
+        host: forgejoWebhookHost(payload),
+        repositoryFullName: payload?.repository?.full_name,
+    };
+}
+
 /**
- * The configs whose Forgejo integration is on `host`. None when the host is
- * unknown: a config of another instance must never take the webhook.
+ * The configs that hold the repository a Forgejo webhook comes from. A
+ * config on the sending host takes it; renaming or moving the repository
+ * keeps the host. When none is on that host, a config that keeps the same
+ * `owner/repo` under that id takes it: Kodus may reach the instance at
+ * another address than the one Forgejo builds its URLs from (`ROOT_URL`),
+ * such as a docker service name or an IP. None otherwise: a config of
+ * another instance must never take the webhook.
  */
-export function forgejoConfigsOnHost<T>(
+export function forgejoConfigsForWebhook<T>(
     configs: T[] | null | undefined,
-    host: string | undefined,
+    source: ForgejoWebhookSource & { repositoryId?: string | number },
 ): T[] {
-    const target = normalizeHost(host);
-    if (!target) {
+    const candidates = configs ?? [];
+
+    const host = normalizeHost(source?.host);
+    const onHost = host
+        ? candidates.filter(
+              (config) => normalizeHost(storedHostOf(config)) === host,
+          )
+        : [];
+    if (onHost.length) {
+        return onHost;
+    }
+
+    const fullName = normalizeFullName(source?.repositoryFullName);
+    const repositoryId = String(source?.repositoryId ?? '');
+    if (!fullName || !repositoryId) {
         return [];
     }
 
-    return (configs ?? []).filter(
-        (config: any) =>
-            normalizeHost(
-                config?.integration?.authIntegration?.authDetails?.host,
-            ) === target,
+    return candidates.filter((config: any) =>
+        (Array.isArray(config?.configValue) ? config.configValue : []).some(
+            (repository: any) =>
+                String(repository?.id) === repositoryId &&
+                normalizeFullName(repository?.fullName ?? repository?.name) ===
+                    fullName,
+        ),
     );
+}
+
+/** The instance host stored on a config's Forgejo integration. */
+export function storedHostOf(config: any): string | undefined {
+    return config?.integration?.authIntegration?.authDetails?.host;
+}
+
+function normalizeFullName(
+    value: string | undefined | null,
+): string | undefined {
+    const trimmed = String(value ?? '')
+        .trim()
+        .toLowerCase();
+    return trimmed || undefined;
 }

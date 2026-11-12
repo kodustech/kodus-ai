@@ -7,12 +7,17 @@ describe('ForgejoService — findTeamAndOrganizationIdByConfigKey resolves the r
     // Forgejo numbers repositories per instance: repository 26 is
     // alpha/app on git.alpha.example and beta/api on
     // git.beta.example.
-    const configOn = (host: string, org: string) => ({
+    const configOn = (
+        host: string,
+        org: string,
+        repositoryFullName: string,
+    ) => ({
         team: { uuid: `team-${org}`, organization: { uuid: `org-${org}` } },
         integration: { authIntegration: { authDetails: { host } } },
+        configValue: [{ id: '26', name: repositoryFullName }],
     });
-    const alpha = configOn('https://git.alpha.example', 'alpha');
-    const beta = configOn('https://git.beta.example', 'beta');
+    const alpha = configOn('https://git.alpha.example', 'alpha', 'alpha/app');
+    const beta = configOn('https://git.beta.example', 'beta', 'beta/api');
 
     const makeService = (configs: unknown[]) => {
         const service = Object.create(
@@ -39,7 +44,7 @@ describe('ForgejoService — findTeamAndOrganizationIdByConfigKey resolves the r
         ]);
 
         const config = await service.findTeamAndOrganizationIdByConfigKey({
-            repository: { id: 26 },
+            repository: { id: 26, name: 'beta/api' },
             host: 'git.beta.example',
         });
 
@@ -56,10 +61,22 @@ describe('ForgejoService — findTeamAndOrganizationIdByConfigKey resolves the r
 
         await expect(
             service.findTeamAndOrganizationIdByConfigKey({
-                repository: { id: 26 },
+                repository: { id: 26, name: 'beta/api' },
                 host: 'git.beta.example',
             }),
         ).resolves.toBeNull();
+    });
+
+    it('returns the config of an instance stored at another address that keeps the repository', async () => {
+        const internal = configOn('http://forgejo:3000', 'beta', 'beta/api');
+        const { service } = makeService([alpha, internal]);
+
+        await expect(
+            service.findTeamAndOrganizationIdByConfigKey({
+                repository: { id: 26, name: 'beta/api' },
+                host: 'git.beta.example',
+            }),
+        ).resolves.toBe(internal);
     });
 
     it('returns nothing, and looks nothing up, without a repository id', async () => {
