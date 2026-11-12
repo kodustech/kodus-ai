@@ -11,6 +11,9 @@
 //   P4  an include glob that names files explicitly reaches a file the team's
 //       ignorePaths set aside
 //   P7  a disabled agent does not run
+//   P14 a convention shown by the code: an existing file cited as the pattern
+//       is verified and posted when the change departs from it, quiet when
+//       the change follows it (code-pattern-cases.js)
 //
 // A case is a pull request: `repo` is every file at the PR's head, `before` the
 // files the PR changed as they were (null = added). `team` is what the team
@@ -621,5 +624,7 @@ export const migration: Migration = {
         ],
     },
 ];
+
+CASES.push(...require('./code-pattern-cases').CODE_PATTERN_CASES);
 
 module.exports = { CASES };
