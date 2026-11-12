@@ -1,6 +1,12 @@
 import { createHash } from 'crypto';
 
 export interface ScanFingerprintInput {
+    /**
+     * The repository's platform: an id is only unique on its own platform, and
+     * one organization can hold a GitHub repository and a GitLab project with
+     * the same id.
+     */
+    repositoryPlatform: string;
     repositoryId: string;
     /**
      * The lens that reported it. Only a finding without a CWE is told apart
@@ -98,8 +104,9 @@ export function cweFamily(cwe?: string): string {
 }
 
 /**
- * The identity a security-scan finding keeps across scans: where it is (file
- * and function) and what kind of weakness (the CWE's family). Line numbers
+ * The identity a security-scan finding keeps across scans: which repository
+ * (platform and id), where in it (file and function) and what kind of
+ * weakness (the CWE's family). Line numbers
  * are left out on purpose: an edit above the finding moves every line, and
  * the same finding would come back as a new issue while the old one is
  * resolved. Renaming the file or the function does change the identity — the
@@ -115,6 +122,7 @@ export function computeScanFingerprint(input: ScanFingerprintInput): string {
         : cweFamily(input.cwe) ||
           `class:${input.vulnerabilityClass.trim().toLowerCase()}`;
     const parts = [
+        input.repositoryPlatform.trim().toLowerCase(),
         input.repositoryId,
         appWide ? '' : normalizeScanPath(input.filePath),
         appWide ? '' : (input.symbol ?? '').trim(),

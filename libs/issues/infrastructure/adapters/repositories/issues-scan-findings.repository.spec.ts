@@ -63,8 +63,10 @@ describe('IssuesRepository — security-scan findings', () => {
                 contributingSuggestions: [],
             }),
         );
+        // The same id on another platform is another repository.
         expect(model.findOne).toHaveBeenCalledWith({
             'organizationId': 'org-1',
+            'repository.platform': PlatformType.GITHUB,
             'repository.id': 'repo-1',
             'fingerprint': 'fp-1',
         });
@@ -319,6 +321,7 @@ describe('IssuesRepository — security-scan findings', () => {
 
     const unseen = {
         'organizationId': 'org-1',
+        'repository.platform': PlatformType.GITHUB,
         'repository.id': 'repo-1',
         'source': IssueSource.SECURITY_SCAN,
         'status': IssueStatus.OPEN,
@@ -333,6 +336,7 @@ describe('IssuesRepository — security-scan findings', () => {
 
         const resolved = await repository.resolveUnseenScanFindings({
             organizationId: 'org-1',
+            repositoryPlatform: PlatformType.GITHUB,
             repositoryId: 'repo-1',
             scanId: 'scan-2',
             // A scan may spell a path as it was found; the issue stores it clean.
@@ -362,6 +366,7 @@ describe('IssuesRepository — security-scan findings', () => {
 
         await repository.resolveUnseenScanFindings({
             organizationId: 'org-1',
+            repositoryPlatform: PlatformType.GITHUB,
             repositoryId: 'repo-1',
             scanId: 'scan-2',
             examined: [],
@@ -383,6 +388,7 @@ describe('IssuesRepository — security-scan findings', () => {
         await expect(
             repository.resolveUnseenScanFindings({
                 organizationId: 'org-1',
+                repositoryPlatform: PlatformType.GITHUB,
                 repositoryId: 'repo-1',
                 scanId: 'scan-2',
                 examined: [{ vulnerabilityClass: 'authz', filePaths: [] }],

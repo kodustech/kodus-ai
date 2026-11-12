@@ -2,6 +2,7 @@ import { computeScanFingerprint, cweFamily } from './scan-fingerprint';
 
 describe('computeScanFingerprint', () => {
     const base = {
+        repositoryPlatform: 'github',
         repositoryId: 'repo-1',
         vulnerabilityClass: 'authz',
         filePath: 'src/orders/orders.controller.ts',
@@ -58,6 +59,8 @@ describe('computeScanFingerprint', () => {
 
     it.each([
         ['repository', { repositoryId: 'repo-2' }],
+        // A GitLab project can carry the id of a GitHub repository.
+        ['platform', { repositoryPlatform: 'gitlab' }],
         ['file', { filePath: 'src/orders/orders.service.ts' }],
         ['symbol', { symbol: 'OrdersController.update' }],
         ['kind of weakness', { cwe: 'CWE-89' }],
