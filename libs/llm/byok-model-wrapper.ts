@@ -108,6 +108,33 @@ function estimatePromptTokens(prompt: unknown): number {
     return estimateTextTokens(text);
 }
 
+/**
+ * Room a provider adds around what is sent: its chat template, each turn's
+ * markers and the instructions some render tools into (Anthropic's tool
+ * prompt runs to a few hundred tokens).
+ */
+const PROVIDER_FRAMING_TOKENS = 2_000;
+
+/**
+ * More tokens than any model's tokenizer makes of the prompt: every token of
+ * a byte-level tokenizer covers at least one byte, so the UTF-8 size of the
+ * serialized prompt bounds it (its JSON quoting only adds). The shared
+ * tokenizer's count is no bound: another model's tokenizer can split some
+ * scripts (Korean comments in code) into more tokens than any fixed margin.
+ */
+function promptTokensUpperBound(prompt: unknown): number {
+    if (prompt == null) return PROVIDER_FRAMING_TOKENS;
+    const text =
+        typeof prompt === 'string' ? prompt : safeSerialize(prompt);
+    return Buffer.byteLength(text, 'utf8') + PROVIDER_FRAMING_TOKENS;
+}
+
+/** The provider answered with an error status: it refused the request, unbilled. */
+function refusedByProvider(err: unknown): boolean {
+    const status = (err as { statusCode?: unknown } | null)?.statusCode;
+    return typeof status === 'number' && status >= 400;
+}
+
 function safeSerialize(value: unknown): string {
     try {
         return JSON.stringify(value) ?? '';
@@ -170,6 +197,9 @@ export function wrapByokModel(
                 // What is sent: the call's own params, or with the answer cap
                 // a spend-capped run enforces (below).
                 let callParams = params;
+                // Set as the request leaves: a failure before it was never
+                // billed; one after it may have been.
+                let reachedProvider = false;
                 const generate = async () => {
                     const sent = withoutRefusedFields(
                         callParams,
@@ -178,8 +208,12 @@ export function wrapByokModel(
                         Date.now(),
                         namespace,
                     );
-                    const call = (p: any) =>
-                        p === params ? doGenerate() : inner.doGenerate(p);
+                    const call = (p: any) => {
+                        reachedProvider = true;
+                        return p === params
+                            ? doGenerate()
+                            : inner.doGenerate(p);
+                    };
                     // A strict upstream refuses one unknown field per answer
                     // (Go's decoder stops at the first), so each reasoning field
                     // we added can cost one more ask, never more than that: a
@@ -307,8 +341,12 @@ export function wrapByokModel(
                 // A metered run with a spend cap admits the request before it
                 // leaves, against the most it can cost: its prompt and tools,
                 // and the answer cap it asks for (#2451).
-                const admission = admitRequest(() => ({
+                const admission = await admitRequest(() => ({
                     inputTokens: estimatePromptTokens({
+                        prompt: params?.prompt,
+                        tools: params?.tools,
+                    }),
+                    inputTokensUpperBound: promptTokensUpperBound({
                         prompt: params?.prompt,
                         tools: params?.tools,
                     }),
@@ -355,7 +393,17 @@ export function wrapByokModel(
                     );
                 } catch (err) {
                     // An error can still carry what the provider billed.
-                    settle(readAiSdkUsageFromError(err)?.usage);
+                    // Without it, only a request that never left, or that
+                    // the provider refused with an error status, cost
+                    // nothing; a lost connection or a cut stream may have
+                    // been billed, so its totals are unknown, not zero.
+                    const billed = readAiSdkUsageFromError(err)?.usage;
+                    settle(
+                        billed ??
+                            (reachedProvider && !refusedByProvider(err)
+                                ? {}
+                                : undefined),
+                    );
                     throw err;
                 }
                 // Answered, so billed, even when the provider sent no usage.
