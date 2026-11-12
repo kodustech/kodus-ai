@@ -254,6 +254,31 @@ describe('LocalSandboxService sandbox file access', () => {
         );
     });
 
+    it.each([
+        'app/[...slug]/page.tsx',
+        'app/(..)photo/page.tsx',
+        'src/foo..bar.ts',
+    ])(
+        'reads and writes %p, whose ".." is part of a file name',
+        async (rel) => {
+            await sandbox.writeFile(rel, 'route');
+            expect(fs.readFileSync(path.join(dir, rel), 'utf-8')).toBe('route');
+            await expect(sandbox.readFile(rel)).resolves.toBe('route');
+        },
+    );
+
+    it.each(['sub/../../outside.txt', '..\\outside.txt'])(
+        'rejects %p, which has a ".." segment',
+        async (escapePath) => {
+            await expect(sandbox.readFile(escapePath)).rejects.toThrow(
+                /Path traversal using "\.\." is not allowed/,
+            );
+            await expect(sandbox.writeFile(escapePath, 'x')).rejects.toThrow(
+                /Path traversal using "\.\." is not allowed/,
+            );
+        },
+    );
+
     it('rejects reading through a symlink that escapes the repo', async () => {
         const outsideFile = path.join(outsideDir, 'secret.txt');
         fs.writeFileSync(outsideFile, 'secret');

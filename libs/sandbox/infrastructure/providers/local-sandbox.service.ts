@@ -34,6 +34,7 @@ import {
     SubmoduleGitHost,
 } from '@libs/sandbox/infrastructure/providers/submodule-fetch';
 import { sedLineRange } from '@libs/sandbox/infrastructure/providers/read-within-root';
+import { hasParentDirSegment } from '@libs/sandbox/infrastructure/providers/path-segments';
 
 const execFileAsync = promisify(execFile);
 
@@ -1167,9 +1168,9 @@ export class LocalSandboxService implements ISandboxProvider {
     }
 
     private validatePath(path: string, repoDir?: string): void {
-        // Check for .. traversal FIRST, before any absolute-path logic,
+        // Check for a ".." segment FIRST, before any absolute-path logic,
         // so paths like /repo/../../../etc/passwd are always rejected.
-        if (path.includes('..')) {
+        if (hasParentDirSegment(path)) {
             throw new Error('Path traversal using ".." is not allowed');
         }
         // `isAbsolute` (not `startsWith('/')`) so a Windows absolute path like
