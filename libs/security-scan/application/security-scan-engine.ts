@@ -524,16 +524,21 @@ export class SecurityScanEngine {
     private async listFiles(
         sandbox: SandboxInstance,
     ): Promise<{ files: string[]; complete: boolean }> {
+        // NUL-separated: a plain listing quotes and escapes any path with
+        // a non-ASCII byte (core.quotePath), and `src/ação.ts` would then
+        // match no file a finding names.
         const fromGit = await sandbox
-            .run(`git -C ${sandbox.repoDir} ls-files`, { timeoutMs: 60_000 })
+            .run(`git -C ${sandbox.repoDir} ls-files -z`, { timeoutMs: 60_000 })
             .catch(() => undefined);
         const tracked = fromGit?.exitCode === 0 && !!fromGit.stdout;
-        const raw = tracked
-            ? fromGit.stdout
-            : await sandbox.remoteCommands.listDir('.', 25);
-        const all = raw
-            .split('\n')
-            .map((l) => l.trim().replace(/^\.\//, ''))
+        const all = (
+            tracked
+                ? fromGit.stdout.split('\0')
+                : (await sandbox.remoteCommands.listDir('.', 25))
+                      .split('\n')
+                      .map((l) => l.trim())
+        )
+            .map((l) => l.replace(/^\.\//, ''))
             .filter((l) => l && !l.startsWith('Error:'));
         const files = all.slice(0, LISTING_LIMIT * 5);
         return { files, complete: tracked && files.length === all.length };
@@ -765,12 +770,21 @@ export class SecurityScanEngine {
             }
         }
 
+        // Not one class read to the end (lenses failed, ran out of steps or
+        // could not verify): the unit failed, so it runs again rather than
+        // passing for a clean area.
         const { lensesExamined: examinedClasses } = progressSoFar();
-        return failures === runs.length &&
-            runs.length > 0 &&
-            !examinedBefore.length
-            ? { findings, error: 'every lens failed', examinedClasses }
-            : { findings, examinedClasses };
+        if (!examinedClasses.length) {
+            return {
+                findings,
+                error:
+                    failures === runs.length
+                        ? 'every lens failed'
+                        : 'no lens read the area to the end',
+                examinedClasses,
+            };
+        }
+        return { findings, examinedClasses };
     }
 
     private lensInput(

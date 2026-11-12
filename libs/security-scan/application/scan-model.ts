@@ -8,15 +8,18 @@ import type { PermissionValidationService } from '@libs/ee/shared/services/permi
 import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
 import { LLM_TASK } from '@libs/llm/byok-config';
+import { BYOKProvider } from '@libs/llm/model-providers';
 
 import type { SecurityScanModel } from './security-scan-engine';
 
 /**
- * The deep scan runs only on the organization's own model (BYOK), never on
- * the managed one: a whole-repository scan is the organization's spend.
+ * The deep scan runs only on a model with the organization's own key (BYOK):
+ * never on the managed model, nor on the Kodus provider, whose platform key
+ * draws prepaid credits the scan does not check. A whole-repository scan is
+ * the organization's own spend.
  */
 export const SCAN_NEEDS_BYOK_MESSAGE =
-    'Deep scan runs only on your own model. Connect one in AI providers to run it; you can route the Deep scan to a model of its own there.';
+    'Deep scan runs only on a model with your own API key, not on the Kodus provider. Connect one in AI providers to run it; you can route the Deep scan to a model of its own there.';
 
 export interface ResolvedScanModel {
     model: SecurityScanModel;
@@ -56,9 +59,12 @@ export async function resolveScanModel(params: {
             // No failover to the organization's backup model: the spend cap
             // prices every request at this model's rates, and a pricier
             // fallback would spend past it uncounted.
-            slot: byokConfig
-                ? { ...byokConfig, fallback: undefined }
-                : byokConfig,
+            // Empty unless the organization's own key runs it: the start and
+            // the job refuse to scan on anything else.
+            slot:
+                byokConfig && byokConfig.provider !== BYOKProvider.KODUS
+                    ? { ...byokConfig, fallback: undefined }
+                    : undefined,
             modelName: main.modelName,
             contextWindowTokens: resolveContextWindow({
                 byokMaxInputTokens: main.maxInputTokens,

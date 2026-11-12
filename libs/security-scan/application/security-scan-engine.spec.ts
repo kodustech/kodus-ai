@@ -117,6 +117,9 @@ function fakeSandbox(type: 'e2b' | 'local' = 'e2b') {
                 );
                 return { stdout: '', exitCode: taken ? 0 : 1 };
             }
+            if (command.includes('ls-files -z')) {
+                return { stdout: Object.keys(FILES).join('\0'), exitCode: 0 };
+            }
             if (command.includes('ls-files')) {
                 return { stdout: Object.keys(FILES).join('\n'), exitCode: 0 };
             }
@@ -614,7 +617,7 @@ describe('SecurityScanEngine', () => {
         );
     });
 
-    it("never writes over, runs or removes a file the repository already has", async () => {
+    it('never writes over, runs or removes a file the repository already has', async () => {
         const sandbox = fakeSandbox('e2b');
         const llm = fakeLlm({ units: [] });
         const answer = llm.getMockImplementation()!;
@@ -646,7 +649,9 @@ describe('SecurityScanEngine', () => {
         expect(sandbox.writeFile).not.toHaveBeenCalled();
         const commands = sandbox.run.mock.calls.map((c: any[]) => c[0]);
         expect(commands.some((c: string) => c.startsWith('rm '))).toBe(false);
-        expect(commands.some((c: string) => c.includes('npx jest'))).toBe(false);
+        expect(commands.some((c: string) => c.includes('npx jest'))).toBe(
+            false,
+        );
         // The test is kept on the issue, marked as not run.
         expect(result.findings[0].reproduction).toEqual(
             expect.objectContaining({
@@ -1342,6 +1347,87 @@ describe('SecurityScanEngine: across slices and units', () => {
         },
     };
 
+    it('keeps a finding in a file whose path has non-ASCII characters', async () => {
+        const accented = 'src/pedidos/ação.ts';
+        const sandbox = fakeSandbox();
+        const run = sandbox.run.getMockImplementation()!;
+        // What git prints for it without -z: quoted, with octal escapes.
+        sandbox.run.mockImplementation(async (command: string) =>
+            command.includes('ls-files -z')
+                ? {
+                      stdout: [...Object.keys(FILES), accented].join('\0'),
+                      exitCode: 0,
+                  }
+                : command.includes('ls-files')
+                  ? {
+                        stdout: '"src/pedidos/a\\303\\247\\303\\243o.ts"',
+                        exitCode: 0,
+                    }
+                  : run(command),
+        );
+        const read = sandbox.remoteCommands.read.getMockImplementation()!;
+        sandbox.remoteCommands.read.mockImplementation(async (path: string) =>
+            path.endsWith('ação.ts')
+                ? FILES['src/orders/orders.controller.ts']
+                : read(path),
+        );
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file === accented && cls === 'authz'
+                    ? [{ ...IDOR, relevantFile: accented }]
+                    : [],
+            ),
+            llm: fakeLlm({
+                units: [
+                    {
+                        file: accented,
+                        relatedFiles: [],
+                        classes: ['authz'],
+                        priority: 90,
+                        reason: 'loads orders by id',
+                    },
+                ],
+            }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.findings.map((f) => f.filePath)).toContain(accented);
+    });
+
+    it('fails a unit no lens read to the end, instead of calling it done', async () => {
+        // Every lens finishes, but its verifier could not check what it found.
+        const runLens = jest.fn(async () => ({
+            findings: { reasoning: '', suggestions: [] },
+            finishReason: 'completed',
+            unverifiedByVerify: [IDOR],
+        }));
+        const engine = new SecurityScanEngine({
+            runLens: runLens as any,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => onlyController),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.progress[0]).toEqual(
+            expect.objectContaining({
+                state: 'failed',
+                error: 'no lens read the area to the end',
+            }),
+        );
+        expect(result.examinedByClass).toEqual([]);
+    });
+
     it('picks a long unit up at its next lens in the next slice, so it gets through', async () => {
         let now = 0;
         const lensOf = (input: any) =>
@@ -1441,7 +1527,10 @@ describe('SecurityScanEngine: across slices and units', () => {
                 suggestions: [later],
                 trace: {
                     groups: [
-                        { keep: summary(later), duplicates: [summary(earlier)] },
+                        {
+                            keep: summary(later),
+                            duplicates: [summary(earlier)],
+                        },
                     ],
                 } as any,
             };

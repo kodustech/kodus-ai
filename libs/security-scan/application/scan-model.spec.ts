@@ -35,4 +35,30 @@ describe('resolveScanModel', () => {
         // The team picks the deep scan's model in routing, on a task of its own.
         expect(resolveModel.mock.calls[0][2]).toBe('securityScan');
     });
+
+    it.each([
+        [
+            'the Kodus provider, on prepaid platform credits',
+            { provider: 'kodus', model: 'deepseek-v4' },
+        ],
+        ['the managed model', undefined],
+    ])(
+        'leaves the slot empty on %s, so the scan refuses to run',
+        async (_case, byokConfig) => {
+            resolveModel.mockResolvedValue({
+                byokConfig,
+                main: { modelName: 'kodus:deepseek-v4' },
+            });
+
+            const { model } = await resolveScanModel({
+                organizationAndTeamData: { organizationId: 'org-1' } as any,
+                permissionValidationService: {} as any,
+                pricingResolver: {
+                    resolve: jest.fn(async () => ({ priced: true, rates: {} })),
+                } as any,
+            });
+
+            expect(model.slot).toBeUndefined();
+        },
+    );
 });
