@@ -346,6 +346,8 @@ describe('SecurityScanJobProcessor', () => {
                 [{ unitId: 'u1', state: 'done', findings: 0 }, []],
                 [{ unitId: 'u2', state: 'failed', findings: 0 }, []],
                 [{ unitId: 'u3', state: 'done', findings: 0 }, []],
+                // An area recorded again counts once, in its last state.
+                [{ unitId: 'u2', state: 'done', findings: 0 }, []],
             ],
             result: finishedResult(),
         });
@@ -355,9 +357,12 @@ describe('SecurityScanJobProcessor', () => {
         // Read once to start the job; never once per area.
         expect(scans.findById).toHaveBeenCalledTimes(1);
         const writes = scans.recordUnit.mock.calls as any[];
-        expect(writes.map((call) => call[1].unitId)).toEqual(['u1', 'u2', 'u3']);
+        expect(writes.map((call) => call[1].unitId)).toEqual(['u1', 'u2', 'u3', 'u2']);
         expect(writes[2][2].coverage).toEqual(
             expect.objectContaining({ unitsDone: 2, unitsFailed: 1 }),
+        );
+        expect(writes[3][2].coverage).toEqual(
+            expect.objectContaining({ unitsDone: 3, unitsFailed: 0 }),
         );
         expect(writes[2][2]).not.toHaveProperty('progress');
     });

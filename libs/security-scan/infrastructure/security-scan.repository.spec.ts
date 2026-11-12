@@ -102,29 +102,31 @@ describe('SecurityScanRepository.recordUnit', () => {
             exec: jest.fn(async () => ({ matchedCount: matched.shift() ?? 1 })),
         }));
 
-    it("replaces the area's earlier entry in place, with the scan's other changes", async () => {
+    it('appends a new area with the scan\'s other changes, guarded in the same write', async () => {
         const updateOne = updateOneReturning(1);
         const repository = new SecurityScanRepository({ updateOne } as any);
 
         await repository.recordUnit('scan-1', progress, { outcome: { created: 1 } } as any, reported);
 
+        // One write: the check that the area has no entry is its filter.
         expect(updateOne).toHaveBeenCalledTimes(1);
         const [filter, update] = updateOne.mock.calls[0] as unknown as [any, any];
-        expect(filter).toEqual({ '_id': 'scan-1', 'progress.unitId': 'u1' });
-        expect(update.$set).toEqual({ 'outcome': { created: 1 }, 'progress.$': progress });
-        expect(update.$push).toEqual({ reported: { $each: reported } });
+        expect(filter).toEqual({ '_id': 'scan-1', 'progress.unitId': { $ne: 'u1' } });
+        expect(update.$set).toEqual({ outcome: { created: 1 } });
+        expect(update.$push).toEqual({ progress, reported: { $each: reported } });
     });
 
-    it('appends the area when it has no entry yet', async () => {
+    it("replaces the area's earlier entry in place when it has one", async () => {
         const updateOne = updateOneReturning(0, 1);
         const repository = new SecurityScanRepository({ updateOne } as any);
 
-        await repository.recordUnit('scan-1', progress, {}, reported);
+        await repository.recordUnit('scan-1', progress, { outcome: { created: 1 } } as any, reported);
 
         expect(updateOne).toHaveBeenCalledTimes(2);
         const [filter, update] = updateOne.mock.calls[1] as unknown as [any, any];
-        expect(filter).toEqual({ _id: 'scan-1' });
-        expect(update.$push).toEqual({ progress, reported: { $each: reported } });
+        expect(filter).toEqual({ '_id': 'scan-1', 'progress.unitId': 'u1' });
+        expect(update.$set).toEqual({ 'outcome': { created: 1 }, 'progress.$': progress });
+        expect(update.$push).toEqual({ reported: { $each: reported } });
     });
 
     it('removes a pending area', async () => {

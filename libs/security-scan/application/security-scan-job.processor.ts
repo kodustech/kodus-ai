@@ -298,9 +298,13 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         // Only this job writes the scan's progress while it runs, so it is
         // tracked here instead of re-read from the document after every area.
         const unitStates = new Map(scan.progress.map((p) => [p.unitId, p]));
-        let liveCoverage = scan.coverage;
+        const stateCounts = new Map<ScanUnitProgress['state'], number>();
+        const tally = (state: ScanUnitProgress['state'], by: number) =>
+            stateCounts.set(state, (stateCounts.get(state) ?? 0) + by);
+        unitStates.forEach((p) => tally(p.state, 1));
         const countIn = (state: ScanUnitProgress['state']) =>
-            [...unitStates.values()].filter((p) => p.state === state).length;
+            stateCounts.get(state) ?? 0;
+        let liveCoverage = scan.coverage;
 
         const engine = new SecurityScanEngine();
         const result = await engine.run({
@@ -354,9 +358,14 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         .clearIssuesCache(scan.organizationId)
                         .catch(() => undefined);
                 }
-                unitStates.delete(progress.unitId);
+                const earlier = unitStates.get(progress.unitId);
+                if (earlier) {
+                    tally(earlier.state, -1);
+                    unitStates.delete(progress.unitId);
+                }
                 if (progress.state !== 'pending') {
                     unitStates.set(progress.unitId, progress);
+                    tally(progress.state, 1);
                 }
                 // Live counts for the scans list; the examined files are only
                 // settled when the slice ends.

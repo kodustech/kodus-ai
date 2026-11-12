@@ -149,22 +149,24 @@ export class SecurityScanRepository implements ISecurityScanRepository {
                 .exec();
             return;
         }
-        const replaced = await this.model
+        // Appended only while the area has no entry, in the same write as the
+        // check; an area recorded before is replaced in place.
+        const appended = await this.model
+            .updateOne(
+                { '_id': uuid, 'progress.unitId': { $ne: progress.unitId } },
+                { $set: changes, $push: { progress, ...reported } },
+            )
+            .exec();
+        if (appended.matchedCount) {
+            return;
+        }
+        await this.model
             .updateOne(
                 { '_id': uuid, 'progress.unitId': progress.unitId },
                 {
                     $set: { ...changes, 'progress.$': progress },
                     ...(reported ? { $push: reported } : {}),
                 },
-            )
-            .exec();
-        if (replaced.matchedCount) {
-            return;
-        }
-        await this.model
-            .updateOne(
-                { _id: uuid },
-                { $set: changes, $push: { progress, ...reported } },
             )
             .exec();
     }
