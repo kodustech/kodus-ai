@@ -576,6 +576,8 @@ export class SecurityScanEngine {
                 message: `Security scan plan holds ${params.maxUnits} of the repository's candidate files`,
                 context: SecurityScanEngine.name,
                 metadata: {
+                    organizationId: params.organizationId,
+                    teamId: params.teamId,
                     repositoryId: params.repositoryId,
                     candidates: Object.keys(surface.files).length,
                 },
@@ -806,9 +808,8 @@ export class SecurityScanEngine {
         // fails the unit: it is shown and runs again, while the classes that
         // were read still count as examined.
         const { lensesExamined: examinedClasses } = progressSoFar();
-        const missing = unit.classes.filter(
-            (c) => !examinedClasses.includes(c),
-        );
+        const examinedSet = new Set(examinedClasses);
+        const missing = unit.classes.filter((c) => !examinedSet.has(c));
         if (missing.length) {
             return {
                 findings,
