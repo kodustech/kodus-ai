@@ -423,6 +423,34 @@ export class IssuesRepository implements IIssuesRepository {
         return [...areas.values()];
     }
 
+    async markScanFindingsSeen(
+        params: ScanRepositoryScope & {
+            fingerprints: string[];
+            scanId: string;
+        },
+    ): Promise<number> {
+        if (!params.fingerprints.length) {
+            return 0;
+        }
+        const result = await this.issuesModel.updateMany(
+            {
+                'organizationId': params.organizationId,
+                'repository.platform': params.repositoryPlatform,
+                'repository.id': params.repositoryId,
+                'source': IssueSource.SECURITY_SCAN,
+                'status': IssueStatus.OPEN,
+                'fingerprint': { $in: [...new Set(params.fingerprints)] },
+            },
+            {
+                $set: {
+                    lastSeenScanId: params.scanId,
+                    lastSeenAt: new Date().toISOString(),
+                },
+            },
+        );
+        return result?.modifiedCount ?? 0;
+    }
+
     async resolveUnseenScanFindings(
         params: ResolveUnseenScanFindingsParams,
     ): Promise<number> {

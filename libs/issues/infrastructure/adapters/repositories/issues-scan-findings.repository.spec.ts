@@ -534,3 +534,47 @@ describe('IssuesRepository.findOpenScanFindingAreas', () => {
         });
     });
 });
+
+describe('IssuesRepository.markScanFindingsSeen', () => {
+    it("marks the repository's open scan findings with these fingerprints as seen by the scan", async () => {
+        const updateMany = jest.fn(async () => ({ modifiedCount: 2 }));
+        const repository = new IssuesRepository({ updateMany } as any);
+
+        const seen = await repository.markScanFindingsSeen({
+            organizationId: 'org-1',
+            repositoryPlatform: PlatformType.GITHUB,
+            repositoryId: 'repo-1',
+            fingerprints: ['fp-1', 'fp-2', 'fp-1'],
+            scanId: 'scan-2',
+        });
+
+        expect(seen).toBe(2);
+        const [filter, update] = updateMany.mock.calls[0] as unknown as [any, any];
+        expect(filter).toEqual({
+            'organizationId': 'org-1',
+            'repository.platform': PlatformType.GITHUB,
+            'repository.id': 'repo-1',
+            'source': IssueSource.SECURITY_SCAN,
+            'status': IssueStatus.OPEN,
+            'fingerprint': { $in: ['fp-1', 'fp-2'] },
+        });
+        expect(update.$set.lastSeenScanId).toBe('scan-2');
+        expect(typeof update.$set.lastSeenAt).toBe('string');
+    });
+
+    it('writes nothing without fingerprints', async () => {
+        const updateMany = jest.fn();
+        const repository = new IssuesRepository({ updateMany } as any);
+
+        await expect(
+            repository.markScanFindingsSeen({
+                organizationId: 'org-1',
+                repositoryPlatform: PlatformType.GITHUB,
+                repositoryId: 'repo-1',
+                fingerprints: [],
+                scanId: 'scan-2',
+            }),
+        ).resolves.toBe(0);
+        expect(updateMany).not.toHaveBeenCalled();
+    });
+});

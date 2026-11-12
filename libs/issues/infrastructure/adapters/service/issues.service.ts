@@ -155,6 +155,15 @@ export class IssuesService implements IIssuesService {
         return this.issuesRepository.findOpenScanFindingAreas(params);
     }
 
+    async markScanFindingsSeen(
+        params: ScanRepositoryScope & {
+            fingerprints: string[];
+            scanId: string;
+        },
+    ): Promise<number> {
+        return this.issuesRepository.markScanFindingsSeen(params);
+    }
+
     async resolveUnseenScanFindings(
         params: ResolveUnseenScanFindingsParams,
     ): Promise<number> {
