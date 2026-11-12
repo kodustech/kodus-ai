@@ -47,6 +47,17 @@ export interface ScanRepositoryScope {
     repositoryId: string;
 }
 
+export interface MarkScanFindingsSeenParams extends ScanRepositoryScope {
+    fingerprints: string[];
+    scanId: string;
+    /**
+     * The scan found these again (a fresh finding the dedup folded into
+     * them): one resolved since is reopened, as a stored sighting would.
+     * Without it, only open findings are marked.
+     */
+    foundAgain?: boolean;
+}
+
 /** A file and a class an open scan finding sits at. */
 export interface OpenScanFindingArea {
     filePath: string;
@@ -138,12 +149,10 @@ export interface IIssuesRepository {
      * its findings without reading their areas again: they are this scan's
      * sightings too, and not resolved as unseen.
      */
-    markScanFindingsSeen(
-        params: ScanRepositoryScope & {
-            fingerprints: string[];
-            scanId: string;
-        },
-    ): Promise<number>;
+    markScanFindingsSeen(params: MarkScanFindingsSeenParams): Promise<{
+        sighted: number;
+        reopened: number;
+    }>;
 
     resolveUnseenScanFindings(
         params: ResolveUnseenScanFindingsParams,

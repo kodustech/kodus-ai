@@ -9,6 +9,7 @@ import {
 } from '@libs/core/infrastructure/repositories/mappers';
 import {
     IIssuesRepository,
+    MarkScanFindingsSeenParams,
     OpenScanFindingArea,
     ResolveUnseenScanFindingsParams,
     ScanRepositoryScope,
@@ -424,31 +425,42 @@ export class IssuesRepository implements IIssuesRepository {
     }
 
     async markScanFindingsSeen(
-        params: ScanRepositoryScope & {
-            fingerprints: string[];
-            scanId: string;
-        },
-    ): Promise<number> {
+        params: MarkScanFindingsSeenParams,
+    ): Promise<{ sighted: number; reopened: number }> {
         if (!params.fingerprints.length) {
-            return 0;
+            return { sighted: 0, reopened: 0 };
         }
-        const result = await this.issuesModel.updateMany(
-            {
-                'organizationId': params.organizationId,
-                'repository.platform': params.repositoryPlatform,
-                'repository.id': params.repositoryId,
-                'source': IssueSource.SECURITY_SCAN,
-                'status': IssueStatus.OPEN,
-                'fingerprint': { $in: [...new Set(params.fingerprints)] },
-            },
-            {
-                $set: {
-                    lastSeenScanId: params.scanId,
-                    lastSeenAt: new Date().toISOString(),
-                },
-            },
+        const now = new Date().toISOString();
+        const theseFindings = {
+            'organizationId': params.organizationId,
+            'repository.platform': params.repositoryPlatform,
+            'repository.id': params.repositoryId,
+            'source': IssueSource.SECURITY_SCAN,
+            'fingerprint': { $in: [...new Set(params.fingerprints)] },
+        };
+        const sighted = await this.issuesModel.updateMany(
+            { ...theseFindings, status: IssueStatus.OPEN },
+            { $set: { lastSeenScanId: params.scanId, lastSeenAt: now } },
         );
-        return result?.modifiedCount ?? 0;
+        // Found again after a scan resolved it: back open. A dismissed one
+        // stays dismissed, as on a stored sighting.
+        const reopened = params.foundAgain
+            ? await this.issuesModel.updateMany(
+                  { ...theseFindings, status: IssueStatus.RESOLVED },
+                  {
+                      $set: {
+                          status: IssueStatus.OPEN,
+                          lastSeenScanId: params.scanId,
+                          lastSeenAt: now,
+                      },
+                      $unset: { resolvedAt: '' },
+                  },
+              )
+            : undefined;
+        return {
+            sighted: sighted?.modifiedCount ?? 0,
+            reopened: reopened?.modifiedCount ?? 0,
+        };
     }
 
     async resolveUnseenScanFindings(

@@ -536,30 +536,57 @@ describe('IssuesRepository.findOpenScanFindingAreas', () => {
 });
 
 describe('IssuesRepository.markScanFindingsSeen', () => {
+    const scope = {
+        organizationId: 'org-1',
+        repositoryPlatform: PlatformType.GITHUB,
+        repositoryId: 'repo-1',
+    };
+    const identity = {
+        'organizationId': 'org-1',
+        'repository.platform': PlatformType.GITHUB,
+        'repository.id': 'repo-1',
+        'source': IssueSource.SECURITY_SCAN,
+        'fingerprint': { $in: ['fp-1', 'fp-2'] },
+    };
+
     it("marks the repository's open scan findings with these fingerprints as seen by the scan", async () => {
         const updateMany = jest.fn(async () => ({ modifiedCount: 2 }));
         const repository = new IssuesRepository({ updateMany } as any);
 
-        const seen = await repository.markScanFindingsSeen({
-            organizationId: 'org-1',
-            repositoryPlatform: PlatformType.GITHUB,
-            repositoryId: 'repo-1',
+        const result = await repository.markScanFindingsSeen({
+            ...scope,
             fingerprints: ['fp-1', 'fp-2', 'fp-1'],
             scanId: 'scan-2',
         });
 
-        expect(seen).toBe(2);
+        expect(result).toEqual({ sighted: 2, reopened: 0 });
+        // Not found again: a resolved one stays resolved.
+        expect(updateMany).toHaveBeenCalledTimes(1);
         const [filter, update] = updateMany.mock.calls[0] as unknown as [any, any];
-        expect(filter).toEqual({
-            'organizationId': 'org-1',
-            'repository.platform': PlatformType.GITHUB,
-            'repository.id': 'repo-1',
-            'source': IssueSource.SECURITY_SCAN,
-            'status': IssueStatus.OPEN,
-            'fingerprint': { $in: ['fp-1', 'fp-2'] },
-        });
+        expect(filter).toEqual({ ...identity, status: IssueStatus.OPEN });
         expect(update.$set.lastSeenScanId).toBe('scan-2');
         expect(typeof update.$set.lastSeenAt).toBe('string');
+    });
+
+    it('reopens a resolved one the scan found again, never a dismissed one', async () => {
+        const updateMany = jest
+            .fn()
+            .mockResolvedValueOnce({ modifiedCount: 1 })
+            .mockResolvedValueOnce({ modifiedCount: 1 });
+        const repository = new IssuesRepository({ updateMany } as any);
+
+        const result = await repository.markScanFindingsSeen({
+            ...scope,
+            fingerprints: ['fp-1', 'fp-2'],
+            scanId: 'scan-2',
+            foundAgain: true,
+        });
+
+        expect(result).toEqual({ sighted: 1, reopened: 1 });
+        const [filter, update] = updateMany.mock.calls[1] as unknown as [any, any];
+        expect(filter).toEqual({ ...identity, status: IssueStatus.RESOLVED });
+        expect(update.$set.status).toBe(IssueStatus.OPEN);
+        expect(update.$unset).toEqual({ resolvedAt: '' });
     });
 
     it('writes nothing without fingerprints', async () => {
@@ -567,14 +594,8 @@ describe('IssuesRepository.markScanFindingsSeen', () => {
         const repository = new IssuesRepository({ updateMany } as any);
 
         await expect(
-            repository.markScanFindingsSeen({
-                organizationId: 'org-1',
-                repositoryPlatform: PlatformType.GITHUB,
-                repositoryId: 'repo-1',
-                fingerprints: [],
-                scanId: 'scan-2',
-            }),
-        ).resolves.toBe(0);
+            repository.markScanFindingsSeen({ ...scope, fingerprints: [], scanId: 'scan-2' }),
+        ).resolves.toEqual({ sighted: 0, reopened: 0 });
         expect(updateMany).not.toHaveBeenCalled();
     });
 });
