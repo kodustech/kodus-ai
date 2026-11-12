@@ -46,13 +46,23 @@ export function replyFor(
     if (comment === 'created') {
         return 'Business logic checked. The result is in the Kody · Business Logic comment on this pull request.';
     }
+    return `${verdict} ${recheckNotice(changed)}`;
+}
+
+/**
+ * What a re-check says about the Business Logic comment, in ONE place: the
+ * command reply and the two thread replies carried four near-copies of this
+ * sentence and had already drifted, so the next wording change would have
+ * landed in one path and described the same status differently in another.
+ */
+export function recheckNotice(changed?: boolean): string {
     if (changed === false) {
-        return `${verdict} The result did not change.`;
+        return 'The result did not change; the Kody · Business Logic comment says the same.';
     }
     if (changed === true) {
-        return `${verdict} The Kody · Business Logic comment is updated.`;
+        return 'The Kody · Business Logic comment is updated.';
     }
-    return `${verdict} The result is in the Kody · Business Logic comment on this pull request.`;
+    return 'The result is in the Kody · Business Logic comment on this pull request.';
 }
 
 /** Text given to the command that is not a reference is the task itself. */

@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
 import type { BusinessValidationRequest } from '@libs/agents/business-validation/business-validation.types';
 import { requirementKey } from '@libs/agents/business-validation/carry-over';
+import { recheckNotice } from '@libs/agents/business-validation/command';
 import { taskPasses } from '@libs/agents/business-validation/check-policy';
 import type { OpenFinding } from '@libs/agents/business-validation/judge/reply-classifier';
 import type {
@@ -354,11 +355,7 @@ export class BusinessLogicReplies {
                 reply:
                     outcome.kind === 'skipped'
                         ? outcome.message
-                        : published.changed === false
-                          ? 'I re-checked, and the result did not change; the Business Logic comment above says the same.'
-                          : published.changed === true
-                            ? 'I re-checked, and the Business Logic comment above is updated.'
-                            : 'I re-checked, and the result is in the Business Logic comment above.',
+                        : `I re-checked. ${recheckNotice(published.changed)}`,
             };
         }
         const lines = outcome.checks.flatMap((check) =>
@@ -378,11 +375,7 @@ export class BusinessLogicReplies {
                     `I re-checked${intent.files.length ? ` ${intent.files.map((f) => `\`${f}\``).join(', ')}` : ''}:`,
                     ...lines,
                     '',
-                    published.changed === false
-                        ? 'The Business Logic comment above says the same. If a requirement that stays open is not needed in this PR, reply saying so and why, and I will mark it accepted.'
-                        : published.changed === true
-                          ? 'The Business Logic comment above is updated. If a requirement that stays open is not needed in this PR, reply saying so and why, and I will mark it accepted.'
-                          : 'The result is in the Business Logic comment above. If a requirement that stays open is not needed in this PR, reply saying so and why, and I will mark it accepted.',
+                    `${recheckNotice(published.changed)} If a requirement that stays open is not needed in this PR, reply saying so and why, and I will mark it accepted.`,
                 ].join('\n'),
             ),
         };
