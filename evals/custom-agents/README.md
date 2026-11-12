@@ -88,6 +88,8 @@ clean after each one.
 | P10 | `P10-recovery-null-required.patch`: prose recovery requires the label key again | `finder.recovery-nulls.spec.ts` | red: 2 of 5 failed, a second call on both routes |
 | P12 | `P12-instruction-files-unquotable.patch`: the quote gate takes no repository instruction file as a source | `convention-check.repo-instructions.spec.ts`, `convention-second-pass.spec.ts` | red: 4 of 17 failed (2026-11-12, `mutations/run.js --only=P12 --skip-model`, tree restored) |
 | P12 | same | this eval on `deepseek-v4-flash@fireworks` and `kimi-k2.7-code@fireworks`, P12's cases, 2 runs each | broken: the violation posted on 1 of 4 runs, 1 quote-gate drop per run; fixed: 8/8 checks, 0 drops (2026-11-12) |
+| P13 | `P13-architecture-direction-rule-dropped.patch`: the Architecture template (web and CLI) loses its dependency-direction rule | `architecture-template.spec.ts` | red: 1 of 3 failed (2026-11-12, `mutations/run.js --only=P13 --skip-model`, tree restored) |
+| P13 | same | this eval on `deepseek-v4-flash@fireworks` and `kimi-k2.7-code@fireworks`, P13's cases, 2 runs each (the break is main's template) | broken: 16/20, the domain-imports-web-layer flag 3/4; fixed: 19/20, 4/4 (2026-11-12) |
 
 P5 was not falsifiable at first: with the floor and cap moved after dedup, the
 stage spec stayed green (20 of 20). Its two ordering tests scripted the dedup
