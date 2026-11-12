@@ -1275,6 +1275,14 @@ export class SecurityScanEngine {
         // install): then nothing is removed.
         const baseline = await status();
         const before = baseline ? new Set(baseline) : null;
+        // The commit the lenses read: a command that stages or commits a
+        // change is put back to it, not to the index it rewrote.
+        const headOf = () =>
+            sandbox
+                .run(`git -C ${repo} rev-parse HEAD`, { timeoutMs: 10_000 })
+                .then((r) => (r.exitCode === 0 ? r.stdout?.trim() : undefined))
+                .catch(() => undefined);
+        const scanned = await headOf();
         try {
             await sandbox
                 .run(
@@ -1333,7 +1341,8 @@ export class SecurityScanEngine {
                     !before?.has(e) &&
                     (before !== null || !e.startsWith('?? ')),
             );
-            if (appeared.length) {
+            const moved = !!scanned && (await headOf()) !== scanned;
+            if (appeared.length || moved) {
                 logger.warn({
                     message:
                         'A reproduction command changed the checkout; putting it back',
@@ -1345,11 +1354,15 @@ export class SecurityScanEngine {
                         command: record.command.slice(0, 200),
                     },
                 });
-                if (appeared.some((e) => !e.startsWith('?? '))) {
+                // Index and files back to the scanned commit (a checkout
+                // from the index would keep what the command staged), and
+                // the branch back to it if the command committed.
+                if (moved || appeared.some((e) => !e.startsWith('?? '))) {
                     await sandbox
-                        .run(`git -C ${repo} checkout -- .`, {
-                            timeoutMs: 30_000,
-                        })
+                        .run(
+                            `git -C ${repo} reset -q --hard ${scanned ? shellQuote(scanned) : 'HEAD'}`,
+                            { timeoutMs: 30_000 },
+                        )
                         .catch(() => undefined);
                 }
                 const added = appeared

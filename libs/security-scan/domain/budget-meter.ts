@@ -235,26 +235,34 @@ export class ScanBudgetMeter implements UsageMeter {
         reservedInput: number,
         reservedOutput: number,
     ): void {
-        const unreported = {
-            inputTokens: usage.inputTokens === undefined ? reservedInput : 0,
-            outputTokens: usage.outputTokens === undefined ? reservedOutput : 0,
-        };
-        if (!unreported.inputTokens && !unreported.outputTokens) {
+        const missingInput = usage.inputTokens === undefined;
+        const missingOutput = usage.outputTokens === undefined;
+        if (!missingInput && !missingOutput) {
             return;
         }
+        // The whole request priced as one, at the context tier its input
+        // falls in (the reported input, or what was reserved for it): a
+        // missing total priced alone would drop to the short-context rate.
+        const whole = {
+            ...usage,
+            inputTokens: missingInput ? reservedInput : usage.inputTokens,
+            outputTokens: missingOutput ? reservedOutput : usage.outputTokens,
+        };
+        const wholeCost = Math.max(
+            this.costOf(whole),
+            missingInput
+                ? this.costOf({ ...whole, cacheWriteTokens: reservedInput })
+                : 0,
+        );
+        // What `record` adds for it later is the reported part alone.
+        const unreportedUsd = Math.max(0, wholeCost - this.costOf(usage));
         this.spent = {
             ...this.spent,
-            usd:
-                this.spent.usd +
-                Math.max(
-                    this.costOf(unreported),
-                    this.costOf({
-                        ...unreported,
-                        cacheWriteTokens: unreported.inputTokens,
-                    }),
-                ),
-            inputTokens: this.spent.inputTokens + unreported.inputTokens,
-            outputTokens: this.spent.outputTokens + unreported.outputTokens,
+            usd: this.spent.usd + unreportedUsd,
+            inputTokens:
+                this.spent.inputTokens + (missingInput ? reservedInput : 0),
+            outputTokens:
+                this.spent.outputTokens + (missingOutput ? reservedOutput : 0),
         };
         if (this.isExhausted()) {
             this.notify();

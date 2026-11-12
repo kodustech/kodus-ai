@@ -324,6 +324,28 @@ describe('ScanBudgetMeter', () => {
         expect(spending.snapshot().usd).toBeCloseTo(0.7);
     });
 
+    it('prices an answer missing its output at the tier of its reported input', () => {
+        // Input and output both double past 200k tokens of context.
+        const tiered = {
+            ...RATES,
+            input: { default: 1e-6, tiers: [{ threshold: 200_000, rate: 2e-6 }] },
+            output: { default: 2e-6, tiers: [{ threshold: 200_000, rate: 4e-6 }] },
+        };
+        const meter = new ScanBudgetMeter({ maxUsd: 10 }, tiered);
+
+        // 300k of input reported, the 100k answer reserved but not reported.
+        admitNow(meter, {
+            inputTokens: 1_000,
+            inputTokensUpperBound: 300_000,
+            maxOutputTokens: 100_000,
+        }).settle({ inputTokens: 300_000 });
+        meter.record({ usage: { inputTokens: 300_000 } });
+
+        // $0.60 of input and $0.40 of answer, both at the long-context rate;
+        // priced alone, the answer would have dropped to $0.20.
+        expect(meter.snapshot().usd).toBeCloseTo(1.0);
+    });
+
     it('caps by tokens when the model has no price', () => {
         const meter = new ScanBudgetMeter({ maxTokens: 10_000 }, null);
 

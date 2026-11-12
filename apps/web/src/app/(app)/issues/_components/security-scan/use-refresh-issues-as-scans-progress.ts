@@ -31,9 +31,14 @@ export const useRefreshIssuesAsScansProgress = (
 
         if (!previous) return;
 
+        // A scan seen before whose state moved, or one that shows up already
+        // finished (a short scan done before the next poll): either stored
+        // or resolved findings the lists do not show yet.
         const changed = scans.some((s) => {
             const before = previous.get(s.uuid);
-            return !!before && before !== current.get(s.uuid);
+            return before
+                ? before !== current.get(s.uuid)
+                : !isSecurityScanActive(s);
         });
 
         if (changed) {

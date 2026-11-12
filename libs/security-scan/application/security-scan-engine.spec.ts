@@ -698,7 +698,11 @@ describe('SecurityScanEngine', () => {
                     exitCode: 0,
                 };
             }
-            if (command.includes('checkout -- .')) {
+            if (command.includes('rev-parse HEAD')) {
+                // The command committed what it patched: HEAD moved.
+                return { stdout: tampered ? 'evil999\n' : 'abc123\n', exitCode: 0 };
+            }
+            if (command.includes("reset -q --hard 'abc123'")) {
                 tampered = false;
             }
             return run(command);
@@ -717,7 +721,9 @@ describe('SecurityScanEngine', () => {
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        expect(sandbox.run).toHaveBeenCalledWith("git -C '/repo' checkout -- .", expect.anything());
+        // Back to the scanned commit, index and branch included: what it
+        // staged or committed does not survive.
+        expect(sandbox.run).toHaveBeenCalledWith("git -C '/repo' reset -q --hard 'abc123'", expect.anything());
         // A file it planted goes; what was there before (the install) stays.
         expect(sandbox.run).toHaveBeenCalledWith("rm -rf -- '/repo/src/planted.ts'", expect.anything());
         expect(tampered).toBe(false);
@@ -755,7 +761,7 @@ describe('SecurityScanEngine', () => {
         const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
         expect(commands.some((c) => c.startsWith('rm -rf'))).toBe(false);
         // The patched tracked file is still put back.
-        expect(commands).toContain("git -C '/repo' checkout -- .");
+        expect(commands.some((c) => c.startsWith("git -C '/repo' reset -q --hard"))).toBe(true);
     });
 
     it('never writes over, runs or removes a file the repository already has', async () => {
