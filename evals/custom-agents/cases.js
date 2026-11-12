@@ -11,6 +11,9 @@
 //   P4  an include glob that names files explicitly reaches a file the team's
 //       ignorePaths set aside
 //   P7  a disabled agent does not run
+//   P13 the built-in Architecture template, saved unchanged, flags what its
+//       rules name and stays quiet on the same code written right
+//       (architecture-cases.js)
 //
 // A case is a pull request: `repo` is every file at the PR's head, `before` the
 // files the PR changed as they were (null = added). `team` is what the team
@@ -621,5 +624,7 @@ export const migration: Migration = {
         ],
     },
 ];
+
+CASES.push(...require('./architecture-cases').ARCHITECTURE_CASES);
 
 module.exports = { CASES };
