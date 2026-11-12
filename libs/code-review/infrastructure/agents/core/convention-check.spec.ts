@@ -969,6 +969,8 @@ describe('isCodeFileSource', () => {
             'TeamInstructions',
             'jscpd',
             'ast-grep:no-bare-boolean',
+            'sgconfig.yml#no-bare-boolean',
+            'rules/sgconfig.yml#valve.v2',
             '',
         ]) {
             expect([file, isCodeFileSource(cites(file))]).toEqual([
@@ -1004,6 +1006,23 @@ describe('isCodeFileSource', () => {
                 'Close valves in a finally block.',
             ),
         ).toBe(true);
+    });
+
+    // The quote gate rejects a quote this short before it looks at the
+    // instructions, so only the verifier can keep such a finding.
+    it('takes a code file whose quote is too short for the gate, even when the instructions hold it', () => {
+        const short = {
+            kind: 'convention',
+            source: {
+                file: 'src/valves/open.ts',
+                section: '',
+                quote: 'use pnpm',
+            },
+        } as unknown as FinderSuggestion;
+
+        expect(isCodeFileSource(short, [], 'Tooling: use pnpm only.')).toBe(
+            true,
+        );
     });
 });
 

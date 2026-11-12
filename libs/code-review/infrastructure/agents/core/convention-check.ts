@@ -470,9 +470,12 @@ export function isCodeFileSource(
         !DOC_FILE.test(file) &&
         !isIdeRuleSource(file) &&
         !isLinkedGuide(canonicalGuideCitation(file, guideFiles), guideFiles) &&
+        astGrepRuleIdOf(finding) == null &&
+        // The gate re-points a quote the instructions hold, but rejects one
+        // too short to identify a rule before it looks there.
         !(
             teamInstructions?.trim() &&
-            quote.trim() &&
+            normalizeQuoteText(quote).length >= MIN_QUOTE_LENGTH &&
             findQuoteSection(teamInstructions, quote) != null
         )
     );
