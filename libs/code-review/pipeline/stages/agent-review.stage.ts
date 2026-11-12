@@ -1,3 +1,4 @@
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import * as crypto from 'crypto';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -4001,11 +4002,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
     /**
      * Resolve GitHub token for cross-repo file reading (readReference tool).
-     * Uses the same token that was used to clone the repo for the sandbox.
+     * Uses the same token that was used to clone the repo for the sandbox,
+     * and only on a GitHub review: readReference calls api.github.com.
      */
     private async resolveGitHubToken(
         context: CodeReviewPipelineContext,
     ): Promise<string | undefined> {
+        if (context.platformType !== PlatformType.GITHUB) return undefined;
         try {
             if (context.getFreshCloneParams) {
                 const params = await context.getFreshCloneParams();
