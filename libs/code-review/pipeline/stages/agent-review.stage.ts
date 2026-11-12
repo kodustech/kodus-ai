@@ -483,16 +483,21 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             return undefined;
         }
 
-        // The generalist, the only agent that reads them, runs only when at
-        // least one of these categories is on.
+        // The generalist reads them, and runs only when at least one of these
+        // categories is on; a custom agent's quote gate checks rules quoted
+        // from them, so an enabled custom agent needs them too.
         const options = context.codeReviewConfig?.reviewOptions;
+        const customAgentRuns = (
+            context.codeReviewConfig?.customAgents ?? []
+        ).some((agent) => agent?.enabled !== false);
         if (
             options?.bug === false &&
             options?.security === false &&
-            options?.performance === false
+            options?.performance === false &&
+            !customAgentRuns
         ) {
             this.logger.warn({
-                message: `[repo-instructions] skipped for PR#${prNumber}: bug, security and performance are all off, so no agent reads them`,
+                message: `[repo-instructions] skipped for PR#${prNumber}: bug, security and performance are all off and no custom agent runs, so no agent reads them`,
                 context: this.stageName,
                 metadata: logMetadata,
             });

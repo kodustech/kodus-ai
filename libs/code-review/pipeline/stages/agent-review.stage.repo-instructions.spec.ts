@@ -55,8 +55,8 @@ describe('AgentReviewStage — repo instructions source branch', () => {
             'CLAUDE.md',
         ]);
         expect(
-            codeManagementService.getRepositoryAllFiles.mock.calls[0][0]
-                .filters.branch,
+            codeManagementService.getRepositoryAllFiles.mock.calls[0][0].filters
+                .branch,
         ).toBe('release/2.0');
         // A listing failure must not look like a repository without the files.
         expect(
@@ -79,7 +79,23 @@ describe('AgentReviewStage — repo instructions source branch', () => {
             'bug, security and performance are all off, so the generalist does not run',
             {
                 repoInstructionsEnabled: true,
-                reviewOptions: { bug: false, security: false, performance: false },
+                reviewOptions: {
+                    bug: false,
+                    security: false,
+                    performance: false,
+                },
+            },
+        ],
+        [
+            'the categories are off and the only custom agent is disabled',
+            {
+                repoInstructionsEnabled: true,
+                reviewOptions: {
+                    bug: false,
+                    security: false,
+                    performance: false,
+                },
+                customAgents: [{ id: 'conventions', enabled: false }],
             },
         ],
     ])('reads nothing when %s', async (_label, codeReviewConfig) => {
@@ -93,10 +109,41 @@ describe('AgentReviewStage — repo instructions source branch', () => {
         );
 
         expect(result).toBeUndefined();
-        expect(codeManagementService.getRepositoryAllFiles).not.toHaveBeenCalled();
+        expect(
+            codeManagementService.getRepositoryAllFiles,
+        ).not.toHaveBeenCalled();
         expect(
             codeManagementService.getRepositoryContentFile,
         ).not.toHaveBeenCalled();
+    });
+
+    // A custom agent quotes rules from these files (its quote gate checks the
+    // quote against them), so a team running only custom agents still gets them.
+    it('reads them when the categories are off but a custom agent runs', async () => {
+        const { stage, codeManagementService } = makeStage();
+
+        const result = await (stage as any).resolveRepoInstructions(
+            {
+                ...context,
+                codeReviewConfig: {
+                    repoInstructionsEnabled: true,
+                    reviewOptions: {
+                        bug: false,
+                        security: false,
+                        performance: false,
+                    },
+                    customAgents: [{ id: 'conventions', enabled: true }],
+                },
+            },
+            [{ filename: 'src/a.ts' }],
+            { kind: 'full' },
+            7,
+        );
+
+        expect(result.files.map((f: { path: string }) => f.path)).toEqual([
+            'CLAUDE.md',
+        ]);
+        expect(codeManagementService.getRepositoryAllFiles).toHaveBeenCalled();
     });
 
     it.each([
@@ -172,7 +219,9 @@ describe('AgentReviewStage — repo instructions source branch', () => {
         );
 
         expect(result).toBeUndefined();
-        expect(codeManagementService.getRepositoryAllFiles).not.toHaveBeenCalled();
+        expect(
+            codeManagementService.getRepositoryAllFiles,
+        ).not.toHaveBeenCalled();
         expect(
             codeManagementService.getRepositoryContentFile,
         ).not.toHaveBeenCalled();
@@ -276,7 +325,10 @@ describe('AgentReviewStage — instruction index cache', () => {
     });
 
     it.each([
-        ['has no commit for the target branch either', async () => ({ base: {} })],
+        [
+            'has no commit for the target branch either',
+            async () => ({ base: {} }),
+        ],
         [
             'fails',
             async () => {
@@ -300,7 +352,9 @@ describe('AgentReviewStage — instruction index cache', () => {
 
     it('warns when the provider lookup fails', async () => {
         const { stage, codeManagementService } = makeCachedStage();
-        codeManagementService.getPullRequest.mockRejectedValue(new Error('502'));
+        codeManagementService.getPullRequest.mockRejectedValue(
+            new Error('502'),
+        );
         const warn = jest.spyOn((stage as any).logger, 'warn');
 
         await resolve(stage, withBase());
