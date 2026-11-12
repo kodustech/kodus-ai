@@ -318,14 +318,21 @@ export class SecurityScanEngine {
                         progress.get(unit.id),
                         result.findings,
                     );
-                } else if (result.findings.length) {
-                    // The job ended mid-unit: the unit runs again next
-                    // time; its findings so far are stored now so none
-                    // is lost.
-                    await params.onUnitDone?.(
-                        { unitId: unit.id, state: 'pending', findings: 0 },
-                        result.findings,
-                    );
+                } else {
+                    // The slice ended mid-unit: the unit runs again in the
+                    // next one, from the lenses it has not run yet. Its
+                    // findings so far are stored now so none is lost.
+                    const pending: ScanUnitProgress = {
+                        unitId: unit.id,
+                        state: 'pending',
+                        findings: 0,
+                        lensesRun: result.lensesRun,
+                        lensesExamined: result.lensesExamined,
+                    };
+                    progress.set(unit.id, pending);
+                    if (result.findings.length) {
+                        await params.onUnitDone?.(pending, result.findings);
+                    }
                 }
                 return;
             }
@@ -375,6 +382,7 @@ export class SecurityScanEngine {
                     signal,
                     [...(params.reported ?? []), ...findings],
                     reproduceOneAtATime,
+                    progress.get(unit.id),
                 );
                 const turn = folded;
                 folded = audit.then(async (result) => {
@@ -465,7 +473,7 @@ export class SecurityScanEngine {
             suggestionContent: f.description,
         });
         try {
-            const { suggestions } = await this.dedup(
+            const { suggestions, trace } = await this.dedup(
                 (this.dedupDeps ??= createFindingDedupDeps({
                     logger,
                     context: SecurityScanEngine.name,
@@ -476,6 +484,26 @@ export class SecurityScanEngine {
                 { organizationId: params.organizationId } as any,
             );
             const kept = new Set(suggestions.map((s) => s.id));
+            // An earlier finding is already stored: when the dedup kept a
+            // fresh one in its place, the fresh one is the duplicate, so the
+            // bug keeps the one identity it has.
+            const indicesOf = new Map<string, number[]>();
+            all.forEach((f, i) => {
+                const key = dedupKey(asSuggestion(f, i));
+                indicesOf.set(key, [...(indicesOf.get(key) ?? []), i]);
+            });
+            for (const group of trace?.groups ?? []) {
+                const replacesEarlier = group.duplicates.some((d) =>
+                    (indicesOf.get(dedupKey(d)) ?? []).some(
+                        (i) => i < earlier.length,
+                    ),
+                );
+                if (replacesEarlier) {
+                    for (const i of indicesOf.get(dedupKey(group.keep)) ?? []) {
+                        if (i >= earlier.length) kept.delete(`scan-${i}`);
+                    }
+                }
+            }
             return fresh.filter((_, i) =>
                 kept.has(`scan-${earlier.length + i}`),
             );
@@ -568,27 +596,47 @@ export class SecurityScanEngine {
         earlier: ScanReportedFinding[] = [],
         /** Units share one sandbox: reproduction tests run one at a time. */
         oneAtATime: Serial = serially(),
+        /** Where an earlier slice left this unit, if it did. */
+        resume?: ScanUnitProgress,
     ): Promise<AuditResult> {
         const findings: ScanFinding[] = [];
         let failures = 0;
         // Classes a lens did not read to the end: failed, or stopped short.
         const unfinished = new Set<VulnClass>();
+        // Classes whose lens ended, in this slice or an earlier one.
+        const ran = new Set<VulnClass>(resume?.lensesRun ?? []);
+        const examinedBefore = resume?.lensesExamined ?? [];
+        const progressSoFar = () => ({
+            lensesRun: [...ran],
+            lensesExamined: [
+                ...new Set([
+                    ...examinedBefore,
+                    ...[...ran].filter(
+                        (c) =>
+                            !unfinished.has(c) &&
+                            !resume?.lensesRun?.includes(c),
+                    ),
+                ]),
+            ],
+        });
 
-        const runs = unit.classes.flatMap((vulnClass) =>
-            Array.from({ length: LENS_PASSES }, (_, pass) => ({
-                vulnClass,
-                pass,
-            })),
-        );
+        const runs = unit.classes
+            .filter((vulnClass) => !ran.has(vulnClass))
+            .flatMap((vulnClass) =>
+                Array.from({ length: LENS_PASSES }, (_, pass) => ({
+                    vulnClass,
+                    pass,
+                })),
+            );
         for (const { vulnClass, pass } of runs) {
             // Past the slice's deadline a lens could run into the job's hard
             // cut, which fails the scan: stop here, and the unit resumes in
-            // the next slice with what it found so far kept.
+            // the next slice from the lenses it has not run.
             if (
                 signal.aborted ||
                 (params.deadlineAt && this.now() >= params.deadlineAt)
             ) {
-                return { findings, aborted: true };
+                return { findings, aborted: true, ...progressSoFar() };
             }
             try {
                 const input = this.lensInput(
@@ -611,7 +659,7 @@ export class SecurityScanEngine {
                     byokConfig: params.model.slot,
                 });
                 if (signal.aborted) {
-                    return { findings, aborted: true };
+                    return { findings, aborted: true, ...progressSoFar() };
                 }
                 // The harness reports a provider error or a run out of steps
                 // in the result, not by throwing. What such a lens found is
@@ -631,7 +679,10 @@ export class SecurityScanEngine {
                 } else if (
                     output.finishReason !== 'completed' ||
                     output.incompleteReason ||
-                    output.submittedResult === false
+                    output.submittedResult === false ||
+                    // The verifier failed on some of them: neither confirmed
+                    // nor refuted, so the class was not looked at to the end.
+                    output.unverifiedByVerify?.length
                 ) {
                     unfinished.add(vulnClass);
                 }
@@ -640,7 +691,7 @@ export class SecurityScanEngine {
                     // The cap aborts the lens, not the finalize calls after
                     // it: each one is a request.
                     if (signal.aborted) {
-                        return { findings, aborted: true };
+                        return { findings, aborted: true, ...progressSoFar() };
                     }
                     const path = admitFindingPath(
                         suggestion.relevantFile,
@@ -675,7 +726,7 @@ export class SecurityScanEngine {
                 }
             } catch (error) {
                 if (signal.aborted) {
-                    return { findings, aborted: true };
+                    return { findings, aborted: true, ...progressSoFar() };
                 }
                 failures++;
                 unfinished.add(vulnClass);
@@ -688,6 +739,9 @@ export class SecurityScanEngine {
                         unit: unit.id,
                     },
                 });
+            }
+            if (pass === LENS_PASSES - 1) {
+                ran.add(vulnClass);
             }
         }
 
@@ -711,8 +765,10 @@ export class SecurityScanEngine {
             }
         }
 
-        const examinedClasses = unit.classes.filter((c) => !unfinished.has(c));
-        return failures === runs.length && runs.length > 0
+        const { lensesExamined: examinedClasses } = progressSoFar();
+        return failures === runs.length &&
+            runs.length > 0 &&
+            !examinedBefore.length
             ? { findings, error: 'every lens failed', examinedClasses }
             : { findings, examinedClasses };
     }
@@ -1077,6 +1133,21 @@ function onAttackPath(
     );
 }
 
+/** How a dedup trace entry is matched back to the finding it summarizes. */
+function dedupKey(s: {
+    relevantFile?: string;
+    relevantLinesStart?: number;
+    relevantLinesEnd?: number;
+    oneSentenceSummary?: string;
+}): string {
+    return [
+        s.relevantFile,
+        s.relevantLinesStart,
+        s.relevantLinesEnd,
+        s.oneSentenceSummary,
+    ].join('\u0000');
+}
+
 /** At most this many earlier findings go to one unit's dedup call. */
 const DEDUP_EARLIER_LIMIT = 40;
 
@@ -1115,6 +1186,9 @@ interface AuditResult {
     findings: ScanFinding[];
     /** The classes whose every lens ran to the end. */
     examinedClasses?: VulnClass[];
+    /** On a unit that stopped halfway, where to pick it up. */
+    lensesRun?: VulnClass[];
+    lensesExamined?: VulnClass[];
     error?: string;
     /** The unit stopped halfway: the cap, or the job ended. */
     aborted?: boolean;

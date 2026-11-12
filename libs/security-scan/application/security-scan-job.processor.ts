@@ -56,7 +56,10 @@ import {
 import { SecurityScanEngine } from './security-scan-engine';
 import { ScanOwnerResolver } from './scan-owner-resolver';
 import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
-import { ScanFailure } from '../domain/scan-failure';
+import {
+    SCAN_NO_AREA_EXAMINED_MESSAGE,
+    ScanFailure,
+} from '../domain/scan-failure';
 
 const logger = createLogger('SecurityScanJobProcessor');
 
@@ -410,6 +413,12 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
 
         if (signal?.aborted && !result.stoppedByBudget) {
             throw new Error('Security scan job was aborted');
+        }
+
+        // Not one area examined, and some failed (the provider down for every
+        // lens): that is a failed scan, never a clean one.
+        if (!coverage.unitsDone && coverage.unitsFailed) {
+            throw new ScanFailure(SCAN_NO_AREA_EXAMINED_MESSAGE);
         }
 
         // Only now is it known which files this scan examined end to end; an

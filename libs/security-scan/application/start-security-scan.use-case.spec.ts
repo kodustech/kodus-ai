@@ -94,6 +94,28 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         );
     });
 
+    it('runs again the areas a provider outage failed', async () => {
+        const { scans, start } = useCaseWith({
+            ...stopped,
+            status: SecurityScanStatus.FAILED,
+            progress: [
+                { unitId: 'a', state: 'done', findings: 1 },
+                { unitId: 'b', state: 'failed', findings: 0 },
+                { unitId: 'c', state: 'failed', findings: 0 },
+            ],
+        });
+
+        await start();
+
+        const created = scans.create.mock.calls[0][0];
+        expect(created.progress).toEqual([
+            { unitId: 'a', state: 'done', findings: 1 },
+        ]);
+        expect(created.coverage).toEqual(
+            expect.objectContaining({ unitsDone: 1, unitsFailed: 0 }),
+        );
+    });
+
     it('starts from scratch after a scan that completed', async () => {
         const { scans, start } = useCaseWith({
             ...stopped,

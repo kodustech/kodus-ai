@@ -51,6 +51,13 @@ export interface ScanUnitProgress {
     state: ScanUnitState;
     findings: number;
     error?: string;
+    /**
+     * On a unit a slice left pending: the classes whose lens already ended,
+     * and of those, the ones read to the end. The next slice runs only the
+     * rest, so a unit longer than a slice still gets through.
+     */
+    lensesRun?: VulnClass[];
+    lensesExamined?: VulnClass[];
 }
 
 export interface SecurityScanOutcomeCounts {

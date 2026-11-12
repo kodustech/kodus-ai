@@ -1108,6 +1108,10 @@ describe('SecurityScanEngine: what a scan may resolve', () => {
             'ended in a provider error',
             { finishReason: 'error', errorName: 'APICallError' },
         ],
+        [
+            'could not verify a finding',
+            { finishReason: 'completed', unverifiedByVerify: [IDOR] },
+        ],
     ])(
         'keeps what a lens that %s found, without counting its class as examined',
         async (_case, ending) => {
@@ -1325,5 +1329,158 @@ describe('SecurityScanEngine: failures that must not pass for a clean scan', () 
             c.includes('npx jest'),
         );
         expect(testRuns).toHaveLength(1);
+    });
+});
+
+describe('SecurityScanEngine: across slices and units', () => {
+    const onlyController = {
+        ...SURFACE,
+        hits: SURFACE.hits.slice(0, 1),
+        files: {
+            'src/orders/orders.controller.ts':
+                SURFACE.files['src/orders/orders.controller.ts'],
+        },
+    };
+
+    it('picks a long unit up at its next lens in the next slice, so it gets through', async () => {
+        let now = 0;
+        const lensOf = (input: any) =>
+            input.agentName.replace('security-scan-', '');
+        // Each lens takes 8 minutes; a slice stops starting lenses at 20.
+        const runLens = jest.fn(async (_input: any) => {
+            now += 8 * 60_000;
+            return {
+                findings: { reasoning: '', suggestions: [] },
+                finishReason: 'completed',
+            };
+        });
+        const engine = new SecurityScanEngine({
+            runLens: runLens as any,
+            llm: fakeLlm({
+                units: [
+                    {
+                        file: 'src/orders/orders.controller.ts',
+                        relatedFiles: [],
+                        classes: ['authz'],
+                        priority: 90,
+                        reason: '',
+                    },
+                ],
+            }),
+            collectSurface: jest.fn(async () => onlyController),
+            now: () => now,
+        });
+        const meter = () => new ScanBudgetMeter({ maxUsd: 100 }, RATES);
+
+        const first = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: meter(),
+            deadlineAt: 20 * 60_000,
+        } as any);
+        const classes = first.units[0].classes;
+        expect(classes.length).toBeGreaterThan(3);
+        expect(first.finished).toBe(false);
+        expect(first.progress[0]).toEqual(
+            expect.objectContaining({
+                state: 'pending',
+                lensesRun: classes.slice(0, 3),
+            }),
+        );
+
+        runLens.mockClear();
+        const second = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: meter(),
+            units: first.units,
+            progress: first.progress,
+            deadlineAt: now + 20 * 60_000,
+        } as any);
+
+        // Only the lenses the first slice never reached.
+        expect(runLens.mock.calls.map(([input]) => lensOf(input))).toEqual(
+            classes.slice(3),
+        );
+        expect(second.finished).toBe(true);
+        expect(
+            second.examinedByClass.map((e) => e.vulnerabilityClass).sort(),
+        ).toEqual([...classes].sort());
+    });
+
+    it('keeps the stored finding when the dedup picks a later report of the same bug', async () => {
+        const runLens = fakeLens((file, cls) =>
+            file.endsWith('orders.controller.ts')
+                ? cls === 'authz'
+                    ? [IDOR]
+                    : []
+                : cls !== 'data_exposure'
+                  ? []
+                  : [
+                        {
+                            ...IDOR,
+                            relevantFile: 'src/orders/orders.service.ts',
+                            relevantLinesStart: 1,
+                            relevantLinesEnd: 1,
+                        },
+                    ],
+        );
+        const summary = (x: any) => ({
+            relevantFile: x.relevantFile,
+            relevantLinesStart: x.relevantLinesStart,
+            relevantLinesEnd: x.relevantLinesEnd,
+            oneSentenceSummary: x.oneSentenceSummary,
+        });
+        // Groups the two and keeps the later one, the service's.
+        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => {
+            if (suggestions.length < 2) {
+                return { suggestions, trace: {} as any };
+            }
+            const [earlier, later] = suggestions;
+            return {
+                suggestions: [later],
+                trace: {
+                    groups: [
+                        { keep: summary(later), duplicates: [summary(earlier)] },
+                    ],
+                } as any,
+            };
+        });
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({
+                units: [
+                    {
+                        file: 'src/orders/orders.controller.ts',
+                        relatedFiles: [],
+                        classes: ['authz'],
+                        priority: 90,
+                        reason: '',
+                    },
+                    {
+                        file: 'src/orders/orders.service.ts',
+                        relatedFiles: [],
+                        classes: ['data_exposure'],
+                        priority: 80,
+                        reason: '',
+                    },
+                ],
+            }),
+            collectSurface: jest.fn(async () => SURFACE),
+            dedup: dedup as any,
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        // The controller's finding was stored first and stays the one.
+        expect(
+            result.findings
+                .filter((f) => f.filePath.startsWith('src/orders'))
+                .map((f) => f.filePath),
+        ).toEqual(['src/orders/orders.controller.ts']);
     });
 });

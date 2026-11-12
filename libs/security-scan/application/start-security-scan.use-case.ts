@@ -223,8 +223,9 @@ export class StartSecurityScanUseCase {
         ) {
             return null;
         }
+        // Areas that failed (a provider outage) run again, with the rest.
         const progress = (last.progress ?? []).filter(
-            (p) => p.state === 'done' || p.state === 'failed',
+            (p) => p.state === 'done',
         );
         if (progress.length >= last.units.length) {
             return null;
@@ -237,9 +238,8 @@ export class StartSecurityScanUseCase {
                 examinedFiles: [],
                 examinedByClass: [],
                 unitsTotal: last.units.length,
-                unitsDone: progress.filter((p) => p.state === 'done').length,
-                unitsFailed: progress.filter((p) => p.state === 'failed')
-                    .length,
+                unitsDone: progress.length,
+                unitsFailed: 0,
                 unitsSkippedByBudget: 0,
                 languages: last.coverage?.languages ?? [],
             },

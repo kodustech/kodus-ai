@@ -21,6 +21,7 @@ import {
 import { SecurityScanStatus } from '../domain/security-scan.types';
 import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import { SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
+import { SCAN_NO_AREA_EXAMINED_MESSAGE } from '../domain/scan-failure';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 
 const scanRecord = (overrides = {}) => ({
@@ -372,6 +373,29 @@ describe('SecurityScanJobProcessor', () => {
             expect.objectContaining({
                 status: SecurityScanStatus.FAILED,
                 error: SCAN_NEEDS_BYOK_MESSAGE,
+            }),
+        );
+    });
+
+    it('fails, instead of completing, a scan whose every area failed', async () => {
+        const { processor, scans, issuesService } = setup({
+            result: finishedResult({
+                progress: [
+                    { unitId: 'u1', state: 'failed', findings: 0, error: 'every lens failed' },
+                ],
+                findings: [],
+                examinedFiles: [],
+                examinedByClass: [],
+            }),
+        });
+
+        await processor.process('job-1');
+
+        expect(issuesService.resolveUnseenScanFindings).not.toHaveBeenCalled();
+        expect(lastUpdate(scans)).toEqual(
+            expect.objectContaining({
+                status: SecurityScanStatus.FAILED,
+                error: SCAN_NO_AREA_EXAMINED_MESSAGE,
             }),
         );
     });
