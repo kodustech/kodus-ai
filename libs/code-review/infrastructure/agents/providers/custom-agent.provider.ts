@@ -19,8 +19,7 @@ import {
 import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
 import { buildRunCliAgentTool } from '@libs/code-review/infrastructure/agents/custom-agent-cli/run-cli.tool';
 import { makeTargetBranchGuideReader } from '@libs/code-review/infrastructure/agents/core/convention-check';
-import { SandboxBaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
-import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { sandboxBaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
 
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import type {
@@ -167,21 +166,6 @@ export function buildCustomAgentLaneFocus(
 
 const logger = createLogger('CustomAgentProvider');
 
-/** The sandbox's fetched base ref, read with git through sandbox.run. */
-function sandboxTargetBranchReader(
-    sandbox: Pick<SandboxInstance, 'run' | 'repoDir' | 'type'> | undefined,
-    baseBranch: string | undefined,
-): SandboxBaseBranchReader | undefined {
-    if (!sandbox?.run || !sandbox.repoDir || !baseBranch) return undefined;
-    if (sandbox.type === 'null') return undefined;
-    try {
-        return new SandboxBaseBranchReader(sandbox, baseBranch);
-    } catch {
-        // Unusual branch name: left to the command channel's `git show`.
-        return undefined;
-    }
-}
-
 /**
  * The tenant and repository the Kodus issues plugin needs on every call. Its
  * tools take them as arguments, and the model would only guess them, so the
@@ -288,7 +272,7 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
         const sandbox = tooling?.sandbox;
         const reader = input.knowledgeReader;
         const targetReader =
-            reader ?? sandboxTargetBranchReader(sandbox, input.baseBranch);
+            reader ?? sandboxBaseBranchReader(sandbox, input.baseBranch);
         const org = input.organizationAndTeamData;
         const mcpManager = this.toolServices.mcpManager;
         const logContext = {
