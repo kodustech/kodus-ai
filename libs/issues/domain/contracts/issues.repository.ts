@@ -1,6 +1,7 @@
 import { IssueStatus } from '@libs/core/infrastructure/config/types/general/issues.type';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 import { IssuesEntity } from '../entities/issues.entity';
 import { IIssue } from '../interfaces/issues.interface';
@@ -41,6 +42,8 @@ export type ScanFindingUpsert = Omit<
 
 export interface ResolveUnseenScanFindingsParams {
     organizationId: string;
+    /** An id is only unique on its platform. */
+    repositoryPlatform: PlatformType;
     repositoryId: string;
     scanId: string;
     /**

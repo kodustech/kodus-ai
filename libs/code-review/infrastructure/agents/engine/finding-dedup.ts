@@ -855,9 +855,13 @@ export async function deduplicateFindings(
  * base URL is pinned explicitly; only the platform key comes from the env.
  * (The tiebreak LLM that runs AFTER the embedding still uses BYOK.) Built
  * lazily, once per deps object; the embedding cache is per dedup run.
+ *
+ * `platformEmbeddings: false` never builds it: a caller held to the client's
+ * own model (the deep scan, #2451) must not send findings to the platform
+ * key, so every merge the lexical check leaves open goes to the BYOK tiebreak.
  */
 export function createFindingDedupDeps(
-    params: FindingDedupLog,
+    params: FindingDedupLog & { platformEmbeddings?: boolean },
 ): FindingDedupDeps {
     const log: FindingDedupLog = {
         logger: params.logger,
@@ -870,7 +874,10 @@ export function createFindingDedupDeps(
         }
         // Single platform-embedder seam (libs/common/utils/document): pinned to
         // OpenAI text-embedding, never BYOK, null when no platform key.
-        embedder = buildPlatformEmbedder();
+        embedder =
+            params.platformEmbeddings === false
+                ? null
+                : buildPlatformEmbedder();
         return embedder;
     };
     const embedDeps = {

@@ -239,6 +239,7 @@ export class IssuesRepository implements IIssuesRepository {
         const now = new Date().toISOString();
         const filter = {
             'organizationId': finding.organizationId,
+            'repository.platform': finding.repository.platform,
             'repository.id': finding.repository.id,
             'fingerprint': finding.fingerprint,
         };
@@ -396,6 +397,8 @@ export class IssuesRepository implements IIssuesRepository {
     ): Promise<number> {
         const unseen = {
             'organizationId': params.organizationId,
+            // The same id on another platform is another repository.
+            'repository.platform': params.repositoryPlatform,
             'repository.id': params.repositoryId,
             'source': IssueSource.SECURITY_SCAN,
             'status': IssueStatus.OPEN,

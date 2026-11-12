@@ -139,6 +139,39 @@ describe('deduplicateFindings with createFindingDedupDeps', () => {
         expect(out.trace.removedCount).toBe(0);
     });
 
+    it('never embeds on the platform key when the caller turns it off, and asks the BYOK tiebreak', async () => {
+        // A platform key is configured: only the option keeps findings off it.
+        (buildPlatformEmbedder as jest.Mock).mockReturnValue({} as any);
+        runSpy = jest
+            .spyOn(LLM, 'run')
+            .mockResolvedValueOnce({
+                groups: [{ keep: 0, duplicates: [1] }],
+                unique: [],
+            } as any)
+            .mockResolvedValueOnce({ sameBug: false } as any);
+
+        const out = await deduplicateFindings(
+            createFindingDedupDeps({
+                logger: logger as any,
+                context: 'SecurityScan',
+                platformEmbeddings: false,
+            }),
+            [distinctX(), distinctY()],
+            7,
+            slot,
+            telemetryMeta,
+        );
+        (buildPlatformEmbedder as jest.Mock).mockReturnValue(null);
+
+        expect(buildPlatformEmbedder).not.toHaveBeenCalled();
+        expect(tracedEmbed).not.toHaveBeenCalled();
+        expect(runSpy.mock.calls[1][0]).toMatchObject({
+            runName: 'dedup-tiebreak',
+            byokConfig: slot,
+        });
+        expect(out.suggestions).toHaveLength(2);
+    });
+
     it('logs an embedding outage with the review it happened in', async () => {
         (buildPlatformEmbedder as jest.Mock).mockReturnValueOnce({} as any);
         (tracedEmbed as jest.Mock).mockRejectedValue(new Error('embeddings down'));
