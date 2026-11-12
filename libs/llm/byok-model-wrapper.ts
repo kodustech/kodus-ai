@@ -76,12 +76,24 @@ function budgetAddedToAnswerCap(
     const parsed = [namespace, ...aliases].find(
         (key) => providerOptions?.[key] != null,
     );
-    return parsed
-        ? reasoningBudgetFrom(
-              providerOptions![parsed] as Record<string, unknown>,
-          )
+    if (!parsed) {
+        return undefined;
+    }
+    const options = providerOptions![parsed] as Record<string, unknown>;
+    const budget = reasoningBudgetFrom(options);
+    if (budget !== undefined) {
+        return budget;
+    }
+    // Thinking enabled with no budget: @ai-sdk/anthropic sends its default
+    // budget, 1024, on top of the answer cap all the same.
+    const thinking = (options as { thinking?: { type?: unknown } }).thinking;
+    return namespace === 'anthropic' && thinking?.type === 'enabled'
+        ? ANTHROPIC_DEFAULT_THINKING_BUDGET
         : undefined;
 }
+
+/** What @ai-sdk/anthropic budgets for thinking enabled without a budget. */
+const ANTHROPIC_DEFAULT_THINKING_BUDGET = 1024;
 
 /** The provider-options key the slot's adapter reads, so an effort the call
  *  never carried can be added there when the upstream asks for it. */
@@ -124,9 +136,15 @@ const PROVIDER_FRAMING_TOKENS = 2_000;
  */
 function promptTokensUpperBound(prompt: unknown): number {
     if (prompt == null) return PROVIDER_FRAMING_TOKENS;
-    const text =
-        typeof prompt === 'string' ? prompt : safeSerialize(prompt);
-    return Buffer.byteLength(text, 'utf8') + PROVIDER_FRAMING_TOKENS;
+    let text: string;
+    try {
+        text = typeof prompt === 'string' ? prompt : JSON.stringify(prompt);
+    } catch {
+        // What cannot be measured has no bound: a cap refuses it rather
+        // than reserve "[object Object]".
+        return Number.POSITIVE_INFINITY;
+    }
+    return Buffer.byteLength(text ?? '', 'utf8') + PROVIDER_FRAMING_TOKENS;
 }
 
 /** The provider answered with an error status: it refused the request, unbilled. */

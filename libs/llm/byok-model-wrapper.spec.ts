@@ -798,6 +798,26 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         );
     });
 
+    it("reserves Anthropic's default thinking budget when thinking is enabled without one", async () => {
+        const slot = { provider: BYOKProvider.ANTHROPIC, apiKey: 'k-anthropic-default', model: 'claude-sonnet-4-5' } as NormalizedModel;
+
+        expect(
+            (await admittedWith(slot, { anthropic: { thinking: { type: 'enabled' } } }))
+                .reasoningBudgetTokens,
+        ).toBe(1024);
+    });
+
+    it('bounds a prompt it cannot serialize as unbounded, so a cap refuses it', async () => {
+        const admit = jest.fn(() => ({ settle: jest.fn() }));
+        const cyclic: any = { role: 'user', content: 'x' };
+        cyclic.self = cyclic;
+        await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+            wrap(answering({})).doGenerate({ prompt: [cyclic] } as any),
+        ).catch(() => undefined);
+
+        expect((admit.mock.calls as any[])[0][0].inputTokensUpperBound).toBe(Number.POSITIVE_INFINITY);
+    });
+
     it('never counts a budget the served adapter does not add or does not read', async () => {
         // OpenAI keeps reasoning inside the answer cap, and never reads the
         // anthropic namespace anyway.
