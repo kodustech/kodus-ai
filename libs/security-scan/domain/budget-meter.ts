@@ -36,6 +36,9 @@ const TOKENIZER_MARGIN = 1.25;
  */
 export const SCAN_ANSWER_CAP_TOKENS = 16_000;
 
+/** The least answer cap sent, however full the context window. */
+const MIN_ANSWER_CAP_TOKENS = 1_024;
+
 /** Thrown to the model wrapper for a request the cap has no room for. */
 export class ScanBudgetReached extends Error {
     constructor() {
@@ -46,7 +49,7 @@ export class ScanBudgetReached extends Error {
 
 type Cost = { usd: number; tokens: number };
 /** A request's most, and the input and answer it was reserved for. */
-type Ceiling = Cost & { input: number; output: number };
+type Ceiling = Cost & { input: number; output: number; answerCap: number };
 
 export class ScanBudgetMeter implements UsageMeter {
     private spent: SecurityScanSpend;
@@ -74,6 +77,12 @@ export class ScanBudgetMeter implements UsageMeter {
         /** Null when the model has no known price: then only tokens count. */
         private readonly rates: ModelTokenRates | null,
         initial?: SecurityScanSpend,
+        /**
+         * The model's context window: the answer cap sent with a request
+         * that sets none must fit beside its prompt, or a server with a
+         * small window refuses the request outright.
+         */
+        private readonly contextWindowTokens?: number,
     ) {
         this.spent = initial
             ? { ...initial }
@@ -104,25 +113,48 @@ export class ScanBudgetMeter implements UsageMeter {
         const input =
             request.inputTokensUpperBound ??
             Math.ceil(request.inputTokens * TOKENIZER_MARGIN);
+        const answerCap = request.maxOutputTokens || this.answerCapFor(request);
         // The answer cap, plus any reasoning budget the provider grants on
         // top of it (Anthropic's thinking).
-        const output =
-            (request.maxOutputTokens || SCAN_ANSWER_CAP_TOKENS) +
-            (request.reasoningBudgetTokens ?? 0);
-        return {
-            input,
-            output,
+        const output = answerCap + (request.reasoningBudgetTokens ?? 0);
+        let usd: number;
+        try {
             // Input priced at the dearer of a fresh read and a cache write.
-            usd: Math.max(
+            usd = Math.max(
                 this.costOf({ inputTokens: input, outputTokens: output }),
                 this.costOf({
                     inputTokens: input,
                     outputTokens: output,
                     cacheWriteTokens: input,
                 }),
-            ),
+            );
+        } catch {
+            usd = Number.NaN;
+        }
+        return {
+            input,
+            output,
+            answerCap,
+            // A price that cannot be computed is no room: never a free pass.
+            usd: Number.isFinite(usd) ? usd : Number.POSITIVE_INFINITY,
             tokens: input + output,
         };
+    }
+
+    /**
+     * The answer cap for a request that sets none: the scan's own, or what
+     * the context window leaves beside the prompt when that is less.
+     */
+    private answerCapFor(request: RequestCeiling): number {
+        if (!this.contextWindowTokens) {
+            return SCAN_ANSWER_CAP_TOKENS;
+        }
+        const room =
+            this.contextWindowTokens - Math.ceil(request.inputTokens * 1.1);
+        return Math.max(
+            MIN_ANSWER_CAP_TOKENS,
+            Math.min(SCAN_ANSWER_CAP_TOKENS, room),
+        );
     }
 
     private grant(ceiling: Ceiling, request: RequestCeiling): Admission {
@@ -132,7 +164,7 @@ export class ScanBudgetMeter implements UsageMeter {
         let settled = false;
         return {
             ...(!request.maxOutputTokens && this.capped()
-                ? { maxOutputTokens: SCAN_ANSWER_CAP_TOKENS }
+                ? { maxOutputTokens: ceiling.answerCap }
                 : {}),
             settle: (usage) => {
                 if (settled) return;

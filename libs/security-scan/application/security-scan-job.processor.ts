@@ -204,7 +204,12 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         if (budgetError) {
             throw new ScanFailure(budgetError);
         }
-        const meter = new ScanBudgetMeter(scan.budget, rates, scan.spend);
+        const meter = new ScanBudgetMeter(
+            scan.budget,
+            rates,
+            scan.spend,
+            model.contextWindowTokens,
+        );
 
         const cloneParams = await this.codeManagementService.getCloneParams(
             {

@@ -250,6 +250,31 @@ describe('ScanBudgetMeter', () => {
         ).not.toThrow();
     });
 
+    it('sends an answer cap that fits beside the prompt in a small context window', () => {
+        // A 32k window: a 20k prompt (22k with the margin) leaves 10k.
+        const meter = new ScanBudgetMeter({ maxTokens: 1_000_000 }, null, undefined, 32_768);
+
+        expect(admitNow(meter, { inputTokens: 20_000 }).maxOutputTokens).toBe(10_768);
+        // A large window keeps the scan's own cap.
+        expect(
+            admitNow(new ScanBudgetMeter({ maxTokens: 1_000_000 }, null, undefined, 200_000), {
+                inputTokens: 20_000,
+            }).maxOutputTokens,
+        ).toBe(SCAN_ANSWER_CAP_TOKENS);
+    });
+
+    it('refuses a request whose price cannot be computed, never lets it through free', () => {
+        // A manual price missing its cache rates prices every request at NaN.
+        const meter = new ScanBudgetMeter({ maxUsd: 1 }, {
+            input: { default: 1e-6 },
+            output: { default: 1e-6 },
+        } as any);
+
+        expect(() => admitNow(meter, { inputTokens: 10, maxOutputTokens: 10 })).toThrow(
+            ScanBudgetReached,
+        );
+    });
+
     it('reserves the reasoning budget the provider adds on top of the answer cap', () => {
         const meter = new ScanBudgetMeter({ maxTokens: 30_000 }, null);
 

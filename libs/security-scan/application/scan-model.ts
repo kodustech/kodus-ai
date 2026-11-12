@@ -76,6 +76,27 @@ export async function resolveScanModel(params: {
             openrouterProviderOrder: main.openrouterProviderOrder,
             openrouterAllowFallbacks: main.openrouterAllowFallbacks,
         },
-        rates: pricing?.priced ? pricing.rates : null,
+        // A price with a rate missing, negative or not a number prices
+        // every request at NaN, which no cap ever crosses: no price at all.
+        rates:
+            pricing?.priced && usableRates(pricing.rates)
+                ? pricing.rates
+                : null,
     };
+}
+
+function usableRates(rates: ModelTokenRates | undefined): boolean {
+    const usable = (n: unknown) =>
+        typeof n === 'number' && Number.isFinite(n) && n >= 0;
+    return (
+        !!rates &&
+        [rates.input, rates.output, rates.cacheRead, rates.cacheWrite].every(
+            (rate) =>
+                !!rate &&
+                usable(rate.default) &&
+                (rate.tiers ?? []).every(
+                    (t) => usable(t.rate) && usable(t.threshold),
+                ),
+        )
+    );
 }

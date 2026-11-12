@@ -52,4 +52,31 @@ describe('resolveScanModel', () => {
 
         expect(model.slot).toBeUndefined();
     });
+
+    it('has no price for rates with one missing, negative or not a number', async () => {
+        resolveModel.mockResolvedValue({
+            byokConfig: { provider: 'openai_compatible', model: 'deepseek-v4' },
+            main: { modelName: 'openai_compatible:deepseek-v4' },
+        });
+        const priced = (rates: unknown) =>
+            resolveScanModel({
+                organizationAndTeamData: { organizationId: 'org-1' } as any,
+                permissionValidationService: {} as any,
+                pricingResolver: {
+                    resolve: jest.fn(async () => ({ priced: true, rates })),
+                } as any,
+            });
+        const rate = (n: number) => ({ default: n });
+
+        expect(
+            (await priced({ input: rate(1e-6), output: rate(2e-6) })).rates,
+        ).toBeNull();
+        expect(
+            (await priced({ input: rate(-1), output: rate(2e-6), cacheRead: rate(0), cacheWrite: rate(0) })).rates,
+        ).toBeNull();
+        expect(
+            (await priced({ input: rate(1e-6), output: rate(2e-6), cacheRead: rate(1e-7), cacheWrite: rate(1e-6) })).rates,
+        ).not.toBeNull();
+    });
 });
+
