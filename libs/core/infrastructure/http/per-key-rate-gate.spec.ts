@@ -1,7 +1,10 @@
 import {
     __resetRateGatesForTest,
     parkRateGate,
+    RateGateWaitExceededError,
     rateGateKey,
+    recordRateGateSuccess,
+    recordRateLimited,
     runWithRateGate,
 } from './per-key-rate-gate';
 
@@ -10,6 +13,11 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 describe('per-key-rate-gate', () => {
     beforeEach(() => {
         __resetRateGatesForTest();
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
+        jest.restoreAllMocks();
     });
 
     it('serializes concurrent calls that share a key (single slot)', async () => {
@@ -100,5 +108,148 @@ describe('per-key-rate-gate', () => {
         expect(a1).not.toBe(b); // different credential → different bucket
         expect(a1).not.toContain('dXNlcjpwYXNz'); // raw secret not embedded
         expect(a1.startsWith('bitbucket:')).toBe(true);
+    });
+
+    it('rejects a call that would wait past maxWaitMs instead of sleeping', async () => {
+        jest.useFakeTimers();
+        await runWithRateGate('k', { minIntervalMs: 0 }, async () => undefined);
+        parkRateGate('k', Date.now() + 60_000);
+
+        const fn = jest.fn();
+        const error = await runWithRateGate(
+            'k',
+            { minIntervalMs: 0, maxWaitMs: 1_000 },
+            fn,
+        ).catch((e) => e);
+
+        // Gave up at once, and says how long the key stays parked
+        expect(error).toBeInstanceOf(RateGateWaitExceededError);
+        expect(error).toMatchObject({
+            status: 429,
+            name: 'RateGateWaitExceededError',
+            key: 'k',
+            waitedMs: 0,
+            retryAfterMs: 60_000,
+        });
+        expect(error.message).toBe(
+            'Rate gate k: gave up after waiting 0ms (key parked for another 60000ms)',
+        );
+        expect(fn).not.toHaveBeenCalled();
+    });
+
+    it('drains a parked queue at once when every caller has a budget', async () => {
+        await runWithRateGate('k', { minIntervalMs: 0 }, async () => undefined);
+        parkRateGate('k', Date.now() + 60_000);
+
+        const calls = Array.from({ length: 20 }, () =>
+            runWithRateGate(
+                'k',
+                { minIntervalMs: 0, maxWaitMs: 1_000 },
+                async () => 'ran',
+            ).catch((e) => e),
+        );
+        const results = await Promise.all(calls);
+
+        expect(
+            results.every((r) => r instanceof RateGateWaitExceededError),
+        ).toBe(true);
+    });
+
+    it('charges queue time against the budget while the key is rate limited', async () => {
+        jest.useFakeTimers();
+        recordRateLimited('k', { baseMs: 0, maxMs: 0 });
+        const holder = runWithRateGate('k', { minIntervalMs: 0 }, () =>
+            sleep(120),
+        );
+        const queued = runWithRateGate(
+            'k',
+            { minIntervalMs: 0, maxWaitMs: 50 },
+            async () => 'ran',
+        ).catch((e) => e);
+
+        await jest.advanceTimersByTimeAsync(120);
+        await holder;
+        const error = await queued;
+
+        expect(error).toBeInstanceOf(RateGateWaitExceededError);
+        // It gave up at its budget, still queued; nothing is parked
+        expect(error).toMatchObject({ waitedMs: 50, retryAfterMs: 0 });
+    });
+
+    it('gives up while still queued behind a call that holds the slot', async () => {
+        jest.useFakeTimers();
+        recordRateLimited('k', { baseMs: 0, maxMs: 0 });
+        const holder = runWithRateGate('k', { minIntervalMs: 0 }, () =>
+            sleep(130_000),
+        );
+        const fn = jest.fn(async () => 'ran');
+        const queued = runWithRateGate(
+            'k',
+            { minIntervalMs: 0, maxWaitMs: 20_000 },
+            fn,
+        ).catch((e) => e);
+
+        await jest.advanceTimersByTimeAsync(20_000);
+        const error = await queued;
+        expect(error).toBeInstanceOf(RateGateWaitExceededError);
+        expect(error).toMatchObject({ waitedMs: 20_000 });
+
+        // Once the holder frees the slot, the expired call does not run
+        await jest.advanceTimersByTimeAsync(110_000);
+        await holder;
+        expect(fn).not.toHaveBeenCalled();
+    });
+
+    it('never cuts a healthy queue short, however long it waited', async () => {
+        const holder = runWithRateGate('k', { minIntervalMs: 0 }, () =>
+            sleep(120),
+        );
+        const queued = runWithRateGate(
+            'k',
+            { minIntervalMs: 0, maxWaitMs: 50 },
+            async () => 'ran',
+        );
+
+        await holder;
+        await expect(queued).resolves.toBe('ran');
+    });
+
+    it('still waits out a park that fits in maxWaitMs', async () => {
+        await runWithRateGate('k', { minIntervalMs: 0 }, async () => undefined);
+        parkRateGate('k', Date.now() + 50);
+
+        await expect(
+            runWithRateGate(
+                'k',
+                { minIntervalMs: 0, maxWaitMs: 1_000 },
+                async () => 'ran',
+            ),
+        ).resolves.toBe('ran');
+    });
+
+    it('doubles the 429 backoff per 429 in a row, capped, and resets on success', () => {
+        jest.spyOn(Math, 'random').mockReturnValue(0);
+        const backoff = { baseMs: 10_000, maxMs: 60_000 };
+
+        expect(
+            [1, 2, 3, 4, 5].map(() => recordRateLimited('k', backoff)),
+        ).toEqual([10_000, 20_000, 40_000, 60_000, 60_000]);
+
+        recordRateGateSuccess('k');
+        expect(recordRateLimited('k', backoff)).toBe(10_000);
+        // Streaks are per credential
+        expect(recordRateLimited('other', backoff)).toBe(10_000);
+    });
+
+    it('resetting the streak of a key never seen is a no-op', () => {
+        expect(() => recordRateGateSuccess('never-seen')).not.toThrow();
+    });
+
+    it('adds at most 20% jitter to the backoff', () => {
+        jest.spyOn(Math, 'random').mockReturnValue(0.999);
+
+        expect(recordRateLimited('k', { baseMs: 10_000, maxMs: 60_000 })).toBe(
+            11_998,
+        );
     });
 });

@@ -259,6 +259,28 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    findPullRequestAuthorsOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>> {
+        return this.pullRequestsRepository.findPullRequestAuthorsOpenedSince(
+            since,
+            organizationId,
+            repositoryIds,
+        );
+    }
+
+    hasStoredPullRequests(
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.hasStoredPullRequests(
+            organizationId,
+            repositoryIds,
+        );
+    }
+
     findOpenPullRequestKeys(
         organizationId: string,
         repositoryIds: string[] | undefined,

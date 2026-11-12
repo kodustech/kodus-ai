@@ -1,8 +1,8 @@
 diff --git a/libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope.ts b/libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope.ts
-index f681cb86a..03c6540ba 100644
+index 86adef5f3..17847808e 100644
 --- a/libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope.ts
 +++ b/libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope.ts
-@@ -193,7 +193,6 @@ export function selectCustomAgents(
+@@ -262,7 +262,6 @@ export function customAgentCandidates(
      // check runs the first, since run names and usage are keyed by slug.
      const seen = new Set<string>();
      return agents.filter((a) => {
@@ -11,15 +11,15 @@ index f681cb86a..03c6540ba 100644
          if (seen.has(slug)) return false;
          seen.add(slug);
 diff --git a/libs/code-review/pipeline/stages/agent-review.stage.ts b/libs/code-review/pipeline/stages/agent-review.stage.ts
-index 1ed59941c..e1cddd6d4 100644
+index 96b149084..f03239cf1 100644
 --- a/libs/code-review/pipeline/stages/agent-review.stage.ts
 +++ b/libs/code-review/pipeline/stages/agent-review.stage.ts
-@@ -436,7 +436,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
+@@ -684,7 +684,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
          const configured = context.codeReviewConfig?.customAgents ?? [];
-         const wanted = context.onlyCustomAgent
+         return context.onlyCustomAgent
              ? configured
 -            : configured.filter((agent) => agent?.enabled);
 +            : configured;
-         if (!wanted.length) {
-             return [];
-         }
+     }
+ 
+     /**

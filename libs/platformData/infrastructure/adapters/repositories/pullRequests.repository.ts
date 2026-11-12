@@ -895,6 +895,70 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             }));
     }
 
+    // Everyone who opened a PR on these repositories since `since`, keyed by
+    // the provider's user id: the same id a license seat carries, so the
+    // member list and the seat prune can match on it.
+    async findPullRequestAuthorsOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>> {
+        if (!repositoryIds.length) {
+            return [];
+        }
+
+        const rows = await this.pullRequestsModel
+            .aggregate([
+                {
+                    $match: {
+                        organizationId,
+                        'repository.id': { $in: repositoryIds },
+                        // A PR is stored after it opens, so createdAt >=
+                        // openedAt: this only bounds the index scan, openedAt
+                        // still decides the result.
+                        'createdAt': { $gte: new Date(since) },
+                        'openedAt': { $gte: since },
+                        'user.id': { $nin: [null, ''] },
+                    },
+                },
+                {
+                    $group: {
+                        _id: '$user.id',
+                        name: { $first: '$user.name' },
+                        username: { $first: '$user.username' },
+                    },
+                },
+            ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .exec();
+
+        return rows.map((r: any) => ({
+            id: String(r._id),
+            name: r.name ?? '',
+            username: r.username ?? '',
+        }));
+    }
+
+    async hasStoredPullRequests(
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<boolean> {
+        if (!repositoryIds.length) {
+            return false;
+        }
+
+        const doc = await this.pullRequestsModel
+            .findOne(
+                { organizationId, 'repository.id': { $in: repositoryIds } },
+                { _id: 1 },
+            )
+            .lean()
+            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+            .exec();
+
+        return !!doc;
+    }
+
     // Distinct PR authors (by display name) for the org/team repo scope — powers
     // the Author search autocomplete. Optional `search` narrows by a
     // case-insensitive substring of name/username; results are ordered by PR

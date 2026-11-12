@@ -270,6 +270,33 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         });
     });
 
+    describe('findPullRequestAuthorsOpenedSince', () => {
+        it('bounds the scan by createdAt so the org+repo+createdAt index applies', async () => {
+            const option = jest.fn().mockReturnValue({ exec });
+            aggregate.mockReturnValue({ option });
+            exec.mockResolvedValue([
+                { _id: '{u1}', name: 'Ana', username: 'ana' },
+            ]);
+            const since = '2026-09-12T00:00:00.000Z';
+
+            const authors = await repo.findPullRequestAuthorsOpenedSince(
+                since,
+                'org-A',
+                ['r1'],
+            );
+
+            expect(authors).toEqual([
+                { id: '{u1}', name: 'Ana', username: 'ana' },
+            ]);
+            const match = aggregate.mock.calls[0][0][0].$match;
+            expect(match.organizationId).toBe('org-A');
+            expect(match['repository.id']).toEqual({ $in: ['r1'] });
+            expect(match.createdAt).toEqual({ $gte: new Date(since) });
+            expect(match.openedAt).toEqual({ $gte: since });
+            expect(option).toHaveBeenCalledWith({ maxTimeMS: 50_000 });
+        });
+    });
+
     describe('findPullRequestsWithDeliveredSuggestions', () => {
         it('projects the read fields before unwinding files/suggestions', async () => {
             const option = jest.fn().mockReturnValue({ exec });

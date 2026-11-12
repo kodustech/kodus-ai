@@ -44,6 +44,7 @@ every PR.
 | P9 a finished run reads as finished (#2384) | An agent that delivered a whole result, in its first pass or in the synthesis rescue, is not reported as "ended without submitting a result"; one that ran out of steps or had its turn cut still is | `incomplete-and-unverified.spec.ts` |
 | P10 prose recovery takes `null` (#2384) | An answer that sets a recovery field to `null` is read as that field absent: one call, the findings kept | `finder.recovery-nulls.spec.ts` |
 | P11 linked guides on the local sandbox | An agent whose rules are skills and docs linked to it posts the violation it finds, quoting the guide, on the local sandbox (self-hosted without an E2B key, whose command channel refuses git); it stays quiet on a near miss | `convention-check.local-sandbox.spec.ts`; this eval: 2 flags and 1 control (a real model) |
+| P12 repository instruction files | With repository instructions on, a rule quoted from the CLAUDE.md or AGENTS.md the review loaded from the target branch passes the quote gate; a quote not in the file, or a file the review did not load, is still dropped. A team running only custom agents still gets the files | `convention-check.repo-instructions.spec.ts`, `convention-second-pass.spec.ts`, `agent-review.stage.repo-instructions.spec.ts`; this eval: 1 flag and 1 control (a real model) |
 
 A finding on a file outside the agent's files is also dropped by the mapper
 every agent shares (`finding-mapper.ts`, "relevantFile not in changedFiles";
@@ -87,6 +88,8 @@ clean after each one.
 | P10 | `P10-recovery-null-required.patch`: prose recovery requires the label key again | `finder.recovery-nulls.spec.ts` | red: 2 of 5 failed, a second call on both routes |
 | P11 | `P11-local-sandbox-guides-unread.patch`: the quote gate reads a guide of the reviewed repository only through the sandbox command channel | `convention-check.local-sandbox.spec.ts` | red: 2 of 4 failed, both passing cases (2026-11-12, `mutations/run.js --only=P11 --skip-model`, tree restored) |
 | P11 | same | this eval on `deepseek-v4-flash@fireworks`, P11's cases, 2 runs | red both runs: 1/3, both violations dropped by the quote gate (fixed: 3/3 both runs). On `kimi-k2.7-code@fireworks` the gate drops them too, but the rule resurfaces as a non-convention finding: 3/3 and 2/3 broken, 3/3 fixed |
+| P12 | `P12-instruction-files-unquotable.patch`: the quote gate takes no repository instruction file as a source | `convention-check.repo-instructions.spec.ts`, `convention-second-pass.spec.ts` | red: 4 of 17 failed (2026-11-12, `mutations/run.js --only=P12 --skip-model`, tree restored) |
+| P12 | same | this eval on `deepseek-v4-flash@fireworks` and `kimi-k2.7-code@fireworks`, P12's cases, 2 runs each | broken: the violation posted on 1 of 4 runs, 1 quote-gate drop per run; fixed: 8/8 checks, 0 drops (2026-11-12) |
 
 P5 was not falsifiable at first: with the floor and cap moved after dedup, the
 stage spec stayed green (20 of 20). Its two ordering tests scripted the dedup

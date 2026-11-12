@@ -131,7 +131,7 @@ describe('BackfillHistoricalPRsUseCase.transformPullRequestToDocument', () => {
             createdAt: '2026-04-01T08:00:00.000Z',
             updatedAt: '2026-05-02T09:30:00.000Z',
             provider: '',
-            user: { id: '7', username: 'octocat' },
+            user: { id: '7', username: 'octocat', name: 'Octo Cat' },
             reviewers: [
                 { id: '11', username: '' },
                 { id: '12', username: '' },
@@ -186,7 +186,7 @@ describe('BackfillHistoricalPRsUseCase.transformPullRequestToDocument', () => {
             createdAt: NOW_ISO,
             updatedAt: NOW_ISO,
             provider: '',
-            user: { id: '', username: '' },
+            user: { id: '', username: '', name: '' },
             reviewers: [],
             assignees: [],
             organizationId: 'org-999',
@@ -426,7 +426,11 @@ describe('BackfillHistoricalPRsUseCase.transformPullRequestToDocument', () => {
                 [],
                 { id: 'r', name: 'n' },
             );
-            expect(result.user).toEqual({ id: '99', username: 'the-login' });
+            expect(result.user).toEqual({
+                id: '99',
+                username: 'the-login',
+                name: 'the-name',
+            });
         });
 
         it('falls back to name when login is absent', () => {
@@ -437,15 +441,19 @@ describe('BackfillHistoricalPRsUseCase.transformPullRequestToDocument', () => {
                 [],
                 { id: 'r', name: 'n' },
             );
-            expect(result.user).toEqual({ id: '1', username: 'the-name' });
+            expect(result.user).toEqual({
+                id: '1',
+                username: 'the-name',
+                name: 'the-name',
+            });
         });
 
-        it('produces empty id and username when user is absent', () => {
+        it('produces empty id, username and name when user is absent', () => {
             const result = transform({}, 'o', zeroStats, [], {
                 id: 'r',
                 name: 'n',
             });
-            expect(result.user).toEqual({ id: '', username: '' });
+            expect(result.user).toEqual({ id: '', username: '', name: '' });
         });
     });
 

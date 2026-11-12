@@ -13,6 +13,8 @@
 //   P7  a disabled agent does not run
 //   P11 an agent whose rules are linked skills and docs posts what they forbid,
 //       on the local sandbox too (guide-cases.js)
+//   P12 with repository instructions on, an agent posts a rule quoted from
+//       CLAUDE.md or AGENTS.md (instruction-cases.js)
 //
 // A case is a pull request: `repo` is every file at the PR's head, `before` the
 // files the PR changed as they were (null = added). `team` is what the team
@@ -625,5 +627,6 @@ export const migration: Migration = {
 ];
 
 CASES.push(...require('./guide-cases').GUIDE_CASES);
+CASES.push(...require('./instruction-cases').INSTRUCTION_CASES);
 
 module.exports = { CASES };
