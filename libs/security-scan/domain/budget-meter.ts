@@ -263,7 +263,19 @@ function add(a: Cost, b: Cost, sign: 1 | -1): Cost {
     return { usd: a.usd + sign * b.usd, tokens: a.tokens + sign * b.tokens };
 }
 
-/** One answer's usage, as the wrapper settles it and its caller records it. */
+/**
+ * One answer's usage, as the wrapper settles it and its caller records it:
+ * every count its cost depends on (the rates are the meter's own), so two
+ * answers with one key cost the same and either may be taken for the other.
+ */
 function keyOf(usage: AiSdkUsage): string {
-    return `${usage.inputTokens ?? 0}:${usage.outputTokens ?? 0}`;
+    return [
+        usage.inputTokens,
+        usage.outputTokens,
+        usage.reasoningTokens,
+        usage.cacheReadTokens,
+        usage.cacheWriteTokens,
+    ]
+        .map((n) => n ?? 0)
+        .join(':');
 }

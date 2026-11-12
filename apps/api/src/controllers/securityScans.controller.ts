@@ -165,10 +165,13 @@ export class SecurityScansController {
     @UseGuards(PolicyGuard)
     @CheckPolicies(canReadScans)
     async list(@Query('limit') limit?: string) {
+        // Only a positive whole number is a limit; anything else (blank,
+        // zero, negative, not a number) keeps the default.
+        const asked = Number(limit);
         return this.getSecurityScans.list(
             await this.organizationId(),
             (await this.visibleRepositories()) ?? undefined,
-            limit ? Number(limit) : undefined,
+            Number.isInteger(asked) && asked > 0 ? asked : undefined,
         );
     }
 

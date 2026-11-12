@@ -132,6 +132,24 @@ describe('ScanBudgetMeter', () => {
         ).not.toThrow();
     });
 
+    it('releases the held answer its record is for, when two share their token counts', () => {
+        const meter = new ScanBudgetMeter({ maxUsd: 10 }, RATES);
+        const full = { inputTokens: 1_000_000, outputTokens: 0 };
+        const cached = { ...full, cacheReadTokens: 1_000_000 };
+
+        // Both answered, not recorded yet: $1 and $0.10 held.
+        meter.admit({ inputTokens: 100, maxOutputTokens: 10 }).settle(full);
+        meter.admit({ inputTokens: 100, maxOutputTokens: 10 }).settle(cached);
+        // The cached one is recorded first: its own $0.10 is released.
+        meter.record({ usage: cached });
+
+        // Spent $0.10 and still holding $1: $8.90 of room, too little for a
+        // $9 request. Releasing the wrong one would leave $9.80.
+        expect(() =>
+            meter.admit({ inputTokens: 7_200_000, maxOutputTokens: 1 }),
+        ).toThrow(ScanBudgetReached);
+    });
+
     it('gives back the reservation of a request that failed unanswered', () => {
         const meter = new ScanBudgetMeter({ maxUsd: 1 }, RATES);
 

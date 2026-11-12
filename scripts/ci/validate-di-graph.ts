@@ -36,9 +36,7 @@ import { NestFactory } from '@nestjs/core';
 
 import { ApiModule } from '../../apps/api/src/api.module';
 import { WorkerModule } from '../../apps/worker/src/worker.module';
-
-/** Every worker role that consumes queues builds its own module graph. */
-const WORKER_ROLES = ['code-review', 'security-scan'];
+import { CONSUMING_WORKER_ROLES as WORKER_ROLES } from '../../apps/worker/src/worker-role';
 
 /**
  * Belt-and-braces: the whole point of this job is to be fast and

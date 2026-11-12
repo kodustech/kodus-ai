@@ -57,6 +57,26 @@ describe('issues command actions', () => {
         expect(stdout).toBe('Fix these 2 issues\n');
     });
 
+    it('keeps --json with --prompt-only on list, as show does', async () => {
+        service.list.mockResolvedValue([issue('a')]);
+        const result = {
+            prompt: 'Fix this issue',
+            included: ['a'],
+            skipped: [],
+        };
+        service.fixPrompt.mockResolvedValue(result);
+        const logged: string[] = [];
+        vi.mocked(console.log).mockImplementation((line) => {
+            logged.push(String(line));
+        });
+
+        await issuesListAction({ promptOnly: true, json: true });
+
+        // The JSON payload, not the bare prompt text.
+        expect(stdout).toBe('');
+        expect(logged.map((l) => JSON.parse(l))).toContainEqual(result);
+    });
+
     it('prints the prompt of the given ids with show', async () => {
         service.fixPrompt.mockResolvedValue({
             prompt: 'Fix this issue',

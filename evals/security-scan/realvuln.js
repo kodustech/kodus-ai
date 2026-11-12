@@ -222,6 +222,7 @@ async function main() {
 }
 
 main().catch((error) => {
-    console.error(error);
+    // The stack only: an error object can carry request headers.
+    console.error(error instanceof Error ? error.stack : String(error));
     process.exit(2);
 });

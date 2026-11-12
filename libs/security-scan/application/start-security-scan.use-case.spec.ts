@@ -163,3 +163,26 @@ describe('StartSecurityScanUseCase — a scan that cannot be queued', () => {
         );
     });
 });
+
+describe('StartSecurityScanUseCase — a duplicate key on create', () => {
+    const duplicateKey = () =>
+        Object.assign(new Error('E11000 duplicate key'), { code: 11000 });
+
+    it('reports a scan already running when one is now active', async () => {
+        const { scans, start } = useCaseWith(null);
+        scans.create.mockRejectedValueOnce(duplicateKey());
+        scans.findActive
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({ uuid: 'other-scan' } as any);
+
+        await expect(start()).rejects.toThrow(/already running/);
+    });
+
+    it('fails with the real error when no scan is active', async () => {
+        const { scans, start } = useCaseWith(null);
+        const error = duplicateKey();
+        scans.create.mockRejectedValueOnce(error);
+
+        await expect(start()).rejects.toBe(error);
+    });
+});

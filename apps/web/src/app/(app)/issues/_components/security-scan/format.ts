@@ -29,8 +29,8 @@ export const formatScanSpend = ({
         return `${usd(spend.usd)} of ${usd(budget.maxUsd)}`;
     }
 
-    const tokens = spend.inputTokens + spend.outputTokens;
     if (budget.maxTokens !== undefined) {
+        const tokens = spend.inputTokens + spend.outputTokens;
         return `${formatTokenCount(tokens)} of ${formatTokenCount(budget.maxTokens)} tokens`;
     }
 

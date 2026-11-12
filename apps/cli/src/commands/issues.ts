@@ -97,7 +97,7 @@ export async function issuesListAction(
             }
             await printFixPrompt(
                 issues.slice(0, FIX_PROMPT_MAX_ISSUES).map((i) => i.uuid),
-                { promptOnly: true },
+                { json: options.json, promptOnly: true },
             );
             return;
         }

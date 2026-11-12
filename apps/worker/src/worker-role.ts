@@ -28,6 +28,12 @@
  */
 export type WorkerRole = 'code-review' | 'analytics' | 'security-scan';
 
+/** The roles that consume queues, each with its own module graph. */
+export const CONSUMING_WORKER_ROLES: readonly WorkerRole[] = [
+    'code-review',
+    'security-scan',
+];
+
 export function resolveWorkerRole(): WorkerRole {
     const raw = process.env.WORKER_ROLE?.toLowerCase();
     if (

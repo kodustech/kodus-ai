@@ -154,10 +154,17 @@ export class StartSecurityScanUseCase {
                 modelName: model.modelName,
                 requestedBy: input.requestedBy,
             })
-            .catch((error) => {
+            .catch(async (error) => {
                 // Another request started one between the check above and
-                // this write; the one-active-scan index refused the second.
-                if (error?.code === 11000) {
+                // this write, and the one-active-scan index refused the
+                // second: only a scan now active proves it, so read it back.
+                if (
+                    error?.code === 11000 &&
+                    (await this.scans.findActive(
+                        orgTeam.organizationId,
+                        String(repository.id),
+                    ))
+                ) {
                     throw new ConflictException(ALREADY_RUNNING);
                 }
                 throw error;
