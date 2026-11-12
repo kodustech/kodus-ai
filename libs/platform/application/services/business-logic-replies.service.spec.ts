@@ -372,38 +372,52 @@ describe('BusinessLogicReplies', () => {
         });
     });
 
-    it('re-checks a dispute with what the author pointed at and says whether it changed (UC-38)', async () => {
-        const revalidated = disputedOutcome;
-        const { replies, service, publisher } = build({
-            intent: 'accept',
-            findings: [1],
-            movedTo: 'SAA-102',
-        });
-
-        const result = await replies.handle({
-            request,
-            message: 'Keyboard reordering is out of scope, split into SAA-102.',
-            sender: { login: 'nina' },
-        });
-
-        expect(service.tryRead).toHaveBeenCalledWith(
-            expect.anything(),
-            'SAA-102',
-            expect.anything(),
+    it('says a re-check that reached no verdict did not change the comment (UC-38)', async () => {
+        // The non-validated path (a task id that no longer exists, a tracker
+        // that answered an error) still has to say what happened to the
+        // comment. Before the re-check flag existed it claimed an update here
+        // whether or not the text changed.
+        const { replies, publisher } = build(
+            {
+                intent: 'dispute',
+                findings: [1],
+                files: ['useDrag.ts'],
+                claim: 'covered in useDrag.ts',
+            },
+            {
+                outcome: {
+                    kind: 'task_missing',
+                    references: [],
+                    tracker: 'Linear',
+                    message:
+                        'I could not read SAA-96: the task does not exist.',
+                },
+                references: [],
+                attempts: [],
+                trackers: ['Linear'],
+            },
         );
-        const published = publisher.publish.mock.calls[0][0];
-        expect(published.trigger).toBe('accepted');
-        const keyboard =
-            published.result.outcome.checks[0].verdict.requirements[1];
-        expect(keyboard.accepted).toMatchObject({
-            by: 'nina',
-            movedTo: 'SAA-102',
+        publisher.publish.mockResolvedValueOnce({
+            outcome: {
+                kind: 'task_missing',
+                references: [],
+                tracker: 'Linear',
+                message: 'I could not read SAA-96: the task does not exist.',
+            },
+            comment: 'updated',
+            changed: false,
         });
-        expect(published.result.outcome.passed).toBe(true);
-        expect(result).toMatchObject({
-            handled: true,
-            reply: expect.stringContaining('Nothing is left to merge'),
+
+        const unchanged = await replies.handle({
+            request,
+            message: 'Keyboard reordering is covered in useDrag.ts',
+            sender: { login: 'rafa' },
         });
+
+        expect(unchanged.reply).toContain(
+            'The result did not change; the Kody · Business Logic comment says the same.',
+        );
+        expect(unchanged.reply).not.toContain('is updated');
     });
 
     it('re-checks a dispute with what the author pointed at and says whether it changed (UC-38)', async () => {
@@ -477,7 +491,7 @@ describe('BusinessLogicReplies', () => {
         });
         expect(result).toMatchObject({
             reply: expect.stringContaining(
-                'The Business Logic comment above is updated.',
+                'The Kody · Business Logic comment is updated.',
             ),
         });
 
@@ -494,7 +508,7 @@ describe('BusinessLogicReplies', () => {
         });
         expect(unchanged).toMatchObject({
             reply: expect.stringContaining(
-                'The Business Logic comment above says the same.',
+                'The result did not change; the Kody · Business Logic comment says the same.',
             ),
         });
     });
@@ -522,7 +536,7 @@ describe('BusinessLogicReplies', () => {
 
         expect(legacy.reply).not.toMatch(/says the same|is updated/);
         expect(legacy.reply).toContain(
-            'The result is in the Business Logic comment above.',
+            'The result is in the Kody · Business Logic comment on this pull request.',
         );
     });
 
