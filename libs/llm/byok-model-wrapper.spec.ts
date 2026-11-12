@@ -946,6 +946,19 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         expect(await run(new Error('socket hang up'))).toEqual({});
     });
 
+    it('never asks the meter for room on behalf of a caller that already aborted', async () => {
+        const admit = jest.fn(() => ({ settle: jest.fn() }));
+        const caller = new AbortController();
+        caller.abort(new Error('caller gave up'));
+
+        await expect(
+            runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+                wrap(answering({})).doGenerate({ prompt: PROMPT, abortSignal: caller.signal } as any),
+            ),
+        ).rejects.toThrow('caller gave up');
+        expect(admit).not.toHaveBeenCalled();
+    });
+
     it('stops waiting for room when the caller aborts, giving back room granted later', async () => {
         const settle = jest.fn();
         let grant!: (a: any) => void;
@@ -966,18 +979,23 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         expect(settle).toHaveBeenCalledWith(undefined);
     });
 
-    it('settles a request aborted before it left as unbilled', async () => {
+    it('settles a request aborted after its admission, before it left, as unbilled', async () => {
         const settle = jest.fn();
         const model = answering({});
         model.doGenerate.mockRejectedValue(
             Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }),
         );
         const aborted = new AbortController();
-        aborted.abort();
+        // The caller gives up once the request is admitted (waiting in the
+        // provider's queue): the transport refuses it before sending.
+        const admit = () => {
+            aborted.abort();
+            return { settle };
+        };
 
         await expect(
             runWithUsageMeter(
-                { record: jest.fn(), admit: () => ({ settle }) },
+                { record: jest.fn(), admit },
                 async () =>
                     wrap(model).doGenerate({
                         prompt: PROMPT,
