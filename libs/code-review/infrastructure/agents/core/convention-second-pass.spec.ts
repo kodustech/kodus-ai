@@ -456,6 +456,28 @@ describe('convention findings sourced from a code file', () => {
         );
     });
 
+    // Code holds "..." (spread, rest): that is code, not a shortened quote.
+    it('checks a quoted pattern holding a spread as a bug', async () => {
+        const SPREAD = {
+            ...CODE,
+            source: {
+                file: 'src/valves/open-valve.handler.ts',
+                quote: 'return { ...result, zone } as ValveResult;',
+            },
+        };
+        submitted = { reasoning: 'one pattern', suggestions: [SPREAD, BUG] };
+        const { r } = await run(
+            true,
+            {},
+            {
+                'src/valves/open-valve.handler.ts':
+                    'export async function openValve(zone: string) {\n    const result = await valve.open(zone);\n    return { ...result, zone } as ValveResult;\n}\n',
+            },
+        );
+        expect(r.droppedByQuoteCheck).toEqual([]);
+        expect(r.kept.map(tagOf)).toEqual(['BUG', 'CODE-PATTERN']);
+    });
+
     // A pattern the model made up has nothing for the verifier to compare.
     it.each([
         [

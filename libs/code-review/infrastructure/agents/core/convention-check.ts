@@ -502,7 +502,13 @@ export async function checkCodeFileQuotes(
         const content = quote.trim()
             ? await readGuide(file).catch(() => null)
             : null;
-        if (content != null && findQuoteSection(content, quote) != null) {
+        // Code holds "..." (spread, rest), so the whole quote is looked up
+        // first; a quote the model shortened with "..." still matches by parts.
+        const holds =
+            content != null &&
+            (normalizeQuoteText(content).includes(normalizeQuoteText(quote)) ||
+                findQuoteSection(content, quote) != null);
+        if (holds) {
             passed.push(finding);
         } else {
             rejected.push({
