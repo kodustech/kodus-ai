@@ -56,6 +56,9 @@ export interface StartSecurityScanInput {
     requestedBy?: { userId?: string; email?: string };
 }
 
+export const NO_CODE_INTEGRATION_MESSAGE =
+    'This team has no active code management integration to scan the repository through.';
+
 @Injectable()
 export class StartSecurityScanUseCase {
     constructor(
@@ -105,6 +108,12 @@ export class StartSecurityScanUseCase {
 
         const platform =
             await this.codeManagementService.getTypeIntegration(orgTeam);
+        // The platform is half the repository's identity (an id is only
+        // unique on it): without an active integration there is no knowing
+        // which repository this is, nor a way to clone it.
+        if (!platform) {
+            throw new BadRequestException(NO_CODE_INTEGRATION_MESSAGE);
+        }
         const repositoryKey = {
             platform: String(platform),
             id: String(repository.id),

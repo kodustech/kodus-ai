@@ -23,7 +23,10 @@ const unit = (id: string) => ({
     language: 'typescript',
 });
 
-function useCaseWith(last: Record<string, unknown> | null) {
+function useCaseWith(
+    last: Record<string, unknown> | null,
+    platform: string | null = 'GITHUB',
+) {
     const scans = {
         failStale: jest.fn(async () => 0),
         findActive: jest.fn(async () => null),
@@ -41,7 +44,7 @@ function useCaseWith(last: Record<string, unknown> | null) {
             ]),
         } as any,
         {} as any,
-        { getTypeIntegration: jest.fn(async () => 'GITHUB') } as any,
+        { getTypeIntegration: jest.fn(async () => platform) } as any,
         {} as any,
         { getConfig: jest.fn(async () => null) } as any,
     );
@@ -103,6 +106,15 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         const key = { platform: 'GITHUB', id: 'repo-1' };
         expect(scans.findActive).toHaveBeenCalledWith('org-1', key);
         expect(scans.findLatest).toHaveBeenCalledWith('org-1', key);
+    });
+
+    it('refuses to start without an active code integration, writing nothing', async () => {
+        const { scans, start, jobQueue } = useCaseWith(null, null);
+
+        await expect(start()).rejects.toThrow(/no active code management integration/);
+        expect(scans.findActive).not.toHaveBeenCalled();
+        expect(scans.create).not.toHaveBeenCalled();
+        expect(jobQueue.enqueue).not.toHaveBeenCalled();
     });
 
     it('runs again the areas a provider outage failed', async () => {
