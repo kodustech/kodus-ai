@@ -72,6 +72,11 @@ function teamConfig(c) {
     const defaults = getDefaultKodusConfigFile();
     return {
         customAgents: agentsOf(c),
+        // Repository instructions on (P12): the review loads CLAUDE.md and
+        // AGENTS.md from the target branch for every agent.
+        ...(c.team.repoInstructionsEnabled && {
+            repoInstructionsEnabled: true,
+        }),
         reviewOptions: {
             ...(defaults.reviewOptions || {}),
             bug: false,
@@ -106,6 +111,9 @@ function caseVars(c) {
         reviewMode: 'balanced',
         repoBase,
         repoFiles,
+        // Repository instructions are listed and read on the target branch
+        // through the platform (P12): it holds what the base holds.
+        ...(c.team.repoInstructionsEnabled && { targetBranchFiles: repoBase }),
     };
 }
 
