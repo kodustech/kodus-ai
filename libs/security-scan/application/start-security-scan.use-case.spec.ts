@@ -25,7 +25,7 @@ const unit = (id: string) => ({
 
 function useCaseWith(
     last: Record<string, unknown> | null,
-    platform: string | null = 'GITHUB',
+    platform: string | null | Error = 'GITHUB',
 ) {
     const scans = {
         failStale: jest.fn(async () => 0),
@@ -44,7 +44,12 @@ function useCaseWith(
             ]),
         } as any,
         {} as any,
-        { getTypeIntegration: jest.fn(async () => platform) } as any,
+        {
+            findTypeIntegration: jest.fn(async () => {
+                if (platform instanceof Error) throw platform;
+                return platform;
+            }),
+        } as any,
         {} as any,
         { getConfig: jest.fn(async () => null) } as any,
     );
@@ -115,6 +120,13 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         expect(scans.findActive).not.toHaveBeenCalled();
         expect(scans.create).not.toHaveBeenCalled();
         expect(jobQueue.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('lets a failed integration lookup through as the error it is, not as a missing integration', async () => {
+        const { scans, start } = useCaseWith(null, new Error('postgres down'));
+
+        await expect(start()).rejects.toThrow('postgres down');
+        expect(scans.create).not.toHaveBeenCalled();
     });
 
     it('runs again the areas a provider outage failed', async () => {

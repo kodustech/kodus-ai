@@ -106,8 +106,10 @@ export class StartSecurityScanUseCase {
             throw new BadRequestException(budgetError);
         }
 
+        // A failed lookup throws (a 5xx, worth retrying); only a confirmed
+        // absence is the caller's to fix.
         const platform =
-            await this.codeManagementService.getTypeIntegration(orgTeam);
+            await this.codeManagementService.findTypeIntegration(orgTeam);
         // The platform is half the repository's identity (an id is only
         // unique on it): without an active integration there is no knowing
         // which repository this is, nor a way to clone it.

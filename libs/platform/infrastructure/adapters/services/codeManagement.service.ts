@@ -65,22 +65,27 @@ export class CodeManagementService implements ICodeManagementService {
         private platformIntegrationFactory: PlatformIntegrationFactory,
     ) {}
 
+    /**
+     * The platform of the team's active code integration, or null when it has
+     * none. A failed lookup throws, so a caller can tell it from an absence.
+     */
+    async findTypeIntegration(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<PlatformType | null> {
+        const integration = await this.integrationService.findOne({
+            organization: { uuid: organizationAndTeamData.organizationId },
+            team: { uuid: organizationAndTeamData.teamId },
+            integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+            status: true,
+        });
+        return integration?.platform ?? null;
+    }
+
     async getTypeIntegration(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PlatformType> {
         try {
-            const integration = await this.integrationService.findOne({
-                organization: { uuid: organizationAndTeamData.organizationId },
-                team: { uuid: organizationAndTeamData.teamId },
-                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
-                status: true,
-            });
-
-            if (!integration) {
-                return null;
-            }
-
-            return integration.platform;
+            return await this.findTypeIntegration(organizationAndTeamData);
         } catch (error) {
             this.logger.error({
                 message: 'Failed to resolve integration type',
