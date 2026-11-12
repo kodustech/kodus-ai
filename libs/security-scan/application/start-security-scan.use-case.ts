@@ -268,6 +268,9 @@ export class StartSecurityScanUseCase {
                 unitsFailed: 0,
                 unitsSkippedByBudget: 0,
                 languages: last.coverage?.languages ?? [],
+                // The same plan, with the same holes.
+                mapFailedLanguages: last.coverage?.mapFailedLanguages ?? [],
+                filesBeyondPlan: last.coverage?.filesBeyondPlan ?? 0,
             },
         };
     }

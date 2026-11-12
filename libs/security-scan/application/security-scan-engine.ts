@@ -289,9 +289,11 @@ export class SecurityScanEngine {
                 mapFailedLanguages: [
                     ...new Set(searchFailures.map((e) => e.language)),
                 ],
+                // Only files a lens would read: an auth check alone is no
+                // candidate, so its file is not one the limit left out.
                 filesBeyondPlan: Math.max(
                     0,
-                    Object.keys(surface.files).length - params.maxUnits,
+                    rankCandidates(surface).length - params.maxUnits,
                 ),
             };
             if (planGaps.mapFailedLanguages.length) {
@@ -301,6 +303,7 @@ export class SecurityScanEngine {
                     context: SecurityScanEngine.name,
                     metadata: {
                         organizationId: params.organizationId,
+                        teamId: params.teamId,
                         repositoryId: params.repositoryId,
                         languages: planGaps.mapFailedLanguages,
                     },

@@ -129,6 +129,23 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         expect(scans.create).not.toHaveBeenCalled();
     });
 
+    it("carries on the plan's coverage gaps, so the scan does not read as full coverage", async () => {
+        const { scans, start } = useCaseWith({
+            ...stopped,
+            coverage: {
+                ...stopped.coverage,
+                mapFailedLanguages: ['python'],
+                filesBeyondPlan: 1,
+            },
+        });
+
+        await start();
+
+        expect(scans.create.mock.calls[0][0].coverage).toEqual(
+            expect.objectContaining({ mapFailedLanguages: ['python'], filesBeyondPlan: 1 }),
+        );
+    });
+
     it('runs again the areas a provider outage failed', async () => {
         const { scans, start } = useCaseWith({
             ...stopped,

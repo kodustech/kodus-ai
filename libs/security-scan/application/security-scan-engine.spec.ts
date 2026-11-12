@@ -14,6 +14,7 @@ import type { SurfaceMap } from '../domain/surface/surface.types';
 import { admitRequest, reportUsage } from '@libs/llm/usage-meter';
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
 
+import { rankCandidates } from '../domain/scan-units';
 import { SecurityScanEngine } from './security-scan-engine';
 
 const RATES = {
@@ -1622,7 +1623,33 @@ describe('SecurityScanEngine: across slices and units', () => {
         } as any);
 
         expect(result.units).toHaveLength(1);
-        expect(result.filesBeyondPlan).toBe(Object.keys(SURFACE.files).length - 1);
+        expect(result.filesBeyondPlan).toBe(rankCandidates(SURFACE).length - 1);
+    });
+
+    it('never counts a file the plan would not take as left out by its limit', async () => {
+        // Two candidates and a file whose only hit is an auth check.
+        const surface = {
+            ...onlyController,
+            files: {
+                ...SURFACE.files,
+                'src/guards/auth.guard.ts': { entryPoints: 0, authChecks: 1, sinks: 0, classes: [] },
+            },
+        } as any;
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens(() => []),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => surface),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            maxUnits: 1,
+        } as any);
+
+        expect(result.filesBeyondPlan).toBe(rankCandidates(surface).length - 1);
+        expect(result.filesBeyondPlan).toBe(Object.keys(surface.files).length - 2);
     });
 
     it('keeps a finding in a file listed past the first 20,000, and lists it as tracked', async () => {
