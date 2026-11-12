@@ -751,27 +751,38 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         expect(settle.mock.calls[0][0].totalTokens).toBeUndefined();
     });
 
-    it('admits a request with the reasoning budget its provider adds on top of the answer cap', async () => {
+    const thinking = {
+        anthropic: { thinking: { type: 'enabled', budgetTokens: 32_000 } },
+    };
+    const admittedWith = async (slot: NormalizedModel, providerOptions: any) => {
         const admit = jest.fn(() => ({ settle: jest.fn() }));
-
         await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
-            wrap(answering({})).doGenerate({
+            wrap(answering({}), slot).doGenerate({
                 prompt: PROMPT,
                 maxOutputTokens: 16_000,
-                providerOptions: {
-                    anthropic: {
-                        thinking: { type: 'enabled', budgetTokens: 32_000 },
-                    },
-                },
+                providerOptions,
             } as any),
         );
+        return (admit.mock.calls as unknown[][])[0][0] as any;
+    };
 
-        expect(admit).toHaveBeenCalledWith(
+    it('admits an Anthropic request with the thinking budget its adapter adds to max_tokens', async () => {
+        const slot = { provider: BYOKProvider.ANTHROPIC, apiKey: 'k-anthropic-budget', model: 'claude-sonnet-4-5' } as NormalizedModel;
+
+        expect(await admittedWith(slot, thinking)).toEqual(
             expect.objectContaining({
                 maxOutputTokens: 16_000,
                 reasoningBudgetTokens: 32_000,
             }),
         );
+    });
+
+    it('never counts a budget the served adapter does not add or does not read', async () => {
+        // OpenAI keeps reasoning inside the answer cap, and never reads the
+        // anthropic namespace anyway.
+        const openai = tpmSlot('k-openai-budget');
+
+        expect((await admittedWith(openai, thinking)).reasoningBudgetTokens).toBeUndefined();
     });
 
     it('sends the answer cap a request was admitted at when it set none', async () => {
