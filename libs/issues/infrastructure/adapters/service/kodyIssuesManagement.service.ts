@@ -102,17 +102,6 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                 )) ??
                 null;
 
-            if (
-                !byokConfig &&
-                (await this.permissionValidationService.hasBYOK(
-                    params.organizationAndTeamData,
-                ))
-            ) {
-                throw new Error(
-                    'Closed-PR issue analysis: configured BYOK model cannot be resolved',
-                );
-            }
-
             const issuesConfig = await this.parametersService.findByKey(
                 ParametersKey.ISSUE_CREATION_CONFIG,
                 params.organizationAndTeamData,
