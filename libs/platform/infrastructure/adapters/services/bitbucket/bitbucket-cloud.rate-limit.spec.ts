@@ -108,7 +108,7 @@ describe('BitbucketCloudService — 429 backoff and wait budget', () => {
     });
 
     it.each(['0', ' '])(
-        'backs off instead of retrying at once on Retry-After %j',
+        'feeds the doubling backoff instead of retrying at once on Retry-After %j',
         async (retryAfter) => {
             jest.useFakeTimers();
             const fetchMock = jest
@@ -116,6 +116,7 @@ describe('BitbucketCloudService — 429 backoff and wait budget', () => {
                 .mockResolvedValueOnce(
                     respond(429, { 'retry-after': retryAfter }),
                 )
+                .mockResolvedValueOnce(respond(429))
                 .mockResolvedValueOnce(respond(200));
             global.fetch = fetchMock as any;
             const { service } = makeService();
@@ -124,9 +125,15 @@ describe('BitbucketCloudService — 429 backoff and wait budget', () => {
             await jest.advanceTimersByTimeAsync(9_999);
             expect(fetchMock).toHaveBeenCalledTimes(1);
             await jest.advanceTimersByTimeAsync(1);
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+
+            // Second 429 in a row waits 20s: the header fed the backoff
+            await jest.advanceTimersByTimeAsync(19_999);
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            await jest.advanceTimersByTimeAsync(1);
 
             await expect(result).resolves.toMatchObject({ status: 200 });
-            expect(fetchMock).toHaveBeenCalledTimes(2);
+            expect(fetchMock).toHaveBeenCalledTimes(3);
         },
     );
 
