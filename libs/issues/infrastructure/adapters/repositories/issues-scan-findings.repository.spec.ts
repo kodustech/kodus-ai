@@ -205,6 +205,29 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(model.findOneAndUpdate).toHaveBeenCalled();
     });
 
+    it('stores nothing twice when a unit run again stores the same finding in one scan', async () => {
+        // The worker stopped between storing the finding and recording the
+        // unit: the unit runs again and stores it again.
+        const stored = {
+            _id: 'i-1',
+            status: IssueStatus.OPEN,
+            lastSeenScanId: 'scan-2',
+            title: finding.title,
+            startLine: finding.startLine,
+            endLine: finding.endLine,
+            description: finding.description,
+            severity: finding.severity,
+        };
+        const model = modelWith(stored);
+        const repository = new IssuesRepository(model as any);
+
+        const { outcome } = await repository.upsertScanFinding(finding);
+
+        expect(outcome).toBe('still_open');
+        const [, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [any, any];
+        expect(update.$set).toEqual({ lastSeenAt: expect.any(String) });
+    });
+
     it('keeps a second weakness of the same identity in one scan as another occurrence', async () => {
         // Two SQL injections in one function: the first is stored by this
         // scan, the second arrives with the same identity.
