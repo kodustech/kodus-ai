@@ -24,15 +24,40 @@ describe('computeScanFingerprint', () => {
         ).toBe(computeScanFingerprint(base));
     });
 
-    it('ignores the class casing', () => {
+    it('is one issue whichever lens reports the bug', () => {
+        const secret = {
+            ...base,
+            filePath: 'config/env/all.js',
+            symbol: undefined,
+            cwe: 'CWE-798',
+        };
         expect(
-            computeScanFingerprint({ ...base, vulnerabilityClass: 'AUTHZ ' }),
-        ).toBe(computeScanFingerprint(base));
+            computeScanFingerprint({
+                ...secret,
+                vulnerabilityClass: 'misconfiguration',
+            }),
+        ).toBe(
+            computeScanFingerprint({
+                ...secret,
+                vulnerabilityClass: 'secret_identity',
+            }),
+        );
+    });
+
+    it('tells findings without a CWE apart by their lens', () => {
+        const noCwe = { ...base, cwe: undefined };
+        expect(
+            computeScanFingerprint({ ...noCwe, vulnerabilityClass: 'authz' }),
+        ).not.toBe(
+            computeScanFingerprint({ ...noCwe, vulnerabilityClass: 'ssrf' }),
+        );
+        expect(
+            computeScanFingerprint({ ...noCwe, vulnerabilityClass: 'AUTHZ ' }),
+        ).toBe(computeScanFingerprint({ ...noCwe, vulnerabilityClass: 'authz' }));
     });
 
     it.each([
         ['repository', { repositoryId: 'repo-2' }],
-        ['class', { vulnerabilityClass: 'injection' }],
         ['file', { filePath: 'src/orders/orders.service.ts' }],
         ['symbol', { symbol: 'OrdersController.update' }],
         ['kind of weakness', { cwe: 'CWE-89' }],
