@@ -1672,6 +1672,17 @@
     }
   },
   {
+    "key": "pullRequest.controller.ts#getPullRequestExecutionsTotals",
+    "httpMethod": "GET",
+    "urlPath": "/pull-requests/executions/totals",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "pullRequest.controller.ts#getPullRequestFiles",
     "httpMethod": "GET",
     "urlPath": "/pull-requests/files",
@@ -1746,6 +1757,17 @@
       "billing_manager": "allow",
       "repo_admin": "allow",
       "contributor": "allow"
+    }
+  },
+  {
+    "key": "riskAssessment.controller.ts#previewOnPr",
+    "httpMethod": "POST",
+    "urlPath": "/code-review/risk/preview",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
     }
   },
   {

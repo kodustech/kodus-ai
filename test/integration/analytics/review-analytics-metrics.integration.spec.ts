@@ -16,7 +16,9 @@
  * mismatching value.
  *
  * Requires docker. Skips itself when the daemon is unavailable (CI
- * runners without docker, etc.).
+ * runners without docker, etc.) and under SKIP_INTEGRATION=true: the
+ * container has one fixed name and port, so runners in parallel (the mutation
+ * gate) would remove each other's database.
  */
 import { execSync } from 'child_process';
 
@@ -208,7 +210,9 @@ const Q = {
     endDate: '2026-06-01',
 };
 
-(dockerAvailable() ? describe : describe.skip)(
+const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
+
+(!skipIntegration && dockerAvailable() ? describe : describe.skip)(
     'review analytics — real Postgres end-to-end',
     () => {
         let ds: DataSource;

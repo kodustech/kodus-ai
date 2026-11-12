@@ -8,6 +8,7 @@ import type {
 import { PlatformConfigValue } from "@services/parameters/types";
 import { CustomMessageConfig } from "@services/pull-request-messages/types";
 import { FEATURE_FLAGS } from "src/core/config/feature-flags";
+import { hasRoutingProvider } from "src/features/ee/byok/_components/routing/routing-state";
 
 import { useCodeReviewRouteParams } from "../_hooks";
 import type {
@@ -153,6 +154,8 @@ export const FeatureFlagsProvider = (
 export type CodeReviewModelData = {
     llmConfigStatus: LLMConfigStatus | null;
     byokModels: LLMProviderModel[];
+    isCheckingProvider?: boolean;
+    providerStatusError?: boolean;
 };
 
 const CodeReviewModelDataContext = createContext<CodeReviewModelData>({
@@ -160,8 +163,13 @@ const CodeReviewModelDataContext = createContext<CodeReviewModelData>({
     byokModels: [],
 });
 
-export const useCodeReviewModelData = () =>
-    useContext(CodeReviewModelDataContext);
+export const useCodeReviewModelData = () => {
+    const data = useContext(CodeReviewModelDataContext);
+    return {
+        ...data,
+        hasConnectedProvider: hasRoutingProvider(data.llmConfigStatus),
+    };
+};
 
 export const CodeReviewModelDataProvider = (
     props: React.PropsWithChildren & { value: CodeReviewModelData },

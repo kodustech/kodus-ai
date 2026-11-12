@@ -30,9 +30,12 @@ import { GetCustomAgentsStatusUseCase } from '../application/use-cases/custom-ag
 import { ResolveCustomAgentUseCase } from '../application/use-cases/custom-agents/resolve-custom-agent.use-case';
 import { TryCustomAgentUseCase } from '../application/use-cases/custom-agents/try-custom-agent.use-case';
 import { CustomAgentsEngineModule } from './custom-agents-engine.module';
+import { CodeReviewPipelineModule } from '../pipeline/code-review-pipeline.module';
+import { PreviewPrRiskUseCase } from '../application/use-cases/risk/preview-pr-risk.use-case';
 
 @Module({
     imports: [
+        forwardRef(() => CodeReviewPipelineModule),
         CustomAgentRunsModule,
         PermissionsModule,
         forwardRef(() => ParametersModule),
@@ -54,6 +57,7 @@ import { CustomAgentsEngineModule } from './custom-agents-engine.module';
         forwardRef(() => CustomAgentsEngineModule),
     ],
     providers: [
+        PreviewPrRiskUseCase,
         DeleteRepositoryCodeReviewParameterUseCase,
         GenerateKodusConfigFileUseCase,
         GetCliRepositorySettingsUseCase,
@@ -70,6 +74,7 @@ import { CustomAgentsEngineModule } from './custom-agents-engine.module';
         GetCustomAgentsStatusUseCase,
     ],
     exports: [
+        PreviewPrRiskUseCase,
         DeleteRepositoryCodeReviewParameterUseCase,
         GenerateKodusConfigFileUseCase,
         GetCliRepositorySettingsUseCase,

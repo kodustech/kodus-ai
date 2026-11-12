@@ -1,3 +1,4 @@
+import { byokAuthKind } from '@libs/llm/slot-auth';
 import { encrypt } from '@libs/common/utils/crypto';
 import {
     isByokConfig,
@@ -400,7 +401,8 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         const organizationId = this.request?.user?.organization?.uuid;
         if (!(await this.kodusGate?.isEnabledFor(organizationId))) {
             this.logger.warn({
-                message: 'Refused to connect the Kodus provider: org outside the private alpha',
+                message:
+                    'Refused to connect the Kodus provider: org outside the private alpha',
                 context: CreateOrUpdateOrganizationParametersUseCase.name,
                 metadata: { organizationId, provider: 'kodus' },
             });
@@ -576,16 +578,14 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             }
             return;
         }
-        const has = (v: unknown): boolean =>
-            typeof v === 'string' && v.length > 0;
         const settings = (cred?.settings ?? {}) as Record<string, unknown>;
 
+        const auth = byokAuthKind(cred?.provider, {
+            ...settings,
+            apiKey: cred?.apiKey,
+        });
         if (cred?.provider === BYOKProvider.AMAZON_BEDROCK) {
-            const hasBearer = has(settings.awsBearerToken);
-            const hasIam =
-                has(settings.awsAccessKeyId) &&
-                has(settings.awsSecretAccessKey);
-            if (!hasBearer && !hasIam) {
+            if (!auth) {
                 throw new BadRequestException(
                     'Bedrock BYOK credential requires either awsBearerToken or awsAccessKeyId + awsSecretAccessKey',
                 );
@@ -593,7 +593,7 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             return;
         }
 
-        if (!has(cred?.apiKey)) {
+        if (!auth) {
             throw new BadRequestException(
                 `apiKey is required for the ${cred?.provider ?? 'unknown'} BYOK credential`,
             );

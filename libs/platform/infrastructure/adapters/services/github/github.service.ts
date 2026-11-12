@@ -1,3 +1,7 @@
+import type {
+    ApprovalTeamMembership,
+    ApprovalTeamMembershipParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/approvalTeamMembership.type';
 import {
     BadRequestException,
     Inject,
@@ -47,6 +51,7 @@ import {
     formatTitleLine,
 } from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
+import { createHash } from 'node:crypto';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
 import {
     isFileMatchingGlob,
@@ -298,6 +303,8 @@ export class GithubService
             doNotRetry: number[];
         };
         throttle?: {
+            /** Clients with the same id share the plugin's write queues. */
+            id?: string;
             onRateLimit: (
                 retryAfter: number,
                 options: { method: string; url: string },
@@ -3138,8 +3145,14 @@ export class GithubService
                 organizationAndTeamData,
             );
 
+            // The webhook mapper spreads GitHub's repository payload, so
+            // `owner` can arrive as the account object instead of its login.
+            const rawOwner = repository.owner as
+                | string
+                | { login?: string }
+                | undefined;
             const owner =
-                repository.owner ??
+                (typeof rawOwner === 'string' ? rawOwner : rawOwner?.login) ||
                 (await this.getGithubAuthDetails(organizationAndTeamData))?.org;
 
             const { data } = await octokit.rest.pulls.get({
@@ -3546,6 +3559,12 @@ export class GithubService
                         doNotRetry: [400, 401, 403, 404, 422, 451],
                     },
                     throttle: {
+                        // The plugin's write queues (one write a second, one
+                        // comment or review every three) are shared by every
+                        // client with the same id. Without one, all
+                        // organizations in the process queued behind each
+                        // other; GitHub limits each installation on its own.
+                        id: `installation:${githubAuthDetail.installationId}`,
                         onRateLimit: (
                             retryAfter,
                             options,
@@ -3673,6 +3692,9 @@ export class GithubService
                         doNotRetry: [400, 401, 403, 404, 422, 451],
                     },
                     throttle: {
+                        // One write queue per token, as on the App path: teams
+                        // sharing a PAT share GitHub's per-user limit too.
+                        id: `token:${createHash('sha256').update(decryptedPAT).digest('hex').slice(0, 16)}`,
                         // NEVER sleep inside the octokit call (mirrors the App
                         // path above). A primary-rate-limit retryAfter is the
                         // time until the hourly bucket resets — up to ~59 min.
@@ -3925,6 +3947,49 @@ export class GithubService
             return `${installationAuthentication.tokenType} - ${installationAuthentication?.token}`;
         } catch (err) {
             throw new BadRequestException(err);
+        }
+    }
+
+    async getApprovalTeamMembership(
+        params: ApprovalTeamMembershipParams,
+    ): Promise<ApprovalTeamMembership> {
+        try {
+            const auth = await this.getGithubAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!auth?.org || auth.accountType === 'user') return 'unavailable';
+            const segments = params.team.replace(/^@/, '').split('/');
+            const slug = segments.pop();
+            if (
+                !slug ||
+                segments.length > 1 ||
+                (segments.length === 1 &&
+                    segments[0].toLowerCase() !== auth.org.toLowerCase())
+            )
+                return 'unavailable';
+            const octokit = await this.instanceOctokit(
+                params.organizationAndTeamData,
+            );
+            // Verify visibility before treating a membership 404 as a nonmember.
+            await octokit.rest.teams.getByName({
+                org: auth.org,
+                team_slug: slug,
+            });
+            try {
+                const { data } =
+                    await octokit.rest.teams.getMembershipForUserInOrg({
+                        org: auth.org,
+                        team_slug: slug,
+                        username: params.author,
+                    });
+                return data.state === 'active' ? 'member' : 'not-member';
+            } catch (error) {
+                return this.statusOf(error) === 404
+                    ? 'not-member'
+                    : 'unavailable';
+            }
+        } catch {
+            return 'unavailable';
         }
     }
 
@@ -4617,11 +4682,16 @@ export class GithubService
     }
 
     async getFilesByPullRequestId(params: any): Promise<any[] | null> {
-        const { organizationAndTeamData, repository, prNumber, headSha } =
-            params;
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            headSha,
+            baseSha,
+        } = params;
 
-        // Cache: the list of changed files for a PR at a specific HEAD
-        // SHA is immutable — pushing a new commit produces a new SHA.
+        // A full PR diff belongs to both refs. Retargeting can change its file
+        // list without a new head, so incomplete identities bypass the cache.
         // The pipeline calls this twice per job (PullRequestManagerService
         // `getChangedFiles` + `getChangedFilesMetadata`), and a paginated
         // PR can fan out into 5-15+ subrequests. Caching by (prNumber,
@@ -4630,9 +4700,10 @@ export class GithubService
         // Callers that don't pass `headSha` (legacy paths, cron jobs that
         // don't have the head SHA handy) skip the cache and pay the
         // original cost — same behavior as before.
-        const cacheKey = headSha
-            ? `gh:pr-files:${organizationAndTeamData?.organizationId ?? 'no-org'}:${repository?.id ?? repository?.name}:${prNumber}:${headSha}`
-            : null;
+        const cacheKey =
+            headSha && baseSha
+                ? `gh:pr-files:v2:${organizationAndTeamData?.organizationId ?? 'no-org'}:${repository?.id ?? repository?.name}:${prNumber}:${headSha}:${baseSha}`
+                : null;
         if (cacheKey) {
             const cached =
                 await this.cacheService.getFromCache<any[]>(cacheKey);
@@ -7172,6 +7243,7 @@ This is an experimental feature that generates committable changes. Review the d
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
         repository: { id: string; name: string };
+        headSha?: string;
     }) {
         try {
             const { organizationAndTeamData, prNumber, repository } = params;
@@ -7187,6 +7259,7 @@ This is an experimental feature that generates committable changes. Review the d
                 repo: repository.name,
                 pull_number: prNumber,
                 event: 'APPROVE',
+                ...(params.headSha ? { commit_id: params.headSha } : {}),
             });
 
             this.logger.log({
@@ -8927,6 +9000,10 @@ This is an experimental feature that generates committable changes. Review the d
             organizationId: organizationAndTeamData?.organizationId ?? '',
             title: pullRequest?.title ?? '',
             body: pullRequest?.body ?? '',
+            ...('changed_files' in pullRequest &&
+            typeof pullRequest.changed_files === 'number'
+                ? { changedFilesCount: pullRequest.changed_files }
+                : {}),
             labels: (pullRequest?.labels ?? [])
                 .map((label) =>
                     typeof label === 'string' ? label : label?.name,

@@ -1,5 +1,16 @@
 import { Type } from 'class-transformer';
 import {
+    approvalPoliciesSchema,
+    type NamedApprovalPolicy,
+} from '@libs/core/infrastructure/config/types/general/approval-policies';
+import {
+    riskCriteriaSchema,
+    riskReviewRoutingSchema,
+    REVIEW_SETTINGS_INHERITABLE_FIELDS,
+    type RiskCriterion,
+    type RiskReviewRouting,
+} from '@libs/core/infrastructure/config/types/general/risk-assessment';
+import {
     ArrayMaxSize,
     ArrayMinSize,
     IsArray,
@@ -712,6 +723,10 @@ class CustomAgentConfigDto {
     @IsBoolean()
     enabled: boolean;
 
+    @IsOptional()
+    @IsIn(['always', 'risk-found'])
+    runWhen?: 'always' | 'risk-found';
+
     @IsString()
     @MaxLength(CUSTOM_AGENT_LIMITS.maxInstructionsLength)
     instructions: string;
@@ -885,6 +900,20 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsBoolean()
     pullRequestApprovalActive?: boolean;
 
+    @ValidateIf((_, value) => value !== undefined)
+    @IsArray()
+    @Type(() => Object)
+    @ValidateBy({
+        name: 'approvalPolicies',
+        validator: {
+            validate: (value: unknown) =>
+                approvalPoliciesSchema.safeParse(value).success,
+            defaultMessage: () =>
+                'Approval policies must be valid and have distinct IDs and names.',
+        },
+    })
+    approvalPolicies?: NamedApprovalPolicy[];
+
     @IsOptional()
     @IsArray()
     @ArrayMaxSize(50)
@@ -900,6 +929,37 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsBoolean()
     approvalRiskActive?: boolean;
+
+    @ValidateIf((_, value) => value !== undefined)
+    @IsBoolean()
+    riskAssessmentActive?: boolean;
+
+    @ValidateIf((_, value) => value !== undefined)
+    @IsArray()
+    @ArrayMaxSize(50)
+    @Type(() => Object)
+    @ValidateBy({
+        name: 'riskCriteria',
+        validator: {
+            validate: (value: unknown) =>
+                riskCriteriaSchema.safeParse(value).success,
+            defaultMessage: () =>
+                'Risk criteria must be valid and have unique IDs.',
+        },
+    })
+    riskCriteria?: RiskCriterion[];
+
+    @ValidateIf((_, value) => value !== undefined)
+    @IsObject()
+    @ValidateBy({
+        name: 'riskReviewRouting',
+        validator: {
+            validate: (value: unknown) =>
+                riskReviewRoutingSchema.safeParse(value).success,
+            defaultMessage: () => 'Risk routing must select Balanced or Heavy.',
+        },
+    })
+    riskReviewRouting?: RiskReviewRouting;
 
     @IsOptional()
     @IsString()
@@ -1092,6 +1152,16 @@ export class ExpectedCustomAgentsRevisionsDto {
 }
 
 export class CreateOrUpdateCodeReviewParameterDto {
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(REVIEW_SETTINGS_INHERITABLE_FIELDS.length)
+    @IsIn(REVIEW_SETTINGS_INHERITABLE_FIELDS, { each: true })
+    @ApiPropertyOptional({
+        type: [String],
+        description: 'Scoped review settings to restore from the parent.',
+    })
+    inheritFields?: string[];
+
     @IsObject()
     @ApiProperty({
         type: OrganizationAndTeamDataDto,

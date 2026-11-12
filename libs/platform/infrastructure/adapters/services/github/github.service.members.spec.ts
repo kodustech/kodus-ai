@@ -39,7 +39,6 @@ describe('GithubService — getAllMembersByOrg', () => {
             clearCache: jest.fn(),
             cacheExists: jest.fn(),
             getMultipleFromCache: jest.fn(),
-            deleteByKeyPattern: jest.fn(),
         };
 
         const service = new GithubService(

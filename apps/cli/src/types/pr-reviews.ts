@@ -41,8 +41,10 @@ export interface PullRequestExecutionsPage {
     data: PullRequestReviewRun[];
     pagination: {
         currentPage: number;
-        totalPages: number;
-        totalItems: number;
+        // Sent only on an empty result: the list no longer counts. Paging
+        // reads `nextCursor`.
+        totalPages?: number;
+        totalItems?: number;
         hasNextPage: boolean;
         nextCursor?: string;
     };

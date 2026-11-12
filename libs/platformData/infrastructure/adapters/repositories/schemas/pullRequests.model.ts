@@ -3,7 +3,10 @@ import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
-import { ICommit } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import {
+    ICommit,
+    IApprovalReasonDeliveryFailure,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { ReviewModeResponse } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { CoreDocument } from '@libs/core/infrastructure/repositories/model/mongodb';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
@@ -15,11 +18,11 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 })
 export class PullRequestsModel extends CoreDocument {
     @Prop({ type: Object, required: false, default: null })
-    public approvalReasonDeliveryFailure?: {
-        decision: 'hold' | 'approve';
-        reason: string;
-        occurredAt: string;
-    } | null;
+    public approvalReasonDeliveryFailure?: IApprovalReasonDeliveryFailure | null;
+
+    /** Retained after a clear so a late older failure cannot reappear. */
+    @Prop({ type: String, required: false })
+    public approvalReasonDeliveryUpdatedAt?: string;
 
     @Prop({ type: String, required: true })
     public title: string;
@@ -202,6 +205,19 @@ export class PullRequestsModel extends CoreDocument {
     public isDraft: boolean;
 }
 
+/**
+ * The index that reaches an organization's open pull requests. Named here so
+ * queries that hint it and the definition below cannot drift apart.
+ */
+export const OPEN_PULL_REQUESTS_INDEX =
+    'idx_org_status_merged_openedAt_for_awaiting';
+
+/**
+ * The index behind the Reviews title search. It holds every field that search
+ * reads, so the search never loads a PR document.
+ */
+export const PULL_REQUEST_TITLE_INDEX = 'idx_org_title_repo_number';
+
 export const PullRequestsSchema =
     SchemaFactory.createForClass(PullRequestsModel);
 
@@ -281,7 +297,7 @@ PullRequestsSchema.index(
 // the projection so the scope resolution stays index-only. Create with
 // `{ background: true }` on large prod collections before enabling the filter.
 PullRequestsSchema.index(
-    { organizationId: 1, 'repository.id': 1, createdAt: -1, number: 1 },
+    { 'organizationId': 1, 'repository.id': 1, 'createdAt': -1, 'number': 1 },
     { name: 'idx_org_repo_createdAt_number_for_token_usage' },
 );
 
@@ -292,5 +308,16 @@ PullRequestsSchema.index(
 // Create with `{ background: true }` on large prod collections.
 PullRequestsSchema.index(
     { organizationId: 1, status: 1, merged: 1, openedAt: 1 },
-    { name: 'idx_org_status_merged_openedAt_for_awaiting' },
+    { name: OPEN_PULL_REQUESTS_INDEX },
+);
+
+// Title search on the Reviews screen (findPRNumbersByTitleAndOrganization): an
+// unanchored, case-insensitive match over an organization's PR titles that
+// returns only (repository.id, number). No other index holds the title, so the
+// search fetched every PR document of the organization to read it. This one
+// covers the query: the titles are scanned in the index and the documents stay
+// on disk.
+PullRequestsSchema.index(
+    { 'organizationId': 1, 'title': 1, 'repository.id': 1, 'number': 1 },
+    { name: PULL_REQUEST_TITLE_INDEX },
 );

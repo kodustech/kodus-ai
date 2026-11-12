@@ -60,7 +60,8 @@ type CapabilityRequirement = {
 // OR a tool-calling path — is the bar for every structured review-family task.
 const STRUCTURED_OUTPUT_REQUIREMENT: CapabilityRequirement = {
     capability: 'structuredOutput',
-    satisfied: (c) => c.structuredOutput !== 'none' || c.toolCalling === 'native',
+    satisfied: (c) =>
+        c.structuredOutput !== 'none' || c.toolCalling === 'native',
 };
 // A tool-using agent loop (chat + the business-rules validator) needs native
 // tool calling to invoke tools mid-turn.
@@ -71,6 +72,7 @@ const TOOL_CALLING_REQUIREMENT: CapabilityRequirement = {
 
 const TASK_CAPABILITY_REQUIREMENTS: Record<LlmTask, CapabilityRequirement> = {
     codeReview: STRUCTURED_OUTPUT_REQUIREMENT,
+    riskAssessment: STRUCTURED_OUTPUT_REQUIREMENT,
     codeReviewHeavy: STRUCTURED_OUTPUT_REQUIREMENT,
     // Kody-Rules review + rule generation drive structured output (findings /
     // rule objects) via generateObject, like the main review.
@@ -83,7 +85,6 @@ const TASK_CAPABILITY_REQUIREMENTS: Record<LlmTask, CapabilityRequirement> = {
     // A custom agent investigates with tools (grep, ast-grep, MCP, CLIs).
     customAgent: TOOL_CALLING_REQUIREMENT,
 };
-
 
 /** One candidate the precedence chain will try, in order. */
 interface Candidate {
@@ -281,7 +282,10 @@ export class StaticTaskStrategy implements RoutingStrategy {
             ? byId.get(taskOverrideId)
             : undefined;
         if (taskOverrideModel) {
-            candidates.push({ model: taskOverrideModel, tier: taskOverrideTier });
+            candidates.push({
+                model: taskOverrideModel,
+                tier: taskOverrideTier,
+            });
         }
 
         const defaultModel = routing.defaultModelId

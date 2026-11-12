@@ -9,6 +9,7 @@
 // Prints one repo-relative spec path per line. Exits non-zero, with jest's
 // diagnostic, when jest cannot list the specs: that is not "no specs".
 const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const DEFAULT_MAX = 40;
@@ -70,8 +71,39 @@ const specs = output
     .map((abs) => path.relative(root, abs))
     .filter((spec) => !spec.startsWith('..'));
 
+// This job starts no database and runs under SKIP_INTEGRATION=true
+// (mutation-diff.sh), so a database-backed integration spec skips itself: it
+// loads and kills nothing. Those go last, so they only take a slot of the cap
+// that no spec that runs wants. A wrong guess costs a position, not a spec.
+const skipsItself = (spec) => {
+    if (!/\.integration\.spec\.ts$/.test(spec)) return false;
+    try {
+        // The gate as code — reading the variable or calling the Mongo gate —
+        // with comments stripped, so a spec that only mentions it still runs
+        // in its own position.
+        const code = fs
+            .readFileSync(spec, 'utf8')
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .replace(/^\s*\/\/.*$/gm, '');
+        return /process\.env\.SKIP_INTEGRATION\b|resolveMongoTestGate\s*\(/.test(
+            code,
+        );
+    } catch {
+        return false;
+    }
+};
+
 specs
-    .map((spec) => ({ spec, closeness: closeness(spec) }))
-    .sort((a, b) => b.closeness - a.closeness || a.spec.localeCompare(b.spec))
+    .map((spec) => ({
+        spec,
+        closeness: closeness(spec),
+        skipped: skipsItself(spec),
+    }))
+    .sort(
+        (a, b) =>
+            a.skipped - b.skipped ||
+            b.closeness - a.closeness ||
+            a.spec.localeCompare(b.spec),
+    )
     .slice(0, max)
     .forEach(({ spec }) => console.log(spec));
