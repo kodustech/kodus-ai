@@ -64,6 +64,7 @@ function setup(engineResult: any, scan = scanRecord()) {
     const scans = {
         findById: jest.fn(async () => scan),
         update: jest.fn(async (..._args: unknown[]) => scan),
+        recordUnit: jest.fn(async (..._args: unknown[]) => undefined),
     };
     const jobRepository = {
         findOne: jest.fn(async () => ({
@@ -245,10 +246,9 @@ describe('SecurityScanJobProcessor', () => {
         const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
         expect(engine.run.mock.calls[0][0].reported).toEqual([earlier]);
         // Each unit appends what it reported, in the same write as its progress.
-        const unitUpdate = scans.update.mock.calls.find(
-            (call: any[]) => call[2]?.length,
-        ) as any;
-        expect(unitUpdate[2]).toEqual([
+        const unitUpdate = scans.recordUnit.mock.calls[0] as any;
+        expect(unitUpdate[1]).toEqual({ unitId: 'u1', state: 'done', findings: 1 });
+        expect(unitUpdate[3]).toEqual([
             expect.objectContaining({
                 filePath: finding.filePath,
                 startLine: finding.startLine,
@@ -340,6 +340,28 @@ describe('SecurityScanJobProcessor', () => {
         expect(cloneParams.checkoutSha).toBeUndefined();
     });
 
+    it('records each area alone, with live counts, without reading the scan back', async () => {
+        const { processor, scans } = setup({
+            unitEvents: [
+                [{ unitId: 'u1', state: 'done', findings: 0 }, []],
+                [{ unitId: 'u2', state: 'failed', findings: 0 }, []],
+                [{ unitId: 'u3', state: 'done', findings: 0 }, []],
+            ],
+            result: finishedResult(),
+        });
+
+        await processor.process('job-1');
+
+        // Read once to start the job; never once per area.
+        expect(scans.findById).toHaveBeenCalledTimes(1);
+        const writes = scans.recordUnit.mock.calls as any[];
+        expect(writes.map((call) => call[1].unitId)).toEqual(['u1', 'u2', 'u3']);
+        expect(writes[2][2].coverage).toEqual(
+            expect.objectContaining({ unitsDone: 2, unitsFailed: 1 }),
+        );
+        expect(writes[2][2]).not.toHaveProperty('progress');
+    });
+
     it('fails the scan, resolving nothing, when a finding cannot be stored', async () => {
         const { processor, scans, issuesService } = setup({
             unitEvents: [[{ unitId: 'u1', state: 'done', findings: 1 }, [finding]]],
@@ -351,10 +373,7 @@ describe('SecurityScanJobProcessor', () => {
 
         expect(issuesService.resolveUnseenScanFindings).not.toHaveBeenCalled();
         // The unit is not recorded as done, so running the scan again retries it.
-        const progressWrites = scans.update.mock.calls.filter(
-            (call: any[]) => call[1]?.progress,
-        );
-        expect(progressWrites).toHaveLength(0);
+        expect(scans.recordUnit).not.toHaveBeenCalled();
         expect(lastUpdate(scans).status).toBe(SecurityScanStatus.FAILED);
     });
 

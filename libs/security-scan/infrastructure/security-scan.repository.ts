@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 
 import {
     ScanReportedFinding,
+    ScanUnitProgress,
     SecurityScanRecord,
     SecurityScanStatus,
 } from '../domain/security-scan.types';
@@ -28,6 +29,16 @@ export interface ISecurityScanRepository {
         changes: Partial<NewSecurityScan>,
         appendReported?: ScanReportedFinding[],
     ): Promise<SecurityScanRecord | null>;
+    /**
+     * Records one area's progress in place of its earlier entry (a pending
+     * one is removed), without reading or rewriting the rest of the scan.
+     */
+    recordUnit(
+        uuid: string,
+        progress: ScanUnitProgress,
+        changes: Partial<NewSecurityScan>,
+        appendReported?: ScanReportedFinding[],
+    ): Promise<void>;
     findRecent(
         organizationId: string,
         repositoryIds: string[] | undefined,
@@ -114,6 +125,48 @@ export class SecurityScanRepository implements ISecurityScanRepository {
             )
             .exec();
         return doc ? toRecord(doc) : null;
+    }
+
+    async recordUnit(
+        uuid: string,
+        progress: ScanUnitProgress,
+        changes: Partial<NewSecurityScan>,
+        appendReported?: ScanReportedFinding[],
+    ): Promise<void> {
+        const reported = appendReported?.length
+            ? { reported: { $each: appendReported } }
+            : undefined;
+        if (progress.state === 'pending') {
+            await this.model
+                .updateOne(
+                    { _id: uuid },
+                    {
+                        $set: changes,
+                        $pull: { progress: { unitId: progress.unitId } },
+                        ...(reported ? { $push: reported } : {}),
+                    },
+                )
+                .exec();
+            return;
+        }
+        const replaced = await this.model
+            .updateOne(
+                { '_id': uuid, 'progress.unitId': progress.unitId },
+                {
+                    $set: { ...changes, 'progress.$': progress },
+                    ...(reported ? { $push: reported } : {}),
+                },
+            )
+            .exec();
+        if (replaced.matchedCount) {
+            return;
+        }
+        await this.model
+            .updateOne(
+                { _id: uuid },
+                { $set: changes, $push: { progress, ...reported } },
+            )
+            .exec();
     }
 
     async findRecent(

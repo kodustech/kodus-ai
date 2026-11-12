@@ -44,6 +44,7 @@ import {
     ScanExaminedClass,
     ScanFinding,
     ScanReportedFinding,
+    ScanUnitProgress,
     SecurityScanOutcomeCounts,
     SecurityScanRecord,
     SecurityScanStatus,
@@ -294,6 +295,13 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             resolved: scan.outcome?.resolved ?? 0,
         };
 
+        // Only this job writes the scan's progress while it runs, so it is
+        // tracked here instead of re-read from the document after every area.
+        const unitStates = new Map(scan.progress.map((p) => [p.unitId, p]));
+        let liveCoverage = scan.coverage;
+        const countIn = (state: ScanUnitProgress['state']) =>
+            [...unitStates.values()].filter((p) => p.state === state).length;
+
         const engine = new SecurityScanEngine();
         const result = await engine.run({
             organizationId: scan.organizationId,
@@ -311,17 +319,18 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             reported: scan.reported,
             reproduce: true,
             onPlanned: async (units, languages) => {
+                liveCoverage = {
+                    examinedFiles: [],
+                    unitsTotal: units.length,
+                    unitsDone: 0,
+                    unitsFailed: 0,
+                    unitsSkippedByBudget: 0,
+                    languages,
+                };
                 await this.scans.update(scan.uuid, {
                     units,
                     modelName: model.modelName,
-                    coverage: {
-                        examinedFiles: [],
-                        unitsTotal: units.length,
-                        unitsDone: 0,
-                        unitsFailed: 0,
-                        unitsSkippedByBudget: 0,
-                        languages,
-                    },
+                    coverage: liveCoverage,
                 });
             },
             onUnitDone: async (progress, findings) => {
@@ -345,35 +354,27 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         .clearIssuesCache(scan.organizationId)
                         .catch(() => undefined);
                 }
-                const current = await this.scans.findById(scan.uuid);
-                const list = (current?.progress ?? []).filter(
-                    (p) => p.unitId !== progress.unitId,
-                );
+                unitStates.delete(progress.unitId);
                 if (progress.state !== 'pending') {
-                    list.push(progress);
+                    unitStates.set(progress.unitId, progress);
                 }
-                await this.scans.update(
+                // Live counts for the scans list; the examined files are only
+                // settled when the slice ends.
+                if (liveCoverage) {
+                    liveCoverage = {
+                        ...liveCoverage,
+                        unitsDone: countIn('done'),
+                        unitsFailed: countIn('failed'),
+                        unitsSkippedByBudget: countIn('skipped_budget'),
+                    };
+                }
+                await this.scans.recordUnit(
                     scan.uuid,
+                    progress,
                     {
-                        progress: list,
                         spend: meter.snapshot(),
                         outcome: counts,
-                        // Live counts for the scans list; the examined files are
-                        // only settled when the slice ends.
-                        ...(current?.coverage && {
-                            coverage: {
-                                ...current.coverage,
-                                unitsDone: list.filter(
-                                    (p) => p.state === 'done',
-                                ).length,
-                                unitsFailed: list.filter(
-                                    (p) => p.state === 'failed',
-                                ).length,
-                                unitsSkippedByBudget: list.filter(
-                                    (p) => p.state === 'skipped_budget',
-                                ).length,
-                            },
-                        }),
+                        ...(liveCoverage && { coverage: liveCoverage }),
                     },
                     findings.map(toReported),
                 );

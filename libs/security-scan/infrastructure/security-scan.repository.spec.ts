@@ -93,3 +93,48 @@ describe('SecurityScanRepository: one active scan per repository', () => {
         expect(update.$unset).toEqual({ activeKey: '' });
     });
 });
+
+describe('SecurityScanRepository.recordUnit', () => {
+    const progress = { unitId: 'u1', state: 'done', findings: 1 } as any;
+    const reported = [{ filePath: 'a.ts' }] as any;
+    const updateOneReturning = (...matched: number[]) =>
+        jest.fn(() => ({
+            exec: jest.fn(async () => ({ matchedCount: matched.shift() ?? 1 })),
+        }));
+
+    it("replaces the area's earlier entry in place, with the scan's other changes", async () => {
+        const updateOne = updateOneReturning(1);
+        const repository = new SecurityScanRepository({ updateOne } as any);
+
+        await repository.recordUnit('scan-1', progress, { outcome: { created: 1 } } as any, reported);
+
+        expect(updateOne).toHaveBeenCalledTimes(1);
+        const [filter, update] = updateOne.mock.calls[0] as unknown as [any, any];
+        expect(filter).toEqual({ '_id': 'scan-1', 'progress.unitId': 'u1' });
+        expect(update.$set).toEqual({ 'outcome': { created: 1 }, 'progress.$': progress });
+        expect(update.$push).toEqual({ reported: { $each: reported } });
+    });
+
+    it('appends the area when it has no entry yet', async () => {
+        const updateOne = updateOneReturning(0, 1);
+        const repository = new SecurityScanRepository({ updateOne } as any);
+
+        await repository.recordUnit('scan-1', progress, {}, reported);
+
+        expect(updateOne).toHaveBeenCalledTimes(2);
+        const [filter, update] = updateOne.mock.calls[1] as unknown as [any, any];
+        expect(filter).toEqual({ _id: 'scan-1' });
+        expect(update.$push).toEqual({ progress, reported: { $each: reported } });
+    });
+
+    it('removes a pending area', async () => {
+        const updateOne = updateOneReturning(1);
+        const repository = new SecurityScanRepository({ updateOne } as any);
+
+        await repository.recordUnit('scan-1', { ...progress, state: 'pending' }, {});
+
+        const [, update] = updateOne.mock.calls[0] as unknown as [any, any];
+        expect(update.$pull).toEqual({ progress: { unitId: 'u1' } });
+        expect(update.$push).toBeUndefined();
+    });
+});
