@@ -323,6 +323,23 @@ describe('collectSurface', () => {
         ]);
     });
 
+    it('keeps a file whose every hit fell past the cap as a candidate', async () => {
+        const files = {
+            'a.mini': Array.from(
+                { length: MAX_HITS_PER_PATTERN },
+                () => 'exec(a)',
+            ).join('\n'),
+            'b.mini': 'exec(b)',
+        };
+        const map = await run(files);
+
+        expect(
+            map.hits.filter((h) => h.patternId === 'mini.exec'),
+        ).toHaveLength(MAX_HITS_PER_PATTERN);
+        expect(Object.keys(map.files).sort()).toEqual(['a.mini', 'b.mini']);
+        expect(map.files['b.mini'].sinks).toBe(1);
+    });
+
     it('scans a multi-language repo with the real surfaces', async () => {
         const files = {
             'src/routes.ts':

@@ -166,6 +166,9 @@ export class StartSecurityScanUseCase {
                 ...(resumed && {
                     coverage: resumed.coverage,
                     planCommitSha: resumed.planCommitSha,
+                    // The dedup compares against what the plan's finished
+                    // areas found, and the job sights those issues.
+                    reported: resumed.reported,
                 }),
                 modelName: model.modelName,
                 requestedBy: input.requestedBy,
@@ -236,7 +239,7 @@ export class StartSecurityScanUseCase {
         repository: ScanRepositoryKey,
     ): Promise<Pick<
         SecurityScanRecord,
-        'units' | 'progress' | 'coverage' | 'planCommitSha'
+        'units' | 'progress' | 'coverage' | 'planCommitSha' | 'reported'
     > | null> {
         const last = await this.scans.findLatest(organizationId, repository);
         // Stopped before the end, or completed with areas that failed (a
@@ -260,6 +263,7 @@ export class StartSecurityScanUseCase {
             units: last.units,
             progress,
             planCommitSha: last.commitSha,
+            reported: last.reported ?? [],
             coverage: {
                 examinedFiles: [],
                 examinedByClass: [],

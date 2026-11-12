@@ -177,4 +177,7 @@ export type ScanReportedFinding = Pick<
     | 'startLine'
     | 'endLine'
 > &
-    Partial<Pick<ScanFinding, 'attackPath'>>;
+    Partial<Pick<ScanFinding, 'attackPath'>> & {
+        /** The issue it was stored as: a scan carrying it on sights it too. */
+        fingerprint?: string;
+    };

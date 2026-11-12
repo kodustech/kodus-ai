@@ -360,10 +360,14 @@ export async function collectSurface(
     const seen = new Set<string>();
     const perPattern = new Map<string, number>();
     const truncated = new Map<string, { language: string; dropped: number }>();
+    // Every distinct hit, the capped ones too: the cap bounds the leads the
+    // lenses read, never which files are candidates.
+    const allHits: SurfaceHit[] = [];
     for (const h of perBatchHits.flat()) {
         const key = `${h.file}\u0000${h.line}\u0000${h.patternId}`;
         if (seen.has(key)) continue;
         seen.add(key);
+        allHits.push(h);
         const n = perPattern.get(h.patternId) ?? 0;
         if (n >= MAX_HITS_PER_PATTERN) {
             const t = truncated.get(h.patternId) ?? {
@@ -386,7 +390,7 @@ export async function collectSurface(
     }
 
     const files: SurfaceMap['files'] = {};
-    for (const h of hits) {
+    for (const h of allHits) {
         const f = (files[h.file] ??= {
             entryPoints: 0,
             authChecks: 0,

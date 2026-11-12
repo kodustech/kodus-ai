@@ -105,6 +105,7 @@ function setup(engineResult: any, scan = scanRecord()) {
     const issuesService = {
         upsertScanFinding: jest.fn(async () => ({ outcome: 'created' })),
         resolveUnseenScanFindings: jest.fn(async () => 2),
+        markScanFindingsSeen: jest.fn(async () => 0),
         findOpenScanFindingAreas: jest.fn(async () => [
             { filePath: 'src/orders.ts', vulnerabilityClass: 'authz' },
         ]),
@@ -266,6 +267,8 @@ describe('SecurityScanJobProcessor', () => {
         expect(unitUpdate[1]).toEqual({ unitId: 'u1', state: 'done', findings: 1 });
         expect(unitUpdate[3]).toEqual([
             expect.objectContaining({
+                // The issue it was stored as, for a scan that carries it on.
+                fingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
                 filePath: finding.filePath,
                 startLine: finding.startLine,
                 vulnerabilityClass: finding.vulnerabilityClass,
@@ -413,6 +416,32 @@ describe('SecurityScanJobProcessor', () => {
         expect(lastUpdate(continued.scans).coverage).toEqual(
             expect.objectContaining({ mapFailedLanguages: ['python'], filesBeyondPlan: 1 }),
         );
+    });
+
+    it("sights the findings a carried-on plan holds before resolving what was not seen", async () => {
+        const { processor, issuesService } = setup(
+            { result: finishedResult() },
+            scanRecord({
+                reported: [
+                    { title: 'IDOR', filePath: 'src/a.ts', fingerprint: 'fp-earlier' },
+                    // Reported before fingerprints were kept: nothing to sight.
+                    { title: 'SQLi', filePath: 'src/b.ts' },
+                ] as any,
+            }),
+        );
+
+        await processor.process('job-1');
+
+        expect(issuesService.markScanFindingsSeen).toHaveBeenCalledWith({
+            organizationId: 'org-1',
+            repositoryPlatform: 'GITHUB',
+            repositoryId: 'repo-1',
+            fingerprints: ['fp-earlier'],
+            scanId: 'scan-1',
+        });
+        expect(
+            issuesService.markScanFindingsSeen.mock.invocationCallOrder[0],
+        ).toBeLessThan(issuesService.resolveUnseenScanFindings.mock.invocationCallOrder[0]);
     });
 
     it('records each area alone, with live counts, without reading the scan back', async () => {

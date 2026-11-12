@@ -86,9 +86,9 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         expect(created.progress).toEqual([
             { unitId: 'a', state: 'done', findings: 1 },
         ]);
-        // What the earlier scan reported was its sighting, not this one's: a
-        // unit that finds it again stores it, which keeps the issue open.
-        expect(created.reported).toBeUndefined();
+        // What the plan's finished areas found: the dedup compares against
+        // it, and the job sights those issues as this scan's.
+        expect(created.reported).toEqual([{ title: 'IDOR', filePath: 'src/a.ts' }]);
         // The job drops the plan if the branch moved past this commit.
         expect(created.planCommitSha).toBe('plan-sha');
         // Files the earlier scan examined are not this scan's: none of their

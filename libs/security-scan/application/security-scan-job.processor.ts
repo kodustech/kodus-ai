@@ -400,7 +400,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         outcome: counts,
                         ...(liveCoverage && { coverage: liveCoverage }),
                     },
-                    findings.map(toReported),
+                    findings.map((f) => toReported(f, fingerprintOf(scan, f))),
                 );
             },
         });
@@ -457,6 +457,18 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             throw new ScanFailure(SCAN_NO_AREA_EXAMINED_MESSAGE);
         }
 
+        // What this scan carries from an earlier one's plan it holds without
+        // reading again: sighted by it, so not resolved below as unseen.
+        await this.issuesService.markScanFindingsSeen({
+            organizationId: scan.organizationId,
+            repositoryPlatform: scan.repository.platform as PlatformType,
+            repositoryId: scan.repository.id,
+            fingerprints: (scan.reported ?? [])
+                .map((r) => r.fingerprint)
+                .filter((fp): fp is string => !!fp),
+            scanId: scan.uuid,
+        });
+
         // Only now is it known which files this scan examined end to end; an
         // open finding there that no unit reported again is gone.
         counts.resolved += await this.issuesService.resolveUnseenScanFindings({
@@ -511,15 +523,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 organizationId: scan.organizationId,
                 owner,
                 reporter: { gitId: 'kodus', username: 'Kodus' },
-                fingerprint: computeScanFingerprint({
-                    repositoryPlatform: scan.repository.platform,
-                    repositoryId: scan.repository.id,
-                    vulnerabilityClass: finding.vulnerabilityClass,
-                    filePath: finding.filePath,
-                    symbol: finding.symbol,
-                    cwe: finding.cwe,
-                    appWide: finding.appWide,
-                }),
+                fingerprint: fingerprintOf(scan, finding),
                 cwe: finding.cwe,
                 vulnerabilityClass: finding.vulnerabilityClass,
                 symbol: finding.symbol,
@@ -614,8 +618,24 @@ export function buildIssueDescription(
     return parts.join('\n\n');
 }
 
-function toReported(finding: ScanFinding): ScanReportedFinding {
+function fingerprintOf(scan: SecurityScanRecord, finding: ScanFinding): string {
+    return computeScanFingerprint({
+        repositoryPlatform: scan.repository.platform,
+        repositoryId: scan.repository.id,
+        vulnerabilityClass: finding.vulnerabilityClass,
+        filePath: finding.filePath,
+        symbol: finding.symbol,
+        cwe: finding.cwe,
+        appWide: finding.appWide,
+    });
+}
+
+function toReported(
+    finding: ScanFinding,
+    fingerprint: string,
+): ScanReportedFinding {
     return {
+        fingerprint,
         vulnerabilityClass: finding.vulnerabilityClass,
         cwe: finding.cwe,
         title: finding.title,
