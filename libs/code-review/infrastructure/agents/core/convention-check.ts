@@ -285,7 +285,9 @@ export function isLinkedGuide(
  * it read the rule from. With `listGuideDir`, a quote missing from a cited
  * SKILL.md is looked up in that same skill's text files, and the finding is
  * re-pointed at the file that holds it. Other skills and repository files
- * never count.
+ * never count, except `instructionFiles`: the coding-agent instruction files
+ * (CLAUDE.md, AGENTS.md, ...) the review loaded from the target branch for
+ * this PR, which the agent read as they are here.
  */
 export async function checkConventionQuotes(
     candidates: readonly FinderSuggestion[],
@@ -293,6 +295,7 @@ export async function checkConventionQuotes(
     guideFiles: readonly string[] = [],
     listGuideDir?: GuideDirLister,
     teamInstructions?: string,
+    instructionFiles: ReadonlyArray<{ path: string; content: string }> = [],
 ): Promise<ConventionCheckResult> {
     const passed: ConventionCheckPassed[] = [];
     const rejected: ConventionCheckRejected[] = [];
@@ -308,6 +311,9 @@ export async function checkConventionQuotes(
     };
     const reject = (finding: FinderSuggestion, detail: string) =>
         rejected.push({ finding, reason: QUOTE_NOT_FOUND, detail });
+    const instructionByPath = new Map(
+        instructionFiles.map((f) => [stripLeading(f.path), f]),
+    );
 
     for (const cited of candidates) {
         const file = canonicalGuideCitation(
@@ -382,8 +388,26 @@ export async function checkConventionQuotes(
             return true;
         };
         if (!isLinkedGuide(file, guideFiles)) {
-            if (!passFromInstructions()) {
-                reject(finding, `${file} is not a guide linked to this review`);
+            const instruction = instructionByPath.get(file);
+            const instructionSection = instruction
+                ? findQuoteSection(instruction.content, quote)
+                : null;
+            if (instructionSection != null) {
+                // Named as the review loaded it, so the comment cites that file.
+                passed.push({
+                    finding: {
+                        ...finding,
+                        source: { ...finding.source!, file },
+                    },
+                    sectionText: instructionSection,
+                });
+            } else if (!passFromInstructions()) {
+                reject(
+                    finding,
+                    instruction
+                        ? `quote not found in ${file}`
+                        : `${file} is not a guide linked to this review`,
+                );
             }
             continue;
         }

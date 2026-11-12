@@ -11,6 +11,8 @@
 //   P4  an include glob that names files explicitly reaches a file the team's
 //       ignorePaths set aside
 //   P7  a disabled agent does not run
+//   P12 with repository instructions on, an agent posts a rule quoted from
+//       CLAUDE.md or AGENTS.md (instruction-cases.js)
 //   P14 a convention shown by the code: an existing file cited as the pattern
 //       is verified and posted when the change departs from it, quiet when
 //       the change follows it (code-pattern-cases.js)
@@ -625,6 +627,7 @@ export const migration: Migration = {
     },
 ];
 
+CASES.push(...require('./instruction-cases').INSTRUCTION_CASES);
 CASES.push(...require('./code-pattern-cases').CODE_PATTERN_CASES);
 
 module.exports = { CASES };

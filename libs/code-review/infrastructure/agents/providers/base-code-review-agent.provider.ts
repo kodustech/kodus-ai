@@ -62,6 +62,7 @@ import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/colla
 import { runChunkedReview } from '@libs/code-review/infrastructure/agents/collaborators/batch-runner';
 import { AgentProgressReporter } from '@libs/code-review/infrastructure/agents/collaborators/agent-progress-reporter';
 import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
+import { sandboxBaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
 import { renderKnowledgeSection } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-prompt';
 import { buildKnowledgeTools } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
 import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
@@ -782,7 +783,15 @@ export abstract class BaseCodeReviewAgentProvider {
                     ),
                     allowedLabels: this.getAllowedSuggestionLabels(input),
                     conventionGuides: this.getConventionGuides(input),
-                    conventionGuideReader: input.knowledgeReader,
+                    // The target branch: the knowledge reader, else the
+                    // sandbox's fetched base ref through sandbox.run (a code
+                    // file a convention cites, with no skill or doc linked).
+                    conventionGuideReader:
+                        input.knowledgeReader ??
+                        sandboxBaseBranchReader(
+                            input.customAgentTooling?.sandbox,
+                            input.baseBranch,
+                        ),
                     teamInstructions: this.getTeamInstructions(),
                     laneFocus: this.getLaneFocus(input),
                     ...(agentTools.teamSystemTools?.length && {
