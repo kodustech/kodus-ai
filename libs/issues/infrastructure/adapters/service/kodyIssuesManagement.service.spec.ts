@@ -1,3 +1,4 @@
+import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { KodyIssuesManagementService } from './kodyIssuesManagement.service';
 import { ISSUES_SERVICE_TOKEN } from '@libs/issues/domain/contracts/issues.service.contract';
@@ -16,6 +17,10 @@ import { contextToGenerateIssues } from '@libs/issues/domain/interfaces/kodyIssu
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
+
+jest.mock('@libs/ee/configs/environment', () => ({
+    environment: { API_CLOUD_MODE: false, API_DEVELOPMENT_MODE: false },
+}));
 
 describe('KodyIssuesManagementService', () => {
     let service: KodyIssuesManagementService;
@@ -81,6 +86,8 @@ describe('KodyIssuesManagementService', () => {
         };
 
         permissionValidationServiceMock = {
+            resolveTaskSlot: jest.fn().mockResolvedValue(undefined),
+            hasBYOK: jest.fn().mockResolvedValue(false),
             validateExecutionPermissions: jest.fn().mockResolvedValue({
                 allowed: true,
                 byokConfig: null,
@@ -183,7 +190,9 @@ describe('KodyIssuesManagementService', () => {
     // with the schema's default implementationStatus; the earlier comment
     // already tracks it, so it never becomes an issue.
     it('leaves a suggestion discarded as a repeat out of the issues', async () => {
-        const valid = await (service as any).filterValidSuggestionsFromPrByStatus([
+        const valid = await (
+            service as any
+        ).filterValidSuggestionsFromPrByStatus([
             {
                 path: 'src/main.ts',
                 suggestions: [
@@ -198,7 +207,9 @@ describe('KodyIssuesManagementService', () => {
             },
         ]);
 
-        expect(valid.map((s: { id: string }) => s.id)).toEqual(['suggestion-1']);
+        expect(valid.map((s: { id: string }) => s.id)).toEqual([
+            'suggestion-1',
+        ]);
     });
 
     describe('processClosedPr', () => {
@@ -209,6 +220,134 @@ describe('KodyIssuesManagementService', () => {
                 .spyOn(service, 'mergeSuggestionsIntoIssues')
                 .mockResolvedValue(undefined);
         });
+
+        it('resolves the self-hosted slot and preserves fallback and limits in both consumers', async () => {
+            const slot: NormalizedModel = {
+                provider: 'openai_compatible',
+                apiKey: 'test-placeholder',
+                model: 'primary-model',
+                maxInputTokens: 200000,
+                maxConcurrentRequests: 2,
+                fallback: {
+                    provider: 'openrouter',
+                    apiKey: 'test-placeholder',
+                    model: 'fallback-model',
+                },
+            };
+            permissionValidationServiceMock.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true },
+            );
+            permissionValidationServiceMock.resolveTaskSlot.mockResolvedValue(
+                slot,
+            );
+            const resolveSpy = jest
+                .spyOn(service as any, 'resolveExistingIssues')
+                .mockResolvedValue(undefined);
+
+            await service.processClosedPr(baseParams);
+
+            expect(
+                permissionValidationServiceMock.resolveTaskSlot,
+            ).toHaveBeenCalledWith(
+                mockOrganizationAndTeamData,
+                LLM_TASK.codeReview,
+            );
+            expect(mergeSpy.mock.calls[0][3]).toBe(slot);
+            expect(resolveSpy).toHaveBeenCalledWith(
+                baseParams,
+                mockPrFiles,
+                slot,
+            );
+            expect(resolveSpy.mock.calls[0][2]).toBe(slot);
+            expect(
+                permissionValidationServiceMock.hasBYOK,
+            ).not.toHaveBeenCalled();
+            expect(
+                pullRequestsServiceMock.updateSyncedWithIssuesFlag,
+            ).toHaveBeenCalled();
+        });
+
+        it('keeps a carrier supplied by permission validation without resolving it again', async () => {
+            const slot: NormalizedModel = {
+                provider: 'openai',
+                apiKey: 'test-placeholder',
+                model: 'validated-model',
+            };
+            permissionValidationServiceMock.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true, byokConfig: slot },
+            );
+            const resolveSpy = jest
+                .spyOn(service as any, 'resolveExistingIssues')
+                .mockResolvedValue(undefined);
+
+            await service.processClosedPr(baseParams);
+
+            expect(mergeSpy.mock.calls[0][3]).toBe(slot);
+            expect(resolveSpy.mock.calls[0][2]).toBe(slot);
+            expect(
+                permissionValidationServiceMock.resolveTaskSlot,
+            ).not.toHaveBeenCalled();
+            expect(
+                permissionValidationServiceMock.hasBYOK,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('retains the managed default for an organization without BYOK', async () => {
+            const resolveSpy = jest
+                .spyOn(service as any, 'resolveExistingIssues')
+                .mockResolvedValue(undefined);
+
+            await service.processClosedPr(baseParams);
+
+            expect(
+                permissionValidationServiceMock.hasBYOK,
+            ).toHaveBeenCalledWith(mockOrganizationAndTeamData);
+            expect(mergeSpy.mock.calls[0][3]).toBeNull();
+            expect(resolveSpy).toHaveBeenCalledWith(
+                baseParams,
+                mockPrFiles,
+                null,
+            );
+            expect(
+                pullRequestsServiceMock.updateSyncedWithIssuesFlag,
+            ).toHaveBeenCalled();
+        });
+
+        it.each([
+            'unresolved BYOK',
+            'routing read failure',
+            'BYOK read failure',
+        ])(
+            'leaves the PR unsynced without running issue analysis on %s',
+            async (failure) => {
+                permissionValidationServiceMock.hasBYOK.mockResolvedValue(true);
+                if (failure === 'routing read failure') {
+                    permissionValidationServiceMock.resolveTaskSlot.mockRejectedValue(
+                        new Error('routing read unavailable'),
+                    );
+                } else if (failure === 'BYOK read failure') {
+                    permissionValidationServiceMock.hasBYOK.mockRejectedValue(
+                        new Error('BYOK read unavailable'),
+                    );
+                }
+                const resolveSpy = jest
+                    .spyOn(service as any, 'resolveExistingIssues')
+                    .mockResolvedValue(undefined);
+                const errorSpy = jest
+                    .spyOn((service as any).logger, 'error')
+                    .mockImplementation(() => {});
+
+                await service.processClosedPr(baseParams);
+
+                expect(mergeSpy).not.toHaveBeenCalled();
+                expect(resolveSpy).not.toHaveBeenCalled();
+                expect(parametersServiceMock.findByKey).not.toHaveBeenCalled();
+                expect(
+                    pullRequestsServiceMock.updateSyncedWithIssuesFlag,
+                ).not.toHaveBeenCalled();
+                expect(errorSpy).toHaveBeenCalled();
+            },
+        );
 
         it.each([
             ['no config stored', null],
@@ -291,6 +430,12 @@ describe('KodyIssuesManagementService', () => {
 
             await service.processClosedPr(baseParams);
 
+            expect(
+                permissionValidationServiceMock.resolveTaskSlot,
+            ).not.toHaveBeenCalled();
+            expect(
+                permissionValidationServiceMock.hasBYOK,
+            ).not.toHaveBeenCalled();
             expect(parametersServiceMock.findByKey).not.toHaveBeenCalled();
             expect(mergeSpy).not.toHaveBeenCalled();
             expect(

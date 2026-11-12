@@ -1,4 +1,4 @@
-import type { NormalizedModel } from '@libs/llm/byok-config';
+import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
 import { llmErrorLogLevel } from '@libs/llm/error-classifier';
 import { Injectable, Inject } from '@nestjs/common';
 import pLimit from 'p-limit';
@@ -92,7 +92,26 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                 return;
             }
 
-            const byokConfig = validationResult.byokConfig ?? null;
+            // Self-hosted permission checks allow execution without a carrier.
+            // Resolve the full slot so issue analysis retains its fallback/limits.
+            const byokConfig =
+                validationResult.byokConfig ??
+                (await this.permissionValidationService.resolveTaskSlot(
+                    params.organizationAndTeamData,
+                    LLM_TASK.codeReview,
+                )) ??
+                null;
+
+            if (
+                !byokConfig &&
+                (await this.permissionValidationService.hasBYOK(
+                    params.organizationAndTeamData,
+                ))
+            ) {
+                throw new Error(
+                    'Closed-PR issue analysis: configured BYOK model cannot be resolved',
+                );
+            }
 
             const issuesConfig = await this.parametersService.findByKey(
                 ParametersKey.ISSUE_CREATION_CONFIG,
