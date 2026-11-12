@@ -101,6 +101,18 @@ describe('LocalSandboxService sandbox file access', () => {
         await expect(sandbox.readFile('a.txt')).resolves.toBe('hello');
     });
 
+    // A name that starts with ".." is a name, not a parent directory.
+    it.each(['..hidden/f.ts', '...', '..env.example'])(
+        'reads and writes %p at the repository root',
+        async (name) => {
+            await sandbox.writeFile(name, 'inside');
+            await expect(sandbox.readFile(name)).resolves.toBe('inside');
+            expect(fs.readFileSync(path.join(dir, name), 'utf-8')).toBe(
+                'inside',
+            );
+        },
+    );
+
     it('writes a repo-relative file and creates parent directories', async () => {
         await sandbox.writeFile('sub/b.txt', 'world');
         expect(fs.readFileSync(path.join(dir, 'sub/b.txt'), 'utf-8')).toBe(
@@ -354,6 +366,8 @@ describe('LocalSandboxService.isPathInside', () => {
     it('accepts the root itself and nested children (POSIX)', () => {
         expect(isInside('/repo', '/repo')).toBe(true);
         expect(isInside('/repo', '/repo/a/b.ts')).toBe(true);
+        expect(isInside('/repo', '/repo/..hidden/f.ts')).toBe(true);
+        expect(isInside('/repo', '/repo/...')).toBe(true);
     });
 
     it('rejects escapes and sibling dirs (POSIX)', () => {

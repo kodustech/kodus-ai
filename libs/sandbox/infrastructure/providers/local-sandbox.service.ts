@@ -114,6 +114,15 @@ const GIT_REPOSITORY_ENV = [
     'GIT_NAMESPACE',
 ];
 
+/**
+ * Whether a `relative(root, x)` result leaves the root: `..` itself, a `../`
+ * prefix, or another drive or root (an absolute result). A name that only
+ * starts with dots (`..hidden`, `...`) stays inside.
+ */
+function escapesRoot(rel: string): boolean {
+    return rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel);
+}
+
 /** `process.env` plus `extra`, without the variables that relocate git. */
 export function sandboxEnv(
     extra?: Record<string, string | undefined>,
@@ -1082,7 +1091,7 @@ export class LocalSandboxService implements ISandboxProvider {
      */
     private isPathInside(root: string, child: string): boolean {
         const rel = relative(root, child);
-        return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+        return rel === '' || !escapesRoot(rel);
     }
 
     /**
@@ -1124,7 +1133,7 @@ export class LocalSandboxService implements ISandboxProvider {
         const rel = relative(repoReal, safePath);
         // safePath was validated to live inside repoReal, so `rel` never
         // escapes; guard defensively anyway.
-        if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+        if (rel === '' || escapesRoot(rel)) {
             throw new Error(`Path escapes repo boundary: ${safePath}`);
         }
         const parts = rel.split(sep).filter((p) => p.length > 0);
@@ -1254,9 +1263,7 @@ export class LocalSandboxService implements ISandboxProvider {
             // of not re-validating repoDir itself.
             const parentRel = relative(repoDir, parent);
             const parentStrictlyInside =
-                parentRel !== '' &&
-                !parentRel.startsWith('..') &&
-                !isAbsolute(parentRel);
+                parentRel !== '' && !escapesRoot(parentRel);
             if (parent === current || !parentStrictlyInside) {
                 break;
             }
