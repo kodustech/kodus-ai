@@ -423,6 +423,13 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 (p) => p.state === 'skipped_budget',
             ).length,
             languages: result.languages,
+            // Known to the run that made the plan; its continuations keep it.
+            mapFailedLanguages:
+                result.mapFailedLanguages ??
+                scan.coverage?.mapFailedLanguages ??
+                [],
+            filesBeyondPlan:
+                result.filesBeyondPlan ?? scan.coverage?.filesBeyondPlan ?? 0,
         };
 
         if (!result.finished && !result.stoppedByBudget && !signal?.aborted) {

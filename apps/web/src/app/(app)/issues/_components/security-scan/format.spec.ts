@@ -43,6 +43,23 @@ describe("formatScanCoverage", () => {
         ).toBe("38/40 areas examined · 2 skipped at the limit");
     });
 
+    it("says what the plan could not hold, so a completed scan is not read as full", () => {
+        expect(
+            formatScanCoverage({
+                examinedFiles: [],
+                languages: ["typescript", "python"],
+                unitsTotal: 2000,
+                unitsDone: 2000,
+                unitsFailed: 0,
+                unitsSkippedByBudget: 0,
+                filesBeyondPlan: 1,
+                mapFailedLanguages: ["python"],
+            }),
+        ).toBe(
+            "2000/2000 areas examined · 1 file past the plan's limit not examined · could not map python files",
+        );
+    });
+
     it("says nothing before the scan has planned its areas", () => {
         expect(formatScanCoverage(undefined)).toBeUndefined();
     });

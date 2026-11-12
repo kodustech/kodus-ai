@@ -33,6 +33,10 @@ export type SecurityScan = {
         unitsFailed: number;
         unitsSkippedByBudget: number;
         languages: string[];
+        /** Languages whose pattern search failed: the plan may miss their files. */
+        mapFailedLanguages?: string[];
+        /** Candidate files past the plan's limit, never read by this scan. */
+        filesBeyondPlan?: number;
     };
     outcome?: {
         created: number;

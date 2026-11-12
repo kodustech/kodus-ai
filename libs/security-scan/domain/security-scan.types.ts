@@ -88,6 +88,13 @@ export interface SecurityScanCoverage {
     unitsSkippedByBudget: number;
     /** Languages the repository holds and how the map handled them. */
     languages: string[];
+    /**
+     * What the plan could not hold, so a completed scan is not read as full
+     * coverage: languages whose pattern search failed, and candidate files
+     * past the plan's limit.
+     */
+    mapFailedLanguages?: string[];
+    filesBeyondPlan?: number;
 }
 
 export interface SecurityScanRecord {

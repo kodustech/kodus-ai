@@ -1587,6 +1587,44 @@ describe('SecurityScanEngine: across slices and units', () => {
         expect(result.progress).toEqual([{ unitId: 'u-controller', state: 'done', findings: 0 }]);
     });
 
+    it('runs on a map with a failed search, and names the language it could not map', async () => {
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens(() => []),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => ({
+                ...onlyController,
+                errors: [{ language: 'python', patternIds: ['py-sql'], message: 'rg: exit 2' }],
+            })),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.finished).toBe(true);
+        expect(result.mapFailedLanguages).toEqual(['python']);
+    });
+
+    it('counts the candidate files the plan limit leaves out', async () => {
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens(() => []),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            maxUnits: 1,
+        } as any);
+
+        expect(result.units).toHaveLength(1);
+        expect(result.filesBeyondPlan).toBe(Object.keys(SURFACE.files).length - 1);
+    });
+
     it('keeps a finding in a file listed past the first 20,000, and lists it as tracked', async () => {
         const controller = 'src/orders/orders.controller.ts';
         const filler = Array.from({ length: 20_000 }, (_, i) => `vendor/f${i}.ts`);

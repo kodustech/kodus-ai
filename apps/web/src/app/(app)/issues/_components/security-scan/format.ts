@@ -37,7 +37,10 @@ export const formatScanSpend = ({
     return usd(spend.usd);
 };
 
-/** "38/40 areas examined · 2 skipped at the limit · 1 failed". */
+/**
+ * "38/40 areas examined · 2 skipped at the limit · 1 failed", and what the
+ * plan could not hold: files past its limit, languages it could not map.
+ */
 export const formatScanCoverage = (
     coverage: SecurityScan["coverage"],
 ): string | undefined => {
@@ -51,6 +54,16 @@ export const formatScanCoverage = (
     }
     if (coverage.unitsFailed > 0) {
         parts.push(`${coverage.unitsFailed} failed`);
+    }
+    if (coverage.filesBeyondPlan) {
+        parts.push(
+            `${coverage.filesBeyondPlan} ${coverage.filesBeyondPlan === 1 ? "file" : "files"} past the plan's limit not examined`,
+        );
+    }
+    if (coverage.mapFailedLanguages?.length) {
+        parts.push(
+            `could not map ${coverage.mapFailedLanguages.join(", ")} files`,
+        );
     }
 
     return parts.join(" · ");

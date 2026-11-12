@@ -382,6 +382,39 @@ describe('SecurityScanJobProcessor', () => {
         expect(issuesService.findOpenScanFindingAreas).toHaveBeenCalledTimes(1);
     });
 
+    it("stores what the plan could not hold, and keeps it on the plan's continuations", async () => {
+        const planned = setup({
+            result: finishedResult({ mapFailedLanguages: ['python'], filesBeyondPlan: 1 }),
+        });
+        await planned.processor.process('job-1');
+        expect(lastUpdate(planned.scans).coverage).toEqual(
+            expect.objectContaining({ mapFailedLanguages: ['python'], filesBeyondPlan: 1 }),
+        );
+
+        // A continuation does not map again: the plan's gaps carry over.
+        const continued = setup(
+            { result: finishedResult() },
+            scanRecord({
+                commitSha: 'abc123',
+                units: [{ id: 'u1' }] as any,
+                coverage: {
+                    examinedFiles: [],
+                    unitsTotal: 1,
+                    unitsDone: 0,
+                    unitsFailed: 0,
+                    unitsSkippedByBudget: 0,
+                    languages: ['python'],
+                    mapFailedLanguages: ['python'],
+                    filesBeyondPlan: 1,
+                },
+            }),
+        );
+        await continued.processor.process('job-1');
+        expect(lastUpdate(continued.scans).coverage).toEqual(
+            expect.objectContaining({ mapFailedLanguages: ['python'], filesBeyondPlan: 1 }),
+        );
+    });
+
     it('records each area alone, with live counts, without reading the scan back', async () => {
         const { processor, scans } = setup({
             unitEvents: [

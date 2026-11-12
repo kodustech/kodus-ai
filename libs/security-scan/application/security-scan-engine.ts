@@ -153,6 +153,13 @@ export interface SecurityScanEngineResult {
      * finding in a file outside it is gone with the file.
      */
     trackedFiles?: string[];
+    /**
+     * Set by the run that made the plan. Languages a pattern search failed
+     * for: their files may be missing from the plan.
+     */
+    mapFailedLanguages?: string[];
+    /** Candidate files the plan's limit left out: this scan never reads them. */
+    filesBeyondPlan?: number;
 }
 
 const MAP_SCHEMA = z.object({
@@ -272,7 +279,33 @@ export class SecurityScanEngine {
         }
 
         let units = params.units;
+        let planGaps:
+            | { mapFailedLanguages: string[]; filesBeyondPlan: number }
+            | undefined;
         if (!units?.length) {
+            // A search that failed beside others that worked leaves a map
+            // with holes: the scan runs on what it has and says which.
+            planGaps = {
+                mapFailedLanguages: [
+                    ...new Set(searchFailures.map((e) => e.language)),
+                ],
+                filesBeyondPlan: Math.max(
+                    0,
+                    Object.keys(surface.files).length - params.maxUnits,
+                ),
+            };
+            if (planGaps.mapFailedLanguages.length) {
+                logger.warn({
+                    message:
+                        'Security scan mapped the repository with failed searches',
+                    context: SecurityScanEngine.name,
+                    metadata: {
+                        organizationId: params.organizationId,
+                        repositoryId: params.repositoryId,
+                        languages: planGaps.mapFailedLanguages,
+                    },
+                });
+            }
             units = withRevisits(
                 await this.plan(
                     params,
@@ -486,6 +519,7 @@ export class SecurityScanEngine {
             languages,
             finished,
             stoppedByBudget,
+            ...planGaps,
             examinedFiles: [...examined],
             examinedByClass: [...examinedByClass].map(
                 ([vulnerabilityClass, files]) => ({
