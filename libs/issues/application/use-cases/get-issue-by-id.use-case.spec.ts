@@ -11,7 +11,17 @@ function useCaseFor(issue: Record<string, unknown>) {
             enrichContributingSuggestions: jest.fn(async () => []),
             ageCalculation: jest.fn(async () => '1 day'),
         } as any,
-        { findOne: jest.fn(async () => null) } as any,
+        {
+            // Azure links are built from the repository's http_url.
+            findOne: jest.fn(async () => ({
+                configValue: [
+                    {
+                        id: 'repo-1',
+                        http_url: 'https://dev.azure.com/acme/shop/_git/shop',
+                    },
+                ],
+            })),
+        } as any,
         { user: { uuid: 'u-1', organization: { uuid: 'org-1' } } } as any,
         { ensure: jest.fn(async () => undefined) } as any,
     );
@@ -53,6 +63,22 @@ describe('GetIssueByIdUseCase — file link', () => {
 
         expect(details?.fileLink.url).toBe(
             'https://github.com/acme/shop/blob/main/src/orders.controller.ts',
+        );
+    });
+
+    it('pins an Azure scan finding link to its commit', async () => {
+        const details = await useCaseFor({
+            ...base,
+            repository: {
+                ...base.repository,
+                platform: PlatformType.AZURE_REPOS,
+            },
+            source: IssueSource.SECURITY_SCAN,
+            lastSeenCommitSha: 'abc123',
+        }).execute('i-1');
+
+        expect(details?.fileLink.url).toBe(
+            'https://dev.azure.com/acme/shop/_git/shop?path=/src/orders.controller.ts&version=GCabc123',
         );
     });
 });
