@@ -358,7 +358,8 @@ export function wrapByokModel(
                     settle(readAiSdkUsageFromError(err)?.usage);
                     throw err;
                 }
-                settle(readProviderUsage((result as any)?.usage));
+                // Answered, so billed, even when the provider sent no usage.
+                settle(readProviderUsage((result as any)?.usage) ?? {});
                 return result;
             },
             // A stream's usage arrives only at its end, after the request was

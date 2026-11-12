@@ -38,7 +38,9 @@ export interface UsageMeter {
 export interface Admission {
     /**
      * Called once it ends: with what the provider billed for it, or
-     * undefined when it failed unanswered.
+     * undefined when it failed unanswered. An answer whose provider reported
+     * no totals settles with them undefined, never as undefined: it was
+     * billed, and a cap must not count it as free.
      */
     settle: (answered: AiSdkUsage | undefined) => void;
     /**
