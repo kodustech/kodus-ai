@@ -323,6 +323,9 @@ export class IssuesRepository implements IIssuesRepository {
             lastSeenScanId?: string;
             description?: string;
             severity?: string;
+            title?: string;
+            startLine?: number;
+            endLine?: number;
         },
         finding: ScanFindingUpsert,
         now: string,
@@ -336,6 +339,24 @@ export class IssuesRepository implements IIssuesRepository {
             existing.status !== IssueStatus.DISMISSED &&
             existing.lastSeenScanId === finding.lastSeenScanId
         ) {
+            // The same finding stored again by this scan (a unit run again
+            // after a worker stopped between storing it and recording the
+            // unit): already on the issue, not a second weakness.
+            const occurrence = `### Also in this function: ${finding.title}\n\nLines ${finding.startLine}-${finding.endLine}.`;
+            const sameAsFirst =
+                existing.title === finding.title &&
+                existing.startLine === finding.startLine &&
+                existing.endLine === finding.endLine;
+            if (
+                existing.status === IssueStatus.OPEN &&
+                (sameAsFirst ||
+                    (existing.description ?? '').includes(occurrence))
+            ) {
+                return {
+                    outcome: 'still_open',
+                    update: { $set: { lastSeenAt: now } },
+                };
+            }
             // This scan already stored a finding under this identity: a
             // second weakness of the same kind in the same function. Both
             // stay on the one issue; neither overwrites the other. Resolved
@@ -348,7 +369,7 @@ export class IssuesRepository implements IIssuesRepository {
                     ...(reopen ? { $unset: { resolvedAt: '' } } : {}),
                     $set: {
                         ...(reopen ? { status: IssueStatus.OPEN } : {}),
-                        description: `${existing.description ?? ''}\n\n---\n\n### Also in this function: ${finding.title}\n\nLines ${finding.startLine}-${finding.endLine}.\n\n${finding.description}`,
+                        description: `${existing.description ?? ''}\n\n---\n\n${occurrence}\n\n${finding.description}`,
                         severity: moreSevere(
                             existing.severity,
                             finding.severity,
