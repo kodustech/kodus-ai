@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { isValidObjectId } from 'mongoose';
 import { REQUEST } from '@nestjs/core';
 
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
@@ -52,8 +53,12 @@ export class BuildFixPromptUseCase implements IUseCase {
 
         const readableIds = readable === null ? null : new Set(readable);
 
+        // A malformed id (a typo on the CLI) is no issue: skipped, like an
+        // unknown one, instead of a database cast error.
         const issues = await Promise.all(
-            wanted.map((id) => this.issuesService.findById(id)),
+            wanted.map((id) =>
+                isValidObjectId(id) ? this.issuesService.findById(id) : null,
+            ),
         );
         const kept = issues.filter(
             (issue) =>
