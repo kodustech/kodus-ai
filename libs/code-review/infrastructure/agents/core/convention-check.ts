@@ -596,65 +596,52 @@ export function guideSourcesFor(
     targetBranchReader: GuideFileReader | undefined,
     targetBranchLister: GuideDirLister | undefined,
 ): { readGuide: GuideFileReader; listGuideDir?: GuideDirLister } | undefined {
-    const hasOtherRepository = guideFiles.some(
-        (file) => parseKnowledgeSourcePath(stripLeading(file)) != null,
-    );
-    if (hasOtherRepository && !knowledgeReader) {
+    const isOther = (path: string) =>
+        parseKnowledgeSourcePath(stripLeading(path)) != null;
+    const hasOtherRepository = guideFiles.some(isOther);
+    if (!knowledgeReader) {
+        if (!targetBranchReader) return undefined;
         // Nothing can read another repository here: its guides read as
         // unreadable (their quotes are rejected), never through the target
         // branch, which would look `owner/repo:path` up in this repository.
-        return targetBranchReader
-            ? {
-                  readGuide: (file) =>
-                      parseKnowledgeSourcePath(stripLeading(file)) != null
+        return {
+            readGuide: hasOtherRepository
+                ? (file) =>
+                      isOther(file)
                           ? Promise.resolve(null)
-                          : targetBranchReader(file),
-                  listGuideDir: targetBranchLister,
-              }
-            : undefined;
+                          : targetBranchReader(file)
+                : targetBranchReader,
+            listGuideDir: targetBranchLister,
+        };
     }
     if (!hasOtherRepository && !targetBranchReader) return undefined;
-    const fromKnowledge: GuideFileReader | undefined = knowledgeReader
-        ? async (file) => {
-              const read = await knowledgeReader.readFile(stripLeading(file));
-              return read.status === 'ok' ? read.content : null;
-          }
-        : undefined;
-    const listFromKnowledge: GuideDirLister | undefined = knowledgeReader
-        ? (dir) =>
-              knowledgeReader.listFiles(stripLeading(dir).replace(/\/+$/, ''))
-        : undefined;
+    const fromKnowledge: GuideFileReader = async (file) => {
+        const read = await knowledgeReader.readFile(stripLeading(file));
+        return read.status === 'ok' ? read.content : null;
+    };
+    const listFromKnowledge: GuideDirLister = (dir) =>
+        knowledgeReader.listFiles(stripLeading(dir).replace(/\/+$/, ''));
     // The reviewed repository's guides: the sandbox's target-branch reads,
     // and the knowledge reader when those come back empty or fail.
-    const readLocal: GuideFileReader = async (file) => {
-        const content = targetBranchReader
-            ? await targetBranchReader(file)
-            : null;
-        if (content != null || !fromKnowledge) return content;
-        return fromKnowledge(file);
-    };
-    const listLocal: GuideDirLister | undefined =
-        targetBranchLister || listFromKnowledge
-            ? async (dir) => {
-                  if (!targetBranchLister) return listFromKnowledge!(dir);
-                  try {
-                      return await targetBranchLister(dir);
-                  } catch (error) {
-                      if (!listFromKnowledge) throw error;
-                      return listFromKnowledge(dir);
-                  }
+    const readLocal: GuideFileReader = async (file) =>
+        (await targetBranchReader?.(file)) ?? fromKnowledge(file);
+    const listLocal: GuideDirLister = targetBranchLister
+        ? async (dir) => {
+              try {
+                  return await targetBranchLister(dir);
+              } catch {
+                  return listFromKnowledge(dir);
               }
-            : undefined;
+          }
+        : listFromKnowledge;
     if (!hasOtherRepository) {
         return { readGuide: readLocal, listGuideDir: listLocal };
     }
-    const isOther = (path: string) =>
-        parseKnowledgeSourcePath(stripLeading(path)) != null;
     return {
         readGuide: (file) =>
-            isOther(file) ? fromKnowledge!(file) : readLocal(file),
+            isOther(file) ? fromKnowledge(file) : readLocal(file),
         listGuideDir: (dir) =>
-            isOther(dir) ? listFromKnowledge!(dir) : listLocal!(dir),
+            isOther(dir) ? listFromKnowledge(dir) : listLocal(dir),
     };
 }
 

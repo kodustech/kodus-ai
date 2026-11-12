@@ -53,15 +53,6 @@ const refusesGit = {
     }),
 };
 
-function localSandboxSources() {
-    return guideSourcesFor(
-        [SKILL],
-        knowledgeReader,
-        makeTargetBranchGuideReader(refusesGit as never, 'main'),
-        makeTargetBranchGuideLister(refusesGit as never, 'main'),
-    );
-}
-
 function cites(file: string, quote: string): FinderSuggestion {
     return {
         relevantFile: 'src/jobs/book-tram.ts',
@@ -75,19 +66,31 @@ function cites(file: string, quote: string): FinderSuggestion {
     };
 }
 
+// The quote gate as a local-sandbox review builds it: the sandbox's
+// target-branch reads, then the knowledge reader.
+async function gate(finding: FinderSuggestion, guides = [SKILL]) {
+    const sources = guideSourcesFor(
+        guides,
+        knowledgeReader,
+        makeTargetBranchGuideReader(refusesGit as never, 'main'),
+        makeTargetBranchGuideLister(refusesGit as never, 'main'),
+    );
+    if (!sources) throw new Error('no guide sources for a review with guides');
+    return checkConventionQuotes(
+        [finding],
+        sources.readGuide,
+        guides,
+        sources.listGuideDir,
+    );
+}
+
 describe('quote gate on the local sandbox', () => {
     it('passes a finding that quotes a linked skill of the reviewed repository', async () => {
-        const sources = localSandboxSources();
-        const result = await checkConventionQuotes(
-            [
-                cites(
-                    SKILL,
-                    'A job books a tram only after checking that the tram is parked in the depot.',
-                ),
-            ],
-            sources!.readGuide,
-            [SKILL],
-            sources!.listGuideDir,
+        const result = await gate(
+            cites(
+                SKILL,
+                'A job books a tram only after checking that the tram is parked in the depot.',
+            ),
         );
 
         expect(result.rejected).toEqual([]);
@@ -95,17 +98,11 @@ describe('quote gate on the local sandbox', () => {
     });
 
     it('passes a quote from a file beside the linked SKILL.md', async () => {
-        const sources = localSandboxSources();
-        const result = await checkConventionQuotes(
-            [
-                cites(
-                    REFERENCE,
-                    'Brake tests are recorded before the tram leaves the bay.',
-                ),
-            ],
-            sources!.readGuide,
-            [SKILL],
-            sources!.listGuideDir,
+        const result = await gate(
+            cites(
+                REFERENCE,
+                'Brake tests are recorded before the tram leaves the bay.',
+            ),
         );
 
         expect(result.rejected).toEqual([]);
@@ -113,12 +110,8 @@ describe('quote gate on the local sandbox', () => {
     });
 
     it('still rejects a quote that is not in the skill', async () => {
-        const sources = localSandboxSources();
-        const result = await checkConventionQuotes(
-            [cites(SKILL, 'A job may book any tram that is not in service.')],
-            sources!.readGuide,
-            [SKILL],
-            sources!.listGuideDir,
+        const result = await gate(
+            cites(SKILL, 'A job may book any tram that is not in service.'),
         );
 
         expect(result.passed).toEqual([]);
@@ -127,17 +120,9 @@ describe('quote gate on the local sandbox', () => {
 
     it('still rejects a linked skill the target branch does not have', async () => {
         const missing = '.skills/timetable/SKILL.md';
-        const sources = guideSourcesFor(
+        const result = await gate(
+            cites(missing, 'Timetables are published a week ahead.'),
             [missing],
-            knowledgeReader,
-            makeTargetBranchGuideReader(refusesGit as never, 'main'),
-            makeTargetBranchGuideLister(refusesGit as never, 'main'),
-        );
-        const result = await checkConventionQuotes(
-            [cites(missing, 'Timetables are published a week ahead.')],
-            sources!.readGuide,
-            [missing],
-            sources!.listGuideDir,
         );
 
         expect(result.passed).toEqual([]);
