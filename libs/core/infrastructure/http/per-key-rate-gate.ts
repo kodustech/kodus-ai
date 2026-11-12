@@ -130,7 +130,46 @@ export async function runWithRateGate<T>(
             ? Infinity
             : enqueuedAt + options.maxWaitMs;
 
-    return gate.limit(async () => {
+    // The checks below run only once the slot is ours. A call queued behind
+    // one that holds the slot through its own 429 retries would otherwise
+    // wait for all of them, so the budget also runs while queued.
+    let admitted = false;
+    let expired = false;
+    let admissionTimer: ReturnType<typeof setTimeout> | undefined;
+    let rejectQueued: (error: Error) => void = () => {};
+    const queuedExpiry = new Promise<never>((_, reject) => {
+        rejectQueued = reject;
+    });
+    if (deadline !== Infinity) {
+        const checkQueued = () => {
+            if (admitted) return;
+            if (gate.rateLimitStreak > 0) {
+                expired = true;
+                const now = Date.now();
+                rejectQueued(
+                    new RateGateWaitExceededError(
+                        key,
+                        now - enqueuedAt,
+                        Math.max(
+                            0,
+                            Math.max(gate.pausedUntil, gate.nextAllowedAt) -
+                                now,
+                        ),
+                    ),
+                );
+                return;
+            }
+            // A healthy queue is never cut short; look again shortly.
+            admissionTimer = setTimeout(checkQueued, 1_000);
+        };
+        admissionTimer = setTimeout(checkQueued, options.maxWaitMs);
+    }
+
+    const run = gate.limit(async (): Promise<T | undefined> => {
+        // Expired while queued: the caller already has its 429.
+        if (expired) return undefined;
+        admitted = true;
+        clearTimeout(admissionTimer);
         // Park + spacing can both move while we sleep (a sibling call
         // that 429'd may extend pausedUntil), so re-check in a loop.
         for (;;) {
@@ -162,6 +201,10 @@ export async function runWithRateGate<T>(
         gate.nextAllowedAt = Date.now() + options.minIntervalMs;
         return fn();
     });
+
+    return Promise.race([run as Promise<T>, queuedExpiry]).finally(() =>
+        clearTimeout(admissionTimer),
+    );
 }
 
 /**

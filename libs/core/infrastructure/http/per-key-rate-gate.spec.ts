@@ -172,8 +172,32 @@ describe('per-key-rate-gate', () => {
         const error = await queued;
 
         expect(error).toBeInstanceOf(RateGateWaitExceededError);
-        // It waited behind the holder; nothing is parked, so no retry delay
-        expect(error).toMatchObject({ waitedMs: 120, retryAfterMs: 0 });
+        // It gave up at its budget, still queued; nothing is parked
+        expect(error).toMatchObject({ waitedMs: 50, retryAfterMs: 0 });
+    });
+
+    it('gives up while still queued behind a call that holds the slot', async () => {
+        jest.useFakeTimers();
+        recordRateLimited('k', { baseMs: 0, maxMs: 0 });
+        const holder = runWithRateGate('k', { minIntervalMs: 0 }, () =>
+            sleep(130_000),
+        );
+        const fn = jest.fn(async () => 'ran');
+        const queued = runWithRateGate(
+            'k',
+            { minIntervalMs: 0, maxWaitMs: 20_000 },
+            fn,
+        ).catch((e) => e);
+
+        await jest.advanceTimersByTimeAsync(20_000);
+        const error = await queued;
+        expect(error).toBeInstanceOf(RateGateWaitExceededError);
+        expect(error).toMatchObject({ waitedMs: 20_000 });
+
+        // Once the holder frees the slot, the expired call does not run
+        await jest.advanceTimersByTimeAsync(110_000);
+        await holder;
+        expect(fn).not.toHaveBeenCalled();
     });
 
     it('never cuts a healthy queue short, however long it waited', async () => {
