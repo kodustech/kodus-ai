@@ -265,7 +265,9 @@ export function withRevisits(
             .flatMap((u) => u.classes);
         const classes = lacking(covered, want);
         if (!classes.length) continue;
-        const revisitId = covered.length ? unitId(`${file}#revisit`) : unitId(file);
+        const revisitId = covered.length
+            ? unitId(`${file}#revisit`)
+            : unitId(file);
         if (merged.some((u) => u.id === revisitId)) continue;
         merged.push({
             id: revisitId,
