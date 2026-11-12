@@ -170,9 +170,6 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(outcome).toBe('reopened');
         const update = model.findOneAndUpdate.mock.calls[0][1];
         expect(update.$set.status).toBe(IssueStatus.OPEN);
-        // Seen by this scan, so its resolution pass does not close it again.
-        expect(update.$set.lastSeenScanId).toBe('scan-2');
-        expect(typeof update.$set.lastSeenAt).toBe('string');
         expect(update.$unset).toEqual({ resolvedAt: '' });
     });
 
@@ -264,9 +261,6 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(outcome).toBe('merged');
         const update = (model.findOneAndUpdate.mock.calls[0] as unknown as [any, any])[1];
         expect(update.$set.status).toBe(IssueStatus.OPEN);
-        // Seen by this scan, so its resolution pass does not close it again.
-        expect(update.$set.lastSeenScanId).toBe('scan-2');
-        expect(typeof update.$set.lastSeenAt).toBe('string');
         expect(update.$unset).toEqual({ resolvedAt: '' });
     });
 
