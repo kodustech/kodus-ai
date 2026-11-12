@@ -128,6 +128,10 @@ export async function admitRequest(
     if (!store?.meter.admit) {
         return ADMITTED_UNMETERED;
     }
+    // A caller that already gave up takes no room, not even for a moment.
+    if (signal?.aborted) {
+        throw signal.reason;
+    }
     const admission = await untilAborted(store.meter.admit(ceiling()), signal);
     return {
         maxOutputTokens: admission.maxOutputTokens,
