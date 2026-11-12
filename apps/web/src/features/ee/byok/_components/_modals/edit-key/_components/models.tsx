@@ -241,7 +241,15 @@ const ModelPickerPopover = ({
     const { reset: resetErrorBoundary } = useQueryErrorResetBoundary();
 
     return (
-        <Popover modal open={open} onOpenChange={setOpen}>
+        <Popover
+            modal
+            open={open}
+            onOpenChange={(next) => {
+                setOpen(next);
+                // A closed picker must not leave its filter text behind for the
+                // manual row to pick up the next time it opens.
+                if (!next) setSearch("");
+            }}>
             <Controller
                 name="model"
                 control={form.control}
@@ -337,6 +345,7 @@ const ModelPickerPopover = ({
                                     });
 
                                     resetErrorBoundary();
+                                    setSearch("");
                                     setOpen(false);
                                 }}>
                                 <span className="flex min-w-0 flex-col gap-0.5">
@@ -370,6 +379,7 @@ const ModelPickerPopover = ({
                             value="__manual__"
                             onSelect={() => {
                                 onUseManual?.(search.trim());
+                                setSearch("");
                                 setOpen(false);
                             }}>
                             <span>

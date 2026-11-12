@@ -415,7 +415,7 @@ describe("ByokModelSelect — manual entry while searching", () => {
         );
     });
 
-    it("empty search: opens an empty manual input, as before", async () => {
+    it("clears a search left over from a closed picker before manual entry", async () => {
         mockPreview.mockReturnValue({
             data: [{ id: "listed/model-a", name: "Model A" }],
             isFetching: false,
@@ -432,7 +432,20 @@ describe("ByokModelSelect — manual entry while searching", () => {
             />,
         );
 
+        // Type a partial filter, then close the picker without choosing.
         fireEvent.click(screen.getByRole("combobox"));
+        fireEvent.change(await screen.findByPlaceholderText(/search models/i), {
+            target: { value: "gpt" },
+        });
+        fireEvent.keyDown(screen.getByPlaceholderText(/search models/i), {
+            key: "Escape",
+        });
+
+        // Reopened, the picker starts clean, so the manual row carries no stale id.
+        fireEvent.click(screen.getByRole("combobox"));
+        expect(
+            await screen.findByPlaceholderText(/search models/i),
+        ).toHaveValue("");
         fireEvent.click(await screen.findByText("Type model manually"));
 
         expect(screen.getByPlaceholderText(/type a model name/i)).toHaveValue(
