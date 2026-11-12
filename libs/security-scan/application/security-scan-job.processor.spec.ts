@@ -170,6 +170,7 @@ describe('SecurityScanJobProcessor', () => {
         );
         expect(issuesService.resolveUnseenScanFindings).toHaveBeenCalledWith({
             organizationId: 'org-1',
+            repositoryPlatform: 'GITHUB',
             repositoryId: 'repo-1',
             scanId: 'scan-1',
             examined: [{ vulnerabilityClass: 'authz', filePaths: ['src/orders.controller.ts'] }],

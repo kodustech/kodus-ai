@@ -439,6 +439,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         // open finding there that no unit reported again is gone.
         counts.resolved += await this.issuesService.resolveUnseenScanFindings({
             organizationId: scan.organizationId,
+            repositoryPlatform: scan.repository.platform as PlatformType,
             repositoryId: scan.repository.id,
             scanId: scan.uuid,
             examined: coverage.examinedByClass,
@@ -489,6 +490,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 owner,
                 reporter: { gitId: 'kodus', username: 'Kodus' },
                 fingerprint: computeScanFingerprint({
+                    repositoryPlatform: scan.repository.platform,
                     repositoryId: scan.repository.id,
                     vulnerabilityClass: finding.vulnerabilityClass,
                     filePath: finding.filePath,

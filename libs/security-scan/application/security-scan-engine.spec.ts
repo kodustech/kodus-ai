@@ -3,10 +3,16 @@ jest.mock('@libs/llm/managed-slot', () => {
     const actual = jest.requireActual('@libs/llm/managed-slot');
     return { ...actual, hasManagedModelKey: jest.fn(() => false) };
 });
+// No platform embedding key unless a test configures one.
+jest.mock('@libs/common/utils/document', () => {
+    const actual = jest.requireActual('@libs/common/utils/document');
+    return { ...actual, buildPlatformEmbedder: jest.fn(() => null) };
+});
 
 import { ScanBudgetMeter } from '../domain/budget-meter';
 import type { SurfaceMap } from '../domain/surface/surface.types';
 import { admitRequest, reportUsage } from '@libs/llm/usage-meter';
+import { buildPlatformEmbedder } from '@libs/common/utils/document';
 
 import { SecurityScanEngine } from './security-scan-engine';
 
@@ -1405,6 +1411,65 @@ describe('SecurityScanEngine: across slices and units', () => {
         } as any);
 
         expect(result.findings.map((f) => f.filePath)).toContain(accented);
+    });
+
+    it("dedups on the client's model alone, never embedding findings on the platform key", async () => {
+        // A platform key is configured: the scan must still not use it.
+        (buildPlatformEmbedder as jest.Mock).mockReturnValue({});
+        const tiebreak = jest.fn(async () => false);
+        // A merge the wording alone does not settle: past the lexical check,
+        // where an embedding would be asked for.
+        const unsettled = (file: string, text: string) => ({
+            relevantFile: file,
+            label: 'security',
+            oneSentenceSummary: text,
+            suggestionContent: text,
+        });
+        const dedup = jest.fn(async (deps: any, suggestions: any[]) => {
+            await deps.resolveMerge(
+                unsettled('src/a.ts', 'off by one error in the pagination loop'),
+                unsettled('src/b.ts', 'sql query built via string concatenation'),
+                'a',
+                'b',
+                new Map(),
+                tiebreak,
+            );
+            return { suggestions, trace: {} as any };
+        });
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => onlyController),
+            dedup: dedup as any,
+        });
+
+        try {
+            await engine.run({
+                ...baseParams(),
+                sandbox: fakeSandbox(),
+                meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+                // Reported before in the same file, so the new one is deduped.
+                reported: [
+                    {
+                        vulnerabilityClass: 'secret_identity',
+                        cwe: 'CWE-798',
+                        title: 'Hard-coded API key',
+                        description: 'The key is in the source.',
+                        severity: 'high',
+                        filePath: 'src/orders/orders.controller.ts',
+                        startLine: 40,
+                        endLine: 41,
+                    },
+                ],
+            } as any);
+        } finally {
+            (buildPlatformEmbedder as jest.Mock).mockReturnValue(null);
+        }
+
+        expect(tiebreak).toHaveBeenCalled();
+        expect(buildPlatformEmbedder).not.toHaveBeenCalled();
     });
 
     it('keeps a finding in a file listed past the first 20,000, and lists it as tracked', async () => {

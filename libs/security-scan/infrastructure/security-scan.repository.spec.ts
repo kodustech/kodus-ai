@@ -56,13 +56,45 @@ describe('SecurityScanRepository: one active scan per repository', () => {
 
         await repository.create({
             organizationId: 'org-1',
-            repository: { id: 'repo-1' },
+            repository: { platform: 'GITHUB', id: 'repo-1' },
+            status: 'queued',
+        } as any);
+        // A GitLab project with the same id is another repository.
+        await repository.create({
+            organizationId: 'org-1',
+            repository: { platform: 'GITLAB', id: 'repo-1' },
             status: 'queued',
         } as any);
 
         expect((create.mock.calls[0] as unknown[])[0]).toEqual(
-            expect.objectContaining({ activeKey: 'org-1:repo-1' }),
+            expect.objectContaining({ activeKey: 'org-1:GITHUB:repo-1' }),
         );
+        expect((create.mock.calls[1] as unknown[])[0]).toEqual(
+            expect.objectContaining({ activeKey: 'org-1:GITLAB:repo-1' }),
+        );
+    });
+
+    it("finds a repository's active and latest scans by its platform and id", async () => {
+        const query = { select: jest.fn(), sort: jest.fn(), exec: jest.fn(async () => null) };
+        query.select.mockReturnValue(query);
+        query.sort.mockReturnValue(query);
+        const findOne = jest.fn(() => query);
+        const repository = new SecurityScanRepository({ findOne } as any);
+        const gitlab = { platform: 'GITLAB', id: 'repo-1' };
+
+        await repository.findActive('org-1', gitlab);
+        await repository.findLatest('org-1', gitlab);
+
+        for (const [filter] of findOne.mock.calls as unknown as [any][]) {
+            expect(filter).toEqual(
+                expect.objectContaining({
+                    'organizationId': 'org-1',
+                    'repository.platform': 'GITLAB',
+                    'repository.id': 'repo-1',
+                }),
+            );
+        }
+        expect(findOne).toHaveBeenCalledTimes(2);
     });
 
     it('frees the key when the scan ends and appends what it reported in the same write', async () => {

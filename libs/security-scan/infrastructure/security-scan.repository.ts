@@ -47,12 +47,12 @@ export interface ISecurityScanRepository {
     /** A scan of this repository that has not finished yet, if any. */
     findActive(
         organizationId: string,
-        repositoryId: string,
+        repository: ScanRepositoryKey,
     ): Promise<SecurityScanRecord | null>;
     /** The repository's last scan, with its plan, progress and findings. */
     findLatest(
         organizationId: string,
-        repositoryId: string,
+        repository: ScanRepositoryKey,
     ): Promise<SecurityScanRecord | null>;
     /**
      * Marks as failed the organization's scans nothing has touched for their
@@ -71,8 +71,20 @@ export type StaleScanWindows = {
 
 const ACTIVE = [SecurityScanStatus.QUEUED, SecurityScanStatus.RUNNING];
 
-const activeKeyOf = (organizationId: string, repositoryId: string) =>
-    `${organizationId}:${repositoryId}`;
+/**
+ * A repository within an organization: its platform and its id there. An id
+ * is only unique on its platform, and one organization can hold a GitHub
+ * repository and a GitLab project with the same one.
+ */
+export type ScanRepositoryKey = { platform: string; id: string };
+
+const activeKeyOf = (organizationId: string, repository: ScanRepositoryKey) =>
+    `${organizationId}:${repository.platform}:${repository.id}`;
+
+const sameRepository = (repository: ScanRepositoryKey) => ({
+    'repository.platform': repository.platform,
+    'repository.id': repository.id,
+});
 
 export const STALE_SCAN_ERROR =
     'Interrupted: the worker running this scan stopped. Its findings so far are kept; run the scan again to cover the rest.';
@@ -92,7 +104,7 @@ export class SecurityScanRepository implements ISecurityScanRepository {
                 ? {
                       activeKey: activeKeyOf(
                           scan.organizationId,
-                          scan.repository.id,
+                          scan.repository,
                       ),
                   }
                 : {}),
@@ -194,13 +206,13 @@ export class SecurityScanRepository implements ISecurityScanRepository {
 
     async findActive(
         organizationId: string,
-        repositoryId: string,
+        repository: ScanRepositoryKey,
     ): Promise<SecurityScanRecord | null> {
         const doc = await this.model
             .findOne({
                 organizationId,
-                'repository.id': repositoryId,
-                'status': { $in: ACTIVE },
+                ...sameRepository(repository),
+                status: { $in: ACTIVE },
             })
             .select({ units: 0, progress: 0, reported: 0 })
             .exec();
@@ -209,10 +221,10 @@ export class SecurityScanRepository implements ISecurityScanRepository {
 
     async findLatest(
         organizationId: string,
-        repositoryId: string,
+        repository: ScanRepositoryKey,
     ): Promise<SecurityScanRecord | null> {
         const doc = await this.model
-            .findOne({ organizationId, 'repository.id': repositoryId })
+            .findOne({ organizationId, ...sameRepository(repository) })
             .sort({ createdAt: -1 })
             .exec();
         return doc ? toRecord(doc) : null;

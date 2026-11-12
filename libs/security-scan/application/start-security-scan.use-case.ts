@@ -34,6 +34,7 @@ import {
 } from '../domain/security-scan.types';
 import {
     ISecurityScanRepository,
+    ScanRepositoryKey,
     SECURITY_SCAN_REPOSITORY_TOKEN,
 } from '../infrastructure/security-scan.repository';
 
@@ -102,10 +103,17 @@ export class StartSecurityScanUseCase {
             throw new BadRequestException(budgetError);
         }
 
+        const platform =
+            await this.codeManagementService.getTypeIntegration(orgTeam);
+        const repositoryKey = {
+            platform: String(platform),
+            id: String(repository.id),
+        };
+
         await this.scans.failStale(orgTeam.organizationId, STALE_SCAN_AFTER);
         const active = await this.scans.findActive(
             orgTeam.organizationId,
-            String(repository.id),
+            repositoryKey,
         );
         if (active) {
             throw new ConflictException(ALREADY_RUNNING);
@@ -113,11 +121,8 @@ export class StartSecurityScanUseCase {
 
         const resumed = await this.resumablePlan(
             orgTeam.organizationId,
-            String(repository.id),
+            repositoryKey,
         );
-
-        const platform =
-            await this.codeManagementService.getTypeIntegration(orgTeam);
         const fullName =
             repository.full_name ||
             (repository.name.includes('/')
@@ -129,10 +134,10 @@ export class StartSecurityScanUseCase {
                 organizationId: orgTeam.organizationId,
                 teamId: orgTeam.teamId,
                 repository: {
-                    id: String(repository.id),
+                    id: repositoryKey.id,
                     name: repository.name,
                     fullName,
-                    platform: String(platform),
+                    platform: repositoryKey.platform,
                     defaultBranch: repository.default_branch || 'main',
                 },
                 status: SecurityScanStatus.QUEUED,
@@ -162,7 +167,7 @@ export class StartSecurityScanUseCase {
                     error?.code === 11000 &&
                     (await this.scans.findActive(
                         orgTeam.organizationId,
-                        String(repository.id),
+                        repositoryKey,
                     ))
                 ) {
                     throw new ConflictException(ALREADY_RUNNING);
@@ -217,12 +222,12 @@ export class StartSecurityScanUseCase {
      */
     private async resumablePlan(
         organizationId: string,
-        repositoryId: string,
+        repository: ScanRepositoryKey,
     ): Promise<Pick<
         SecurityScanRecord,
         'units' | 'progress' | 'coverage' | 'planCommitSha'
     > | null> {
-        const last = await this.scans.findLatest(organizationId, repositoryId);
+        const last = await this.scans.findLatest(organizationId, repository);
         // Stopped before the end, or completed with areas that failed (a
         // lens the provider refused): either way some areas were not read.
         const unfinished =

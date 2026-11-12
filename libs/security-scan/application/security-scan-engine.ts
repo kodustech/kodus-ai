@@ -490,9 +490,12 @@ export class SecurityScanEngine {
         });
         try {
             const { suggestions, trace } = await this.dedup(
+                // Findings go to the client's own model alone (#2451): never
+                // embedded on the platform key, the BYOK tiebreak decides.
                 (this.dedupDeps ??= createFindingDedupDeps({
                     logger,
                     context: SecurityScanEngine.name,
+                    platformEmbeddings: false,
                 })),
                 all.map(asSuggestion) as any,
                 0,

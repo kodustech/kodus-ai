@@ -94,6 +94,17 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         );
     });
 
+    it("looks for the repository's active and last scan by its platform and id", async () => {
+        const { scans, start } = useCaseWith(null);
+
+        await start();
+
+        // A GitLab project with the same id is another repository.
+        const key = { platform: 'GITHUB', id: 'repo-1' };
+        expect(scans.findActive).toHaveBeenCalledWith('org-1', key);
+        expect(scans.findLatest).toHaveBeenCalledWith('org-1', key);
+    });
+
     it('runs again the areas a provider outage failed', async () => {
         const { scans, start } = useCaseWith({
             ...stopped,

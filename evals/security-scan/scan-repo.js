@@ -86,7 +86,7 @@ async function scanRepository({ c, route, pricing, budgetUsd, sandbox: sandboxKi
         const shipped = [];
         const seen = new Set();
         for (const f of result.findings) {
-            const fp = computeScanFingerprint({ repositoryId, vulnerabilityClass: f.vulnerabilityClass, filePath: f.filePath, symbol: f.symbol, cwe: f.cwe, appWide: f.appWide });
+            const fp = computeScanFingerprint({ repositoryPlatform: 'github', repositoryId, vulnerabilityClass: f.vulnerabilityClass, filePath: f.filePath, symbol: f.symbol, cwe: f.cwe, appWide: f.appWide });
             if (seen.has(fp)) continue;
             seen.add(fp);
             shipped.push(f);
