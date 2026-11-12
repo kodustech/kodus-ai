@@ -197,6 +197,54 @@ describe('ChatWithKodyFromGitUseCase', () => {
         );
     });
 
+    it('resolves a Forgejo comment on the instance that sent it', async () => {
+        const webhookContextService = {
+            getContext: jest.fn().mockResolvedValue(null),
+        };
+        const forgejo = new ChatWithKodyFromGitUseCase(
+            codeManagementService as any,
+            conversationAgentUseCase as any,
+            businessValidationService as any,
+            permissionValidationService as any,
+            leaseManager as any,
+            pullRequestsService as any,
+            undefined,
+            undefined,
+            undefined,
+            webhookContextService as any,
+        );
+
+        await forgejo.execute({
+            event: 'issue_comment',
+            platformType: PlatformType.FORGEJO,
+            payload: {
+                action: 'created',
+                repository: {
+                    id: 26,
+                    name: 'api',
+                    full_name: 'beta/api',
+                    html_url: 'https://git.beta.example/beta/api',
+                },
+                issue: { number: 21, body: 'PR description body' },
+                pull_request: { number: 21 },
+                comment: { id: 123, body: '@kody what does this do?' },
+                sender: { id: 7, login: 'bob' },
+            },
+        } as any);
+
+        expect(
+            codeManagementService.findTeamAndOrganizationIdByConfigKey,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({ host: 'git.beta.example' }),
+            PlatformType.FORGEJO,
+        );
+        expect(webhookContextService.getContext).toHaveBeenCalledWith(
+            PlatformType.FORGEJO,
+            expect.any(String),
+            { host: 'git.beta.example' },
+        );
+    });
+
     it('answers as the team whose review runs on the repository when it is connected in two organizations', async () => {
         const webhookContextService = {
             getContext: jest.fn().mockResolvedValue({
@@ -241,6 +289,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
         expect(webhookContextService.getContext).toHaveBeenCalledWith(
             PlatformType.GITHUB,
             'repo-1',
+            undefined,
         );
         expect(businessValidationService.validate).toHaveBeenCalledWith(
             expect.objectContaining({

@@ -8,9 +8,12 @@ import {
     isReviewCommand,
     parseReviewDirective,
     requestedReviewModeOf,
-    parseCustomAgentCommand
+    parseCustomAgentCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
-import { getMappedPlatform } from '@libs/common/utils/webhooks';
+import {
+    forgejoWebhookHost,
+    getMappedPlatform,
+} from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
@@ -143,6 +146,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.FORGEJO,
             String(payload?.repository?.id),
+            { host: forgejoWebhookHost(payload) },
         );
 
         // If no active automation found, complete the webhook processing immediately
@@ -399,6 +403,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.FORGEJO,
             repository.id,
+            { host: forgejoWebhookHost(payload) },
         );
         if (!context?.organizationAndTeamData) {
             return;
@@ -531,7 +536,6 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
             const customAgentSlug = parseCustomAgentCommand(comment.body);
 
             const isStartCommand =
-
                 isReviewCommand(comment.body) || !!customAgentSlug;
             const isForceCommand = isForceReviewCommand(comment.body);
             const hasMarker = hasReviewMarker(comment.body);
@@ -564,6 +568,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                     const context = await this.webhookContextService.getContext(
                         PlatformType.FORGEJO,
                         String(repository.id),
+                        { host: forgejoWebhookHost(payload) },
                     );
 
                     if (!context?.organizationAndTeamData) {
@@ -646,7 +651,9 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                                 : 'command',
                             triggerCommentId: comment?.id,
                             reviewDirective: parseReviewDirective(comment.body),
-                            requestedReviewMode: requestedReviewModeOf(comment.body),
+                            requestedReviewMode: requestedReviewModeOf(
+                                comment.body,
+                            ),
                             onlyCustomAgent: customAgentSlug,
                             pull_request:
                                 pullRequestData ||

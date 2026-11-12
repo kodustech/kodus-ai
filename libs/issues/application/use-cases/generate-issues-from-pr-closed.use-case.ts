@@ -10,7 +10,10 @@ import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { getMappedPlatform } from '@libs/common/utils/webhooks';
+import {
+    forgejoConfigsOnHost,
+    getMappedPlatform,
+} from '@libs/common/utils/webhooks';
 import {
     IIntegrationConfigService,
     INTEGRATION_CONFIG_SERVICE_TOKEN,
@@ -266,12 +269,18 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
         repository: IRepositoryToIssues,
         platformType: PlatformType,
     ): Promise<OrganizationAndTeamData | null> {
-        const configs =
+        const foundConfigs =
             await this.integrationConfigService.findIntegrationConfigWithTeams(
                 IntegrationConfigKey.REPOSITORIES,
                 repository.id,
                 platformType,
             );
+        // Forgejo repository ids are per instance: keep the integrations of
+        // the instance that sent the webhook.
+        const configs =
+            platformType === PlatformType.FORGEJO
+                ? forgejoConfigsOnHost(foundConfigs, repository.url)
+                : foundConfigs;
 
         if (!configs || !configs.length) {
             this.logger.warn({
