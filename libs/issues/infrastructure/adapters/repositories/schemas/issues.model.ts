@@ -99,6 +99,12 @@ export class IssuesModel extends CoreDocument {
 export const IssuesSchema = SchemaFactory.createForClass(IssuesModel);
 
 // 1. Main - organization + status open
+// Whether a cached list is still current (changedSince): the latest write.
+IssuesSchema.index(
+    { organizationId: 1, updatedAt: -1 },
+    { name: 'organization_updated', background: true },
+);
+
 IssuesSchema.index(
     { organizationId: 1, createdAt: -1 },
     {

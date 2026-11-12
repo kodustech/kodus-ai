@@ -162,6 +162,10 @@ export class IssuesService implements IIssuesService {
         return this.issuesRepository.markScanFindingsSeen(params);
     }
 
+    async changedSince(organizationId: string, since: Date): Promise<boolean> {
+        return this.issuesRepository.changedSince(organizationId, since);
+    }
+
     async resolveUnseenScanFindings(
         params: ResolveUnseenScanFindingsParams,
     ): Promise<number> {
