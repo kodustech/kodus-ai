@@ -85,7 +85,7 @@ clean after each one.
 | P8 | `P8-main-review-reads-other-repository.patch`: a guide of another repository linked to the main review reaches the built-in agents | `review-knowledge.spec.ts` | red: 3 of 5 failed |
 | P9 | `P9-first-pass-only-result.patch`: only the first pass can deliver the result | `incomplete-and-unverified.spec.ts` | red: 2 of 30 failed, both rescue cases (2026-11-04, `fix/custom-agents-whole-run-result`) |
 | P10 | `P10-recovery-null-required.patch`: prose recovery requires the label key again | `finder.recovery-nulls.spec.ts` | red: 2 of 5 failed, a second call on both routes |
-| P12 | `P12-instruction-files-unquotable.patch`: the quote gate takes no repository instruction file as a source | `convention-check.repo-instructions.spec.ts`, `convention-second-pass.spec.ts` | pending: the runner needs a committed file |
+| P12 | `P12-instruction-files-unquotable.patch`: the quote gate takes no repository instruction file as a source | `convention-check.repo-instructions.spec.ts`, `convention-second-pass.spec.ts` | red: 4 of 17 failed (2026-11-12, `mutations/run.js --only=P12 --skip-model`, tree restored) |
 | P12 | same | this eval on `deepseek-v4-flash@fireworks` and `kimi-k2.7-code@fireworks`, P12's cases, 2 runs each | broken: the violation posted on 1 of 4 runs, 1 quote-gate drop per run; fixed: 8/8 checks, 0 drops (2026-11-12) |
 
 P5 was not falsifiable at first: with the floor and cap moved after dedup, the
