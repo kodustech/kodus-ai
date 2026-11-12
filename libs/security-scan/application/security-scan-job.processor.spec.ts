@@ -385,6 +385,30 @@ describe('SecurityScanJobProcessor', () => {
         );
     });
 
+    it('fails a slice of an inherited plan that reached no unit, though every unit comes back pending', async () => {
+        const unit = (id: string) => ({ id, file: `src/${id}.ts`, relatedFiles: [], language: 'typescript', classes: ['authz'], priority: 50, reasons: [] });
+        const { processor, scans, jobQueue } = setup(
+            { result: finishedResult() },
+            scanRecord({ commitSha: 'abc123', units: [unit('u1'), unit('u2')] as any, progress: [] }),
+        );
+        // The engine lists every unit it never reached as bare pending.
+        (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
+            run: jest.fn(async () => ({
+                ...finishedResult(),
+                finished: false,
+                progress: [
+                    { unitId: 'u1', state: 'pending', findings: 0 },
+                    { unitId: 'u2', state: 'pending', findings: 0 },
+                ],
+            })),
+        }));
+
+        await processor.process('job-1');
+
+        expect(jobQueue.enqueue).not.toHaveBeenCalled();
+        expect(lastUpdate(scans).error).toEqual(expect.stringContaining('made no progress'));
+    });
+
     it('never runs a scan another process ended since it was read', async () => {
         const { processor, scans } = setup({ result: finishedResult() });
         // Failed as stale between the read and the start.

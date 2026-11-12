@@ -690,7 +690,13 @@ describe('SecurityScanEngine', () => {
                 return { stdout: 'PASS', exitCode: 0 };
             }
             if (command.includes('status --porcelain')) {
-                return { stdout: tampered ? ' M src/auth.ts' : '', exitCode: 0 };
+                // The install left node_modules untracked before the run.
+                return {
+                    stdout: tampered
+                        ? '?? node_modules/\0 M src/auth.ts\0?? src/planted.ts\0'
+                        : '?? node_modules/\0',
+                    exitCode: 0,
+                };
             }
             if (command.includes('checkout -- .')) {
                 tampered = false;
@@ -712,6 +718,8 @@ describe('SecurityScanEngine', () => {
         } as any);
 
         expect(sandbox.run).toHaveBeenCalledWith("git -C '/repo' checkout -- .", expect.anything());
+        // A file it planted goes; what was there before (the install) stays.
+        expect(sandbox.run).toHaveBeenCalledWith("rm -rf -- '/repo/src/planted.ts'", expect.anything());
         expect(tampered).toBe(false);
     });
 

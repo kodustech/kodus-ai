@@ -661,13 +661,19 @@ export class SecurityScanEngine {
                 const s = asSuggestion(all[i], i);
                 return `${s.relevantFile}:${s.relevantLinesStart}-${s.relevantLinesEnd}`;
             };
-            const holderOf = (i: number): number | undefined => {
-                const holder = suggestions.find((s: any) =>
-                    (s.alsoFoundIn ?? []).includes(locationOf(i)),
-                ) as { id?: string } | undefined;
-                const at = Number(holder?.id?.replace(/^scan-/, ''));
-                return Number.isInteger(at) ? at : undefined;
-            };
+            // Each listed location, to the kept finding that lists it.
+            const holderAt = new Map<string, number>();
+            for (const s of suggestions as Array<{
+                id?: string;
+                alsoFoundIn?: string[];
+            }>) {
+                const at = Number(s.id?.replace(/^scan-/, ''));
+                if (!Number.isInteger(at)) continue;
+                for (const location of s.alsoFoundIn ?? []) {
+                    if (!holderAt.has(location)) holderAt.set(location, at);
+                }
+            }
+            const holderOf = (i: number) => holderAt.get(locationOf(i));
             for (let i = 0; i < all.length; i++) {
                 if (named.has(i) || kept.has(`scan-${i}`)) continue;
                 const holder = holderOf(i);
@@ -1207,7 +1213,7 @@ export class SecurityScanEngine {
             if (sandbox.type !== 'e2b') {
                 return;
             }
-            await this.runReproduction(sandbox, finding.language, record);
+            await this.runReproduction(params, finding.language, record);
         } catch (error) {
             logger.warn({
                 message: 'Reproduction test could not be produced',
@@ -1229,10 +1235,11 @@ export class SecurityScanEngine {
      * the command changes in the checkout anyway is put back.
      */
     private async runReproduction(
-        sandbox: SandboxInstance,
+        params: SecurityScanEngineParams,
         language: string,
         record: NonNullable<ScanFinding['reproduction']>,
     ): Promise<void> {
+        const sandbox = params.sandbox;
         const repo = shellQuote(sandbox.repoDir);
         const workdir = `${sandbox.repoDir}.repro`;
         const work = shellQuote(workdir);
@@ -1250,14 +1257,17 @@ export class SecurityScanEngine {
         if (added.exitCode !== 0) {
             return;
         }
-        const tracked = () =>
+        // What git sees in the checkout: changed tracked files, and files it
+        // does not track (an untracked directory as one entry).
+        const status = () =>
             sandbox
-                .run(`git -C ${repo} status --porcelain --untracked-files=no`, {
-                    timeoutMs: 30_000,
-                })
-                .then((r) => r.stdout ?? '')
-                .catch(() => '');
-        const before = await tracked();
+                .run(
+                    `git -C ${repo} status --porcelain -z --untracked-files=normal`,
+                    { timeoutMs: 30_000 },
+                )
+                .then((r) => (r.stdout ?? '').split('\0').filter(Boolean))
+                .catch(() => [] as string[]);
+        const before = new Set(await status());
         try {
             await sandbox
                 .run(
@@ -1304,16 +1314,38 @@ export class SecurityScanEngine {
                     timeoutMs: 30_000,
                 })
                 .catch(() => undefined);
-            if ((await tracked()) !== before) {
+            // Anything that appeared is taken back before a lens reads it:
+            // changed files restored, new ones removed.
+            const appeared = (await status()).filter((e) => !before.has(e));
+            if (appeared.length) {
                 logger.warn({
                     message:
                         'A reproduction command changed the checkout; putting it back',
                     context: SecurityScanEngine.name,
-                    metadata: { command: record.command.slice(0, 200) },
+                    metadata: {
+                        organizationId: params.organizationId,
+                        teamId: params.teamId,
+                        repositoryId: params.repositoryId,
+                        command: record.command.slice(0, 200),
+                    },
                 });
-                await sandbox
-                    .run(`git -C ${repo} checkout -- .`, { timeoutMs: 30_000 })
-                    .catch(() => undefined);
+                if (appeared.some((e) => !e.startsWith('?? '))) {
+                    await sandbox
+                        .run(`git -C ${repo} checkout -- .`, {
+                            timeoutMs: 30_000,
+                        })
+                        .catch(() => undefined);
+                }
+                const added = appeared
+                    .filter((e) => e.startsWith('?? '))
+                    .map((e) => shellQuote(`${sandbox.repoDir}/${e.slice(3)}`));
+                if (added.length) {
+                    await sandbox
+                        .run(`rm -rf -- ${added.join(' ')}`, {
+                            timeoutMs: 30_000,
+                        })
+                        .catch(() => undefined);
+                }
             }
         }
     }

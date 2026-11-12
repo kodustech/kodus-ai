@@ -104,11 +104,17 @@ function section(issue: FixPromptIssue, n: number): string {
         // the repository. Only one that ran in the scan's sandbox and
         // reproduced the issue is handed over to run; any other is to be
         // read first, never run as given on the developer's machine.
-        const proven = !!test.executed && !!test.reproduced;
+        const proven = test.executed === true && test.reproduced === true;
+        // Ran and did not reproduce, or never ran (no sandbox, or not
+        // recorded): said as it is, and never handed over to run.
+        const status =
+            test.executed === true
+                ? 'It ran in an isolated sandbox and did not reproduce the issue'
+                : 'It was not run, so it has not reproduced the issue';
         out.push(
             proven
                 ? `Reproduction test (${test.path}). It ran in an isolated sandbox and reproduced the issue. Run it with:\n${fenced(test.command)}\n\n${fenced(test.content.trim())}`
-                : `Reproduction test (${test.path}). It has not reproduced the issue: review it, and the command it was written for, before running anything.\n${fenced(test.command)}\n\n${fenced(test.content.trim())}`,
+                : `Reproduction test (${test.path}). ${status}: review it, and the command it was written for, before running anything.\n${fenced(test.command)}\n\n${fenced(test.content.trim())}`,
         );
     }
 

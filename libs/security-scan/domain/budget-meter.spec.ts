@@ -251,10 +251,10 @@ describe('ScanBudgetMeter', () => {
     });
 
     it('sends an answer cap that fits beside the prompt in a small context window', () => {
-        // A 32k window: a 20k prompt (22k with the margin) leaves 10k.
+        // A 32k window: a 20k prompt (25k with the margin) leaves 7.7k.
         const meter = new ScanBudgetMeter({ maxTokens: 1_000_000 }, null, undefined, 32_768);
 
-        expect(admitNow(meter, { inputTokens: 20_000 }).maxOutputTokens).toBe(10_768);
+        expect(admitNow(meter, { inputTokens: 20_000 }).maxOutputTokens).toBe(7_768);
         // A large window keeps the scan's own cap.
         expect(
             admitNow(new ScanBudgetMeter({ maxTokens: 1_000_000 }, null, undefined, 200_000), {

@@ -149,8 +149,13 @@ export class ScanBudgetMeter implements UsageMeter {
         if (!this.contextWindowTokens) {
             return SCAN_ANSWER_CAP_TOKENS;
         }
+        // The served model's count, with the margin for a tokenizer that
+        // counts more; not the byte bound, which would starve every answer
+        // (code runs about four bytes to a token). A prompt that still
+        // overflows is refused by the provider and handled as one.
         const room =
-            this.contextWindowTokens - Math.ceil(request.inputTokens * 1.1);
+            this.contextWindowTokens -
+            Math.ceil(request.inputTokens * TOKENIZER_MARGIN);
         return Math.max(
             MIN_ANSWER_CAP_TOKENS,
             Math.min(SCAN_ANSWER_CAP_TOKENS, room),

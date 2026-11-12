@@ -109,7 +109,7 @@ describe('buildFixPrompt', () => {
             },
         ]);
 
-        expect(prompt).toContain('has not reproduced the issue');
+        expect(prompt).toContain('It ran in an isolated sandbox and did not reproduce the issue');
         expect(prompt).toContain('review it, and the command it was written for, before running anything');
         expect(prompt).not.toContain('Run it with');
     });
@@ -130,6 +130,7 @@ describe('buildFixPrompt', () => {
             },
         ]);
 
+        expect(prompt).toContain('It was not run, so it has not reproduced the issue');
         expect(prompt).not.toContain('Run it with');
     });
 

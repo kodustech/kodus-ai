@@ -205,7 +205,12 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 message: `Security scan job ${jobId} ran but could not be marked completed`,
                 context: SecurityScanJobProcessor.name,
                 error,
-                metadata: { scanId: scan.uuid },
+                metadata: {
+                    scanId: scan.uuid,
+                    organizationId: scan.organizationId,
+                    teamId: scan.teamId,
+                    repositoryId: scan.repository.id,
+                },
             }),
         );
     }
@@ -734,21 +739,20 @@ export function buildIssueDescription(
     return parts.join('\n\n');
 }
 
-/** Whether a unit's state, or the lenses it ran, changed in this slice. */
+/**
+ * Whether a unit's state, or the lenses it ran, changed in this slice. A
+ * unit the slice never reached comes back pending with no lens run, whether
+ * or not it had an entry: that is no move.
+ */
 function movedAUnit(
     before: ScanUnitProgress[],
     after: ScanUnitProgress[],
 ): boolean {
-    const was = new Map(
-        before.map((p) => [
-            p.unitId,
-            `${p.state}:${(p.lensesRun ?? []).join(',')}`,
-        ]),
-    );
-    return after.some(
-        (p) =>
-            was.get(p.unitId) !== `${p.state}:${(p.lensesRun ?? []).join(',')}`,
-    );
+    const keyOf = (p: ScanUnitProgress) =>
+        `${p.state}:${(p.lensesRun ?? []).join(',')}`;
+    const untouched = 'pending:';
+    const was = new Map(before.map((p) => [p.unitId, keyOf(p)]));
+    return after.some((p) => keyOf(p) !== (was.get(p.unitId) ?? untouched));
 }
 
 function fingerprintOf(scan: SecurityScanRecord, finding: ScanFinding): string {
