@@ -16,6 +16,8 @@ describe('hasParentDirSegment', () => {
         'src/foo..bar.ts',
         'notes..',
         '..hidden/file.ts',
+        '.../x',
+        'a/..../b',
         'src/./a.ts',
         '.',
         '',
@@ -40,7 +42,6 @@ describe('hasParentDirSegment', () => {
         '.. /x',
         'sub/.. /.. /secret',
         'a/.. .\\x',
-        '.../x',
     ])('treats %p as traversal', (path) => {
         expect(hasParentDirSegment(path)).toBe(true);
     });
