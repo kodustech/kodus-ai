@@ -84,6 +84,17 @@ export const ByokModelSelect = ({
         setManual(null);
     }
     const manual = manualOverride ?? autoManual;
+    // The picker's manual row passes the id typed in its search box, so the
+    // manual input opens with it instead of empty.
+    const switchToManual = (typed?: string) => {
+        if (typed) {
+            form.setValue("model", typed, {
+                shouldDirty: true,
+                shouldValidate: true,
+            });
+        }
+        setManual(true);
+    };
 
     // In use in Routing → the model identity is frozen. Show it read-only with a
     // hint pointing at where to change it, instead of the editable picker.
@@ -109,17 +120,12 @@ export const ByokModelSelect = ({
                 credentialStored={credentialStored}
                 credentialId={credentialId}
                 requiresBaseUrl={foundProvider.requiresBaseUrl ?? false}
-                onUseManual={() => setManual(true)}
+                onUseManual={switchToManual}
             />
         );
     }
 
-    return (
-        <ModelSelect
-            excludeIds={excludeIds}
-            onUseManual={() => setManual(true)}
-        />
-    );
+    return <ModelSelect excludeIds={excludeIds} onUseManual={switchToManual} />;
 };
 
 // Exported lightweight manual input for external fallbacks
@@ -227,7 +233,7 @@ const ModelPickerPopover = ({
     onUseManual,
 }: {
     models: LLMProviderModel[];
-    onUseManual?: () => void;
+    onUseManual?: (typed?: string) => void;
 }) => {
     const form = useFormContext<EditKeyForm>();
     const [open, setOpen] = useState(false);
@@ -363,7 +369,7 @@ const ModelPickerPopover = ({
                             key="__manual__"
                             value="__manual__"
                             onSelect={() => {
-                                onUseManual?.();
+                                onUseManual?.(search.trim());
                                 setOpen(false);
                             }}>
                             <span>
@@ -387,7 +393,7 @@ const ModelSelect = ({
     onUseManual,
     excludeIds = [],
 }: {
-    onUseManual?: () => void;
+    onUseManual?: (typed?: string) => void;
     excludeIds?: string[];
 }) => {
     const form = useFormContext<EditKeyForm>();
@@ -439,7 +445,7 @@ const ModelSelectLive = ({
     credentialId,
     requiresBaseUrl = false,
 }: {
-    onUseManual?: () => void;
+    onUseManual?: (typed?: string) => void;
     excludeIds?: string[];
     credentialStored: boolean;
     credentialId?: string;
@@ -535,7 +541,7 @@ const ModelSelectLive = ({
                         variant="tertiary"
                         size="xs"
                         className="mt-2"
-                        onClick={onUseManual}>
+                        onClick={() => onUseManual()}>
                         Type model manually
                     </Button>
                 )}
@@ -569,7 +575,7 @@ const ModelSelectLive = ({
                         variant="tertiary"
                         size="xs"
                         className="mt-2"
-                        onClick={onUseManual}>
+                        onClick={() => onUseManual()}>
                         Type model manually
                     </Button>
                 )}

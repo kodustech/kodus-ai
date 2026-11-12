@@ -384,4 +384,59 @@ describe("ByokModelSelect — manual entry while searching", () => {
             screen.getByPlaceholderText(/type a model name/i),
         ).toBeInTheDocument();
     });
+
+    it("carries the typed id into the manual input, trimmed", async () => {
+        mockPreview.mockReturnValue({
+            data: [{ id: "listed/model-a", name: "Model A" }],
+            isFetching: false,
+            isError: false,
+        });
+        render(
+            <LivePickerHarness
+                credentialStored
+                defaultValues={{
+                    provider: "openai_compatible",
+                    model: "",
+                    baseURL: "https://api.together.ai/v1",
+                }}
+            />,
+        );
+
+        fireEvent.click(screen.getByRole("combobox"));
+        fireEvent.change(await screen.findByPlaceholderText(/search models/i), {
+            target: { value: "  my-custom-model-v9  " },
+        });
+        fireEvent.click(
+            await screen.findByText('Type manually: "my-custom-model-v9"'),
+        );
+
+        expect(screen.getByPlaceholderText(/type a model name/i)).toHaveValue(
+            "my-custom-model-v9",
+        );
+    });
+
+    it("empty search: opens an empty manual input, as before", async () => {
+        mockPreview.mockReturnValue({
+            data: [{ id: "listed/model-a", name: "Model A" }],
+            isFetching: false,
+            isError: false,
+        });
+        render(
+            <LivePickerHarness
+                credentialStored
+                defaultValues={{
+                    provider: "openai_compatible",
+                    model: "",
+                    baseURL: "https://api.together.ai/v1",
+                }}
+            />,
+        );
+
+        fireEvent.click(screen.getByRole("combobox"));
+        fireEvent.click(await screen.findByText("Type model manually"));
+
+        expect(screen.getByPlaceholderText(/type a model name/i)).toHaveValue(
+            "",
+        );
+    });
 });
