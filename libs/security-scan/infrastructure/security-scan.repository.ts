@@ -23,11 +23,17 @@ export type NewSecurityScan = Omit<
 export interface ISecurityScanRepository {
     create(scan: NewSecurityScan): Promise<SecurityScanRecord>;
     findById(uuid: string): Promise<SecurityScanRecord | null>;
-    /** `appendReported` is pushed onto `reported` in the same write. */
+    /**
+     * `appendReported` is pushed onto `reported` in the same write. With
+     * `onlyFrom`, the write lands only while the scan is in one of those
+     * states (null otherwise): a status change never overwrites one another
+     * process made in between.
+     */
     update(
         uuid: string,
         changes: Partial<NewSecurityScan>,
         appendReported?: ScanReportedFinding[],
+        onlyFrom?: SecurityScanStatus[],
     ): Promise<SecurityScanRecord | null>;
     /**
      * Records one area's progress in place of its earlier entry (a pending
@@ -121,11 +127,15 @@ export class SecurityScanRepository implements ISecurityScanRepository {
         uuid: string,
         changes: Partial<NewSecurityScan>,
         appendReported?: ScanReportedFinding[],
+        onlyFrom?: SecurityScanStatus[],
     ): Promise<SecurityScanRecord | null> {
         const ended = changes.status && !ACTIVE.includes(changes.status);
         const doc = await this.model
-            .findByIdAndUpdate(
-                uuid,
+            .findOneAndUpdate(
+                {
+                    _id: uuid,
+                    ...(onlyFrom ? { status: { $in: onlyFrom } } : {}),
+                },
                 {
                     $set: changes,
                     ...(ended ? { $unset: { activeKey: '' } } : {}),

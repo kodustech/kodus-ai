@@ -335,7 +335,7 @@ describe('SecurityScanJobProcessor', () => {
         });
     });
 
-    it('keeps an inherited plan, and what it reported, when HEAD cannot be read', async () => {
+    it('fails a first job that cannot read HEAD, keeping the inherited plan and what it reported', async () => {
         const reported = [{ vulnerabilityClass: 'authz', filePath: 'src/a.ts', fingerprint: 'fp-a' }];
         const { processor, scans, sandbox } = setup(
             { result: finishedResult() },
@@ -346,17 +346,56 @@ describe('SecurityScanJobProcessor', () => {
             command.includes('rev-parse HEAD') ? { stdout: '', exitCode: 128 } : run(command),
         );
 
+        const engines = (SecurityScanEngine as unknown as jest.Mock).mock.calls.length;
         await processor.process('job-1');
 
-        const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
-        expect(engine.run.mock.calls[0][0]).toEqual(
-            expect.objectContaining({ units: [{ id: 'u1' }], reported }),
-        );
-        // The wipe a moved branch writes never happens.
+        // Nothing tied to a commit runs; nothing of the plan is wiped.
+        expect((SecurityScanEngine as unknown as jest.Mock).mock.calls.length).toBe(engines);
         expect(scans.update).not.toHaveBeenCalledWith(
             'scan-1',
             expect.objectContaining({ reported: [] }),
         );
+        expect(lastUpdate(scans)).toEqual(
+            expect.objectContaining({
+                status: SecurityScanStatus.FAILED,
+                error: expect.stringContaining('could not read which commit'),
+            }),
+        );
+    });
+
+    it('fails a slice that neither planned nor moved a unit, instead of queuing it again', async () => {
+        const unit = { id: 'u1', file: 'src/a.ts', relatedFiles: [], language: 'typescript', classes: ['authz'], priority: 50, reasons: [] };
+        const { processor, scans, jobQueue } = setup(
+            { result: { ...finishedResult(), finished: false, progress: [] } },
+            scanRecord({ commitSha: 'abc123', units: [unit] as any, progress: [] }),
+        );
+        // A continuation whose setup took the whole slice: no unit started.
+        (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
+            run: jest.fn(async () => ({ ...finishedResult(), finished: false, progress: [] })),
+        }));
+
+        await processor.process('job-1');
+
+        expect(jobQueue.enqueue).not.toHaveBeenCalled();
+        expect(lastUpdate(scans)).toEqual(
+            expect.objectContaining({
+                status: SecurityScanStatus.FAILED,
+                error: expect.stringContaining('made no progress'),
+            }),
+        );
+    });
+
+    it('never runs a scan another process ended since it was read', async () => {
+        const { processor, scans } = setup({ result: finishedResult() });
+        // Failed as stale between the read and the start.
+        scans.update.mockImplementation(async (_id: unknown, _c: unknown, _r: unknown, onlyFrom?: unknown) =>
+            onlyFrom ? null : ({} as any),
+        );
+
+        const engines = (SecurityScanEngine as unknown as jest.Mock).mock.calls.length;
+        await processor.process('job-1');
+
+        expect((SecurityScanEngine as unknown as jest.Mock).mock.calls.length).toBe(engines);
     });
 
     it('keeps an inherited plan made at the commit it reads', async () => {
@@ -477,14 +516,17 @@ describe('SecurityScanJobProcessor', () => {
             unitEvents: [[{ unitId: 'u1', state: 'done', findings: 0 }, [], ['fp-again']]],
             result: finishedResult({ findings: [] }),
         });
-        issuesService.markScanFindingsSeen.mockResolvedValueOnce({ sighted: 0, reopened: 1 });
+        issuesService.markScanFindingsSeen.mockResolvedValueOnce({ sighted: 2, reopened: 1 });
 
         await processor.process('job-1');
 
         expect(issuesService.markScanFindingsSeen).toHaveBeenCalledWith(
             expect.objectContaining({ fingerprints: ['fp-again'], scanId: 'scan-1', foundAgain: true }),
         );
-        expect(lastUpdate(scans).outcome).toEqual(expect.objectContaining({ reopened: 1 }));
+        // Found again: counted as still open, or reopened.
+        expect(lastUpdate(scans).outcome).toEqual(
+            expect.objectContaining({ reopened: 1, stillOpen: 2 }),
+        );
     });
 
     it("drops a stale plan's reports with it: of another commit, neither compared against nor sighted", async () => {

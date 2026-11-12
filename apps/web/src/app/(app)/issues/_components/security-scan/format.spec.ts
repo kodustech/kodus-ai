@@ -16,6 +16,15 @@ const spend = {
 };
 
 describe("formatScanSpend", () => {
+    it("shows tokens for a model with no known price, never $0", () => {
+        expect(
+            formatScanSpend({
+                budget: {},
+                spend: { usd: 0, inputTokens: 1_000_000, outputTokens: 200_000, requests: 40 },
+            }),
+        ).toBe("1.2M tokens");
+    });
+
     it("shows USD against a USD limit", () => {
         expect(formatScanSpend({ budget: { maxUsd: 20 }, spend })).toBe(
             "$3.12 of $20",

@@ -61,7 +61,9 @@ import { SecurityScanEngine } from './security-scan-engine';
 import { ScanOwnerResolver } from './scan-owner-resolver';
 import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 import {
+    SCAN_HEAD_UNREADABLE_MESSAGE,
     SCAN_NO_AREA_EXAMINED_MESSAGE,
+    SCAN_NO_PROGRESS_MESSAGE,
     ScanFailure,
 } from '../domain/scan-failure';
 
@@ -127,29 +129,41 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             return;
         }
 
-        await this.jobRepository.update(jobId, {
-            status: JobStatus.PROCESSING,
-            startedAt: new Date(),
-            currentStage: 'SCANNING',
-        });
-        scan.startedAt ??= new Date().toISOString();
-        await this.scans.update(scan.uuid, {
-            status: SecurityScanStatus.RUNNING,
-            startedAt: scan.startedAt,
-        });
-
+        const active = [SecurityScanStatus.QUEUED, SecurityScanStatus.RUNNING];
         let releaseLease: (() => Promise<void>) | undefined;
+        let outcome: Record<string, unknown>;
         try {
-            await raceWithAbortSignal(
-                (async () => {
-                    const outcome = await this.runSlice(
-                        scan,
-                        payload.organizationAndTeamData,
-                        signal,
-                        (release) => (releaseLease = release),
-                    );
-                    await this.markCompleted(jobId, outcome);
-                })(),
+            // Inside the try: a failure here fails the scan, instead of
+            // leaving it queued (and its repository locked) until it goes
+            // stale.
+            await this.jobRepository.update(jobId, {
+                status: JobStatus.PROCESSING,
+                startedAt: new Date(),
+                currentStage: 'SCANNING',
+            });
+            scan.startedAt ??= new Date().toISOString();
+            // Only while it is still active: failed as stale (its key freed)
+            // since it was read, it must not run beside a new scan.
+            const running = await this.scans.update(
+                scan.uuid,
+                {
+                    status: SecurityScanStatus.RUNNING,
+                    startedAt: scan.startedAt,
+                },
+                undefined,
+                active,
+            );
+            if (!running) {
+                await this.markCompleted(jobId, { skipped: 'not active' });
+                return;
+            }
+            outcome = await raceWithAbortSignal(
+                this.runSlice(
+                    scan,
+                    payload.organizationAndTeamData,
+                    signal,
+                    (release) => (releaseLease = release),
+                ),
                 signal,
             );
         } catch (error) {
@@ -163,12 +177,20 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     repositoryId: scan.repository.id,
                 },
             });
-            await this.scans.update(scan.uuid, {
-                status: SecurityScanStatus.FAILED,
-                error: scanErrorMessage(error),
-                finishedAt: new Date().toISOString(),
-            });
+            // A scan another process ended (completed, or failed as stale)
+            // keeps the state it has.
+            await this.scans.update(
+                scan.uuid,
+                {
+                    status: SecurityScanStatus.FAILED,
+                    error: scanErrorMessage(error),
+                    finishedAt: new Date().toISOString(),
+                },
+                undefined,
+                active,
+            );
             await this.markFailed(jobId, error);
+            return;
         } finally {
             try {
                 await releaseLease?.();
@@ -176,6 +198,16 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 // The reaper kills a sandbox whose cleanup failed.
             }
         }
+        // The slice is done (completed, or its continuation queued): a failure
+        // to record the job must not fail the scan.
+        await this.markCompleted(jobId, outcome).catch((error) =>
+            logger.warn({
+                message: `Security scan job ${jobId} ran but could not be marked completed`,
+                context: SecurityScanJobProcessor.name,
+                error,
+                metadata: { scanId: scan.uuid },
+            }),
+        );
     }
 
     private async runSlice(
@@ -266,6 +298,11 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         const commitSha = headSha || scan.commitSha;
         // The scan's first job: the one that sets its commit.
         const firstJob = !scan.commitSha;
+        // Without the commit, nothing ties the scan to one: its continuations
+        // would clone a moving branch, and its plan could not be checked.
+        if (firstJob && !headSha) {
+            throw new ScanFailure(SCAN_HEAD_UNREADABLE_MESSAGE);
+        }
         // A plan carried from an earlier scan holds for the commit it was made
         // at: past it, its done areas say nothing about this code and new
         // files are missing from it, so the repository is mapped again.
@@ -336,6 +373,8 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             stateCounts.get(state) ?? 0;
         let liveCoverage = scan.coverage;
 
+        // Whether this slice made (or grew) the plan: progress of its own.
+        let planned = false;
         const engine = new SecurityScanEngine();
         const result = await engine.run({
             organizationId: scan.organizationId,
@@ -365,6 +404,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                       }),
             reproduce: true,
             onPlanned: async (units, languages) => {
+                planned = true;
                 // A carried-on plan keeps the areas it already finished, and
                 // what they read.
                 liveCoverage = {
@@ -387,7 +427,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 // An earlier finding a unit found again is seen by this scan.
                 if (sighted?.length) {
                     // Found again: one resolved since is reopened.
-                    const { reopened } =
+                    const { sighted: stillOpen, reopened } =
                         await this.issuesService.markScanFindingsSeen({
                             organizationId: scan.organizationId,
                             repositoryPlatform: scan.repository
@@ -398,6 +438,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                             foundAgain: true,
                         });
                     counts.reopened += reopened;
+                    counts.stillOpen += stillOpen;
                 }
                 for (const finding of findings) {
                     const outcome = await this.storeFinding(
@@ -481,6 +522,11 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         };
 
         if (!result.finished && !result.stoppedByBudget && !signal?.aborted) {
+            // A slice that neither made the plan nor moved a unit would hand
+            // the same work to the next one, and the next, forever.
+            if (!planned && !movedAUnit(scan.progress ?? [], result.progress)) {
+                throw new ScanFailure(SCAN_NO_PROGRESS_MESSAGE);
+            }
             // The sandbox is about to expire: persist and let a new job, with
             // a new sandbox, take the rest. Queued again until a worker takes
             // it, so the wait is not read as a stopped worker.
@@ -517,7 +563,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 ),
             ),
         );
-        await this.issuesService.markScanFindingsSeen({
+        const held = await this.issuesService.markScanFindingsSeen({
             organizationId: scan.organizationId,
             repositoryPlatform: scan.repository.platform as PlatformType,
             repositoryId: scan.repository.id,
@@ -532,6 +578,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 .filter((fp): fp is string => !!fp),
             scanId: scan.uuid,
         });
+        counts.stillOpen += held.sighted;
 
         // Only now is it known which files this scan examined end to end; an
         // open finding there that no unit reported again is gone.
@@ -685,6 +732,23 @@ export function buildIssueDescription(
         );
     }
     return parts.join('\n\n');
+}
+
+/** Whether a unit's state, or the lenses it ran, changed in this slice. */
+function movedAUnit(
+    before: ScanUnitProgress[],
+    after: ScanUnitProgress[],
+): boolean {
+    const was = new Map(
+        before.map((p) => [
+            p.unitId,
+            `${p.state}:${(p.lensesRun ?? []).join(',')}`,
+        ]),
+    );
+    return after.some(
+        (p) =>
+            was.get(p.unitId) !== `${p.state}:${(p.lensesRun ?? []).join(',')}`,
+    );
 }
 
 function fingerprintOf(scan: SecurityScanRecord, finding: ScanFinding): string {

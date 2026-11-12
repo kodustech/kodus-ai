@@ -98,21 +98,33 @@ describe('SecurityScanRepository: one active scan per repository', () => {
     });
 
     it('frees the key when the scan ends and appends what it reported in the same write', async () => {
-        const findByIdAndUpdate = jest.fn(() => exec({ _doc: { _id: 'id-1' } }));
-        const repository = new SecurityScanRepository({ findByIdAndUpdate } as any);
+        const findOneAndUpdate = jest.fn(() => exec({ _doc: { _id: 'id-1' } }));
+        const repository = new SecurityScanRepository({ findOneAndUpdate } as any);
         const reported = [{ filePath: 'src/a.ts' }] as any;
 
         await repository.update('id-1', { status: 'completed' } as any, reported);
         await repository.update('id-1', { status: 'running' } as any);
 
-        const [, ended] = findByIdAndUpdate.mock.calls[0] as unknown as [string, any];
+        const [, ended] = findOneAndUpdate.mock.calls[0] as unknown as [string, any];
         expect(ended).toEqual({
             $set: { status: 'completed' },
             $unset: { activeKey: '' },
             $push: { reported: { $each: reported } },
         });
-        const [, running] = findByIdAndUpdate.mock.calls[1] as unknown as [string, any];
+        const [, running] = findOneAndUpdate.mock.calls[1] as unknown as [string, any];
         expect(running).toEqual({ $set: { status: 'running' } });
+    });
+
+    it('changes a status only from the states it is given', async () => {
+        const findOneAndUpdate = jest.fn(() => exec(null));
+        const repository = new SecurityScanRepository({ findOneAndUpdate } as any);
+
+        await expect(
+            repository.update('id-1', { status: 'running' } as any, undefined, ['queued', 'running'] as any),
+        ).resolves.toBeNull();
+
+        const [filter] = findOneAndUpdate.mock.calls[0] as unknown as [any];
+        expect(filter).toEqual({ _id: 'id-1', status: { $in: ['queued', 'running'] } });
     });
 
     it('frees the key of a scan it fails as stale', async () => {

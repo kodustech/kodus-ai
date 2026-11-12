@@ -6,3 +6,9 @@ export const SCAN_NO_AREA_EXAMINED_MESSAGE =
 
 export const SCAN_MAP_FAILED_MESSAGE =
     "Kody could not read the repository's code to map it. Run the scan again; if it keeps failing, contact support.";
+
+export const SCAN_HEAD_UNREADABLE_MESSAGE =
+    'Kody could not read which commit it checked out, so the scan cannot be tied to one. Run the scan again; if it keeps failing, contact support.';
+
+export const SCAN_NO_PROGRESS_MESSAGE =
+    'The scan made no progress in its time slice: preparing the repository took the whole slice. If it keeps happening, contact support.';
