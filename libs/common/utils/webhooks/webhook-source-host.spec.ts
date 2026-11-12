@@ -123,14 +123,13 @@ describe('forgejoConfigsForWebhook', () => {
         ).toEqual([]);
     });
 
-    it('keeps nothing when the same name is stored under another repository id', () => {
+    it('keeps nothing for a config stored at another address whose repository was renamed', () => {
+        // Neither the host nor `owner/repo` ties it to the sending
+        // instance; the id alone is what other instances share.
         expect(
             forgejoConfigsForWebhook(
-                [configOn('http://forgejo:3000', 'beta', 'beta/api')],
-                {
-                    ...fromBeta,
-                    repositoryId: 27,
-                },
+                [configOn('http://forgejo:3000', 'beta', 'beta/old-name')],
+                fromBeta,
             ),
         ).toEqual([]);
     });
