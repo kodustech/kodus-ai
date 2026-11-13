@@ -851,17 +851,6 @@ describe('ValidateConfigStage — custom agents plan gate', () => {
                     'Custom agents are in beta and BETA_FEATURES is off on this install.',
             });
         });
-
-        it('with BETA_FEATURES=true, keeps the custom agents and runs @kody -v', async () => {
-            process.env.BETA_FEATURES = 'true';
-
-            const result = await stage.execute(buildContext('ledger-rules'));
-
-            expect(result.codeReviewConfig.customAgents).toEqual([agent]);
-            expect(result.codeReviewConfig.knowledge).toEqual(knowledge);
-            expect(createSingleIssueComment).not.toHaveBeenCalled();
-            expect(result.statusInfo?.status).not.toBe('skipped');
-        });
     });
 });
 

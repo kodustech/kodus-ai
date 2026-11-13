@@ -92,6 +92,19 @@ export class NotificationController {
         res.setHeader('X-Accel-Buffering', 'no');
         res.flushHeaders();
 
+        // The client may leave at any point from here on, also while the
+        // count below is read; the API ending the stream on shutdown closes
+        // the response. Either way, whatever was opened is released.
+        let heartbeat: NodeJS.Timeout | undefined;
+        let closed = false;
+        const release = () => {
+            closed = true;
+            clearInterval(heartbeat);
+            this.sseService.removeConnection(userId, res);
+        };
+        req.on('close', release);
+        res.on('close', release);
+
         // Send initial unread count, scoped like the list the drawer renders --
         // a badge counting other organizations is the discrepancy users see.
         const organizationId = (req as any).user?.organization?.uuid;
@@ -99,6 +112,7 @@ export class NotificationController {
             userId,
             organizationId,
         );
+        if (closed) return;
         res.write(
             `event: unread-count\ndata: ${JSON.stringify({ count })}\n\n`,
         );
@@ -106,22 +120,13 @@ export class NotificationController {
         this.sseService.addConnection(userId, res);
 
         // Heartbeat every 30s to keep the connection alive
-        const heartbeat = setInterval(() => {
+        heartbeat = setInterval(() => {
             try {
                 res.write(': heartbeat\n\n');
             } catch {
                 clearInterval(heartbeat);
             }
         }, 30_000);
-
-        // The client leaving closes the request; the API ending the stream
-        // on shutdown closes the response.
-        const release = () => {
-            clearInterval(heartbeat);
-            this.sseService.removeConnection(userId, res);
-        };
-        req.on('close', release);
-        res.on('close', release);
     }
 
     @Patch(':id/read')

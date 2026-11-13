@@ -12,23 +12,20 @@ import { RoutingRuleService } from '@libs/notifications/application/routing-rule
 
 import { NotificationController } from '../notification.controller';
 
-/**
- * The API must stop on SIGTERM while a browser keeps the notification stream
- * open. Nest closes the HTTP server on shutdown, and a server waits for every
- * open response: the stream has to be ended by the API itself.
- */
-describe('NotificationController stream on shutdown', () => {
+describe('NotificationController stream', () => {
     let app: INestApplication;
     let request: http.ClientRequest | undefined;
+    let unreadCount: jest.Mock;
 
     beforeEach(async () => {
+        unreadCount = jest.fn().mockResolvedValue(3);
         const moduleRef = await Test.createTestingModule({
             controllers: [NotificationController],
             providers: [
                 NotificationSseService,
                 {
                     provide: NotificationQueryService,
-                    useValue: { unreadCount: jest.fn().mockResolvedValue(3) },
+                    useValue: { unreadCount },
                 },
                 { provide: RoutingRuleService, useValue: {} },
                 { provide: GetKodyRulesIndexUseCase, useValue: {} },
@@ -79,10 +76,43 @@ describe('NotificationController stream on shutdown', () => {
         ]).finally(() => clearTimeout(timer));
     };
 
+    // The API must stop on SIGTERM while a browser keeps the stream open.
+    // Nest closes the HTTP server on shutdown, and a server waits for every
+    // open response: the stream has to be ended by the API itself.
     it('closes the API while a client keeps the stream open', async () => {
         const stream = await openStream();
 
         await expect(within(app.close(), 2_000)).resolves.toBe('done');
         await expect(within(stream.ended, 2_000)).resolves.toBe('done');
+    });
+
+    it('keeps nothing of a client that left before its stream was ready', async () => {
+        let answer: (count: number) => void = () => undefined;
+        unreadCount.mockReturnValue(
+            new Promise<number>((resolve) => {
+                answer = resolve;
+            }),
+        );
+        const added = jest.spyOn(
+            app.get(NotificationSseService),
+            'addConnection',
+        );
+        const settle = () => new Promise((done) => setTimeout(done, 100));
+
+        // The headers are sent before the unread count is read.
+        await new Promise<void>((resolve, reject) => {
+            const { port } = app.getHttpServer().address() as AddressInfo;
+            request = http.get(
+                { host: '127.0.0.1', port, path: '/notifications/stream' },
+                () => resolve(),
+            );
+            request.on('error', reject);
+        });
+        request?.destroy();
+        await settle();
+        answer(3);
+        await settle();
+
+        expect(added).not.toHaveBeenCalled();
     });
 });

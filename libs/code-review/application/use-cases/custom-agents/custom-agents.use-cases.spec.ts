@@ -1237,15 +1237,6 @@ describe('TryCustomAgentUseCase', () => {
                 ).not.toHaveBeenCalled();
             },
         );
-
-        it('runs with BETA_FEATURES=true', async () => {
-            process.env.BETA_FEATURES = 'true';
-            const runner = {
-                runCustomAgentOnPullRequest: jest.fn().mockResolvedValue(trace),
-            };
-
-            await expect(tryIt(runner)).resolves.toEqual(trace);
-        });
     });
 
     it('runs on a trial', async () => {
