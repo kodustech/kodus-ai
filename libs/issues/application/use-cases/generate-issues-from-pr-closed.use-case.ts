@@ -20,6 +20,7 @@ import {
     IRepositoryToIssues,
 } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
 import { KodyIssuesManagementService } from '@libs/issues/infrastructure/adapters/service/kodyIssuesManagement.service';
+import { repositoryHost } from '@libs/issues/domain/scan-fingerprint';
 import { stripCurlyBracesFromUUIDs } from '@libs/platform/domain/platformIntegrations/types/webhooks/webhooks-bitbucket.type';
 import {
     IMappedPullRequest,
@@ -241,11 +242,12 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
         const repositoryFullName = params?.repository?.fullName;
         const platformType = params?.platformType;
 
-        const organizationAndTeamData = await this.getOrganizationAndTeamData(
-            Number(pullRequest.number),
-            params?.repository,
-            platformType,
-        );
+        const { organizationAndTeamData, host } =
+            await this.getOrganizationAndTeamData(
+                Number(pullRequest.number),
+                params?.repository,
+                platformType,
+            );
 
         return {
             context: {
@@ -255,6 +257,9 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
                     name: repositoryName,
                     full_name: repositoryFullName,
                     platform: platformType,
+                    // Its instance, as the team's integration lists it: a
+                    // security-scan issue only takes a suggestion of its own.
+                    ...(host ? { host } : {}),
                 },
                 organizationAndTeamData,
             },
@@ -265,7 +270,10 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
         prNumber: number,
         repository: IRepositoryToIssues,
         platformType: PlatformType,
-    ): Promise<OrganizationAndTeamData | null> {
+    ): Promise<{
+        organizationAndTeamData: OrganizationAndTeamData | null;
+        host?: string;
+    }> {
         const configs =
             await this.integrationConfigService.findIntegrationConfigWithTeams(
                 IntegrationConfigKey.REPOSITORIES,
@@ -284,7 +292,7 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
                 },
             });
 
-            return null;
+            return { organizationAndTeamData: null };
         }
 
         const organizationAndTeamData: OrganizationAndTeamData[] = configs.map(
@@ -293,7 +301,13 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
                 teamId: config.team.uuid,
             }),
         );
+        const listed = (
+            Array.isArray(configs[0]?.configValue) ? configs[0].configValue : []
+        ).find((r) => String(r?.id) === String(repository?.id));
 
-        return organizationAndTeamData?.[0] || null;
+        return {
+            organizationAndTeamData: organizationAndTeamData?.[0] || null,
+            host: repositoryHost(listed?.http_url) || undefined,
+        };
     }
 }
