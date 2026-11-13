@@ -17,6 +17,8 @@ import {
     prRiskDescriptionKey,
 } from '@libs/code-review/domain/risk/risk-configuration';
 import { ApprovalPoliciesService } from '@libs/code-review/pipeline/services/approval-policies.service';
+import { OwnChangeRequestService } from '@libs/code-review/pipeline/services/own-change-request.service';
+import { hostCommentKey } from '@libs/code-review/domain/approval/own-change-request';
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 import { isByokConfig, LLM_TASK } from '@libs/llm/byok-config';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
@@ -101,6 +103,7 @@ import {
     IApprovalReasonDeliveryFailure,
     ApprovalReasonDeliveryGuard,
     IPullRequestWithDeliveredSuggestions,
+    IPullRequestWithKodyChangeRequest,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
 const API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED =
@@ -138,6 +141,15 @@ const APPROVAL_REASON_LOOKUP_TIMEOUT_MS = 10_000;
 const APPROVAL_REASON_WRITE_TIMEOUT_MS = 15_000;
 const APPROVAL_FILES_TIMEOUT_MS = 10_000;
 const DIRECTORY_FILE_CACHE_TTL_MS = 10 * 60 * 1000;
+// One bound for the whole withdrawal: a status read, a comment list and the
+// dismissal itself, each a provider round trip.
+const CHANGE_REQUEST_WITHDRAWAL_TIMEOUT_MS = 30_000;
+// A host that refuses the dismissal (a token without the role, a branch rule
+// restricting who dismisses reviews) refuses it again on the next pass, and
+// keeps refusing for as long as the PR is open: each refusal waits four times
+// longer than the last, up to a day.
+const CHANGE_REQUEST_REFUSAL_BACKOFF_MS = 15 * 60 * 1000;
+const CHANGE_REQUEST_REFUSAL_BACKOFF_MAX_MS = 24 * 60 * 60 * 1000;
 const SHARED_RISK_STALE_REASON =
     'The risk assessment does not match the current PR or risk settings. Run a new review before automatic approval.';
 
@@ -180,6 +192,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private readonly organizationParameters?: IOrganizationParametersService,
         private readonly approvalPolicies?: ApprovalPoliciesService,
+        private readonly ownChangeRequest?: OwnChangeRequestService,
     ) {}
 
     private async sharedRiskIsCurrent(input: {
@@ -859,6 +872,63 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     }),
                 ),
             );
+
+            // An approval clears Kody's change request by itself, so this
+            // runs after them. Every PR that carries the request is judged
+            // here on its own terms: it must stop blocking the merge once
+            // the findings behind it are resolved, approved by Kody or not.
+            const changeRequestsByOrganization = new Map<
+                string,
+                Promise<IPullRequestWithKodyChangeRequest[]>
+            >();
+            await Promise.allSettled(
+                teams.map((team) =>
+                    teamLimit(async () => {
+                        const organizationId = team.organization?.uuid;
+                        const repositories = parametersByTeam.get(team.uuid)
+                            ?.configValue?.repositories;
+                        const teamAutomation = teamAutomationsByTeam.get(
+                            team.uuid,
+                        );
+                        if (
+                            !this.ownChangeRequest ||
+                            !organizationId ||
+                            !Array.isArray(repositories) ||
+                            !teamAutomation
+                        ) {
+                            return;
+                        }
+                        // Teams of one organization share its list.
+                        if (!changeRequestsByOrganization.has(organizationId)) {
+                            changeRequestsByOrganization.set(
+                                organizationId,
+                                this.pullRequestService.findOpenPullRequestsWithKodyChangeRequest(
+                                    organizationId,
+                                ),
+                            );
+                        }
+                        const repositoryIds = new Set(
+                            repositories.map((repository) => repository?.id),
+                        );
+                        const pullRequests = (
+                            await changeRequestsByOrganization.get(
+                                organizationId,
+                            )
+                        ).filter((pr) => repositoryIds.has(pr.repository?.id));
+                        await Promise.allSettled(
+                            pullRequests.map((pr) =>
+                                prLimit(() =>
+                                    this.withdrawResolvedChangeRequest(
+                                        { organizationId, teamId: team.uuid },
+                                        pr,
+                                        teamAutomation.uuid,
+                                    ),
+                                ),
+                            ),
+                        );
+                    }),
+                ),
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Error checking if PR can be approved generator cron',
@@ -880,6 +950,62 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     error,
                 });
             }
+        }
+    }
+
+    private readonly changeRequestRefusals = new Map<
+        string,
+        { until: number; count: number }
+    >();
+
+    private async withdrawResolvedChangeRequest(
+        organizationAndTeamData: OrganizationAndTeamData,
+        pullRequest: IPullRequestWithKodyChangeRequest,
+        teamAutomationId: string,
+    ): Promise<void> {
+        const key = `${organizationAndTeamData.organizationId}:${pullRequest.repository?.id}:${pullRequest.number}`;
+        const refusal = this.changeRequestRefusals.get(key);
+        if (refusal && refusal.until > Date.now()) {
+            return;
+        }
+        try {
+            await runWithBoundedTimeout(
+                this.ownChangeRequest.withdrawIfResolved({
+                    organizationAndTeamData,
+                    pullRequest,
+                    // A review still running may be about to request changes
+                    // over a finding this pass has not seen.
+                    isReviewRunning: () =>
+                        this.hasInProgressReviewExecution({
+                            teamAutomationId,
+                            pullRequestNumber: pullRequest.number,
+                            repositoryId: pullRequest.repository?.id,
+                        }),
+                }),
+                CHANGE_REQUEST_WITHDRAWAL_TIMEOUT_MS,
+                'change request withdrawal',
+            );
+            this.changeRequestRefusals.delete(key);
+        } catch (error) {
+            const count = (refusal?.count ?? 0) + 1;
+            const wait = Math.min(
+                CHANGE_REQUEST_REFUSAL_BACKOFF_MS * 4 ** (count - 1),
+                CHANGE_REQUEST_REFUSAL_BACKOFF_MAX_MS,
+            );
+            this.changeRequestRefusals.set(key, {
+                until: Date.now() + wait,
+                count,
+            });
+            this.logger.warn({
+                message: `Could not withdraw Kody's change request on PR#${pullRequest.number} (attempt ${count}); next attempt in ${Math.round(wait / 60_000)} minutes`,
+                context: CheckIfPRCanBeApprovedCronProvider.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: pullRequest.repository?.id,
+                    prNumber: pullRequest.number,
+                },
+            });
         }
     }
 
@@ -1033,14 +1159,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     (typeof comments)[number]
                 >();
                 for (const comment of comments) {
-                    const id = String(
-                        platformType === PlatformType.GITHUB
-                            ? (comment.fullDatabaseId ?? comment.id)
-                            : platformType === PlatformType.AZURE_REPOS
-                              ? comment.threadId
-                              : comment.id,
-                    );
-                    if (!commentsById.has(id)) commentsById.set(id, comment);
+                    const id = hostCommentKey(comment, platformType);
+                    if (id && !commentsById.has(id))
+                        commentsById.set(id, comment);
                 }
                 if (
                     pr.suggestions.some((suggestion) => {
@@ -1633,21 +1754,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 );
 
                 reviewComments = reviewComments.filter((comment) => {
-                    let commentId;
+                    const commentId = comment
+                        ? hostCommentKey(comment, platformType)
+                        : undefined;
 
-                    if (platformType === PlatformType.GITHUB) {
-                        commentId = comment?.fullDatabaseId || comment?.id;
-                    } else if (platformType === PlatformType.AZURE_REPOS) {
-                        commentId = comment?.threadId;
-                    } else {
-                        commentId = comment?.id;
-                    }
-
-                    if (!commentId) {
-                        return false;
-                    }
-
-                    return deliveredCommentIds.has(String(commentId));
+                    return !!commentId && deliveredCommentIds.has(commentId);
                 });
 
                 this.logger.log({

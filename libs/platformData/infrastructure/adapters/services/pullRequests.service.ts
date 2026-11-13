@@ -16,6 +16,7 @@ import {
     IPullRequestUser,
     IPullRequestUserMapping,
     IPullRequestWithDeliveredSuggestions,
+    IPullRequestWithKodyChangeRequest,
     ISuggestion,
     ISuggestionByPR,
     SuggestionCountsBySeverity,
@@ -121,6 +122,46 @@ export class PullRequestsService implements IPullRequestsService {
             prNumber,
             failure,
             guard,
+        );
+    }
+
+    recordKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        request: {
+            requestedAt: string;
+            commentIds: string[];
+            summaryCommentId?: string;
+        },
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.recordKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            request,
+        );
+    }
+
+    clearKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.clearKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            requestedAt,
+        );
+    }
+
+    findOpenPullRequestsWithKodyChangeRequest(
+        organizationId: string,
+    ): Promise<IPullRequestWithKodyChangeRequest[]> {
+        return this.pullRequestsRepository.findOpenPullRequestsWithKodyChangeRequest(
+            organizationId,
         );
     }
 

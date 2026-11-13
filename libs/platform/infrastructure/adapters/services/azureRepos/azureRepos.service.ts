@@ -1,3 +1,4 @@
+import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import type {
     ApprovalTeamMembership,
     ApprovalTeamMembershipParams,
@@ -1046,6 +1047,36 @@ export class AzureReposService implements Omit<
             );
         }
         if (state !== PullRequestReviewState.APPROVED) return 0;
+        await this.resetOwnVote(organizationAndTeamData, repository, prNumber);
+        return 1;
+    }
+
+    /** A reject vote (-10) is what `requestChangesPullRequest` leaves. */
+    async dismissOwnPullRequestChangeRequests(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        const state = await this.getReviewStatusByPullRequest({
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        });
+        if (state === null) {
+            throw new Error(`Could not read Kody's vote on PR #${prNumber}`);
+        }
+        if (state !== PullRequestReviewState.CHANGES_REQUESTED) return 0;
+        await this.resetOwnVote(organizationAndTeamData, repository, prNumber);
+        return 1;
+    }
+
+    private async resetOwnVote(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: Partial<Repository>,
+        prNumber: number,
+    ): Promise<void> {
         const { orgName, token } = await this.getAuthDetails(
             organizationAndTeamData,
         );
@@ -1070,7 +1101,6 @@ export class AzureReposService implements Omit<
             reviewerId,
             vote: AzurePullRequestVote.NoVote,
         });
-        return 1;
     }
 
     async approvePullRequest(params: {
@@ -1178,9 +1208,11 @@ export class AzureReposService implements Omit<
             const listOfCriticalIssues =
                 this.getListOfCriticalIssues(criticalComments);
 
-            const bodyFormatted = `${title}\n\n${listOfCriticalIssues}\n\n\n`;
+            const bodyFormatted = withChangeRequestExitNote(
+                `${title}\n\n${listOfCriticalIssues}`,
+            );
 
-            await this.createSingleIssueComment({
+            const summary = await this.createSingleIssueComment({
                 body: bodyFormatted,
                 organizationAndTeamData,
                 prNumber,
@@ -1194,7 +1226,11 @@ export class AzureReposService implements Omit<
                 metadata: { params },
             });
 
-            return true;
+            // The summary is an active thread: a "comments must be resolved"
+            // policy holds the PR on it after the vote is withdrawn.
+            return summary?.id
+                ? { summaryCommentId: String(summary.id) }
+                : true;
         } catch (error) {
             this.logger.error({
                 message: `Error requesting changes on pull request #${params.prNumber}`,

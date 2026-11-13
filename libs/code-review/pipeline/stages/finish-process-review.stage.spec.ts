@@ -12,6 +12,7 @@ import { COMMENT_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contract
 
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { RequestChangesOrApproveStage } from './finish-process-review.stage';
+import { OwnChangeRequestService } from '../services/own-change-request.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -40,6 +41,7 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         Pick<PrAuthorRecipientResolver, 'resolve'>
     >;
     let commentManager: { postApprovalReason: jest.Mock };
+    let ownChangeRequest: { record: jest.Mock };
 
     // Frozen by DEFAULT — production hands every stage after the first
     // produce() a deep-frozen context. See test/fixtures/frozen-pipeline-context.ts.
@@ -84,6 +86,7 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         commentManager = {
             postApprovalReason: jest.fn().mockResolvedValue(undefined),
         };
+        ownChangeRequest = { record: jest.fn().mockResolvedValue(undefined) };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -94,6 +97,7 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
                     useValue: commentManager,
                 },
                 { provide: NotificationService, useValue: notificationService },
+                { provide: OwnChangeRequestService, useValue: ownChangeRequest },
                 {
                     provide: PrAuthorRecipientResolver,
                     useValue: prAuthorResolver,
@@ -703,4 +707,102 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         );
         expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
     });
+
+    // The request leaves later without an approval only if it was recorded
+    // with the comments behind it.
+    describe('requesting changes', () => {
+        const finding = (severity: string, commentId?: number) => ({
+            comment: { suggestion: { severity } },
+            codeReviewFeedbackData: commentId ? { commentId } : undefined,
+        });
+        const requestChanges = (lineComments: object[]) =>
+            (stage as any).executeStage(
+                makeContext({
+                    codeReviewConfig: {
+                        pullRequestApprovalActive: false,
+                        isRequestChangesActive: true,
+                    },
+                    lineComments,
+                }),
+            );
+
+        it('records the request with the comments of its critical findings only', async () => {
+            codeManagement.requestChangesPullRequest.mockResolvedValue({
+                summaryCommentId: 'discussion-9',
+            });
+
+            await requestChanges([
+                finding('critical', 101),
+                finding('Critical', 102),
+                finding('high', 103),
+            ]);
+
+            expect(
+                codeManagement.requestChangesPullRequest,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                codeManagement.requestChangesPullRequest,
+            ).toHaveBeenCalledWith({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                prNumber: 42,
+                repository: { id: 'repo-1', name: 'acme/api' },
+                criticalComments: [
+                    finding('critical', 101),
+                    finding('Critical', 102),
+                ],
+            });
+            expect(ownChangeRequest.record).toHaveBeenCalledWith({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                repository: { id: 'repo-1', name: 'acme/api' },
+                prNumber: 42,
+                commentIds: ['101', '102'],
+                summaryCommentId: 'discussion-9',
+            });
+        });
+
+        it('records only the comments that were posted, on a host that hands back no summary', async () => {
+            // The default host answers nothing (GitHub, Bitbucket, Forgejo).
+            await requestChanges([
+                finding('critical', 101),
+                finding('critical'),
+                {
+                    comment: { suggestion: { severity: 'critical' } },
+                    codeReviewFeedbackData: { commentId: null },
+                },
+            ]);
+
+            expect(ownChangeRequest.record).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    commentIds: ['101'],
+                    summaryCommentId: undefined,
+                }),
+            );
+        });
+
+        it('records nothing when the host refused the request', async () => {
+            codeManagement.requestChangesPullRequest.mockRejectedValue(
+                new Error('403'),
+            );
+
+            await requestChanges([finding('critical', 101)]);
+
+            expect(ownChangeRequest.record).not.toHaveBeenCalled();
+        });
+
+        it('requests and records nothing without a critical finding', async () => {
+            await requestChanges([finding('high', 103)]);
+
+            expect(
+                codeManagement.requestChangesPullRequest,
+            ).not.toHaveBeenCalled();
+            expect(ownChangeRequest.record).not.toHaveBeenCalled();
+        });
+    });
 });
+

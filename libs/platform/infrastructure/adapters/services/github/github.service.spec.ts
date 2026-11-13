@@ -226,6 +226,191 @@ describe('GithubService', () => {
         expect(dismissReview).toHaveBeenCalledTimes(1);
     });
 
+    describe('isOwnAccount', () => {
+        const kody = { login: 'kody-ai[bot]', node_id: 'kody-id', type: 'Bot' };
+        const stub = (authMode: AuthMode) => {
+            jest.spyOn(
+                service as any,
+                'getGithubAuthDetails',
+            ).mockResolvedValue({
+                authMode,
+            });
+            return jest
+                .spyOn(service as any, 'instanceGraphQL')
+                .mockResolvedValue(
+                    jest.fn().mockResolvedValue({
+                        viewer: { login: 'kody-ai[bot]', id: 'kody-id' },
+                    }),
+                );
+        };
+
+        it.each([
+            ['the same login and node id', kody, true],
+            [
+                'the same login on another account',
+                { ...kody, node_id: 'x' },
+                false,
+            ],
+            ['another login', { ...kody, login: 'other[bot]' }, false],
+        ])('tells Kody by %s', async (_name, account, expected) => {
+            stub(AuthMode.OAUTH);
+
+            await expect(
+                service.isOwnAccount({ organizationAndTeamData, account }),
+            ).resolves.toBe(expected);
+        });
+
+        it('takes a person for somebody else without asking GitHub when installed as an App', async () => {
+            const instanceGraphQL = stub(AuthMode.OAUTH);
+
+            await expect(
+                service.isOwnAccount({
+                    organizationAndTeamData,
+                    account: { ...kody, type: 'User' },
+                }),
+            ).resolves.toBe(false);
+            expect(instanceGraphQL).not.toHaveBeenCalled();
+        });
+
+        it('asks GitHub, with the credentials it already read, who it is acting as', async () => {
+            const auth = { authMode: AuthMode.TOKEN };
+            const graphql = jest.fn().mockResolvedValue({
+                viewer: { login: 'kody-ai[bot]', id: 'kody-id' },
+            });
+            jest.spyOn(service as any, 'getGithubAuthDetails').mockResolvedValue(
+                auth,
+            );
+            const instanceGraphQL = jest
+                .spyOn(service as any, 'instanceGraphQL')
+                .mockResolvedValue(graphql);
+
+            await service.isOwnAccount({ organizationAndTeamData, account: kody });
+
+            expect(instanceGraphQL).toHaveBeenCalledWith(
+                organizationAndTeamData,
+                auth,
+            );
+            expect(graphql).toHaveBeenCalledWith('query { viewer { login id } }');
+        });
+
+        it('checks a person when Kody acts with a personal token', async () => {
+            stub(AuthMode.TOKEN);
+
+            await expect(
+                service.isOwnAccount({
+                    organizationAndTeamData,
+                    account: { ...kody, type: 'User' },
+                }),
+            ).resolves.toBe(true);
+        });
+    });
+
+    it("withdraws only Kody's live change requests, with the reason given", async () => {
+        const dismissReview = jest.fn().mockResolvedValue({});
+        const kody = { login: 'kody-ai[bot]', node_id: 'kody-id' };
+        jest.spyOn(service as any, 'getGithubAuthDetails').mockResolvedValue({
+            org: 'kodustech',
+        });
+        jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue({
+            paginate: jest.fn().mockResolvedValue([
+                { id: 10, state: 'CHANGES_REQUESTED', user: kody },
+                // Already dismissed, an approval and a comment: not touched.
+                { id: 11, state: 'DISMISSED', user: kody },
+                { id: 12, state: 'APPROVED', user: kody },
+                { id: 13, state: 'COMMENTED', user: kody },
+                // A person's change request is theirs to withdraw.
+                {
+                    id: 14,
+                    state: 'CHANGES_REQUESTED',
+                    user: { login: 'reviewer', node_id: 'other-id' },
+                },
+                // Same login, another account.
+                {
+                    id: 15,
+                    state: 'CHANGES_REQUESTED',
+                    user: { login: 'kody-ai[bot]', node_id: 'other-id' },
+                },
+            ]),
+            rest: { pulls: { listReviews: jest.fn(), dismissReview } },
+        });
+        jest.spyOn(service as any, 'instanceGraphQL').mockResolvedValue(
+            jest.fn().mockResolvedValue({
+                viewer: { login: 'kody-ai[bot]', id: 'kody-id' },
+            }),
+        );
+
+        await expect(
+            service.dismissOwnPullRequestChangeRequests({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'kodus' },
+                prNumber: 42,
+                reason: 'The critical findings are resolved.',
+            }),
+        ).resolves.toBe(1);
+        expect(dismissReview).toHaveBeenCalledTimes(1);
+        expect(dismissReview).toHaveBeenCalledWith(
+            expect.objectContaining({
+                owner: 'kodustech',
+                repo: 'kodus',
+                pull_number: 42,
+                review_id: 10,
+                message: 'The critical findings are resolved.',
+            }),
+        );
+    });
+
+    it.each([
+        ['dismissOwnPullRequestChangeRequests', 'change request'],
+        ['dismissOwnPullRequestApprovals', 'approval'],
+    ] as const)('%s names what it could not dismiss without a repository', async (method, what) => {
+        await expect(
+            service[method]({
+                organizationAndTeamData,
+                repository: { id: 'repo-1' },
+                prNumber: 42,
+                reason: 'Resolved.',
+            }),
+        ).rejects.toThrow(
+            `Repository and PR number are required to dismiss ${what}`,
+        );
+    });
+
+    it('reports a change request the host refused to dismiss', async () => {
+        const refused = Object.assign(new Error('Forbidden'), { status: 403 });
+        jest.spyOn(service as any, 'getGithubAuthDetails').mockResolvedValue({
+            org: 'kodustech',
+        });
+        jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue({
+            paginate: jest.fn().mockResolvedValue([
+                {
+                    id: 10,
+                    state: 'CHANGES_REQUESTED',
+                    user: { login: 'kody-ai[bot]', node_id: 'kody-id' },
+                },
+            ]),
+            rest: {
+                pulls: {
+                    listReviews: jest.fn(),
+                    dismissReview: jest.fn().mockRejectedValue(refused),
+                },
+            },
+        });
+        jest.spyOn(service as any, 'instanceGraphQL').mockResolvedValue(
+            jest.fn().mockResolvedValue({
+                viewer: { login: 'kody-ai[bot]', id: 'kody-id' },
+            }),
+        );
+
+        await expect(
+            service.dismissOwnPullRequestChangeRequests({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'kodus' },
+                prNumber: 42,
+                reason: 'Resolved.',
+            }),
+        ).rejects.toBe(refused);
+    });
+
     it('bounds a stalled GitHub approval dismissal and reports unknown state', async () => {
         jest.useFakeTimers();
         try {

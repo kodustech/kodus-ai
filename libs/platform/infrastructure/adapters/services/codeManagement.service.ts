@@ -20,6 +20,7 @@ import {
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import {
     CodeManagementConnectionStatus,
+    type HostAccount,
     ICodeManagementService,
     PullRequestFileChange,
 } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
@@ -1805,6 +1806,42 @@ export class CodeManagementService implements ICodeManagementService {
             throw new Error(`Approval dismissal is unavailable on ${type}`);
         }
         return provider.dismissOwnPullRequestApprovals(params);
+    }
+
+    async isOwnAccount(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            account: HostAccount;
+        },
+        type?: PlatformType,
+    ): Promise<boolean> {
+        type ??= await this.getTypeIntegration(params.organizationAndTeamData);
+        const provider =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+        // A host that cannot tell is never taken for Kody.
+        return (await provider?.isOwnAccount?.(params)) ?? false;
+    }
+
+    async dismissOwnPullRequestChangeRequests(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: Partial<Repository>;
+            prNumber: number;
+            reason: string;
+        },
+        type?: PlatformType,
+    ): Promise<number> {
+        type ??= await this.getTypeIntegration(params.organizationAndTeamData);
+        const provider =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+        // A host that can show Kody's change request must be able to take it
+        // back; failing here keeps a silent no-op from looking like success.
+        if (!provider?.dismissOwnPullRequestChangeRequests) {
+            throw new Error(
+                `Change request withdrawal is unavailable on ${type}`,
+            );
+        }
+        return provider.dismissOwnPullRequestChangeRequests(params);
     }
 
     async addReactionToPR(params: {

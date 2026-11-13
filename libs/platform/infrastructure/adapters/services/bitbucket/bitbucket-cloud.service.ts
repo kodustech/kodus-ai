@@ -1,3 +1,4 @@
+import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { createLogger } from '@libs/core/log/logger';
 
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
@@ -4500,6 +4501,51 @@ export class BitbucketCloudService implements Omit<
         return 1;
     }
 
+    /**
+     * Reads the participant's current state from the PR rather than the
+     * activity log `getReviewStatusByPullRequest` walks: the log is a history,
+     * and a withdrawn request must not be withdrawn again on every pass.
+     */
+    async dismissOwnPullRequestChangeRequests(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        const workspace = await this.getWorkspaceFromRepository(
+            organizationAndTeamData,
+            repository.id,
+        );
+        if (!workspace) throw new Error('Bitbucket workspace not found');
+        const bitbucketAPI = this.instanceBitbucketApi(
+            await this.getAuthDetails(organizationAndTeamData),
+        );
+        const target = {
+            pull_request_id: prNumber,
+            repo_slug: `{${repository.id}}`,
+            workspace: `{${workspace}}`,
+        };
+        const [me, pullRequest] = await Promise.all([
+            bitbucketAPI.users.getAuthedUser({}),
+            bitbucketAPI.pullrequests.get(target),
+        ]);
+        const uuid = me?.data?.uuid;
+        if (!uuid) {
+            throw new Error(
+                `Could not read Kody's change request on PR #${prNumber}`,
+            );
+        }
+        const requesting = (pullRequest?.data?.participants ?? []).some(
+            (participant) =>
+                participant.user?.uuid === uuid &&
+                participant.state === 'changes_requested',
+        );
+        if (!requesting) return 0;
+        await bitbucketAPI.pullrequests.deleteChangeRequest(target);
+        return 1;
+    }
+
     async approvePullRequest(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
@@ -4618,7 +4664,9 @@ export class BitbucketCloudService implements Omit<
             const title =
                 '# Found critical issues please review the requested changes';
 
-            const bodyFormatted = `${title}\n\n${listOfCriticalIssues}`;
+            const bodyFormatted = withChangeRequestExitNote(
+                `${title}\n\n${listOfCriticalIssues}`,
+            );
 
             await this.createCommentInPullRequest({
                 overallComment: bodyFormatted,

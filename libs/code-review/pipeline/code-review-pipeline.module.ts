@@ -19,6 +19,7 @@ import { DecidePrApprovalStage } from './stages/decide-pr-approval.stage';
 import { AssessPrRiskStage } from './stages/assess-pr-risk.stage';
 import { PrRiskAssessmentService } from './services/pr-risk-assessment.service';
 import { ApprovalPoliciesService } from './services/approval-policies.service';
+import { OwnChangeRequestService } from './services/own-change-request.service';
 import { ResolveRiskRoutingStage } from './stages/resolve-risk-routing.stage';
 import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
 import { CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
@@ -182,6 +183,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         AssessPrRiskStage,
         PrRiskAssessmentService,
         ApprovalPoliciesService,
+        OwnChangeRequestService,
         ResolveRiskRoutingStage,
         UpdateCommentsAndGenerateSummaryStage,
         RequestChangesOrApproveStage,
@@ -233,6 +235,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
     ],
     exports: [
         ApprovalPoliciesService,
+        OwnChangeRequestService,
         PrRiskAssessmentService,
         CodeReviewPipelineStrategy,
 

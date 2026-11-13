@@ -1,3 +1,4 @@
+import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import {
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
@@ -1336,6 +1337,46 @@ export class BitbucketDataCenterService implements Omit<
         await this.getAxiosInstance(authDetails).put(
             `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/pull-requests/${prNumber}/participants/${authDetails.username}`,
             { status: 'UNAPPROVED' },
+        );
+        return 1;
+    }
+
+    /**
+     * Clears the NEEDS_WORK status `requestChangesPullRequest` sets, on the
+     * same participant path it used.
+     */
+    async dismissOwnPullRequestChangeRequests(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        const state = await this.getReviewStatusByPullRequest({
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        });
+        if (state === null) {
+            throw new Error(
+                `Could not read Kody's change request on PR #${prNumber}`,
+            );
+        }
+        if (state !== PullRequestReviewState.CHANGES_REQUESTED) return 0;
+        const [authDetails, repoConfig, currentUser] = await Promise.all([
+            this.getAuthDetails(organizationAndTeamData),
+            this.getRepoConfig(
+                organizationAndTeamData,
+                repository.id || repository.name,
+            ),
+            this.getCurrentUser({ organizationAndTeamData }),
+        ]);
+        if (!authDetails || !repoConfig || !currentUser) {
+            throw new Error('Bitbucket Data Center repository not found');
+        }
+        await this.getAxiosInstance(authDetails).put(
+            `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/pull-requests/${prNumber}/participants/${currentUser.id}`,
+            { user: { name: currentUser.id }, status: 'UNAPPROVED' },
         );
         return 1;
     }
@@ -3005,7 +3046,9 @@ export class BitbucketDataCenterService implements Omit<
                     )
                     .join('\n');
 
-                const bodyFormatted = `${title}\n\n${listOfCriticalIssues}`;
+                const bodyFormatted = withChangeRequestExitNote(
+                    `${title}\n\n${listOfCriticalIssues}`,
+                );
 
                 await this.createCommentInPullRequest({
                     organizationAndTeamData,

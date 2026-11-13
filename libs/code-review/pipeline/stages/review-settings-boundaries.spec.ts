@@ -168,6 +168,7 @@ function setup(
         {} as any,
         {} as any,
         messages as any,
+        { record: jest.fn().mockResolvedValue(undefined) } as any,
     );
     const context = {
         organizationAndTeamData: org,
