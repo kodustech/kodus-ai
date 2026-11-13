@@ -249,6 +249,7 @@ export class IssuesRepository implements IIssuesRepository {
         const filter = {
             'organizationId': finding.organizationId,
             'repository.platform': finding.repository.platform,
+            'repository.host': finding.repository.host ?? '',
             'repository.id': finding.repository.id,
             'fingerprint': finding.fingerprint,
         };
@@ -265,6 +266,11 @@ export class IssuesRepository implements IIssuesRepository {
                 try {
                     const created = await this.issuesModel.create({
                         ...finding,
+                        // Stored as the filter reads it.
+                        repository: {
+                            ...finding.repository,
+                            host: finding.repository.host ?? '',
+                        },
                         filePath: normalizeScanPath(finding.filePath),
                         source: IssueSource.SECURITY_SCAN,
                         status: IssueStatus.OPEN,
@@ -431,6 +437,7 @@ export class IssuesRepository implements IIssuesRepository {
                 {
                     'organizationId': params.organizationId,
                     'repository.platform': params.repositoryPlatform,
+                    'repository.host': params.repositoryHost,
                     'repository.id': params.repositoryId,
                     'source': IssueSource.SECURITY_SCAN,
                     'status': IssueStatus.OPEN,
@@ -461,6 +468,7 @@ export class IssuesRepository implements IIssuesRepository {
         const theseFindings = {
             'organizationId': params.organizationId,
             'repository.platform': params.repositoryPlatform,
+            'repository.host': params.repositoryHost,
             'repository.id': params.repositoryId,
             'source': IssueSource.SECURITY_SCAN,
             'fingerprint': { $in: [...new Set(params.fingerprints)] },
@@ -503,6 +511,7 @@ export class IssuesRepository implements IIssuesRepository {
             'organizationId': params.organizationId,
             // The same id on another platform is another repository.
             'repository.platform': params.repositoryPlatform,
+            'repository.host': params.repositoryHost,
             'repository.id': params.repositoryId,
             'source': IssueSource.SECURITY_SCAN,
             'status': IssueStatus.OPEN,

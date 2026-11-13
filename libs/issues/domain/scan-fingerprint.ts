@@ -7,6 +7,11 @@ export interface ScanFingerprintInput {
      * the same id.
      */
     repositoryPlatform: string;
+    /**
+     * The Git instance (see repositoryHost): two self-hosted GitLab or
+     * Forgejo servers connected to one organization each have a project 1.
+     */
+    repositoryHost: string;
     repositoryId: string;
     /**
      * The lens that reported it. Only a finding without a CWE is told apart
@@ -105,7 +110,7 @@ export function cweFamily(cwe?: string): string {
 
 /**
  * The identity a security-scan finding keeps across scans: which repository
- * (platform and id), where in it (file and function) and what kind of
+ * (platform, instance and id), where in it (file and function) and what kind of
  * weakness (the CWE's family). Line numbers
  * are left out on purpose: an edit above the finding moves every line, and
  * the same finding would come back as a new issue while the old one is
@@ -123,6 +128,7 @@ export function computeScanFingerprint(input: ScanFingerprintInput): string {
           `class:${input.vulnerabilityClass.trim().toLowerCase()}`;
     const parts = [
         input.repositoryPlatform.trim().toLowerCase(),
+        input.repositoryHost,
         input.repositoryId,
         appWide ? '' : normalizeScanPath(input.filePath),
         appWide ? '' : (input.symbol ?? '').trim(),
@@ -130,6 +136,19 @@ export function computeScanFingerprint(input: ScanFingerprintInput): string {
     ];
 
     return createHash('sha256').update(parts.join('\u0000')).digest('hex');
+}
+
+/**
+ * The Git instance a repository lives on: the host (and port) of its URL,
+ * lowercased, from the URL its integration lists it with. A repository id is
+ * only unique on its instance. Empty when the URL is missing or unreadable.
+ */
+export function repositoryHost(url?: string | null): string {
+    try {
+        return url ? new URL(url.trim()).host.toLowerCase() : '';
+    } catch {
+        return '';
+    }
 }
 
 /** The spelling a scan finding's path is stored and compared in. */

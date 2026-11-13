@@ -25,6 +25,7 @@ import {
 } from '@libs/issues/domain/contracts/issues.service.contract';
 
 import { IssuesEntity } from '@libs/issues/domain/entities/issues.entity';
+import { repositoryHost } from '@libs/issues/domain/scan-fingerprint';
 import { IIssueDetails } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
 import { KodyIssuesManagementService } from '@libs/issues/infrastructure/adapters/service/kodyIssuesManagement.service';
 
@@ -93,17 +94,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             issue.repository.platform === PlatformType.AZURE_REPOS ||
             issue.repository.platform === PlatformType.FORGEJO
         ) {
-            const integrationConfig =
-                await this.integrationConfigService.findOne({
-                    configKey: IntegrationConfigKey.REPOSITORIES,
-                    configValue: [{ id: issue.repository.id }],
-                });
-
-            const repoConfig = integrationConfig?.configValue?.find(
-                (x) => x.id === issue.repository.id,
-            );
-
-            httpUrl = repoConfig?.http_url ?? null;
+            httpUrl = await this.configuredHttpUrl(issue);
         }
 
         const dataToBuildUrls = {
@@ -184,6 +175,35 @@ export class GetIssueByIdUseCase implements IUseCase {
     }
 
     //#region Auxiliary functions
+    /**
+     * The repository's URL as the issue's own organization lists it, on the
+     * issue's platform: another organization (or platform) can hold a
+     * repository with the same id, and so can another instance of the
+     * platform, which a scan finding records (`repository.host`).
+     */
+    private async configuredHttpUrl(
+        issue: IssuesEntity,
+    ): Promise<string | null> {
+        const { id, platform, host } = issue.repository;
+        const configs =
+            await this.integrationConfigService.findByOrganizationAndConfigKey(
+                issue.organizationId,
+                IntegrationConfigKey.REPOSITORIES,
+            );
+        for (const config of configs ?? []) {
+            if (config.integration?.platform !== platform) continue;
+            const listed = (
+                Array.isArray(config.configValue) ? config.configValue : []
+            ).find(
+                (r) =>
+                    String(r?.id) === String(id) &&
+                    (!host || repositoryHost(r?.http_url) === host),
+            );
+            if (listed?.http_url) return listed.http_url;
+        }
+        return null;
+    }
+
     private async calculateTotalReactions(
         issue: IssuesEntity,
         codeReviewFeedback: any[],

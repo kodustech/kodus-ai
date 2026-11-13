@@ -75,6 +75,8 @@ export interface IRepositoryToIssues {
     full_name: string;
     platform: PlatformType;
     url?: string;
+    /** The Git instance (repositoryHost); set on security-scan findings. */
+    host?: string;
 }
 
 export type contextToGenerateIssues = {
