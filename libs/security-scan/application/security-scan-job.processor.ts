@@ -50,6 +50,7 @@ import {
     ScanUnitProgress,
     SecurityScanOutcomeCounts,
     SecurityScanRecord,
+    SecurityScanSpend,
     SecurityScanStatus,
 } from '../domain/security-scan.types';
 import type { VulnClass } from '../domain/surface/surface.types';
@@ -201,7 +202,11 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     status: SecurityScanStatus.FAILED,
                     error: scanErrorMessage(error),
                     finishedAt: new Date().toISOString(),
-                    ...(sliceMeter ? { spend: sliceMeter.snapshot() } : {}),
+                    // Requests still in flight may be billed yet: charged
+                    // at their reservation.
+                    ...(sliceMeter
+                        ? { spend: sliceMeter.committedSpend() }
+                        : {}),
                 },
                 undefined,
                 { statuses: active, ownedBy: jobId, orUnowned: true },
@@ -284,8 +289,13 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         const meter = new ScanBudgetMeter(
             scan.budget,
             rates,
-            scan.spend,
+            carriedSpend(scan),
             model.contextWindowTokens,
+        );
+        // On record before each request leaves: a worker that dies with
+        // requests in flight leaves them charged to the next slice.
+        meter.beforeEachRequest((committed) =>
+            this.scans.raiseCommittedSpend(scan.uuid, committed, jobId),
         );
         onMeter(meter);
 
@@ -835,6 +845,26 @@ function movedAUnit(
     const untouched = 'pending:';
     const was = new Map(before.map((p) => [p.unitId, keyOf(p)]));
     return after.some((p) => keyOf(p) !== (was.get(p.unitId) ?? untouched));
+}
+
+/**
+ * Where a slice's meter starts: what was spent, or what the slice before
+ * may have been billed when it ended with requests in flight (its committed
+ * spend is still set), whichever is more.
+ */
+function carriedSpend(scan: SecurityScanRecord): SecurityScanSpend {
+    const spent = scan.spend;
+    const committed = scan.committedSpend;
+    if (!committed) {
+        return spent;
+    }
+    const most = (a?: number, b?: number) => Math.max(a ?? 0, b ?? 0);
+    return {
+        usd: most(spent?.usd, committed.usd),
+        inputTokens: most(spent?.inputTokens, committed.inputTokens),
+        outputTokens: most(spent?.outputTokens, committed.outputTokens),
+        requests: most(spent?.requests, committed.requests),
+    };
 }
 
 function fingerprintOf(scan: SecurityScanRecord, finding: ScanFinding): string {

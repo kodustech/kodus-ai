@@ -6,6 +6,7 @@ import {
     ScanReportedFinding,
     ScanUnitProgress,
     SecurityScanRecord,
+    SecurityScanSpend,
     SecurityScanStatus,
 } from '../domain/security-scan.types';
 
@@ -44,6 +45,15 @@ export interface ISecurityScanRepository {
         jobId: string,
         leaseMs: number,
     ): Promise<SecurityScanRecord | null>;
+    /**
+     * Raises the scan's committed spend to at least `committed`, field by
+     * field, while `ownedBy` runs it; throws when it no longer does.
+     */
+    raiseCommittedSpend(
+        uuid: string,
+        committed: SecurityScanSpend,
+        ownedBy: string,
+    ): Promise<void>;
     /**
      * Records one area's progress in place of its earlier entry (a pending
      * one is removed), without reading or rewriting the rest of the scan.
@@ -184,7 +194,13 @@ export class SecurityScanRepository implements ISecurityScanRepository {
                               $unset: {
                                   ...(ended ? { activeKey: '' } : {}),
                                   ...(released
-                                      ? { runningJobId: '', leaseExpiresAt: '' }
+                                      ? {
+                                            runningJobId: '',
+                                            leaseExpiresAt: '',
+                                            // Handed on with every request
+                                            // settled: spend is exact.
+                                            committedSpend: '',
+                                        }
                                       : {}),
                               },
                           }
@@ -228,6 +244,33 @@ export class SecurityScanRepository implements ISecurityScanRepository {
             )
             .exec();
         return doc ? toRecord(doc) : null;
+    }
+
+    async raiseCommittedSpend(
+        uuid: string,
+        committed: SecurityScanSpend,
+        ownedBy: string,
+    ): Promise<void> {
+        // $max: concurrent requests record out of order, and a later,
+        // lower figure must not undo a higher one still in flight.
+        const result = await this.model
+            .updateOne(
+                { _id: uuid, runningJobId: ownedBy, status: { $in: ACTIVE } },
+                {
+                    $max: {
+                        'committedSpend.usd': committed.usd,
+                        'committedSpend.inputTokens': committed.inputTokens,
+                        'committedSpend.outputTokens': committed.outputTokens,
+                        'committedSpend.requests': committed.requests,
+                    },
+                },
+            )
+            .exec();
+        if (!result.matchedCount) {
+            throw new Error(
+                `Security scan ${uuid} is no longer run by job ${ownedBy}`,
+            );
+        }
     }
 
     async recordUnit(
@@ -373,6 +416,7 @@ function toRecord(doc: any): SecurityScanRecord {
         status: o.status,
         budget: o.budget ?? {},
         spend: o.spend,
+        committedSpend: o.committedSpend,
         commitSha: o.commitSha,
         planCommitSha: o.planCommitSha,
         units: o.units ?? [],

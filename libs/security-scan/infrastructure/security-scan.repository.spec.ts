@@ -116,7 +116,7 @@ describe('SecurityScanRepository: one active scan per repository', () => {
         // Ended: the key is freed and no job holds it any more.
         expect(ended).toEqual({
             $set: { status: 'completed' },
-            $unset: { activeKey: '', runningJobId: '', leaseExpiresAt: '' },
+            $unset: { activeKey: '', runningJobId: '', leaseExpiresAt: '', committedSpend: '' },
             $push: { reported: { $each: reported } },
         });
         const [, running] = findOneAndUpdate.mock.calls[1] as unknown as [string, any];
@@ -151,7 +151,8 @@ describe('SecurityScanRepository: one active scan per repository', () => {
         await repository.update('id-1', { status: 'queued' } as any);
 
         const [, update] = findOneAndUpdate.mock.calls[0] as unknown as [string, any];
-        expect(update.$unset).toEqual({ runningJobId: '', leaseExpiresAt: '' });
+        // Handed on with every request settled: the spend written is exact.
+        expect(update.$unset).toEqual({ runningJobId: '', leaseExpiresAt: '', committedSpend: '' });
     });
 
     it('changes a status only from the states it is given', async () => {
@@ -228,5 +229,31 @@ describe('SecurityScanRepository.recordUnit', () => {
         const [, update] = updateOne.mock.calls[0] as unknown as [any, any];
         expect(update.$pull).toEqual({ progress: { unitId: 'u1' } });
         expect(update.$push).toBeUndefined();
+    });
+
+    it('raises the committed spend field by field, only while the job runs the scan', async () => {
+        const updateOne = jest
+            .fn()
+            .mockReturnValueOnce({ exec: async () => ({ matchedCount: 1 }) })
+            .mockReturnValueOnce({ exec: async () => ({ matchedCount: 0 }) });
+        const repository = new SecurityScanRepository({ updateOne } as any);
+        const committed = { usd: 1.5, inputTokens: 10_000, outputTokens: 2_000, requests: 3 };
+
+        await repository.raiseCommittedSpend('scan-1', committed, 'job-1');
+        await expect(repository.raiseCommittedSpend('scan-1', committed, 'job-1')).rejects.toThrow(
+            'no longer run by job job-1',
+        );
+
+        const [filter, update] = updateOne.mock.calls[0];
+        expect(filter).toEqual(expect.objectContaining({ _id: 'scan-1', runningJobId: 'job-1' }));
+        // Out-of-order records never lower it.
+        expect(update).toEqual({
+            $max: {
+                'committedSpend.usd': 1.5,
+                'committedSpend.inputTokens': 10_000,
+                'committedSpend.outputTokens': 2_000,
+                'committedSpend.requests': 3,
+            },
+        });
     });
 });

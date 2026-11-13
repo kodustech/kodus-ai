@@ -49,6 +49,15 @@ export class SecurityScanModel extends CoreDocument {
     @Prop({ type: Object, required: true })
     public spend: SecurityScanSpend;
 
+    /**
+     * The most the running slice may have been billed: raised before each
+     * of its requests leaves, cleared when it hands the scan on. Still set
+     * when a slice starts, the one before it ended with requests in flight
+     * (its worker died): they are charged at their reservation.
+     */
+    @Prop({ type: Object })
+    public committedSpend?: SecurityScanSpend;
+
     @Prop({ type: String })
     public commitSha?: string;
 

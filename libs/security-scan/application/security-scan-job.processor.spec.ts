@@ -188,6 +188,33 @@ describe('SecurityScanJobProcessor', () => {
         expect(scans.recordUnit).not.toHaveBeenCalled();
     });
 
+    it('starts a slice from what the one before may have been billed, when it died with requests in flight', async () => {
+        const committed = { usd: 0.02, inputTokens: 4_000, outputTokens: 6_000, requests: 1 };
+        const { processor, scans } = setup(
+            { result: finishedResult() },
+            scanRecord({ committedSpend: committed } as any),
+        );
+        (scans as any).raiseCommittedSpend = jest.fn(async () => undefined);
+        let startedAt: unknown;
+        (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
+            run: jest.fn(async (params: any) => {
+                startedAt = params.meter.snapshot();
+                await params.meter.admit({ inputTokens: 10, inputTokensUpperBound: 10, maxOutputTokens: 10 });
+                return finishedResult();
+            }),
+        }));
+
+        await processor.process('job-1');
+
+        expect(startedAt).toEqual(committed);
+        // Each request's reservation goes on record before it leaves.
+        expect((scans as any).raiseCommittedSpend).toHaveBeenCalledWith(
+            'scan-1',
+            expect.objectContaining({ inputTokens: 4_010, outputTokens: 6_010 }),
+            'job-1',
+        );
+    });
+
     it('writes no issue once another job holds the scan', async () => {
         const { processor, issuesService, scans } = setup({
             unitEvents: [[{ unitId: 'u1', state: 'done', findings: 1 }, [finding], ['fp-old']]],

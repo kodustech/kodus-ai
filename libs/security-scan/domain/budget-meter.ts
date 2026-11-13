@@ -8,7 +8,10 @@ import type {
     UsageObservation,
 } from '@libs/llm/usage-meter';
 
-import type { SecurityScanBudget, SecurityScanSpend } from './security-scan.types';
+import type {
+    SecurityScanBudget,
+    SecurityScanSpend,
+} from './security-scan.types';
 
 /**
  * Counts what a scan spends and keeps it under the cap the customer set.
@@ -55,11 +58,17 @@ export class ScanBudgetMeter implements UsageMeter {
     private spent: SecurityScanSpend;
     /** Ceilings of the requests admitted and not answered yet. */
     private inFlight: Cost = { usd: 0, tokens: 0 };
+    /** The same ceilings, as input and answer tokens. */
+    private inFlightTokens = { input: 0, output: 0 };
+    /** Awaited before each request leaves (see beforeEachRequest). */
+    private beforeRequest?: (committed: SecurityScanSpend) => Promise<void>;
     /**
      * Requests answered and not recorded yet: the wrapper settles a request
      * before its caller reads the usage and records it.
      */
-    private readonly answered: Array<Cost & { key: string }> = [];
+    private readonly answered: Array<
+        Cost & { key: string; input: number; output: number }
+    > = [];
     private refused = false;
     private readonly listeners: Array<() => void> = [];
     /** How many requests are in flight. */
@@ -97,7 +106,7 @@ export class ScanBudgetMeter implements UsageMeter {
         }
         const ceiling = this.ceilingOf(request);
         if (!this.wouldCross(ceiling)) {
-            return this.grant(ceiling, request);
+            return this.recorded(this.grant(ceiling, request));
         }
         if (this.inFlightCount > 0 && !this.wouldCross(ceiling, false)) {
             return new Promise((resolve, reject) =>
@@ -164,6 +173,8 @@ export class ScanBudgetMeter implements UsageMeter {
 
     private grant(ceiling: Ceiling, request: RequestCeiling): Admission {
         this.inFlight = add(this.inFlight, ceiling, 1);
+        this.inFlightTokens.input += ceiling.input;
+        this.inFlightTokens.output += ceiling.output;
         this.inFlightCount++;
 
         let settled = false;
@@ -175,16 +186,67 @@ export class ScanBudgetMeter implements UsageMeter {
                 if (settled) return;
                 settled = true;
                 this.inFlight = add(this.inFlight, ceiling, -1);
+                this.inFlightTokens.input -= ceiling.input;
+                this.inFlightTokens.output -= ceiling.output;
                 this.inFlightCount--;
                 if (usage) {
                     this.chargeUnreported(usage, ceiling.input, ceiling.output);
                     this.answered.push({
                         ...this.cost(usage),
+                        input: usage.inputTokens ?? 0,
+                        output: usage.outputTokens ?? 0,
                         key: keyOf(usage),
                     });
                 }
                 this.admitWaiting();
             },
+        };
+    }
+
+    /**
+     * Has `listener` record, before each request leaves, the most the scan
+     * may have been billed by then (committedSpend). A request whose record
+     * fails is not sent: a worker that dies with requests in flight must
+     * leave their reservations on record, or the next slice starts from
+     * what was spent and admits past the cap while they are still billed.
+     */
+    beforeEachRequest(
+        listener: (committed: SecurityScanSpend) => Promise<void>,
+    ): void {
+        this.beforeRequest = listener;
+    }
+
+    /** The admission once its reservation is on record. */
+    private recorded(admission: Admission): Admission | Promise<Admission> {
+        if (!this.beforeRequest) {
+            return admission;
+        }
+        return this.beforeRequest(this.committedSpend()).then(
+            () => admission,
+            (error) => {
+                admission.settle(undefined);
+                throw error;
+            },
+        );
+    }
+
+    /**
+     * The most the scan may have been billed: spent, answered and not
+     * recorded yet, and every request in flight at its ceiling.
+     */
+    committedSpend(): SecurityScanSpend {
+        return {
+            usd: this.committed().usd,
+            inputTokens:
+                this.spent.inputTokens +
+                this.inFlightTokens.input +
+                this.answered.reduce((sum, a) => sum + a.input, 0),
+            outputTokens:
+                this.spent.outputTokens +
+                this.inFlightTokens.output +
+                this.answered.reduce((sum, a) => sum + a.output, 0),
+            requests:
+                this.spent.requests + this.inFlightCount + this.answered.length,
         };
     }
 
@@ -197,7 +259,9 @@ export class ScanBudgetMeter implements UsageMeter {
             }
             if (!this.wouldCross(next.ceiling)) {
                 this.waiting.shift();
-                next.resolve(this.grant(next.ceiling, next.request));
+                Promise.resolve(
+                    this.recorded(this.grant(next.ceiling, next.request)),
+                ).then(next.resolve, next.reject);
                 continue;
             }
             if (

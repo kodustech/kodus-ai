@@ -409,3 +409,46 @@ describe('validateBudget', () => {
         expect(validateBudget({ maxTokens: -1 }, true)).toMatch(/greater than zero/);
     });
 });
+
+describe('ScanBudgetMeter — reservations on record', () => {
+    const ceiling = (input: number, maxOutputTokens: number): RequestCeiling =>
+        ({ inputTokens: input, inputTokensUpperBound: input, maxOutputTokens }) as RequestCeiling;
+
+    it('has each request\'s reservation recorded before it leaves', async () => {
+        const meter = new ScanBudgetMeter({ maxTokens: 12_000 }, RATES);
+        const recorded: number[] = [];
+        meter.beforeEachRequest(async (c) => {
+            recorded.push(c.inputTokens + c.outputTokens);
+        });
+
+        await meter.admit(ceiling(4_000, 6_000));
+
+        expect(recorded).toEqual([10_000]);
+    });
+
+    it('does not send a request whose reservation could not be recorded, and gives its room back', async () => {
+        const meter = new ScanBudgetMeter({ maxTokens: 12_000 }, RATES);
+        meter.beforeEachRequest(async () => {
+            throw new Error('scan lost');
+        });
+
+        await expect(Promise.resolve(meter.admit(ceiling(4_000, 6_000)))).rejects.toThrow('scan lost');
+        expect(meter.committedSpend()).toEqual({ usd: 0, inputTokens: 0, outputTokens: 0, requests: 0 });
+    });
+
+    it('keeps a dead slice\'s requests charged in the next one, so the cap holds', async () => {
+        // The first slice's worker died with a request in flight: what it
+        // recorded is all the next slice knows of it.
+        const first = new ScanBudgetMeter({ maxTokens: 12_000 }, RATES);
+        let recorded: any;
+        first.beforeEachRequest(async (c) => {
+            recorded = c;
+        });
+        await first.admit(ceiling(4_000, 6_000));
+
+        const next = new ScanBudgetMeter({ maxTokens: 12_000 }, RATES, recorded);
+
+        expect(() => next.admit(ceiling(4_000, 6_000))).toThrow(ScanBudgetReached);
+    });
+});
+
