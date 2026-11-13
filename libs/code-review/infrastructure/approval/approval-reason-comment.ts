@@ -1,5 +1,11 @@
 export const APPROVAL_REASON_MARKER = '<!-- kodus-conditional-approval -->';
 
+// GitHub writes wait in a per-installation queue (one comment every 3s). A
+// raced write that loses still posts later, so a short bound records a failure
+// for a comment that lands (#2534) and the cron, not finding it yet, posts a
+// second one. The bound must exceed the queue; it only stops a stalled call.
+export const APPROVAL_REASON_WRITE_TIMEOUT_MS = 90_000;
+
 export function formatApprovalReasonComment(
     kind: 'approve' | 'hold',
     reason: string,

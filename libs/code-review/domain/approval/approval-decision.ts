@@ -29,6 +29,24 @@ export interface ApprovalDecision {
 
 const normalized = (value: string) => value.trim().toLocaleLowerCase('en-US');
 
+/**
+ * Why a review cannot decide on the PR as the provider now has it. Each reason
+ * names what happened: a push during the review is routine and must not read
+ * like a failure to reach the provider (#2534).
+ */
+export function reviewedSnapshotHoldReason(
+    live: { head?: { sha?: string }; base?: { sha?: string } } | null,
+    reviewed: { headSha?: string; baseSha?: string },
+): string | null {
+    if (!live)
+        return 'Kody could not read the current PR from the Git provider.';
+    if (reviewed.headSha && live.head?.sha !== reviewed.headSha)
+        return 'A newer commit arrived while Kody reviewed this one; Kody decides on the next reviewed commit.';
+    if (reviewed.baseSha && live.base?.sha !== reviewed.baseSha)
+        return 'The target branch changed during the review, so this review cannot approve the PR.';
+    return null;
+}
+
 export function approvalPolicyFromConfig(
     config: CodeReviewConfig,
 ): ApprovalPolicy {

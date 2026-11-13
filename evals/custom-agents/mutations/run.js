@@ -53,6 +53,8 @@ const SPEC = {
         'libs/code-review/infrastructure/agents/core/incomplete-and-unverified.spec.ts',
     recovery:
         'libs/code-review/infrastructure/agents/core/finder.recovery-nulls.spec.ts',
+    localSandboxQuote:
+        'libs/code-review/infrastructure/agents/core/convention-check.local-sandbox.spec.ts',
     instructionQuote:
         'libs/code-review/infrastructure/agents/core/convention-check.repo-instructions.spec.ts',
     instructionRouting:
@@ -63,6 +65,7 @@ const SPEC = {
 const MODEL_CASES = {
     P1: 'money-float-tax,money-discount-decimal,money-cents-helpers,api-error-leak,api-error-contract',
     P2: 'money-float-tax,api-error-leak,api-only-general-bug',
+    P11: 'guide-skill-violated,guide-doc-violated-among-other-changes,guide-near-miss',
     P12: 'instructions-rule-violated,instructions-rule-followed',
     P13: 'architecture-domain-imports-http,architecture-controller-maps-input,architecture-logic-in-controller,architecture-controller-delegates',
 };
@@ -123,7 +126,7 @@ const MUTATIONS = [
         property: 'P8',
         patch: 'P8-other-repository-guides-unread.patch',
         break: 'the quote gate reads a guide of another repository from the reviewed one, where it is not',
-        checks: [{ jest: [SPEC.otherRepoKnowledge] }],
+        checks: [{ jest: [SPEC.otherRepoKnowledge, SPEC.localSandboxQuote] }],
     },
     {
         property: 'P8',
@@ -154,6 +157,15 @@ const MUTATIONS = [
         patch: 'P10-recovery-null-required.patch',
         break: 'prose recovery requires the label key, so an answer with "label": null fails and asks the model again (#2384)',
         checks: [{ jest: [SPEC.recovery] }],
+    },
+    {
+        property: 'P11',
+        patch: 'P11-local-sandbox-guides-unread.patch',
+        break: 'the quote gate reads a guide of the reviewed repository only through the sandbox command channel, which the local sandbox refuses for git, so every finding quoting it is dropped',
+        checks: [
+            { jest: [SPEC.localSandboxQuote] },
+            { model: MODEL_CASES.P11 },
+        ],
     },
     {
         property: 'P12',

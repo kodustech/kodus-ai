@@ -67,6 +67,7 @@ import {
     IConditionalApprovalAccessService,
 } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import {
+    APPROVAL_REASON_WRITE_TIMEOUT_MS,
     formatApprovalReasonComment,
     isApprovalReasonComment,
 } from '@libs/code-review/infrastructure/approval/approval-reason-comment';
@@ -135,13 +136,10 @@ const TEAM_CONCURRENCY = 10;
 const PR_CONCURRENCY = 15;
 const FINAL_PROVIDER_TIMEOUT_MS = 15_000;
 const APPROVAL_REASON_LOOKUP_TIMEOUT_MS = 10_000;
-// GitHub writes wait in a per-installation queue (one comment every 3s). A
-// raced write that loses still posts later, and the next run, not finding it
-// yet, posts a second one, so the bound must exceed the queue: at most
-// PR_CONCURRENCY writes ahead (45s). It only stops a stalled provider call from
-// outliving the 5-minute lock. No hold reason starts after the deadline, so the
-// last ones land inside the lock; the next run recomputes and posts the rest.
-const APPROVAL_REASON_WRITE_TIMEOUT_MS = 90_000;
+// The cron puts at most PR_CONCURRENCY writes ahead in the installation queue
+// (45s), inside APPROVAL_REASON_WRITE_TIMEOUT_MS. No hold reason starts after
+// the deadline, so the last ones land inside the 5-minute lock; the next run
+// recomputes and posts the rest.
 const APPROVAL_REASON_WRITE_DEADLINE_MS = 3 * 60 * 1000;
 const APPROVAL_FILES_TIMEOUT_MS = 10_000;
 const DIRECTORY_FILE_CACHE_TTL_MS = 10 * 60 * 1000;
