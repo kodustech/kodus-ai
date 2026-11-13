@@ -1268,12 +1268,14 @@ export class SecurityScanEngine {
     /**
      * Runs a reproduction test where it cannot touch what the lenses read.
      * The test, its command and the dependency install are model output or
-     * repository code: all of it runs in a separate worktree of the scanned
-     * commit, kept for the job (so dependencies install once) and reset to
-     * that commit before each test. The checkout the lenses read only ever
-     * has its state checked: anything a command changed there anyway is put
-     * back, and if it cannot be, the scan stops rather than read changed
-     * code.
+     * repository code: all of it runs as a user of its own (REPRO_USER), in
+     * a clone of the scanned commit in that user's home, kept for the job
+     * (so dependencies install once) and reset to that commit before each
+     * test. That user cannot write the review user's home, whose git config
+     * and shell profile every lens command reads (a global gitignore hides
+     * files from rg), nor the checkout the lenses read, which only ever has
+     * its state checked: anything changed there anyway is put back, and if
+     * it cannot be, the scan stops rather than read changed code.
      */
     private async runReproduction(
         params: SecurityScanEngineParams,
@@ -1282,12 +1284,12 @@ export class SecurityScanEngine {
     ): Promise<void> {
         const sandbox = params.sandbox;
         const repo = shellQuote(sandbox.repoDir);
-        const workdir = `${sandbox.repoDir}.repro`;
+        const workdir = REPRO_WORKDIR;
         const work = shellQuote(workdir);
         const target = `${workdir}/${record.path}`;
         const quoted = shellQuote(target);
         const run = (command: string, timeoutMs: number) =>
-            runCommand(sandbox, command, timeoutMs);
+            asReproUser(sandbox, command, timeoutMs);
 
         // Without the scanned commit and the checkout's state, nothing could
         // be checked afterwards: no test runs.
@@ -1298,7 +1300,10 @@ export class SecurityScanEngine {
         }
         // The checkout the lenses read, and its git metadata, are made
         // read-only to the user the test runs as; without that no test runs.
-        if (!(await this.lockAuditCheckout(sandbox))) {
+        if (
+            !(await this.lockAuditCheckout(sandbox)) ||
+            !(await this.prepareReproUser(sandbox))
+        ) {
             return;
         }
 
@@ -1331,7 +1336,15 @@ export class SecurityScanEngine {
             if (!free) {
                 return;
             }
-            await sandbox.writeFile(target, record.content);
+            // Written by that user, never over a file already there.
+            const dir = target.slice(0, target.lastIndexOf('/'));
+            const written = await run(
+                `mkdir -p ${shellQuote(dir)} && (set -C; printf '%s' ${shellQuote(Buffer.from(record.content).toString('base64'))} | base64 -d > ${quoted})`,
+                30_000,
+            );
+            if (written.exitCode !== 0) {
+                return;
+            }
             const result = await run(
                 `cd ${work} && ${record.command}`,
                 180_000,
@@ -1349,8 +1362,52 @@ export class SecurityScanEngine {
                 ).slice(-4000),
             });
         } finally {
+            // Nothing it started outlives the test: a process left behind
+            // could still be writing while the lenses read.
+            await runCommand(
+                sandbox,
+                `pkill -KILL -u ${REPRO_USER}; true`,
+                10_000,
+                { asRoot: true },
+            );
             await this.restoreCheckout(params, scanned, before, record);
         }
+    }
+
+    /** Whether REPRO_USER exists and is ready to clone the checkout. */
+    private reproUserReady = false;
+
+    /**
+     * Creates the user reproduction tests run as, through the root channel,
+     * and checks as that user that it is not root, cannot write the review
+     * user's home nor the checkout, and that git reads the checkout.
+     */
+    private async prepareReproUser(sandbox: SandboxInstance): Promise<boolean> {
+        if (this.reproUserReady) {
+            return true;
+        }
+        const repo = shellQuote(sandbox.repoDir);
+        // The review user's home: crossed to reach the checkout, never
+        // listed or written.
+        const home = shellQuote(
+            sandbox.repoDir.slice(0, sandbox.repoDir.lastIndexOf('/')) || '/',
+        );
+        const created = await runCommand(
+            sandbox,
+            `(id -u ${REPRO_USER} >/dev/null 2>&1 || useradd -m -s /bin/bash ${REPRO_USER}) && chmod o+x ${home}`,
+            30_000,
+            { asRoot: true },
+        );
+        this.reproUserReady =
+            created.exitCode === 0 &&
+            (
+                await asReproUser(
+                    sandbox,
+                    `[ "$(id -u)" != 0 ] && ! sudo -n true 2>/dev/null && [ ! -w ${home} ] && [ ! -w ${repo} ] && git config --global --add safe.directory ${repo} && git config --global --add safe.directory ${repo}/.git && git -C ${repo} rev-parse -q HEAD >/dev/null`,
+                    30_000,
+                )
+            ).exitCode === 0;
+        return this.reproUserReady;
     }
 
     /** Created once per job: the clone reproduction tests run in. */
@@ -1569,11 +1626,11 @@ export class SecurityScanEngine {
         if (!command) {
             return;
         }
-        await sandbox
-            .run(`cd ${shellQuote(workdir)} && (${command})`, {
-                timeoutMs: 300_000,
-            })
-            .catch(() => undefined);
+        await asReproUser(
+            sandbox,
+            `cd ${shellQuote(workdir)} && (${command})`,
+            300_000,
+        );
     }
 
     private async testHints(
@@ -1668,6 +1725,28 @@ async function runCommand(
                   stderr: String(e?.message ?? error),
               };
     }
+}
+
+/**
+ * The user reproduction tests and their installs run as. Not the review
+ * user: every lens command reads that user's home (git config, shell
+ * profile), which a build hook or a test could otherwise rewrite.
+ */
+const REPRO_USER = 'kodus-repro';
+const REPRO_WORKDIR = `/home/${REPRO_USER}/repo`;
+
+/** A command run as REPRO_USER, in its own login environment. */
+function asReproUser(
+    sandbox: SandboxInstance,
+    command: string,
+    timeoutMs: number,
+) {
+    return runCommand(
+        sandbox,
+        `runuser -l ${REPRO_USER} -c ${shellQuote(command)}`,
+        timeoutMs,
+        { asRoot: true },
+    );
 }
 
 function shellQuote(value: string): string {

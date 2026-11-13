@@ -97,6 +97,14 @@ const SURFACE: SurfaceMap = {
     errors: [],
 };
 
+/** The command a reproduction runs as its own user, unwrapped. */
+function asRepro(command: string): string | undefined {
+    const m = /^runuser -l kodus-repro -c '([\s\S]*)'$/.exec(command);
+    return m ? m[1].replace(/'\\''/g, "'") : undefined;
+}
+
+const REPRO = '/home/kodus-repro/repo';
+
 function fakeSandbox(type: 'e2b' | 'local' = 'e2b') {
     const written: Record<string, string> = {};
     return {
@@ -121,13 +129,19 @@ function fakeSandbox(type: 'e2b' | 'local' = 'e2b') {
                 exitCode: 0,
             })),
         },
-        run: jest.fn(async (command: string) => {
+        run: jest.fn(async (outer: string) => {
+            const command = asRepro(outer) ?? outer;
+            const write = /printf '%s' '([^']*)' \| base64 -d > '([^']+)'\)$/.exec(command);
+            if (write) {
+                written[write[2]] = Buffer.from(write[1], 'base64').toString();
+                return { stdout: '', exitCode: 0 };
+            }
             if (command.startsWith('test -e')) {
                 // The reproduction worktree holds the same tracked files.
                 const taken = Object.keys(FILES).some(
                     (f) =>
                         command.includes(`'/repo/${f}'`) ||
-                        command.includes(`'/repo.repro/${f}'`),
+                        command.includes(`'${REPRO}/${f}'`),
                 );
                 if (!taken) {
                     // As E2B does: any exit but 0 is thrown, carrying it.
@@ -678,14 +692,14 @@ describe('SecurityScanEngine', () => {
         // checkout the lenses read; the worktree goes once it ran.
         expect(sandbox.written['/repo/src/orders/idor.repro.spec.ts']).toBeUndefined();
         expect(
-            sandbox.written['/repo.repro/src/orders/idor.repro.spec.ts'],
+            sandbox.written[`${REPRO}/src/orders/idor.repro.spec.ts`],
         ).toBeDefined();
-        const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
-        expect(commands).toContain("cd '/repo.repro' && npx jest src/orders/idor.repro.spec.ts");
+        const commands = sandbox.run.mock.calls.map((c: any[]) => asRepro(c[0]) ?? (c[0] as string));
+        expect(commands).toContain(`cd '${REPRO}' && npx jest src/orders/idor.repro.spec.ts`);
         // A clone of its own, sharing the checkout's objects read-only.
         expect(
             commands.some((c) =>
-                c.includes("git clone -q --shared --no-checkout '/repo' '/repo.repro'"),
+                c.includes(`git clone -q --shared --no-checkout '/repo' '${REPRO}'`),
             ),
         ).toBe(true);
         // The audit checkout, .git included, locked through the root channel.
@@ -714,6 +728,69 @@ describe('SecurityScanEngine', () => {
         );
     });
 
+    it('runs the test, its install and its clone as a user of its own, never as the review user', async () => {
+        const sandbox = fakeSandbox('e2b');
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        const calls = sandbox.run.mock.calls as [string, any][];
+        const ofRepro = (needle: string) =>
+            calls.filter(([c]) => c.includes(needle)).every(([c, o]) => !!asRepro(c) && o?.asRoot);
+        // Every lens command reads the review user's home (git config, shell
+        // profile): nothing the test runs may write it.
+        for (const step of ['git clone', 'npx jest', 'base64 -d']) {
+            expect(calls.some(([c]) => c.includes(step))).toBe(true);
+            expect(ofRepro(step)).toBe(true);
+        }
+        expect(calls.some(([c]) => c.includes('useradd -m -s /bin/bash kodus-repro'))).toBe(true);
+        // Checked as that user: not root, and the review user's home is not its to write.
+        expect(
+            calls.some(([c]) => (asRepro(c) ?? '').includes(`[ ! -w '/' ]`)),
+        ).toBe(true);
+        // Nothing it started outlives the test.
+        expect(sandbox.run).toHaveBeenCalledWith(
+            'pkill -KILL -u kodus-repro; true',
+            expect.objectContaining({ asRoot: true }),
+        );
+    });
+
+    it('runs no test where its own user cannot be made', async () => {
+        const sandbox = fakeSandbox('e2b');
+        const run = sandbox.run.getMockImplementation()!;
+        sandbox.run.mockImplementation(async (command: string, opts: any) =>
+            command.includes('useradd')
+                ? { stdout: '', stderr: 'useradd: not found', exitCode: 127 }
+                : run(command, opts),
+        );
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
+        expect(commands.some((c) => c.includes('npx jest'))).toBe(false);
+    });
+
     it('runs no test where the checkout cannot be pinned to its path', async () => {
         const sandbox = fakeSandbox('e2b');
         const run = sandbox.run.getMockImplementation()!;
@@ -736,7 +813,7 @@ describe('SecurityScanEngine', () => {
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
+        const commands = sandbox.run.mock.calls.map((c: any[]) => asRepro(c[0]) ?? (c[0] as string));
         expect(commands.some((c) => c.includes('npx jest'))).toBe(false);
     });
 
@@ -810,7 +887,7 @@ describe('SecurityScanEngine', () => {
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
+        const commands = sandbox.run.mock.calls.map((c: any[]) => asRepro(c[0]) ?? (c[0] as string));
         expect(commands.some((c) => c.includes('npx jest'))).toBe(false);
         expect(result.findings[0].reproduction).toEqual(expect.objectContaining({ executed: false }));
     });
@@ -906,7 +983,7 @@ describe('SecurityScanEngine', () => {
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
+        const commands = sandbox.run.mock.calls.map((c: any[]) => asRepro(c[0]) ?? (c[0] as string));
         expect(commands.some((c) => c.includes('npx jest'))).toBe(false);
         expect(commands.some((c) => c.startsWith('chown'))).toBe(false);
         expect(result.findings[0].reproduction).toEqual(expect.objectContaining({ executed: false }));
@@ -980,7 +1057,9 @@ describe('SecurityScanEngine', () => {
         const sandbox = fakeSandbox('e2b');
         const run = sandbox.run.getMockImplementation()!;
         sandbox.run.mockImplementation(async (command: string) =>
-            command.startsWith('test -e') ? Promise.reject(new Error('timed out')) : run(command),
+            (asRepro(command) ?? command).startsWith('test -e')
+                ? Promise.reject(new Error('timed out'))
+                : run(command),
         );
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
@@ -996,7 +1075,7 @@ describe('SecurityScanEngine', () => {
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        expect(sandbox.writeFile).not.toHaveBeenCalled();
+        expect(sandbox.written).toEqual({});
         expect(result.findings[0].reproduction).toEqual(expect.objectContaining({ executed: false }));
     });
 
@@ -1029,8 +1108,8 @@ describe('SecurityScanEngine', () => {
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        expect(sandbox.writeFile).not.toHaveBeenCalled();
-        const commands = sandbox.run.mock.calls.map((c: any[]) => c[0]);
+        expect(sandbox.written).toEqual({});
+        const commands = sandbox.run.mock.calls.map((c: any[]) => asRepro(c[0]) ?? c[0]);
         // Nothing in the repository's checkout is removed (the reproduction
         // clone beside it is its own).
         expect(
@@ -1066,7 +1145,7 @@ describe('SecurityScanEngine', () => {
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        expect(sandbox.writeFile).not.toHaveBeenCalled();
+        expect(sandbox.written).toEqual({});
         expect(
             sandbox.run.mock.calls.some(([c]: [string]) => c.includes('jest')),
         ).toBe(false);
