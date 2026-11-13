@@ -421,6 +421,17 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
 
         // Whether this slice made (or grew) the plan: progress of its own.
         let planned = false;
+        // Renews the job's lease, or throws when it no longer runs the scan.
+        const stillOwned = async () => {
+            signal?.throwIfAborted();
+            if (
+                !(await this.scans.claim(scan.uuid, jobId, SCAN_JOB_LEASE_MS))
+            ) {
+                throw new Error(
+                    `Security scan ${scan.uuid} is no longer run by job ${jobId}`,
+                );
+            }
+        };
         const engine = new SecurityScanEngine();
         const result = await engine.run({
             organizationId: scan.organizationId,
@@ -471,6 +482,11 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 });
             },
             onUnitDone: async (progress, findings, sighted) => {
+                // Writes nothing once this job lost the scan: timed out (the
+                // scan failed, its sandbox gone, the slice still running in
+                // the background) or claimed by another job. A later scan
+                // may have resolved what this one would reopen.
+                await stillOwned();
                 // An earlier finding a unit found again is seen by this scan.
                 if (sighted?.length) {
                     // Found again: one resolved since is reopened.
@@ -489,6 +505,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     counts.stillOpen += stillOpen;
                 }
                 for (const finding of findings) {
+                    signal?.throwIfAborted();
                     const outcome = await this.storeFinding(
                         scan,
                         finding,

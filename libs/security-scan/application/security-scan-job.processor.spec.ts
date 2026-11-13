@@ -156,6 +156,51 @@ const finishedResult = (overrides = {}) => ({
 });
 
 describe('SecurityScanJobProcessor', () => {
+    it('writes no issue from a slice still running after its job timed out', async () => {
+        const { processor, issuesService, scans } = setup({});
+        let resume!: () => void;
+        const paused = new Promise<void>((r) => (resume = r));
+        let unitDone!: Promise<unknown>;
+        (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
+            run: jest.fn(async (params: any) => {
+                await paused;
+                unitDone = params
+                    .onUnitDone({ unitId: 'u1', state: 'pending', findings: 0 }, [finding], ['fp-old'])
+                    .catch((e: Error) => e);
+                await unitDone;
+                return finishedResult();
+            }),
+        }));
+        const timeout = new AbortController();
+
+        const processed = processor.process('job-1', timeout.signal);
+        await new Promise((r) => setImmediate(r));
+        timeout.abort();
+        await processed;
+        // The slice goes on in the background, past the job's end.
+        resume();
+        await new Promise((r) => setImmediate(r));
+        await unitDone;
+
+        expect(issuesService.upsertScanFinding).not.toHaveBeenCalled();
+        expect(issuesService.markScanFindingsSeen).not.toHaveBeenCalled();
+        expect(scans.recordUnit).not.toHaveBeenCalled();
+    });
+
+    it('writes no issue once another job holds the scan', async () => {
+        const { processor, issuesService, scans } = setup({
+            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 1 }, [finding], ['fp-old']]],
+            result: finishedResult(),
+        });
+        // Claimed at the start, then lost.
+        scans.claim.mockResolvedValueOnce(scanRecord() as any).mockResolvedValue(null);
+
+        await processor.process('job-1');
+
+        expect(issuesService.upsertScanFinding).not.toHaveBeenCalled();
+        expect(issuesService.markScanFindingsSeen).not.toHaveBeenCalled();
+    });
+
     it('stores each finding as an issue, resolves what was not seen again and completes', async () => {
         const { processor, scans, issuesService, sandbox, kodyIssuesManagement, leaseManager } =
             setup({
