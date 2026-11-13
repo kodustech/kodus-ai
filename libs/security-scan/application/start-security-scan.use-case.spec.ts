@@ -146,7 +146,9 @@ describe('StartSecurityScanUseCase — running again continues', () => {
     it('starts nothing when the provider cannot say which branch is the default', async () => {
         const { scans, start, jobQueue } = useCaseWith(null, 'GITHUB', new Error('502'));
 
-        await expect(start()).rejects.toThrow(/Try again/);
+        const error = await start().catch((e) => e);
+        expect(error.message).toMatch(/Try again/);
+        expect(error.getStatus()).toBe(503);
         expect(scans.create).not.toHaveBeenCalled();
         expect(jobQueue.enqueue).not.toHaveBeenCalled();
     });
@@ -154,7 +156,10 @@ describe('StartSecurityScanUseCase — running again continues', () => {
     it('names both causes when the provider gives no default branch: an empty repository, or an error it answered empty', async () => {
         const { scans, start } = useCaseWith(null, 'GITHUB', '');
 
-        await expect(start()).rejects.toThrow(/gave no default branch.*empty.*try again/);
+        const error = await start().catch((e) => e);
+        expect(error.message).toMatch(/gave no default branch.*empty.*try again/);
+        // Retryable: Bitbucket Cloud answers empty on its own errors too.
+        expect(error.getStatus()).toBe(503);
         expect(scans.create).not.toHaveBeenCalled();
     });
 
