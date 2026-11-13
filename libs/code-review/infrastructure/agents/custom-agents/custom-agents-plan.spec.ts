@@ -1,6 +1,9 @@
 import { environment } from '@libs/ee/configs/environment';
 
-import { isCustomAgentsReleaseAllowed } from './custom-agents-plan';
+import {
+    customAgentsBlockedBy,
+    isCustomAgentsReleaseAllowed,
+} from './custom-agents-plan';
 
 jest.mock('@libs/ee/configs/environment', () => {
     const actual = jest.requireActual('@libs/ee/configs/environment');
@@ -57,4 +60,60 @@ describe('isCustomAgentsReleaseAllowed', () => {
             expect(isCustomAgentsReleaseAllowed()).toBe(true);
         },
     );
+});
+
+// What the review's config stage and Try it both ask before running an agent.
+describe('customAgentsBlockedBy', () => {
+    const betaFeatures = process.env.BETA_FEATURES;
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
+    const license = (planType: string) =>
+        ({
+            validateOrganizationLicense: jest.fn().mockResolvedValue({
+                valid: true,
+                subscriptionStatus: 'active',
+                planType,
+            }),
+        }) as any;
+    const blockedBy = (planType: string) =>
+        customAgentsBlockedBy(license(planType), organizationAndTeamData, 't');
+
+    beforeEach(() => {
+        environment.API_CLOUD_MODE = false;
+        delete process.env.BETA_FEATURES;
+    });
+
+    afterEach(() => {
+        environment.API_CLOUD_MODE = true;
+        if (betaFeatures === undefined) {
+            delete process.env.BETA_FEATURES;
+        } else {
+            process.env.BETA_FEATURES = betaFeatures;
+        }
+    });
+
+    it('lets a self-hosted install with BETA_FEATURES=true and a plan that has them run', async () => {
+        process.env.BETA_FEATURES = 'true';
+
+        await expect(blockedBy('teams_byok')).resolves.toBeNull();
+    });
+
+    it('still asks the plan of a self-hosted install with BETA_FEATURES=true', async () => {
+        process.env.BETA_FEATURES = 'true';
+
+        await expect(blockedBy('free_byok')).resolves.toBe('plan');
+    });
+
+    it('names the release stage before reading the plan when BETA_FEATURES is off', async () => {
+        const licenseService = license('teams_byok');
+
+        await expect(
+            customAgentsBlockedBy(licenseService, organizationAndTeamData, 't'),
+        ).resolves.toBe('beta');
+        expect(
+            licenseService.validateOrganizationLicense,
+        ).not.toHaveBeenCalled();
+    });
 });
