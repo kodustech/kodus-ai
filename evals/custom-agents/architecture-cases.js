@@ -1,10 +1,11 @@
 // P13 Architecture template: the built-in Architecture agent, saved unchanged
 // from the New agent dialog, flags a domain module that depends on the web
 // layer and a controller that computes a business rule itself, and stays quiet
-// on the same changes written right (controls). The instructions are read from
+// on the same changes written right and on a shared frontend component built
+// on UI primitives (controls). The instructions are read from
 // the web app's templates, the text the dialog and the CLI hand a team, so a
 // template edit is what this eval measures.
-// Invented domain: a subscription team's quotes and renewals.
+// Invented domain: a subscription team's quotes and renewals, and its web app.
 
 const fs = require('fs');
 const path = require('path');
@@ -90,6 +91,37 @@ const RENEWALS_BEFORE = `import { renewalPriceCents } from '../services/pricing'
 export function renewalQuote(req: any, res: any) {
     const { plan, loyal } = req.body;
     res.json({ priceCents: renewalPriceCents(plan, loyal) });
+}
+`;
+
+const UI_TABLE_TSX = `/** Styled table primitives; no data, no app state. */
+export function Table(props: { children: React.ReactNode }) {
+    return <table className="w-full text-sm">{props.children}</table>;
+}
+
+export function TableRow(props: { children: React.ReactNode }) {
+    return <tr className="border-b">{props.children}</tr>;
+}
+
+export function TableCell(props: { children: React.ReactNode }) {
+    return <td className="px-3 py-2">{props.children}</td>;
+}
+`;
+
+const UI_BUTTON_TSX = `export function Button(props: { onClick: () => void; children: React.ReactNode }) {
+    return <button className="rounded px-3 py-1" onClick={props.onClick}>{props.children}</button>;
+}
+`;
+
+const SHARED_EMPTY_STATE_TSX = `import { Button } from '../components/ui/button';
+
+export function EmptyState(props: { message: string; onRetry: () => void }) {
+    return (
+        <div>
+            <p>{props.message}</p>
+            <Button onClick={props.onRetry}>Retry</Button>
+        </div>
+    );
 }
 `;
 
@@ -218,6 +250,45 @@ export function renewalQuote(req: any, res: any) {
                 property: 'P13',
                 quiet: 'src/controllers/renewals.controller.ts',
                 about: BUSINESS,
+            },
+        ],
+    },
+    {
+        id: 'architecture-shared-component-uses-ui-primitive',
+        checks: 'The Architecture template stays quiet when a shared frontend component builds on the UI primitives, the direction the rest of the shared components already follow (control)',
+        team: { agent },
+        prTitle: 'Shared data table',
+        prBody: 'Invoices and renewals pages will render their rows with one shared table.',
+        before: { 'src/shared/DataTable.tsx': null },
+        repo: {
+            'src/components/ui/table.tsx': UI_TABLE_TSX,
+            'src/components/ui/button.tsx': UI_BUTTON_TSX,
+            'src/shared/EmptyState.tsx': SHARED_EMPTY_STATE_TSX,
+            'src/shared/DataTable.tsx': `import { Table, TableCell, TableRow } from '../components/ui/table';
+
+export function DataTable<Row>(props: {
+    rows: Row[];
+    columns: { key: keyof Row; label: string }[];
+}) {
+    return (
+        <Table>
+            {props.rows.map((row, i) => (
+                <TableRow key={i}>
+                    {props.columns.map((column) => (
+                        <TableCell key={String(column.key)}>{String(row[column.key])}</TableCell>
+                    ))}
+                </TableRow>
+            ))}
+        </Table>
+    );
+}
+`,
+        },
+        expect: [
+            {
+                property: 'P13',
+                quiet: 'src/shared/DataTable.tsx',
+                about: LAYER,
             },
         ],
     },

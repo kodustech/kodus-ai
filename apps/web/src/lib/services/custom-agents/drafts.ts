@@ -118,7 +118,7 @@ export const CUSTOM_AGENT_TEMPLATES: CustomAgentTemplate[] = [
         instructions: [
             "Review the change against the architecture this repository already follows.",
             "Flag imports that cross a layer boundary the rest of the code respects, business logic placed in controllers or adapters, and new modules that duplicate one that already exists.",
-            "Dependencies point inward: a domain, model or shared module that imports from a controller, route handler, adapter, job, UI component or web framework, even only a type such as the request object, reverses that direction.",
+            "Dependencies point inward: domain or model code that imports from a controller, route handler, adapter, job, page or web framework, even only a type such as the request object, reverses that direction. A component built on the UI primitives follows it.",
             "Cite the file or doc that shows the existing pattern; do not flag style or naming.",
         ].join("\n"),
     },
