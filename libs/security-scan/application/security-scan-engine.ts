@@ -1273,20 +1273,27 @@ export class SecurityScanEngine {
         if (!scanned || !before) {
             return;
         }
+        // The checkout the lenses read, and its git metadata, are made
+        // read-only to the user the test runs as; without that no test runs.
+        if (!(await this.lockAuditCheckout(sandbox))) {
+            return;
+        }
 
-        const ready = this.reproWorktree
+        // A clone of its own, sharing the checkout's objects read-only: the
+        // command can write its index, files and branches, never the audit's.
+        const ready = this.reproClone
             ? await run(
                   `git -C ${work} reset -q --hard ${shellQuote(scanned)} && git -C ${work} clean -fdq -e node_modules -e .venv -e vendor`,
                   60_000,
               )
             : await run(
-                  `git -C ${repo} worktree remove --force ${work} >/dev/null 2>&1; git -C ${repo} worktree add --detach ${work} ${shellQuote(scanned)}`,
-                  60_000,
+                  `rm -rf ${work} && git clone -q --shared --no-checkout ${repo} ${work} && git -C ${work} checkout -q --detach ${shellQuote(scanned)}`,
+                  120_000,
               );
         if (ready.exitCode !== 0) {
             return;
         }
-        this.reproWorktree = true;
+        this.reproClone = true;
 
         try {
             await this.ensureDependencies(sandbox, language, workdir);
@@ -1323,8 +1330,59 @@ export class SecurityScanEngine {
         }
     }
 
-    /** Created once per job: the worktree reproduction tests run in. */
-    private reproWorktree = false;
+    /** Created once per job: the clone reproduction tests run in. */
+    private reproClone = false;
+
+    /** Whether the audit checkout is read-only to the review user. */
+    private auditCheckoutLocked = false;
+
+    /**
+     * Makes the checkout the lenses read, and its .git, read-only to the
+     * review user: owned by root, writable by nobody else. Only possible in a
+     * sandbox whose review user cannot become root (privileges dropped) and
+     * through the provider's root channel; anywhere else, false. The sandbox
+     * is the slice's own (its lease key is unique), so it stays locked.
+     */
+    private async lockAuditCheckout(
+        sandbox: SandboxInstance,
+    ): Promise<boolean> {
+        if (this.auditCheckoutLocked) {
+            return true;
+        }
+        if (sandbox.type !== 'e2b' || sandbox.privilegesDropped !== true) {
+            return false;
+        }
+        const repo = shellQuote(sandbox.repoDir);
+        // git refuses a repository another user owns unless told it is safe.
+        const trusted = await runCommand(
+            sandbox,
+            `git config --global --add safe.directory ${repo}`,
+            10_000,
+        );
+        const locked =
+            trusted.exitCode === 0 &&
+            (
+                await runCommand(
+                    sandbox,
+                    `chown -R root:root ${repo} && chmod -R a+rX,go-w ${repo}`,
+                    120_000,
+                    { asRoot: true },
+                )
+            ).exitCode === 0;
+        // Checked as the review user: neither the files nor .git writable,
+        // and git still reads it.
+        const verified =
+            locked &&
+            (
+                await runCommand(
+                    sandbox,
+                    `[ ! -w ${repo} ] && [ ! -w ${repo}/.git ] && [ ! -w ${repo}/.git/index ] && git -C ${repo} rev-parse -q HEAD >/dev/null`,
+                    30_000,
+                )
+            ).exitCode === 0;
+        this.auditCheckoutLocked = verified;
+        return verified;
+    }
 
     private async headOf(
         sandbox: SandboxInstance,
@@ -1408,7 +1466,10 @@ export class SecurityScanEngine {
             ...(planted.length ? [`rm -rf -- ${planted.join(' ')}`] : []),
         ];
         for (const command of commands) {
-            const result = await runCommand(sandbox, command, 30_000);
+            // Through the root channel: the checkout is root's now.
+            const result = await runCommand(sandbox, command, 30_000, {
+                asRoot: true,
+            });
             if (result.exitCode !== 0) {
                 throw new ScanFailure(SCAN_CHECKOUT_TAMPERED_MESSAGE);
             }
@@ -1504,9 +1565,13 @@ async function runCommand(
     sandbox: SandboxInstance,
     command: string,
     timeoutMs: number,
+    opts: { asRoot?: boolean } = {},
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     try {
-        const r = await sandbox.run(command, { timeoutMs });
+        const r = await sandbox.run(command, {
+            timeoutMs,
+            ...(opts.asRoot ? { asRoot: true } : {}),
+        });
         return {
             exitCode: r.exitCode,
             stdout: r.stdout ?? '',

@@ -4,6 +4,7 @@ import { getOrganizationName } from "@services/organizations/fetch";
 import { getOrganizationReleaseTrack } from "@services/organizations/release-track";
 import { getPermissions } from "@services/permissions/fetch";
 import { getTeams } from "@services/teams/fetch";
+import { auth } from "src/core/config/auth";
 import { FEATURE_FLAGS } from "src/core/config/feature-flags";
 import { isFeatureEnabled } from "src/core/feature-gate/resolver";
 import {
@@ -93,14 +94,32 @@ export const getLayoutData = cache(async (teamId: string) => {
     };
 });
 
-/** Whether the organization is in the deep scan's private alpha. */
-export const isDeepScanEnabled = cache(async () =>
-    isFeatureEnabled({
+/**
+ * Whether the organization is in the deep scan's private alpha. The same env
+ * allow-list the API's gate reads (`*` or comma-separated organization ids)
+ * opens it first, on dev VMs and previews, so the page and the API agree.
+ */
+export const isDeepScanEnabled = cache(async () => {
+    const allow = (process.env.API_DEEP_SCAN_ALPHA_ORGS ?? "").trim();
+    if (allow) {
+        const organizationId = (await auth())?.user?.organizationId;
+        if (
+            allow === "*" ||
+            (!!organizationId &&
+                allow
+                    .split(",")
+                    .map((id) => id.trim())
+                    .includes(organizationId))
+        ) {
+            return true;
+        }
+    }
+    return isFeatureEnabled({
         feature: FEATURE_FLAGS.deepScan,
         identifier: "organization",
         releaseTrack: await getOrganizationReleaseTrack(),
-    }),
-);
+    });
+});
 
 /**
  * Fetches teams with request-level caching.

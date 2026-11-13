@@ -103,6 +103,8 @@ function fakeSandbox(type: 'e2b' | 'local' = 'e2b') {
         type,
         repoDir: '/repo',
         sandboxId: 'sbx',
+        // An E2B sandbox whose review user cannot become root.
+        privilegesDropped: type === 'e2b',
         written,
         remoteCommands: {
             grep: jest.fn(async () => 'No matches found.'),
@@ -676,10 +678,17 @@ describe('SecurityScanEngine', () => {
         ).toBeDefined();
         const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
         expect(commands).toContain("cd '/repo.repro' && npx jest src/orders/idor.repro.spec.ts");
-        // A worktree of the scanned commit, kept for the job.
+        // A clone of its own, sharing the checkout's objects read-only.
         expect(
-            commands.some((c) => c.includes("worktree add --detach '/repo.repro' 'abc123'")),
+            commands.some((c) =>
+                c.includes("git clone -q --shared --no-checkout '/repo' '/repo.repro'"),
+            ),
         ).toBe(true);
+        // The audit checkout, .git included, locked through the root channel.
+        expect(sandbox.run).toHaveBeenCalledWith(
+            "chown -R root:root '/repo' && chmod -R a+rX,go-w '/repo'",
+            expect.objectContaining({ asRoot: true }),
+        );
         // Dependencies install there, never in the checkout the lenses read.
         expect(commands.some((c) => c.startsWith("cd '/repo' &&"))).toBe(false);
         expect(result.findings[0].reproduction).toEqual(
@@ -840,6 +849,30 @@ describe('SecurityScanEngine', () => {
         );
     });
 
+    it('runs no reproduction where the audit checkout cannot be made read-only to it', async () => {
+        const sandbox = fakeSandbox('e2b');
+        // The review user can still become root: nothing it could not undo.
+        sandbox.privilegesDropped = false;
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
+        expect(commands.some((c) => c.includes('npx jest'))).toBe(false);
+        expect(commands.some((c) => c.startsWith('chown'))).toBe(false);
+        expect(result.findings[0].reproduction).toEqual(expect.objectContaining({ executed: false }));
+    });
+
     it('writes no test where it could not check that the path is free', async () => {
         const sandbox = fakeSandbox('e2b');
         const run = sandbox.run.getMockImplementation()!;
@@ -895,7 +928,11 @@ describe('SecurityScanEngine', () => {
 
         expect(sandbox.writeFile).not.toHaveBeenCalled();
         const commands = sandbox.run.mock.calls.map((c: any[]) => c[0]);
-        expect(commands.some((c: string) => c.startsWith('rm '))).toBe(false);
+        // Nothing in the repository's checkout is removed (the reproduction
+        // clone beside it is its own).
+        expect(
+            commands.some((c: string) => c.startsWith('rm ') && c.includes("'/repo/")),
+        ).toBe(false);
         expect(commands.some((c: string) => c.includes('npx jest'))).toBe(
             false,
         );

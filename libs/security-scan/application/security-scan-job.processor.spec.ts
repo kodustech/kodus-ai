@@ -410,6 +410,26 @@ describe('SecurityScanJobProcessor', () => {
         expect(lastUpdate(scans).error).toEqual(expect.stringContaining('made no progress'));
     });
 
+    it('records what a failed slice spent', async () => {
+        const { processor, scans } = setup({ result: finishedResult() });
+        // The slice spends, then fails before any unit lands.
+        (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
+            run: jest.fn(async (params: any) => {
+                params.meter.record({ usage: { inputTokens: 100_000, outputTokens: 5_000 } });
+                throw new Error('provider exploded');
+            }),
+        }));
+
+        await processor.process('job-1');
+
+        const failed = lastUpdate(scans);
+        expect(failed.status).toBe(SecurityScanStatus.FAILED);
+        expect(failed.spend).toEqual(
+            expect.objectContaining({ inputTokens: 100_000, outputTokens: 5_000 }),
+        );
+        expect(failed.spend.usd).toBeGreaterThan(0);
+    });
+
     it('stops a job that lost its scan, writing and resolving nothing more', async () => {
         const { processor, scans, issuesService } = setup({
             unitEvents: [[{ unitId: 'u1', state: 'done', findings: 0 }, []]],

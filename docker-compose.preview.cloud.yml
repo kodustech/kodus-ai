@@ -27,3 +27,5 @@ services:
     web:
         environment:
             - API_CLOUD_MODE=true
+            # The page reads the same allow-list as the API's gate.
+            - API_DEEP_SCAN_ALPHA_ORGS=*

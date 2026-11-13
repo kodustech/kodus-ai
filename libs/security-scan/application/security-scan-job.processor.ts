@@ -137,6 +137,10 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
 
         const active = [SecurityScanStatus.QUEUED, SecurityScanStatus.RUNNING];
         let releaseLease: (() => Promise<void>) | undefined;
+        // What the slice spent, so a failure records it too: units write
+        // spend as they land, and what was spent since the last one would
+        // be lost.
+        let sliceMeter: ScanBudgetMeter | undefined;
         let outcome: Record<string, unknown>;
         try {
             // Inside the try: a failure here fails the scan, instead of
@@ -174,6 +178,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     payload.organizationAndTeamData,
                     signal,
                     (release) => (releaseLease = release),
+                    (meter) => (sliceMeter = meter),
                 ),
                 signal,
             );
@@ -196,6 +201,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     status: SecurityScanStatus.FAILED,
                     error: scanErrorMessage(error),
                     finishedAt: new Date().toISOString(),
+                    ...(sliceMeter ? { spend: sliceMeter.snapshot() } : {}),
                 },
                 undefined,
                 { statuses: active, ownedBy: jobId, orUnowned: true },
@@ -253,6 +259,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         orgTeam: OrganizationAndTeamData,
         signal: AbortSignal | undefined,
         onLease: (release: () => Promise<void>) => void,
+        onMeter: (meter: ScanBudgetMeter) => void = () => undefined,
     ): Promise<Record<string, unknown>> {
         const sliceStartedAt = Date.now();
 
@@ -280,6 +287,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             scan.spend,
             model.contextWindowTokens,
         );
+        onMeter(meter);
 
         const cloneParams = await this.codeManagementService.getCloneParams(
             {
