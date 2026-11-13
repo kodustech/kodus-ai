@@ -87,6 +87,12 @@ export interface ImplementationCheckRecord {
      */
     verdict?: ImplementationStatus;
     reason?: ImplementationUnmeasuredReason;
+    /**
+     * For a suggestion that stands for several locations ("Also found in"):
+     * the ones found fixed so far. A later push shows only its own changes,
+     * so the locations fixed before it are remembered here.
+     */
+    implementedLocations?: string[];
 }
 
 /** How many suggestions a check left unmeasured, per reason. */

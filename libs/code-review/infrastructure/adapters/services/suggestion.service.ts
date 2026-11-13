@@ -44,8 +44,15 @@ import {
     ISuggestionByPR,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import {
+    groupImplementationStatus,
+    problemWithoutLocations,
+    suggestionLocations,
+    type SuggestionLocation,
+} from '@libs/code-review/infrastructure/agents/engine/suggestion-locations';
+import {
     countByReason,
     ImplementationCheckRecord,
+    type ImplementationUnmeasuredReason,
     normalizeImplementationStatus,
     raisesImplementationStatus,
     resolvesSuggestionThread,
@@ -132,9 +139,30 @@ export class SuggestionService implements ISuggestionService {
         }
 
         const patches = new Map(changedFiles.map((f) => [f.filename, f.patch]));
-        const onChangedFiles = candidates.filter(
-            (s) => s.relevantFile && patches.has(s.relevantFile),
-        );
+
+        // A suggestion may stand for several locations ("Also found in").
+        // Each one is read on its own file, and the ones an earlier check
+        // found fixed are not read again: this diff no longer shows them.
+        const groups = candidates.map((suggestion) => {
+            const locations = suggestionLocations(suggestion);
+            const fixed = new Set(
+                locations.length > 1
+                    ? (suggestion.implementationCheck?.implementedLocations ??
+                          [])
+                    : [],
+            );
+            return {
+                suggestion,
+                locations,
+                fixed,
+                changed: locations.filter(
+                    (location) =>
+                        !fixed.has(location.key) && patches.has(location.file),
+                ),
+            };
+        });
+        const groupsOnChangedFiles = groups.filter((g) => g.changed.length);
+        const onChangedFiles = groupsOnChangedFiles.map((g) => g.suggestion);
 
         if (!onChangedFiles.length) {
             return {
@@ -144,21 +172,74 @@ export class SuggestionService implements ISuggestionService {
             };
         }
 
+        type LocationAsk = {
+            group: (typeof groups)[number];
+            location: SuggestionLocation;
+            asked: ImplementationCheckSuggestion;
+        };
         const unmeasured: ImplementationCheckResult['unmeasured'] = [];
-        const verdicts: { id: string; status: ImplementationStatus }[] = [];
-        const byFile = new Map<string, Partial<ISuggestion>[]>();
+        const verdicts: {
+            id: string;
+            status: ImplementationStatus;
+            implementedLocations?: string[];
+        }[] = [];
+        const byFile = new Map<string, LocationAsk[]>();
+        // What this check learned about each location, by the id it was asked under.
+        const answers = new Map<
+            string,
+            | { status: ImplementationStatus }
+            | { reason: ImplementationUnmeasuredReason }
+        >();
+        const askIdOf = (
+            group: (typeof groups)[number],
+            location: SuggestionLocation,
+        ) =>
+            location.own
+                ? group.suggestion.id
+                : `${group.suggestion.id}#${group.locations.indexOf(location)}`;
 
-        for (const s of onChangedFiles) {
-            // Only the changes since the last review say what the developer
-            // did; the whole PR's diff holds the code the suggestion was about.
-            if (diffSource === 'full' || diffSource === 'none') {
-                unmeasured.push({ id: s.id, reason: 'diff_unavailable' });
-            } else if (!patches.get(s.relevantFile)) {
-                unmeasured.push({ id: s.id, reason: 'diff_unavailable' });
-            } else {
-                byFile.set(s.relevantFile, [
-                    ...(byFile.get(s.relevantFile) || []),
-                    s,
+        for (const group of groupsOnChangedFiles) {
+            const s = group.suggestion;
+            for (const location of group.changed) {
+                const askId = askIdOf(group, location);
+                // Only the changes since the last review say what the developer
+                // did; the whole PR's diff holds the code the suggestion was about.
+                if (
+                    diffSource === 'full' ||
+                    diffSource === 'none' ||
+                    !patches.get(location.file)
+                ) {
+                    answers.set(askId, { reason: 'diff_unavailable' });
+                    continue;
+                }
+                const problem = s.suggestionContent || s.fullExplanation || '';
+                byFile.set(location.file, [
+                    ...(byFile.get(location.file) || []),
+                    {
+                        group,
+                        location,
+                        asked: location.own
+                            ? {
+                                  id: askId,
+                                  relevantLinesStart: s.relevantLinesStart,
+                                  relevantLinesEnd: s.relevantLinesEnd,
+                                  // What the developer read in the comment.
+                                  problem:
+                                      group.locations.length > 1
+                                          ? problemWithoutLocations(problem)
+                                          : problem,
+                                  existingCode: s.existingCode,
+                                  improvedCode: s.improvedCode,
+                              }
+                            : {
+                                  // The code quoted in the comment is the
+                                  // kept location's, not this one's.
+                                  id: askId,
+                                  relevantLinesStart: location.start,
+                                  relevantLinesEnd: location.end,
+                                  problem: problemWithoutLocations(problem),
+                              },
+                    },
                 ]);
             }
         }
@@ -176,21 +257,12 @@ export class SuggestionService implements ISuggestionService {
                 }) * IMPLEMENTATION_CHECK_PROMPT_SHARE,
             );
 
-            const requests = [...byFile].map(([filename, suggestions]) => ({
-                suggestions,
+            const requests = [...byFile].map(([filename, asks]) => ({
                 file: { filename, patch: patches.get(filename) },
-                asked: suggestions.map((s): ImplementationCheckSuggestion => ({
-                    id: s.id,
-                    relevantLinesStart: s.relevantLinesStart,
-                    relevantLinesEnd: s.relevantLinesEnd,
-                    // What the developer read in the comment.
-                    problem: s.suggestionContent || s.fullExplanation || '',
-                    existingCode: s.existingCode,
-                    improvedCode: s.improvedCode,
-                })),
+                asked: asks.map((ask) => ask.asked),
             }));
 
-            const files = requests.filter(({ file, asked, suggestions }) => {
+            const files = requests.filter(({ file, asked }) => {
                 const prompt = prompt_checkSuggestionImplementation({
                     file,
                     suggestions: asked,
@@ -200,8 +272,8 @@ export class SuggestionService implements ISuggestionService {
                 if (Math.ceil(prompt.length / 3) <= maxPromptTokens) {
                     return true;
                 }
-                for (const s of suggestions) {
-                    unmeasured.push({ id: s.id, reason: 'diff_too_large' });
+                for (const { id } of asked) {
+                    answers.set(id, { reason: 'diff_too_large' });
                 }
                 return false;
             });
@@ -224,11 +296,15 @@ export class SuggestionService implements ISuggestionService {
             settled.forEach((outcome, i) => {
                 const {
                     file: { filename },
-                    suggestions,
+                    asked,
                 } = files[i];
                 if (outcome.status === 'fulfilled') {
-                    verdicts.push(...outcome.value.verdicts);
-                    unmeasured.push(...outcome.value.unmeasured);
+                    for (const { id, status } of outcome.value.verdicts) {
+                        answers.set(id, { status });
+                    }
+                    for (const { id, reason } of outcome.value.unmeasured) {
+                        answers.set(id, { reason });
+                    }
                     return;
                 }
                 this.logger.error({
@@ -239,13 +315,64 @@ export class SuggestionService implements ISuggestionService {
                         organizationAndTeamData,
                         prNumber,
                         file: filename,
-                        suggestions: suggestions.length,
+                        suggestions: asked.length,
                     },
                 });
-                for (const s of suggestions) {
-                    unmeasured.push({ id: s.id, reason: 'llm_error' });
+                for (const { id } of asked) {
+                    answers.set(id, { reason: 'llm_error' });
                 }
             });
+        }
+
+        // One verdict per suggestion, from what was learned of its locations.
+        for (const group of groupsOnChangedFiles) {
+            const { id } = group.suggestion;
+            const read = group.changed.map((location) => ({
+                location,
+                answer: answers.get(askIdOf(group, location)),
+            }));
+            const undecided = read.find(
+                ({ answer }) => !answer || 'reason' in answer,
+            );
+            const reason =
+                undecided?.answer && 'reason' in undecided.answer
+                    ? undecided.answer.reason
+                    : 'omitted';
+            const statusOf = (answer: (typeof read)[number]['answer']) =>
+                answer && 'status' in answer ? answer.status : undefined;
+
+            if (group.locations.length === 1) {
+                const status = statusOf(read[0]?.answer);
+                if (status) verdicts.push({ id, status });
+                else unmeasured.push({ id, reason });
+                continue;
+            }
+
+            const fixed = new Set([
+                ...group.fixed,
+                ...read
+                    .filter(
+                        ({ answer }) =>
+                            statusOf(answer) ===
+                            ImplementationStatus.IMPLEMENTED,
+                    )
+                    .map(({ location }) => location.key),
+            ]);
+            const status = groupImplementationStatus({
+                locations: group.locations,
+                fixed,
+                partial: read.some(
+                    ({ answer }) =>
+                        statusOf(answer) ===
+                        ImplementationStatus.PARTIALLY_IMPLEMENTED,
+                ),
+                undecided: !!undecided,
+            });
+            if (status) {
+                verdicts.push({ id, status, implementedLocations: [...fixed] });
+            } else {
+                unmeasured.push({ id, reason });
+            }
         }
 
         const byId = new Map(onChangedFiles.map((s) => [s.id, s]));
@@ -266,12 +393,15 @@ export class SuggestionService implements ISuggestionService {
         const writes = pLimit(IMPLEMENTATION_CHECK_WRITE_CONCURRENCY);
 
         await Promise.all([
-            ...verdicts.map(({ id, status }) =>
+            ...verdicts.map(({ id, status, implementedLocations }) =>
                 writes(async () => {
                     const record: ImplementationCheckRecord = {
                         checkedAt,
                         outcome: 'decided',
                         verdict: status,
+                        ...(implementedLocations
+                            ? { implementedLocations }
+                            : {}),
                     };
                     if (
                         raisesImplementationStatus(
@@ -304,13 +434,21 @@ export class SuggestionService implements ISuggestionService {
             ),
             ...unmeasured.map(({ id, reason }) =>
                 writes(() => {
-                    const last = byId.get(id)?.implementationCheck?.verdict;
+                    const previous = byId.get(id)?.implementationCheck;
                     return write(id, {
                         implementationCheck: {
                             checkedAt,
                             outcome: 'unmeasured',
                             reason,
-                            ...(last ? { verdict: last } : {}),
+                            ...(previous?.verdict
+                                ? { verdict: previous.verdict }
+                                : {}),
+                            ...(previous?.implementedLocations
+                                ? {
+                                      implementedLocations:
+                                          previous.implementedLocations,
+                                  }
+                                : {}),
                         },
                     });
                 }),

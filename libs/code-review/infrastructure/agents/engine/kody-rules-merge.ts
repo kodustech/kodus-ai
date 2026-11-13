@@ -96,6 +96,9 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
     return result;
 }
 
+/** Heads the list of a comment's other locations; the implementation check reads it back. */
+export const OTHER_LOCATIONS_HEADING = '**Also found in:**';
+
 /**
  * The merged locations to render under "Also found in", without the comment's
  * own range. Each merge leaves out the location it kept, but the kept finding

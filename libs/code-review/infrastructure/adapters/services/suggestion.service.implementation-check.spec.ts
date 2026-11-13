@@ -507,4 +507,198 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
         ).toBe(false);
         expect(result.persisted).toEqual([]);
     });
+
+    // One comment can stand for the same problem in several places: the
+    // dedup keeps one finding and lists the others under "Also found in".
+    describe('a suggestion that groups several locations', () => {
+        const grouped = (extra: Record<string, unknown> = {}) =>
+            sent('s-1', 'app/a.rb', {
+                relevantLinesStart: 1,
+                relevantLinesEnd: 2,
+                suggestionContent:
+                    'Escape the query.\n\n**Also found in:**\n- `app/b.rb:10-12`',
+                existingCode: 'where(raw)',
+                improvedCode: 'where(sanitize(raw))',
+                alsoFoundIn: ['app/b.rb:10-12'],
+                ...extra,
+            });
+        const fileA = { filename: 'app/a.rb', patch: '@@ a @@' };
+        const fileB = { filename: 'app/b.rb', patch: '@@ b @@' };
+
+        // The model's verdict for each file it is asked about.
+        const answerByFile = (byFile: Record<string, ImplementationStatus>) =>
+            aiAnalysisService.checkSuggestionImplementation.mockImplementation(
+                async ({ file, suggestions }) => ({
+                    verdicts: suggestions.map((s) => ({
+                        id: s.id,
+                        status: byFile[file.filename],
+                    })),
+                    unmeasured: [],
+                }),
+            );
+        const statusWritten = () =>
+            writesFor('s-1')
+                .map(([, data]) => data.implementationStatus)
+                .filter(Boolean);
+
+        it.each(['alsoFoundIn', 'kodyRuleOtherLocations'])(
+            'is partially implemented when only its own file was fixed (%s)',
+            async (field) => {
+                answerAll(ImplementationStatus.IMPLEMENTED);
+
+                const result = await check(
+                    [
+                        grouped({
+                            alsoFoundIn: undefined,
+                            [field]: ['app/b.rb:10-12'],
+                        }),
+                    ],
+                    [fileA],
+                );
+
+                expect(statusWritten()).toEqual([
+                    ImplementationStatus.PARTIALLY_IMPLEMENTED,
+                ]);
+                expect(result.persisted).toEqual([
+                    {
+                        id: 's-1',
+                        implementationStatus:
+                            ImplementationStatus.PARTIALLY_IMPLEMENTED,
+                    },
+                ]);
+            },
+        );
+
+        it('reads the other locations from the comment when the suggestion carries no list', async () => {
+            answerAll(ImplementationStatus.IMPLEMENTED);
+
+            await check([grouped({ alsoFoundIn: undefined })], [fileA]);
+
+            expect(statusWritten()).toEqual([
+                ImplementationStatus.PARTIALLY_IMPLEMENTED,
+            ]);
+        });
+
+        it('is partially implemented when the other file changed and still has the problem', async () => {
+            answerByFile({
+                'app/a.rb': ImplementationStatus.IMPLEMENTED,
+                'app/b.rb': ImplementationStatus.NOT_IMPLEMENTED,
+            });
+
+            await check([grouped()], [fileA, fileB]);
+
+            expect(statusWritten()).toEqual([
+                ImplementationStatus.PARTIALLY_IMPLEMENTED,
+            ]);
+        });
+
+        it('is implemented once every location is fixed', async () => {
+            answerAll(ImplementationStatus.IMPLEMENTED);
+
+            await check([grouped()], [fileA, fileB]);
+
+            expect(statusWritten()).toEqual([ImplementationStatus.IMPLEMENTED]);
+        });
+
+        it('stays not implemented when no location was fixed', async () => {
+            answerAll(ImplementationStatus.NOT_IMPLEMENTED);
+
+            const result = await check([grouped()], [fileA, fileB]);
+
+            expect(statusWritten()).toEqual([]);
+            expect(result.persisted).toEqual([]);
+            expect(result.decided).toBe(1);
+        });
+
+        it('checks a group whose only changed file is one of the other locations', async () => {
+            answerAll(ImplementationStatus.IMPLEMENTED);
+
+            const result = await check([grouped()], [fileB]);
+
+            expect(result.skipped).toBeUndefined();
+            expect(statusWritten()).toEqual([
+                ImplementationStatus.PARTIALLY_IMPLEMENTED,
+            ]);
+        });
+
+        it('is implemented when a later push fixes the location that was left', async () => {
+            answerAll(ImplementationStatus.IMPLEMENTED);
+
+            // First push: only the kept location.
+            await check([grouped()], [fileA]);
+            const [, firstWrite] = writesFor('s-1')[0];
+            pullRequestService.updateSuggestion.mockClear();
+
+            // Second push: only the other one. The first is not in this diff.
+            await check(
+                [
+                    grouped({
+                        implementationStatus: firstWrite.implementationStatus,
+                        implementationCheck: firstWrite.implementationCheck,
+                    }),
+                ],
+                [fileB],
+            );
+
+            expect(statusWritten()).toEqual([ImplementationStatus.IMPLEMENTED]);
+        });
+
+        it('asks about each location on its own file, without the code of another one', async () => {
+            answerAll(ImplementationStatus.NOT_IMPLEMENTED);
+
+            await check([grouped()], [fileA, fileB]);
+
+            const asked = Object.fromEntries(
+                aiAnalysisService.checkSuggestionImplementation.mock.calls.map(
+                    ([params]) => [params.file.filename, params.suggestions],
+                ),
+            );
+            expect(asked['app/a.rb']).toEqual([
+                {
+                    id: 's-1',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 2,
+                    problem: 'Escape the query.',
+                    existingCode: 'where(raw)',
+                    improvedCode: 'where(sanitize(raw))',
+                },
+            ]);
+            expect(asked['app/b.rb']).toEqual([
+                {
+                    id: expect.stringMatching(/^s-1.+/),
+                    relevantLinesStart: 10,
+                    relevantLinesEnd: 12,
+                    problem: 'Escape the query.',
+                },
+            ]);
+        });
+
+        it('cannot decide while a location it had to read is unmeasured and none is fixed', async () => {
+            aiAnalysisService.checkSuggestionImplementation.mockImplementation(
+                async ({ file, suggestions }) =>
+                    file.filename === 'app/b.rb'
+                        ? {
+                              verdicts: [],
+                              unmeasured: suggestions.map((s) => ({
+                                  id: s.id,
+                                  reason: 'invalid_output',
+                              })),
+                          }
+                        : {
+                              verdicts: suggestions.map((s) => ({
+                                  id: s.id,
+                                  status: ImplementationStatus.NOT_IMPLEMENTED,
+                              })),
+                              unmeasured: [],
+                          },
+            );
+
+            const result = await check([grouped()], [fileA, fileB]);
+
+            expect(result.unmeasured).toEqual([
+                { id: 's-1', reason: 'invalid_output' },
+            ]);
+            expect(statusWritten()).toEqual([]);
+        });
+    });
 });
