@@ -85,6 +85,16 @@ export class SecurityScanModel extends CoreDocument {
      *  repository, whatever two requests race. */
     @Prop({ type: String })
     public activeKey?: string;
+
+    /**
+     * The job running the scan, and until when its claim holds: two jobs of
+     * one scan (a redelivered one beside its continuation) never run at once.
+     */
+    @Prop({ type: String })
+    public runningJobId?: string;
+
+    @Prop({ type: Date })
+    public leaseExpiresAt?: Date;
 }
 
 export const SecurityScanSchema =

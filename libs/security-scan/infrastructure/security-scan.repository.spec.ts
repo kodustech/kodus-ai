@@ -106,13 +106,45 @@ describe('SecurityScanRepository: one active scan per repository', () => {
         await repository.update('id-1', { status: 'running' } as any);
 
         const [, ended] = findOneAndUpdate.mock.calls[0] as unknown as [string, any];
+        // Ended: the key is freed and no job holds it any more.
         expect(ended).toEqual({
             $set: { status: 'completed' },
-            $unset: { activeKey: '' },
+            $unset: { activeKey: '', runningJobId: '', leaseExpiresAt: '' },
             $push: { reported: { $each: reported } },
         });
         const [, running] = findOneAndUpdate.mock.calls[1] as unknown as [string, any];
         expect(running).toEqual({ $set: { status: 'running' } });
+    });
+
+    it('lets a job claim an active scan only when no other job holds a live claim', async () => {
+        const findOneAndUpdate = jest.fn(() => exec(null));
+        const repository = new SecurityScanRepository({ findOneAndUpdate } as any);
+        const before = Date.now();
+
+        await expect(repository.claim('id-1', 'job-2', 60_000)).resolves.toBeNull();
+
+        const [filter, update] = findOneAndUpdate.mock.calls[0] as unknown as [any, any];
+        expect(filter.status).toEqual({ $in: ['queued', 'running'] });
+        expect(filter.$or).toEqual(
+            expect.arrayContaining([
+                { runningJobId: 'job-2' },
+                { leaseExpiresAt: { $lt: expect.any(Date) } },
+            ]),
+        );
+        expect(update.$set).toEqual(
+            expect.objectContaining({ status: 'running', runningJobId: 'job-2' }),
+        );
+        expect(update.$set.leaseExpiresAt.getTime()).toBeGreaterThanOrEqual(before + 60_000);
+    });
+
+    it('frees the claim when the scan is queued for its next job', async () => {
+        const findOneAndUpdate = jest.fn(() => exec({ _doc: { _id: 'id-1' } }));
+        const repository = new SecurityScanRepository({ findOneAndUpdate } as any);
+
+        await repository.update('id-1', { status: 'queued' } as any);
+
+        const [, update] = findOneAndUpdate.mock.calls[0] as unknown as [string, any];
+        expect(update.$unset).toEqual({ runningJobId: '', leaseExpiresAt: '' });
     });
 
     it('changes a status only from the states it is given', async () => {
@@ -120,11 +152,18 @@ describe('SecurityScanRepository: one active scan per repository', () => {
         const repository = new SecurityScanRepository({ findOneAndUpdate } as any);
 
         await expect(
-            repository.update('id-1', { status: 'running' } as any, undefined, ['queued', 'running'] as any),
+            repository.update('id-1', { status: 'running' } as any, undefined, {
+                statuses: ['queued', 'running'] as any,
+                ownedBy: 'job-1',
+            }),
         ).resolves.toBeNull();
 
         const [filter] = findOneAndUpdate.mock.calls[0] as unknown as [any];
-        expect(filter).toEqual({ _id: 'id-1', status: { $in: ['queued', 'running'] } });
+        expect(filter).toEqual({
+            _id: 'id-1',
+            status: { $in: ['queued', 'running'] },
+            runningJobId: 'job-1',
+        });
     });
 
     it('frees the key of a scan it fails as stale', async () => {

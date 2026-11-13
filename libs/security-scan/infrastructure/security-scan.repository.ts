@@ -24,16 +24,25 @@ export interface ISecurityScanRepository {
     create(scan: NewSecurityScan): Promise<SecurityScanRecord>;
     findById(uuid: string): Promise<SecurityScanRecord | null>;
     /**
-     * `appendReported` is pushed onto `reported` in the same write. With
-     * `onlyFrom`, the write lands only while the scan is in one of those
-     * states (null otherwise): a status change never overwrites one another
-     * process made in between.
+     * `appendReported` is pushed onto `reported` in the same write. With a
+     * `guard`, the write lands only while it holds (null otherwise): a status
+     * change never overwrites one another process made in between, and a job
+     * that lost the scan (timed out, its claim taken) writes nothing.
      */
     update(
         uuid: string,
         changes: Partial<NewSecurityScan>,
         appendReported?: ScanReportedFinding[],
-        onlyFrom?: SecurityScanStatus[],
+        guard?: ScanWriteGuard,
+    ): Promise<SecurityScanRecord | null>;
+    /**
+     * Makes `jobId` the one job running the scan while it is active and no
+     * other job holds a live claim. Null when it cannot.
+     */
+    claim(
+        uuid: string,
+        jobId: string,
+        leaseMs: number,
     ): Promise<SecurityScanRecord | null>;
     /**
      * Records one area's progress in place of its earlier entry (a pending
@@ -44,6 +53,8 @@ export interface ISecurityScanRepository {
         progress: ScanUnitProgress,
         changes: Partial<NewSecurityScan>,
         appendReported?: ScanReportedFinding[],
+        /** Lands only while this job holds the scan. */
+        ownedBy?: string,
     ): Promise<void>;
     findRecent(
         organizationId: string,
@@ -66,6 +77,33 @@ export interface ISecurityScanRepository {
      * one was lost. Returns how many.
      */
     failStale(organizationId: string, after: StaleScanWindows): Promise<number>;
+}
+
+export type ScanWriteGuard = {
+    /** The states the scan must be in. */
+    statuses?: SecurityScanStatus[];
+    /** The job that must hold the scan. */
+    ownedBy?: string;
+    /** With `ownedBy`: a scan no job holds counts too. */
+    orUnowned?: boolean;
+};
+
+function guardFilter(guard?: ScanWriteGuard): Record<string, unknown> {
+    if (!guard) return {};
+    return {
+        ...(guard.statuses ? { status: { $in: guard.statuses } } : {}),
+        ...(guard.ownedBy
+            ? guard.orUnowned
+                ? {
+                      $or: [
+                          { runningJobId: guard.ownedBy },
+                          { runningJobId: { $exists: false } },
+                          { runningJobId: null },
+                      ],
+                  }
+                : { runningJobId: guard.ownedBy }
+            : {}),
+    };
 }
 
 export type StaleScanWindows = {
@@ -127,21 +165,61 @@ export class SecurityScanRepository implements ISecurityScanRepository {
         uuid: string,
         changes: Partial<NewSecurityScan>,
         appendReported?: ScanReportedFinding[],
-        onlyFrom?: SecurityScanStatus[],
+        guard?: ScanWriteGuard,
     ): Promise<SecurityScanRecord | null> {
         const ended = changes.status && !ACTIVE.includes(changes.status);
+        // Ended, or queued for its next job: no job holds it any more.
+        const released =
+            !!changes.status && changes.status !== SecurityScanStatus.RUNNING;
+        const doc = await this.model
+            .findOneAndUpdate(
+                { _id: uuid, ...guardFilter(guard) },
+                {
+                    $set: changes,
+                    ...(ended || released
+                        ? {
+                              $unset: {
+                                  ...(ended ? { activeKey: '' } : {}),
+                                  ...(released
+                                      ? { runningJobId: '', leaseExpiresAt: '' }
+                                      : {}),
+                              },
+                          }
+                        : {}),
+                    ...(appendReported?.length
+                        ? { $push: { reported: { $each: appendReported } } }
+                        : {}),
+                },
+                { new: true },
+            )
+            .exec();
+        return doc ? toRecord(doc) : null;
+    }
+
+    async claim(
+        uuid: string,
+        jobId: string,
+        leaseMs: number,
+    ): Promise<SecurityScanRecord | null> {
+        const now = new Date();
         const doc = await this.model
             .findOneAndUpdate(
                 {
                     _id: uuid,
-                    ...(onlyFrom ? { status: { $in: onlyFrom } } : {}),
+                    status: { $in: ACTIVE },
+                    $or: [
+                        { runningJobId: { $exists: false } },
+                        { runningJobId: null },
+                        { runningJobId: jobId },
+                        { leaseExpiresAt: { $lt: now } },
+                    ],
                 },
                 {
-                    $set: changes,
-                    ...(ended ? { $unset: { activeKey: '' } } : {}),
-                    ...(appendReported?.length
-                        ? { $push: { reported: { $each: appendReported } } }
-                        : {}),
+                    $set: {
+                        status: SecurityScanStatus.RUNNING,
+                        runningJobId: jobId,
+                        leaseExpiresAt: new Date(now.getTime() + leaseMs),
+                    },
                 },
                 { new: true },
             )
@@ -154,14 +232,16 @@ export class SecurityScanRepository implements ISecurityScanRepository {
         progress: ScanUnitProgress,
         changes: Partial<NewSecurityScan>,
         appendReported?: ScanReportedFinding[],
+        ownedBy?: string,
     ): Promise<void> {
+        const owned = ownedBy ? { runningJobId: ownedBy } : {};
         const reported = appendReported?.length
             ? { reported: { $each: appendReported } }
             : undefined;
         if (progress.state === 'pending') {
             await this.model
                 .updateOne(
-                    { _id: uuid },
+                    { _id: uuid, ...owned },
                     {
                         $set: changes,
                         $pull: { progress: { unitId: progress.unitId } },
@@ -175,7 +255,11 @@ export class SecurityScanRepository implements ISecurityScanRepository {
         // check; an area recorded before is replaced in place.
         const appended = await this.model
             .updateOne(
-                { '_id': uuid, 'progress.unitId': { $ne: progress.unitId } },
+                {
+                    '_id': uuid,
+                    'progress.unitId': { $ne: progress.unitId },
+                    ...owned,
+                },
                 { $set: changes, $push: { progress, ...reported } },
             )
             .exec();
@@ -184,7 +268,7 @@ export class SecurityScanRepository implements ISecurityScanRepository {
         }
         await this.model
             .updateOne(
-                { '_id': uuid, 'progress.unitId': progress.unitId },
+                { '_id': uuid, 'progress.unitId': progress.unitId, ...owned },
                 {
                     $set: { ...changes, 'progress.$': progress },
                     ...(reported ? { $push: reported } : {}),

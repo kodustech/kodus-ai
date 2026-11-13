@@ -75,6 +75,12 @@ const logger = createLogger('SecurityScanJobProcessor');
  * a reproduction test whose install is capped at 5 minutes).
  */
 export const SCAN_SLICE_MS = 20 * 60 * 1000;
+
+/**
+ * How long a job's claim on its scan holds: past the longest a job runs (a
+ * slice and its setup), so a claim outlives only a job that died.
+ */
+const SCAN_JOB_LEASE_MS = 40 * 60 * 1000;
 const LEASE_TTL_MS = 34 * 60 * 1000;
 /**
  * The most areas one plan holds. It bounds the stored plan, not the scan's
@@ -141,25 +147,30 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 startedAt: new Date(),
                 currentStage: 'SCANNING',
             });
-            scan.startedAt ??= new Date().toISOString();
-            // Only while it is still active: failed as stale (its key freed)
-            // since it was read, it must not run beside a new scan.
-            const running = await this.scans.update(
+            // One job runs a scan at a time: a redelivered job beside its
+            // continuation, or a scan failed as stale since it was read,
+            // never runs.
+            const claimed = await this.scans.claim(
                 scan.uuid,
-                {
-                    status: SecurityScanStatus.RUNNING,
-                    startedAt: scan.startedAt,
-                },
-                undefined,
-                active,
+                jobId,
+                SCAN_JOB_LEASE_MS,
             );
-            if (!running) {
-                await this.markCompleted(jobId, { skipped: 'not active' });
+            if (!claimed) {
+                await this.markCompleted(jobId, {
+                    skipped: 'not active, or another job runs it',
+                });
                 return;
+            }
+            if (!scan.startedAt) {
+                scan.startedAt = new Date().toISOString();
+                await this.ownedUpdate(scan, jobId, {
+                    startedAt: scan.startedAt,
+                });
             }
             outcome = await raceWithAbortSignal(
                 this.runSlice(
                     scan,
+                    jobId,
                     payload.organizationAndTeamData,
                     signal,
                     (release) => (releaseLease = release),
@@ -177,8 +188,8 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     repositoryId: scan.repository.id,
                 },
             });
-            // A scan another process ended (completed, or failed as stale)
-            // keeps the state it has.
+            // A scan another process ended (completed, or failed as stale),
+            // or another job now runs, keeps the state it has.
             await this.scans.update(
                 scan.uuid,
                 {
@@ -187,7 +198,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     finishedAt: new Date().toISOString(),
                 },
                 undefined,
-                active,
+                { statuses: active, ownedBy: jobId, orUnowned: true },
             );
             await this.markFailed(jobId, error);
             return;
@@ -215,8 +226,30 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         );
     }
 
+    /**
+     * A write that lands only while this job still runs the scan: a job that
+     * lost it (timed out, failed, its claim taken) changes nothing, and is
+     * told so.
+     */
+    private async ownedUpdate(
+        scan: SecurityScanRecord,
+        jobId: string,
+        changes: Parameters<ISecurityScanRepository['update']>[1],
+    ): Promise<void> {
+        const written = await this.scans.update(scan.uuid, changes, undefined, {
+            statuses: [SecurityScanStatus.QUEUED, SecurityScanStatus.RUNNING],
+            ownedBy: jobId,
+        });
+        if (!written) {
+            throw new Error(
+                `Security scan ${scan.uuid} is no longer run by job ${jobId}`,
+            );
+        }
+    }
+
     private async runSlice(
         scan: SecurityScanRecord,
+        jobId: string,
         orgTeam: OrganizationAndTeamData,
         signal: AbortSignal | undefined,
         onLease: (release: () => Promise<void>) => void,
@@ -332,7 +365,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             }
         }
         if ((commitSha && commitSha !== scan.commitSha) || stalePlan) {
-            await this.scans.update(scan.uuid, {
+            await this.ownedUpdate(scan, jobId, {
                 ...(commitSha ? { commitSha } : {}),
                 ...(stalePlan
                     ? {
@@ -422,7 +455,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     unitsSkippedByBudget: countIn('skipped_budget'),
                     languages,
                 };
-                await this.scans.update(scan.uuid, {
+                await this.ownedUpdate(scan, jobId, {
                     units,
                     modelName: model.modelName,
                     coverage: liveCoverage,
@@ -493,6 +526,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         ...(liveCoverage && { coverage: liveCoverage }),
                     },
                     findings.map((f) => toReported(f, fingerprintOf(scan, f))),
+                    jobId,
                 );
             },
         });
@@ -535,7 +569,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             // The sandbox is about to expire: persist and let a new job, with
             // a new sandbox, take the rest. Queued again until a worker takes
             // it, so the wait is not read as a stopped worker.
-            await this.scans.update(scan.uuid, {
+            await this.ownedUpdate(scan, jobId, {
                 status: SecurityScanStatus.QUEUED,
                 progress: result.progress,
                 spend: meter.snapshot(),
@@ -555,6 +589,9 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         if (!coverage.unitsDone && coverage.unitsFailed) {
             throw new ScanFailure(SCAN_NO_AREA_EXAMINED_MESSAGE);
         }
+
+        // A job aborted (timed out) resolves nothing: another may run next.
+        signal?.throwIfAborted();
 
         // What this scan carries from an earlier one's plan, in an area it
         // did not read again, it holds as found: seen by it, not resolved
@@ -606,7 +643,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             .clearIssuesCache(scan.organizationId)
             .catch(() => undefined);
 
-        await this.scans.update(scan.uuid, {
+        await this.ownedUpdate(scan, jobId, {
             status: result.stoppedByBudget
                 ? SecurityScanStatus.STOPPED_BY_BUDGET
                 : SecurityScanStatus.COMPLETED,

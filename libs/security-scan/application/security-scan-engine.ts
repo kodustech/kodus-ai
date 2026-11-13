@@ -46,7 +46,11 @@ import {
     withRevisits,
 } from '../domain/scan-units';
 import { admitFindingPath } from '../domain/finding-path';
-import { SCAN_MAP_FAILED_MESSAGE, ScanFailure } from '../domain/scan-failure';
+import {
+    SCAN_CHECKOUT_TAMPERED_MESSAGE,
+    SCAN_MAP_FAILED_MESSAGE,
+    ScanFailure,
+} from '../domain/scan-failure';
 import type {
     ScanExaminedClass,
     ScanFinding,
@@ -503,7 +507,14 @@ export class SecurityScanEngine {
                     [...(params.reported ?? []), ...findings],
                     reproduceOneAtATime,
                     progress.get(unit.id),
-                );
+                ).catch((error) => {
+                    // A unit that throws (a checkout a reproduction changed
+                    // and could not be put back) stops every unit: none may
+                    // go on reading what it would read.
+                    stopped = true;
+                    abortAll();
+                    throw error;
+                });
                 const turn = folded;
                 folded = audit.then(async (result) => {
                     await turn;
@@ -1215,6 +1226,10 @@ export class SecurityScanEngine {
             }
             await this.runReproduction(params, finding.language, record);
         } catch (error) {
+            // A checkout that could not be put back stops the scan.
+            if (error instanceof ScanFailure) {
+                throw error;
+            }
             logger.warn({
                 message: 'Reproduction test could not be produced',
                 context: SecurityScanEngine.name,
@@ -1229,10 +1244,13 @@ export class SecurityScanEngine {
 
     /**
      * Runs a reproduction test where it cannot touch what the lenses read.
-     * The test and its command are model output written while reading the
-     * repository: they run in a separate worktree of the same commit, with
-     * the installed dependencies linked in, never in the checkout. Anything
-     * the command changes in the checkout anyway is put back.
+     * The test, its command and the dependency install are model output or
+     * repository code: all of it runs in a separate worktree of the scanned
+     * commit, kept for the job (so dependencies install once) and reset to
+     * that commit before each test. The checkout the lenses read only ever
+     * has its state checked: anything a command changed there anyway is put
+     * back, and if it cannot be, the scan stops rather than read changed
+     * code.
      */
     private async runReproduction(
         params: SecurityScanEngineParams,
@@ -1245,72 +1263,51 @@ export class SecurityScanEngine {
         const work = shellQuote(workdir);
         const target = `${workdir}/${record.path}`;
         const quoted = shellQuote(target);
+        const run = (command: string, timeoutMs: number) =>
+            sandbox.run(command, { timeoutMs }).catch((error) => ({
+                exitCode: 124,
+                stdout: '',
+                stderr: String(error?.message ?? error),
+            }));
 
-        await this.ensureDependencies(sandbox, language);
-        // Reproductions run one at a time, so one worktree serves them all.
-        const added = await sandbox
-            .run(
-                `git -C ${repo} worktree remove --force ${work} >/dev/null 2>&1; git -C ${repo} worktree add --detach ${work} HEAD`,
-                { timeoutMs: 60_000 },
-            )
-            .catch(() => ({ exitCode: 1 }));
-        if (added.exitCode !== 0) {
+        // Without the scanned commit and the checkout's state, nothing could
+        // be checked afterwards: no test runs.
+        const scanned = await this.headOf(sandbox);
+        const before = scanned ? await this.checkoutState(sandbox) : null;
+        if (!scanned || !before) {
             return;
         }
-        // What git sees in the checkout: changed tracked files, and files it
-        // does not track (an untracked directory as one entry).
-        const status = () =>
-            sandbox
-                .run(
-                    `git -C ${repo} status --porcelain -z --untracked-files=normal`,
-                    { timeoutMs: 30_000 },
-                )
-                .then((r) =>
-                    r.exitCode === 0
-                        ? (r.stdout ?? '').split('\0').filter(Boolean)
-                        : null,
-                )
-                .catch(() => null);
-        // Unread, nothing tells a planted file from one that was there (the
-        // install): then nothing is removed.
-        const baseline = await status();
-        const before = baseline ? new Set(baseline) : null;
-        // The commit the lenses read: a command that stages or commits a
-        // change is put back to it, not to the index it rewrote.
-        const headOf = () =>
-            sandbox
-                .run(`git -C ${repo} rev-parse HEAD`, { timeoutMs: 10_000 })
-                .then((r) => (r.exitCode === 0 ? r.stdout?.trim() : undefined))
-                .catch(() => undefined);
-        const scanned = await headOf();
+
+        const ready = this.reproWorktree
+            ? await run(
+                  `git -C ${work} reset -q --hard ${shellQuote(scanned)} && git -C ${work} clean -fdq -e node_modules -e .venv -e vendor`,
+                  60_000,
+              )
+            : await run(
+                  `git -C ${repo} worktree remove --force ${work} >/dev/null 2>&1; git -C ${repo} worktree add --detach ${work} ${shellQuote(scanned)}`,
+                  60_000,
+              );
+        if (ready.exitCode !== 0) {
+            return;
+        }
+        this.reproWorktree = true;
+
         try {
-            await sandbox
-                .run(
-                    `for d in node_modules .venv vendor/bundle; do [ -e ${repo}/$d ] && [ ! -e ${work}/$d ] && ln -s ${repo}/$d ${work}/$d; done; true`,
-                    { timeoutMs: 10_000 },
-                )
-                .catch(() => undefined);
+            await this.ensureDependencies(sandbox, language, workdir);
             // A file (or link) already there is the repository's own: never
             // written over. The test stays on the issue, not run.
-            const taken = await sandbox
-                .run(`test -e ${quoted} || test -L ${quoted}`, {
-                    timeoutMs: 10_000,
-                })
-                .then((r) => r.exitCode === 0)
-                .catch(() => true);
+            const taken = await run(
+                `test -e ${quoted} || test -L ${quoted}`,
+                10_000,
+            ).then((r) => r.exitCode === 0);
             if (taken) {
                 return;
             }
             await sandbox.writeFile(target, record.content);
-            const result = await sandbox
-                .run(`cd ${work} && ${record.command}`, {
-                    timeoutMs: 180_000,
-                })
-                .catch((error) => ({
-                    exitCode: 124,
-                    stdout: '',
-                    stderr: String(error?.message ?? error),
-                }));
+            const result = await run(
+                `cd ${work} && ${record.command}`,
+                180_000,
+            );
             Object.assign(record, {
                 executed: true,
                 exitCode: result.exitCode,
@@ -1324,73 +1321,116 @@ export class SecurityScanEngine {
                 ).slice(-4000),
             });
         } finally {
-            await sandbox
-                .run(`git -C ${repo} worktree remove --force ${work}`, {
-                    timeoutMs: 30_000,
-                })
-                .catch(() => undefined);
-            // Anything that appeared is taken back before a lens reads it:
-            // changed files restored, new ones removed.
-            // A changed tracked file is restored on the later read alone
-            // (checking it out again is always safe); a new untracked one is
-            // removed only against a baseline, which tells it from the
-            // install.
-            const after = (await status()) ?? [];
-            const appeared = after.filter(
-                (e) =>
-                    !before?.has(e) &&
-                    (before !== null || !e.startsWith('?? ')),
-            );
-            // Moved: HEAD read and not the scanned commit. Unread after the
-            // run, it is put back to the scanned commit all the same (always
-            // safe); with no scanned commit to go back to, nothing is moved.
-            const headNow = scanned === undefined ? undefined : await headOf();
-            const moved =
-                scanned !== undefined &&
-                (headNow === undefined || headNow !== scanned);
-            if (appeared.length || moved) {
-                logger.warn({
-                    message:
-                        'A reproduction command changed the checkout; putting it back',
-                    context: SecurityScanEngine.name,
-                    metadata: {
-                        organizationId: params.organizationId,
-                        teamId: params.teamId,
-                        repositoryId: params.repositoryId,
-                        command: record.command.slice(0, 200),
-                    },
-                });
-                // Index and files back to the scanned commit (a checkout
-                // from the index would keep what the command staged), and
-                // the branch back to it if the command committed.
-                if (moved || appeared.some((e) => !e.startsWith('?? '))) {
-                    await sandbox
-                        .run(
-                            `git -C ${repo} reset -q --hard ${scanned ? shellQuote(scanned) : 'HEAD'}`,
-                            { timeoutMs: 30_000 },
-                        )
-                        .catch(() => undefined);
-                }
-                const added = appeared
-                    .filter((e) => e.startsWith('?? '))
-                    .map((e) => shellQuote(`${sandbox.repoDir}/${e.slice(3)}`));
-                if (added.length) {
-                    await sandbox
-                        .run(`rm -rf -- ${added.join(' ')}`, {
-                            timeoutMs: 30_000,
-                        })
-                        .catch(() => undefined);
-                }
+            await this.restoreCheckout(params, scanned, before, record);
+        }
+    }
+
+    /** Created once per job: the worktree reproduction tests run in. */
+    private reproWorktree = false;
+
+    private async headOf(
+        sandbox: SandboxInstance,
+    ): Promise<string | undefined> {
+        return sandbox
+            .run(`git -C ${shellQuote(sandbox.repoDir)} rev-parse HEAD`, {
+                timeoutMs: 10_000,
+            })
+            .then((r) =>
+                r.exitCode === 0 ? r.stdout?.trim() || undefined : undefined,
+            )
+            .catch(() => undefined);
+    }
+
+    /**
+     * What git sees in the checkout: changed tracked files, and files it does
+     * not track (an untracked directory as one entry). Null when unread.
+     */
+    private async checkoutState(
+        sandbox: SandboxInstance,
+    ): Promise<Set<string> | null> {
+        return sandbox
+            .run(
+                `git -C ${shellQuote(sandbox.repoDir)} status --porcelain -z --untracked-files=normal`,
+                { timeoutMs: 30_000 },
+            )
+            .then((r) =>
+                r.exitCode === 0
+                    ? new Set((r.stdout ?? '').split('\0').filter(Boolean))
+                    : null,
+            )
+            .catch(() => null);
+    }
+
+    /**
+     * The checkout as it was before the test: index, files and branch back
+     * to the scanned commit, files it planted removed. A checkout that cannot
+     * be read, or put back, stops the scan: the lenses would read changed code.
+     */
+    private async restoreCheckout(
+        params: SecurityScanEngineParams,
+        scanned: string,
+        before: Set<string>,
+        record: NonNullable<ScanFinding['reproduction']>,
+    ): Promise<void> {
+        const sandbox = params.sandbox;
+        const repo = shellQuote(sandbox.repoDir);
+        const unchanged = async () => {
+            const [state, head] = await Promise.all([
+                this.checkoutState(sandbox),
+                this.headOf(sandbox),
+            ]);
+            if (!state || !head) {
+                return null;
             }
+            const appeared = [...state].filter((e) => !before.has(e));
+            return { appeared, moved: head !== scanned };
+        };
+
+        const found = await unchanged();
+        if (found && !found.appeared.length && !found.moved) {
+            return;
+        }
+        logger.warn({
+            message:
+                'A reproduction command changed the checkout; putting it back',
+            context: SecurityScanEngine.name,
+            metadata: {
+                organizationId: params.organizationId,
+                teamId: params.teamId,
+                repositoryId: params.repositoryId,
+                command: record.command.slice(0, 200),
+            },
+        });
+        const planted = (found?.appeared ?? [])
+            .filter((e) => e.startsWith('?? '))
+            .map((e) => shellQuote(`${sandbox.repoDir}/${e.slice(3)}`));
+        const commands = [
+            `rm -f ${repo}/.git/index.lock`,
+            `git -C ${repo} reset -q --hard ${shellQuote(scanned)}`,
+            ...(planted.length ? [`rm -rf -- ${planted.join(' ')}`] : []),
+        ];
+        for (const command of commands) {
+            const result = await sandbox
+                .run(command, { timeoutMs: 30_000 })
+                .catch(() => ({ exitCode: 1 }));
+            if (result.exitCode !== 0) {
+                throw new ScanFailure(SCAN_CHECKOUT_TAMPERED_MESSAGE);
+            }
+        }
+        const after = await unchanged();
+        if (!after || after.appeared.length || after.moved) {
+            throw new ScanFailure(SCAN_CHECKOUT_TAMPERED_MESSAGE);
         }
     }
 
     private readonly installed = new Set<string>();
 
     /** One dependency install per language per sandbox, best effort. */
+    /** Installed in the reproduction worktree, never in the checkout. */
     private async ensureDependencies(
         sandbox: SandboxInstance,
         language: string,
+        workdir: string,
     ): Promise<void> {
         if (this.installed.has(language)) {
             return;
@@ -1401,7 +1441,7 @@ export class SecurityScanEngine {
             return;
         }
         await sandbox
-            .run(`cd ${sandbox.repoDir} && (${command})`, {
+            .run(`cd ${shellQuote(workdir)} && (${command})`, {
                 timeoutMs: 300_000,
             })
             .catch(() => undefined);

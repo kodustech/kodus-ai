@@ -12,3 +12,6 @@ export const SCAN_HEAD_UNREADABLE_MESSAGE =
 
 export const SCAN_NO_PROGRESS_MESSAGE =
     'The scan made no progress in its time slice: preparing the repository took the whole slice. If it keeps happening, contact support.';
+
+export const SCAN_CHECKOUT_TAMPERED_MESSAGE =
+    'A reproduction test changed the repository checkout and it could not be put back, so the scan stopped instead of reading changed code. Run the scan again.';

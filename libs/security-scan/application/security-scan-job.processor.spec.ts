@@ -64,6 +64,7 @@ function setup(engineResult: any, scan = scanRecord()) {
     const scans = {
         findById: jest.fn(async () => scan),
         update: jest.fn(async (..._args: unknown[]) => scan),
+        claim: jest.fn(async (..._args: unknown[]) => scan as any),
         recordUnit: jest.fn(async (..._args: unknown[]) => undefined),
     };
     const jobRepository = {
@@ -327,12 +328,12 @@ describe('SecurityScanJobProcessor', () => {
         expect(engine.run.mock.calls[0][0]).toEqual(
             expect.objectContaining({ units: [], progress: [] }),
         );
-        expect(scans.update).toHaveBeenCalledWith('scan-1', {
-            commitSha: 'abc123',
-            units: [],
-            progress: [],
-            reported: [],
-        });
+        expect(scans.update).toHaveBeenCalledWith(
+            'scan-1',
+            { commitSha: 'abc123', units: [], progress: [], reported: [] },
+            undefined,
+            expect.objectContaining({ ownedBy: 'job-1' }),
+        );
     });
 
     it('fails a first job that cannot read HEAD, keeping the inherited plan and what it reported', async () => {
@@ -409,12 +410,43 @@ describe('SecurityScanJobProcessor', () => {
         expect(lastUpdate(scans).error).toEqual(expect.stringContaining('made no progress'));
     });
 
+    it('stops a job that lost its scan, writing and resolving nothing more', async () => {
+        const { processor, scans, issuesService } = setup({
+            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 0 }, []]],
+            result: finishedResult({ findings: [] }),
+        });
+        // Claimed, then lost: timed out and failed, or claimed by another job.
+        scans.update.mockImplementation(async (_id: unknown, _c: unknown, _r: unknown, guard?: any) =>
+            guard?.ownedBy && !guard?.orUnowned ? null : ({} as any),
+        );
+
+        await processor.process('job-1');
+
+        expect(issuesService.resolveUnseenScanFindings).not.toHaveBeenCalled();
+        expect(issuesService.markScanFindingsSeen).not.toHaveBeenCalled();
+        // The failure it records lands only if no other job holds the scan.
+        expect(lastUpdate(scans).status).toBe(SecurityScanStatus.FAILED);
+        expect((scans.update.mock.calls.at(-1) as any[])[3]).toEqual(
+            expect.objectContaining({ ownedBy: 'job-1', orUnowned: true }),
+        );
+    });
+
+    it('claims the scan for its job before running it', async () => {
+        const { processor, scans } = setup({ result: finishedResult() });
+
+        await processor.process('job-1');
+
+        expect(scans.claim).toHaveBeenCalledWith('scan-1', 'job-1', expect.any(Number));
+        // Every write of the slice lands only while the job holds it.
+        const owned = (scans.update.mock.calls as any[]).filter((c) => c[3]?.ownedBy === 'job-1');
+        expect(owned.length).toBe(scans.update.mock.calls.length);
+    });
+
     it('never runs a scan another process ended since it was read', async () => {
         const { processor, scans } = setup({ result: finishedResult() });
-        // Failed as stale between the read and the start.
-        scans.update.mockImplementation(async (_id: unknown, _c: unknown, _r: unknown, onlyFrom?: unknown) =>
-            onlyFrom ? null : ({} as any),
-        );
+        // Failed as stale between the read and the start, or another job
+        // holds it.
+        scans.claim.mockResolvedValue(null);
 
         const engines = (SecurityScanEngine as unknown as jest.Mock).mock.calls.length;
         await processor.process('job-1');
@@ -570,6 +602,8 @@ describe('SecurityScanJobProcessor', () => {
         expect(scans.update).toHaveBeenCalledWith(
             'scan-1',
             expect.objectContaining({ units: [], progress: [], reported: [] }),
+            undefined,
+            expect.objectContaining({ ownedBy: 'job-1' }),
         );
         const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
         expect(engine.run.mock.calls[0][0].reported).toEqual([]);

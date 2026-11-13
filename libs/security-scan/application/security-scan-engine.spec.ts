@@ -129,6 +129,9 @@ function fakeSandbox(type: 'e2b' | 'local' = 'e2b') {
                 );
                 return { stdout: '', exitCode: taken ? 0 : 1 };
             }
+            if (command.includes('rev-parse HEAD')) {
+                return { stdout: 'abc123\n', exitCode: 0 };
+            }
             if (command.includes('ls-files -z')) {
                 return { stdout: Object.keys(FILES).join('\0'), exitCode: 0 };
             }
@@ -665,10 +668,12 @@ describe('SecurityScanEngine', () => {
         ).toBeDefined();
         const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
         expect(commands).toContain("cd '/repo.repro' && npx jest src/orders/idor.repro.spec.ts");
+        // A worktree of the scanned commit, kept for the job.
         expect(
-            commands.some((c) => c.includes("worktree add --detach '/repo.repro' HEAD")),
+            commands.some((c) => c.includes("worktree add --detach '/repo.repro' 'abc123'")),
         ).toBe(true);
-        expect(commands).toContain("git -C '/repo' worktree remove --force '/repo.repro'");
+        // Dependencies install there, never in the checkout the lenses read.
+        expect(commands.some((c) => c.startsWith("cd '/repo' &&"))).toBe(false);
         expect(result.findings[0].reproduction).toEqual(
             expect.objectContaining({
                 executed: true,
@@ -729,18 +734,46 @@ describe('SecurityScanEngine', () => {
         expect(tampered).toBe(false);
     });
 
-    it('removes no untracked file, but restores tracked ones, when the checkout could not be read before', async () => {
+    it('runs no reproduction when the checkout cannot be read first, so nothing could be checked after', async () => {
         const sandbox = fakeSandbox('e2b');
         const run = sandbox.run.getMockImplementation()!;
-        let reads = 0;
+        sandbox.run.mockImplementation(async (command: string) =>
+            command.includes('status --porcelain') ? { stdout: '', exitCode: 128 } : run(command),
+        );
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
+        expect(commands.some((c) => c.includes('npx jest'))).toBe(false);
+        expect(result.findings[0].reproduction).toEqual(expect.objectContaining({ executed: false }));
+    });
+
+    it('stops the scan when a reproduction changed the checkout and it cannot be put back', async () => {
+        const sandbox = fakeSandbox('e2b');
+        const run = sandbox.run.getMockImplementation()!;
+        let tampered = false;
         sandbox.run.mockImplementation(async (command: string) => {
+            if (command.includes('npx jest')) {
+                tampered = true;
+                return { stdout: 'PASS', exitCode: 0 };
+            }
             if (command.includes('status --porcelain')) {
-                reads++;
-                // The baseline read fails; the next one lists the install and
-                // a tracked file the command patched.
-                return reads === 1
-                    ? { stdout: '', exitCode: 128 }
-                    : { stdout: '?? node_modules/\0 M src/auth.ts\0', exitCode: 0 };
+                return { stdout: tampered ? ' M src/auth.ts\0' : '', exitCode: 0 };
+            }
+            // The command left a lock behind: the reset fails.
+            if (command.includes('reset -q --hard')) {
+                return { stdout: '', stderr: 'index.lock exists', exitCode: 128 };
             }
             return run(command);
         });
@@ -752,16 +785,13 @@ describe('SecurityScanEngine', () => {
             collectSurface: jest.fn(async () => SURFACE),
         });
 
-        await engine.run({
-            ...baseParams({ reproduce: true }),
-            sandbox,
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-        } as any);
-
-        const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
-        expect(commands.some((c) => c.startsWith('rm -rf'))).toBe(false);
-        // The patched tracked file is still put back.
-        expect(commands.some((c) => c.startsWith("git -C '/repo' reset -q --hard"))).toBe(true);
+        await expect(
+            engine.run({
+                ...baseParams({ reproduce: true }),
+                sandbox,
+                meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            } as any),
+        ).rejects.toThrow('could not be put back');
     });
 
     it('never writes over, runs or removes a file the repository already has', async () => {
