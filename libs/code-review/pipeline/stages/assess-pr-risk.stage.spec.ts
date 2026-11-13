@@ -335,3 +335,54 @@ it.each([0, 1])(
         expect(assessPrRisk).toHaveBeenCalledTimes(2);
     },
 );
+
+it('records a failed model judgment as a partial stage error (#2385)', async () => {
+    jest.mocked(assessPrRisk).mockResolvedValue({
+        status: 'unavailable',
+        reason: 'Kody could not assess risk for this PR.',
+        failure: { category: 'schema', errorName: 'NoObjectGeneratedError' },
+    });
+    const result = await stage.execute(context());
+    expect(result.riskAssessment).toMatchObject({ status: 'unavailable' });
+    expect(result.errors).toEqual([
+        expect.objectContaining({
+            stage: 'AssessPrRiskStage',
+            severity: 'partial',
+            metadata: {
+                reason: 'approval_risk_assessment_failed',
+                category: 'schema',
+                errorName: 'NoObjectGeneratedError',
+            },
+        }),
+    ]);
+});
+
+it('records an unexpected failure while collecting the assessment input', async () => {
+    maps.read.mockRejectedValue(new Error('database failed'));
+    expect((await stage.execute(context())).errors).toEqual([
+        expect.objectContaining({
+            stage: 'AssessPrRiskStage',
+            severity: 'partial',
+            metadata: expect.objectContaining({
+                reason: 'approval_risk_assessment_failed',
+                errorName: 'Error',
+            }),
+        }),
+    ]);
+});
+
+it.each([
+    ['a push during the diff read', { head: { sha: 'new-head' } }],
+    ['risk turned off', undefined],
+])('records no error for an expected outcome: %s', async (_, change) => {
+    if (change)
+        management.getPullRequest.mockResolvedValue({ ...live, ...change });
+    const result = await stage.execute(
+        context(change ? {} : { riskAssessmentActive: false }),
+    );
+    expect(result.errors ?? []).toEqual([]);
+});
+
+it('records nothing for a successful judgment', async () => {
+    expect((await stage.execute(context())).errors ?? []).toEqual([]);
+});

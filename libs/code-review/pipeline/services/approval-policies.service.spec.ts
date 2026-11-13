@@ -127,10 +127,6 @@ it('holds a line-limited policy for a modified binary renamed without a verified
 
 it.each([
     { reviewClean: false },
-    {
-        config: { ...request().config, riskAssessmentActive: true },
-        risk: { status: 'unavailable', reason: 'Failure' },
-    },
     { config: { ...request().config, pullRequestApprovalActive: false } },
     { pullRequest: { number: 4, head: { sha: 'head' } } },
 ])(
@@ -234,6 +230,50 @@ it('reuses the independently fetched complete diff instead of fetching again', a
     await service().evaluate(request({ fullPrFiles: [file] as any }));
     expect(code.getFilesByPullRequestId).not.toHaveBeenCalled();
     expect(LLM.run).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+    [
+        'a push during the review, with risk left unavailable by it',
+        { ...live, head: { sha: 'pushed' } },
+        'A newer commit arrived while Kody reviewed this one; Kody decides on the next reviewed commit.',
+    ],
+    [
+        'a moved target branch',
+        { ...live, base: { sha: 'moved' } },
+        'The target branch changed during the review, so this review cannot approve the PR.',
+    ],
+    [
+        'an unreadable PR',
+        null,
+        'Kody could not read the current PR from the Git provider.',
+    ],
+])('names %s in the hold (#2534)', async (_, current, reason) => {
+    code.getPullRequest.mockResolvedValue(current);
+    const input = request({
+        risk: {
+            status: 'unavailable',
+            reason: 'The PR changed while Kody was reading its diff.',
+        },
+    });
+    input.config.riskAssessmentActive = true;
+    expect((await service().evaluate(input)).decision).toMatchObject({
+        kind: 'hold',
+        reason,
+    });
+});
+
+// Unavailable risk reads the PR once, so a push that caused it is named.
+it('still holds on unavailable risk when the PR has not changed', async () => {
+    const input = request({
+        risk: { status: 'unavailable', reason: 'Model failed.' },
+    });
+    input.config.riskAssessmentActive = true;
+    expect((await service().evaluate(input)).decision).toMatchObject({
+        kind: 'hold',
+        reason: 'Risk assessment is unavailable for the current PR head.',
+    });
+    expect(LLM.run).not.toHaveBeenCalled();
 });
 
 it('prevents approval when the head or base changes while eligibility runs', async () => {

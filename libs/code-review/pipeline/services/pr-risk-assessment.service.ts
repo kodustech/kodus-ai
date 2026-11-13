@@ -214,7 +214,20 @@ export class PrRiskAssessmentService {
                 },
                 error,
             });
-            return unavailable('Kody could not assess risk for this PR.');
+            return {
+                assessment: {
+                    status: 'unavailable',
+                    reason: 'Kody could not assess risk for this PR.',
+                    failure: {
+                        category: 'unexpected',
+                        errorName:
+                            error instanceof Error
+                                ? error.name
+                                : 'UnknownError',
+                    },
+                },
+                fullPrFiles,
+            };
         }
     }
 }
