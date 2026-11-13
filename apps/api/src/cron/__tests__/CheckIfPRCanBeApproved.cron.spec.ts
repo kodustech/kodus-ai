@@ -73,6 +73,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             findOpenPullRequestsWithKodyChangeRequest: jest
                 .fn()
                 .mockResolvedValue([]),
+            hasOpenKodyChangeRequest: jest.fn().mockResolvedValue(true),
             clearKodyChangeRequest: jest.fn().mockResolvedValue(true),
         } as any;
 

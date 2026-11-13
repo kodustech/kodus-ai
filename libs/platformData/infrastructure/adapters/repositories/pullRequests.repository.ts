@@ -207,6 +207,22 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         return result.modifiedCount > 0;
     }
 
+    async hasOpenKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        const found = await this.pullRequestsModel.exists({
+            organizationId,
+            'repository.id': repositoryId,
+            'number': prNumber,
+            'status': PullRequestState.OPENED,
+            'kodyChangeRequest.requestedAt': requestedAt,
+        });
+        return found !== null;
+    }
+
     async findOpenPullRequestsWithKodyChangeRequest(
         organizationId: string,
     ): Promise<IPullRequestWithKodyChangeRequest[]> {

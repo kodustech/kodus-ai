@@ -53,9 +53,7 @@ describe('OwnChangeRequestService', () => {
         const pullRequests = {
             recordKodyChangeRequest: jest.fn().mockResolvedValue(true),
             clearKodyChangeRequest: jest.fn().mockResolvedValue(true),
-            findOpenPullRequestsWithKodyChangeRequest: jest
-                .fn()
-                .mockImplementation(async () => [marked()]),
+            hasOpenKodyChangeRequest: jest.fn().mockResolvedValue(true),
         };
         const isReviewRunning = jest.fn().mockResolvedValue(false);
         const service = new OwnChangeRequestService(
@@ -134,9 +132,6 @@ describe('OwnChangeRequestService', () => {
             built.codeManagement.getPullRequestReviewComments.mockResolvedValue(
                 [{ threadId: 11, isResolved: true }],
             );
-            built.pullRequests.findOpenPullRequestsWithKodyChangeRequest.mockResolvedValue(
-                [pullRequest],
-            );
 
             await expect(built.run(pullRequest)).resolves.toBe(true);
 
@@ -211,46 +206,27 @@ describe('OwnChangeRequestService', () => {
         // finding this reading of the request does not hold.
         it('keeps a request made again since it was read', async () => {
             const built = build();
-            built.pullRequests.findOpenPullRequestsWithKodyChangeRequest.mockResolvedValue(
-                [
-                    marked(PlatformType.GITHUB, {
-                        requestedAt: '2026-11-11T19:44:00.000Z',
-                        commentIds: ['11', '12'],
-                    }),
-                ],
+            built.pullRequests.hasOpenKodyChangeRequest.mockResolvedValue(
+                false,
             );
 
             await expect(built.run()).resolves.toBe(false);
             expectKept(built);
         });
 
-        it.each([
-            ['another PR of the repository', { number: 8 }],
-            [
-                'the same number in another repository',
-                { repository: { id: 'repo-2', name: 'acme/web' } },
-            ],
-        ])(
-            'does not take %s, requested at the same instant, for this request',
-            async (_name, over) => {
-                const built = build();
-                built.pullRequests.findOpenPullRequestsWithKodyChangeRequest.mockResolvedValue(
-                    [{ ...marked(), ...over }],
-                );
-
-                await expect(built.run()).resolves.toBe(false);
-                expectKept(built);
-            },
-        );
-
-        it('asks the list of the same organization whether the request still stands', async () => {
+        it('asks whether this PR still carries the request it read', async () => {
             const built = build();
 
             await built.run();
 
             expect(
-                built.pullRequests.findOpenPullRequestsWithKodyChangeRequest,
-            ).toHaveBeenCalledWith('org-1');
+                built.pullRequests.hasOpenKodyChangeRequest,
+            ).toHaveBeenCalledWith(
+                'org-1',
+                'repo-1',
+                7,
+                '2026-11-11T17:23:13.000Z',
+            );
         });
 
         it('keeps the request, on record too, when the host refuses to withdraw it', async () => {
@@ -274,9 +250,6 @@ describe('OwnChangeRequestService', () => {
             built.codeManagement.getPullRequestReviewComments.mockResolvedValue(
                 [{ threadId: 11, isResolved: true }],
             );
-            built.pullRequests.findOpenPullRequestsWithKodyChangeRequest.mockResolvedValue(
-                [pullRequest],
-            );
 
             await expect(built.run(pullRequest)).resolves.toBe(true);
 
@@ -298,9 +271,6 @@ describe('OwnChangeRequestService', () => {
             const pullRequest = marked(PlatformType.GITLAB, {
                 summaryCommentIds: ['d-1'],
             });
-            built.pullRequests.findOpenPullRequestsWithKodyChangeRequest.mockResolvedValue(
-                [pullRequest],
-            );
 
             await expect(built.run(pullRequest)).resolves.toBe(true);
 

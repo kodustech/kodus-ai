@@ -104,6 +104,26 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             );
         });
 
+        it('tells whether the open PR still carries the request it was handed', async () => {
+            model.exists = jest
+                .fn()
+                .mockResolvedValueOnce({ _id: 'pr-7' })
+                .mockResolvedValueOnce(null);
+
+            await expect(
+                repo.hasOpenKodyChangeRequest('org-A', 'repo-alpha', 7, T1),
+            ).resolves.toBe(true);
+            await expect(
+                repo.hasOpenKodyChangeRequest('org-A', 'repo-alpha', 7, T1),
+            ).resolves.toBe(false);
+
+            expect(model.exists).toHaveBeenCalledWith({
+                ...target,
+                'status': 'open',
+                'kodyChangeRequest.requestedAt': T1,
+            });
+        });
+
         it('lists the open PRs of one organization that carry a request, through its index', async () => {
             const listed = [{ number: 7 }];
             const query: any = {};

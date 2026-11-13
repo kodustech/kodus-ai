@@ -6,6 +6,10 @@ import type { HostAccount } from '@libs/platform/domain/platformIntegrations/int
  * request made to a team names no account. On a delivery of the GitHub App
  * (it carries `installation`) Kody is the App's bot, so a person named there
  * is somebody else, and is told so here, before any job or lookup.
+ *
+ * GitHub's pull request page shows the button next to user accounts only,
+ * none next to an App's bot: the click reaches Kody where Kody reviews as a
+ * user (a personal access token).
  */
 export function requestedReviewerOf(
     event: string,

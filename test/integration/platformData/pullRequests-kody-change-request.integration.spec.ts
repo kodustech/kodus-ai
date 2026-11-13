@@ -1,7 +1,7 @@
 /**
  * INTEGRATION TEST — the record of Kody's "changes requested" on a PR
  * (PullRequestsRepository.recordKodyChangeRequest / clearKodyChangeRequest /
- * findOpenPullRequestsWithKodyChangeRequest).
+ * hasOpenKodyChangeRequest / findOpenPullRequestsWithKodyChangeRequest).
  *
  * The approval cron lists, on every pass, the PRs that carry the record, and
  * takes the request back once the findings behind it are resolved. The list
@@ -178,6 +178,35 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
                     summaryCommentIds: ['d-1'],
                 },
             });
+        });
+
+        it('tells whether an open PR still carries the request that was read', async () => {
+            const stands = (
+                requestedAt: string,
+                number = 1,
+                repositoryId = 'repo-1',
+                organizationId = ORG,
+            ) =>
+                repository.hasOpenKodyChangeRequest(
+                    organizationId,
+                    repositoryId,
+                    number,
+                    requestedAt,
+                );
+
+            await expect(stands(T2)).resolves.toBe(true);
+            // Requested again since T1.
+            await expect(stands(T1)).resolves.toBe(false);
+            // PR 3 carries T1 but is closed; the PR of repo-2 carries nothing.
+            await expect(stands(T1, 3)).resolves.toBe(false);
+            await expect(stands(T2, 1, 'repo-2')).resolves.toBe(false);
+            // The other organization's PR 1 carries T1, not T2.
+            await expect(stands(T1, 1, 'repo-1', OTHER_ORG)).resolves.toBe(
+                true,
+            );
+            await expect(stands(T2, 1, 'repo-1', OTHER_ORG)).resolves.toBe(
+                false,
+            );
         });
 
         it('answers the same list on a deployment that lacks the index', async () => {

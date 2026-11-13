@@ -156,6 +156,20 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    hasOpenKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.hasOpenKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            requestedAt,
+        );
+    }
+
     findOpenPullRequestsWithKodyChangeRequest(
         organizationId: string,
     ): Promise<IPullRequestWithKodyChangeRequest[]> {

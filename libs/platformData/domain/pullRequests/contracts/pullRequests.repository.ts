@@ -282,6 +282,13 @@ export interface IPullRequestsRepository {
         prNumber: number,
         requestedAt: string,
     ): Promise<boolean>;
+    /** Whether the PR is open and still carries the request read at `requestedAt`. */
+    hasOpenKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean>;
     /** The open PRs of an organization that carry Kody's change request. */
     findOpenPullRequestsWithKodyChangeRequest(
         organizationId: string,

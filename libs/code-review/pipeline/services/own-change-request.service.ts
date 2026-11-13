@@ -101,9 +101,11 @@ export class OwnChangeRequestService {
         // over a finding this reading of the request does not hold.
         if (
             (await input.isReviewRunning()) ||
-            !(await this.isStillTheRequest(
-                organizationAndTeamData,
-                pullRequest,
+            !(await this.pullRequests.hasOpenKodyChangeRequest(
+                organizationAndTeamData.organizationId,
+                repository.id,
+                prNumber,
+                changeRequest.requestedAt,
             ))
         ) {
             return false;
@@ -151,22 +153,5 @@ export class OwnChangeRequestService {
             });
         }
         return withdrawn;
-    }
-
-    private async isStillTheRequest(
-        organizationAndTeamData: OrganizationAndTeamData,
-        pullRequest: IPullRequestWithKodyChangeRequest,
-    ): Promise<boolean> {
-        const current =
-            await this.pullRequests.findOpenPullRequestsWithKodyChangeRequest(
-                organizationAndTeamData.organizationId,
-            );
-        return current.some(
-            (candidate) =>
-                candidate.number === pullRequest.number &&
-                candidate.repository?.id === pullRequest.repository?.id &&
-                candidate.kodyChangeRequest?.requestedAt ===
-                    pullRequest.kodyChangeRequest.requestedAt,
-        );
     }
 }
