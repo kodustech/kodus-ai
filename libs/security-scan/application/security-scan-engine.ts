@@ -1264,11 +1264,7 @@ export class SecurityScanEngine {
         const target = `${workdir}/${record.path}`;
         const quoted = shellQuote(target);
         const run = (command: string, timeoutMs: number) =>
-            sandbox.run(command, { timeoutMs }).catch((error) => ({
-                exitCode: 124,
-                stdout: '',
-                stderr: String(error?.message ?? error),
-            }));
+            runCommand(sandbox, command, timeoutMs);
 
         // Without the scanned commit and the checkout's state, nothing could
         // be checked afterwards: no test runs.
@@ -1412,9 +1408,7 @@ export class SecurityScanEngine {
             ...(planted.length ? [`rm -rf -- ${planted.join(' ')}`] : []),
         ];
         for (const command of commands) {
-            const result = await sandbox
-                .run(command, { timeoutMs: 30_000 })
-                .catch(() => ({ exitCode: 1 }));
+            const result = await runCommand(sandbox, command, 30_000);
             if (result.exitCode !== 0) {
                 throw new ScanFailure(SCAN_CHECKOUT_TAMPERED_MESSAGE);
             }
@@ -1498,6 +1492,45 @@ const INSTALL_COMMANDS: Record<string, string> = {
 function normalizeCwe(value?: string): string | undefined {
     const id = cweId(value);
     return id ? `CWE-${id}` : undefined;
+}
+
+/**
+ * A command's result, whatever its exit: E2B throws on any exit but 0
+ * (CommandExitError, which carries the exit code and output); that is read
+ * back as the result it is. A throw with no exit code (a timeout, a lost
+ * sandbox) is 124, never success.
+ */
+async function runCommand(
+    sandbox: SandboxInstance,
+    command: string,
+    timeoutMs: number,
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    try {
+        const r = await sandbox.run(command, { timeoutMs });
+        return {
+            exitCode: r.exitCode,
+            stdout: r.stdout ?? '',
+            stderr: r.stderr ?? '',
+        };
+    } catch (error) {
+        const e = error as {
+            exitCode?: unknown;
+            stdout?: unknown;
+            stderr?: unknown;
+            message?: unknown;
+        };
+        return typeof e?.exitCode === 'number'
+            ? {
+                  exitCode: e.exitCode,
+                  stdout: typeof e.stdout === 'string' ? e.stdout : '',
+                  stderr: typeof e.stderr === 'string' ? e.stderr : '',
+              }
+            : {
+                  exitCode: 124,
+                  stdout: '',
+                  stderr: String(e?.message ?? error),
+              };
+    }
 }
 
 function shellQuote(value: string): string {

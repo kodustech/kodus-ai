@@ -127,7 +127,15 @@ function fakeSandbox(type: 'e2b' | 'local' = 'e2b') {
                         command.includes(`'/repo/${f}'`) ||
                         command.includes(`'/repo.repro/${f}'`),
                 );
-                return { stdout: '', exitCode: taken ? 0 : 1 };
+                if (!taken) {
+                    // As E2B does: any exit but 0 is thrown, carrying it.
+                    throw Object.assign(new Error('exit status 1'), {
+                        exitCode: 1,
+                        stdout: '',
+                        stderr: '',
+                    });
+                }
+                return { stdout: '', exitCode: 0 };
             }
             if (command.includes('rev-parse HEAD')) {
                 return { stdout: 'abc123\n', exitCode: 0 };
@@ -792,6 +800,44 @@ describe('SecurityScanEngine', () => {
                 meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             } as any),
         ).rejects.toThrow('could not be put back');
+    });
+
+    it("keeps a failing test's own exit code and output, as E2B throws them", async () => {
+        const sandbox = fakeSandbox('e2b');
+        const run = sandbox.run.getMockImplementation()!;
+        sandbox.run.mockImplementation(async (command: string) =>
+            command.includes('npx jest')
+                ? Promise.reject(
+                      Object.assign(new Error('exit status 1'), {
+                          exitCode: 1,
+                          stdout: 'FAIL: expected 403, got 200',
+                          stderr: '',
+                      }),
+                  )
+                : run(command),
+        );
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.findings[0].reproduction).toEqual(
+            expect.objectContaining({
+                executed: true,
+                exitCode: 1,
+                reproduced: false,
+                output: expect.stringContaining('expected 403, got 200'),
+            }),
+        );
     });
 
     it('writes no test where it could not check that the path is free', async () => {
