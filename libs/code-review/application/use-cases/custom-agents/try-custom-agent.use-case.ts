@@ -23,8 +23,9 @@ import {
     type ICustomAgentTryRunStore,
 } from '@libs/code-review/domain/custom-agents/contracts';
 import {
+    CUSTOM_AGENTS_BETA_REQUIRED,
     CUSTOM_AGENTS_PLAN_REQUIRED,
-    isCustomAgentsPlanAllowed,
+    customAgentsBlockedBy,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
 import {
     type CustomAgentConfig,
@@ -170,15 +171,19 @@ export class TryCustomAgentUseCase {
     }
 
     private async assertPlan(organizationAndTeamData: OrganizationAndTeamData) {
-        // A try runs the agent as a review would: same plan as the review.
-        if (
-            !(await isCustomAgentsPlanAllowed(
-                this.licenseService,
-                organizationAndTeamData,
-                TryCustomAgentUseCase.name,
-            ))
-        ) {
-            throw new ForbiddenException(CUSTOM_AGENTS_PLAN_REQUIRED);
+        // A try runs the agent as a review would: same release stage and
+        // plan as the review.
+        const blocker = await customAgentsBlockedBy(
+            this.licenseService,
+            organizationAndTeamData,
+            TryCustomAgentUseCase.name,
+        );
+        if (blocker) {
+            throw new ForbiddenException(
+                blocker === 'beta'
+                    ? CUSTOM_AGENTS_BETA_REQUIRED
+                    : CUSTOM_AGENTS_PLAN_REQUIRED,
+            );
         }
     }
 
