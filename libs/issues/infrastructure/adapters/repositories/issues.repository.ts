@@ -10,6 +10,7 @@ import {
 import {
     IIssuesRepository,
     MarkScanFindingsSeenParams,
+    OpenScanFinding,
     OpenScanFindingArea,
     ResolveUnseenScanFindingsParams,
     ScanRepositoryScope,
@@ -456,6 +457,50 @@ export class IssuesRepository implements IIssuesRepository {
             });
         }
         return [...areas.values()];
+    }
+
+    async findOpenScanFindings(
+        params: ScanRepositoryScope,
+    ): Promise<OpenScanFinding[]> {
+        const docs = await this.issuesModel
+            .find(
+                {
+                    'organizationId': params.organizationId,
+                    'repository.platform': params.repositoryPlatform,
+                    'repository.host': params.repositoryHost,
+                    'repository.id': params.repositoryId,
+                    'source': IssueSource.SECURITY_SCAN,
+                    'status': IssueStatus.OPEN,
+                },
+                {
+                    'fingerprint': 1,
+                    'filePath': 1,
+                    'vulnerabilityClass': 1,
+                    'title': 1,
+                    'description': 1,
+                    'severity': 1,
+                    'cwe': 1,
+                    'startLine': 1,
+                    'endLine': 1,
+                    'evidence.attackPath': 1,
+                },
+            )
+            .lean()
+            .exec();
+        return (docs as Array<Partial<IIssue>>)
+            .filter((d) => d.fingerprint && d.filePath && d.vulnerabilityClass)
+            .map((d) => ({
+                fingerprint: d.fingerprint,
+                filePath: normalizeScanPath(d.filePath),
+                vulnerabilityClass: d.vulnerabilityClass,
+                title: d.title ?? '',
+                description: d.description ?? '',
+                severity: String(d.severity ?? ''),
+                cwe: d.cwe,
+                startLine: d.startLine ?? 1,
+                endLine: d.endLine ?? d.startLine ?? 1,
+                attackPath: d.evidence?.attackPath,
+            }));
     }
 
     async markScanFindingsSeen(

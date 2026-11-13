@@ -569,6 +569,60 @@ describe('IssuesRepository.findOpenScanFindingAreas', () => {
     });
 });
 
+describe('IssuesRepository.findOpenScanFindings', () => {
+    it("lists the repository's open scan findings with what identifies each", async () => {
+        const find = jest.fn(() => ({
+            lean: () => exec([
+                {
+                    fingerprint: 'fp-dao',
+                    filePath: './src/orders.dao.ts',
+                    vulnerabilityClass: 'injection',
+                    title: 'SQL built from the order id',
+                    description: 'The id reaches the query.',
+                    severity: 'high',
+                    cwe: 'CWE-89',
+                    startLine: 12,
+                    endLine: 14,
+                    evidence: { attackPath: [{ file: 'src/orders.controller.ts', line: 5, note: 'id' }] },
+                },
+                // Stored before fingerprints: nothing to keep the identity of.
+                { filePath: 'src/old.ts', vulnerabilityClass: 'authz' },
+            ]),
+        }));
+        const repository = new IssuesRepository({ find } as any);
+
+        const open = await repository.findOpenScanFindings({
+            organizationId: 'org-1',
+            repositoryPlatform: PlatformType.GITLAB,
+            repositoryHost: 'gitlab.com',
+            repositoryId: 'repo-1',
+        });
+
+        expect(open).toEqual([
+            {
+                fingerprint: 'fp-dao',
+                filePath: 'src/orders.dao.ts',
+                vulnerabilityClass: 'injection',
+                title: 'SQL built from the order id',
+                description: 'The id reaches the query.',
+                severity: 'high',
+                cwe: 'CWE-89',
+                startLine: 12,
+                endLine: 14,
+                attackPath: [{ file: 'src/orders.controller.ts', line: 5, note: 'id' }],
+            },
+        ]);
+        const [filter] = find.mock.calls[0] as unknown as [any];
+        expect(filter).toEqual(
+            expect.objectContaining({
+                'repository.host': 'gitlab.com',
+                'source': IssueSource.SECURITY_SCAN,
+                'status': IssueStatus.OPEN,
+            }),
+        );
+    });
+});
+
 describe('IssuesRepository.markScanFindingsSeen', () => {
     const scope = {
         organizationId: 'org-1',
