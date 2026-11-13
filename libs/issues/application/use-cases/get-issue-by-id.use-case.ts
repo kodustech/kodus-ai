@@ -185,11 +185,13 @@ export class GetIssueByIdUseCase implements IUseCase {
         issue: IssuesEntity,
     ): Promise<string | null> {
         const { id, platform, host } = issue.repository;
-        const configs =
-            await this.integrationConfigService.findByOrganizationAndConfigKey(
+        // A failed read leaves the issue without that link, not unreadable.
+        const configs = await this.integrationConfigService
+            .findByOrganizationAndConfigKey(
                 issue.organizationId,
                 IntegrationConfigKey.REPOSITORIES,
-            );
+            )
+            .catch(() => null);
         for (const config of configs ?? []) {
             if (config.integration?.platform !== platform) continue;
             const listed = (

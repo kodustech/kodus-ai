@@ -130,5 +130,18 @@ describe('GetIssueByIdUseCase — file link', () => {
 
         expect(details?.repositoryLink.url).toBe('https://git.acme.dev/acme/shop');
     });
-});
 
+    it('still shows the issue when its repository URL cannot be read', async () => {
+        const useCase = useCaseFor({
+            ...base,
+            repository: { ...base.repository, platform: PlatformType.AZURE_REPOS },
+        });
+        (useCase as any).integrationConfigService.findByOrganizationAndConfigKey = jest.fn(async () => {
+            throw new Error('postgres down');
+        });
+
+        const details = await useCase.execute('i-1');
+
+        expect(details?.id).toBe('i-1');
+    });
+});
