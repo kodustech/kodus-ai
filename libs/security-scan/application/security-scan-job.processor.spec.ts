@@ -108,6 +108,7 @@ function setup(engineResult: any, scan = scanRecord()) {
         upsertScanFinding: jest.fn(async () => ({ outcome: 'created' })),
         resolveUnseenScanFindings: jest.fn(async () => 2),
         markScanFindingsSeen: jest.fn(async (..._args: unknown[]) => ({ sighted: 0, reopened: 0 })),
+        findOpenScanFindings: jest.fn(async (..._args: unknown[]) => [] as any[]),
         findOpenScanFindingAreas: jest.fn(async () => [
             { filePath: 'src/orders.ts', vulnerabilityClass: 'authz' },
         ]),

@@ -2179,6 +2179,48 @@ describe('SecurityScanEngine: across slices and units', () => {
         );
     });
 
+    it('sights an open finding of an earlier scan instead of storing the same bug at another place', async () => {
+        // The earlier scan kept the bug at the service, which the controller
+        // reaches; this scan runs the controller first and finds it there.
+        const service = {
+            fingerprint: 'fp-service',
+            vulnerabilityClass: 'authz' as const,
+            cwe: 'CWE-639',
+            title: 'Any user reads any order',
+            description: 'The service loads any order by id.',
+            severity: 'high' as const,
+            filePath: 'src/orders/orders.service.ts',
+            startLine: 3,
+            endLine: 3,
+            attackPath: [{ file: 'src/orders/orders.controller.ts', line: 7, note: 'id from the path' }],
+        };
+        const onUnitDone = jest.fn(async () => undefined);
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            known: [service],
+            onUnitDone,
+        } as any);
+
+        // Stored at the controller, it would be a new issue, and the
+        // service's would be resolved with nothing fixed.
+        expect(result.findings).toEqual([]);
+        expect(
+            (onUnitDone.mock.calls as unknown as [unknown, unknown, string[]?][]).some(([, , sighted]) =>
+                (sighted ?? []).includes('fp-service'),
+            ),
+        ).toBe(true);
+    });
+
     it.each([
         ['its CWE cannot be structured', 'finalize'],
         ['its file cannot be read for the function', 'read'],

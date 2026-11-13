@@ -447,6 +447,21 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             units: scan.units,
             progress: scan.progress,
             reported: scan.reported,
+            // The same bug found again keeps the issue it is, whichever
+            // place this scan's dedup would keep.
+            known: (
+                await this.issuesService.findOpenScanFindings({
+                    organizationId: scan.organizationId,
+                    repositoryPlatform: scan.repository
+                        .platform as PlatformType,
+                    repositoryHost: scan.repository.host ?? '',
+                    repositoryId: scan.repository.id,
+                })
+            ).map((f) => ({
+                ...f,
+                vulnerabilityClass: f.vulnerabilityClass as VulnClass,
+                severity: f.severity as ScanFinding['severity'],
+            })),
             // Read whenever a plan is made or first carried on: the scan's
             // first job, or any job with no plan stored yet. A continuation
             // holds them in its plan already.

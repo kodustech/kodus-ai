@@ -129,6 +129,13 @@ export interface SecurityScanEngineParams {
     /** What earlier runs of the same scan reported: not reported again. */
     reported?: ScanReportedFinding[];
     /**
+     * The repository's open findings of earlier scans. A fresh finding of
+     * the same bug is sighted as the one stored, never stored beside it:
+     * which of two places the dedup keeps follows the order units run in,
+     * and a new identity would open a second issue and resolve the first.
+     */
+    known?: ScanReportedFinding[];
+    /**
      * Where the repository's open findings of earlier scans sit: read again
      * whatever the pattern scan draws, so a fix can resolve them.
      */
@@ -367,6 +374,13 @@ export class SecurityScanEngine {
                 await params.onPlanned?.(units, languages);
             }
         }
+        // The open findings of earlier scans not already this scan's.
+        const ours = new Set(
+            (params.reported ?? []).map((r) => r.fingerprint).filter(Boolean),
+        );
+        const known = (params.known ?? []).filter(
+            (k) => k.fingerprint && !ours.has(k.fingerprint),
+        );
         const findings: ScanFinding[] = [];
         const examined = new Set<string>();
         const examinedByClass = new Map<VulnClass, Set<string>>();
@@ -407,7 +421,11 @@ export class SecurityScanEngine {
                 // unit is (the model's dedup needs a request the stop may no
                 // longer allow): a bug another unit reported is sighted, not
                 // stored twice.
-                const reportedSoFar = [...(params.reported ?? []), ...findings];
+                const reportedSoFar = [
+                    ...known,
+                    ...(params.reported ?? []),
+                    ...findings,
+                ];
                 result.sighted = [...(result.sighted ?? [])];
                 result.findings = result.findings.filter((f) => {
                     const repeats = duplicatesOf(reportedSoFar, f);
@@ -453,7 +471,11 @@ export class SecurityScanEngine {
             // The unit ran beside units folded in after it started: what they
             // reported was not in its view yet. Past the cap the meter refuses
             // the dedup's request, and every finding is kept.
-            const reported = [...(params.reported ?? []), ...findings];
+            const reported = [
+                ...known,
+                ...(params.reported ?? []),
+                ...findings,
+            ];
             // Earlier findings a fresh one turns out to repeat: found again.
             const sighted = [...(result.sighted ?? [])];
             const fresh = result.findings.filter((f) => {
@@ -508,7 +530,7 @@ export class SecurityScanEngine {
                     unitHits,
                     existingFiles,
                     signal,
-                    [...(params.reported ?? []), ...findings],
+                    [...known, ...(params.reported ?? []), ...findings],
                     reproduceOneAtATime,
                     progress.get(unit.id),
                 ).catch((error) => {
