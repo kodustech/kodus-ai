@@ -273,6 +273,7 @@ it('still holds on unavailable risk when the PR has not changed', async () => {
         kind: 'hold',
         reason: 'Risk assessment is unavailable for the current PR head.',
     });
+    expect(code.getPullRequest).toHaveBeenCalledTimes(1);
     expect(LLM.run).not.toHaveBeenCalled();
 });
 

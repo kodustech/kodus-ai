@@ -372,17 +372,42 @@ it('records an unexpected failure while collecting the assessment input', async 
 });
 
 it.each([
-    ['a push during the diff read', { head: { sha: 'new-head' } }],
-    ['risk turned off', undefined],
-])('records no error for an expected outcome: %s', async (_, change) => {
-    if (change)
-        management.getPullRequest.mockResolvedValue({ ...live, ...change });
-    const result = await stage.execute(
-        context(change ? {} : { riskAssessmentActive: false }),
-    );
-    expect(result.errors ?? []).toEqual([]);
+    [
+        'exhausted credits',
+        () =>
+            permissions.gateKodusCreditsForSlot.mockResolvedValue({
+                reason: 'credits',
+            }),
+    ],
+    ['no entitlement', () => access.isEnabled.mockResolvedValue(false)],
+    [
+        'an incomplete provider diff',
+        () =>
+            management.getFilesByPullRequestId.mockResolvedValue([
+                { ...files[0], filename: undefined },
+            ]),
+    ],
+])('records an assessment left unavailable by %s', async (_, arrange) => {
+    arrange();
+    expect((await stage.execute(context())).errors).toEqual([
+        expect.objectContaining({
+            stage: 'AssessPrRiskStage',
+            severity: 'partial',
+            metadata: { reason: 'approval_risk_assessment_failed' },
+        }),
+    ]);
 });
 
-it('records nothing for a successful judgment', async () => {
+it('flags a failed assessment but not a judgment, a push during the diff read or a CLI run', async () => {
     expect((await stage.execute(context())).errors ?? []).toEqual([]);
+    management.getPullRequest.mockResolvedValueOnce({
+        ...live,
+        head: { sha: 'new-head' },
+    });
+    expect((await stage.execute(context())).errors ?? []).toEqual([]);
+    const cli = context();
+    cli.origin = 'cli';
+    expect((await stage.execute(cli)).errors ?? []).toEqual([]);
+    maps.read.mockRejectedValue(new Error('database failed'));
+    expect((await stage.execute(context())).errors).toHaveLength(1);
 });

@@ -24,10 +24,10 @@ export class AssessPrRiskStage extends BasePipelineStage<CodeReviewPipelineConte
         return this.updateContext(context, (draft) => {
             draft.riskAssessment = assessment;
             draft.fullPrFiles = result.fullPrFiles;
-            // A failed judgment stays `unavailable` (never safe), but the stage
-            // and the review must not read as a clean success (#2385). Expected
-            // outcomes such as a push during the diff read carry no failure.
-            if (assessment.status === 'unavailable' && assessment.failure) {
+            // An unavailable assessment stays `unavailable` (never safe), but the
+            // stage and the review must not read as a clean success (#2385),
+            // unless it was routine, such as a push during the diff read.
+            if (assessment.status === 'unavailable' && !assessment.expected) {
                 draft.errors ??= [];
                 draft.errors.push({
                     stage: this.stageName,

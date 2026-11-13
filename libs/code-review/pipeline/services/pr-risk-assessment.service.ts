@@ -80,8 +80,15 @@ export class PrRiskAssessmentService {
         context: PrRiskAssessmentRequest,
     ): Promise<PrRiskAssessmentResponse> {
         let fullPrFiles = context.fullPrFiles;
-        const unavailable = (reason: string): PrRiskAssessmentResponse => ({
-            assessment: { status: 'unavailable', reason },
+        const unavailable = (
+            reason: string,
+            expected?: true,
+        ): PrRiskAssessmentResponse => ({
+            assessment: {
+                status: 'unavailable',
+                reason,
+                ...(expected ? { expected } : {}),
+            },
             fullPrFiles,
         });
         if (context.riskConfigurationUnavailable)
@@ -94,6 +101,7 @@ export class PrRiskAssessmentService {
         if (context.origin === 'cli')
             return unavailable(
                 'PR risk assessment requires a provider PR snapshot.',
+                true,
             );
         try {
             const criteria = riskCriteriaSchema.safeParse(
@@ -140,6 +148,7 @@ export class PrRiskAssessmentService {
             if (live?.head?.sha !== headSha || live?.base?.sha !== baseSha) {
                 return unavailable(
                     'The PR changed while Kody was reading its diff.',
+                    true,
                 );
             }
             if (!hasCompletePrFileList(files, live.changedFilesCount))
