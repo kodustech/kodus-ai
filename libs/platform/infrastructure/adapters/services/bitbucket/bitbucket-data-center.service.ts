@@ -2135,19 +2135,33 @@ export class BitbucketDataCenterService implements Omit<
     async getDefaultBranch(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
+        /**
+         * Only the branch the provider confirmed: a failed or empty lookup
+         * throws instead of falling back to a usual name, which a caller
+         * acting on the branch (the security scan) would read as the answer.
+         */
+        strict?: boolean;
     }): Promise<string> {
+        const fallback = (why: string) => {
+            if (params.strict) {
+                throw new Error(
+                    `Bitbucket Data Center default branch not confirmed: ${why}`,
+                );
+            }
+            return 'master';
+        };
         try {
             const { organizationAndTeamData, repository } = params;
             const authDetails = await this.getAuthDetails(
                 organizationAndTeamData,
             );
-            if (!authDetails) return 'master';
+            if (!authDetails) return fallback('no credentials');
 
             const repoConfig = await this.getRepoConfig(
                 organizationAndTeamData,
                 repository.id || repository.name,
             );
-            if (!repoConfig) return 'master';
+            if (!repoConfig) return fallback('repository not configured');
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
@@ -2155,8 +2169,9 @@ export class BitbucketDataCenterService implements Omit<
                 `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/branches/default`,
             );
 
-            return response.data?.displayId || 'master';
+            return response.data?.displayId || fallback('none returned');
         } catch (error) {
+            if (params.strict) throw error;
             this.logger.error({
                 message: 'Error getting default branch from Data Center',
                 context: BitbucketDataCenterService.name,

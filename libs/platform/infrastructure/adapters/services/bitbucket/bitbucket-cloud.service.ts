@@ -2983,6 +2983,12 @@ export class BitbucketCloudService implements Omit<
     async getDefaultBranch(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
+        /**
+         * Only the branch the provider confirmed: a failed or empty lookup
+         * throws instead of falling back to a usual name, which a caller
+         * acting on the branch (the security scan) would read as the answer.
+         */
+        strict?: boolean;
     }): Promise<string> {
         try {
             const { organizationAndTeamData, repository } = params;
@@ -3008,6 +3014,7 @@ export class BitbucketCloudService implements Omit<
 
             return repo?.mainbranch?.name;
         } catch (error) {
+            if (params.strict) throw error;
             this.logger.error({
                 message: 'Error to get default branch',
                 context: BitbucketCloudService.name,

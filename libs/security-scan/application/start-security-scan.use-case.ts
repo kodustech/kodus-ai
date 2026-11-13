@@ -167,6 +167,9 @@ export class StartSecurityScanUseCase {
                 {
                     organizationAndTeamData: orgTeam,
                     repository: { id: repository.id, name: repository.name },
+                    // A fallback name ("main", "master") would be scanned
+                    // as the default; only a confirmed branch is.
+                    strict: true,
                 },
                 platform,
             )

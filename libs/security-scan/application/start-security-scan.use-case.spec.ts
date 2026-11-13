@@ -71,7 +71,7 @@ function useCaseWith(
             repositoryId: 'repo-1',
             budget: { maxUsd: 5 },
         } as any);
-    return { scans, start, jobQueue };
+    return { scans, start, jobQueue, codeManagement: (useCase as any).codeManagementService };
 }
 
 describe('StartSecurityScanUseCase — running again continues', () => {
@@ -134,9 +134,15 @@ describe('StartSecurityScanUseCase — running again continues', () => {
     });
 
     it('scans the branch the provider serves as default now, not the one stored when the repository was connected', async () => {
-        const { scans, start } = useCaseWith(null);
+        const { scans, start, codeManagement } = useCaseWith(null);
 
         await start();
+
+        // Strict: an adapter's fallback name ("main") is never the answer.
+        expect(codeManagement.getDefaultBranch).toHaveBeenCalledWith(
+            expect.objectContaining({ strict: true }),
+            'GITHUB',
+        );
 
         expect(scans.create.mock.calls[0][0].repository).toEqual(
             expect.objectContaining({ defaultBranch: 'trunk', host: 'github.com' }),
