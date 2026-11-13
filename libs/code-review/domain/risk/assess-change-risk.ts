@@ -7,7 +7,12 @@ import { LLM } from '@libs/llm/llm';
 import {
     classifyLLMError,
     getClassification,
+    LlmErrorCategory,
 } from '@libs/llm/error-classifier';
+import { getModelId } from '@libs/llm/managed-slot';
+import { resolveContextWindowWithSource } from '@libs/llm/model-context-window';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
+import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
 import { createLogger } from '@libs/core/log/logger';
 import { CHANGE_RISK_PROMPT } from './change-risk-prompt';
 import { addedCodeLines } from './added-code-lines';
@@ -18,7 +23,12 @@ export interface ChangeRiskAssessment {
     reason: string;
     reviewedHeadSha: string;
     areaMapVersion?: string;
-    failure?: { category: string; errorName: string; httpStatus?: number };
+    failure?: {
+        category: string;
+        errorName: string;
+        httpStatus?: number;
+        code?: 'diff_too_large';
+    };
 }
 
 export const approvalRiskOutputSchema = z.object({
@@ -147,6 +157,56 @@ export async function assessChangeRisk(input: {
     const diff = buildChangeRiskDiff(input.files);
 
     try {
+        const user = JSON.stringify({
+            title: input.title,
+            body: input.body ?? '',
+            teamRiskInstructions: input.teamInstructions ?? '',
+            reviewLanguage: input.language ?? 'en-US',
+            fileCount: input.files.length,
+            diffWasTruncated: false,
+            diff,
+            historicalAreas: relevantAreas.slice(0, MAX_AREA_FILES),
+            areaEvidenceTruncated: input.files.length > MAX_AREA_FILES,
+            historyCoverage: input.areaMap?.coverage ?? null,
+            historyWindow: input.areaMap
+                ? {
+                      start: input.areaMap.windowStart,
+                      end: input.areaMap.windowEnd,
+                      refreshedAt: input.areaMap.refreshedAt,
+                  }
+                : null,
+        });
+        const window = resolveContextWindowWithSource({
+            byokMaxInputTokens: input.modelSlot?.maxInputTokens,
+            modelName: getModelId(input.modelSlot),
+        });
+        // A known model/explicit input window replaces the old character cap.
+        // Unknown windows stay with the provider instead of inventing a ceiling.
+        if (window.source !== 'default') {
+            const promptTokens = estimateTextTokens(
+                [
+                    CHANGE_RISK_PROMPT,
+                    user,
+                    JSON.stringify(
+                        zodToStrictWireSchema(approvalRiskOutputSchema)
+                            .jsonSchema,
+                    ),
+                ].join('\n\n'),
+            );
+            if (promptTokens > window.tokens) {
+                return {
+                    level: 'unknown',
+                    reason: `The complete PR prompt needs about ${promptTokens} tokens, exceeding the configured model input limit of ${window.tokens} tokens.`,
+                    failure: {
+                        category: LlmErrorCategory.CONTEXT_OVERFLOW,
+                        errorName: 'RiskPromptTooLargeError',
+                        code: 'diff_too_large',
+                    },
+                    reviewedHeadSha: input.headSha,
+                    areaMapVersion: input.areaMap?.version,
+                };
+            }
+        }
         const result = await LLM.run({
             schema: approvalRiskOutputSchema,
             runName: input.trace ? 'pr-risk-assessment' : 'approval-risk',
@@ -160,25 +220,7 @@ export async function assessChangeRisk(input: {
                 areaMapVersion: input.areaMap?.version ?? 'unavailable',
             },
             system: CHANGE_RISK_PROMPT,
-            user: JSON.stringify({
-                title: input.title,
-                body: input.body ?? '',
-                teamRiskInstructions: input.teamInstructions ?? '',
-                reviewLanguage: input.language ?? 'en-US',
-                fileCount: input.files.length,
-                diffWasTruncated: false,
-                diff,
-                historicalAreas: relevantAreas.slice(0, MAX_AREA_FILES),
-                areaEvidenceTruncated: input.files.length > MAX_AREA_FILES,
-                historyCoverage: input.areaMap?.coverage ?? null,
-                historyWindow: input.areaMap
-                    ? {
-                          start: input.areaMap.windowStart,
-                          end: input.areaMap.windowEnd,
-                          refreshedAt: input.areaMap.refreshedAt,
-                      }
-                    : null,
-            }),
+            user,
         });
 
         if (
@@ -219,6 +261,8 @@ export async function assessChangeRisk(input: {
     } catch (error) {
         const classification =
             getClassification(error) ?? classifyLLMError(error);
+        const promptTooLarge =
+            classification.category === LlmErrorCategory.CONTEXT_OVERFLOW;
         logger.warn({
             message: 'Approval risk assessment failed',
             context: 'approval-risk',
@@ -235,8 +279,11 @@ export async function assessChangeRisk(input: {
                 category: classification.category,
                 errorName: error instanceof Error ? error.name : 'UnknownError',
                 httpStatus: classification.httpStatus,
+                ...(promptTooLarge ? { code: 'diff_too_large' as const } : {}),
             },
-            reason: 'Kody could not assess risk for this PR.',
+            reason: promptTooLarge
+                ? 'The complete PR prompt exceeds the configured risk model input limit.'
+                : 'Kody could not assess risk for this PR.',
             reviewedHeadSha: input.headSha,
             areaMapVersion: input.areaMap?.version,
         };

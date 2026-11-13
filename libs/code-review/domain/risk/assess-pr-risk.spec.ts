@@ -358,7 +358,11 @@ it('keeps a large diff unavailable when the configured model rejects its context
     expect(LLM.run).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({
         status: 'unavailable',
-        failure: { errorName: 'Error' },
+        failure: {
+            errorName: 'Error',
+            category: 'CONTEXT_OVERFLOW',
+            code: 'diff_too_large',
+        },
     });
     expect(riskApprovalVeto(true, result, input.headSha)).toBeTruthy();
 });

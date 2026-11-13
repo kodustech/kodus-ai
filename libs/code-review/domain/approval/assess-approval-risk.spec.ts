@@ -24,6 +24,86 @@ const input = {
 
 afterEach(() => jest.clearAllMocks());
 
+it.each(['title', 'body', 'teamInstructions'])(
+    'checks the complete prompt when %s exceeds the configured model input window',
+    async (field) => {
+        jest.mocked(LLM.run).mockResolvedValue({
+            level: 'low',
+            reason: 'The patch alone looks harmless.',
+        } as any);
+        const result = await assessApprovalRisk({
+            ...input,
+            [field]: 'documentation '.repeat(5000),
+            modelSlot: {
+                provider: 'openai',
+                model: 'gpt-4o-mini',
+                maxInputTokens: 2048,
+            } as any,
+        });
+
+        expect(result).toMatchObject({
+            level: 'unknown',
+            failure: { category: 'CONTEXT_OVERFLOW', code: 'diff_too_large' },
+        });
+        expect(LLM.run).not.toHaveBeenCalled();
+    },
+);
+
+it.each([
+    [2048, 'unknown', 0],
+    [16384, 'low', 1],
+])(
+    'uses the configured %i-token input window for the same complete diff',
+    async (maxInputTokens, level, calls) => {
+        jest.mocked(LLM.run).mockResolvedValue({
+            level: 'low',
+            reason: 'The complete documentation diff preserves behavior.',
+        } as any);
+        const result = await assessApprovalRisk({
+            ...input,
+            files: [
+                {
+                    filename: 'docs/guide.md',
+                    status: 'added',
+                    additions: 1,
+                    deletions: 0,
+                    patch: `@@ -0,0 +1 @@\n+${'documentation '.repeat(5000)}`,
+                },
+            ],
+            modelSlot: {
+                provider: 'openai',
+                model: 'gpt-4o-mini',
+                maxInputTokens,
+            } as any,
+        });
+
+        expect(result.level).toBe(level);
+        expect(LLM.run).toHaveBeenCalledTimes(calls);
+    },
+);
+
+it('does not substitute a fixed input ceiling for an unknown model window', async () => {
+    jest.mocked(LLM.run).mockResolvedValue({
+        level: 'low',
+        reason: 'The configured provider accepted the complete input.',
+    } as any);
+    const body = 'documentation '.repeat(200_000);
+    const result = await assessApprovalRisk({
+        ...input,
+        body,
+        modelSlot: {
+            provider: 'openai_compatible',
+            model: 'completely-unknown-model-xyz',
+        } as any,
+    });
+
+    expect(result.level).toBe('low');
+    expect(LLM.run).toHaveBeenCalledTimes(1);
+    expect(
+        JSON.parse(jest.mocked(LLM.run).mock.calls[0][0].user as string).body,
+    ).toBe(body);
+});
+
 it.each([1, 51])(
     'sends the complete legacy approval diff above 50k characters across %i files',
     async (fileCount) => {
