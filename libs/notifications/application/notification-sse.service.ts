@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BeforeApplicationShutdown, Injectable } from '@nestjs/common';
 import { createLogger } from '@libs/core/log/logger';
 import type { Response } from 'express';
 
@@ -8,9 +8,28 @@ import type { Response } from 'express';
  * write events to.
  */
 @Injectable()
-export class NotificationSseService {
+export class NotificationSseService implements BeforeApplicationShutdown {
     private readonly logger = createLogger(NotificationSseService.name);
     private readonly connections = new Map<string, Set<Response>>();
+
+    /**
+     * Ends every open stream. Nest closes the HTTP server right after this
+     * hook, and a server waits for its open responses: a stream left open
+     * would keep the process alive until the browser went away. The client
+     * reconnects by itself, to whichever instance is up.
+     */
+    beforeApplicationShutdown(): void {
+        for (const set of this.connections.values()) {
+            for (const res of set) {
+                try {
+                    res.end();
+                } catch {
+                    // Already gone.
+                }
+            }
+        }
+        this.connections.clear();
+    }
 
     addConnection(userId: string, res: Response): void {
         let set = this.connections.get(userId);

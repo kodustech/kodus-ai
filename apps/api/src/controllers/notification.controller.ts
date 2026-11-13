@@ -114,10 +114,14 @@ export class NotificationController {
             }
         }, 30_000);
 
-        req.on('close', () => {
+        // The client leaving closes the request; the API ending the stream
+        // on shutdown closes the response.
+        const release = () => {
             clearInterval(heartbeat);
             this.sseService.removeConnection(userId, res);
-        });
+        };
+        req.on('close', release);
+        res.on('close', release);
     }
 
     @Patch(':id/read')
