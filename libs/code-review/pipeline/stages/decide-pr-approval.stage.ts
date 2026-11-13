@@ -17,6 +17,7 @@ import {
     approvalPolicyFromConfig,
     evaluateApproval,
     matchesApprovalScope,
+    reviewedSnapshotHoldReason,
     type ApprovalRiskAssessment,
 } from '@libs/code-review/domain/approval/approval-decision';
 import { assessApprovalRisk } from '@libs/code-review/domain/approval/assess-approval-risk';
@@ -28,7 +29,10 @@ import {
 } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { ApprovalPoliciesService } from '../services/approval-policies.service';
-import { SUMMARY_GENERATION_FAILED_REASON } from '../constants/error-reasons';
+import {
+    RISK_ASSESSMENT_FAILED_REASON,
+    SUMMARY_GENERATION_FAILED_REASON,
+} from '../constants/error-reasons';
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 
 @Injectable()
@@ -55,9 +59,12 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
         const config = context.codeReviewConfig;
+        // A failed risk assessment is judged by the risk veto, which names it;
+        // counting it here would replace that reason with "not clean".
         const hasBlockingFailure = (context.errors ?? []).some(
             (error) =>
                 error.metadata?.reason !== SUMMARY_GENERATION_FAILED_REASON &&
+                error.metadata?.reason !== RISK_ASSESSMENT_FAILED_REASON &&
                 ['critical', 'partial'].includes(error.severity ?? 'critical'),
         );
         if (
@@ -162,18 +169,14 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
             prNumber: pullRequest.number,
             includeLabels: !!policy.labels?.length,
         });
-        // Each reason names what happened: a push during the review is routine
-        // and must not read like a failure to reach the provider.
-        const liveHold = !livePr
-            ? 'Kody could not read the current PR from the Git provider.'
-            : headSha && livePr.head?.sha !== headSha
-              ? 'A newer commit arrived while Kody reviewed this one; Kody decides on the next reviewed commit.'
-              : pullRequest.base?.sha &&
-                  livePr.base?.sha !== pullRequest.base.sha
-                ? 'The target branch changed during the review, so this review cannot approve the PR.'
-                : policy.labels?.length && !livePr.labels
-                  ? 'Kody could not read the PR labels from the Git provider.'
-                  : null;
+        const liveHold =
+            reviewedSnapshotHoldReason(livePr, {
+                headSha,
+                baseSha: pullRequest.base?.sha,
+            }) ??
+            (policy.labels?.length && !livePr.labels
+                ? 'Kody could not read the PR labels from the Git provider.'
+                : null);
         if (liveHold) {
             return this.updateContext(context, (draft) => {
                 draft.approvalDecision = { kind: 'hold', reason: liveHold };
@@ -331,14 +334,18 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                       }
                     : {}),
             };
-            if (risk?.level === 'unknown') {
+            // The shared assessment records its own failure in AssessPrRiskStage.
+            if (
+                risk?.level === 'unknown' &&
+                config.riskAssessmentActive !== true
+            ) {
                 draft.errors ??= [];
                 draft.errors.push({
                     stage: this.stageName,
                     severity: 'partial',
                     error: new Error(risk.reason),
                     metadata: {
-                        reason: 'approval_risk_assessment_failed',
+                        reason: RISK_ASSESSMENT_FAILED_REASON,
                         ...risk.failure,
                     },
                 });
