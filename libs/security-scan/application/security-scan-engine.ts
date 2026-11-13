@@ -147,10 +147,10 @@ export interface SecurityScanEngineParams {
         progress: ScanUnitProgress,
         findings: ScanFinding[],
         /**
-         * Fingerprints of earlier findings a fresh one was dropped as a
-         * duplicate of: found again, so seen by this scan.
+         * Stored findings a fresh one was dropped as a duplicate of: found
+         * again, so seen by this scan (once each, by fingerprint).
          */
-        sighted?: string[],
+        sighted?: ScanReportedFinding[],
     ) => Promise<void>;
 }
 
@@ -383,6 +383,7 @@ export class SecurityScanEngine {
         const known = (params.known ?? []).filter(
             (k) => k.fingerprint && !ours.has(k.fingerprint),
         );
+        this.known = new Set(known);
         const findings: ScanFinding[] = [];
         const examined = new Set<string>();
         const examinedByClass = new Map<VulnClass, Set<string>>();
@@ -431,6 +432,7 @@ export class SecurityScanEngine {
                 result.sighted = [...(result.sighted ?? [])];
                 result.findings = result.findings.filter((f) => {
                     const repeats = duplicatesOf(reportedSoFar, f);
+                    if (this.refreshes(f, repeats)) return true;
                     result.sighted!.push(...repeats);
                     return !repeats.length;
                 });
@@ -445,7 +447,7 @@ export class SecurityScanEngine {
                     await params.onUnitDone?.(
                         progress.get(unit.id),
                         result.findings,
-                        fingerprintsOf(result.sighted),
+                        withFingerprint(result.sighted),
                     );
                 } else {
                     // The slice ended mid-unit: the unit runs again in the
@@ -463,7 +465,7 @@ export class SecurityScanEngine {
                         await params.onUnitDone?.(
                             pending,
                             result.findings,
-                            fingerprintsOf(result.sighted),
+                            withFingerprint(result.sighted),
                         );
                     }
                 }
@@ -482,6 +484,7 @@ export class SecurityScanEngine {
             const sighted = [...(result.sighted ?? [])];
             const fresh = result.findings.filter((f) => {
                 const repeats = duplicatesOf(reported, f);
+                if (this.refreshes(f, repeats)) return true;
                 sighted.push(...repeats);
                 return !repeats.length;
             });
@@ -516,7 +519,7 @@ export class SecurityScanEngine {
             await params.onUnitDone?.(
                 unitProgress,
                 result.findings,
-                fingerprintsOf(sighted),
+                withFingerprint(sighted),
             );
         };
 
@@ -619,6 +622,28 @@ export class SecurityScanEngine {
      * already reported; a unit finding it folds into another is dropped. A
      * dedup failure keeps every finding: a duplicate costs less than a miss.
      */
+    /** This run's open issues of earlier scans (SecurityScanEngineParams.known). */
+    private known: ReadonlySet<ScanReportedFinding> = new Set();
+
+    /**
+     * A fresh finding that repeats only open issues of earlier scans is
+     * stored as the first of them (`storedAs`): the issue keeps its identity
+     * and takes this scan's commit, lines, evidence and owner, and the
+     * sighting is on record as this scan's finding. One that repeats
+     * anything of this scan's own is a duplicate as before.
+     */
+    private refreshes(
+        finding: ScanFinding,
+        repeats: ScanReportedFinding[],
+    ): boolean {
+        const [first] = repeats;
+        if (!first?.fingerprint || !repeats.every((r) => this.known.has(r))) {
+            return false;
+        }
+        finding.storedAs = first.fingerprint;
+        return true;
+    }
+
     private async withoutDuplicates(
         params: SecurityScanEngineParams,
         fresh: ScanFinding[],
@@ -683,13 +708,29 @@ export class SecurityScanEngine {
                     (m) => indicesOf.get(dedupKey(m)) ?? [],
                 );
                 members.forEach((i) => named.add(i));
-                const droppedFresh = members.some(
+                const droppedFresh = members.filter(
                     (i) => i >= earlier.length && !kept.has(`scan-${i}`),
                 );
-                if (droppedFresh) {
-                    for (const i of members) {
-                        if (i < earlier.length) sighted.push(earlier[i]);
-                    }
+                const earlierMembers = members.filter(
+                    (i) => i < earlier.length,
+                );
+                const keptFresh = members.some(
+                    (i) => i >= earlier.length && kept.has(`scan-${i}`),
+                );
+                // Grouped only with open issues of earlier scans: the fresh
+                // one is stored as the first, which keeps its identity and
+                // takes this scan's data.
+                if (
+                    droppedFresh.length &&
+                    !keptFresh &&
+                    this.refreshes(
+                        fresh[droppedFresh[0] - earlier.length],
+                        earlierMembers.map((i) => earlier[i]),
+                    )
+                ) {
+                    kept.add(`scan-${droppedFresh[0]}`);
+                } else if (droppedFresh.length) {
+                    for (const i of earlierMembers) sighted.push(earlier[i]);
                 }
             }
             // A merge the trace does not name (a keep the model repeated
@@ -720,13 +761,27 @@ export class SecurityScanEngine {
                     if (holder === undefined) {
                         kept.add(`scan-${i}`);
                     } else if (holder < earlier.length) {
-                        sighted.push(earlier[holder]);
+                        if (
+                            this.refreshes(fresh[i - earlier.length], [
+                                earlier[holder],
+                            ])
+                        ) {
+                            kept.add(`scan-${i}`);
+                        } else {
+                            sighted.push(earlier[holder]);
+                        }
                     }
                 } else if (holder !== undefined && holder >= earlier.length) {
                     // An earlier finding absorbed into a fresh one: the bug
                     // keeps the identity it has.
-                    kept.delete(`scan-${holder}`);
-                    sighted.push(earlier[i]);
+                    if (
+                        !this.refreshes(fresh[holder - earlier.length], [
+                            earlier[i],
+                        ])
+                    ) {
+                        kept.delete(`scan-${holder}`);
+                        sighted.push(earlier[i]);
+                    }
                 }
             }
             return fresh.filter((_, i) =>
@@ -992,10 +1047,14 @@ export class SecurityScanEngine {
                     const repeats = finding
                         ? duplicatesOf(earlier, finding)
                         : [];
-                    sighted.push(...repeats);
+                    const refreshing =
+                        !!finding && this.refreshes(finding, repeats);
+                    if (!refreshing) {
+                        sighted.push(...repeats);
+                    }
                     if (
                         finding &&
-                        !repeats.length &&
+                        (refreshing || !repeats.length) &&
                         !isDuplicate(findings, finding)
                     ) {
                         findings.push(finding);
@@ -1891,14 +1950,17 @@ const DEDUP_EARLIER_LIMIT = 40;
  * dedup call's size stays bounded however long the scan runs.
  */
 /** The stored identities of the findings, where they have one. */
-function fingerprintsOf(findings: ScanReportedFinding[] = []): string[] {
-    return [
-        ...new Set(
-            findings
-                .map((f) => f.fingerprint)
-                .filter((fp): fp is string => !!fp),
-        ),
-    ];
+/** The stored findings among these, once each by fingerprint. */
+function withFingerprint(
+    findings: ScanReportedFinding[] = [],
+): ScanReportedFinding[] {
+    const byFingerprint = new Map<string, ScanReportedFinding>();
+    for (const f of findings) {
+        if (f.fingerprint && !byFingerprint.has(f.fingerprint)) {
+            byFingerprint.set(f.fingerprint, f);
+        }
+    }
+    return [...byFingerprint.values()];
 }
 
 function nearby(

@@ -166,7 +166,7 @@ describe('SecurityScanJobProcessor', () => {
             run: jest.fn(async (params: any) => {
                 await paused;
                 unitDone = params
-                    .onUnitDone({ unitId: 'u1', state: 'pending', findings: 0 }, [finding], ['fp-old'])
+                    .onUnitDone({ unitId: 'u1', state: 'pending', findings: 0 }, [finding], [{ ...finding, fingerprint: 'fp-old' }])
                     .catch((e: Error) => e);
                 await unitDone;
                 return finishedResult();
@@ -215,9 +215,24 @@ describe('SecurityScanJobProcessor', () => {
         );
     });
 
+    it('stores a finding found again under the issue it is, and records that identity for a resumed scan', async () => {
+        const { processor, issuesService, scans } = setup({
+            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 1 }, [{ ...finding, storedAs: 'fp-open' }]]],
+            result: finishedResult(),
+        });
+
+        await processor.process('job-1');
+
+        expect(issuesService.upsertScanFinding).toHaveBeenCalledWith(
+            expect.objectContaining({ fingerprint: 'fp-open', startLine: finding.startLine }),
+        );
+        const [, , , reported] = scans.recordUnit.mock.calls[0] as unknown as [unknown, unknown, unknown, any[]];
+        expect(reported.map((r) => r.fingerprint)).toEqual(['fp-open']);
+    });
+
     it('writes no issue once another job holds the scan', async () => {
         const { processor, issuesService, scans } = setup({
-            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 1 }, [finding], ['fp-old']]],
+            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 1 }, [finding], [{ ...finding, fingerprint: 'fp-old' }]]],
             result: finishedResult(),
         });
         // Claimed at the start, then lost.
@@ -666,7 +681,7 @@ describe('SecurityScanJobProcessor', () => {
 
     it('sights at once an earlier finding a unit found again, reopening it if resolved since', async () => {
         const { processor, scans, issuesService } = setup({
-            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 0 }, [], ['fp-again']]],
+            unitEvents: [[{ unitId: 'u1', state: 'done', findings: 0 }, [], [{ ...finding, fingerprint: 'fp-again' }]]],
             result: finishedResult({ findings: [] }),
         });
         issuesService.markScanFindingsSeen.mockResolvedValueOnce({ sighted: 2, reopened: 1 });
@@ -680,6 +695,10 @@ describe('SecurityScanJobProcessor', () => {
         expect(lastUpdate(scans).outcome).toEqual(
             expect.objectContaining({ reopened: 1, stillOpen: 2 }),
         );
+        // And on the scan's record: a scan carrying on this plan holds it
+        // too, instead of resolving it in an area it inherits as read.
+        const [, , , reported] = scans.recordUnit.mock.calls[0] as unknown as [unknown, unknown, unknown, any[]];
+        expect(reported.map((r) => r.fingerprint)).toEqual(['fp-again']);
     });
 
     it("drops a stale plan's reports with it: of another commit, neither compared against nor sighted", async () => {

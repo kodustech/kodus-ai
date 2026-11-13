@@ -431,6 +431,12 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
 
         // Whether this slice made (or grew) the plan: progress of its own.
         let planned = false;
+        // Fingerprints already in the scan's reported list.
+        const onRecord = new Set(
+            (scan.reported ?? [])
+                .map((r) => r.fingerprint)
+                .filter((fp): fp is string => !!fp),
+        );
         // Renews the job's lease, or throws when it no longer runs the scan.
         const stillOwned = async () => {
             signal?.throwIfAborted();
@@ -522,7 +528,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                                 .platform as PlatformType,
                             repositoryHost: scan.repository.host ?? '',
                             repositoryId: scan.repository.id,
-                            fingerprints: sighted,
+                            fingerprints: sighted.map((s) => s.fingerprint!),
                             scanId: scan.uuid,
                             foundAgain: true,
                         });
@@ -577,7 +583,19 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         outcome: counts,
                         ...(liveCoverage && { coverage: liveCoverage }),
                     },
-                    findings.map((f) => toReported(f, fingerprintOf(scan, f))),
+                    [
+                        ...findings.map((f) =>
+                            toReported(f, fingerprintOf(scan, f)),
+                        ),
+                        // Seen by this scan as much as what it stored: a scan
+                        // that carries on this one's plan holds them too,
+                        // instead of resolving them in an area it inherits.
+                        ...(sighted ?? []).filter((s) => {
+                            if (onRecord.has(s.fingerprint!)) return false;
+                            onRecord.add(s.fingerprint!);
+                            return true;
+                        }),
+                    ],
                     jobId,
                 );
             },
@@ -868,6 +886,9 @@ function carriedSpend(scan: SecurityScanRecord): SecurityScanSpend {
 }
 
 function fingerprintOf(scan: SecurityScanRecord, finding: ScanFinding): string {
+    if (finding.storedAs) {
+        return finding.storedAs;
+    }
     return computeScanFingerprint({
         repositoryPlatform: scan.repository.platform,
         repositoryHost: scan.repository.host ?? '',

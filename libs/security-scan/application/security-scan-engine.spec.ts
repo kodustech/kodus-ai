@@ -2175,11 +2175,11 @@ describe('SecurityScanEngine: across slices and units', () => {
         expect(onUnitDone).toHaveBeenCalledWith(
             expect.objectContaining({ state: 'done' }),
             [],
-            ['fp-earlier'],
+            [expect.objectContaining({ fingerprint: 'fp-earlier' })],
         );
     });
 
-    it('sights an open finding of an earlier scan instead of storing the same bug at another place', async () => {
+    it('stores the same bug found at another place as the open issue it is, with this scan\'s data', async () => {
         // The earlier scan kept the bug at the service, which the controller
         // reaches; this scan runs the controller first and finds it there.
         const service = {
@@ -2211,14 +2211,16 @@ describe('SecurityScanEngine: across slices and units', () => {
             onUnitDone,
         } as any);
 
-        // Stored at the controller, it would be a new issue, and the
-        // service's would be resolved with nothing fixed.
-        expect(result.findings).toEqual([]);
-        expect(
-            (onUnitDone.mock.calls as unknown as [unknown, unknown, string[]?][]).some(([, , sighted]) =>
-                (sighted ?? []).includes('fp-service'),
-            ),
-        ).toBe(true);
+        // Under a fingerprint of its own it would be a new issue, and the
+        // service's would be resolved with nothing fixed. Stored as the
+        // service's issue, that issue takes this scan's lines and evidence,
+        // and the sighting is this scan's finding (carried by a resumed scan).
+        expect(result.findings).toEqual([
+            expect.objectContaining({
+                filePath: 'src/orders/orders.controller.ts',
+                storedAs: 'fp-service',
+            }),
+        ]);
     });
 
     it.each([
@@ -2581,7 +2583,7 @@ describe('SecurityScanEngine: across slices and units', () => {
         } as any);
 
         // Dropped, and the earlier finding it repeats is sighted.
-        expect(onUnitDone).toHaveBeenCalledWith(expect.anything(), [], ['fp-carried']);
+        expect(onUnitDone).toHaveBeenCalledWith(expect.anything(), [], [expect.objectContaining({ fingerprint: 'fp-carried' })]);
     });
 
     it('keeps a fresh finding the dedup dropped without saying what it repeats', async () => {
@@ -2683,7 +2685,7 @@ describe('SecurityScanEngine: across slices and units', () => {
         expect(onUnitDone).toHaveBeenCalledWith(
             expect.objectContaining({ state: 'done' }),
             [],
-            ['fp-carried'],
+            [expect.objectContaining({ fingerprint: 'fp-carried' })],
         );
     });
 });

@@ -158,6 +158,12 @@ export interface SecurityScanRecord {
  */
 export interface ScanFinding {
     unitId: string;
+    /**
+     * The fingerprint of an open issue of an earlier scan this finding is
+     * found again as: stored under it, so the issue keeps its identity and
+     * takes this scan's code, lines, evidence and owner.
+     */
+    storedAs?: string;
     vulnerabilityClass: VulnClass;
     cwe?: string;
     title: string;
