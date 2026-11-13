@@ -103,9 +103,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryFullName: issue.repository.full_name,
             httpUrl: httpUrl,
             repositoryUrl: issue.repository.url ?? null,
-            // A scan finding's instance (GitHub Enterprise, a self-hosted
-            // GitLab), when the issue carries no URL of its own.
-            host: issue.repository.host,
+            instance: await this.instanceOrigin(issue, httpUrl),
         };
 
         const prUrls = await this.selectAllPrNumbers(issue, dataToBuildUrls);
@@ -178,6 +176,33 @@ export class GetIssueByIdUseCase implements IUseCase {
     }
 
     //#region Auxiliary functions
+    /**
+     * Where a scan finding's Git instance serves its pages (GitHub
+     * Enterprise, a self-hosted GitLab or Forgejo) when the issue holds no
+     * URL of its own: the origin of the URL its organization lists the
+     * repository with, scheme and port as served. `https` on the recorded
+     * host only when that URL cannot be read.
+     */
+    private async instanceOrigin(
+        issue: IssuesEntity,
+        listedForPlatform: string | null,
+    ): Promise<string | undefined> {
+        const { host, url, platform } = issue.repository;
+        if (!host || url) return undefined;
+        // Azure and Forgejo had theirs read already.
+        const listed =
+            platform === PlatformType.AZURE_REPOS ||
+            platform === PlatformType.FORGEJO
+                ? listedForPlatform
+                : await this.configuredHttpUrl(issue);
+        try {
+            if (listed) return new URL(listed).origin;
+        } catch {
+            // Unreadable: the recorded host.
+        }
+        return `https://${host}`;
+    }
+
     /**
      * The repository's URL as the issue's own organization lists it, on the
      * issue's platform: another organization (or platform) can hold a
@@ -261,7 +286,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryFullName: string;
             httpUrl: string;
             repositoryUrl?: string;
-            host?: string;
+            instance?: string;
         },
     ): Promise<
         {
@@ -303,7 +328,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryFullName: string;
             httpUrl: string;
             repositoryUrl?: string;
-            host?: string;
+            instance?: string;
         },
         filePath: string,
         commitSha?: string,
@@ -343,7 +368,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryFullName: string;
             httpUrl: string;
             repositoryUrl?: string;
-            host?: string;
+            instance?: string;
         },
         prNumber: string,
     ): string {
@@ -374,7 +399,7 @@ export class GetIssueByIdUseCase implements IUseCase {
         repositoryFullName: string;
         httpUrl: string;
         repositoryUrl?: string;
-        host?: string;
+        instance?: string;
     }): string {
         switch (data.platform) {
             case PlatformType.GITHUB:
@@ -387,10 +412,10 @@ export class GetIssueByIdUseCase implements IUseCase {
                     }
                 }
 
-                return `https://${data.host || 'github.com'}/${data.repositoryFullName}`;
+                return `${data.instance ?? 'https://github.com'}/${data.repositoryFullName}`;
             case PlatformType.GITLAB: {
-                const gitlabUrl = data.host
-                    ? `https://${data.host}`
+                const gitlabUrl = data.instance
+                    ? data.instance
                     : process.env.WEB_GITLAB_OAUTH_URL
                       ? new URL(process.env.WEB_GITLAB_OAUTH_URL).origin
                       : 'https://gitlab.com';
@@ -405,8 +430,8 @@ export class GetIssueByIdUseCase implements IUseCase {
                 const url =
                     data.repositoryUrl ||
                     data.httpUrl ||
-                    (data.host
-                        ? `https://${data.host}/${data.repositoryFullName}`
+                    (data.instance
+                        ? `${data.instance}/${data.repositoryFullName}`
                         : '');
                 return url.replace(/\.git$/, '').replace(/\/$/, '');
             }

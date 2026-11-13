@@ -193,4 +193,26 @@ describe('GetIssueByIdUseCase — file link', () => {
 
         expect(details?.fileLink.url).toBe(url);
     });
+
+    it("takes the instance's scheme and port from the URL it lists the repository with", async () => {
+        const details = await useCaseFor(
+            {
+                ...base,
+                repository: { ...base.repository, url: undefined, host: 'ghe.acme.io:8080' },
+                source: IssueSource.SECURITY_SCAN,
+                lastSeenCommitSha: 'abc123',
+            },
+            undefined,
+            [
+                {
+                    integration: { platform: PlatformType.GITHUB },
+                    configValue: [{ id: 'repo-1', http_url: 'http://ghe.acme.io:8080/acme/shop' }],
+                },
+            ],
+        ).execute('i-1');
+
+        expect(details?.fileLink.url).toBe(
+            'http://ghe.acme.io:8080/acme/shop/blob/abc123/src/orders.controller.ts',
+        );
+    });
 });
