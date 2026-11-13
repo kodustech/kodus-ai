@@ -411,3 +411,19 @@ it('flags a failed assessment but not a judgment, a push during the diff read or
     maps.read.mockRejectedValue(new Error('database failed'));
     expect((await stage.execute(context())).errors).toHaveLength(1);
 });
+
+it.each([
+    [true, 1],
+    [false, 0],
+])(
+    'flags unresolved risk settings only when risk may be active (active: %s)',
+    async (active, errors) => {
+        const ctx = {
+            ...context({ riskAssessmentActive: active }),
+            riskConfigurationUnavailable: true,
+        };
+        const result = await stage.execute(ctx);
+        expect(result.riskAssessment).toMatchObject({ status: 'unavailable' });
+        expect(result.errors ?? []).toHaveLength(errors);
+    },
+);

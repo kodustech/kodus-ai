@@ -91,8 +91,14 @@ export class PrRiskAssessmentService {
             },
             fullPrFiles,
         });
+        // Also set when only approval settings failed: then no assessment was
+        // part of this review, and that failure is not the risk stage's.
         if (context.riskConfigurationUnavailable)
-            return unavailable('Kody could not resolve PR-wide risk settings.');
+            return unavailable(
+                'Kody could not resolve PR-wide risk settings.',
+                context.codeReviewConfig?.riskAssessmentActive !== true ||
+                    undefined,
+            );
         // Absent is a legacy configuration, handled by the existing approval
         // path until the scope migration explicitly enables shared assessment.
         if (context.codeReviewConfig?.riskAssessmentActive !== true) {
