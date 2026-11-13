@@ -27,6 +27,22 @@ export interface CodeAreaHistorySyncStatus {
     cursorEnd: string;
     discoveredMergedPrs: number;
     complete: boolean;
+    /** The provider could not list this repository's PRs; skip it until then. */
+    retryAfter?: string | null;
+}
+
+/**
+ * The provider could not list the repository's PRs (App uninstalled or
+ * suspended, repository gone). `attempt` counts consecutive failed runs, so a
+ * scheduler can report the first one and stay quiet on the retries.
+ */
+export class CodeAreaHistoryUnavailableError extends Error {
+    constructor(
+        readonly attempt: number,
+        readonly retryAfter: string,
+    ) {
+        super('Could not list PR history for area map');
+    }
 }
 
 export interface IRefreshCodeAreaRiskMapService {

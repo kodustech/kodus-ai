@@ -52,6 +52,7 @@ import {
     formatTitleLine,
 } from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
+import { createHash } from 'node:crypto';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
 import {
     isFileMatchingGlob,
@@ -304,6 +305,8 @@ export class GithubService
             doNotRetry: number[];
         };
         throttle?: {
+            /** Clients with the same id share the plugin's write queues. */
+            id?: string;
             onRateLimit: (
                 retryAfter: number,
                 options: { method: string; url: string },
@@ -3144,8 +3147,14 @@ export class GithubService
                 organizationAndTeamData,
             );
 
+            // The webhook mapper spreads GitHub's repository payload, so
+            // `owner` can arrive as the account object instead of its login.
+            const rawOwner = repository.owner as
+                | string
+                | { login?: string }
+                | undefined;
             const owner =
-                repository.owner ??
+                (typeof rawOwner === 'string' ? rawOwner : rawOwner?.login) ||
                 (await this.getGithubAuthDetails(organizationAndTeamData))?.org;
 
             const { data } = await octokit.rest.pulls.get({
@@ -3552,6 +3561,12 @@ export class GithubService
                         doNotRetry: [400, 401, 403, 404, 422, 451],
                     },
                     throttle: {
+                        // The plugin's write queues (one write a second, one
+                        // comment or review every three) are shared by every
+                        // client with the same id. Without one, all
+                        // organizations in the process queued behind each
+                        // other; GitHub limits each installation on its own.
+                        id: `installation:${githubAuthDetail.installationId}`,
                         onRateLimit: (
                             retryAfter,
                             options,
@@ -3679,6 +3694,9 @@ export class GithubService
                         doNotRetry: [400, 401, 403, 404, 422, 451],
                     },
                     throttle: {
+                        // One write queue per token, as on the App path: teams
+                        // sharing a PAT share GitHub's per-user limit too.
+                        id: `token:${createHash('sha256').update(decryptedPAT).digest('hex').slice(0, 16)}`,
                         // NEVER sleep inside the octokit call (mirrors the App
                         // path above). A primary-rate-limit retryAfter is the
                         // time until the hourly bucket resets — up to ~59 min.

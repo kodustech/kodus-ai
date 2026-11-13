@@ -450,6 +450,9 @@ export class CodeManagementService implements ICodeManagementService {
                     lastNDays?: number;
                     limit?: number;
                 };
+                // A screen is waiting: providers that back off on rate limits
+                // give up sooner. Only Bitbucket Cloud reads it today.
+                interactive?: boolean;
             };
         },
         type?: PlatformType,
@@ -626,6 +629,7 @@ export class CodeManagementService implements ICodeManagementService {
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
             determineBots?: boolean;
+            requireLoaded?: boolean;
         },
         type?: PlatformType,
     ): Promise<PullRequestAuthor[]> {

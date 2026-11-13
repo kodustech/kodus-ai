@@ -52,12 +52,13 @@ export class PruneRemovedLicenseSeatsUseCase {
 
         const memberList = await this.organizationMemberListService.fetch(
             organizationAndTeamData,
+            { requireAuthors: true, skipCache: true },
         );
 
         // Revoking against an unconfirmed member list would strip every seat in
         // the organization on a provider outage.
         if (memberList.status !== 'ok') {
-            this.logger.warn({
+            this.logger.error({
                 message:
                     'Skipping license seat prune: organization members could not be confirmed',
                 context: PruneRemovedLicenseSeatsUseCase.name,

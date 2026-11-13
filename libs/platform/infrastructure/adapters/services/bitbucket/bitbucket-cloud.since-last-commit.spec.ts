@@ -77,9 +77,15 @@ describe('BitbucketCloudService.getChangedFilesSinceLastCommit — diffstat page
                 data: pages[page.next],
             }),
             commits: {
-                getDiff: jest
-                    .fn()
-                    .mockResolvedValue({ data: '@@ -1 +1 @@\n-a\n+b' }),
+                // A diff as Bitbucket writes it: one git section per file
+                getDiff: jest.fn().mockResolvedValue({
+                    data: ['src/a.ts', 'zz/own.ts']
+                        .map(
+                            (path) =>
+                                `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n-a\n+b\n`,
+                        )
+                        .join(''),
+                }),
             },
             source: { read: jest.fn().mockResolvedValue({ data: 'b' }) },
         });
