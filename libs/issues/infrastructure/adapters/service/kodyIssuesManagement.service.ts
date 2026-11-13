@@ -190,11 +190,19 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
 
         try {
             // 1. Buscar issues abertas para o arquivo
-            const existingIssues = await this.issuesService.findByFileAndStatus(
-                organizationAndTeamData.organizationId,
-                repository.id,
-                filePath,
-                IssueStatus.OPEN,
+            // A scan issue names its repository by platform too: a GitLab
+            // project can carry the id of a GitHub repository.
+            const existingIssues = (
+                await this.issuesService.findByFileAndStatus(
+                    organizationAndTeamData.organizationId,
+                    repository.id,
+                    filePath,
+                    IssueStatus.OPEN,
+                )
+            )?.filter(
+                (issue) =>
+                    issue.source !== IssueSource.SECURITY_SCAN ||
+                    issue.repository?.platform === repository.platform,
             );
 
             if (!existingIssues || existingIssues?.length === 0) {

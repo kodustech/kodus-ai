@@ -1,3 +1,4 @@
+import { IssueSource } from '@libs/issues/domain/interfaces/issues.interface';
 import { Test, TestingModule } from '@nestjs/testing';
 import { KodyIssuesManagementService } from './kodyIssuesManagement.service';
 import { ISSUES_SERVICE_TOKEN } from '@libs/issues/domain/contracts/issues.service.contract';
@@ -318,6 +319,19 @@ describe('KodyIssuesManagementService', () => {
                         filePath: 'src/main.ts',
                         language: 'typescript',
                         contributingSuggestions: [],
+                        source: IssueSource.SECURITY_SCAN,
+                        repository: { ...mockRepository },
+                    },
+                    // The same id and file on another platform: another repository.
+                    {
+                        uuid: 'other-platform',
+                        title: 'IDOR on order lookup',
+                        description: 'Any user can read any order.',
+                        filePath: 'src/main.ts',
+                        language: 'typescript',
+                        contributingSuggestions: [],
+                        source: IssueSource.SECURITY_SCAN,
+                        repository: { ...mockRepository, platform: 'other-platform' },
                     },
                 ]);
             kodyIssuesAnalysisServiceMock.mergeSuggestionsIntoIssues.mockResolvedValue(
