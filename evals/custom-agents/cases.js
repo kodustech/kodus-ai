@@ -11,6 +11,8 @@
 //   P4  an include glob that names files explicitly reaches a file the team's
 //       ignorePaths set aside
 //   P7  a disabled agent does not run
+//   P11 an agent whose rules are linked skills and docs posts what they forbid,
+//       on the local sandbox too (guide-cases.js)
 //   P12 with repository instructions on, an agent posts a rule quoted from
 //       CLAUDE.md or AGENTS.md (instruction-cases.js)
 //
@@ -624,6 +626,7 @@ export const migration: Migration = {
     },
 ];
 
+CASES.push(...require('./guide-cases').GUIDE_CASES);
 CASES.push(...require('./instruction-cases').INSTRUCTION_CASES);
 
 module.exports = { CASES };
