@@ -131,17 +131,25 @@ describe('GetIssueByIdUseCase — file link', () => {
         expect(details?.repositoryLink.url).toBe('https://git.acme.dev/acme/shop');
     });
 
-    it('still shows the issue when its repository URL cannot be read', async () => {
-        const useCase = useCaseFor({
-            ...base,
-            repository: { ...base.repository, platform: PlatformType.AZURE_REPOS },
-        });
-        (useCase as any).integrationConfigService.findByOrganizationAndConfigKey = jest.fn(async () => {
-            throw new Error('postgres down');
-        });
+    it.each([PlatformType.AZURE_REPOS, PlatformType.FORGEJO])(
+        'still shows a %s issue whose repository URL cannot be read, without a broken link',
+        async (platform) => {
+            const useCase = useCaseFor({
+                ...base,
+                repository: { ...base.repository, platform, url: undefined },
+                contributingSuggestions: [{ id: 's-1', prNumber: 7 }],
+            });
+            (useCase as any).integrationConfigService.findByOrganizationAndConfigKey = jest.fn(async () => {
+                throw new Error('postgres down');
+            });
+            (useCase as any).kodyIssuesManagementService.enrichContributingSuggestions = jest.fn(async () => []);
 
-        const details = await useCase.execute('i-1');
+            const details = await useCase.execute('i-1');
 
-        expect(details?.id).toBe('i-1');
-    });
+            expect(details?.id).toBe('i-1');
+            expect(details?.fileLink.url).toBe('');
+            expect(details?.repositoryLink.url).toBe('');
+            expect(details?.prLinks).toEqual([{ label: '7', url: '' }]);
+        },
+    );
 });

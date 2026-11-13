@@ -94,7 +94,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             issue.repository.platform === PlatformType.AZURE_REPOS ||
             issue.repository.platform === PlatformType.FORGEJO
         ) {
-            httpUrl = await this.configuredHttpUrl(issue);
+            httpUrl = (await this.configuredHttpUrl(issue)) ?? httpUrl;
         }
 
         const dataToBuildUrls = {
@@ -309,6 +309,9 @@ export class GetIssueByIdUseCase implements IUseCase {
         const branch = commitSha || 'main';
 
         const repositoryUrl = this.buildRepositoryUrl(data);
+        if (!repositoryUrl) {
+            return '';
+        }
 
         switch (data.platform) {
             case PlatformType.GITHUB:
@@ -316,7 +319,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             case PlatformType.GITLAB:
                 return `${repositoryUrl}/-/blob/${branch}/${cleanFilePath}`;
             case PlatformType.AZURE_REPOS:
-                return `${data.httpUrl}?path=/${cleanFilePath}${commitSha ? `&version=GC${commitSha}` : ''}`;
+                return `${repositoryUrl}?path=/${cleanFilePath}${commitSha ? `&version=GC${commitSha}` : ''}`;
             case PlatformType.BITBUCKET:
                 return `https://bitbucket.org/${data.repositoryFullName}/src/${branch}/${cleanFilePath}`;
             case PlatformType.FORGEJO:
@@ -339,6 +342,9 @@ export class GetIssueByIdUseCase implements IUseCase {
         prNumber: string,
     ): string {
         const repositoryUrl = this.buildRepositoryUrl(data);
+        if (!repositoryUrl) {
+            return '';
+        }
 
         switch (data.platform) {
             case PlatformType.GITHUB:
@@ -346,7 +352,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             case PlatformType.GITLAB:
                 return `${repositoryUrl}/-/merge_requests/${prNumber}`;
             case PlatformType.AZURE_REPOS:
-                return `${data.httpUrl}/pullrequest/${prNumber}`;
+                return `${repositoryUrl}/pullrequest/${prNumber}`;
             case PlatformType.BITBUCKET:
                 return `https://bitbucket.org/${data.repositoryFullName}/pull-requests/${prNumber}`;
             case PlatformType.FORGEJO:
@@ -356,6 +362,7 @@ export class GetIssueByIdUseCase implements IUseCase {
         }
     }
 
+    /** Empty when the repository's URL is unknown: no link, never "null/…". */
     private buildRepositoryUrl(data: {
         platform: PlatformType;
         repositoryFullName: string;
@@ -381,16 +388,13 @@ export class GetIssueByIdUseCase implements IUseCase {
                 return `${gitlabUrl}/${data.repositoryFullName}`;
             }
             case PlatformType.AZURE_REPOS:
-                return data.httpUrl;
+                return data.httpUrl ?? '';
             case PlatformType.BITBUCKET:
                 return `https://bitbucket.org/${data.repositoryFullName}`;
             case PlatformType.FORGEJO: {
                 // The clone URL, without its `.git`.
                 const url = data.repositoryUrl || data.httpUrl;
-                if (!url) {
-                    throw new Error('Forgejo repository has no URL');
-                }
-                return url.replace(/\.git$/, '').replace(/\/$/, '');
+                return (url ?? '').replace(/\.git$/, '').replace(/\/$/, '');
             }
             default:
                 throw new Error(`Platform not supported: ${data.platform}`);
