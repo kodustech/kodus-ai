@@ -1296,11 +1296,13 @@ export class SecurityScanEngine {
             await this.ensureDependencies(sandbox, language, workdir);
             // A file (or link) already there is the repository's own: never
             // written over. The test stays on the issue, not run.
-            const taken = await run(
+            // Free only on test's own "no" (exit 1): a probe that failed or
+            // timed out says nothing, and nothing is written over.
+            const free = await run(
                 `test -e ${quoted} || test -L ${quoted}`,
                 10_000,
-            ).then((r) => r.exitCode === 0);
-            if (taken) {
+            ).then((r) => r.exitCode === 1);
+            if (!free) {
                 return;
             }
             await sandbox.writeFile(target, record.content);

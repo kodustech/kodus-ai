@@ -794,6 +794,30 @@ describe('SecurityScanEngine', () => {
         ).rejects.toThrow('could not be put back');
     });
 
+    it('writes no test where it could not check that the path is free', async () => {
+        const sandbox = fakeSandbox('e2b');
+        const run = sandbox.run.getMockImplementation()!;
+        sandbox.run.mockImplementation(async (command: string) =>
+            command.startsWith('test -e') ? Promise.reject(new Error('timed out')) : run(command),
+        );
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(sandbox.writeFile).not.toHaveBeenCalled();
+        expect(result.findings[0].reproduction).toEqual(expect.objectContaining({ executed: false }));
+    });
+
     it('never writes over, runs or removes a file the repository already has', async () => {
         const sandbox = fakeSandbox('e2b');
         const llm = fakeLlm({ units: [] });
