@@ -197,9 +197,11 @@ export class SecurityScanRepository implements ISecurityScanRepository {
                                       ? {
                                             runningJobId: '',
                                             leaseExpiresAt: '',
-                                            // Handed on with every request
-                                            // settled: spend is exact.
-                                            committedSpend: '',
+                                            // Unless the write sets it: what
+                                            // the next slice starts from.
+                                            ...('committedSpend' in changes
+                                                ? {}
+                                                : { committedSpend: '' }),
                                         }
                                       : {}),
                               },

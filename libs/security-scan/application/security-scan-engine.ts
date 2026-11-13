@@ -640,6 +640,15 @@ export class SecurityScanEngine {
         /** Receives the other issues it repeats: found again too. */
         sighted: ScanReportedFinding[],
     ): boolean {
+        // Stored as one already (absorbed through more than one path, or
+        // compared again after its unit): it stays that one, and every other
+        // issue it repeats is found again.
+        if (finding.storedAs) {
+            sighted.push(
+                ...repeats.filter((r) => r.fingerprint !== finding.storedAs),
+            );
+            return true;
+        }
         const [first, ...others] = repeats;
         if (!first?.fingerprint || !repeats.every((r) => this.known.has(r))) {
             return false;

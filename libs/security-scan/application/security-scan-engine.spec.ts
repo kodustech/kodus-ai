@@ -2179,6 +2179,22 @@ describe('SecurityScanEngine: across slices and units', () => {
         );
     });
 
+    it('keeps a finding stored as the first issue it absorbed, and sights the next one', () => {
+        const engine = new SecurityScanEngine({} as any) as any;
+        const first = { fingerprint: 'fp-first' };
+        const second = { fingerprint: 'fp-second' };
+        engine.known = new Set([first, second]);
+        const finding: any = {};
+        const sighted: any[] = [];
+
+        // Two earlier issues absorbed through two paths (alsoFoundIn).
+        expect(engine.refreshes(finding, [first], sighted)).toBe(true);
+        expect(engine.refreshes(finding, [second], sighted)).toBe(true);
+
+        expect(finding.storedAs).toBe('fp-first');
+        expect(sighted).toEqual([second]);
+    });
+
     it.each([
         ['every other open issue it repeats', [IDOR], ['fp-old-controller']],
         ['the issue, when the unit already holds the same finding', [IDOR, IDOR], ['fp-old-controller']],

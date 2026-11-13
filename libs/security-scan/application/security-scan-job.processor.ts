@@ -652,6 +652,9 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 status: SecurityScanStatus.QUEUED,
                 progress: result.progress,
                 spend: meter.snapshot(),
+                // A request the slice gave up on (a timed-out plan) may
+                // still be billed: its reservation passes to the next slice.
+                committedSpend: meter.committedSpend(),
                 coverage,
                 outcome: counts,
             });

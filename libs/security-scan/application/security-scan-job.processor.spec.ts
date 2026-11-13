@@ -343,6 +343,35 @@ describe('SecurityScanJobProcessor', () => {
         );
     });
 
+    it('passes a request the slice gave up on to the next slice, at its reservation', async () => {
+        const { processor, scans, jobQueue } = setup({});
+        (scans as any).raiseCommittedSpend = jest.fn(async () => undefined);
+        (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
+            run: jest.fn(async (params: any) => {
+                // The plan timed out with its request still at the provider.
+                await params.meter.admit({ inputTokens: 1_000, inputTokensUpperBound: 1_000, maxOutputTokens: 1_000 });
+                await params.onPlanned?.([{ id: 'u1' }], ['typescript']);
+                return {
+                    ...finishedResult(),
+                    finished: false,
+                    progress: [{ unitId: 'u1', state: 'pending', findings: 0 }],
+                };
+            }),
+        }));
+
+        await processor.process('job-1');
+
+        expect(jobQueue.enqueue).toHaveBeenCalled();
+        const handoff = (scans.update.mock.calls as unknown as [string, any][]).find(
+            ([, c]) => c.status === SecurityScanStatus.QUEUED,
+        )![1];
+        expect(handoff.spend).toEqual(expect.objectContaining({ inputTokens: 0, outputTokens: 0 }));
+        // What the next slice starts from: never the spend alone.
+        expect(handoff.committedSpend).toEqual(
+            expect.objectContaining({ inputTokens: 1_000, outputTokens: 1_000 }),
+        );
+    });
+
     it('hands the rest to a new job when the sandbox time runs out', async () => {
         const earlier = {
             vulnerabilityClass: 'ssrf',

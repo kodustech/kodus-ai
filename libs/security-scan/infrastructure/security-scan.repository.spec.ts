@@ -151,8 +151,20 @@ describe('SecurityScanRepository: one active scan per repository', () => {
         await repository.update('id-1', { status: 'queued' } as any);
 
         const [, update] = findOneAndUpdate.mock.calls[0] as unknown as [string, any];
-        // Handed on with every request settled: the spend written is exact.
+        // Handed on with nothing said of requests in flight: none were.
         expect(update.$unset).toEqual({ runningJobId: '', leaseExpiresAt: '', committedSpend: '' });
+    });
+
+    it('keeps the committed spend a hand-off writes for the next slice', async () => {
+        const findOneAndUpdate = jest.fn(() => exec({ _doc: { _id: 'id-1' } }));
+        const repository = new SecurityScanRepository({ findOneAndUpdate } as any);
+        const committedSpend = { usd: 0.01, inputTokens: 1_000, outputTokens: 1_000, requests: 1 };
+
+        await repository.update('id-1', { status: 'queued', committedSpend } as any);
+
+        const [, update] = findOneAndUpdate.mock.calls[0] as unknown as [string, any];
+        expect(update.$set.committedSpend).toEqual(committedSpend);
+        expect(update.$unset).toEqual({ runningJobId: '', leaseExpiresAt: '' });
     });
 
     it('changes a status only from the states it is given', async () => {

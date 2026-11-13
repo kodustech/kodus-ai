@@ -123,10 +123,10 @@ export interface SecurityScanRecord {
     budget: SecurityScanBudget;
     spend: SecurityScanSpend;
     /**
-     * The most the running slice may have been billed: raised before each
-     * of its requests leaves, cleared when it hands the scan on. Still set
-     * when a slice starts, the one before it ended with requests in flight
-     * (its worker died): they are charged at their reservation.
+     * The most the scan may have been billed: raised before each request
+     * leaves, and set when a slice hands the scan on (requests it gave up on
+     * still in flight at their reservation). A slice starts from it when it
+     * is more than the spend: the one before ended with requests in flight.
      */
     committedSpend?: SecurityScanSpend;
     /** The commit scanned; set once the sandbox has the repository. */
