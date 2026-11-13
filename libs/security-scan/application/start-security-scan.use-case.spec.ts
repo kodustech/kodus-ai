@@ -151,10 +151,10 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         expect(jobQueue.enqueue).not.toHaveBeenCalled();
     });
 
-    it('says what to fix, not to retry, when the provider gives no default branch', async () => {
+    it('names both causes when the provider gives no default branch: an empty repository, or an error it answered empty', async () => {
         const { scans, start } = useCaseWith(null, 'GITHUB', '');
 
-        await expect(start()).rejects.toThrow(/gave no default branch/);
+        await expect(start()).rejects.toThrow(/gave no default branch.*empty.*try again/);
         expect(scans.create).not.toHaveBeenCalled();
     });
 

@@ -69,7 +69,7 @@ export const DEFAULT_BRANCH_UNREADABLE_MESSAGE =
     "Could not read the repository's default branch from its Git provider. Try again in a moment.";
 
 export const NO_DEFAULT_BRANCH_MESSAGE =
-    "The repository's Git provider gave no default branch. An empty repository has none: push to it or set its main branch on the provider, then run the scan.";
+    "The repository's Git provider gave no default branch. If the repository is empty, push to it or set its main branch on the provider; otherwise try again in a moment.";
 
 export const NO_CODE_INTEGRATION_MESSAGE =
     'This team has no active code management integration to scan the repository through.';
@@ -158,9 +158,10 @@ export class StartSecurityScanUseCase {
         // The branch the provider serves as default now: the one stored when
         // the repository was connected can have been renamed or replaced
         // since, and a guess would scan an old branch to a clean finish.
-        // A failed lookup is worth retrying; an empty answer can also mean
-        // the repository has none (Bitbucket's empty repository), which only
-        // the provider can fix. Some providers answer empty on errors too.
+        // A failed lookup is worth retrying. An empty answer is either: the
+        // repository has none (Bitbucket's empty repository), or a provider
+        // that answers empty on errors (Bitbucket Cloud does), so its message
+        // names both.
         const defaultBranch = await this.codeManagementService
             .getDefaultBranch(
                 {
@@ -175,7 +176,7 @@ export class StartSecurityScanUseCase {
                 );
             });
         if (!defaultBranch) {
-            throw new BadRequestException(NO_DEFAULT_BRANCH_MESSAGE);
+            throw new ServiceUnavailableException(NO_DEFAULT_BRANCH_MESSAGE);
         }
 
         const scan = await this.scans
