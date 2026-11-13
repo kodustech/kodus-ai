@@ -61,6 +61,9 @@
       // any size.
       if (PARAMS[i] === 'gclid' && !GCLID.test(full)) continue;
       var value = PARAMS[i] === 'gclid' ? full : cut(full, valueMax);
+      // Matched case-insensitively below; stored in the one form the
+      // commission query looks for.
+      if (PARAMS[i] === 'utm_medium' && value.toLowerCase() === CREATOR_MEDIUM) value = CREATOR_MEDIUM;
       touch[PARAMS[i]] = value;
       kept.push(encodeURIComponent(PARAMS[i]) + '=' + encodeURIComponent(value));
     }

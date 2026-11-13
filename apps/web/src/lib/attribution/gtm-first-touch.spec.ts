@@ -128,9 +128,13 @@ describe("GTM first-touch tag", () => {
                 "https://app.kodus.io/sign-up?utm_medium=Creator&utm_campaign=ana456",
             );
 
-            expect(
-                firstTouchOn(jar, "https://app.kodus.io/")?.utm_campaign,
-            ).toBe("ana456");
+            const touch = firstTouchOn(jar, "https://app.kodus.io/");
+            expect(touch?.utm_campaign).toBe("ana456");
+            // Stored in the form the commission query matches.
+            expect(touch?.utm_medium).toBe("creator");
+            expect(touch?.landing_page).toBe(
+                "https://app.kodus.io/sign-up?utm_medium=creator&utm_campaign=ana456",
+            );
         });
 
         // Moves the jar's clock with no read in between: tough-cookie counts
@@ -172,12 +176,15 @@ describe("GTM first-touch tag", () => {
             ],
         ])("counts a link with %s as any other visit", (_label, url) => {
             const jar = new CookieJar();
-            visit(jar, "https://kodus.io/?utm_source=google");
+            visit(jar, CREATOR);
             visit(jar, url);
 
-            expect(firstTouchOn(jar, "https://app.kodus.io/")?.utm_source).toBe(
-                "google",
+            // The real creator link is kept, with its 90 days (365 before
+            // creator links existed).
+            expect(firstTouchOn(jar, "https://app.kodus.io/")?.landing_page).toBe(
+                CREATOR,
             );
+            expect(cookieOn(jar)?.maxAge).toBe(90 * DAY);
         });
     });
 
