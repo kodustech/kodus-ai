@@ -144,7 +144,10 @@ export class SuggestionService implements ISuggestionService {
         // Each one is read on its own file, and the ones an earlier check
         // found fixed are not read again: this diff no longer shows them.
         const groups = candidates.map((suggestion) => {
-            const locations = suggestionLocations(suggestion);
+            // A comment with no file of its own is not checked, as before.
+            const locations = suggestion.relevantFile
+                ? suggestionLocations(suggestion)
+                : [];
             const fixed = new Set(
                 locations.length > 1
                     ? (suggestion.implementationCheck?.implementedLocations ??

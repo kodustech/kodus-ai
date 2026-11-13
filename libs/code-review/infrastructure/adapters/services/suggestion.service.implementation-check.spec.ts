@@ -643,6 +643,32 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
             expect(statusWritten()).toEqual([ImplementationStatus.IMPLEMENTED]);
         });
 
+        // Stored by a merge that listed a duplicate with no file of its own.
+        it.each(['undefined:?-?', ':?-?', 'null:1-2'])(
+            'ignores a listed location that names no file (%s)',
+            async (location) => {
+                answerAll(ImplementationStatus.IMPLEMENTED);
+
+                await check([grouped({ alsoFoundIn: [location] })], [fileA]);
+
+                expect(statusWritten()).toEqual([
+                    ImplementationStatus.IMPLEMENTED,
+                ]);
+            },
+        );
+
+        it('does not check a comment with no file of its own, whatever it lists', async () => {
+            const result = await check(
+                [grouped({ relevantFile: undefined })],
+                [fileA, fileB],
+            );
+
+            expect(result.skipped).toBe('NO_RELEVANT_CHANGES');
+            expect(
+                aiAnalysisService.checkSuggestionImplementation,
+            ).not.toHaveBeenCalled();
+        });
+
         it('asks about each location on its own file, without the code of another one', async () => {
             answerAll(ImplementationStatus.NOT_IMPLEMENTED);
 

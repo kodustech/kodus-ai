@@ -40,7 +40,10 @@ const lineOf = (value: string | undefined) => {
 
 function parseLocation(location: string): SuggestionLocation | null {
     const match = /^(.+):([^:-]*)-([^:-]*)$/.exec(location.trim());
-    if (!match?.[1]) return null;
+    // A merge that listed a duplicate with no file wrote "undefined:?-?".
+    if (!match?.[1] || match[1] === 'undefined' || match[1] === 'null') {
+        return null;
+    }
     const [, file, start, end] = match;
     return {
         key: location.trim(),

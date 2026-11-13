@@ -70,6 +70,8 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
 
         for (let i = 1; i < sorted.length; i++) {
             const dup = sorted[i];
+            // A duplicate with no file names no other place to look at.
+            if (!dup.relevantFile) continue;
             const loc = `${dup.relevantFile}:${dup.relevantLinesStart ?? '?'}-${dup.relevantLinesEnd ?? '?'}`;
             if (loc !== keptLocation && !otherLocations.includes(loc)) {
                 otherLocations.push(loc);
