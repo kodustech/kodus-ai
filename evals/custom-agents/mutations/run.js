@@ -62,12 +62,14 @@ const SPEC = {
 };
 
 // The cases whose checks a model-judged property owns, so its run pays only for them.
+// A case its break cannot turn red stays out (P13's backend shared-module flag
+// is held by the layer-boundary rule the P13 patch keeps).
 const MODEL_CASES = {
     P1: 'money-float-tax,money-discount-decimal,money-cents-helpers,api-error-leak,api-error-contract',
     P2: 'money-float-tax,api-error-leak,api-only-general-bug',
     P11: 'guide-skill-violated,guide-doc-violated-among-other-changes,guide-near-miss',
     P12: 'instructions-rule-violated,instructions-rule-followed',
-    P13: 'architecture-domain-imports-http,architecture-controller-maps-input,architecture-logic-in-controller,architecture-controller-delegates,architecture-shared-imports-controller,architecture-shared-component-uses-ui-primitive',
+    P13: 'architecture-domain-imports-http,architecture-controller-maps-input,architecture-logic-in-controller,architecture-controller-delegates,architecture-shared-component-uses-ui-primitive',
 };
 
 const MUTATIONS = [
