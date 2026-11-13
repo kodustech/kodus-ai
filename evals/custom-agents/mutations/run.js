@@ -67,7 +67,7 @@ const MODEL_CASES = {
     P2: 'money-float-tax,api-error-leak,api-only-general-bug',
     P11: 'guide-skill-violated,guide-doc-violated-among-other-changes,guide-near-miss',
     P12: 'instructions-rule-violated,instructions-rule-followed',
-    P13: 'architecture-domain-imports-http,architecture-controller-maps-input,architecture-logic-in-controller,architecture-controller-delegates',
+    P13: 'architecture-domain-imports-http,architecture-controller-maps-input,architecture-logic-in-controller,architecture-controller-delegates,architecture-shared-component-uses-ui-primitive',
 };
 
 const MUTATIONS = [

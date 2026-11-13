@@ -255,7 +255,7 @@ export function renewalQuote(req: any, res: any) {
     },
     {
         id: 'architecture-shared-component-uses-ui-primitive',
-        checks: 'The Architecture template stays quiet when a shared frontend component builds on the UI primitives, the direction the rest of the shared components already follow (control)',
+        checks: 'The Architecture template stays quiet on a shared frontend component built on the UI primitives, as the other shared components are (control)',
         team: { agent },
         prTitle: 'Shared data table',
         prBody: 'Invoices and renewals pages will render their rows with one shared table.',
