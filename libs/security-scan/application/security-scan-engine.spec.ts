@@ -693,6 +693,15 @@ describe('SecurityScanEngine', () => {
             "chown -R root:root '/repo' && chmod -R a+rX,go-w '/repo'",
             expect.objectContaining({ asRoot: true }),
         );
+        // And pinned to its path: a mount point cannot be moved aside for
+        // another tree while other units read.
+        expect(sandbox.run).toHaveBeenCalledWith(
+            "mountpoint -q '/repo' || mount --bind '/repo' '/repo'",
+            expect.objectContaining({ asRoot: true }),
+        );
+        expect(
+            commands.some((c) => c.startsWith('[ ! -w') && c.includes("mountpoint -q '/repo'")),
+        ).toBe(true);
         // Dependencies install there, never in the checkout the lenses read.
         expect(commands.some((c) => c.startsWith("cd '/repo' &&"))).toBe(false);
         expect(result.findings[0].reproduction).toEqual(
@@ -703,6 +712,32 @@ describe('SecurityScanEngine', () => {
                 command: 'npx jest src/orders/idor.repro.spec.ts',
             }),
         );
+    });
+
+    it('runs no test where the checkout cannot be pinned to its path', async () => {
+        const sandbox = fakeSandbox('e2b');
+        const run = sandbox.run.getMockImplementation()!;
+        sandbox.run.mockImplementation(async (command: string, opts: any) =>
+            command.includes('mount --bind')
+                ? { stdout: '', stderr: 'mount: permission denied', exitCode: 32 }
+                : run(command, opts),
+        );
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
+        expect(commands.some((c) => c.includes('npx jest'))).toBe(false);
     });
 
     it('puts back what a reproduction command changed in the checkout', async () => {

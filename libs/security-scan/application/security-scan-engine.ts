@@ -1339,10 +1339,15 @@ export class SecurityScanEngine {
 
     /**
      * Makes the checkout the lenses read, and its .git, read-only to the
-     * review user: owned by root, writable by nobody else. Only possible in a
-     * sandbox whose review user cannot become root (privileges dropped) and
-     * through the provider's root channel; anywhere else, false. The sandbox
-     * is the slice's own (its lease key is unique), so it stays locked.
+     * review user: owned by root, writable by nobody else. And pinned to its
+     * path: its parent is the review user's home, so a command could move
+     * the checkout aside, put another tree at its path while other units
+     * read, and move it back before any check. A bind mount of the checkout
+     * onto itself makes it a mount point, which nobody but root can rename
+     * or remove (EBUSY). Only possible in a sandbox whose review user cannot
+     * become root (privileges dropped) and through the provider's root
+     * channel; anywhere else, false. The sandbox is the slice's own (its
+     * lease key is unique), so it stays locked.
      */
     private async lockAuditCheckout(
         sandbox: SandboxInstance,
@@ -1370,20 +1375,28 @@ export class SecurityScanEngine {
                     { asRoot: true },
                 )
             ).exitCode === 0;
-        // Checked as the review user: neither the files nor .git writable,
-        // and git still reads it.
-        const verified =
+        const pinned =
             locked &&
             (
                 await runCommand(
                     sandbox,
-                    `[ ! -w ${repo} ] && [ ! -w ${repo}/.git ] && [ ! -w ${repo}/.git/index ] && git -C ${repo} rev-parse -q HEAD >/dev/null`,
+                    `mountpoint -q ${repo} || mount --bind ${repo} ${repo}`,
+                    30_000,
+                    { asRoot: true },
+                )
+            ).exitCode === 0;
+        // Checked as the review user: neither the files nor .git writable,
+        // the checkout a mount point, and git still reads it.
+        const verified =
+            pinned &&
+            (
+                await runCommand(
+                    sandbox,
+                    `[ ! -w ${repo} ] && [ ! -w ${repo}/.git ] && [ ! -w ${repo}/.git/index ] && mountpoint -q ${repo} && git -C ${repo} rev-parse -q HEAD >/dev/null`,
                     30_000,
                 )
             ).exitCode === 0;
-        // Which directory was locked: its parent stays writable to the
-        // review user, who could move it aside and put another tree at its
-        // path. The path must keep resolving to this one.
+        // Which directory was locked, checked again after each test.
         this.auditIdentity = verified
             ? await this.identityOf(sandbox)
             : undefined;
