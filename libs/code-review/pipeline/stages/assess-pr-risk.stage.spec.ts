@@ -412,18 +412,18 @@ it('flags a failed assessment but not a judgment, a push during the diff read or
     expect((await stage.execute(context())).errors).toHaveLength(1);
 });
 
-it.each([
-    [true, 1],
-    [false, 0],
-])(
-    'flags unresolved risk settings only when risk may be active (active: %s)',
-    async (active, errors) => {
-        const ctx = {
+it('flags unresolved risk settings only when risk may be active', async () => {
+    const unresolved = (active: boolean) =>
+        stage.execute({
             ...context({ riskAssessmentActive: active }),
             riskConfigurationUnavailable: true,
-        };
-        const result = await stage.execute(ctx);
-        expect(result.riskAssessment).toMatchObject({ status: 'unavailable' });
-        expect(result.errors ?? []).toHaveLength(errors);
-    },
-);
+        });
+    // Only approval settings failed: no assessment was part of this review.
+    expect((await unresolved(false)).errors ?? []).toEqual([]);
+    expect((await unresolved(true)).errors).toEqual([
+        expect.objectContaining({
+            stage: 'AssessPrRiskStage',
+            metadata: { reason: 'approval_risk_assessment_failed' },
+        }),
+    ]);
+});
