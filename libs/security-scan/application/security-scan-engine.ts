@@ -201,6 +201,9 @@ const REPRO_SCHEMA = z.object({
     command: z.string(),
 });
 
+/** A finding whose identity (its CWE, its function) could not be read. */
+const UNIDENTIFIED = Symbol('unidentified finding');
+
 export class SecurityScanEngine {
     private readonly runLens: NonNullable<SecurityScanEngineDeps['runLens']>;
     private readonly llm: typeof LLM.run;
@@ -941,6 +944,15 @@ export class SecurityScanEngine {
                         { ...suggestion, relevantFile: path.file },
                         files,
                     );
+                    // Its CWE or its function could not be read, and both
+                    // are its identity: stored now, it would open a second
+                    // issue beside the one it is, and the class counted as
+                    // read would resolve that one as gone. The class was
+                    // not read to the end; it runs again.
+                    if (finding === UNIDENTIFIED) {
+                        unfinished.add(vulnClass);
+                        continue;
+                    }
                     const repeats = finding
                         ? duplicatesOf(earlier, finding)
                         : [];
@@ -1097,7 +1109,7 @@ export class SecurityScanEngine {
         },
         /** The tracked files, to spell the attack path's steps as they are. */
         files: ReadonlySet<string> = new Set(),
-    ): Promise<ScanFinding | null> {
+    ): Promise<ScanFinding | typeof UNIDENTIFIED | null> {
         const filePath = (suggestion.relevantFile ?? '').replace(/^\.?\//, '');
         if (!filePath || !suggestion.suggestionContent) {
             return null;
@@ -1113,6 +1125,11 @@ export class SecurityScanEngine {
             startLine,
             endLine,
         );
+        // Without the file there is no function to name, and the function
+        // is half the finding's identity.
+        if (whole === undefined) {
+            return UNIDENTIFIED;
+        }
 
         let structured: z.infer<typeof FINALIZE_SCHEMA> | undefined;
         try {
@@ -1134,11 +1151,16 @@ export class SecurityScanEngine {
         } catch (error) {
             logger.warn({
                 message:
-                    'Security finding could not be structured; keeping it plain',
+                    'Security finding could not be structured; its class runs again',
                 context: SecurityScanEngine.name,
                 error,
                 metadata: { repositoryId: params.repositoryId, filePath },
             });
+        }
+        // Without the structured answer there is no CWE: the finding's
+        // identity is unknown.
+        if (!structured) {
+            return UNIDENTIFIED;
         }
 
         const firstLine = suggestion.suggestionContent
@@ -1149,7 +1171,7 @@ export class SecurityScanEngine {
         return {
             unitId: unit.id,
             vulnerabilityClass: vulnClass,
-            cwe: normalizeCwe(structured?.cwe) ?? DEFAULT_CWE[vulnClass],
+            cwe: normalizeCwe(structured.cwe) ?? DEFAULT_CWE[vulnClass],
             title:
                 structured?.title?.trim() ||
                 (firstLine ?? 'Security vulnerability').slice(0, 120),
@@ -1159,7 +1181,7 @@ export class SecurityScanEngine {
             startLine,
             endLine,
             language: unit.language,
-            symbol: whole ? enclosingSymbol(whole, startLine) : undefined,
+            symbol: enclosingSymbol(whole, startLine),
             // Spelled as the listing spells them: the dedup matches a finding
             // against another's steps by file.
             attackPath: (structured?.attackPath ?? [])

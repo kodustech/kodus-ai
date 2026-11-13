@@ -2100,6 +2100,44 @@ describe('SecurityScanEngine: across slices and units', () => {
         );
     });
 
+    it.each([
+        ['its CWE cannot be structured', 'finalize'],
+        ['its file cannot be read for the function', 'read'],
+    ])('stores no finding and leaves its class unread when %s', async (_, broken) => {
+        const llm = fakeLlm({ units: [] });
+        const answer = llm.getMockImplementation()!;
+        llm.mockImplementation(async (req: any) => {
+            if (broken === 'finalize' && req.runName.endsWith('-finalize')) {
+                throw new Error('provider 500');
+            }
+            return answer(req);
+        });
+        const sandbox = fakeSandbox();
+        if (broken === 'read') {
+            sandbox.remoteCommands.read.mockRejectedValue(new Error('sandbox gone'));
+        }
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm,
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        // Stored with another CWE or no function, it would be a second issue
+        // beside the one it is, and the class read would resolve that one.
+        expect(result.findings).toEqual([]);
+        expect(
+            result.examinedByClass.find((e) => e.vulnerabilityClass === 'authz')?.filePaths ?? [],
+        ).not.toContain('src/orders/orders.controller.ts');
+    });
+
     it("counts a related file as examined for resolution only in its own unit", async () => {
         const controller = 'src/orders/orders.controller.ts';
         const service = 'src/orders/orders.service.ts';
