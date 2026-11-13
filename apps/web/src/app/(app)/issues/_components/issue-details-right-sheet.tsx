@@ -186,7 +186,7 @@ export const IssueDetailsRightSheet = ({
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <CopyFixPromptButton ids={peek ? [peek] : []} />
+                        <CopyFixPromptButton ids={[peek]} />
 
                         <ButtonWithFeedback
                             size="xs"

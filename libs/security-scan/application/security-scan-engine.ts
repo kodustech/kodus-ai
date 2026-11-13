@@ -284,6 +284,8 @@ export class SecurityScanEngine {
                 message: 'Security scan could not map the repository',
                 context: SecurityScanEngine.name,
                 metadata: {
+                    organizationId: params.organizationId,
+                    teamId: params.teamId,
                     repositoryId: params.repositoryId,
                     failures: searchFailures.length,
                     languages: searchFailures.map((e) => e.language),
@@ -735,7 +737,11 @@ export class SecurityScanEngine {
                 message: 'Security scan dedup failed; keeping every finding',
                 context: SecurityScanEngine.name,
                 error,
-                metadata: { repositoryId: params.repositoryId },
+                metadata: {
+                    organizationId: params.organizationId,
+                    teamId: params.teamId,
+                    repositoryId: params.repositoryId,
+                },
             });
             return fresh;
         }
@@ -826,7 +832,11 @@ export class SecurityScanEngine {
                     'Security scan planner failed; using the pattern ranking',
                 context: SecurityScanEngine.name,
                 error,
-                metadata: { repositoryId: params.repositoryId },
+                metadata: {
+                    organizationId: params.organizationId,
+                    teamId: params.teamId,
+                    repositoryId: params.repositoryId,
+                },
             });
             return heuristicUnits(candidates, params.maxUnits);
         }
@@ -920,6 +930,8 @@ export class SecurityScanEngine {
                         message: `Security lens ${vulnClass} ended in an error on ${unit.file}`,
                         context: SecurityScanEngine.name,
                         metadata: {
+                            organizationId: params.organizationId,
+                            teamId: params.teamId,
                             repositoryId: params.repositoryId,
                             unit: unit.id,
                             errorName: output.errorName,
@@ -951,6 +963,8 @@ export class SecurityScanEngine {
                             message: `Security finding dropped: ${path.rejected === 'missing' ? 'names no file in the repository' : 'is in a test, fixture or vendored file'}`,
                             context: SecurityScanEngine.name,
                             metadata: {
+                                organizationId: params.organizationId,
+                                teamId: params.teamId,
                                 repositoryId: params.repositoryId,
                                 unit: unit.id,
                                 vulnClass,
@@ -998,6 +1012,8 @@ export class SecurityScanEngine {
                     context: SecurityScanEngine.name,
                     error,
                     metadata: {
+                        organizationId: params.organizationId,
+                        teamId: params.teamId,
                         repositoryId: params.repositoryId,
                         unit: unit.id,
                     },
@@ -1303,6 +1319,8 @@ export class SecurityScanEngine {
                 context: SecurityScanEngine.name,
                 error,
                 metadata: {
+                    organizationId: params.organizationId,
+                    teamId: params.teamId,
                     repositoryId: params.repositoryId,
                     filePath: finding.filePath,
                 },
