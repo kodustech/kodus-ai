@@ -67,6 +67,7 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
         savedSuggestions: unknown[],
         changedFiles: unknown[],
         diffSource?: string,
+        removedFiles?: string[],
     ) =>
         service.checkImplementedSuggestions({
             organizationAndTeamData: org,
@@ -74,6 +75,7 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
             changedFiles: changedFiles as any,
             savedSuggestions: savedSuggestions as any,
             ...(diffSource ? { diffSource: diffSource as any } : {}),
+            ...(removedFiles ? { removedFiles } : {}),
         });
 
     const writesFor = (id: string) =>
@@ -626,19 +628,21 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
 
             // First push: only the kept location.
             await check([grouped()], [fileA]);
-            const [, firstWrite] = writesFor('s-1')[0];
+            const stored = {
+                implementationStatus: statusWritten()[0],
+                implementationCheck: {
+                    implementedLocations: writesFor('s-1').flatMap(
+                        ([, , , options]) =>
+                            options?.addToSet?.[
+                                'implementationCheck.implementedLocations'
+                            ] ?? [],
+                    ),
+                },
+            };
             pullRequestService.updateSuggestion.mockClear();
 
             // Second push: only the other one. The first is not in this diff.
-            await check(
-                [
-                    grouped({
-                        implementationStatus: firstWrite.implementationStatus,
-                        implementationCheck: firstWrite.implementationCheck,
-                    }),
-                ],
-                [fileB],
-            );
+            await check([grouped(stored)], [fileB]);
 
             expect(statusWritten()).toEqual([ImplementationStatus.IMPLEMENTED]);
         });
@@ -667,6 +671,111 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
             expect(
                 aiAnalysisService.checkSuggestionImplementation,
             ).not.toHaveBeenCalled();
+        });
+
+        // A push that deletes a file deletes the problem in it: the file is
+        // not in the changed files the check reads, which leave removed ones out.
+        it('counts a location whose file the push deleted as fixed', async () => {
+            answerAll(ImplementationStatus.IMPLEMENTED);
+
+            await check([grouped()], [fileA], undefined, ['app/b.rb']);
+
+            expect(statusWritten()).toEqual([ImplementationStatus.IMPLEMENTED]);
+            expect(
+                aiAnalysisService.checkSuggestionImplementation.mock.calls.map(
+                    ([params]) => params.file.filename,
+                ),
+            ).toEqual(['app/a.rb']);
+        });
+
+        it('is partially implemented when the push only deleted the file of another location', async () => {
+            const result = await check([grouped()], [], undefined, [
+                'app/b.rb',
+            ]);
+
+            expect(result.skipped).toBeUndefined();
+            expect(statusWritten()).toEqual([
+                ImplementationStatus.PARTIALLY_IMPLEMENTED,
+            ]);
+            expect(
+                aiAnalysisService.checkSuggestionImplementation,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('leaves a single-location suggestion whose file was deleted unchecked, as before', async () => {
+            const result = await check(
+                [sent('s-solo', 'app/b.rb')],
+                [],
+                undefined,
+                ['app/b.rb'],
+            );
+
+            expect(result.skipped).toBe('NO_RELEVANT_CHANGES');
+        });
+
+        // Implementation jobs of one PR can run at once: a check started on
+        // an older push may finish after one started on a newer push.
+        it('keeps the locations another check found fixed while it ran', async () => {
+            // The stored suggestion, as two overlapping checks share it.
+            const stored: { implementedLocations: string[] } = {
+                implementedLocations: [],
+            };
+            pullRequestService.updateSuggestion.mockImplementation(
+                async (id, data, _org, options) => {
+                    const added =
+                        options?.addToSet?.[
+                            'implementationCheck.implementedLocations'
+                        ] ?? [];
+                    stored.implementedLocations = [
+                        ...new Set([...stored.implementedLocations, ...added]),
+                    ];
+                    if (data?.implementationCheck) {
+                        stored.implementedLocations =
+                            data.implementationCheck.implementedLocations ?? [];
+                    }
+                    return {
+                        files: [
+                            {
+                                suggestions: [
+                                    {
+                                        id,
+                                        implementationCheck: {
+                                            implementedLocations: [
+                                                ...stored.implementedLocations,
+                                            ],
+                                        },
+                                    },
+                                ],
+                            },
+                        ],
+                    };
+                },
+            );
+            const snapshot = grouped(); // what both checks loaded: nothing fixed
+
+            // The newer push fixed A; its check finishes first.
+            answerByFile({ 'app/a.rb': ImplementationStatus.IMPLEMENTED });
+            await check([snapshot], [fileA]);
+            // The older one saw neither fixed, and finishes after it.
+            answerAll(ImplementationStatus.NOT_IMPLEMENTED);
+            await check([snapshot], [fileA, fileB]);
+
+            expect(stored.implementedLocations).toEqual(['app/a.rb:1-2']);
+
+            // After the next review, a push fixes only B.
+            pullRequestService.updateSuggestion.mockClear();
+            answerAll(ImplementationStatus.IMPLEMENTED);
+            await check(
+                [
+                    grouped({
+                        implementationStatus:
+                            ImplementationStatus.PARTIALLY_IMPLEMENTED,
+                    }),
+                ],
+                [fileB],
+            );
+
+            expect(statusWritten()).toEqual([ImplementationStatus.IMPLEMENTED]);
         });
 
         it('asks about each location on its own file, without the code of another one', async () => {

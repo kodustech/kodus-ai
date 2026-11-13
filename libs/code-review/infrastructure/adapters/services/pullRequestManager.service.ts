@@ -109,6 +109,11 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
             // ref — wasting two GitHub requests for content we'll never
             // review. Real impact: ~10-20% of /contents calls on PRs with
             // file deletions.
+            options?.onRemovedFiles?.(
+                (changedFiles ?? [])
+                    .filter((file) => file.status === 'removed')
+                    .map((file) => file.filename),
+            );
             const filteredFiles = changedFiles?.filter((file) => {
                 if (file.status === 'removed') return false;
                 return !isFileMatchingGlob(file.filename, ignorePaths);

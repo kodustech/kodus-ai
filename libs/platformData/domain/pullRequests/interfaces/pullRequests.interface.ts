@@ -347,4 +347,8 @@ export type UpdateSuggestionOptions = {
     implementationStatusNotIn?: ImplementationStatus[];
     /** false: return only whether a suggestion was written, not the PR document. */
     returnDocument?: boolean;
+    /** Values added, each once, to array fields of the suggestion (dotted paths), in the same write. */
+    addToSet?: Record<string, string[]>;
+    /** Fields of the suggestion (dotted paths) removed in the same write. */
+    unset?: string[];
 };

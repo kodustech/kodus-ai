@@ -660,3 +660,32 @@ describe('PullRequestHandlerService.enrichFilesWithContent', () => {
         ).rejects.toBeInstanceOf(TypeError);
     });
 });
+
+describe('PullRequestHandlerService.getChangedFiles', () => {
+    // The implementation check reads these files; a deleted one is left out
+    // of them, so it is named apart.
+    it('names the files the diff removed, and returns the others', async () => {
+        const { service, codeManagementService } = makeService();
+        codeManagementService.getFilesByPullRequestId.mockResolvedValue([
+            { filename: 'app/a.rb', status: 'modified', patch: '@@ a @@' },
+            { filename: 'app/b.rb', status: 'removed', patch: '@@ b @@' },
+        ]);
+        codeManagementService.getRepositoryContentFile.mockResolvedValue({
+            data: { content: 'a', encoding: 'utf-8' },
+        });
+        const onRemovedFiles = jest.fn();
+
+        const files = await service.getChangedFiles(
+            orgData,
+            repository,
+            pullRequest,
+            [],
+            undefined,
+            undefined,
+            { onRemovedFiles },
+        );
+
+        expect(onRemovedFiles).toHaveBeenCalledWith(['app/b.rb']);
+        expect(files.map((file) => file.filename)).toEqual(['app/a.rb']);
+    });
+});

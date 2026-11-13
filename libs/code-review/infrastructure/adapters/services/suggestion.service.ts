@@ -42,6 +42,7 @@ import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/pri
 import {
     ISuggestion,
     ISuggestionByPR,
+    UpdateSuggestionOptions,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import {
     groupImplementationStatus,
@@ -118,12 +119,15 @@ export class SuggestionService implements ISuggestionService {
         changedFiles,
         savedSuggestions,
         diffSource = 'incremental',
+        removedFiles = [],
     }: {
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
         changedFiles: Pick<FileChange, 'filename' | 'patch'>[];
         savedSuggestions: Partial<ISuggestion>[];
         diffSource?: ChangedFilesSource;
+        /** Files the diff deleted: not in `changedFiles`, which leaves them out. */
+        removedFiles?: string[];
     }): Promise<ImplementationCheckResult> {
         const candidates = savedSuggestions.filter(
             (s) =>
@@ -139,6 +143,7 @@ export class SuggestionService implements ISuggestionService {
         }
 
         const patches = new Map(changedFiles.map((f) => [f.filename, f.patch]));
+        const removed = new Set(removedFiles);
 
         // A suggestion may stand for several locations ("Also found in").
         // Each one is read on its own file, and the ones an earlier check
@@ -154,13 +159,18 @@ export class SuggestionService implements ISuggestionService {
                           [])
                     : [],
             );
+            // A deleted file takes the problem in it along. Only a group
+            // counts it: a suggestion on one file was never checked that way.
+            const grouped = locations.length > 1;
             return {
                 suggestion,
                 locations,
                 fixed,
                 changed: locations.filter(
                     (location) =>
-                        !fixed.has(location.key) && patches.has(location.file),
+                        !fixed.has(location.key) &&
+                        (patches.has(location.file) ||
+                            (grouped && removed.has(location.file))),
                 ),
             };
         });
@@ -181,10 +191,17 @@ export class SuggestionService implements ISuggestionService {
             asked: ImplementationCheckSuggestion;
         };
         const unmeasured: ImplementationCheckResult['unmeasured'] = [];
-        const verdicts: {
+        const verdicts: { id: string; status: ImplementationStatus }[] = [];
+        // A group is decided when it is written: from the locations stored
+        // by then, not from the ones this check loaded.
+        const groupChecks: {
             id: string;
-            status: ImplementationStatus;
-            implementedLocations?: string[];
+            locations: SuggestionLocation[];
+            fixedBefore: ReadonlySet<string>;
+            fixedNow: string[];
+            partial: boolean;
+            undecided: boolean;
+            reason: ImplementationUnmeasuredReason;
         }[] = [];
         const byFile = new Map<string, LocationAsk[]>();
         // What this check learned about each location, by the id it was asked under.
@@ -205,6 +222,12 @@ export class SuggestionService implements ISuggestionService {
             const s = group.suggestion;
             for (const location of group.changed) {
                 const askId = askIdOf(group, location);
+                if (removed.has(location.file)) {
+                    answers.set(askId, {
+                        status: ImplementationStatus.IMPLEMENTED,
+                    });
+                    continue;
+                }
                 // Only the changes since the last review say what the developer
                 // did; the whole PR's diff holds the code the suggestion was about.
                 if (
@@ -351,31 +374,25 @@ export class SuggestionService implements ISuggestionService {
                 continue;
             }
 
-            const fixed = new Set([
-                ...group.fixed,
-                ...read
+            groupChecks.push({
+                id,
+                locations: group.locations,
+                fixedBefore: group.fixed,
+                fixedNow: read
                     .filter(
                         ({ answer }) =>
                             statusOf(answer) ===
                             ImplementationStatus.IMPLEMENTED,
                     )
                     .map(({ location }) => location.key),
-            ]);
-            const status = groupImplementationStatus({
-                locations: group.locations,
-                fixed,
                 partial: read.some(
                     ({ answer }) =>
                         statusOf(answer) ===
                         ImplementationStatus.PARTIALLY_IMPLEMENTED,
                 ),
                 undecided: !!undecided,
+                reason,
             });
-            if (status) {
-                verdicts.push({ id, status, implementedLocations: [...fixed] });
-            } else {
-                unmeasured.push({ id, reason });
-            }
         }
 
         const byId = new Map(onChangedFiles.map((s) => [s.id, s]));
@@ -385,26 +402,118 @@ export class SuggestionService implements ISuggestionService {
         const write = (
             id: string,
             data: Partial<ISuggestion>,
-            condition?: { implementationStatusNotIn: ImplementationStatus[] },
+            options?: Omit<UpdateSuggestionOptions, 'returnDocument'>,
         ) =>
             this.pullRequestService.updateSuggestion(
                 id,
                 data,
                 organizationAndTeamData,
-                { ...condition, returnDocument: false },
+                { ...options, returnDocument: false },
             );
+        // The record field by field: replacing the whole record would drop
+        // the locations another check of the group stored meanwhile.
+        const recordFields = (
+            fields: Partial<ImplementationCheckRecord>,
+        ): Partial<ISuggestion> =>
+            Object.fromEntries(
+                Object.entries(fields).map(([key, value]) => [
+                    `implementationCheck.${key}`,
+                    value,
+                ]),
+            ) as Partial<ISuggestion>;
+        const LOCATIONS_FIELD = 'implementationCheck.implementedLocations';
+        const groupVerdicts: typeof verdicts = [];
+        const groupUnmeasured: typeof unmeasured = [];
         const writes = pLimit(IMPLEMENTATION_CHECK_WRITE_CONCURRENCY);
 
         await Promise.all([
-            ...verdicts.map(({ id, status, implementedLocations }) =>
+            ...groupChecks.map((group) =>
+                writes(async () => {
+                    // Adds what this check found fixed to what is stored and
+                    // reads it all back, in one write.
+                    const stored =
+                        await this.pullRequestService.updateSuggestion(
+                            group.id,
+                            {},
+                            organizationAndTeamData,
+                            { addToSet: { [LOCATIONS_FIELD]: group.fixedNow } },
+                        );
+                    const storedLocations =
+                        stored?.files
+                            ?.flatMap((file) => file.suggestions ?? [])
+                            .find((s) => s.id === group.id)?.implementationCheck
+                            ?.implementedLocations ?? [];
+                    const known = new Set([
+                        ...group.fixedBefore,
+                        ...group.fixedNow,
+                        ...storedLocations,
+                    ]);
+                    const status = groupImplementationStatus({
+                        locations: group.locations,
+                        fixed: new Set(
+                            group.locations
+                                .map((location) => location.key)
+                                .filter((key) => known.has(key)),
+                        ),
+                        partial: group.partial,
+                        undecided: group.undecided,
+                    });
+                    if (!status) {
+                        groupUnmeasured.push({
+                            id: group.id,
+                            reason: group.reason,
+                        });
+                        await write(
+                            group.id,
+                            recordFields({
+                                checkedAt,
+                                outcome: 'unmeasured',
+                                reason: group.reason,
+                            }),
+                        );
+                        return;
+                    }
+                    groupVerdicts.push({ id: group.id, status });
+                    const record = recordFields({
+                        checkedAt,
+                        outcome: 'decided',
+                        verdict: status,
+                    });
+                    const unset = ['implementationCheck.reason'];
+                    if (
+                        raisesImplementationStatus(
+                            byId.get(group.id)?.implementationStatus,
+                            status,
+                        ) &&
+                        (await write(
+                            group.id,
+                            {
+                                ...record,
+                                implementationStatus: status,
+                                updatedAt: checkedAt,
+                            },
+                            {
+                                implementationStatusNotIn:
+                                    statusesAtOrAbove(status),
+                                unset,
+                            },
+                        ))
+                    ) {
+                        persisted.push({
+                            id: group.id,
+                            implementationStatus: status,
+                        });
+                        return;
+                    }
+                    await write(group.id, record, { unset });
+                }),
+            ),
+            ...verdicts.map(({ id, status }) =>
                 writes(async () => {
                     const record: ImplementationCheckRecord = {
                         checkedAt,
                         outcome: 'decided',
                         verdict: status,
-                        ...(implementedLocations
-                            ? { implementedLocations }
-                            : {}),
                     };
                     if (
                         raisesImplementationStatus(
@@ -437,26 +546,20 @@ export class SuggestionService implements ISuggestionService {
             ),
             ...unmeasured.map(({ id, reason }) =>
                 writes(() => {
-                    const previous = byId.get(id)?.implementationCheck;
+                    const last = byId.get(id)?.implementationCheck?.verdict;
                     return write(id, {
                         implementationCheck: {
                             checkedAt,
                             outcome: 'unmeasured',
                             reason,
-                            ...(previous?.verdict
-                                ? { verdict: previous.verdict }
-                                : {}),
-                            ...(previous?.implementedLocations
-                                ? {
-                                      implementedLocations:
-                                          previous.implementedLocations,
-                                  }
-                                : {}),
+                            ...(last ? { verdict: last } : {}),
                         },
                     });
                 }),
             ),
         ]);
+        verdicts.push(...groupVerdicts);
+        unmeasured.push(...groupUnmeasured);
 
         const tally = (values: string[]) =>
             values.reduce<Record<string, number>>(
