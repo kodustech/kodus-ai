@@ -1131,8 +1131,13 @@ export class SecurityScanEngine {
                 message:
                     'Security finding dropped: its file could not be read; its class runs again',
                 context: SecurityScanEngine.name,
-                error: unread,
+                error:
+                    unread instanceof Error
+                        ? unread
+                        : new Error(String(unread)),
                 metadata: {
+                    organizationId: params.organizationId,
+                    teamId: params.teamId,
                     repositoryId: params.repositoryId,
                     filePath,
                     unit: unit.id,
@@ -1166,6 +1171,8 @@ export class SecurityScanEngine {
                 context: SecurityScanEngine.name,
                 error,
                 metadata: {
+                    organizationId: params.organizationId,
+                    teamId: params.teamId,
                     repositoryId: params.repositoryId,
                     filePath,
                     unit: unit.id,
