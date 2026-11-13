@@ -35,10 +35,14 @@ describe('SecurityScansController.start', () => {
         expect(startSecurityScan.execute).not.toHaveBeenCalled();
     });
 
-    it('starts the scan of a repository the caller may scan', async () => {
-        const { controller, startSecurityScan } = setup(['repo-allowed']);
+    it('starts the scan of a repository the caller may scan, once authorized on it', async () => {
+        const { controller, startSecurityScan, authorizationService } = setup(['repo-allowed']);
 
         await controller.start({ teamId: 't-1', repositoryId: 'repo-allowed', maxUsd: 5 } as any);
+
+        expect(authorizationService.ensure).toHaveBeenCalledWith(
+            expect.objectContaining({ repoIds: ['repo-allowed'] }),
+        );
 
         expect(startSecurityScan.execute).toHaveBeenCalledWith(
             expect.objectContaining({ repositoryId: 'repo-allowed' }),

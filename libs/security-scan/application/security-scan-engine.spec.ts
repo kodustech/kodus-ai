@@ -2179,6 +2179,61 @@ describe('SecurityScanEngine: across slices and units', () => {
         );
     });
 
+    it.each([
+        ['every other open issue it repeats', [IDOR], ['fp-old-controller']],
+        ['the issue, when the unit already holds the same finding', [IDOR, IDOR], ['fp-old-controller']],
+    ])('stores a finding as the first open issue it repeats, and sights %s', async (_, reported, expectSighted) => {
+        const known = [
+            {
+                fingerprint: 'fp-service',
+                vulnerabilityClass: 'authz' as const,
+                cwe: 'CWE-639',
+                title: 'Any user reads any order',
+                description: 'The service loads any order by id.',
+                severity: 'high' as const,
+                filePath: 'src/orders/orders.service.ts',
+                startLine: 3,
+                endLine: 3,
+                attackPath: [{ file: 'src/orders/orders.controller.ts', line: 7, note: 'id' }],
+            },
+            {
+                fingerprint: 'fp-old-controller',
+                vulnerabilityClass: 'authz' as const,
+                cwe: 'CWE-639',
+                title: 'Any user reads any order',
+                description: 'The controller returns any order.',
+                severity: 'high' as const,
+                filePath: 'src/orders/orders.controller.ts',
+                startLine: 7,
+                endLine: 7,
+            },
+        ];
+        const onUnitDone = jest.fn(async () => undefined);
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? reported : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            known,
+            onUnitDone,
+        } as any);
+
+        // One stored, as the first issue; every other issue it repeats is
+        // found again, so none is resolved as gone.
+        expect(result.findings).toEqual([expect.objectContaining({ storedAs: 'fp-service' })]);
+        const sighted = (onUnitDone.mock.calls as unknown as [unknown, unknown, any[]?][]).flatMap(
+            ([, , s]) => (s ?? []).map((x) => x.fingerprint),
+        );
+        for (const fp of expectSighted) expect(sighted).toContain(fp);
+    });
+
     it('stores the same bug found at another place as the open issue it is, with this scan\'s data', async () => {
         // The earlier scan kept the bug at the service, which the controller
         // reaches; this scan runs the controller first and finds it there.

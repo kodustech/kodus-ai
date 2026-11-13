@@ -432,7 +432,9 @@ export class SecurityScanEngine {
                 result.sighted = [...(result.sighted ?? [])];
                 result.findings = result.findings.filter((f) => {
                     const repeats = duplicatesOf(reportedSoFar, f);
-                    if (this.refreshes(f, repeats)) return true;
+                    if (this.refreshes(f, repeats, result.sighted!)) {
+                        return true;
+                    }
                     result.sighted!.push(...repeats);
                     return !repeats.length;
                 });
@@ -484,7 +486,7 @@ export class SecurityScanEngine {
             const sighted = [...(result.sighted ?? [])];
             const fresh = result.findings.filter((f) => {
                 const repeats = duplicatesOf(reported, f);
-                if (this.refreshes(f, repeats)) return true;
+                if (this.refreshes(f, repeats, sighted)) return true;
                 sighted.push(...repeats);
                 return !repeats.length;
             });
@@ -635,12 +637,15 @@ export class SecurityScanEngine {
     private refreshes(
         finding: ScanFinding,
         repeats: ScanReportedFinding[],
+        /** Receives the other issues it repeats: found again too. */
+        sighted: ScanReportedFinding[],
     ): boolean {
-        const [first] = repeats;
+        const [first, ...others] = repeats;
         if (!first?.fingerprint || !repeats.every((r) => this.known.has(r))) {
             return false;
         }
         finding.storedAs = first.fingerprint;
+        sighted.push(...others);
         return true;
     }
 
@@ -726,6 +731,7 @@ export class SecurityScanEngine {
                     this.refreshes(
                         fresh[droppedFresh[0] - earlier.length],
                         earlierMembers.map((i) => earlier[i]),
+                        sighted,
                     )
                 ) {
                     kept.add(`scan-${droppedFresh[0]}`);
@@ -762,9 +768,11 @@ export class SecurityScanEngine {
                         kept.add(`scan-${i}`);
                     } else if (holder < earlier.length) {
                         if (
-                            this.refreshes(fresh[i - earlier.length], [
-                                earlier[holder],
-                            ])
+                            this.refreshes(
+                                fresh[i - earlier.length],
+                                [earlier[holder]],
+                                sighted,
+                            )
                         ) {
                             kept.add(`scan-${i}`);
                         } else {
@@ -775,9 +783,11 @@ export class SecurityScanEngine {
                     // An earlier finding absorbed into a fresh one: the bug
                     // keeps the identity it has.
                     if (
-                        !this.refreshes(fresh[holder - earlier.length], [
-                            earlier[i],
-                        ])
+                        !this.refreshes(
+                            fresh[holder - earlier.length],
+                            [earlier[i]],
+                            sighted,
+                        )
                     ) {
                         kept.delete(`scan-${holder}`);
                         sighted.push(earlier[i]);
@@ -1047,17 +1057,18 @@ export class SecurityScanEngine {
                     const repeats = finding
                         ? duplicatesOf(earlier, finding)
                         : [];
-                    const refreshing =
-                        !!finding && this.refreshes(finding, repeats);
-                    if (!refreshing) {
+                    // Kept only when it is no duplicate of this unit's own:
+                    // then new, or stored as the open issue it repeats.
+                    // Dropped, what it repeats is still found again.
+                    const keep =
+                        !!finding &&
+                        !isDuplicate(findings, finding) &&
+                        (!repeats.length ||
+                            this.refreshes(finding, repeats, sighted));
+                    if (keep) {
+                        findings.push(finding!);
+                    } else {
                         sighted.push(...repeats);
-                    }
-                    if (
-                        finding &&
-                        (refreshing || !repeats.length) &&
-                        !isDuplicate(findings, finding)
-                    ) {
-                        findings.push(finding);
                     }
                 }
             } catch (error) {

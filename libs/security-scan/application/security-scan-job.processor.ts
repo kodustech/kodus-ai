@@ -512,12 +512,21 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     coverage: liveCoverage,
                 });
             },
-            onUnitDone: async (progress, findings, sighted) => {
+            onUnitDone: async (progress, findings, sightedAll) => {
                 // Writes nothing once this job lost the scan: timed out (the
                 // scan failed, its sandbox gone, the slice still running in
                 // the background) or claimed by another job. A later scan
                 // may have resolved what this one would reopen.
                 await stillOwned();
+                // One a finding of this unit is stored as is refreshed by
+                // that write, not merely sighted: marked first, the write
+                // would read it as a second weakness of this scan.
+                const refreshed = new Set(
+                    findings.map((f) => f.storedAs).filter(Boolean),
+                );
+                const sighted = (sightedAll ?? []).filter(
+                    (s) => !refreshed.has(s.fingerprint),
+                );
                 // An earlier finding a unit found again is seen by this scan.
                 if (sighted?.length) {
                     // Found again: one resolved since is reopened.

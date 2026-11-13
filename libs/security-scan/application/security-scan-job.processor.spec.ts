@@ -230,6 +230,24 @@ describe('SecurityScanJobProcessor', () => {
         expect(reported.map((r) => r.fingerprint)).toEqual(['fp-open']);
     });
 
+    it('refreshes an issue a finding is stored as, without first marking it sighted', async () => {
+        const { processor, issuesService } = setup({
+            unitEvents: [[
+                { unitId: 'u1', state: 'done', findings: 1 },
+                [{ ...finding, storedAs: 'fp-x' }],
+                [{ ...finding, fingerprint: 'fp-x' }, { ...finding, fingerprint: 'fp-y' }],
+            ]],
+            result: finishedResult(),
+        });
+
+        await processor.process('job-1');
+
+        // Marked first, the write would read it as a second weakness.
+        expect(issuesService.markScanFindingsSeen).toHaveBeenCalledWith(
+            expect.objectContaining({ fingerprints: ['fp-y'], foundAgain: true }),
+        );
+    });
+
     it('writes no issue once another job holds the scan', async () => {
         const { processor, issuesService, scans } = setup({
             unitEvents: [[{ unitId: 'u1', state: 'done', findings: 1 }, [finding], [{ ...finding, fingerprint: 'fp-old' }]]],
