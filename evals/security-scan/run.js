@@ -13,9 +13,9 @@
 //   node evals/security-scan/run.js --rescore=<result.json> [--output=…] [--gate]
 //     (re-reads a saved run with the current adjudications.json, no model call)
 //
-// A finding matches an advisory when it is in a file of the advisory's path
-// (the vulnerable operation, the entry point or a step between) within
-// LINE_WINDOW lines of it. Findings that match none are written out for a
+// A finding matches an advisory when it is of the advisory's class and in a
+// file of the advisory's path (the vulnerable operation, the entry point or a
+// step between) within LINE_WINDOW lines of it. Findings that match none are written out for a
 // person to judge (adjudications.json); precision counts only judged findings.
 //
 // Exit: 0 pass, 1 below a floor (--gate), 2 did not measure (evals/README.md).
@@ -61,14 +61,25 @@ const norm = (f) => String(f || '').replace(/\\/g, '/').replace(/^\.?\/+/, '');
  */
 const findingKey = (caseId, f) => `${caseId}|${f.vulnerabilityClass}|${norm(f.filePath)}|${f.symbol || ''}`;
 
+/** A location's lines: a number, or a range written "221-223". */
+function lineRange(line) {
+    const m = String(line).match(/^\s*(\d+)(?:\s*-\s*(\d+))?\s*$/);
+    return m ? [Number(m[1]), Number(m[2] ?? m[1])] : [NaN, NaN];
+}
+
 function matches(finding, advisory) {
+    // Another kind of weakness at the same place (an SSRF beside an
+    // authorization flaw) is another bug: it goes to a person to judge.
+    if (advisory.class && finding.vulnerabilityClass !== advisory.class) return false;
     const file = norm(finding.filePath);
-    return advisory.locations.some(
-        (l) =>
+    return advisory.locations.some((l) => {
+        const [from, to] = lineRange(l.line);
+        return (
             norm(l.file) === file &&
-            l.line >= finding.startLine - LINE_WINDOW &&
-            l.line <= finding.endLine + LINE_WINDOW,
-    );
+            from <= finding.endLine + LINE_WINDOW &&
+            to >= finding.startLine - LINE_WINDOW
+        );
+    });
 }
 
 async function runCase(c, route, pricing) {
@@ -160,10 +171,24 @@ function precisionOf(cases) {
     return { ...p, judged, value: judged ? (p.listed + p.real) / judged : null };
 }
 
-/** Re-reads a saved result with the current adjudications, no model call. */
+/**
+ * Re-reads a saved result with the current matcher and adjudications, no
+ * model call.
+ */
 function rescore(file) {
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
     for (const c of saved.cases) {
+        const known = DATA.cases.find((k) => k.id === c.id);
+        if (known) {
+            const asFinding = (f) => ({ vulnerabilityClass: f.class, filePath: f.file, startLine: f.lines[0], endLine: f.lines[1] });
+            for (const f of c.findings) f.matched = known.advisories.some((a) => matches(asFinding(f), a));
+            const inScope = known.advisories.filter((a) => a.class);
+            c.hits = inScope.filter((a) => c.findings.some((f) => matches(asFinding(f), a))).length;
+            for (const d of c.detail ?? []) {
+                const a = inScope.find((x) => d.what.startsWith(`${x.id} `));
+                if (a) d.ok = c.findings.some((f) => matches(asFinding(f), a));
+            }
+        }
         let judgedReal = 0;
         let judgedFalse = 0;
         let unjudged = 0;
