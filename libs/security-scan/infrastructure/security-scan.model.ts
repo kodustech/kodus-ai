@@ -27,6 +27,11 @@ export class SecurityScanModel extends CoreDocument {
         name: string;
         fullName: string;
         platform: string;
+        /**
+         * The Git instance (repositoryHost of its URL): an id is only unique
+         * on its platform's instance. Empty when the URL is unknown.
+         */
+        host: string;
         defaultBranch: string;
     };
 

@@ -116,17 +116,20 @@ export type StaleScanWindows = {
 const ACTIVE = [SecurityScanStatus.QUEUED, SecurityScanStatus.RUNNING];
 
 /**
- * A repository within an organization: its platform and its id there. An id
- * is only unique on its platform, and one organization can hold a GitHub
- * repository and a GitLab project with the same one.
+ * A repository within an organization: its platform, the instance of it
+ * (repositoryHost) and its id there. An id is only unique on its platform's
+ * instance: one organization can hold a GitHub repository and a GitLab
+ * project with the same one, or two self-hosted GitLab servers each with a
+ * project 1.
  */
-export type ScanRepositoryKey = { platform: string; id: string };
+export type ScanRepositoryKey = { platform: string; host: string; id: string };
 
 const activeKeyOf = (organizationId: string, repository: ScanRepositoryKey) =>
-    `${organizationId}:${repository.platform}:${repository.id}`;
+    `${organizationId}:${repository.platform}:${repository.host}:${repository.id}`;
 
 const sameRepository = (repository: ScanRepositoryKey) => ({
     'repository.platform': repository.platform,
+    'repository.host': repository.host,
     'repository.id': repository.id,
 });
 

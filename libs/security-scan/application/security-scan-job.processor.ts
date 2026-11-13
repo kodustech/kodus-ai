@@ -446,6 +446,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                           organizationId: scan.organizationId,
                           repositoryPlatform: scan.repository
                               .platform as PlatformType,
+                          repositoryHost: scan.repository.host ?? '',
                           repositoryId: scan.repository.id,
                       }),
             reproduce: true,
@@ -478,6 +479,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                             organizationId: scan.organizationId,
                             repositoryPlatform: scan.repository
                                 .platform as PlatformType,
+                            repositoryHost: scan.repository.host ?? '',
                             repositoryId: scan.repository.id,
                             fingerprints: sighted,
                             scanId: scan.uuid,
@@ -616,6 +618,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         const held = await this.issuesService.markScanFindingsSeen({
             organizationId: scan.organizationId,
             repositoryPlatform: scan.repository.platform as PlatformType,
+            repositoryHost: scan.repository.host ?? '',
             repositoryId: scan.repository.id,
             fingerprints: (scan.reported ?? [])
                 .filter(
@@ -635,6 +638,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         counts.resolved += await this.issuesService.resolveUnseenScanFindings({
             organizationId: scan.organizationId,
             repositoryPlatform: scan.repository.platform as PlatformType,
+            repositoryHost: scan.repository.host ?? '',
             repositoryId: scan.repository.id,
             scanId: scan.uuid,
             // What this scan read, and what a carried-on plan's finished
@@ -685,6 +689,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     name: scan.repository.name,
                     full_name: scan.repository.fullName,
                     platform: scan.repository.platform as PlatformType,
+                    host: scan.repository.host ?? '',
                 },
                 organizationId: scan.organizationId,
                 owner,
@@ -803,6 +808,7 @@ function movedAUnit(
 function fingerprintOf(scan: SecurityScanRecord, finding: ScanFinding): string {
     return computeScanFingerprint({
         repositoryPlatform: scan.repository.platform,
+        repositoryHost: scan.repository.host ?? '',
         repositoryId: scan.repository.id,
         vulnerabilityClass: finding.vulnerabilityClass,
         filePath: finding.filePath,

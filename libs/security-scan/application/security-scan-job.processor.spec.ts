@@ -33,6 +33,7 @@ const scanRecord = (overrides = {}) => ({
         name: 'shop',
         fullName: 'acme/shop',
         platform: 'GITHUB',
+        host: 'github.com',
         defaultBranch: 'main',
     },
     status: SecurityScanStatus.QUEUED,
@@ -183,11 +184,13 @@ describe('SecurityScanJobProcessor', () => {
         expect(issuesService.findOpenScanFindingAreas).toHaveBeenCalledWith({
             organizationId: 'org-1',
             repositoryPlatform: 'GITHUB',
+            repositoryHost: 'github.com',
             repositoryId: 'repo-1',
         });
         expect(issuesService.resolveUnseenScanFindings).toHaveBeenCalledWith({
             organizationId: 'org-1',
             repositoryPlatform: 'GITHUB',
+            repositoryHost: 'github.com',
             repositoryId: 'repo-1',
             scanId: 'scan-1',
             examined: [{ vulnerabilityClass: 'authz', filePaths: ['src/orders.controller.ts'] }],
@@ -578,6 +581,7 @@ describe('SecurityScanJobProcessor', () => {
         expect(issuesService.markScanFindingsSeen).toHaveBeenLastCalledWith({
             organizationId: 'org-1',
             repositoryPlatform: 'GITHUB',
+            repositoryHost: 'github.com',
             repositoryId: 'repo-1',
             fingerprints: ['fp-held'],
             scanId: 'scan-1',

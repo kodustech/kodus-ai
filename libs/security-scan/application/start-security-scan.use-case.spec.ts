@@ -26,6 +26,7 @@ const unit = (id: string) => ({
 function useCaseWith(
     last: Record<string, unknown> | null,
     platform: string | null | Error = 'GITHUB',
+    defaultBranch: string | Error = 'trunk',
 ) {
     const scans = {
         failStale: jest.fn(async () => 0),
@@ -40,7 +41,14 @@ function useCaseWith(
         jobQueue as any,
         {
             findIntegrationConfigFormatted: jest.fn(async () => [
-                { id: 'repo-1', name: 'shop', full_name: 'acme/shop' },
+                {
+                    id: 'repo-1',
+                    name: 'shop',
+                    full_name: 'acme/shop',
+                    // Stored when the repository was connected.
+                    default_branch: 'main',
+                    http_url: 'https://GitHub.com/acme/shop',
+                },
             ]),
         } as any,
         {} as any,
@@ -48,6 +56,10 @@ function useCaseWith(
             findTypeIntegration: jest.fn(async () => {
                 if (platform instanceof Error) throw platform;
                 return platform;
+            }),
+            getDefaultBranch: jest.fn(async () => {
+                if (defaultBranch instanceof Error) throw defaultBranch;
+                return defaultBranch;
             }),
         } as any,
         {} as any,
@@ -114,10 +126,29 @@ describe('StartSecurityScanUseCase — running again continues', () => {
 
         await start();
 
-        // A GitLab project with the same id is another repository.
-        const key = { platform: 'GITHUB', id: 'repo-1' };
+        // A GitLab project with the same id is another repository, and so
+        // is a project on another server of the same platform.
+        const key = { platform: 'GITHUB', host: 'github.com', id: 'repo-1' };
         expect(scans.findActive).toHaveBeenCalledWith('org-1', key);
         expect(scans.findLatest).toHaveBeenCalledWith('org-1', key);
+    });
+
+    it('scans the branch the provider serves as default now, not the one stored when the repository was connected', async () => {
+        const { scans, start } = useCaseWith(null);
+
+        await start();
+
+        expect(scans.create.mock.calls[0][0].repository).toEqual(
+            expect.objectContaining({ defaultBranch: 'trunk', host: 'github.com' }),
+        );
+    });
+
+    it('starts nothing when the provider cannot say which branch is the default', async () => {
+        const { scans, start, jobQueue } = useCaseWith(null, 'GITHUB', new Error('502'));
+
+        await expect(start()).rejects.toThrow(/default branch/);
+        expect(scans.create).not.toHaveBeenCalled();
+        expect(jobQueue.enqueue).not.toHaveBeenCalled();
     });
 
     it('refuses to start without an active code integration, writing nothing', async () => {

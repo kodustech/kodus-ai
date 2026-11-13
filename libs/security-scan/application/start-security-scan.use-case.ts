@@ -4,6 +4,7 @@ import {
     Inject,
     Injectable,
     NotFoundException,
+    ServiceUnavailableException,
 } from '@nestjs/common';
 
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
@@ -24,7 +25,10 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { PricingResolver } from '@libs/analytics/application/use-cases/usage/pricing-resolver';
 import { SpendLimitConfigService } from '@libs/analytics/application/spend-limit/spend-limit-config.service';
 
-import { normalizeScanPath } from '@libs/issues/domain/scan-fingerprint';
+import {
+    normalizeScanPath,
+    repositoryHost,
+} from '@libs/issues/domain/scan-fingerprint';
 
 import { validateBudget } from '../domain/budget-meter';
 import type { VulnClass } from '../domain/surface/surface.types';
@@ -50,6 +54,8 @@ interface ConfiguredRepository {
     default_branch?: string;
     organizationName?: string;
     full_name?: string;
+    /** The repository's URL on its instance (see repositoryHost). */
+    http_url?: string;
 }
 
 export interface StartSecurityScanInput {
@@ -58,6 +64,9 @@ export interface StartSecurityScanInput {
     budget: SecurityScanBudget;
     requestedBy?: { userId?: string; email?: string };
 }
+
+export const DEFAULT_BRANCH_UNREADABLE_MESSAGE =
+    "Could not read the repository's default branch from its Git provider. Try again in a moment.";
 
 export const NO_CODE_INTEGRATION_MESSAGE =
     'This team has no active code management integration to scan the repository through.';
@@ -121,6 +130,7 @@ export class StartSecurityScanUseCase {
         }
         const repositoryKey = {
             platform: String(platform),
+            host: repositoryHost(repository.http_url),
             id: String(repository.id),
         };
 
@@ -142,6 +152,23 @@ export class StartSecurityScanUseCase {
             (repository.name.includes('/')
                 ? repository.name
                 : `${repository.organizationName ?? ''}/${repository.name}`);
+        // The branch the provider serves as default now: the one stored when
+        // the repository was connected can have been renamed or replaced
+        // since, and a guess would scan an old branch to a clean finish.
+        const defaultBranch = await this.codeManagementService
+            .getDefaultBranch(
+                {
+                    organizationAndTeamData: orgTeam,
+                    repository: { id: repository.id, name: repository.name },
+                },
+                platform,
+            )
+            .catch(() => undefined);
+        if (!defaultBranch) {
+            throw new ServiceUnavailableException(
+                DEFAULT_BRANCH_UNREADABLE_MESSAGE,
+            );
+        }
 
         const scan = await this.scans
             .create({
@@ -152,7 +179,8 @@ export class StartSecurityScanUseCase {
                     name: repository.name,
                     fullName,
                     platform: repositoryKey.platform,
-                    defaultBranch: repository.default_branch || 'main',
+                    host: repositoryKey.host,
+                    defaultBranch,
                 },
                 status: SecurityScanStatus.QUEUED,
                 budget: {

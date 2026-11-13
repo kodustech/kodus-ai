@@ -56,22 +56,28 @@ describe('SecurityScanRepository: one active scan per repository', () => {
 
         await repository.create({
             organizationId: 'org-1',
-            repository: { platform: 'GITHUB', id: 'repo-1' },
+            repository: { platform: 'GITHUB', host: 'github.com', id: 'repo-1' },
             status: 'queued',
         } as any);
-        // A GitLab project with the same id is another repository.
+        // A GitLab project with the same id is another repository, and so is
+        // a project 1 on another GitLab server.
         await repository.create({
             organizationId: 'org-1',
-            repository: { platform: 'GITLAB', id: 'repo-1' },
+            repository: { platform: 'GITLAB', host: 'gitlab.a.io', id: 'repo-1' },
+            status: 'queued',
+        } as any);
+        await repository.create({
+            organizationId: 'org-1',
+            repository: { platform: 'GITLAB', host: 'gitlab.b.io', id: 'repo-1' },
             status: 'queued',
         } as any);
 
-        expect((create.mock.calls[0] as unknown[])[0]).toEqual(
-            expect.objectContaining({ activeKey: 'org-1:GITHUB:repo-1' }),
-        );
-        expect((create.mock.calls[1] as unknown[])[0]).toEqual(
-            expect.objectContaining({ activeKey: 'org-1:GITLAB:repo-1' }),
-        );
+        const keys = (create.mock.calls as unknown as [any][]).map(([doc]) => doc.activeKey);
+        expect(keys).toEqual([
+            'org-1:GITHUB:github.com:repo-1',
+            'org-1:GITLAB:gitlab.a.io:repo-1',
+            'org-1:GITLAB:gitlab.b.io:repo-1',
+        ]);
     });
 
     it("finds a repository's active and latest scans by its platform and id", async () => {
@@ -80,7 +86,7 @@ describe('SecurityScanRepository: one active scan per repository', () => {
         query.sort.mockReturnValue(query);
         const findOne = jest.fn(() => query);
         const repository = new SecurityScanRepository({ findOne } as any);
-        const gitlab = { platform: 'GITLAB', id: 'repo-1' };
+        const gitlab = { platform: 'GITLAB', host: 'gitlab.a.io', id: 'repo-1' };
 
         await repository.findActive('org-1', gitlab);
         await repository.findLatest('org-1', gitlab);
@@ -90,6 +96,7 @@ describe('SecurityScanRepository: one active scan per repository', () => {
                 expect.objectContaining({
                     'organizationId': 'org-1',
                     'repository.platform': 'GITLAB',
+                    'repository.host': 'gitlab.a.io',
                     'repository.id': 'repo-1',
                 }),
             );
