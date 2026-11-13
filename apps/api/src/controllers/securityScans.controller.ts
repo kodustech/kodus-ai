@@ -18,12 +18,7 @@ import {
     ApiPropertyOptional,
     ApiTags,
 } from '@nestjs/swagger';
-import {
-    IsNumber,
-    IsOptional,
-    IsPositive,
-    IsString,
-} from 'class-validator';
+import { IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
@@ -138,6 +133,13 @@ export class SecurityScansController {
     @UseGuards(PolicyGuard)
     @CheckPolicies(canStartScan)
     async start(@Body() body: StartSecurityScanDto) {
+        // On the very repository the scan runs on: the id the use case reads.
+        await this.authorizationService.ensure({
+            user: this.request.user,
+            action: Action.Create,
+            resource: ResourceType.SecurityScan,
+            repoIds: [body.repositoryId],
+        });
         return this.startSecurityScan.execute({
             organizationAndTeamData: {
                 organizationId: await this.organizationId(),
