@@ -351,4 +351,6 @@ export type UpdateSuggestionOptions = {
     addToSet?: Record<string, string[]>;
     /** Fields of the suggestion (dotted paths) removed in the same write. */
     unset?: string[];
+    /** The only paths of the PR document returned (e.g. `files.suggestions.id`). */
+    projection?: string[];
 };

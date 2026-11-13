@@ -106,6 +106,30 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
             );
         });
 
+        it('returns only the projected paths of the PR', async () => {
+            const pr = await repository.updateSuggestion('s-1', {}, org, {
+                addToSet: { [LOCATIONS]: [] },
+                projection: [
+                    'files.suggestions.id',
+                    `files.suggestions.${LOCATIONS}`,
+                ],
+            });
+
+            expect(pr?.files).toEqual([
+                {
+                    suggestions: [
+                        {
+                            id: 's-1',
+                            implementationCheck: {
+                                implementedLocations: ['app/a.rb:1-2'],
+                            },
+                        },
+                        { id: 's-2' },
+                    ],
+                },
+            ]);
+        });
+
         it('keeps what two checks running at once each add', async () => {
             await Promise.all([
                 repository.updateSuggestion('s-1', {}, org, {

@@ -778,6 +778,27 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
             expect(statusWritten()).toEqual([ImplementationStatus.IMPLEMENTED]);
         });
 
+        it('reads back only the ids and stored locations of the PR suggestions', async () => {
+            answerAll(ImplementationStatus.IMPLEMENTED);
+
+            await check([grouped()], [fileA]);
+
+            const readBack = writesFor('s-1').find(
+                ([, , , options]) => options?.addToSet,
+            );
+            expect(readBack?.[3]).toEqual({
+                addToSet: {
+                    'implementationCheck.implementedLocations': [
+                        'app/a.rb:1-2',
+                    ],
+                },
+                projection: [
+                    'files.suggestions.id',
+                    'files.suggestions.implementationCheck.implementedLocations',
+                ],
+            });
+        });
+
         it('asks about each location on its own file, without the code of another one', async () => {
             answerAll(ImplementationStatus.NOT_IMPLEMENTED);
 

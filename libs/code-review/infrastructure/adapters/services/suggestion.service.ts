@@ -436,7 +436,14 @@ export class SuggestionService implements ISuggestionService {
                             group.id,
                             {},
                             organizationAndTeamData,
-                            { addToSet: { [LOCATIONS_FIELD]: group.fixedNow } },
+                            {
+                                addToSet: { [LOCATIONS_FIELD]: group.fixedNow },
+                                // Only what the group is decided from comes back.
+                                projection: [
+                                    'files.suggestions.id',
+                                    `files.suggestions.${LOCATIONS_FIELD}`,
+                                ],
+                            },
                         );
                     const storedLocations =
                         stored?.files

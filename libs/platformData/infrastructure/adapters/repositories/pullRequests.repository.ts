@@ -2707,7 +2707,13 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     // skip the whole PR document coming back.
                     ...(options?.returnDocument === false
                         ? { projection: { _id: 1 } }
-                        : {}),
+                        : options?.projection?.length
+                          ? {
+                                projection: Object.fromEntries(
+                                    options.projection.map((path) => [path, 1]),
+                                ),
+                            }
+                          : {}),
                 },
             )
             .exec();
