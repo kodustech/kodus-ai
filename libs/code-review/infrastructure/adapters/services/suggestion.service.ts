@@ -1,3 +1,4 @@
+import { hostCommentKey } from '@libs/code-review/domain/approval/own-change-request';
 import { createLogger } from '@libs/core/log/logger';
 import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
@@ -2230,9 +2231,7 @@ export class SuggestionService implements ISuggestionService {
                     .filter((comment) =>
                         this.isActiveReviewComment(comment, platformType),
                     )
-                    .map((comment) =>
-                        this.getReviewCommentMatchId(comment, platformType),
-                    )
+                    .map((comment) => hostCommentKey(comment, platformType))
                     .filter(Boolean),
             );
 
@@ -2459,24 +2458,5 @@ export class SuggestionService implements ISuggestionService {
         }
 
         return !comment?.isResolved;
-    }
-
-    private getReviewCommentMatchId(
-        comment: PullRequestReviewComment,
-        platformType: PlatformType,
-    ): string | null {
-        if (platformType === PlatformType.GITHUB) {
-            return comment?.fullDatabaseId != null
-                ? String(comment.fullDatabaseId)
-                : comment?.id != null
-                  ? String(comment.id)
-                  : null;
-        }
-
-        if (platformType === PlatformType.AZURE_REPOS) {
-            return comment?.threadId != null ? String(comment.threadId) : null;
-        }
-
-        return comment?.id != null ? String(comment.id) : null;
     }
 }

@@ -1,3 +1,4 @@
+import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import type {
     ApprovalTeamMembership,
     ApprovalTeamMembershipParams,
@@ -124,6 +125,7 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import {
     CodeManagementConnectionStatus,
+    type HostAccount,
     ICodeManagementService,
     PullRequestFileChange,
 } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
@@ -3148,9 +3150,7 @@ export class GithubService
             // The webhook mapper spreads GitHub's repository payload, so
             // `owner` can arrive as the account object instead of its login.
             const rawOwner = repository.owner as
-                | string
-                | { login?: string }
-                | undefined;
+                string | { login?: string } | undefined;
             const owner =
                 (typeof rawOwner === 'string' ? rawOwner : rawOwner?.login) ||
                 (await this.getGithubAuthDetails(organizationAndTeamData))?.org;
@@ -7033,23 +7033,10 @@ This is an experimental feature that generates committable changes. Review the d
             githubAuth,
         );
 
-        const graphQLWithAuth = await this.instanceGraphQL(
+        const viewer = await this.getViewer(
             organizationAndTeamData,
+            githubAuth,
         );
-
-        const query = `
-        query {
-          viewer {
-            login
-            id
-            __typename
-          }
-        }
-      `;
-
-        const userAuth: {
-            viewer: { login: string; id: string };
-        } = await graphQLWithAuth(query);
 
         const allReviews = await octokit.paginate(
             octokit.rest.pulls.listReviews,
@@ -7066,11 +7053,7 @@ This is an experimental feature that generates committable changes. Review the d
         }
 
         const myReviews = allReviews
-            ?.filter(
-                (review) =>
-                    review?.user?.login === userAuth?.viewer?.login &&
-                    review?.user?.node_id === userAuth?.viewer?.id,
-            )
+            ?.filter((review) => this.isViewer(viewer, review?.user))
             ?.sort(
                 (a, b) =>
                     new Date(a.submitted_at).getTime() -
@@ -7114,10 +7097,92 @@ This is an experimental feature that generates committable changes. Review the d
         prNumber: number;
         reason: string;
     }): Promise<number> {
+        return this.dismissOwnReviews(
+            params,
+            'APPROVED',
+            'Kody held automatic approval after a new review.',
+        );
+    }
+
+    async isOwnAccount(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        account: HostAccount;
+    }): Promise<boolean> {
+        const githubAuth = await this.getGithubAuthDetails(
+            params.organizationAndTeamData,
+        );
+        // Installed as an App, Kody is a bot account: a person is never it,
+        // and telling so must not cost a GitHub call per review request.
+        if (
+            githubAuth?.authMode === AuthMode.OAUTH &&
+            githubAuth.installationId &&
+            params.account.type !== 'Bot'
+        ) {
+            return false;
+        }
+        return this.isViewer(
+            await this.getViewer(params.organizationAndTeamData, githubAuth),
+            params.account,
+        );
+    }
+
+    /** The account Kody acts as with this integration's credentials. */
+    private async getViewer(
+        organizationAndTeamData: OrganizationAndTeamData,
+        githubAuth?: GithubAuthDetail,
+    ): Promise<{ login: string; id: string }> {
+        const graphQLWithAuth = await this.instanceGraphQL(
+            organizationAndTeamData,
+            githubAuth,
+        );
+        const identity: { viewer: { login: string; id: string } } =
+            await graphQLWithAuth('query { viewer { login id } }');
+        return identity.viewer;
+    }
+
+    /** Login and node id together: a login alone can be another account. */
+    private isViewer(
+        viewer: { login: string; id: string },
+        account?: { login?: string; node_id?: string } | null,
+    ): boolean {
+        return (
+            !!account &&
+            account.login === viewer?.login &&
+            account.node_id === viewer?.id
+        );
+    }
+
+    async dismissOwnPullRequestChangeRequests(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        return this.dismissOwnReviews(
+            params,
+            'CHANGES_REQUESTED',
+            params.reason,
+        );
+    }
+
+    /**
+     * Dismisses the reviews Kody itself left in `state`. A dismissed review
+     * reads back as `DISMISSED`, so a second call finds nothing to do.
+     */
+    private async dismissOwnReviews(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: Partial<Repository>;
+            prNumber: number;
+        },
+        state: 'APPROVED' | 'CHANGES_REQUESTED',
+        message: string,
+    ): Promise<number> {
         const { organizationAndTeamData, repository, prNumber } = params;
+        const label = state === 'APPROVED' ? 'approval' : 'change request';
         if (!repository?.name || !repository.id || !prNumber) {
             throw new Error(
-                'Repository and PR number are required to dismiss approval',
+                `Repository and PR number are required to dismiss ${label}`,
             );
         }
         const githubAuth = await this.getGithubAuthDetails(
@@ -7127,24 +7192,21 @@ This is an experimental feature that generates committable changes. Review the d
             organizationAndTeamData,
             githubAuth,
         );
-        const graphQLWithAuth = await this.instanceGraphQL(
+        const viewer = await this.getViewer(
             organizationAndTeamData,
+            githubAuth,
         );
-        const identity: { viewer: { login: string; id: string } } =
-            await graphQLWithAuth('query { viewer { login id } }');
         const reviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
             owner: githubAuth.org,
             repo: repository.name,
             pull_number: prNumber,
             per_page: 100,
         });
-        const ownApprovals = reviews.filter(
+        const ownReviews = reviews.filter(
             (review) =>
-                review.state === 'APPROVED' &&
-                review.user?.login === identity.viewer.login &&
-                review.user?.node_id === identity.viewer.id,
+                review.state === state && this.isViewer(viewer, review.user),
         );
-        for (const review of ownApprovals) {
+        for (const review of ownReviews) {
             const reviewId = review.id;
             const timeoutMs = 15_000;
             const controller = new AbortController();
@@ -7156,17 +7218,15 @@ This is an experimental feature that generates committable changes. Review the d
                         repo: repository.name,
                         pull_number: prNumber,
                         review_id: reviewId,
-                        message:
-                            'Kody held automatic approval after a new review.',
+                        message,
                         request: { signal: controller.signal },
                     }),
                     timeoutMs,
-                    `GitHub approval dismissal review=${reviewId}`,
+                    `GitHub ${label} dismissal review=${reviewId}`,
                 );
             } catch (error) {
                 this.logger.warn({
-                    message:
-                        'GitHub approval dismissal failed; review state is unverified',
+                    message: `GitHub ${label} dismissal failed; review state is unverified`,
                     context: GithubService.name,
                     error,
                     metadata: {
@@ -7175,6 +7235,7 @@ This is an experimental feature that generates committable changes. Review the d
                         repositoryId: repository.id,
                         prNumber,
                         reviewId,
+                        state,
                         timeoutMs,
                     },
                 });
@@ -7183,7 +7244,7 @@ This is an experimental feature that generates committable changes. Review the d
                 clearTimeout(timer);
             }
         }
-        return ownApprovals.length;
+        return ownReviews.length;
     }
 
     async checkIfPullRequestShouldBeApproved(params: {
@@ -7376,8 +7437,9 @@ This is an experimental feature that generates committable changes. Review the d
             const requestChangeBodyTitle =
                 '# Found critical issues please review the requested changes';
 
-            const formattedBody =
-                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`.trim();
+            const formattedBody = withChangeRequestExitNote(
+                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`,
+            );
 
             await octokit.rest.pulls.createReview({
                 owner: githubAuthDetail.org,

@@ -7,6 +7,7 @@ import { Public } from '@libs/identity/infrastructure/adapters/services/auth/pub
 import { EnqueueWebhookUseCase } from '@libs/platform/application/use-cases/webhook/enqueue-webhook.use-case';
 import { isMergeQueuePush } from '@libs/platform/infrastructure/webhooks/github/merge-queue-ref';
 import { isNewRepositoryEvent } from '@libs/platform/infrastructure/webhooks/github/new-repository-event';
+import { requestedReviewerOf } from '@libs/platform/infrastructure/webhooks/github/review-request';
 
 @Public()
 @Controller('github')
@@ -50,7 +51,12 @@ export class GithubController {
                 'reopened',
                 'ready_for_review',
             ];
-            if (!allowedActions.includes(payload?.action)) {
+            // A review request is worth a job only when it names an
+            // account: the worker then checks whether that account is Kody.
+            if (
+                !allowedActions.includes(payload?.action) &&
+                !requestedReviewerOf(event, payload)
+            ) {
                 return res
                     .status(HttpStatus.OK)
                     .send('Webhook ignored (action not supported)');
