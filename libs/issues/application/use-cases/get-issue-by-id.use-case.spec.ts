@@ -174,4 +174,23 @@ describe('GetIssueByIdUseCase — file link', () => {
             'https://dev.azure.com/acme/shop/_git/shop?path=/src/orders.controller.ts&version=GCabc123',
         );
     });
+
+    it.each([
+        [PlatformType.GITHUB, 'https://ghe.acme.io/acme/shop/blob/abc123/src/orders.controller.ts'],
+        [PlatformType.GITLAB, 'https://gitlab.acme.io/acme/shop/-/blob/abc123/src/orders.controller.ts'],
+    ])('links a %s scan finding to its own instance, not the public one', async (platform, url) => {
+        const details = await useCaseFor({
+            ...base,
+            repository: {
+                ...base.repository,
+                platform,
+                url: undefined,
+                host: platform === PlatformType.GITHUB ? 'ghe.acme.io' : 'gitlab.acme.io',
+            },
+            source: IssueSource.SECURITY_SCAN,
+            lastSeenCommitSha: 'abc123',
+        }).execute('i-1');
+
+        expect(details?.fileLink.url).toBe(url);
+    });
 });

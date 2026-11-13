@@ -103,6 +103,9 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryFullName: issue.repository.full_name,
             httpUrl: httpUrl,
             repositoryUrl: issue.repository.url ?? null,
+            // A scan finding's instance (GitHub Enterprise, a self-hosted
+            // GitLab), when the issue carries no URL of its own.
+            host: issue.repository.host,
         };
 
         const prUrls = await this.selectAllPrNumbers(issue, dataToBuildUrls);
@@ -258,6 +261,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryFullName: string;
             httpUrl: string;
             repositoryUrl?: string;
+            host?: string;
         },
     ): Promise<
         {
@@ -299,6 +303,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryFullName: string;
             httpUrl: string;
             repositoryUrl?: string;
+            host?: string;
         },
         filePath: string,
         commitSha?: string,
@@ -338,6 +343,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryFullName: string;
             httpUrl: string;
             repositoryUrl?: string;
+            host?: string;
         },
         prNumber: string,
     ): string {
@@ -368,6 +374,7 @@ export class GetIssueByIdUseCase implements IUseCase {
         repositoryFullName: string;
         httpUrl: string;
         repositoryUrl?: string;
+        host?: string;
     }): string {
         switch (data.platform) {
             case PlatformType.GITHUB:
@@ -380,11 +387,13 @@ export class GetIssueByIdUseCase implements IUseCase {
                     }
                 }
 
-                return `https://github.com/${data.repositoryFullName}`;
+                return `https://${data.host || 'github.com'}/${data.repositoryFullName}`;
             case PlatformType.GITLAB: {
-                const gitlabUrl = process.env.WEB_GITLAB_OAUTH_URL
-                    ? new URL(process.env.WEB_GITLAB_OAUTH_URL).origin
-                    : 'https://gitlab.com';
+                const gitlabUrl = data.host
+                    ? `https://${data.host}`
+                    : process.env.WEB_GITLAB_OAUTH_URL
+                      ? new URL(process.env.WEB_GITLAB_OAUTH_URL).origin
+                      : 'https://gitlab.com';
                 return `${gitlabUrl}/${data.repositoryFullName}`;
             }
             case PlatformType.AZURE_REPOS:
@@ -393,8 +402,13 @@ export class GetIssueByIdUseCase implements IUseCase {
                 return `https://bitbucket.org/${data.repositoryFullName}`;
             case PlatformType.FORGEJO: {
                 // The clone URL, without its `.git`.
-                const url = data.repositoryUrl || data.httpUrl;
-                return (url ?? '').replace(/\.git$/, '').replace(/\/$/, '');
+                const url =
+                    data.repositoryUrl ||
+                    data.httpUrl ||
+                    (data.host
+                        ? `https://${data.host}/${data.repositoryFullName}`
+                        : '');
+                return url.replace(/\.git$/, '').replace(/\/$/, '');
             }
             default:
                 throw new Error(`Platform not supported: ${data.platform}`);
