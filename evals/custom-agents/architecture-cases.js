@@ -1,6 +1,7 @@
 // P13 Architecture template: the built-in Architecture agent, saved unchanged
 // from the New agent dialog, flags a domain module that depends on the web
-// layer and a controller that computes a business rule itself, and stays quiet
+// layer, a backend shared module that imports from a controller and a
+// controller that computes a business rule itself, and stays quiet
 // on the same changes written right and on a shared frontend component built
 // on UI primitives (controls). The instructions are read from
 // the web app's templates, the text the dialog and the CLI hand a team, so a
@@ -122,6 +123,25 @@ export function EmptyState(props: { message: string; onRetry: () => void }) {
             <Button onClick={props.onRetry}>Retry</Button>
         </div>
     );
+}
+`;
+
+const QUOTES_WITH_PARSER = `import { lineTotal } from '../domain/pricing';
+
+/** Reads a cents amount from a query string value. */
+export function parseCents(value: unknown): number {
+    const cents = Number(value);
+    return Number.isInteger(cents) && cents >= 0 ? cents : 0;
+}
+
+export function quote(req: any, res: any) {
+    res.json({ totalCents: lineTotal(parseCents(req.query.unitCents), Number(req.query.quantity)) });
+}
+`;
+
+const SHARED_MONEY_TS = `/** Formats cents for display; used by every module. */
+export function formatCents(cents: number): string {
+    return (cents / 100).toFixed(2);
 }
 `;
 
@@ -250,6 +270,34 @@ export function renewalQuote(req: any, res: any) {
                 property: 'P13',
                 quiet: 'src/controllers/renewals.controller.ts',
                 about: BUSINESS,
+            },
+        ],
+    },
+    {
+        id: 'architecture-shared-imports-controller',
+        checks: 'The Architecture template flags a backend shared module that imports a helper from a controller, where the other shared modules import nothing',
+        team: { agent },
+        prTitle: 'Invoice lines',
+        prBody: 'Invoices list each line with its amount.',
+        before: { 'src/shared/invoice-lines.ts': null },
+        repo: {
+            'src/domain/pricing.ts': DOMAIN_PRICING_TS,
+            'src/http/quotes.controller.ts': QUOTES_WITH_PARSER,
+            'src/shared/money.ts': SHARED_MONEY_TS,
+            'src/shared/invoice-lines.ts': `import { parseCents } from '../http/quotes.controller';
+import { formatCents } from './money';
+
+export function invoiceLine(label: string, rawCents: unknown): string {
+    return \`\${label}: \${formatCents(parseCents(rawCents))}\`;
+}
+`,
+        },
+        expect: [
+            {
+                property: 'P13',
+                flag: 'src/shared/invoice-lines.ts',
+                at: "import { parseCents } from '../http/quotes.controller';",
+                about: LAYER,
             },
         ],
     },

@@ -47,6 +47,6 @@ describe('Architecture template (eval and CLI)', () => {
                 .map((e: any) => (e.flag ? 'flag' : 'quiet')),
         );
 
-        expect(kinds.sort()).toEqual(['flag', 'flag', 'quiet', 'quiet', 'quiet']);
+        expect(kinds.sort()).toEqual(['flag', 'flag', 'flag', 'quiet', 'quiet', 'quiet']);
     });
 });
