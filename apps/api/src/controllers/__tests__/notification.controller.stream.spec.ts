@@ -136,6 +136,52 @@ describe('NotificationController stream', () => {
         await expect(within(ended, 2_000)).resolves.toBe('done');
     });
 
+    // The hook ends the stream before the response says it closed: a read
+    // that finishes right then must not write to it.
+    it('writes nothing to a stream the shutdown just ended', async () => {
+        let answer: (count: number) => void = () => undefined;
+        unreadCount.mockReturnValue(
+            new Promise<number>((resolve) => {
+                answer = resolve;
+            }),
+        );
+        const sse = app.get(NotificationSseService);
+        const errors: string[] = [];
+        const open = sse.openConnection.bind(sse);
+        jest.spyOn(sse, 'openConnection').mockImplementation((res) => {
+            res.on('error', (error: NodeJS.ErrnoException) =>
+                errors.push(error.code ?? error.message),
+            );
+            return open(res);
+        });
+        const endAll = sse.beforeApplicationShutdown.bind(sse);
+        const hook = jest
+            .spyOn(sse, 'beforeApplicationShutdown')
+            .mockImplementation(() => {
+                endAll();
+                // Released in the same tick the stream was ended.
+                answer(3);
+            });
+
+        await new Promise<void>((resolve, reject) => {
+            const { port } = app.getHttpServer().address() as AddressInfo;
+            request = http.get(
+                { host: '127.0.0.1', port, path: '/notifications/stream' },
+                (response) => {
+                    response.resume();
+                    resolve();
+                },
+            );
+            request.on('error', reject);
+        });
+
+        await expect(within(app.close(), 2_000)).resolves.toBe('done');
+        await new Promise((done) => setTimeout(done, 50));
+
+        expect(hook).toHaveBeenCalled();
+        expect(errors).toEqual([]);
+    });
+
     it('keeps nothing of a client that left before its stream was ready', async () => {
         let answer: (count: number) => void = () => undefined;
         unreadCount.mockReturnValue(

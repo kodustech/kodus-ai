@@ -114,7 +114,8 @@ export class NotificationController {
             userId,
             organizationId,
         );
-        if (closed) return;
+        // Ended by the shutdown, its close event may not have fired yet.
+        if (closed || res.writableEnded) return;
         res.write(
             `event: unread-count\ndata: ${JSON.stringify({ count })}\n\n`,
         );
@@ -123,6 +124,7 @@ export class NotificationController {
 
         // Heartbeat every 30s to keep the connection alive
         heartbeat = setInterval(() => {
+            if (res.writableEnded) return clearInterval(heartbeat);
             try {
                 res.write(': heartbeat\n\n');
             } catch {
