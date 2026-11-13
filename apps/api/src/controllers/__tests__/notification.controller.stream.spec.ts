@@ -86,6 +86,56 @@ describe('NotificationController stream', () => {
         await expect(within(stream.ended, 2_000)).resolves.toBe('done');
     });
 
+    // A shutdown can start while a stream still waits for its first event.
+    it('closes the API while a stream is still reading its unread count', async () => {
+        let answer: (count: number) => void = () => undefined;
+        unreadCount.mockReturnValue(
+            new Promise<number>((resolve) => {
+                answer = resolve;
+            }),
+        );
+        const hook = jest.spyOn(
+            app.get(NotificationSseService),
+            'beforeApplicationShutdown',
+        );
+
+        // The headers are sent before the unread count is read.
+        const { ended } = await new Promise<{ ended: Promise<void> }>(
+            (resolve, reject) => {
+                const { port } = app.getHttpServer().address() as AddressInfo;
+                request = http.get(
+                    { host: '127.0.0.1', port, path: '/notifications/stream' },
+                    (response) => {
+                        response.resume();
+                        resolve({
+                            ended: new Promise<void>((done) => {
+                                response.on('end', done);
+                                response.on('close', done);
+                            }),
+                        });
+                    },
+                );
+                request.on('error', reject);
+            },
+        );
+        const closing = app.close();
+        await within(
+            new Promise<void>((done) => {
+                const poll = setInterval(() => {
+                    if (hook.mock.calls.length) {
+                        clearInterval(poll);
+                        done();
+                    }
+                }, 5);
+            }),
+            2_000,
+        );
+        answer(3);
+
+        await expect(within(closing, 2_000)).resolves.toBe('done');
+        await expect(within(ended, 2_000)).resolves.toBe('done');
+    });
+
     it('keeps nothing of a client that left before its stream was ready', async () => {
         let answer: (count: number) => void = () => undefined;
         unreadCount.mockReturnValue(

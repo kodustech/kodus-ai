@@ -104,6 +104,8 @@ export class NotificationController {
         };
         req.on('close', release);
         res.on('close', release);
+        // Tracked from here, so a shutdown during the read below ends it too.
+        if (!this.sseService.openConnection(res)) return;
 
         // Send initial unread count, scoped like the list the drawer renders --
         // a badge counting other organizations is the discrepancy users see.
@@ -117,7 +119,7 @@ export class NotificationController {
             `event: unread-count\ndata: ${JSON.stringify({ count })}\n\n`,
         );
 
-        this.sseService.addConnection(userId, res);
+        if (!this.sseService.addConnection(userId, res)) return;
 
         // Heartbeat every 30s to keep the connection alive
         heartbeat = setInterval(() => {
