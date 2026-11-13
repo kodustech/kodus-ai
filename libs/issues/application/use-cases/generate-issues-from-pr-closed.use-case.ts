@@ -315,15 +315,25 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
                 ).find((r) => String(r?.id) === String(repository?.id))
                     ?.http_url,
             );
-        const onInstance = prHost
-            ? configs.findIndex((_, i) => listedHost(i) === prHost)
-            : -1;
-
+        if (prHost) {
+            const onInstance = configs.findIndex(
+                (_, i) => listedHost(i) === prHost,
+            );
+            return {
+                organizationAndTeamData:
+                    organizationAndTeamData?.[
+                        onInstance >= 0 ? onInstance : 0
+                    ] || null,
+                ...(onInstance >= 0 ? { host: prHost } : {}),
+            };
+        }
+        // A payload that names no URL (Bitbucket Data Center's): the
+        // instance the configs list the repository on, when they all agree.
+        const hosts = new Set(configs.map((_, i) => listedHost(i)));
+        const [only] = hosts;
         return {
-            organizationAndTeamData:
-                organizationAndTeamData?.[onInstance >= 0 ? onInstance : 0] ||
-                null,
-            ...(onInstance >= 0 ? { host: prHost } : {}),
+            organizationAndTeamData: organizationAndTeamData?.[0] || null,
+            ...(hosts.size === 1 && only ? { host: only } : {}),
         };
     }
 }

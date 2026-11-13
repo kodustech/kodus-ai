@@ -203,6 +203,23 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
             );
         });
 
+        it.each([
+            ['the one server every config lists it on', ['https://bb.acme.dev/scm/a/repo.git'], 'bb.acme.dev'],
+            ['none, when the configs list it on two servers', ['https://bb.acme.dev/scm/a/repo.git', 'https://bb2.acme.dev/scm/a/repo.git'], undefined],
+        ])('carries, for a payload with no URL, %s', async (_, urls, host) => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                urls.map((http_url) => ({ ...mockIntegrationConfig, configValue: [{ id: '999', http_url }] })),
+            );
+
+            await useCase.execute({
+                payload: { ...gitlabMergePayload, project: { ...gitlabMergePayload.project, web_url: '', url: '' } },
+                platformType: PlatformType.GITLAB,
+            });
+
+            const [context] = kodyIssuesManagementServiceMock.processClosedPr.mock.calls.at(-1);
+            expect(context.repository.host).toBe(host);
+        });
+
         it('carries no instance when no config lists the repository on the PR\'s server', async () => {
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue([
                 {
