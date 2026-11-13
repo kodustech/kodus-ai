@@ -190,8 +190,10 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
 
         try {
             // 1. Buscar issues abertas para o arquivo
-            // A scan issue names its repository by platform too: a GitLab
-            // project can carry the id of a GitHub repository.
+            // A scan issue names its repository by platform and instance
+            // too: a GitLab project can carry the id of a GitHub repository,
+            // and two GitLab servers each have a project 1. Without the PR's
+            // instance, no scan issue is known to be its own.
             const existingIssues = (
                 await this.issuesService.findByFileAndStatus(
                     organizationAndTeamData.organizationId,
@@ -202,7 +204,9 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
             )?.filter(
                 (issue) =>
                     issue.source !== IssueSource.SECURITY_SCAN ||
-                    issue.repository?.platform === repository.platform,
+                    (issue.repository?.platform === repository.platform &&
+                        !!repository.host &&
+                        issue.repository?.host === repository.host),
             );
 
             if (!existingIssues || existingIssues?.length === 0) {

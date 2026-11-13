@@ -308,6 +308,29 @@ describe('KodyIssuesManagementService', () => {
             ]);
         });
 
+        it('shows no security-scan issue when the PR\'s instance is unknown', async () => {
+            issuesServiceMock.findByFileAndStatus = jest.fn().mockResolvedValue([
+                {
+                    uuid: 'scan-issue',
+                    title: 'IDOR on order lookup',
+                    description: 'Any user can read any order.',
+                    filePath: 'src/main.ts',
+                    language: 'typescript',
+                    contributingSuggestions: [],
+                    source: IssueSource.SECURITY_SCAN,
+                    repository: { ...mockRepository, host: 'gitlab-a.example' },
+                },
+            ]);
+            const createNewIssues = jest
+                .spyOn(service as any, 'createNewIssues')
+                .mockResolvedValue(undefined);
+
+            await service.mergeSuggestionsIntoIssues(baseParams, 'src/main.ts', [mockSuggestion], undefined);
+
+            expect(kodyIssuesAnalysisServiceMock.mergeSuggestionsIntoIssues).not.toHaveBeenCalled();
+            expect(createNewIssues).toHaveBeenCalled();
+        });
+
         it('matches against a security-scan issue, which has no PR suggestion', async () => {
             issuesServiceMock.findByFileAndStatus = jest
                 .fn()
@@ -320,7 +343,18 @@ describe('KodyIssuesManagementService', () => {
                         language: 'typescript',
                         contributingSuggestions: [],
                         source: IssueSource.SECURITY_SCAN,
-                        repository: { ...mockRepository },
+                        repository: { ...mockRepository, host: 'gitlab-a.example' },
+                    },
+                    // The same id and file on another server of the platform.
+                    {
+                        uuid: 'other-instance',
+                        title: 'IDOR on order lookup',
+                        description: 'Any user can read any order.',
+                        filePath: 'src/main.ts',
+                        language: 'typescript',
+                        contributingSuggestions: [],
+                        source: IssueSource.SECURITY_SCAN,
+                        repository: { ...mockRepository, host: 'gitlab-b.example' },
                     },
                     // The same id and file on another platform: another repository.
                     {
@@ -339,7 +373,7 @@ describe('KodyIssuesManagementService', () => {
             );
 
             await service.mergeSuggestionsIntoIssues(
-                baseParams,
+                { ...baseParams, repository: { ...mockRepository, host: 'gitlab-a.example' } } as any,
                 'src/main.ts',
                 [mockSuggestion],
                 undefined,

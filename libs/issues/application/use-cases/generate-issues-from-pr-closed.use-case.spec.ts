@@ -173,6 +173,26 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
             );
         });
 
+        it("carries the repository's instance from the team's integration", async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue([
+                {
+                    ...mockIntegrationConfig,
+                    configValue: [{ id: '999', http_url: 'https://GitLab-A.example/group/repo.git' }],
+                },
+            ]);
+
+            await useCase.execute({
+                payload: gitlabMergePayload,
+                platformType: PlatformType.GITLAB,
+            });
+
+            expect(kodyIssuesManagementServiceMock.processClosedPr).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: expect.objectContaining({ id: '999', host: 'gitlab-a.example' }),
+                }),
+            );
+        });
+
         it('should clear issues cache after processing', async () => {
             await useCase.execute({
                 payload: gitlabMergePayload,
