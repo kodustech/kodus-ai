@@ -470,6 +470,8 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         repository: Partial<Repository>;
         prNumber: number;
         reason: string;
+        /** Also dismiss Kody's own change requests (GitHub only). */
+        includeChangeRequests?: boolean;
     }): Promise<number>;
 
     addReactionToPR?(params: {

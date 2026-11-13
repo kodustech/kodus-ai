@@ -80,6 +80,13 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                               repository,
                               prNumber,
                               reason: context.approvalDecision.reason,
+                              // A review with no findings and no failures has
+                              // nothing left to ask for: its own earlier change
+                              // request must not outlive the hold.
+                              includeChangeRequests:
+                                  !!lineComments &&
+                                  lineComments.length === 0 &&
+                                  !this.hasReviewFailures(context),
                           },
                       );
                 if (context.approvalDecision.kind === 'hold') {
@@ -184,12 +191,7 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         // — proved with a regression test before this fix (a clean PR with
         // ONLY that error never called approvePullRequest). Every OTHER
         // partial/critical error still blocks, unchanged.
-        const reviewHasFailures = (context.errors ?? []).some(
-            (e) =>
-                e?.metadata?.reason !== SUMMARY_GENERATION_FAILED_REASON &&
-                ((e?.severity ?? 'critical') === 'critical' ||
-                    e?.severity === 'partial'),
-        );
+        const reviewHasFailures = this.hasReviewFailures(context);
 
         // `@kody -v <agent>` runs one custom agent and none of the built-in
         // ones (#2172): finding nothing there says nothing about the PR as a
@@ -320,6 +322,15 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         });
 
         return context;
+    }
+
+    private hasReviewFailures(context: CodeReviewPipelineContext): boolean {
+        return (context.errors ?? []).some(
+            (e) =>
+                e?.metadata?.reason !== SUMMARY_GENERATION_FAILED_REASON &&
+                ((e?.severity ?? 'critical') === 'critical' ||
+                    e?.severity === 'partial'),
+        );
     }
 
     /**

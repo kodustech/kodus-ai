@@ -226,6 +226,55 @@ describe('GithubService', () => {
         expect(dismissReview).toHaveBeenCalledTimes(1);
     });
 
+    it('also dismisses Kody change requests when asked to after a clean review', async () => {
+        const dismissReview = jest.fn().mockResolvedValue({});
+        jest.spyOn(service as any, 'getGithubAuthDetails').mockResolvedValue({
+            org: 'kodustech',
+        });
+        jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue({
+            paginate: jest.fn().mockResolvedValue([
+                {
+                    id: 20,
+                    state: 'CHANGES_REQUESTED',
+                    user: { login: 'kody-ai[bot]', node_id: 'kody-id' },
+                },
+                {
+                    id: 21,
+                    state: 'CHANGES_REQUESTED',
+                    user: { login: 'reviewer', node_id: 'other-id' },
+                },
+            ]),
+            rest: { pulls: { listReviews: jest.fn(), dismissReview } },
+        });
+        jest.spyOn(service as any, 'instanceGraphQL').mockResolvedValue(
+            jest.fn().mockResolvedValue({
+                viewer: { login: 'kody-ai[bot]', id: 'kody-id' },
+            }),
+        );
+        const params = {
+            organizationAndTeamData,
+            repository: { id: 'repo-1', name: 'kodus' },
+            prNumber: 42,
+            reason: 'Sensitive path changed.',
+        };
+
+        await expect(
+            service.dismissOwnPullRequestApprovals(params),
+        ).resolves.toBe(0);
+        expect(dismissReview).not.toHaveBeenCalled();
+
+        await expect(
+            service.dismissOwnPullRequestApprovals({
+                ...params,
+                includeChangeRequests: true,
+            }),
+        ).resolves.toBe(1);
+        expect(dismissReview).toHaveBeenCalledTimes(1);
+        expect(dismissReview).toHaveBeenCalledWith(
+            expect.objectContaining({ review_id: 20, pull_number: 42 }),
+        );
+    });
+
     it('bounds a stalled GitHub approval dismissal and reports unknown state', async () => {
         jest.useFakeTimers();
         try {

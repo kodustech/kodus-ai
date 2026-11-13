@@ -416,6 +416,38 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
     });
 
+    it('also dismisses Kody change requests only when the held review has no findings', async () => {
+        const hold = {
+            kind: 'hold' as const,
+            reason: 'Sensitive path changed.',
+        };
+
+        await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: hold,
+            }),
+        );
+        expect(
+            codeManagement.dismissOwnPullRequestApprovals,
+        ).toHaveBeenLastCalledWith(
+            expect.objectContaining({ includeChangeRequests: true }),
+        );
+
+        await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: hold,
+                lineComments: [{}] as any,
+            }),
+        );
+        expect(
+            codeManagement.dismissOwnPullRequestApprovals,
+        ).toHaveBeenLastCalledWith(
+            expect.objectContaining({ includeChangeRequests: false }),
+        );
+    });
+
     it('dismisses an earlier Kody approval when a new review is outside the approval scope', async () => {
         await stage.execute(
             makeContext({
