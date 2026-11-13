@@ -55,15 +55,23 @@ describe('GetIssuesUseCase — a cached list another process made stale', () => 
         expect(issues.map((i) => i.uuid)).toEqual(['fresh']);
     });
 
-    it('stores the list and when it was read as one entry', async () => {
-        const { useCase, store } = useCaseWith(true);
-        const before = Date.now();
+    it('stores the list and when it was read, taken before the read', async () => {
+        const { useCase, issuesService, store } = useCaseWith(true);
+        const read = issuesService.find.getMockImplementation()!;
+        let readStartedAt = 0;
+        issuesService.find.mockImplementation(async (...args: any[]) => {
+            readStartedAt = Date.now();
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            return read(...args);
+        });
 
         await useCase.execute({} as any);
 
         const entry = store.get(`issues_${org}`) as { issues: any[]; readAt: string };
         expect(entry.issues.map((i) => i.uuid)).toEqual(['fresh']);
-        expect(new Date(entry.readAt).getTime()).toBeGreaterThanOrEqual(before - 1000);
+        // A write during the read is later than readAt, so the next request
+        // reads again.
+        expect(new Date(entry.readAt).getTime()).toBeLessThanOrEqual(readStartedAt);
     });
 
     it('serves the cached list when the check for a later write fails', async () => {
