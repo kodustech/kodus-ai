@@ -152,4 +152,26 @@ describe('GetIssueByIdUseCase — file link', () => {
             expect(details?.prLinks).toEqual([{ label: '7', url: '' }]);
         },
     );
+
+    it("keeps the issue's own URL when the configured one cannot be read", async () => {
+        const useCase = useCaseFor({
+            ...base,
+            repository: {
+                ...base.repository,
+                platform: PlatformType.AZURE_REPOS,
+                url: 'https://dev.azure.com/acme/shop/_git/shop',
+            },
+            source: IssueSource.SECURITY_SCAN,
+            lastSeenCommitSha: 'abc123',
+        });
+        (useCase as any).integrationConfigService.findByOrganizationAndConfigKey = jest.fn(async () => {
+            throw new Error('postgres down');
+        });
+
+        const details = await useCase.execute('i-1');
+
+        expect(details?.fileLink.url).toBe(
+            'https://dev.azure.com/acme/shop/_git/shop?path=/src/orders.controller.ts&version=GCabc123',
+        );
+    });
 });
