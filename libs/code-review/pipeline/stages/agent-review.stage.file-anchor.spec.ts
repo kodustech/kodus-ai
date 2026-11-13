@@ -376,4 +376,54 @@ describe('a kody_rules finding with a line but no file goes PR-level, not discar
             /:0/,
         );
     });
+
+    // #2420: the file IS in the PR and has a real patch, but the rule cited no
+    // line (a rule about the PR itself, such as the title). The anchor pass
+    // used to fill in the file's first hunk, so the PR-level routing below saw
+    // a line and posted the finding inline on an unrelated changed line.
+    it('keeps a line-less finding on a file with a real patch at PR level instead of snapping it to the first hunk', async () => {
+        const result = await run([
+            ruleFinding({
+                relevantLinesStart: undefined,
+                relevantLinesEnd: undefined,
+                brokenKodyRulesIds: ['rule-about-the-pr'],
+                oneSentenceSummary:
+                    'PR title does not follow the required scope pattern',
+            }),
+        ]);
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(inlineSuggestionsOf(result)).toEqual([]);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            '`src/user.ts`',
+        );
+        // The snap would have cited the first hunk (line 10); no line was given.
+        expect(result.validSuggestionsByPR[0].suggestionContent).not.toMatch(
+            /src\/user\.ts:/,
+        );
+    });
+
+    // The input that made the first revision's `!isFileAnchored` exemption
+    // wrong: a rule that declared it needs enclosing scope, citing no line at
+    // all, on a file with a real patch. Snapping filled in the first hunk, so
+    // the finding posted inline on a line it never cited.
+    it('routes a line-less finding from a context-needing rule to PR level, not to the first hunk', async () => {
+        const result = await run([
+            ruleFinding({
+                relevantFile: 'src/user.ts',
+                relevantLinesStart: undefined,
+                relevantLinesEnd: undefined,
+                brokenKodyRulesIds: [CONTEXT_RULE],
+            }),
+        ]);
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(inlineSuggestionsOf(result)).toEqual([]);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            '`src/user.ts`',
+        );
+        expect(result.validSuggestionsByPR[0].suggestionContent).not.toMatch(
+            /src\/user\.ts:/,
+        );
+    });
 });

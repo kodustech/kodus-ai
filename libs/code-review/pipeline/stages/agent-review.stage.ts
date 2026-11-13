@@ -1451,6 +1451,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 context.codeReviewConfig?.kodyRules ?? [],
                 allDiscarded,
                 logIds,
+                new Set(changedFiles.map((f) => f.filename)),
             );
 
             const validatedSuggestions = this.normalizeSuggestionLabels(
@@ -2187,6 +2188,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             teamId?: string;
             prNumber?: number;
         } = {},
+        /**
+         * Files this PR changes, without the ignored ones. Only these reach the
+         * PR-level routing below, so only these may skip the diff snap.
+         */
+        prChangedFileNames: ReadonlySet<string> = new Set(),
     ): Partial<CodeSuggestion>[] {
         // Snap suggestion line numbers to valid diff ranges before passing downstream.
         // GitHub rejects inline comments on lines that aren't part of the diff.
@@ -2219,6 +2225,23 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     return null;
                 }
                 if (!file) return s;
+
+                // A Kody Rule finding that names a file this PR changes without
+                // citing lines is a PR-level finding by intent — see
+                // `isPrLevelSuggestion` below. Snapping it to the file's first
+                // hunk here turned a rule about the PR itself into an inline
+                // comment on an unrelated changed line (#2420). The snap is
+                // kept for ignored files: they never reach that routing map,
+                // so leaving them line-less would produce a broken inline
+                // comment instead of a PR-level one.
+                if (
+                    s.label === 'kody_rules' &&
+                    !s.relevantLinesStart &&
+                    prChangedFileNames.has(s.relevantFile)
+                ) {
+                    return s;
+                }
+
                 const validRanges = extractValidDiffLines(file.patch);
                 const snapped = snapLinesToDiff(s, validRanges);
                 if (snapped === null) {

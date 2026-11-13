@@ -66,12 +66,22 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
         const sorted = [...group].sort(byDetail);
         const keep = { ...sorted[0] };
         const otherLocations: string[] = [];
-        const keptLocation = `${keep.relevantFile}:${keep.relevantLinesStart ?? '?'}-${keep.relevantLinesEnd ?? '?'}`;
+        // A finding with no cited line has no location to name: the previous
+        // `?? '?'` placeholder rendered as `file:?-?` and inflated the merge
+        // count. Those findings are routed PR-level (#2420), so skip them.
+        const locationOf = (s: T): string | null => {
+            const start = s.relevantLinesStart;
+            if (!start) {
+                return null;
+            }
+            return `${s.relevantFile}:${start}-${s.relevantLinesEnd ?? start}`;
+        };
+        const keptLocation = locationOf(keep);
 
         for (let i = 1; i < sorted.length; i++) {
             const dup = sorted[i];
-            const loc = `${dup.relevantFile}:${dup.relevantLinesStart ?? '?'}-${dup.relevantLinesEnd ?? '?'}`;
-            if (loc !== keptLocation && !otherLocations.includes(loc)) {
+            const loc = locationOf(dup);
+            if (loc && loc !== keptLocation && !otherLocations.includes(loc)) {
                 otherLocations.push(loc);
             }
         }
@@ -112,14 +122,25 @@ export function otherLocationsToRender(
         | 'kodyRuleOtherLocations'
     >,
 ): string[] {
+    const start = suggestion.relevantLinesStart;
+    const end = suggestion.relevantLinesEnd;
     const own = new Set([
-        `${suggestion.relevantFile}:${suggestion.relevantLinesStart}-${suggestion.relevantLinesEnd}`,
-        `${suggestion.relevantFile}:${suggestion.relevantLinesStart ?? '?'}-${suggestion.relevantLinesEnd ?? '?'}`,
+        `${suggestion.relevantFile}:${start}-${end}`,
+        `${suggestion.relevantFile}:${start ?? '?'}-${end ?? '?'}`,
+        // mergeKodyRuleFindings renders a start-only range as `start-start`.
+        ...(start != null
+            ? [`${suggestion.relevantFile}:${start}-${start}`]
+            : []),
     ]);
     return [
         ...new Set([
             ...(suggestion.alsoFoundIn || []),
             ...(suggestion.kodyRuleOtherLocations || []),
         ]),
-    ].filter((location) => !own.has(location));
+    ].filter(
+        (location) =>
+            // A finding with no cited line (#2420 routes those PR-level) has no
+            // location to name: `file:?-?` is noise, not a place to look.
+            !location.endsWith(':?-?') && !own.has(location),
+    );
 }
