@@ -24,6 +24,39 @@ const input = {
 
 afterEach(() => jest.clearAllMocks());
 
+it.each([1, 51])(
+    'sends the complete legacy approval diff above 50k characters across %i files',
+    async (fileCount) => {
+        const padding = 'documentation '.repeat(
+            Math.ceil(60_000 / (fileCount * 14)),
+        );
+        const files = Array.from({ length: fileCount }, (_, index) => ({
+            filename: `docs/change-${index}.md`,
+            status: 'added' as const,
+            additions: 2,
+            deletions: 0,
+            patch: `@@ -0,0 +1,2 @@\n+${padding}\n+end-of-file-${index}`,
+        }));
+        jest.mocked(LLM.run).mockResolvedValue({
+            level: 'low',
+            reason: 'The complete documentation diff preserves behavior.',
+        } as any);
+
+        expect(await assessApprovalRisk({ ...input, files })).toMatchObject({
+            level: 'low',
+            reviewedHeadSha: input.headSha,
+        });
+        expect(LLM.run).toHaveBeenCalledTimes(1);
+        const data = JSON.parse(
+            jest.mocked(LLM.run).mock.calls[0][0].user as string,
+        );
+        expect(data.fileCount).toBe(fileCount);
+        expect(data.diff.length).toBeGreaterThan(50_000);
+        expect(data.diff.endsWith(files[fileCount - 1].patch)).toBe(true);
+        expect(data.diffWasTruncated).toBe(false);
+    },
+);
+
 it.each(['low', 'medium', 'high'])(
     'bounds a long %s rationale without invalidating its judgment',
     async (level) => {

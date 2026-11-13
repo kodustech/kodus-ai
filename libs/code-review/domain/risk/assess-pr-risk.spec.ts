@@ -298,13 +298,8 @@ it('does not disclose a provider error or secret in an unavailable result', asyn
     expect(JSON.stringify(result)).not.toContain('private credential');
 });
 
-it.each([
-    { baseSha: '' },
-    { headSha: '' },
-    { files: [] },
-    { files: [{ ...input.files[0], patch: 'x'.repeat(100_001) }] },
-])(
-    'does not call the model for an incomplete or oversized snapshot %j',
+it.each([{ baseSha: '' }, { headSha: '' }, { files: [] }])(
+    'does not call the model for an incomplete snapshot %j',
     async (overrides) => {
         expect(await assessPrRisk({ ...input, ...overrides })).toMatchObject({
             status: 'unavailable',
@@ -312,6 +307,61 @@ it.each([
         expect(LLM.run).not.toHaveBeenCalled();
     },
 );
+
+it.each([1, 51])(
+    'assesses the complete diff above 50k characters across %i files',
+    async (fileCount) => {
+        const padding = 'documentation '.repeat(
+            Math.ceil(60_000 / (fileCount * 14)),
+        );
+        const files = Array.from({ length: fileCount }, (_, index) => ({
+            filename: `docs/change-${index}.md`,
+            status: 'added' as const,
+            additions: 2,
+            deletions: 0,
+            patch: `@@ -0,0 +1,2 @@\n+${padding}\n+end-of-file-${index}`,
+        }));
+        jest.mocked(LLM.run).mockResolvedValue({
+            level: 'low',
+            reason: 'The complete documentation diff preserves behavior.',
+        } as any);
+
+        expect(await assessPrRisk({ ...input, files })).toMatchObject({
+            status: 'assessed',
+            riskIdentified: false,
+        });
+        expect(LLM.run).toHaveBeenCalledTimes(1);
+        const data = JSON.parse(
+            jest.mocked(LLM.run).mock.calls[0][0].user as string,
+        );
+        expect(data.fileCount).toBe(fileCount);
+        expect(data.diff.length).toBeGreaterThan(50_000);
+        expect(data.diff.endsWith(files[fileCount - 1].patch)).toBe(true);
+        expect(data.diffWasTruncated).toBe(false);
+    },
+);
+
+it('keeps a large diff unavailable when the configured model rejects its context', async () => {
+    jest.mocked(LLM.run).mockRejectedValue(
+        new Error('maximum context length exceeded'),
+    );
+    const result = await assessPrRisk({
+        ...input,
+        files: [
+            {
+                ...input.files[0],
+                patch: `@@ -0,0 +1 @@\n+${'documentation '.repeat(5000)}`,
+            },
+        ],
+    });
+
+    expect(LLM.run).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+        status: 'unavailable',
+        failure: { errorName: 'Error' },
+    });
+    expect(riskApprovalVeto(true, result, input.headSha)).toBeTruthy();
+});
 
 it.each([
     { status: 'added', additions: 2500, deletions: 0, patch: undefined },

@@ -27,7 +27,6 @@ export const approvalRiskOutputSchema = z.object({
     reason: z.string().min(8),
 });
 
-const MAX_DIFF_CHARS = 50_000;
 const MAX_REASON_CHARS = 2_000;
 const MAX_AREA_FILES = 100;
 const logger = createLogger('AssessApprovalRisk');
@@ -146,7 +145,6 @@ export async function assessChangeRisk(input: {
         );
     relevantAreas.sort((a, b) => signal(b) - signal(a));
     const diff = buildChangeRiskDiff(input.files);
-    const diffWasTruncated = diff.length > MAX_DIFF_CHARS;
 
     try {
         const result = await LLM.run({
@@ -168,8 +166,8 @@ export async function assessChangeRisk(input: {
                 teamRiskInstructions: input.teamInstructions ?? '',
                 reviewLanguage: input.language ?? 'en-US',
                 fileCount: input.files.length,
-                diffWasTruncated,
-                diff: diff.slice(0, MAX_DIFF_CHARS),
+                diffWasTruncated: false,
+                diff,
                 historicalAreas: relevantAreas.slice(0, MAX_AREA_FILES),
                 areaEvidenceTruncated: input.files.length > MAX_AREA_FILES,
                 historyCoverage: input.areaMap?.coverage ?? null,
