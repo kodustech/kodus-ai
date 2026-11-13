@@ -482,11 +482,28 @@ describe('GitHubPullRequestHandler', () => {
             expect(enqueueCodeReviewJobUseCase.execute).not.toHaveBeenCalled();
         });
 
+        // A rate limit lifts: the click must survive it.
+        it('fails the event, to be retried, when GitHub rate-limits the check of whose request it is', async () => {
+            codeManagementService.isOwnAccount.mockRejectedValue(
+                Object.assign(new Error('rate limited'), {
+                    status: 403,
+                    response: { headers: { 'retry-after': '30' } },
+                }),
+            );
+
+            await expect(
+                handler.execute(
+                    reviewRequested({ requested_reviewer: kody }) as any,
+                ),
+            ).rejects.toThrow('GitHub secondary rate limit');
+            expect(enqueueCodeReviewJobUseCase.execute).not.toHaveBeenCalled();
+        });
+
         // Nearly every review request is for somebody else: one whose owner
-        // cannot be told must not go through the job's retries.
+        // cannot be told, and would not be on a retry, is dropped.
         it('drops the event when it cannot tell whose request it is', async () => {
             codeManagementService.isOwnAccount.mockRejectedValue(
-                new Error('rate limited'),
+                new Error('bad credentials'),
             );
 
             await expect(

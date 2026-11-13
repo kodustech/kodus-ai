@@ -1,4 +1,7 @@
-import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import type {
+    UpdateSuggestionOptions,
+    KodyChangeRequestRecord,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as crypto from 'crypto';
@@ -158,14 +161,14 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         organizationId: string,
         repositoryId: string,
         prNumber: number,
-        request: {
-            requestedAt: string;
-            commentIds: string[];
-            summaryCommentId?: string;
-        },
+        request: KodyChangeRequestRecord,
     ): Promise<boolean> {
         const result = await this.pullRequestsModel.updateOne(
-            { organizationId, 'repository.id': repositoryId, 'number': prNumber },
+            {
+                organizationId,
+                'repository.id': repositoryId,
+                'number': prNumber,
+            },
             {
                 $set: { 'kodyChangeRequest.requestedAt': request.requestedAt },
                 $addToSet: {

@@ -3150,9 +3150,7 @@ export class GithubService
             // The webhook mapper spreads GitHub's repository payload, so
             // `owner` can arrive as the account object instead of its login.
             const rawOwner = repository.owner as
-                | string
-                | { login?: string }
-                | undefined;
+                string | { login?: string } | undefined;
             const owner =
                 (typeof rawOwner === 'string' ? rawOwner : rawOwner?.login) ||
                 (await this.getGithubAuthDetails(organizationAndTeamData))?.org;
@@ -7035,23 +7033,10 @@ This is an experimental feature that generates committable changes. Review the d
             githubAuth,
         );
 
-        const graphQLWithAuth = await this.instanceGraphQL(
+        const viewer = await this.getViewer(
             organizationAndTeamData,
+            githubAuth,
         );
-
-        const query = `
-        query {
-          viewer {
-            login
-            id
-            __typename
-          }
-        }
-      `;
-
-        const userAuth: {
-            viewer: { login: string; id: string };
-        } = await graphQLWithAuth(query);
 
         const allReviews = await octokit.paginate(
             octokit.rest.pulls.listReviews,
@@ -7068,11 +7053,7 @@ This is an experimental feature that generates committable changes. Review the d
         }
 
         const myReviews = allReviews
-            ?.filter(
-                (review) =>
-                    review?.user?.login === userAuth?.viewer?.login &&
-                    review?.user?.node_id === userAuth?.viewer?.id,
-            )
+            ?.filter((review) => this.isViewer(viewer, review?.user))
             ?.sort(
                 (a, b) =>
                     new Date(a.submitted_at).getTime() -
@@ -7134,6 +7115,7 @@ This is an experimental feature that generates committable changes. Review the d
         // and telling so must not cost a GitHub call per review request.
         if (
             githubAuth?.authMode === AuthMode.OAUTH &&
+            githubAuth.installationId &&
             params.account.type !== 'Bot'
         ) {
             return false;

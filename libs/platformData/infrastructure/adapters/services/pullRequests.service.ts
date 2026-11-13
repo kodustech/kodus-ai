@@ -1,4 +1,7 @@
-import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import type {
+    UpdateSuggestionOptions,
+    KodyChangeRequestRecord,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import {
     BulkApplyResult,
     FileBulkOp,
@@ -129,11 +132,7 @@ export class PullRequestsService implements IPullRequestsService {
         organizationId: string,
         repositoryId: string,
         prNumber: number,
-        request: {
-            requestedAt: string;
-            commentIds: string[];
-            summaryCommentId?: string;
-        },
+        request: KodyChangeRequestRecord,
     ): Promise<boolean> {
         return this.pullRequestsRepository.recordKodyChangeRequest(
             organizationId,

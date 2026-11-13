@@ -34,6 +34,13 @@ export interface IApprovalReasonDeliveryFailure {
  * made, so it can be taken back once the findings behind it are resolved,
  * with or without an approval.
  */
+/** A request as it is recorded: one summary at a time, added to the ones on record. */
+export interface KodyChangeRequestRecord {
+    requestedAt: string;
+    commentIds: string[];
+    summaryCommentId?: string;
+}
+
 export interface IKodyChangeRequest {
     /** Of the latest request; a later one replaces it. */
     requestedAt: string;

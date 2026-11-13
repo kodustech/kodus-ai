@@ -1,3 +1,5 @@
+import { classifyGitHubError } from '@libs/core/workflow/domain/errors/classify-github-error';
+import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 import { createLogger } from '@libs/core/log/logger';
 import { EnqueueAstGraphUpdateOnMergedUseCase } from '@libs/code-review/application/use-cases/enqueue-ast-graph-update-on-merged.use-case';
 import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
@@ -203,8 +205,12 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                 return;
             }
         } catch (error) {
-            // Nearly every review request is for somebody else: not knowing
-            // whose this one is must not put the event through the retries.
+            // A rate limit lifts: the event goes back to the queue, so the
+            // click is not lost.
+            const classified = classifyGitHubError(error);
+            if (isRateLimitError(classified)) throw classified;
+            // Anything else would fail the same way again, and nearly every
+            // review request is for somebody else.
             this.logger.warn({
                 message: `Could not tell whether the review requested on PR#${prNumber} is for Kody`,
                 context: GitHubPullRequestHandler.name,

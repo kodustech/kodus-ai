@@ -74,20 +74,8 @@ export class OwnChangeRequestService {
                 changeRequest.requestedAt,
             );
 
-        // GitLab keeps no review state for it: there the request is the
-        // summary discussion alone.
-        const hasReviewState = platformType !== PlatformType.GITLAB;
-        if (hasReviewState) {
-            const status =
-                await this.codeManagement.getReviewStatusByPullRequest(request);
-            if (status === null) return false;
-            if (status !== PullRequestReviewState.CHANGES_REQUESTED) {
-                // Kody approved since, or somebody dismissed the review.
-                await forget();
-                return false;
-            }
-        }
-
+        // Read first: while a finding is open, which is how most passes find a
+        // request, this is the only call the host gets.
         const comments =
             platformType === PlatformType.GITHUB
                 ? await this.codeManagement.getPullRequestReviewThreads(
@@ -100,7 +88,11 @@ export class OwnChangeRequestService {
                   );
         if (
             !Array.isArray(comments) ||
-            hasOpenFinding(changeRequest.commentIds ?? [], comments, platformType)
+            hasOpenFinding(
+                changeRequest.commentIds ?? [],
+                comments,
+                platformType,
+            )
         ) {
             return false;
         }
@@ -109,18 +101,35 @@ export class OwnChangeRequestService {
         // over a finding this reading of the request does not hold.
         if (
             (await input.isReviewRunning()) ||
-            !(await this.isStillTheRequest(organizationAndTeamData, pullRequest))
+            !(await this.isStillTheRequest(
+                organizationAndTeamData,
+                pullRequest,
+            ))
         ) {
             return false;
         }
 
-        if (hasReviewState) {
-            await this.codeManagement.dismissOwnPullRequestChangeRequests(
-                { ...request, reason: OWN_CHANGE_REQUEST_WITHDRAWN_REASON },
-                platformType,
-            );
+        // GitLab keeps no review state for it: there the request is the
+        // summary discussion alone.
+        let dismissed = false;
+        if (platformType !== PlatformType.GITLAB) {
+            const status =
+                await this.codeManagement.getReviewStatusByPullRequest(
+                    request,
+                    platformType,
+                );
+            if (status === null) return false;
+            // Otherwise Kody approved since, or somebody dismissed the review.
+            if (status === PullRequestReviewState.CHANGES_REQUESTED) {
+                await this.codeManagement.dismissOwnPullRequestChangeRequests(
+                    { ...request, reason: OWN_CHANGE_REQUEST_WITHDRAWN_REASON },
+                    platformType,
+                );
+                dismissed = true;
+            }
         }
-        for (const commentId of changeRequest.summaryCommentIds ?? []) {
+        const summaryCommentIds = changeRequest.summaryCommentIds ?? [];
+        for (const commentId of summaryCommentIds) {
             await this.codeManagement.markReviewCommentAsResolved(
                 { ...request, commentId },
                 platformType,
@@ -128,17 +137,20 @@ export class OwnChangeRequestService {
         }
         await forget();
 
-        this.logger.log({
-            message: `Withdrew Kody's change request on PR#${prNumber}: its critical findings are resolved`,
-            context: OwnChangeRequestService.name,
-            metadata: {
-                organizationAndTeamData,
-                repositoryId: repository.id,
-                prNumber,
-                platformType,
-            },
-        });
-        return true;
+        const withdrawn = dismissed || summaryCommentIds.length > 0;
+        if (withdrawn) {
+            this.logger.log({
+                message: `Withdrew Kody's change request on PR#${prNumber}: its critical findings are resolved`,
+                context: OwnChangeRequestService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository.id,
+                    prNumber,
+                    platformType,
+                },
+            });
+        }
+        return withdrawn;
     }
 
     private async isStillTheRequest(

@@ -78,7 +78,9 @@ describe('OwnChangeRequestService', () => {
         expect(
             codeManagement.dismissOwnPullRequestChangeRequests,
         ).not.toHaveBeenCalled();
-        expect(codeManagement.markReviewCommentAsResolved).not.toHaveBeenCalled();
+        expect(
+            codeManagement.markReviewCommentAsResolved,
+        ).not.toHaveBeenCalled();
         expect(pullRequests.clearKodyChangeRequest).not.toHaveBeenCalled();
     };
 
@@ -94,7 +96,9 @@ describe('OwnChangeRequestService', () => {
                 { ...request, reason: OWN_CHANGE_REQUEST_WITHDRAWN_REASON },
                 PlatformType.GITHUB,
             );
-            expect(built.pullRequests.clearKodyChangeRequest).toHaveBeenCalledWith(
+            expect(
+                built.pullRequests.clearKodyChangeRequest,
+            ).toHaveBeenCalledWith(
                 'org-1',
                 'repo-1',
                 7,
@@ -106,7 +110,7 @@ describe('OwnChangeRequestService', () => {
             PullRequestReviewState.APPROVED,
             PullRequestReviewState.DISMISSED,
         ])(
-            'forgets a request the host no longer shows, without touching the host (%s)',
+            'forgets a request the host no longer shows, dismissing nothing (%s)',
             async (status) => {
                 const built = build(status);
 
@@ -116,11 +120,50 @@ describe('OwnChangeRequestService', () => {
                     built.pullRequests.clearKodyChangeRequest,
                 ).toHaveBeenCalledTimes(1);
                 expect(
-                    built.codeManagement.getPullRequestReviewThreads,
-                ).not.toHaveBeenCalled();
-                expect(
                     built.codeManagement.dismissOwnPullRequestChangeRequests,
                 ).not.toHaveBeenCalled();
+            },
+        );
+
+        // Kody approved since: the vote is gone, the summary thread is not.
+        it('still resolves the summary of a request the host no longer shows', async () => {
+            const built = build(PullRequestReviewState.APPROVED);
+            const pullRequest = marked(PlatformType.AZURE_REPOS, {
+                summaryCommentIds: ['77'],
+            });
+            built.codeManagement.getPullRequestReviewComments.mockResolvedValue(
+                [{ threadId: 11, isResolved: true }],
+            );
+            built.pullRequests.findOpenPullRequestsWithKodyChangeRequest.mockResolvedValue(
+                [pullRequest],
+            );
+
+            await expect(built.run(pullRequest)).resolves.toBe(true);
+
+            expect(
+                built.codeManagement.dismissOwnPullRequestChangeRequests,
+            ).not.toHaveBeenCalled();
+            expect(
+                built.codeManagement.markReviewCommentAsResolved,
+            ).toHaveBeenCalledWith(
+                { ...request, commentId: '77' },
+                PlatformType.AZURE_REPOS,
+            );
+            expect(
+                built.pullRequests.clearKodyChangeRequest,
+            ).toHaveBeenCalledTimes(1);
+        });
+
+        // Nothing on record to check the request against is not "all resolved".
+        it.each([[[]], [undefined]])(
+            'keeps a request with no comment on record (%p)',
+            async (commentIds) => {
+                const built = build();
+
+                await expect(
+                    built.run(marked(PlatformType.GITHUB, { commentIds })),
+                ).resolves.toBe(false);
+                expectKept(built);
             },
         );
 
@@ -140,6 +183,10 @@ describe('OwnChangeRequestService', () => {
             await expect(built.run()).resolves.toBe(false);
             expectKept(built);
             expect(built.isReviewRunning).not.toHaveBeenCalled();
+            // The comments are all the host is asked for while one is open.
+            expect(
+                built.codeManagement.getReviewStatusByPullRequest,
+            ).not.toHaveBeenCalled();
         });
 
         it('keeps the request when the host does not answer with its comments', async () => {
@@ -214,7 +261,9 @@ describe('OwnChangeRequestService', () => {
             );
 
             await expect(built.run()).rejects.toBe(refused);
-            expect(built.pullRequests.clearKodyChangeRequest).not.toHaveBeenCalled();
+            expect(
+                built.pullRequests.clearKodyChangeRequest,
+            ).not.toHaveBeenCalled();
         });
 
         it('resolves the summary the host kept open next to the request', async () => {

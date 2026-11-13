@@ -299,7 +299,10 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     getCloneParams(params: any): Promise<GitCloneParams>;
     mergePullRequest(params: any): Promise<any>;
     approvePullRequest(params: any): Promise<any>;
-    requestChangesPullRequest(params: any): Promise<any>;
+    /** Hands back the summary comment the host keeps open next to the request, where it leaves one. */
+    requestChangesPullRequest(
+        params: any,
+    ): Promise<{ summaryCommentId?: string } | null | void>;
 
     getAllCommentsInPullRequest(params: any): Promise<any[]>;
 

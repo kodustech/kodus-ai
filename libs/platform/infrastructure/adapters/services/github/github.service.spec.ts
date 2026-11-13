@@ -262,6 +262,13 @@ describe('GithubService', () => {
 
         it('takes a person for somebody else without asking GitHub when installed as an App', async () => {
             const instanceGraphQL = stub(AuthMode.OAUTH);
+            jest.spyOn(
+                service as any,
+                'getGithubAuthDetails',
+            ).mockResolvedValue({
+                authMode: AuthMode.OAUTH,
+                installationId: '123',
+            });
 
             await expect(
                 service.isOwnAccount({
@@ -272,25 +279,45 @@ describe('GithubService', () => {
             expect(instanceGraphQL).not.toHaveBeenCalled();
         });
 
+        // Without an installation the credentials are not the App's bot:
+        // only GitHub can say who they act as.
+        it('asks GitHub about a person when the credentials carry no installation', async () => {
+            const instanceGraphQL = stub(AuthMode.OAUTH);
+
+            await expect(
+                service.isOwnAccount({
+                    organizationAndTeamData,
+                    account: { ...kody, type: 'User' },
+                }),
+            ).resolves.toBe(true);
+            expect(instanceGraphQL).toHaveBeenCalled();
+        });
+
         it('asks GitHub, with the credentials it already read, who it is acting as', async () => {
             const auth = { authMode: AuthMode.TOKEN };
             const graphql = jest.fn().mockResolvedValue({
                 viewer: { login: 'kody-ai[bot]', id: 'kody-id' },
             });
-            jest.spyOn(service as any, 'getGithubAuthDetails').mockResolvedValue(
-                auth,
-            );
+            jest.spyOn(
+                service as any,
+                'getGithubAuthDetails',
+            ).mockResolvedValue(auth);
             const instanceGraphQL = jest
                 .spyOn(service as any, 'instanceGraphQL')
                 .mockResolvedValue(graphql);
 
-            await service.isOwnAccount({ organizationAndTeamData, account: kody });
+            await service.isOwnAccount({
+                organizationAndTeamData,
+                account: kody,
+            });
 
             expect(instanceGraphQL).toHaveBeenCalledWith(
                 organizationAndTeamData,
                 auth,
             );
-            expect(graphql).toHaveBeenCalledWith('query { viewer { login id } }');
+            expect(graphql).toHaveBeenCalledWith(
+                'query { viewer { login id } }',
+            );
         });
 
         it('checks a person when Kody acts with a personal token', async () => {
@@ -362,18 +389,21 @@ describe('GithubService', () => {
     it.each([
         ['dismissOwnPullRequestChangeRequests', 'change request'],
         ['dismissOwnPullRequestApprovals', 'approval'],
-    ] as const)('%s names what it could not dismiss without a repository', async (method, what) => {
-        await expect(
-            service[method]({
-                organizationAndTeamData,
-                repository: { id: 'repo-1' },
-                prNumber: 42,
-                reason: 'Resolved.',
-            }),
-        ).rejects.toThrow(
-            `Repository and PR number are required to dismiss ${what}`,
-        );
-    });
+    ] as const)(
+        '%s names what it could not dismiss without a repository',
+        async (method, what) => {
+            await expect(
+                service[method]({
+                    organizationAndTeamData,
+                    repository: { id: 'repo-1' },
+                    prNumber: 42,
+                    reason: 'Resolved.',
+                }),
+            ).rejects.toThrow(
+                `Repository and PR number are required to dismiss ${what}`,
+            );
+        },
+    );
 
     it('reports a change request the host refused to dismiss', async () => {
         const refused = Object.assign(new Error('Forbidden'), { status: 403 });

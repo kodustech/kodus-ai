@@ -1,4 +1,7 @@
-import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import type {
+    UpdateSuggestionOptions,
+    KodyChangeRequestRecord,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -267,11 +270,7 @@ export interface IPullRequestsRepository {
         organizationId: string,
         repositoryId: string,
         prNumber: number,
-        request: {
-            requestedAt: string;
-            commentIds: string[];
-            summaryCommentId?: string;
-        },
+        request: KodyChangeRequestRecord,
     ): Promise<boolean>;
     /**
      * Forgets the request read at `requestedAt`. One made since then stays:

@@ -3514,9 +3514,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             }
         });
 
-        it('reads the list once for the teams of one organization', async () => {
-            // An open finding: the pass stops before re-reading the request.
-            const { cron, deps } = setUp(['c2']);
+        /** Two teams of one organization that review the same repositories. */
+        const shareRepositories = (
+            deps: ReturnType<typeof makeCron>['deps'],
+        ) => {
             deps.teamService.findTeamsWithIntegrations.mockResolvedValue([
                 { uuid: 'team-1', organization: { uuid: 'org-1' } },
                 { uuid: 'team-2', organization: { uuid: 'org-1' } },
@@ -3535,6 +3536,12 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                     },
                 ],
             );
+        };
+
+        it('judges a PR once when two teams of its organization review the repository', async () => {
+            // An open finding: the pass stops before re-reading the request.
+            const { cron, deps, service } = setUp(['c2']);
+            shareRepositories(deps);
 
             await cron.handleCron();
 
@@ -3542,9 +3549,49 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 deps.pullRequestService
                     .findOpenPullRequestsWithKodyChangeRequest,
             ).toHaveBeenCalledTimes(1);
-            // Each team still judges the PRs of its own repositories.
+            expect(service.getPullRequestReviewComments).toHaveBeenCalledTimes(
+                1,
+            );
+        });
+
+        it('keeps it while a review of the PR is running for the other team', async () => {
+            const { cron, deps, host } = setUp(['c1']);
+            shareRepositories(deps);
+            const running = jest
+                .spyOn(cron as any, 'hasInProgressReviewExecution')
+                .mockImplementation(
+                    async ({ teamAutomationId }: any) =>
+                        teamAutomationId === 'ta-team-2',
+                );
+
+            await cron.handleCron();
+
+            expect(running).toHaveBeenCalledWith(
+                expect.objectContaining({ teamAutomationId: 'ta-team-1' }),
+            );
+            expect(host.kodyReview).toBe(
+                PullRequestReviewState.CHANGES_REQUESTED,
+            );
+        });
+
+        it('forgets a refusal once the PR leaves the list, and asks again at once if it comes back', async () => {
+            const { cron, deps, service } = setUp(['c1']);
+            service.dismissOwnPullRequestChangeRequests.mockRejectedValue(
+                new Error('403'),
+            );
+            const list =
+                deps.pullRequestService
+                    .findOpenPullRequestsWithKodyChangeRequest;
+
+            await cron.handleCron();
+            list.mockResolvedValue([]);
+            await cron.handleCron();
+            expect((cron as any).changeRequestRefusals.size).toBe(0);
+
+            list.mockResolvedValue([marked()]);
+            await cron.handleCron();
             expect(
-                deps.codeManagementService.getReviewStatusByPullRequest,
+                service.dismissOwnPullRequestChangeRequests,
             ).toHaveBeenCalledTimes(2);
         });
 

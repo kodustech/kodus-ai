@@ -1,3 +1,4 @@
+import { calculateBackoffIntervalExact } from '@libs/common/utils/polling/exponential-backoff';
 import { usesNamedApprovalPolicies } from '@libs/code-review/domain/approval/migrate-review-settings';
 import { REVIEW_SETTINGS_HOLD_REASON } from '@libs/code-review/domain/approval/unavailable-review-settings';
 import { createLogger } from '@libs/core/log/logger';
@@ -18,7 +19,10 @@ import {
 } from '@libs/code-review/domain/risk/risk-configuration';
 import { ApprovalPoliciesService } from '@libs/code-review/pipeline/services/approval-policies.service';
 import { OwnChangeRequestService } from '@libs/code-review/pipeline/services/own-change-request.service';
-import { hostCommentKey } from '@libs/code-review/domain/approval/own-change-request';
+import {
+    hasOpenFinding,
+    hostCommentKey,
+} from '@libs/code-review/domain/approval/own-change-request';
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 import { isByokConfig, LLM_TASK } from '@libs/llm/byok-config';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
@@ -887,58 +891,15 @@ export class CheckIfPRCanBeApprovedCronProvider {
             // runs after them. Every PR that carries the request is judged
             // here on its own terms: it must stop blocking the merge once
             // the findings behind it are resolved, approved by Kody or not.
-            const changeRequestsByOrganization = new Map<
-                string,
-                Promise<IPullRequestWithKodyChangeRequest[]>
-            >();
-            await Promise.allSettled(
-                teams.map((team) =>
-                    teamLimit(async () => {
-                        const organizationId = team.organization?.uuid;
-                        const repositories = parametersByTeam.get(team.uuid)
-                            ?.configValue?.repositories;
-                        const teamAutomation = teamAutomationsByTeam.get(
-                            team.uuid,
-                        );
-                        if (
-                            !this.ownChangeRequest ||
-                            !organizationId ||
-                            !Array.isArray(repositories) ||
-                            !teamAutomation
-                        ) {
-                            return;
-                        }
-                        // Teams of one organization share its list.
-                        if (!changeRequestsByOrganization.has(organizationId)) {
-                            changeRequestsByOrganization.set(
-                                organizationId,
-                                this.pullRequestService.findOpenPullRequestsWithKodyChangeRequest(
-                                    organizationId,
-                                ),
-                            );
-                        }
-                        const repositoryIds = new Set(
-                            repositories.map((repository) => repository?.id),
-                        );
-                        const pullRequests = (
-                            await changeRequestsByOrganization.get(
-                                organizationId,
-                            )
-                        ).filter((pr) => repositoryIds.has(pr.repository?.id));
-                        await Promise.allSettled(
-                            pullRequests.map((pr) =>
-                                prLimit(() =>
-                                    this.withdrawResolvedChangeRequest(
-                                        { organizationId, teamId: team.uuid },
-                                        pr,
-                                        teamAutomation.uuid,
-                                    ),
-                                ),
-                            ),
-                        );
-                    }),
-                ),
-            );
+            if (this.ownChangeRequest) {
+                await this.withdrawResolvedChangeRequests(
+                    teams,
+                    parametersByTeam,
+                    teamAutomationsByTeam,
+                    teamLimit,
+                    prLimit,
+                );
+            }
         } catch (error) {
             this.logger.error({
                 message: 'Error checking if PR can be approved generator cron',
@@ -963,17 +924,102 @@ export class CheckIfPRCanBeApprovedCronProvider {
         }
     }
 
+    /** When a refused withdrawal is tried again, by organization, repository and PR. */
     private readonly changeRequestRefusals = new Map<
         string,
         { until: number; count: number }
     >();
 
+    private async withdrawResolvedChangeRequests(
+        teams: Array<{ uuid: string; organization?: { uuid?: string } }>,
+        parametersByTeam: Map<
+            string,
+            { configValue?: { repositories?: Array<{ id?: string }> } }
+        >,
+        teamAutomationsByTeam: Map<string, { uuid: string }>,
+        teamLimit: <T>(task: () => Promise<T>) => Promise<T>,
+        prLimit: <T>(task: () => Promise<T>) => Promise<T>,
+    ): Promise<void> {
+        // A repository may be reviewed by more than one team of its
+        // organization: its PR is still judged once, against the reviews of
+        // every one of them.
+        const reviewersByRepository = new Map<
+            string,
+            { teamId: string; teamAutomationId: string }[]
+        >();
+        const organizationIds = new Set<string>();
+        for (const team of teams) {
+            const organizationId = team.organization?.uuid;
+            const repositories = parametersByTeam.get(team.uuid)?.configValue
+                ?.repositories;
+            const teamAutomation = teamAutomationsByTeam.get(team.uuid);
+            if (
+                !organizationId ||
+                !Array.isArray(repositories) ||
+                !teamAutomation
+            ) {
+                continue;
+            }
+            organizationIds.add(organizationId);
+            for (const repository of repositories) {
+                const key = `${organizationId}:${repository?.id}`;
+                const reviewers = reviewersByRepository.get(key) ?? [];
+                reviewers.push({
+                    teamId: team.uuid,
+                    teamAutomationId: teamAutomation.uuid,
+                });
+                reviewersByRepository.set(key, reviewers);
+            }
+        }
+
+        const listed = new Set<string>();
+        await Promise.allSettled(
+            [...organizationIds].map((organizationId) =>
+                teamLimit(async () => {
+                    const pullRequests =
+                        await this.pullRequestService.findOpenPullRequestsWithKodyChangeRequest(
+                            organizationId,
+                        );
+                    await Promise.allSettled(
+                        pullRequests.map((pullRequest) => {
+                            const repositoryKey = `${organizationId}:${pullRequest.repository?.id}`;
+                            const reviewers =
+                                reviewersByRepository.get(repositoryKey);
+                            if (!reviewers) return undefined;
+                            const key = `${repositoryKey}:${pullRequest.number}`;
+                            listed.add(key);
+                            return prLimit(() =>
+                                this.withdrawResolvedChangeRequest(
+                                    key,
+                                    {
+                                        organizationId,
+                                        teamId: reviewers[0].teamId,
+                                    },
+                                    pullRequest,
+                                    reviewers.map(
+                                        (reviewer) => reviewer.teamAutomationId,
+                                    ),
+                                ),
+                            );
+                        }),
+                    );
+                }),
+            ),
+        );
+
+        // A PR that left the list (closed, withdrawn, approved) has nothing
+        // left to wait for.
+        for (const key of this.changeRequestRefusals.keys()) {
+            if (!listed.has(key)) this.changeRequestRefusals.delete(key);
+        }
+    }
+
     private async withdrawResolvedChangeRequest(
+        key: string,
         organizationAndTeamData: OrganizationAndTeamData,
         pullRequest: IPullRequestWithKodyChangeRequest,
-        teamAutomationId: string,
+        teamAutomationIds: string[],
     ): Promise<void> {
-        const key = `${organizationAndTeamData.organizationId}:${pullRequest.repository?.id}:${pullRequest.number}`;
         const refusal = this.changeRequestRefusals.get(key);
         if (refusal && refusal.until > Date.now()) {
             return;
@@ -985,12 +1031,19 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     pullRequest,
                     // A review still running may be about to request changes
                     // over a finding this pass has not seen.
-                    isReviewRunning: () =>
-                        this.hasInProgressReviewExecution({
-                            teamAutomationId,
-                            pullRequestNumber: pullRequest.number,
-                            repositoryId: pullRequest.repository?.id,
-                        }),
+                    isReviewRunning: async () =>
+                        (
+                            await Promise.all(
+                                teamAutomationIds.map((teamAutomationId) =>
+                                    this.hasInProgressReviewExecution({
+                                        teamAutomationId,
+                                        pullRequestNumber: pullRequest.number,
+                                        repositoryId:
+                                            pullRequest.repository?.id,
+                                    }),
+                                ),
+                            )
+                        ).some(Boolean),
                 }),
                 CHANGE_REQUEST_WITHDRAWAL_TIMEOUT_MS,
                 'change request withdrawal',
@@ -998,10 +1051,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
             this.changeRequestRefusals.delete(key);
         } catch (error) {
             const count = (refusal?.count ?? 0) + 1;
-            const wait = Math.min(
-                CHANGE_REQUEST_REFUSAL_BACKOFF_MS * 4 ** (count - 1),
-                CHANGE_REQUEST_REFUSAL_BACKOFF_MAX_MS,
-            );
+            const wait = calculateBackoffIntervalExact(count - 1, {
+                baseInterval: CHANGE_REQUEST_REFUSAL_BACKOFF_MS,
+                maxInterval: CHANGE_REQUEST_REFUSAL_BACKOFF_MAX_MS,
+                multiplier: 4,
+            });
             this.changeRequestRefusals.set(key, {
                 until: Date.now() + wait,
                 count,
@@ -1164,21 +1218,14 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 );
                 if (!Array.isArray(comments))
                     return hold('Review findings remain unresolved.');
-                const commentsById = new Map<
-                    string,
-                    (typeof comments)[number]
-                >();
-                for (const comment of comments) {
-                    const id = hostCommentKey(comment, platformType);
-                    if (id && !commentsById.has(id))
-                        commentsById.set(id, comment);
-                }
                 if (
-                    pr.suggestions.some((suggestion) => {
-                        const id = suggestion.comment?.id;
-                        const comment = commentsById.get(String(id));
-                        return !id || comment?.isResolved !== true;
-                    })
+                    hasOpenFinding(
+                        pr.suggestions.map((suggestion) =>
+                            String(suggestion.comment?.id),
+                        ),
+                        comments,
+                        platformType,
+                    )
                 )
                     return hold('Review findings remain unresolved.');
             }

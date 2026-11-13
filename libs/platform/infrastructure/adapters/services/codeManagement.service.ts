@@ -1774,14 +1774,15 @@ export class CodeManagementService implements ICodeManagementService {
         return codeManagementService.isDraftPullRequest(params);
     }
 
-    async getReviewStatusByPullRequest(params: {
-        organizationAndTeamData: OrganizationAndTeamData;
-        repository: Partial<Repository>;
-        prNumber: number;
-    }): Promise<PullRequestReviewState | null> {
-        const type = await this.getTypeIntegration(
-            params.organizationAndTeamData,
-        );
+    async getReviewStatusByPullRequest(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: Partial<Repository>;
+            prNumber: number;
+        },
+        type?: PlatformType,
+    ): Promise<PullRequestReviewState | null> {
+        type ??= await this.getTypeIntegration(params.organizationAndTeamData);
 
         if (!type) {
             return null;

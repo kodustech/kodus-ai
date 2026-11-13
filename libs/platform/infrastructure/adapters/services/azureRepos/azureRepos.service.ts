@@ -1035,20 +1035,7 @@ export class AzureReposService implements Omit<
         prNumber: number;
         reason: string;
     }): Promise<number> {
-        const { organizationAndTeamData, repository, prNumber } = params;
-        const state = await this.getReviewStatusByPullRequest({
-            organizationAndTeamData,
-            repository,
-            prNumber,
-        });
-        if (state === null) {
-            throw new Error(
-                `Could not read Kody's approval on PR #${prNumber}`,
-            );
-        }
-        if (state !== PullRequestReviewState.APPROVED) return 0;
-        await this.resetOwnVote(organizationAndTeamData, repository, prNumber);
-        return 1;
+        return this.resetOwnVoteWhen(params, PullRequestReviewState.APPROVED);
     }
 
     /** A reject vote (-10) is what `requestChangesPullRequest` leaves. */
@@ -1058,6 +1045,21 @@ export class AzureReposService implements Omit<
         prNumber: number;
         reason: string;
     }): Promise<number> {
+        return this.resetOwnVoteWhen(
+            params,
+            PullRequestReviewState.CHANGES_REQUESTED,
+        );
+    }
+
+    /** Answers how many votes it reset: Kody has one vote on a PR. */
+    private async resetOwnVoteWhen(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: Partial<Repository>;
+            prNumber: number;
+        },
+        expected: PullRequestReviewState,
+    ): Promise<number> {
         const { organizationAndTeamData, repository, prNumber } = params;
         const state = await this.getReviewStatusByPullRequest({
             organizationAndTeamData,
@@ -1067,7 +1069,7 @@ export class AzureReposService implements Omit<
         if (state === null) {
             throw new Error(`Could not read Kody's vote on PR #${prNumber}`);
         }
-        if (state !== PullRequestReviewState.CHANGES_REQUESTED) return 0;
+        if (state !== expected) return 0;
         await this.resetOwnVote(organizationAndTeamData, repository, prNumber);
         return 1;
     }
