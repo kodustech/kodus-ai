@@ -68,6 +68,22 @@ export interface OpenScanFindingArea {
     vulnerabilityClass: string;
 }
 
+/**
+ * An open scan finding as a later scan compares a fresh one with: the same
+ * bug found again keeps this identity, whichever place the new scan's dedup
+ * would have kept.
+ */
+export interface OpenScanFinding extends OpenScanFindingArea {
+    fingerprint: string;
+    title: string;
+    description: string;
+    severity: string;
+    cwe?: string;
+    startLine: number;
+    endLine: number;
+    attackPath?: { file: string; line: number; note: string }[];
+}
+
 export interface ResolveUnseenScanFindingsParams extends ScanRepositoryScope {
     scanId: string;
     /**
@@ -152,6 +168,11 @@ export interface IIssuesRepository {
     findOpenScanFindingAreas(
         params: ScanRepositoryScope,
     ): Promise<OpenScanFindingArea[]>;
+
+    /** The repository's open scan findings, with what identifies each. */
+    findOpenScanFindings(
+        params: ScanRepositoryScope,
+    ): Promise<OpenScanFinding[]>;
 
     /**
      * Marks the repository's open scan findings with these fingerprints as

@@ -7,6 +7,7 @@ import {
     IIssuesRepository,
     ISSUES_REPOSITORY_TOKEN,
     MarkScanFindingsSeenParams,
+    OpenScanFinding,
     OpenScanFindingArea,
     ResolveUnseenScanFindingsParams,
     ScanRepositoryScope,
@@ -154,6 +155,12 @@ export class IssuesService implements IIssuesService {
         params: ScanRepositoryScope,
     ): Promise<OpenScanFindingArea[]> {
         return this.issuesRepository.findOpenScanFindingAreas(params);
+    }
+
+    async findOpenScanFindings(
+        params: ScanRepositoryScope,
+    ): Promise<OpenScanFinding[]> {
+        return this.issuesRepository.findOpenScanFindings(params);
     }
 
     async markScanFindingsSeen(
