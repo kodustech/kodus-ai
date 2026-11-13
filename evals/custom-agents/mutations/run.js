@@ -31,6 +31,7 @@ const args = Object.fromEntries(
 const MODEL = args.model || 'deepseek-v4-flash@fireworks';
 
 const SPEC = {
+    architectureTemplate: 'evals/custom-agents/architecture-template.spec.ts',
     provider:
         'libs/code-review/infrastructure/agents/providers/custom-agent.provider.spec.ts',
     prompt: 'libs/code-review/infrastructure/agents/prompts/prompt-builder.custom-agent.spec.ts',
@@ -66,6 +67,7 @@ const MODEL_CASES = {
     P2: 'money-float-tax,api-error-leak,api-only-general-bug',
     P11: 'guide-skill-violated,guide-doc-violated-among-other-changes,guide-near-miss',
     P12: 'instructions-rule-violated,instructions-rule-followed',
+    P13: 'architecture-domain-imports-http,architecture-controller-maps-input,architecture-logic-in-controller,architecture-controller-delegates,architecture-shared-imports-controller,architecture-shared-component-uses-ui-primitive',
 };
 
 const MUTATIONS = [
@@ -172,6 +174,15 @@ const MUTATIONS = [
         checks: [
             { jest: [SPEC.instructionQuote, SPEC.instructionRouting] },
             { model: MODEL_CASES.P12 },
+        ],
+    },
+    {
+        property: 'P13',
+        patch: 'P13-architecture-direction-rule-dropped.patch',
+        break: 'the Architecture template loses its dependency-direction rule, so an agent saved from it no longer names a domain module that depends on the web layer',
+        checks: [
+            { jest: [SPEC.architectureTemplate] },
+            { model: MODEL_CASES.P13 },
         ],
     },
 ];

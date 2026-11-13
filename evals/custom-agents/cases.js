@@ -15,6 +15,9 @@
 //       on the local sandbox too (guide-cases.js)
 //   P12 with repository instructions on, an agent posts a rule quoted from
 //       CLAUDE.md or AGENTS.md (instruction-cases.js)
+//   P13 the built-in Architecture template, saved unchanged, flags what its
+//       rules name and stays quiet on the same code written right
+//       (architecture-cases.js)
 //
 // A case is a pull request: `repo` is every file at the PR's head, `before` the
 // files the PR changed as they were (null = added). `team` is what the team
@@ -628,5 +631,6 @@ export const migration: Migration = {
 
 CASES.push(...require('./guide-cases').GUIDE_CASES);
 CASES.push(...require('./instruction-cases').INSTRUCTION_CASES);
+CASES.push(...require('./architecture-cases').ARCHITECTURE_CASES);
 
 module.exports = { CASES };
