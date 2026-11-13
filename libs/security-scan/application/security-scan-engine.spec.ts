@@ -910,6 +910,37 @@ describe('SecurityScanEngine', () => {
         ).rejects.toThrow('could not be put back');
     });
 
+    it('stops the scan as unverified, not tampered, when the checkout cannot be read after a test', async () => {
+        const sandbox = fakeSandbox('e2b');
+        const run = sandbox.run.getMockImplementation()!;
+        let ran = false;
+        sandbox.run.mockImplementation(async (command: string) => {
+            if (command.includes('npx jest')) {
+                ran = true;
+                return { stdout: 'PASS', exitCode: 0 };
+            }
+            if (command.startsWith("stat -c '%d:%i'") && ran) {
+                return { stdout: '', stderr: 'no such file', exitCode: 1 };
+            }
+            return run(command);
+        });
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        await expect(
+            engine.run({
+                ...baseParams({ reproduce: true }),
+                sandbox,
+                meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            } as any),
+        ).rejects.toThrow('could not be verified');
+    });
+
     it('writes no test where it could not check that the path is free', async () => {
         const sandbox = fakeSandbox('e2b');
         const run = sandbox.run.getMockImplementation()!;

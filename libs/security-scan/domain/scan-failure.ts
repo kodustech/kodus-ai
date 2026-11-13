@@ -15,3 +15,6 @@ export const SCAN_NO_PROGRESS_MESSAGE =
 
 export const SCAN_CHECKOUT_TAMPERED_MESSAGE =
     'A reproduction test changed the repository checkout and it could not be put back, so the scan stopped instead of reading changed code. Run the scan again.';
+
+export const SCAN_CHECKOUT_UNVERIFIED_MESSAGE =
+    'After a reproduction test, the repository checkout could not be verified, so the scan stopped instead of reading code it could not vouch for. Run the scan again.';

@@ -48,6 +48,7 @@ import {
 import { admitFindingPath } from '../domain/finding-path';
 import {
     SCAN_CHECKOUT_TAMPERED_MESSAGE,
+    SCAN_CHECKOUT_UNVERIFIED_MESSAGE,
     SCAN_MAP_FAILED_MESSAGE,
     ScanFailure,
 } from '../domain/scan-failure';
@@ -1467,10 +1468,15 @@ export class SecurityScanEngine {
 
         // The path still leads to the locked checkout, not to a tree put in
         // its place; nothing at it can be trusted, or put back, otherwise.
-        if (
-            !this.auditIdentity ||
-            (await this.identityOf(sandbox)) !== this.auditIdentity
-        ) {
+        // Unread, it could not be verified; read and different, it was
+        // swapped. Either way nothing there is read on.
+        const identity = this.auditIdentity
+            ? await this.identityOf(sandbox)
+            : undefined;
+        if (identity === undefined) {
+            throw new ScanFailure(SCAN_CHECKOUT_UNVERIFIED_MESSAGE);
+        }
+        if (identity !== this.auditIdentity) {
             throw new ScanFailure(SCAN_CHECKOUT_TAMPERED_MESSAGE);
         }
         const found = await unchanged();
