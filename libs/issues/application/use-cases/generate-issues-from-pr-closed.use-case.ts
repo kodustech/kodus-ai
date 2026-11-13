@@ -301,13 +301,29 @@ export class GenerateIssuesFromPrClosedUseCase implements IUseCase {
                 teamId: config.team.uuid,
             }),
         );
-        const listed = (
-            Array.isArray(configs[0]?.configValue) ? configs[0].configValue : []
-        ).find((r) => String(r?.id) === String(repository?.id));
+        // The id alone can name a project on another server of the platform:
+        // the instance is the one the PR's own repository URL is on, and only
+        // a config listing the repository there is known to be this one.
+        const prHost = repositoryHost(
+            (repository as { url?: string } | undefined)?.url,
+        );
+        const listedHost = (i: number) =>
+            repositoryHost(
+                (Array.isArray(configs[i]?.configValue)
+                    ? configs[i].configValue
+                    : []
+                ).find((r) => String(r?.id) === String(repository?.id))
+                    ?.http_url,
+            );
+        const onInstance = prHost
+            ? configs.findIndex((_, i) => listedHost(i) === prHost)
+            : -1;
 
         return {
-            organizationAndTeamData: organizationAndTeamData?.[0] || null,
-            host: repositoryHost(listed?.http_url) || undefined,
+            organizationAndTeamData:
+                organizationAndTeamData?.[onInstance >= 0 ? onInstance : 0] ||
+                null,
+            ...(onInstance >= 0 ? { host: prHost } : {}),
         };
     }
 }
