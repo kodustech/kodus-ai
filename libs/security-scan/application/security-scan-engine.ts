@@ -1341,7 +1341,13 @@ export class SecurityScanEngine {
                     !before?.has(e) &&
                     (before !== null || !e.startsWith('?? ')),
             );
-            const moved = !!scanned && (await headOf()) !== scanned;
+            // Moved: HEAD read and not the scanned commit. Unread after the
+            // run, it is put back to the scanned commit all the same (always
+            // safe); with no scanned commit to go back to, nothing is moved.
+            const headNow = scanned === undefined ? undefined : await headOf();
+            const moved =
+                scanned !== undefined &&
+                (headNow === undefined || headNow !== scanned);
             if (appeared.length || moved) {
                 logger.warn({
                     message:
