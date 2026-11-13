@@ -430,6 +430,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 { emit: jest.fn() } as any,
                 { resolve: async () => null } as any,
                 manager,
+                new OwnChangeRequestService(
+                    deps.codeManagementService,
+                    deps.pullRequestService,
+                ),
             );
             const result = await stage.execute(
                 frozenContext({
