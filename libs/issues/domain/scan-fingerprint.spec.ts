@@ -1,8 +1,13 @@
-import { computeScanFingerprint, cweFamily } from './scan-fingerprint';
+import {
+    computeScanFingerprint,
+    cweFamily,
+    repositoryHost,
+} from './scan-fingerprint';
 
 describe('computeScanFingerprint', () => {
     const base = {
         repositoryPlatform: 'github',
+        repositoryHost: 'github.com',
         repositoryId: 'repo-1',
         vulnerabilityClass: 'authz',
         filePath: 'src/orders/orders.controller.ts',
@@ -61,6 +66,8 @@ describe('computeScanFingerprint', () => {
         ['repository', { repositoryId: 'repo-2' }],
         // A GitLab project can carry the id of a GitHub repository.
         ['platform', { repositoryPlatform: 'gitlab' }],
+        // Two self-hosted servers of one platform each have a project 1.
+        ['instance', { repositoryHost: 'gitlab.acme.io' }],
         ['file', { filePath: 'src/orders/orders.service.ts' }],
         ['symbol', { symbol: 'OrdersController.update' }],
         ['kind of weakness', { cwe: 'CWE-89' }],
@@ -197,5 +204,17 @@ describe('cweFamily', () => {
         [undefined, ''],
     ])('%s → %s', (cwe, family) => {
         expect(cweFamily(cwe)).toBe(family);
+    });
+});
+
+describe('repositoryHost', () => {
+    it.each([
+        ['https://GitLab.Acme.io/group/shop.git', 'gitlab.acme.io'],
+        ['https://git.acme.dev:8443/acme/shop', 'git.acme.dev:8443'],
+        ['https://github.com/acme/shop', 'github.com'],
+        ['not a url', ''],
+        [undefined, ''],
+    ])('reads the instance of %s', (url, host) => {
+        expect(repositoryHost(url)).toBe(host);
     });
 });

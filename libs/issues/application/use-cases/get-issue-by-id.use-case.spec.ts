@@ -6,6 +6,7 @@ import { GetIssueByIdUseCase } from './get-issue-by-id.use-case';
 function useCaseFor(
     issue: Record<string, unknown>,
     httpUrl = 'https://dev.azure.com/acme/shop/_git/shop',
+    configs?: unknown[],
 ) {
     return new GetIssueByIdUseCase(
         { findById: jest.fn(async () => issue) } as any,
@@ -15,15 +16,18 @@ function useCaseFor(
             ageCalculation: jest.fn(async () => '1 day'),
         } as any,
         {
-            // Azure links are built from the repository's http_url.
-            findOne: jest.fn(async () => ({
-                configValue: [
-                    {
-                        id: 'repo-1',
-                        http_url: httpUrl,
-                    },
-                ],
-            })),
+            // Azure links are built from the repository's http_url, as the
+            // issue's organization lists it on the issue's platform.
+            findByOrganizationAndConfigKey: jest.fn(async (organizationId: string) =>
+                organizationId !== 'org-1'
+                    ? []
+                    : (configs ?? [
+                          {
+                              integration: { platform: (issue as any).repository.platform },
+                              configValue: [{ id: 'repo-1', http_url: httpUrl }],
+                          },
+                      ]),
+            ),
         } as any,
         { user: { uuid: 'u-1', organization: { uuid: 'org-1' } } } as any,
         { ensure: jest.fn(async () => undefined) } as any,
@@ -100,6 +104,30 @@ describe('GetIssueByIdUseCase — file link', () => {
         expect(details?.fileLink.url).toBe(
             'https://git.acme.dev/acme/shop/src/commit/abc123/src/orders.controller.ts',
         );
+        expect(details?.repositoryLink.url).toBe('https://git.acme.dev/acme/shop');
+    });
+
+    it('takes the URL from the repository on the finding\'s own platform and instance, never another with the same id', async () => {
+        const forgejo = { ...base.repository, platform: PlatformType.FORGEJO, url: undefined };
+        const listed = (platform: PlatformType, http_url: string) => ({
+            integration: { platform },
+            configValue: [{ id: 'repo-1', http_url }],
+        });
+        const details = await useCaseFor(
+            {
+                ...base,
+                repository: { ...forgejo, host: 'git.acme.dev' },
+                source: IssueSource.SECURITY_SCAN,
+                lastSeenCommitSha: 'abc123',
+            },
+            undefined,
+            [
+                listed(PlatformType.AZURE_REPOS, 'https://dev.azure.com/other/x/_git/x'),
+                listed(PlatformType.FORGEJO, 'https://git.private.io/secret/repo.git'),
+                listed(PlatformType.FORGEJO, 'https://git.acme.dev/acme/shop.git'),
+            ],
+        ).execute('i-1');
+
         expect(details?.repositoryLink.url).toBe('https://git.acme.dev/acme/shop');
     });
 });

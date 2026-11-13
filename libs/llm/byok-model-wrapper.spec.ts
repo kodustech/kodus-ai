@@ -944,6 +944,11 @@ describe('wrapByokModel — spend cap admission (#2451)', () => {
         ).toBeUndefined();
         // No answer at all: it may have been processed, so it is billed.
         expect(await run(new Error('socket hang up'))).toEqual({});
+        // A server error or a timeout says nothing of whether it ran: a
+        // gateway answers 502/504 after forwarding a billable inference.
+        for (const status of [500, 502, 503, 504, 408]) {
+            expect(await run(Object.assign(new Error(`HTTP ${status}`), { statusCode: status }))).toEqual({});
+        }
     });
 
     it('never asks the meter for room on behalf of a caller that already aborted', async () => {

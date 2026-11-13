@@ -40,10 +40,14 @@ export type ScanFindingUpsert = Omit<
     lastSeenScanId: string;
 };
 
-/** One repository, as a scan names it: an id is only unique on its platform. */
+/**
+ * One repository, as a scan names it: an id is only unique on its platform
+ * and instance (repositoryHost).
+ */
 export interface ScanRepositoryScope {
     organizationId: string;
     repositoryPlatform: PlatformType;
+    repositoryHost: string;
     repositoryId: string;
 }
 

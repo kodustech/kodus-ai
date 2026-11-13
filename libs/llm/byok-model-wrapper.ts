@@ -149,14 +149,25 @@ function promptTokensUpperBound(prompt: unknown): number {
 }
 
 /**
- * The provider answered with an error status: it refused the request,
- * unbilled. Read wherever an error carries it (status, statusCode, the
- * response, the cause, a retry's last attempt).
+ * The provider turned the request away before running it, so nothing was
+ * billed: a client error (bad request, auth, not found, rate limit), or
+ * Anthropic's own "overloaded". Read wherever an error carries the status
+ * (status, statusCode, the response, the cause, a retry's last attempt).
+ * A server error is no such proof: a gateway answers 502 or 504 after
+ * forwarding a billable inference, and a 500 can come mid-answer. Nor is a
+ * timeout (408) or a closed request (499).
  */
 function refusedByProvider(err: unknown): boolean {
     const status = extractHttpStatus(err);
-    return typeof status === 'number' && status >= 400;
+    if (typeof status !== 'number') return false;
+    return (
+        (status >= 400 && status < 500 && status !== 408 && status !== 499) ||
+        status === ANTHROPIC_OVERLOADED
+    );
 }
+
+/** Anthropic's "overloaded_error": sent by the API itself, before any work. */
+const ANTHROPIC_OVERLOADED = 529;
 
 function safeSerialize(value: unknown): string {
     try {
