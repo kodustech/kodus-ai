@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 
 import { createLogger } from '@libs/core/log/logger';
-import { parseAlphaOrgs } from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
 import { FEATURE_KEYS, FeatureGateService } from '@libs/feature-gate';
+import { isOnAlphaAllowList } from '@libs/feature-gate/domain/alpha-allow-list';
 import {
     IOrganizationService,
     ORGANIZATION_SERVICE_TOKEN,
@@ -36,8 +36,12 @@ export class DeepScanGate {
         if (!organizationId) {
             return false;
         }
-        const allow = parseAlphaOrgs(process.env[DEEP_SCAN_ALPHA_ORGS_ENV]);
-        if (allow === '*' || allow.has(organizationId)) {
+        if (
+            isOnAlphaAllowList(
+                process.env[DEEP_SCAN_ALPHA_ORGS_ENV],
+                organizationId,
+            )
+        ) {
             return true;
         }
         try {

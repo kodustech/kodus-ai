@@ -142,6 +142,10 @@ function fakeSandbox(type: 'e2b' | 'local' = 'e2b') {
             if (command.includes('rev-parse HEAD')) {
                 return { stdout: 'abc123\n', exitCode: 0 };
             }
+            if (command.startsWith("stat -c '%d:%i'")) {
+                // The locked checkout and its .git.
+                return { stdout: '2049:1001\n2049:1002\n', exitCode: 0 };
+            }
             if (command.includes('ls-files -z')) {
                 return { stdout: Object.keys(FILES).join('\0'), exitCode: 0 };
             }
@@ -871,6 +875,39 @@ describe('SecurityScanEngine', () => {
         expect(commands.some((c) => c.includes('npx jest'))).toBe(false);
         expect(commands.some((c) => c.startsWith('chown'))).toBe(false);
         expect(result.findings[0].reproduction).toEqual(expect.objectContaining({ executed: false }));
+    });
+
+    it('stops the scan when the checkout path no longer leads to the locked tree', async () => {
+        const sandbox = fakeSandbox('e2b');
+        const run = sandbox.run.getMockImplementation()!;
+        let swapped = false;
+        sandbox.run.mockImplementation(async (command: string) => {
+            if (command.includes('npx jest')) {
+                // Moved the root-owned checkout aside, put a same-commit
+                // tree at its path: status and HEAD look the same.
+                swapped = true;
+                return { stdout: 'PASS', exitCode: 0 };
+            }
+            if (command.startsWith("stat -c '%d:%i'") && swapped) {
+                return { stdout: '2049:7777\n2049:7778\n', exitCode: 0 };
+            }
+            return run(command);
+        });
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        await expect(
+            engine.run({
+                ...baseParams({ reproduce: true }),
+                sandbox,
+                meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            } as any),
+        ).rejects.toThrow('could not be put back');
     });
 
     it('writes no test where it could not check that the path is free', async () => {

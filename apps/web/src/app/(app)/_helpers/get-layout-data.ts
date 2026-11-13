@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { isOnAlphaAllowList } from "@libs/feature-gate/domain/alpha-allow-list";
 import { getLLMConfigStatus } from "@services/organizationParameters/fetch";
 import { getOrganizationName } from "@services/organizations/fetch";
 import { getOrganizationReleaseTrack } from "@services/organizations/release-track";
@@ -100,19 +101,12 @@ export const getLayoutData = cache(async (teamId: string) => {
  * opens it first, on dev VMs and previews, so the page and the API agree.
  */
 export const isDeepScanEnabled = cache(async () => {
-    const allow = (process.env.API_DEEP_SCAN_ALPHA_ORGS ?? "").trim();
-    if (allow) {
-        const organizationId = (await auth())?.user?.organizationId;
-        if (
-            allow === "*" ||
-            (!!organizationId &&
-                allow
-                    .split(",")
-                    .map((id) => id.trim())
-                    .includes(organizationId))
-        ) {
-            return true;
-        }
+    const allow = process.env.API_DEEP_SCAN_ALPHA_ORGS;
+    if (
+        allow?.trim() &&
+        isOnAlphaAllowList(allow, (await auth())?.user?.organizationId)
+    ) {
+        return true;
     }
     return isFeatureEnabled({
         feature: FEATURE_FLAGS.deepScan,

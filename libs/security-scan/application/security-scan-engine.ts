@@ -1380,8 +1380,31 @@ export class SecurityScanEngine {
                     30_000,
                 )
             ).exitCode === 0;
-        this.auditCheckoutLocked = verified;
-        return verified;
+        // Which directory was locked: its parent stays writable to the
+        // review user, who could move it aside and put another tree at its
+        // path. The path must keep resolving to this one.
+        this.auditIdentity = verified
+            ? await this.identityOf(sandbox)
+            : undefined;
+        this.auditCheckoutLocked = verified && !!this.auditIdentity;
+        return this.auditCheckoutLocked;
+    }
+
+    /** Device and inode of the checkout and of its .git. */
+    private auditIdentity: string | undefined;
+
+    private async identityOf(
+        sandbox: SandboxInstance,
+    ): Promise<string | undefined> {
+        const repo = shellQuote(sandbox.repoDir);
+        const r = await runCommand(
+            sandbox,
+            `stat -c '%d:%i' ${repo} ${repo}/.git`,
+            10_000,
+            { asRoot: true },
+        );
+        const id = r.stdout.trim();
+        return r.exitCode === 0 && id ? id : undefined;
     }
 
     private async headOf(
@@ -1442,6 +1465,14 @@ export class SecurityScanEngine {
             return { appeared, moved: head !== scanned };
         };
 
+        // The path still leads to the locked checkout, not to a tree put in
+        // its place; nothing at it can be trusted, or put back, otherwise.
+        if (
+            !this.auditIdentity ||
+            (await this.identityOf(sandbox)) !== this.auditIdentity
+        ) {
+            throw new ScanFailure(SCAN_CHECKOUT_TAMPERED_MESSAGE);
+        }
         const found = await unchanged();
         if (found && !found.appeared.length && !found.moved) {
             return;
