@@ -1080,7 +1080,7 @@ export class SecurityScanEngine {
         start: number,
         end: number,
         pad = 25,
-    ): Promise<{ snippet: string; whole?: string }> {
+    ): Promise<{ snippet: string; whole?: string; error?: unknown }> {
         try {
             const whole = await sandbox.remoteCommands.read(file, 0, 0);
             const lines = whole.split('\n');
@@ -1091,8 +1091,8 @@ export class SecurityScanEngine {
                 .map((l, i) => `${from + i}: ${l}`)
                 .join('\n');
             return { snippet, whole };
-        } catch {
-            return { snippet: '' };
+        } catch (error) {
+            return { snippet: '', error };
         }
     }
 
@@ -1119,15 +1119,26 @@ export class SecurityScanEngine {
             startLine,
             suggestion.relevantLinesEnd ?? startLine,
         );
-        const { snippet, whole } = await this.readAround(
-            params.sandbox,
-            filePath,
-            startLine,
-            endLine,
-        );
+        const {
+            snippet,
+            whole,
+            error: unread,
+        } = await this.readAround(params.sandbox, filePath, startLine, endLine);
         // Without the file there is no function to name, and the function
         // is half the finding's identity.
         if (whole === undefined) {
+            logger.warn({
+                message:
+                    'Security finding dropped: its file could not be read; its class runs again',
+                context: SecurityScanEngine.name,
+                error: unread,
+                metadata: {
+                    repositoryId: params.repositoryId,
+                    filePath,
+                    unit: unit.id,
+                    vulnClass,
+                },
+            });
             return UNIDENTIFIED;
         }
 
@@ -1154,7 +1165,12 @@ export class SecurityScanEngine {
                     'Security finding could not be structured; its class runs again',
                 context: SecurityScanEngine.name,
                 error,
-                metadata: { repositoryId: params.repositoryId, filePath },
+                metadata: {
+                    repositoryId: params.repositoryId,
+                    filePath,
+                    unit: unit.id,
+                    vulnClass,
+                },
             });
         }
         // Without the structured answer there is no CWE: the finding's
