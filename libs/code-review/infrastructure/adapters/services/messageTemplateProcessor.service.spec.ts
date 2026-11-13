@@ -78,6 +78,60 @@ describe('MessageTemplateProcessor', () => {
             expect(result).toContain('1'); // total deletions = 1 + 0
         });
 
+        // GitLab and Forgejo send no link for a file, Azure Repos and
+        // Bitbucket send null: the name must not become a link to nowhere.
+        it.each([
+            ['no link', undefined],
+            ['a null link', null],
+            ['an empty link', ''],
+        ])(
+            'names a file the host gave %s for, without linking it',
+            async (_name, blob_url) => {
+                const result = await processor.processTemplate(
+                    '@changedFiles',
+                    {
+                        changedFiles: [
+                            {
+                                filename: 'docs/guide.md',
+                                blob_url,
+                                status: 'modified',
+                                additions: 3,
+                                deletions: 1,
+                                changes: 4,
+                            } as any,
+                        ],
+                        language: 'en-US',
+                    },
+                );
+
+                expect(result).toContain(
+                    '| docs/guide.md | modified | 3 | 1 | 4 |',
+                );
+                expect(result).not.toContain('](');
+            },
+        );
+
+        it('links a file to the page the host gave for it', async () => {
+            const result = await processor.processTemplate('@changedFiles', {
+                changedFiles: [
+                    {
+                        filename: 'docs/guide.md',
+                        blob_url:
+                            'https://github.com/acme/api/blob/abc/docs/guide.md',
+                        status: 'modified',
+                        additions: 3,
+                        deletions: 1,
+                        changes: 4,
+                    } as any,
+                ],
+                language: 'en-US',
+            });
+
+            expect(result).toContain(
+                '| [docs/guide.md](https://github.com/acme/api/blob/abc/docs/guide.md) | modified | 3 | 1 | 4 |',
+            );
+        });
+
         it('returns empty content from @changedFiles when there are no files', async () => {
             const result = await processor.processTemplate(
                 'Body @changedFiles tail',
