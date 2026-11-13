@@ -927,7 +927,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
     /** When a refused withdrawal is tried again, by organization, repository and PR. */
     private readonly changeRequestRefusals = new Map<
         string,
-        { until: number; count: number }
+        { until: number; count: number; organizationId: string }
     >();
 
     private async withdrawResolvedChangeRequests(
@@ -973,13 +973,27 @@ export class CheckIfPRCanBeApprovedCronProvider {
         }
 
         const listed = new Set<string>();
+        const notListed = new Set<string>();
         await Promise.allSettled(
             [...organizationIds].map((organizationId) =>
                 teamLimit(async () => {
-                    const pullRequests =
-                        await this.pullRequestService.findOpenPullRequestsWithKodyChangeRequest(
-                            organizationId,
-                        );
+                    let pullRequests: IPullRequestWithKodyChangeRequest[];
+                    try {
+                        pullRequests =
+                            await this.pullRequestService.findOpenPullRequestsWithKodyChangeRequest(
+                                organizationId,
+                            );
+                    } catch (error) {
+                        notListed.add(organizationId);
+                        this.logger.error({
+                            message:
+                                "Could not list the PRs carrying Kody's change request",
+                            context: CheckIfPRCanBeApprovedCronProvider.name,
+                            error,
+                            metadata: { organizationId },
+                        });
+                        return;
+                    }
                     await Promise.allSettled(
                         pullRequests.map((pullRequest) => {
                             const repositoryKey = `${organizationId}:${pullRequest.repository?.id}`;
@@ -1008,9 +1022,12 @@ export class CheckIfPRCanBeApprovedCronProvider {
         );
 
         // A PR that left the list (closed, withdrawn, approved) has nothing
-        // left to wait for.
-        for (const key of this.changeRequestRefusals.keys()) {
-            if (!listed.has(key)) this.changeRequestRefusals.delete(key);
+        // left to wait for. A list that could not be read says nothing about
+        // its PRs, so their waits stand.
+        for (const [key, refusal] of this.changeRequestRefusals) {
+            if (!listed.has(key) && !notListed.has(refusal.organizationId)) {
+                this.changeRequestRefusals.delete(key);
+            }
         }
     }
 
@@ -1059,6 +1076,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
             this.changeRequestRefusals.set(key, {
                 until: Date.now() + wait,
                 count,
+                organizationId: organizationAndTeamData.organizationId,
             });
             this.logger.warn({
                 message: `Could not withdraw Kody's change request on PR#${pullRequest.number} (attempt ${count}); next attempt in ${Math.round(wait / 60_000)} minutes`,

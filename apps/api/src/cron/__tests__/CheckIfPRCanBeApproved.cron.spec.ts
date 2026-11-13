@@ -3595,6 +3595,25 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             ).toHaveBeenCalledTimes(2);
         });
 
+        it('keeps the wait of a refusal through a pass that could not list the PRs', async () => {
+            const { cron, deps, service } = setUp(['c1']);
+            service.dismissOwnPullRequestChangeRequests.mockRejectedValue(
+                new Error('403'),
+            );
+            const list =
+                deps.pullRequestService
+                    .findOpenPullRequestsWithKodyChangeRequest;
+
+            await cron.handleCron();
+            list.mockRejectedValueOnce(new Error('connection lost'));
+            await expect(cron.handleCron()).resolves.toBeUndefined();
+            await cron.handleCron();
+
+            expect(
+                service.dismissOwnPullRequestChangeRequests,
+            ).toHaveBeenCalledTimes(1);
+        });
+
         it('finishes the pass when the host refuses, and waits longer each time before asking again', async () => {
             const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
             try {
