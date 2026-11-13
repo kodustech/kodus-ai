@@ -146,9 +146,16 @@ describe('StartSecurityScanUseCase — running again continues', () => {
     it('starts nothing when the provider cannot say which branch is the default', async () => {
         const { scans, start, jobQueue } = useCaseWith(null, 'GITHUB', new Error('502'));
 
-        await expect(start()).rejects.toThrow(/default branch/);
+        await expect(start()).rejects.toThrow(/Try again/);
         expect(scans.create).not.toHaveBeenCalled();
         expect(jobQueue.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('says what to fix, not to retry, when the provider gives no default branch', async () => {
+        const { scans, start } = useCaseWith(null, 'GITHUB', '');
+
+        await expect(start()).rejects.toThrow(/gave no default branch/);
+        expect(scans.create).not.toHaveBeenCalled();
     });
 
     it('refuses to start without an active code integration, writing nothing', async () => {
