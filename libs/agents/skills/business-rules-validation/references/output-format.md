@@ -5,7 +5,7 @@
 Each entry in `requirements` carries:
 
 - **requirement**: quoted from the task, in the task's language
-- **source**: where in the task (`AC #2`, `Description`)
+- **source**: where in the task (`AC02`, `Description`)
 - **state**: `met` | `partial` | `missing` | `check_manually`
 - **evidence**: `file` and `line` in PR_DIFF that show it, or show the gap
 - **note**: what the diff does or lacks for it
@@ -29,7 +29,7 @@ Task AB#8 asks for a compact density toggle: it persists per user, defaults to c
   "requirements": [
     {
       "requirement": "The density choice persists per user",
-      "source": "AC #1",
+      "source": "AC01",
       "state": "met",
       "topic": "data_and_persistence",
       "evidence": [{ "file": "src/settings/density.ts", "line": 14 }],
@@ -38,7 +38,7 @@ Task AB#8 asks for a compact density toggle: it persists per user, defaults to c
     },
     {
       "requirement": "Defaults to comfortable",
-      "source": "AC #2",
+      "source": "AC02",
       "state": "missing",
       "topic": "default_values",
       "evidence": [{ "file": "src/settings/density.ts", "line": 6 }],
@@ -48,7 +48,7 @@ Task AB#8 asks for a compact density toggle: it persists per user, defaults to c
     },
     {
       "requirement": "The choice is shown in the user menu on all screen sizes",
-      "source": "AC #3",
+      "source": "AC03",
       "state": "partial",
       "topic": "ui_and_copy",
       "evidence": [{ "file": "src/components/UserMenu.tsx", "line": 31 }],
@@ -58,7 +58,7 @@ Task AB#8 asks for a compact density toggle: it persists per user, defaults to c
     },
     {
       "requirement": "The toggle is visible in the list toolbar",
-      "source": "AC #4",
+      "source": "AC04",
       "state": "check_manually",
       "kind": "visual",
       "topic": "ui_and_copy",

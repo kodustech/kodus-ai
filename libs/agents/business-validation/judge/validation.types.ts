@@ -70,7 +70,7 @@ export interface Acceptance {
 export interface RequirementVerdict {
     /** The requirement, quoted from the task when it can be. */
     requirement: string;
-    /** Where in the task it came from, e.g. "AC #2". */
+    /** Where in the task it came from, e.g. "AC02". */
     source?: string;
     state: RequirementState;
     evidence: CodeLocation[];
