@@ -1,6 +1,9 @@
 import { setImmediate as nextTurn } from 'node:timers/promises';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
-import { estimateRiskPromptTokens } from './estimate-risk-prompt-tokens';
+import {
+    ENCODING_CHARS_PER_TURN,
+    estimateRiskPromptTokens,
+} from './estimate-risk-prompt-tokens';
 
 jest.mock('@libs/llm/token-estimate', () => ({
     estimateTextTokens: jest.fn((text: string) => text.length),
@@ -27,17 +30,23 @@ it('counts the entire large prompt with bounded calls and yields between them', 
         .mocked(estimateTextTokens)
         .mock.calls.map(([text]) => text);
     expect(pieces.join('')).toBe(prompt);
-    expect(pieces.every((piece) => piece.length <= 200_000)).toBe(true);
+    for (const call of jest.mocked(estimateTextTokens).mock.calls) {
+        expect(call).toEqual([expect.any(String), { cache: false }]);
+    }
+    expect(
+        pieces.every((piece) => piece.length <= ENCODING_CHARS_PER_TURN),
+    ).toBe(true);
     expect(callsAtHeartbeat).toBeGreaterThan(0);
     expect(callsAtHeartbeat).toBeLessThan(pieces.length);
 });
 
 it('does not split a Unicode surrogate pair between encoding calls', async () => {
-    const prompt = `${'x'.repeat(63_999)}😀${'y'.repeat(70_000)}`;
+    const prompt = `${'x'.repeat(ENCODING_CHARS_PER_TURN - 1)}😀${'y'.repeat(ENCODING_CHARS_PER_TURN + 6000)}`;
     await estimateRiskPromptTokens(prompt);
     const pieces = jest
         .mocked(estimateTextTokens)
         .mock.calls.map(([text]) => text);
+    expect(pieces.length).toBeGreaterThan(1);
     expect(pieces.join('')).toBe(prompt);
     expect(
         pieces.every(
