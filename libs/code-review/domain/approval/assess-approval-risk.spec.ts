@@ -1,7 +1,12 @@
 import { LLM } from '@libs/llm/llm';
+import * as contextWindows from '@libs/llm/model-context-window';
 import { assessApprovalRisk } from './assess-approval-risk';
 
 jest.mock('@libs/llm/llm', () => ({ LLM: { run: jest.fn() } }));
+jest.mock('@libs/llm/model-context-window', () => ({
+    ...jest.requireActual('@libs/llm/model-context-window'),
+    resolveContextWindowWithSource: jest.fn(),
+}));
 
 const input = {
     organizationId: 'org-1',
@@ -22,7 +27,45 @@ const input = {
     teamInstructions: 'Treat auth changes as consequential.',
 };
 
+beforeEach(() => {
+    jest.mocked(
+        contextWindows.resolveContextWindowWithSource,
+    ).mockImplementation(
+        jest.requireActual('@libs/llm/model-context-window')
+            .resolveContextWindowWithSource,
+    );
+});
 afterEach(() => jest.clearAllMocks());
+
+it.each([
+    ['byok', 'unknown', 0],
+    ['litellm', 'unknown', 0],
+    ['override', 'low', 1],
+    ['models.dev', 'low', 1],
+    ['default', 'low', 1],
+] as const)(
+    'uses a %s window only when its source is authoritative',
+    async (source, level, calls) => {
+        jest.mocked(
+            contextWindows.resolveContextWindowWithSource,
+        ).mockReturnValue({
+            source,
+            tokens: 2048,
+        });
+        jest.mocked(LLM.run).mockResolvedValue({
+            level: 'low',
+            reason: 'The provider accepted the complete input.',
+        } as any);
+
+        const result = await assessApprovalRisk({
+            ...input,
+            body: 'documentation '.repeat(5000),
+        });
+
+        expect(result.level).toBe(level);
+        expect(LLM.run).toHaveBeenCalledTimes(calls);
+    },
+);
 
 it.each(['title', 'body', 'teamInstructions'])(
     'checks the complete prompt when %s exceeds the configured model input window',

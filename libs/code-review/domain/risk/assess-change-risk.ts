@@ -11,11 +11,11 @@ import {
 } from '@libs/llm/error-classifier';
 import { getModelId } from '@libs/llm/managed-slot';
 import { resolveContextWindowWithSource } from '@libs/llm/model-context-window';
-import { estimateTextTokens } from '@libs/llm/token-estimate';
 import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
 import { createLogger } from '@libs/core/log/logger';
 import { CHANGE_RISK_PROMPT } from './change-risk-prompt';
 import { addedCodeLines } from './added-code-lines';
+import { estimateRiskPromptTokens } from './estimate-risk-prompt-tokens';
 
 /** Internal judgment retained for compatibility; public PR risk is binary. */
 export interface ChangeRiskAssessment {
@@ -180,10 +180,10 @@ export async function assessChangeRisk(input: {
             byokMaxInputTokens: input.modelSlot?.maxInputTokens,
             modelName: getModelId(input.modelSlot),
         });
-        // A known model/explicit input window replaces the old character cap.
-        // Unknown windows stay with the provider instead of inventing a ceiling.
-        if (window.source !== 'default') {
-            const promptTokens = estimateTextTokens(
+        // Only explicit limits or the model registry can reject before the call.
+        // Routing aliases, lower-bound estimates and defaults stay with the provider.
+        if (window.source === 'byok' || window.source === 'litellm') {
+            const promptTokens = await estimateRiskPromptTokens(
                 [
                     CHANGE_RISK_PROMPT,
                     user,
