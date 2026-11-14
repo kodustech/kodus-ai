@@ -43,6 +43,39 @@ const run = {
     ],
 };
 
+const disputedOutcome = {
+    outcome: {
+        kind: 'validated',
+        checks: [
+            {
+                task: { tracker: 'Linear', id: 'SAA-96' },
+                verdict: {
+                    needsMoreInfo: false,
+                    summary: '',
+                    requirements: [
+                        {
+                            requirement: 'Keyboard reordering',
+                            state: 'missing',
+                            evidence: [],
+                            note: 'useDrag.ts handles pointer events only; no key handler.',
+                            confidence: 'high',
+                        },
+                    ],
+                    outOfScope: [],
+                },
+                passed: false,
+                readAt: 'x',
+            },
+        ],
+        thinTasks: [],
+        passed: false,
+        unseenFiles: [],
+    },
+    references: [],
+    attempts: [],
+    trackers: ['Linear'],
+};
+
 const request = {
     organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
     repository: { id: 'repo-1', name: 'notes' },
@@ -67,10 +100,19 @@ function build(intent: any, revalidated?: any, latest: any = run) {
         })),
         withRepository: jest.fn((r: unknown) => r),
         headShaOf: jest.fn(async () => 'def5678'),
-        publish: jest.fn(async (input: any) => ({
-            outcome: input.result.outcome,
-            comment: 'updated',
-        })),
+        publish: jest.fn(
+            async (
+                input: any,
+            ): Promise<{
+                outcome: any;
+                comment: 'created' | 'updated' | 'none';
+                changed?: boolean;
+            }> => ({
+                outcome: input.result.outcome,
+                comment: 'updated',
+                changed: true,
+            }),
+        ),
     };
     const runs = { latestForPullRequest: jest.fn(async () => latest) };
     return {
@@ -330,6 +372,54 @@ describe('BusinessLogicReplies', () => {
         });
     });
 
+    it('says a re-check that reached no verdict did not change the comment (UC-38)', async () => {
+        // The non-validated path (a task id that no longer exists, a tracker
+        // that answered an error) still has to say what happened to the
+        // comment. Before the re-check flag existed it claimed an update here
+        // whether or not the text changed.
+        const { replies, publisher } = build(
+            {
+                intent: 'dispute',
+                findings: [1],
+                files: ['useDrag.ts'],
+                claim: 'covered in useDrag.ts',
+            },
+            {
+                outcome: {
+                    kind: 'task_missing',
+                    references: [],
+                    tracker: 'Linear',
+                    message:
+                        'I could not read SAA-96: the task does not exist.',
+                },
+                references: [],
+                attempts: [],
+                trackers: ['Linear'],
+            },
+        );
+        publisher.publish.mockResolvedValueOnce({
+            outcome: {
+                kind: 'task_missing',
+                references: [],
+                tracker: 'Linear',
+                message: 'I could not read SAA-96: the task does not exist.',
+            },
+            comment: 'updated',
+            changed: false,
+        });
+
+        const unchanged = await replies.handle({
+            request,
+            message: 'Keyboard reordering is covered in useDrag.ts',
+            sender: { login: 'rafa' },
+        });
+
+        expect(unchanged.reply).toContain(
+            'The result did not change; the Kody · Business Logic comment says the same.',
+        );
+        expect(unchanged.reply).not.toContain('is updated');
+    });
+
     it('re-checks a dispute with what the author pointed at and says whether it changed (UC-38)', async () => {
         const revalidated = {
             outcome: {
@@ -363,7 +453,7 @@ describe('BusinessLogicReplies', () => {
             attempts: [],
             trackers: ['Linear'],
         };
-        const { replies, service } = build(
+        const { replies, service, publisher } = build(
             {
                 intent: 'dispute',
                 findings: [1],
@@ -399,6 +489,55 @@ describe('BusinessLogicReplies', () => {
             handled: true,
             reply: expect.stringContaining('still MISSING'),
         });
+        expect(result).toMatchObject({
+            reply: expect.stringContaining(
+                'The Kody · Business Logic comment is updated.',
+            ),
+        });
+
+        // Same verdict on the re-check: the reply must not claim an update.
+        publisher.publish.mockResolvedValueOnce({
+            outcome: revalidated.outcome,
+            comment: 'updated',
+            changed: false,
+        });
+        const unchanged = await replies.handle({
+            request,
+            message: 'Keyboard reordering is covered in useDrag.ts',
+            sender: { login: 'rafa' },
+        });
+        expect(unchanged).toMatchObject({
+            reply: expect.stringContaining(
+                'The result did not change; the Kody · Business Logic comment says the same.',
+            ),
+        });
+    });
+
+    it('does not claim a change when the earlier run recorded no signature', async () => {
+        const { replies, publisher } = build(
+            {
+                intent: 'dispute',
+                findings: [1],
+                files: ['useDrag.ts'],
+                claim: 'covered in useDrag.ts',
+            },
+            disputedOutcome,
+        );
+        publisher.publish.mockResolvedValueOnce({
+            outcome: disputedOutcome.outcome,
+            comment: 'updated',
+        });
+
+        const legacy = await replies.handle({
+            request,
+            message: 'Keyboard reordering is covered in useDrag.ts',
+            sender: { login: 'rafa' },
+        });
+
+        expect(legacy.reply).not.toMatch(/says the same|is updated/);
+        expect(legacy.reply).toContain(
+            'The result is in the Kody · Business Logic comment on this pull request.',
+        );
     });
 
     it('re-checks a dispute with the id when the task link is not one the parser reads back', async () => {

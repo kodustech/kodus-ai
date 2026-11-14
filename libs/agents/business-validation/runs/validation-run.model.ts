@@ -43,6 +43,8 @@ export interface RunComment {
     noteId?: number | string;
     /** Azure Repos: the thread the comment opened. */
     threadId?: number | string;
+    /** The verdict this run wrote, so a re-check can say whether it changed. */
+    signature?: string;
 }
 
 /** Who wrote the PR's code, from its commits (UC-42). */

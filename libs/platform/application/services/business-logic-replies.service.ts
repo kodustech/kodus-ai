@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
 import type { BusinessValidationRequest } from '@libs/agents/business-validation/business-validation.types';
 import { requirementKey } from '@libs/agents/business-validation/carry-over';
+import { recheckNotice } from '@libs/agents/business-validation/command';
 import { taskPasses } from '@libs/agents/business-validation/check-policy';
 import type { OpenFinding } from '@libs/agents/business-validation/judge/reply-classifier';
 import type {
@@ -354,7 +355,7 @@ export class BusinessLogicReplies {
                 reply:
                     outcome.kind === 'skipped'
                         ? outcome.message
-                        : 'I re-checked, and the Business Logic comment above is updated.',
+                        : `I re-checked. ${recheckNotice(published.changed)}`,
             };
         }
         const lines = outcome.checks.flatMap((check) =>
@@ -374,7 +375,7 @@ export class BusinessLogicReplies {
                     `I re-checked${intent.files.length ? ` ${intent.files.map((f) => `\`${f}\``).join(', ')}` : ''}:`,
                     ...lines,
                     '',
-                    'The Business Logic comment above is updated. If a requirement that stays open is not needed in this PR, reply saying so and why, and I will mark it accepted.',
+                    `${recheckNotice(published.changed)} If a requirement that stays open is not needed in this PR, reply saying so and why, and I will mark it accepted.`,
                 ].join('\n'),
             ),
         };
