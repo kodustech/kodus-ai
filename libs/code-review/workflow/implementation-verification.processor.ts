@@ -84,228 +84,206 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
             // router timeout. The inner IIFE keeps all original local
             // variables in scope without refactoring into a separate
             // private method.
-            await raceWithAbortSignal(
-                (async () => {
-                    const payload =
-                        job.payload as unknown as CheckImplementationJobPayload;
+            await raceWithAbortSignal((async () => {
+            const payload =
+                job.payload as unknown as CheckImplementationJobPayload;
 
-                    const savedPr = await this.pullRequestsService.findOne({
-                        'number': payload.pullRequestNumber,
-                        'repository.id': payload.repository.id,
-                    } as any);
+            const savedPr = await this.pullRequestsService.findOne({
+                'number': payload.pullRequestNumber,
+                'repository.id': payload.repository.id,
+            } as any);
 
-                    if (!savedPr) {
-                        this.logger.warn({
-                            message: `Pull Request not found in DB for implementation check`,
-                            context: ImplementationVerificationProcessor.name,
-                            metadata: {
-                                prNumber: payload.pullRequestNumber,
-                                repositoryId: payload.repository.id,
-                            },
-                        });
+            if (!savedPr) {
+                this.logger.warn({
+                    message: `Pull Request not found in DB for implementation check`,
+                    context: ImplementationVerificationProcessor.name,
+                    metadata: {
+                        prNumber: payload.pullRequestNumber,
+                        repositoryId: payload.repository.id,
+                    },
+                });
 
-                        await this.markCompleted(jobId, {
-                            reason: 'PR_NOT_FOUND',
-                        });
-                        return;
-                    }
+                await this.markCompleted(jobId, { reason: 'PR_NOT_FOUND' });
+                return;
+            }
 
-                    const savedSuggestions = (savedPr.files || []).flatMap(
-                        (file) => file.suggestions || [],
-                    );
-
-                    // Skip the platform calls when nothing delivered is left to check.
-                    const suggestionsToCheck = savedSuggestions.filter(
-                        (s) =>
-                            s.deliveryStatus === DeliveryStatus.SENT &&
-                            s.implementationStatus !==
-                                ImplementationStatus.IMPLEMENTED,
-                    );
-
-                    if (suggestionsToCheck.length === 0) {
-                        await this.markCompleted(jobId, {
-                            reason: 'NO_SUGGESTIONS',
-                        });
-                        return;
-                    }
-
-                    // 2. Fetch Pull Request Details from Platform (to get latest state)
-                    const platformPr =
-                        payload.payload?.pull_request ||
-                        payload.payload?.resource ||
-                        (await this.pullRequestManagerService.getPullRequestDetails(
-                            payload.organizationAndTeamData,
-                            {
-                                name: payload.repository.name,
-                                id: payload.repository.id,
-                            },
-                            payload.pullRequestNumber,
-                        ));
-
-                    // null when the provider can't serve the PR (deleted, revoked
-                    // access) — nothing to verify against.
-                    if (!platformPr) {
-                        this.logger.warn({
-                            message: `PR#${payload.pullRequestNumber} not available on the platform; implementation check did not run`,
-                            context: ImplementationVerificationProcessor.name,
-                            metadata: {
-                                organizationAndTeamData:
-                                    payload.organizationAndTeamData,
-                                prNumber: payload.pullRequestNumber,
-                                repositoryId: payload.repository.id,
-                                jobId,
-                            },
-                        });
-                        await this.markCompleted(jobId, {
-                            reason: 'PLATFORM_PR_NOT_FOUND',
-                        });
-                        return;
-                    }
-
-                    const teamAutomations =
-                        await this.teamAutomationService.find({
-                            team: {
-                                uuid: payload.organizationAndTeamData.teamId,
-                            },
-                            status: true,
-                        });
-
-                    const teamAutomation = teamAutomations?.find(
-                        (ta) =>
-                            ta.automation?.automationType ===
-                            AutomationType.AUTOMATION_CODE_REVIEW,
-                    );
-
-                    // Retrieve last analyzed commit from the last code review that
-                    // posted its comments. PARTIAL_ERROR posts them too (only an
-                    // auxiliary stage failed), and its suggestions are the ones to check.
-                    const lastExecution =
-                        await this.automationExecutionService.findLatestExecutionByFilters(
-                            {
-                                pullRequestNumber: payload.pullRequestNumber,
-                                repositoryId: payload.repository.id,
-                                status: [
-                                    AutomationStatus.SUCCESS,
-                                    AutomationStatus.PARTIAL_ERROR,
-                                ],
-                                teamAutomation: { uuid: teamAutomation?.uuid },
-                            },
-                        );
-
-                    const lastAnalyzedCommit =
-                        lastExecution?.dataExecution?.lastAnalyzedCommit;
-
-                    platformPr.number = payload.pullRequestNumber;
-
-                    // 3. Fetch Changed Files (Diff)
-                    // Which diff came back: only the changes since the last review
-                    // say what the developer did about its suggestions.
-                    let diffSource: ChangedFilesSource | undefined;
-                    let removedFiles: string[] = [];
-                    const changedFiles =
-                        await this.pullRequestManagerService.getChangedFiles(
-                            payload.organizationAndTeamData,
-                            {
-                                name: payload.repository.name,
-                                id: payload.repository.id,
-                                project: {
-                                    id: platformPr.repository?.project?.id,
-                                },
-                            },
-                            platformPr,
-                            [],
-                            lastAnalyzedCommit,
-                            lastExecution?.dataExecution?.reviewedBaseBranch,
-                            {
-                                onDiffSource: (source) => (diffSource = source),
-                                onRemovedFiles: (filenames) =>
-                                    (removedFiles = filenames),
-                            },
-                        );
-
-                    // 4. Verify Implementation
-                    const check =
-                        await this.suggestionService.checkImplementedSuggestions(
-                            {
-                                organizationAndTeamData:
-                                    payload.organizationAndTeamData,
-                                prNumber: payload.pullRequestNumber,
-                                changedFiles,
-                                savedSuggestions,
-                                diffSource,
-                                removedFiles,
-                            },
-                        );
-
-                    if (check.skipped) {
-                        await this.markCompleted(jobId, {
-                            reason: check.skipped,
-                        });
-                        return;
-                    }
-
-                    const implementedSuggestions = check.persisted;
-
-                    await this.suggestionService.resolveImplementedSuggestionsOnPlatform(
-                        {
-                            organizationAndTeamData:
-                                payload.organizationAndTeamData,
-                            repository: {
-                                id: payload.repository.id,
-                                name: payload.repository.name,
-                            },
-                            prNumber: payload.pullRequestNumber,
-                            platformType: payload.platformType,
-                        },
-                    );
-
-                    // 6. Broadcast so the dashboard's facet counts (Needs attention /
-                    // Awaiting cards) refetch right after statuses are persisted. The
-                    // verification pass is what flips implementationStatus, but unlike
-                    // the review run it never touches an automation execution — so
-                    // without this emit the SSE stream wouldn't tell the frontend a
-                    // suggestion was resolved, and the card could stay stale. Emit only
-                    // when at least one status was actually persisted (the service
-                    // returns only the suggestions it actually persisted); a no-op
-                    // verification shouldn't churn the API.
-                    if (implementedSuggestions?.length) {
-                        try {
-                            this.eventEmitter.emit(PR_EXECUTION_UPDATED_EVENT, {
-                                organizationId:
-                                    payload.organizationAndTeamData
-                                        ?.organizationId,
-                                executionUuid: undefined,
-                                status: AutomationStatus.SUCCESS,
-                                timestamp: new Date().toISOString(),
-                            });
-                        } catch (error) {
-                            // The statuses are already persisted — a failing listener
-                            // must never fail the whole verification job.
-                            this.logger.warn({
-                                message: `Failed to broadcast execution update after verification for PR#${payload.pullRequestNumber}`,
-                                context:
-                                    ImplementationVerificationProcessor.name,
-                                error,
-                                metadata: {
-                                    organizationId:
-                                        payload.organizationAndTeamData
-                                            ?.organizationId,
-                                    prNumber: payload.pullRequestNumber,
-                                },
-                            });
-                        }
-                    }
-
-                    await this.markCompleted(jobId, {
-                        checkedCount: check.checked,
-                        decided: check.decided,
-                        raised: check.persisted.length,
-                        unmeasured: countByReason(check.unmeasured),
-                        diffSource,
-                    });
-                })(),
-                signal,
+            const savedSuggestions = (savedPr.files || []).flatMap(
+                (file) => file.suggestions || [],
             );
+
+            // Skip the platform calls when nothing delivered is left to check.
+            const suggestionsToCheck = savedSuggestions.filter(
+                (s) =>
+                    s.deliveryStatus === DeliveryStatus.SENT &&
+                    s.implementationStatus !==
+                        ImplementationStatus.IMPLEMENTED,
+            );
+
+            if (suggestionsToCheck.length === 0) {
+                await this.markCompleted(jobId, { reason: 'NO_SUGGESTIONS' });
+                return;
+            }
+
+            // 2. Fetch Pull Request Details from Platform (to get latest state)
+            const platformPr =
+                payload.payload?.pull_request ||
+                payload.payload?.resource ||
+                (await this.pullRequestManagerService.getPullRequestDetails(
+                    payload.organizationAndTeamData,
+                    {
+                        name: payload.repository.name,
+                        id: payload.repository.id,
+                    },
+                    payload.pullRequestNumber,
+                ));
+
+            // null when the provider can't serve the PR (deleted, revoked
+            // access) — nothing to verify against.
+            if (!platformPr) {
+                this.logger.warn({
+                    message: `PR#${payload.pullRequestNumber} not available on the platform; implementation check did not run`,
+                    context: ImplementationVerificationProcessor.name,
+                    metadata: {
+                        organizationAndTeamData:
+                            payload.organizationAndTeamData,
+                        prNumber: payload.pullRequestNumber,
+                        repositoryId: payload.repository.id,
+                        jobId,
+                    },
+                });
+                await this.markCompleted(jobId, {
+                    reason: 'PLATFORM_PR_NOT_FOUND',
+                });
+                return;
+            }
+
+            const teamAutomations = await this.teamAutomationService.find({
+                team: { uuid: payload.organizationAndTeamData.teamId },
+                status: true,
+            });
+
+            const teamAutomation = teamAutomations?.find(
+                (ta) =>
+                    ta.automation?.automationType ===
+                    AutomationType.AUTOMATION_CODE_REVIEW,
+            );
+
+            // Retrieve last analyzed commit from the last code review that
+            // posted its comments. PARTIAL_ERROR posts them too (only an
+            // auxiliary stage failed), and its suggestions are the ones to check.
+            const lastExecution =
+                await this.automationExecutionService.findLatestExecutionByFilters(
+                    {
+                        pullRequestNumber: payload.pullRequestNumber,
+                        repositoryId: payload.repository.id,
+                        status: [
+                            AutomationStatus.SUCCESS,
+                            AutomationStatus.PARTIAL_ERROR,
+                        ],
+                        teamAutomation: { uuid: teamAutomation?.uuid },
+                    },
+                );
+
+            const lastAnalyzedCommit =
+                lastExecution?.dataExecution?.lastAnalyzedCommit;
+
+            platformPr.number = payload.pullRequestNumber;
+
+            // 3. Fetch Changed Files (Diff)
+            // Which diff came back: only the changes since the last review
+            // say what the developer did about its suggestions.
+            let diffSource: ChangedFilesSource | undefined;
+            let removedFiles: string[] = [];
+            const changedFiles =
+                await this.pullRequestManagerService.getChangedFiles(
+                    payload.organizationAndTeamData,
+                    {
+                        name: payload.repository.name,
+                        id: payload.repository.id,
+                        project: { id: platformPr.repository?.project?.id },
+                    },
+                    platformPr,
+                    [],
+                    lastAnalyzedCommit,
+                    lastExecution?.dataExecution?.reviewedBaseBranch,
+                    {
+                        onDiffSource: (source) => (diffSource = source),
+                        onRemovedFiles: (filenames) => (removedFiles = filenames),
+                    },
+                );
+
+            // 4. Verify Implementation
+            const check =
+                await this.suggestionService.checkImplementedSuggestions({
+                    organizationAndTeamData: payload.organizationAndTeamData,
+                    prNumber: payload.pullRequestNumber,
+                    changedFiles,
+                    savedSuggestions,
+                    diffSource,
+                    removedFiles,
+                });
+
+            if (check.skipped) {
+                await this.markCompleted(jobId, { reason: check.skipped });
+                return;
+            }
+
+            const implementedSuggestions = check.persisted;
+
+            await this.suggestionService.resolveImplementedSuggestionsOnPlatform(
+                {
+                    organizationAndTeamData: payload.organizationAndTeamData,
+                    repository: {
+                        id: payload.repository.id,
+                        name: payload.repository.name,
+                    },
+                    prNumber: payload.pullRequestNumber,
+                    platformType: payload.platformType,
+                },
+            );
+
+            // 6. Broadcast so the dashboard's facet counts (Needs attention /
+            // Awaiting cards) refetch right after statuses are persisted. The
+            // verification pass is what flips implementationStatus, but unlike
+            // the review run it never touches an automation execution — so
+            // without this emit the SSE stream wouldn't tell the frontend a
+            // suggestion was resolved, and the card could stay stale. Emit only
+            // when at least one status was actually persisted (the service
+            // returns only the suggestions it actually persisted); a no-op
+            // verification shouldn't churn the API.
+            if (implementedSuggestions?.length) {
+                try {
+                    this.eventEmitter.emit(PR_EXECUTION_UPDATED_EVENT, {
+                        organizationId:
+                            payload.organizationAndTeamData?.organizationId,
+                        executionUuid: undefined,
+                        status: AutomationStatus.SUCCESS,
+                        timestamp: new Date().toISOString(),
+                    });
+                } catch (error) {
+                    // The statuses are already persisted — a failing listener
+                    // must never fail the whole verification job.
+                    this.logger.warn({
+                        message: `Failed to broadcast execution update after verification for PR#${payload.pullRequestNumber}`,
+                        context: ImplementationVerificationProcessor.name,
+                        error,
+                        metadata: {
+                            organizationId:
+                                payload.organizationAndTeamData?.organizationId,
+                            prNumber: payload.pullRequestNumber,
+                        },
+                    });
+                }
+            }
+
+            await this.markCompleted(jobId, {
+                checkedCount: check.checked,
+                decided: check.decided,
+                raised: check.persisted.length,
+                unmeasured: countByReason(check.unmeasured),
+                diffSource,
+            });
+            })(), signal);
         } catch (error) {
             this.logger.error({
                 message: `Failed to process implementation check for job ${jobId}`,
