@@ -401,13 +401,20 @@ describe('contentRateLimitKey', () => {
 });
 
 describe('ContentRateLimitGate', () => {
-    // classifyGitHubError reads retry-after against the real clock, so the
-    // injected clock starts from it.
+    // classifyGitHubError reads retry-after against Date.now, so both read
+    // one clock here. Starting the injected clock from the real one left a
+    // case one real millisecond to run before its window outlived it.
     let now: number;
+    let clock: jest.SpyInstance;
     const gate = () => new ContentRateLimitGate(() => now);
 
     beforeEach(() => {
         now = Date.now();
+        clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+    });
+
+    afterEach(() => {
+        clock.mockRestore();
     });
 
     it('ignores errors that are not rate limits', () => {

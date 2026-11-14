@@ -4730,6 +4730,7 @@ export class GithubService
             changes: file.changes,
             patch: file.patch,
             previous_filename: file.previous_filename,
+            blob_url: file.blob_url,
         }));
 
         if (cacheKey && result.length > 0) {

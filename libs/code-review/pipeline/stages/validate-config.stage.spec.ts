@@ -5,10 +5,24 @@ import { ORGANIZATION_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
-import { CUSTOM_AGENTS_PLAN_REQUIRED } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import {
+    CUSTOM_AGENTS_BETA_REQUIRED,
+    CUSTOM_AGENTS_PLAN_REQUIRED,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import { environment } from '@libs/ee/configs/environment';
 import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
+
+// Custom agents read the install's mode. Pinned to Cloud here, as CI runs;
+// the self-hosted cases below switch it.
+jest.mock('@libs/ee/configs/environment', () => {
+    const actual = jest.requireActual('@libs/ee/configs/environment');
+    return {
+        ...actual,
+        environment: { ...actual.environment, API_CLOUD_MODE: true },
+    };
+});
 
 describe('ValidateConfigStage — v2 routing', () => {
     let stage: ValidateConfigStage;
@@ -783,6 +797,60 @@ describe('ValidateConfigStage — custom agents plan gate', () => {
 
         expect(validateOrganizationLicense).not.toHaveBeenCalled();
         expect(createSingleIssueComment).not.toHaveBeenCalled();
+    });
+
+    // Custom agents are a beta feature: a self-hosted install runs them only
+    // with BETA_FEATURES=true, whatever its plan (#2425).
+    describe('on a self-hosted install', () => {
+        const betaFeatures = process.env.BETA_FEATURES;
+
+        beforeEach(() => {
+            environment.API_CLOUD_MODE = false;
+            delete process.env.BETA_FEATURES;
+            validateOrganizationLicense.mockResolvedValue(TEAMS);
+        });
+
+        afterEach(() => {
+            environment.API_CLOUD_MODE = true;
+            if (betaFeatures === undefined) {
+                delete process.env.BETA_FEATURES;
+            } else {
+                process.env.BETA_FEATURES = betaFeatures;
+            }
+        });
+
+        it.each([
+            ['unset', undefined],
+            ['false', 'false'],
+        ])(
+            'with BETA_FEATURES %s, reviews without the custom agents and their skills and docs',
+            async (_name, value) => {
+                if (value !== undefined) process.env.BETA_FEATURES = value;
+
+                const result = await stage.execute(buildContext());
+
+                expect(result.codeReviewConfig.customAgents).toEqual([]);
+                expect(result.codeReviewConfig.knowledge).toEqual([]);
+                expect(result.statusInfo?.status).not.toBe('skipped');
+                expect(createSingleIssueComment).not.toHaveBeenCalled();
+            },
+        );
+
+        it('with BETA_FEATURES off, answers @kody -v with the reason and skips the review', async () => {
+            const result = await stage.execute(buildContext('ledger-rules'));
+
+            expect(createSingleIssueComment).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    prNumber: 7,
+                    body: `\`@kody -v ledger-rules\` did not run. ${CUSTOM_AGENTS_BETA_REQUIRED}`,
+                }),
+            );
+            expect(result.statusInfo).toEqual({
+                status: 'skipped',
+                message:
+                    'Custom agents are in beta and BETA_FEATURES is off on this install.',
+            });
+        });
     });
 });
 

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BeforeApplicationShutdown, Injectable } from '@nestjs/common';
 import { createLogger } from '@libs/core/log/logger';
 import type { Response } from 'express';
 
@@ -8,11 +8,53 @@ import type { Response } from 'express';
  * write events to.
  */
 @Injectable()
-export class NotificationSseService {
+export class NotificationSseService implements BeforeApplicationShutdown {
     private readonly logger = createLogger(NotificationSseService.name);
     private readonly connections = new Map<string, Set<Response>>();
+    /** Streams opened and not registered yet: still reading their first event. */
+    private readonly opening = new Set<Response>();
+    private closing = false;
 
-    addConnection(userId: string, res: Response): void {
+    /**
+     * Ends every open stream, the ones still opening too. Nest closes the
+     * HTTP server right after this hook, and a server waits for its open
+     * responses: a stream left open would keep the process alive until the
+     * browser went away. The client reconnects by itself, to whichever
+     * instance is up.
+     */
+    beforeApplicationShutdown(): void {
+        this.closing = true;
+        for (const res of [
+            ...this.opening,
+            ...[...this.connections.values()].flatMap((set) => [...set]),
+        ]) {
+            this.end(res);
+        }
+        this.opening.clear();
+        this.connections.clear();
+    }
+
+    /**
+     * Tracks a stream from the moment its headers are sent, so a shutdown
+     * that starts before it is registered still ends it. False once the
+     * shutdown started: the stream is ended at once.
+     */
+    openConnection(res: Response): boolean {
+        if (this.closing) {
+            this.end(res);
+            return false;
+        }
+        this.opening.add(res);
+        return true;
+    }
+
+    /** False once the shutdown started: the stream is ended, not registered. */
+    addConnection(userId: string, res: Response): boolean {
+        this.opening.delete(res);
+        if (this.closing) {
+            this.end(res);
+            return false;
+        }
         let set = this.connections.get(userId);
         if (!set) {
             set = new Set();
@@ -28,9 +70,11 @@ export class NotificationSseService {
                 activeConnections: set.size,
             },
         });
+        return true;
     }
 
     removeConnection(userId: string, res: Response): void {
+        this.opening.delete(res);
         const set = this.connections.get(userId);
         if (set) {
             set.delete(res);
@@ -63,6 +107,14 @@ export class NotificationSseService {
     broadcast(event: { type: string; data: unknown }): void {
         for (const [userId] of this.connections) {
             this.pushEvent(userId, event);
+        }
+    }
+
+    private end(res: Response): void {
+        try {
+            res.end();
+        } catch {
+            // Already gone.
         }
     }
 }
