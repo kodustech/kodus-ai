@@ -65,6 +65,9 @@ import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contra
 import { sandboxBaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
 import { renderKnowledgeSection } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-prompt';
 import { buildKnowledgeTools } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
+import type { BaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
+import type { ResolvedKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
+import { parseKnowledgeSourcePath } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
 
 /** Tools an agent adds to its run, and how to release them afterwards. */
@@ -707,6 +710,10 @@ export abstract class BaseCodeReviewAgentProvider {
                 verifyByokConfig: checkByokConfig,
                 gitHubToken: input.gitHubToken,
                 linkedRepoAccess: input.linkedRepoAccess,
+                referenceRepositories: knowledgeRepositories(
+                    input.knowledge,
+                    input.knowledgeReader,
+                ),
                 documentationSearchService: this.documentationSearchService,
                 documentationSearchOptions: {
                     organizationAndTeamData: input.organizationAndTeamData,
@@ -1157,4 +1164,26 @@ export abstract class BaseCodeReviewAgentProvider {
     protected buildUserPrompt(input: ReviewAgentInput): string {
         return buildUserPromptFor(input, this.promptMeta(input));
     }
+}
+
+/** The other repositories an agent's skills and docs come from
+ *  (`owner/repo:path` → `owner/repo`), which readReference may read. */
+export function knowledgeRepositories(
+    knowledge: ResolvedKnowledge | undefined,
+    reader: BaseBranchReader | undefined,
+): string[] {
+    const paths = [
+        ...(knowledge?.skills ?? []).map((skill) => skill.path),
+        ...(knowledge?.docs ?? []).map((doc) => doc.path),
+    ];
+    return [
+        ...new Set(
+            paths
+                // Only what the reader routes to a linked repository: a path
+                // of the reviewed repository can hold a colon too.
+                .filter((path) => reader?.isOtherRepository?.(path))
+                .map((path) => parseKnowledgeSourcePath(path)?.repository)
+                .filter((repository): repository is string => !!repository),
+        ),
+    ];
 }

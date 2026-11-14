@@ -211,6 +211,59 @@ function answersNothing(result: string): boolean {
     );
 }
 
+/** `owner/repo`, each part a GitHub name: no other path, query or segment. */
+const REFERENCE_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+
+/**
+ * Why readReference refuses `repo`/`path` before any request, or null when
+ * both may be read. It reads only the repositories the review was given;
+ * anything else would reach whatever the review's token can.
+ */
+export function refuseReadReference(
+    repo: string,
+    path: string,
+    readable: ReadonlySet<string>,
+): string | null {
+    const name = repo.trim();
+    if (
+        !REFERENCE_REPOSITORY.test(name) ||
+        name.split('/').some((part) => part === '.' || part === '..')
+    ) {
+        return `Error: "${repo}" is not a repository name; use "owner/repo".`;
+    }
+    if (!readable.has(name.toLowerCase())) {
+        const list = [...readable].join(', ') || '(none)';
+        return `Error: ${name} is not a repository this review can read. Readable: ${list}.`;
+    }
+    if (path.startsWith('/') || path.split(/[/\\]/).includes('..')) {
+        return `Error: "${path}" must be a path inside ${name}.`;
+    }
+    return null;
+}
+
+/**
+ * What readReference tells the model when GitHub refuses a read: which
+ * repository, path and ref failed, and what to change on the next call. A
+ * bare "Could not read" left the model retrying the same wrong branch.
+ */
+function describeReadReferenceFailure(
+    repo: string,
+    path: string,
+    explicitRef: string | undefined,
+    status: number,
+    statusText: string,
+): string {
+    const refLabel = explicitRef
+        ? `branch "${explicitRef}"`
+        : "the repository's default branch";
+    const head = `Error: ${path} was not readable in ${repo} on ${refLabel} (${status} ${statusText}).`;
+    if (status !== 404) return head;
+    const hint = explicitRef
+        ? ' Check the path, or omit the branch parameter to read the default branch.'
+        : ' Check the path and the "owner/repo" name, or pass the branch that holds the file.';
+    return `${head} Not found: the repository, the path or the branch does not exist, or this integration cannot access the repository.${hint}`;
+}
+
 export function buildAgentTools(
     remoteCommands: RemoteCommands | undefined,
     gitHubToken?: string,
@@ -219,6 +272,9 @@ export function buildAgentTools(
     documentationSearchOptions?: Record<string, unknown>,
     callGraph?: string,
     linkedRepoAccess?: LinkedRepoAccess,
+    /** Repositories this review's skills and docs come from (`owner/repo`),
+     *  readable through readReference besides the reviewed and linked ones. */
+    referenceRepositories: readonly string[] = [],
 ): Record<string, any> {
     if (!remoteCommands) {
         return {};
@@ -1528,9 +1584,20 @@ fi
     // `@file:org/design-system/docs/pattern.md`). Sandbox-based `readFile`
     // only sees the current PR's repo, so without this tool the agent has
     // no way to fetch externally-referenced files.
+    // What readReference may read: the reviewed repository, its linked ones
+    // and the repositories its skills and docs come from.
+    const readableReferences = new Set(
+        [
+            repositoryFullName,
+            ...(linkedRepoAccess?.list() ?? []).map((r) => r.repository),
+            ...referenceRepositories,
+        ]
+            .filter((r): r is string => typeof r === 'string' && !!r.trim())
+            .map((r) => r.trim().toLowerCase()),
+    );
     if (gitHubToken) {
         tools.readReference = mkTool(
-            'Read a file from another repository. Use this to fetch reference files mentioned in rules (e.g., coding standards, patterns from other repos). Accepts the full "owner/repo" form and an optional branch.',
+            'Read a file from another repository this review links (its linked repositories and the repositories its skills and docs come from). Use this to fetch reference files mentioned in rules (e.g., coding standards, patterns from other repos). Accepts the full "owner/repo" form and an optional branch.',
             {
                 type: 'object',
                 properties: {
@@ -1546,18 +1613,36 @@ fi
                     },
                     branch: {
                         type: 'string',
-                        description: 'Branch name (default: main)',
+                        description:
+                            "Branch name. Omit it to read the repository's default branch (which may be master, develop, ...).",
                     },
                 },
                 required: ['repo', 'path'],
             },
             async ({ repo, path, branch }: any) => {
                 if (!repo || !path) return 'Error: repo and path are required';
-                const ref = branch || 'main';
+                const refused = refuseReadReference(
+                    String(repo),
+                    String(path),
+                    readableReferences,
+                );
+                if (refused) return refused;
+                repo = String(repo).trim();
+                // No branch: omit `ref` and GitHub's contents API reads the
+                // repository's default branch. Hardcoding `main` 404'd on
+                // every read of a repository whose default is master/develop.
+                const explicitRef =
+                    typeof branch === 'string' && branch.trim()
+                        ? branch.trim()
+                        : undefined;
+                const ref = explicitRef ?? '(default branch)';
                 const safePath = encodeURIComponent(path);
+                const query = explicitRef
+                    ? `?ref=${encodeURIComponent(explicitRef)}`
+                    : '';
                 try {
                     const response = await fetch(
-                        `https://api.github.com/repos/${repo}/contents/${safePath}?ref=${ref}`,
+                        `https://api.github.com/repos/${repo}/contents/${safePath}${query}`,
                         {
                             headers: {
                                 Authorization: `Bearer ${gitHubToken}`,
@@ -1570,7 +1655,13 @@ fi
                             message: `[READ-REFERENCE] ${repo}#${ref} ${path} → ${response.status} ${response.statusText}`,
                             context: 'agent-tools.readReference',
                         });
-                        return `Error: Could not read ${path} from ${repo} (${response.status} ${response.statusText})`;
+                        return describeReadReferenceFailure(
+                            repo,
+                            path,
+                            explicitRef,
+                            response.status,
+                            response.statusText,
+                        );
                     }
                     const content = await response.text();
                     logger.log({

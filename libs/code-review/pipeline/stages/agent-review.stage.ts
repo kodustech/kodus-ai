@@ -1,3 +1,4 @@
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import * as crypto from 'crypto';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -368,6 +369,14 @@ function isFinderSuggestion(s: Partial<CodeSuggestion>): boolean {
         !isAnalyzerSuggestion(s) &&
         !isCustomAgentFinding(s)
     );
+}
+
+function isGithubDotCom(cloneUrl: string | undefined): boolean {
+    try {
+        return new URL(cloneUrl ?? '').hostname.toLowerCase() === 'github.com';
+    } catch {
+        return false;
+    }
 }
 
 @Injectable()
@@ -4007,15 +4016,21 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
     /**
      * Resolve GitHub token for cross-repo file reading (readReference tool).
-     * Uses the same token that was used to clone the repo for the sandbox.
+     * Uses the same token that was used to clone the repo for the sandbox,
+     * and only on a GitHub review: readReference calls api.github.com.
      */
     private async resolveGitHubToken(
         context: CodeReviewPipelineContext,
     ): Promise<string | undefined> {
+        if (context.platformType !== PlatformType.GITHUB) return undefined;
         try {
             if (context.getFreshCloneParams) {
                 const params = await context.getFreshCloneParams();
-                return params?.authToken;
+                // readReference calls api.github.com: a GitHub Enterprise
+                // Server token belongs to its own host.
+                return isGithubDotCom(params?.cloneUrl)
+                    ? params?.authToken
+                    : undefined;
             }
         } catch {
             // Best effort — tool just won't be available
