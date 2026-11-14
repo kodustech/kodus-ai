@@ -844,6 +844,50 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
             expect(pullRequestService.updateSuggestion).not.toHaveBeenCalled();
         });
 
+        // The agent may write a path the way the diff does not.
+        it.each(['/app/b.rb:10-12', './app/b.rb:10-12', 'app\\b.rb:10-12'])(
+            'reads a listed location written as %s on the file the diff names',
+            async (location) => {
+                answerAll(ImplementationStatus.IMPLEMENTED);
+
+                await check(
+                    [grouped({ alsoFoundIn: [location] })],
+                    [fileA, fileB],
+                );
+
+                expect(statusWritten()).toEqual([
+                    ImplementationStatus.IMPLEMENTED,
+                ]);
+            },
+        );
+
+        // One group the store refuses must not cost the rest of the check.
+        it('still writes the other suggestions when a group cannot be written', async () => {
+            answerAll(ImplementationStatus.IMPLEMENTED);
+            pullRequestService.updateSuggestion.mockImplementation(
+                async (id, _data, _org, options) => {
+                    if (id === 's-1' && options?.addToSet) {
+                        throw new Error(
+                            "Cannot create field 'implementedLocations'",
+                        );
+                    }
+                    return {};
+                },
+            );
+
+            const result = await check(
+                [grouped(), sent('s-solo', 'app/a.rb')],
+                [fileA, fileB],
+            );
+
+            expect(result.persisted).toEqual([
+                {
+                    id: 's-solo',
+                    implementationStatus: ImplementationStatus.IMPLEMENTED,
+                },
+            ]);
+        });
+
         it('asks about each location on its own file, without the code of another one', async () => {
             answerAll(ImplementationStatus.NOT_IMPLEMENTED);
 

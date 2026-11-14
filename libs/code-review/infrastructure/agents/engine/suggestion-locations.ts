@@ -44,7 +44,12 @@ function parseLocation(location: string): SuggestionLocation | null {
     if (!match?.[1] || match[1] === 'undefined' || match[1] === 'null') {
         return null;
     }
-    const [, file, start, end] = match;
+    const [, written, start, end] = match;
+    // The diff names files relative to the repository, with forward slashes.
+    const file = written
+        .trim()
+        .replace(/\\/g, '/')
+        .replace(/^(\.\/|\/)+/, '');
     return {
         key: location.trim(),
         file,

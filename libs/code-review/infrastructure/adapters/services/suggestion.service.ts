@@ -440,90 +440,108 @@ export class SuggestionService implements ISuggestionService {
         await Promise.all([
             ...groupChecks.map((group) =>
                 writes(async () => {
-                    // Adds what this check found fixed to what is stored and
-                    // reads it all back, in one write.
-                    const stored =
-                        await this.pullRequestService.updateSuggestion(
-                            group.id,
-                            {},
-                            organizationAndTeamData,
-                            {
-                                addToSet: { [LOCATIONS_FIELD]: group.fixedNow },
-                                // Only what the group is decided from comes back.
-                                projection: [
-                                    'files.suggestions.id',
-                                    `files.suggestions.${LOCATIONS_FIELD}`,
-                                ],
-                            },
-                        );
-                    const storedLocations =
-                        stored?.files
-                            ?.flatMap((file) => file.suggestions ?? [])
-                            .find((s) => s.id === group.id)?.implementationCheck
-                            ?.implementedLocations ?? [];
-                    const known = new Set([
-                        ...group.fixedBefore,
-                        ...group.fixedNow,
-                        ...storedLocations,
-                    ]);
-                    const status = groupImplementationStatus({
-                        locations: group.locations,
-                        fixed: new Set(
-                            group.locations
-                                .map((location) => location.key)
-                                .filter((key) => known.has(key)),
-                        ),
-                        partial: group.partial,
-                        undecided: group.undecided,
-                    });
-                    if (!status) {
-                        groupUnmeasured.push({
-                            id: group.id,
-                            reason: group.reason,
+                    try {
+                        // Adds what this check found fixed to what is stored and
+                        // reads it all back, in one write.
+                        const stored =
+                            await this.pullRequestService.updateSuggestion(
+                                group.id,
+                                {},
+                                organizationAndTeamData,
+                                {
+                                    addToSet: {
+                                        [LOCATIONS_FIELD]: group.fixedNow,
+                                    },
+                                    // Only what the group is decided from comes back.
+                                    projection: [
+                                        'files.suggestions.id',
+                                        `files.suggestions.${LOCATIONS_FIELD}`,
+                                    ],
+                                },
+                            );
+                        const storedLocations =
+                            stored?.files
+                                ?.flatMap((file) => file.suggestions ?? [])
+                                .find((s) => s.id === group.id)
+                                ?.implementationCheck?.implementedLocations ??
+                            [];
+                        const known = new Set([
+                            ...group.fixedBefore,
+                            ...group.fixedNow,
+                            ...storedLocations,
+                        ]);
+                        const status = groupImplementationStatus({
+                            locations: group.locations,
+                            fixed: new Set(
+                                group.locations
+                                    .map((location) => location.key)
+                                    .filter((key) => known.has(key)),
+                            ),
+                            partial: group.partial,
+                            undecided: group.undecided,
                         });
-                        await write(
-                            group.id,
-                            recordFields({
-                                checkedAt,
-                                outcome: 'unmeasured',
+                        if (!status) {
+                            groupUnmeasured.push({
+                                id: group.id,
                                 reason: group.reason,
-                            }),
-                        );
-                        return;
-                    }
-                    groupVerdicts.push({ id: group.id, status });
-                    const record = recordFields({
-                        checkedAt,
-                        outcome: 'decided',
-                        verdict: status,
-                    });
-                    const unset = ['implementationCheck.reason'];
-                    if (
-                        raisesImplementationStatus(
-                            byId.get(group.id)?.implementationStatus,
-                            status,
-                        ) &&
-                        (await write(
-                            group.id,
-                            {
-                                ...record,
-                                implementationStatus: status,
-                                updatedAt: checkedAt,
-                            },
-                            {
-                                implementationStatusNotIn:
-                                    statusesAtOrAbove(status),
-                                unset,
-                            },
-                        ))
-                    ) {
-                        persisted.push({
-                            id: group.id,
-                            implementationStatus: status,
+                            });
+                            await write(
+                                group.id,
+                                recordFields({
+                                    checkedAt,
+                                    outcome: 'unmeasured',
+                                    reason: group.reason,
+                                }),
+                            );
+                            return;
+                        }
+                        groupVerdicts.push({ id: group.id, status });
+                        const record = recordFields({
+                            checkedAt,
+                            outcome: 'decided',
+                            verdict: status,
                         });
-                        return;
+                        const unset = ['implementationCheck.reason'];
+                        if (
+                            raisesImplementationStatus(
+                                byId.get(group.id)?.implementationStatus,
+                                status,
+                            ) &&
+                            (await write(
+                                group.id,
+                                {
+                                    ...record,
+                                    implementationStatus: status,
+                                    updatedAt: checkedAt,
+                                },
+                                {
+                                    implementationStatusNotIn:
+                                        statusesAtOrAbove(status),
+                                    unset,
+                                },
+                            ))
+                        ) {
+                            persisted.push({
+                                id: group.id,
+                                implementationStatus: status,
+                            });
+                            return;
+                        }
+                        await write(group.id, record, { unset });
+                    } catch (error) {
+                        // One group the store refuses (a malformed record)
+                        // leaves the others to be written and resolved.
+                        this.logger.error({
+                            message: `Implementation check could not record a grouped suggestion of PR#${prNumber}`,
+                            context: SuggestionService.name,
+                            error,
+                            metadata: {
+                                organizationAndTeamData,
+                                prNumber,
+                                suggestionId: group.id,
+                            },
+                        });
                     }
-                    await write(group.id, record, { unset });
                 }),
             ),
             ...verdicts.map(({ id, status }) =>
