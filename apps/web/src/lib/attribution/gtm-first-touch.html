@@ -9,16 +9,29 @@
  *
  * On the first visit to kodus.io or app.kodus.io it stores where the visitor
  * came from in the cookie `kodus_first_touch` on .kodus.io. It never
- * overwrites an existing cookie. The app reads it at signup and the API stores
- * it on the new organization. ES5 on purpose: GTM rejects newer syntax in
- * Custom HTML.
+ * overwrites an existing cookie, except for a creator link (see below). The
+ * app reads it at signup and the API stores it on the new organization. ES5 on
+ * purpose: GTM rejects newer syntax in Custom HTML.
+ *
+ * Creator links (utm_medium=creator, utm_campaign=<creator id>) pay a
+ * commission, so the last one clicked wins: it replaces whatever the cookie
+ * holds, another creator included, and lasts 90 days from that click. Once it
+ * expires, the next visit records how the visitor came back. Any other visit
+ * leaves a creator cookie alone.
  */
 (function () {
   var COOKIE = 'kodus_first_touch';
   // Production only: the app container loads in every environment (QA,
   // previews, e2e), and a visit there would write this production cookie.
   var HOSTS = ['kodus.io', 'www.kodus.io', 'app.kodus.io'];
-  var MAX_AGE = 60 * 60 * 24 * 365;
+  var DAY = 60 * 60 * 24;
+  var MAX_AGE = DAY * 365;
+  var CREATOR_MEDIUM = 'creator';
+  var CREATOR_MAX_AGE = DAY * 90;
+  // The id format of seo-copilot's creators table, tested on the lowercased id:
+  // 2 to 40 characters, so it fits whole at the shortest cut below. Anything
+  // else credits no creator.
+  var CREATOR_ID = /^[a-z0-9][a-z0-9_-]{1,39}$/;
   var PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid'];
   // The API is the filter and cleans every value again. This only keeps out of
   // the cookie a newsletter link's reader address carried in a UTM, which
@@ -41,7 +54,7 @@
 
   // Rebuilt whole at each size, so the landing page's query always carries
   // the same values as the fields.
-  function build(valueMax, urlMax, landingQuery) {
+  function build(valueMax, urlMax, landingQuery, creatorId) {
     var touch = {};
     var kept = [];
     var query = new URLSearchParams(location.search);
@@ -52,6 +65,10 @@
       // any size.
       if (PARAMS[i] === 'gclid' && !GCLID.test(full)) continue;
       var value = PARAMS[i] === 'gclid' ? full : cut(full, valueMax);
+      // Stored as matched below, in the one form the commission query
+      // compares against.
+      if (creatorId && PARAMS[i] === 'utm_medium') value = CREATOR_MEDIUM;
+      if (creatorId && PARAMS[i] === 'utm_campaign') value = creatorId;
       touch[PARAMS[i]] = value;
       kept.push(encodeURIComponent(PARAMS[i]) + '=' + encodeURIComponent(value));
     }
@@ -67,17 +84,39 @@
     return encodeURIComponent(JSON.stringify(touch));
   }
 
+  // The characters the API strips before storing (INVISIBLE_CHARS in
+  // libs/organization/domain/organization/first-touch.ts), so the tag and the
+  // API agree on whether a link names a creator. A string, not a literal: the
+  // u flag is newer syntax than GTM accepts.
+  function visible(text) {
+    try {
+      return text.replace(new RegExp('[\\p{Cc}\\p{Cf}\\p{Default_Ignorable_Code_Point}]', 'gu'), '');
+    } catch (e) {
+      return text;
+    }
+  }
+
+  // A creator link names who gets the commission in utm_campaign. Returns that
+  // id, or '' when there is no usable one and the visit counts as any other.
+  function creatorIdOf() {
+    var query = new URLSearchParams(location.search);
+    var medium = visible(query.get('utm_medium') || '').replace(/^\s+|\s+$/g, '').toLowerCase();
+    var id = visible(query.get('utm_campaign') || '').replace(/^\s+|\s+$/g, '').toLowerCase();
+    return medium === CREATOR_MEDIUM && CREATOR_ID.test(id) ? id : '';
+  }
+
   try {
     if (HOSTS.indexOf(location.hostname) < 0) return;
-    if (new RegExp('(?:^|;\\s*)' + COOKIE + '=').test(document.cookie)) return;
+    var creatorId = creatorIdOf();
+    if (!creatorId && new RegExp('(?:^|;\\s*)' + COOKIE + '=').test(document.cookie)) return;
 
-    var cookie = build(100, 300, true);
+    var cookie = build(100, 300, true, creatorId);
     // Browsers drop cookies over 4KB without a word; non-ASCII UTMs can get
     // there. Shorter values, and the landing page without its query (the
     // fields still carry the values).
-    if (cookie.length > 3500) cookie = build(40, 100, false);
+    if (cookie.length > 3500) cookie = build(40, 100, false, creatorId);
 
-    document.cookie = COOKIE + '=' + cookie + '; Domain=.kodus.io; Path=/; Max-Age=' + MAX_AGE +
+    document.cookie = COOKIE + '=' + cookie + '; Domain=.kodus.io; Path=/; Max-Age=' + (creatorId ? CREATOR_MAX_AGE : MAX_AGE) +
       '; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : '');
   } catch (e) {
     // Attribution is best effort: never break the page.
