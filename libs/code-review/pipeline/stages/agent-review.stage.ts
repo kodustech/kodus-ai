@@ -3017,7 +3017,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     `r${ri}`,
                     embedCache,
                     tiebreak,
-                    { crossStream: true },
+                    {
+                        crossStream: true,
+                        // An embedding outage on this path names its org and PR.
+                        logMeta: {
+                            prNumber,
+                            organizationId: telemetryMeta?.organizationId,
+                            teamId: telemetryMeta?.teamId,
+                        },
+                    },
                 );
                 if (decision.honor) {
                     absorbedBy = {

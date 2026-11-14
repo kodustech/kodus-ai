@@ -442,6 +442,30 @@ describe('KodyIssuesManagementService', () => {
 
             expect(resolve).not.toHaveBeenCalled();
         });
+
+        it('resolves only an issue the model was shown', async () => {
+            jest.spyOn(service as any, 'getChangedFiles').mockResolvedValue([]);
+            issuesServiceMock.findByFileAndStatus = jest
+                .fn()
+                .mockResolvedValue([{ uuid: 'review-1' }]);
+            issuesServiceMock.updateStatus = jest.fn().mockResolvedValue(null);
+            (service as any).kodyIssuesAnalysisService.resolveExistingIssues = jest.fn(async () => ({
+                issueVerificationResults: [
+                    { issueId: 'review-1', isIssuePresentInCode: false },
+                    // An id the model made up, or read from the PR.
+                    { issueId: 'another-org-issue', isIssuePresentInCode: false },
+                ],
+            }));
+
+            await service.resolveExistingIssues(
+                baseParams,
+                [{ path: 'src/main.ts', status: 'modified', suggestions: [] }],
+                undefined,
+            );
+
+            expect(issuesServiceMock.updateStatus).toHaveBeenCalledTimes(1);
+            expect(issuesServiceMock.updateStatus).toHaveBeenCalledWith('review-1', 'resolved');
+        });
     });
 
     describe('buildFilter', () => {
