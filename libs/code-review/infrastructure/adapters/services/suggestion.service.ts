@@ -90,6 +90,9 @@ import { PullRequestReviewComment } from '@libs/platform/domain/platformIntegrat
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 
+/** MongoDB: an update path runs through a field that is not an object. */
+const MONGO_PATH_NOT_VIABLE = 28;
+
 @Injectable()
 export class SuggestionService implements ISuggestionService {
     private readonly logger = createLogger(SuggestionService.name);
@@ -529,8 +532,17 @@ export class SuggestionService implements ISuggestionService {
                         }
                         await write(group.id, record, { unset });
                     } catch (error) {
-                        // One group the store refuses (a malformed record)
-                        // leaves the others to be written and resolved.
+                        // Only a record the store cannot extend (stored as
+                        // null or a non-object) is left behind, so the other
+                        // suggestions are still written and resolved. Any
+                        // other failure may pass on a retry: it fails the
+                        // check, as it did before groups were checked.
+                        if (
+                            (error as { code?: number })?.code !==
+                            MONGO_PATH_NOT_VIABLE
+                        ) {
+                            throw error;
+                        }
                         this.logger.error({
                             message: `Implementation check could not record a grouped suggestion of PR#${prNumber}`,
                             context: SuggestionService.name,

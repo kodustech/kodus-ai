@@ -861,18 +861,26 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
             },
         );
 
-        // One group the store refuses must not cost the rest of the check.
-        it('still writes the other suggestions when a group cannot be written', async () => {
-            answerAll(ImplementationStatus.IMPLEMENTED);
+        // One group whose record the store cannot extend (stored as null or
+        // a non-object: MongoDB answers PathNotViable) must not cost the rest
+        // of the check.
+        const failGroupWrite = (error: Error) =>
             pullRequestService.updateSuggestion.mockImplementation(
                 async (id, _data, _org, options) => {
-                    if (id === 's-1' && options?.addToSet) {
-                        throw new Error(
-                            "Cannot create field 'implementedLocations'",
-                        );
-                    }
+                    if (id === 's-1' && options?.addToSet) throw error;
                     return {};
                 },
+            );
+
+        it('still writes the other suggestions when a group record cannot be extended', async () => {
+            answerAll(ImplementationStatus.IMPLEMENTED);
+            failGroupWrite(
+                Object.assign(
+                    new Error(
+                        "Cannot create field 'implementedLocations' in element {implementationCheck: null}",
+                    ),
+                    { name: 'MongoServerError', code: 28 },
+                ),
             );
 
             const result = await check(
@@ -886,6 +894,19 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
                     implementationStatus: ImplementationStatus.IMPLEMENTED,
                 },
             ]);
+        });
+
+        // Anything else may pass on a retry: it fails the check, as on main.
+        it('fails the check on any other store error', async () => {
+            answerAll(ImplementationStatus.IMPLEMENTED);
+            const transient = Object.assign(new Error('connection reset'), {
+                name: 'MongoNetworkError',
+            });
+            failGroupWrite(transient);
+
+            await expect(
+                check([grouped(), sent('s-solo', 'app/a.rb')], [fileA, fileB]),
+            ).rejects.toBe(transient);
         });
 
         it('asks about each location on its own file, without the code of another one', async () => {
