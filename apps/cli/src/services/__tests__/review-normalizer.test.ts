@@ -136,3 +136,28 @@ describe('review normalizer — full explanation', () => {
         expect(pr.message).toBe('The whole PR explanation.');
     });
 });
+
+describe('review normalizer — flat issues arrays', () => {
+    it.each(['issues', 'suggestions'] as const)(
+        'normalizes API severities in a flat `%s` array',
+        (key) => {
+            const base = { file: 'a.ts', line: 1, message: 'm' };
+            const response = {
+                [key]: [
+                    { ...base, severity: 'high' },
+                    { ...base, severity: 'medium' },
+                    { ...base, severity: 'low' },
+                    { ...base, severity: 'critical' },
+                ],
+            } as unknown as PullRequestSuggestionsResponse;
+
+            const result = normalizeSuggestionsResponse(response);
+            expect(result.issues.map((i) => i.severity)).toEqual([
+                'error',
+                'warning',
+                'info',
+                'critical',
+            ]);
+        },
+    );
+});

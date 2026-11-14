@@ -7,6 +7,7 @@ import type {
 } from '../../types/review.js';
 import type { GitMetrics, IReviewApi } from './api.interface.js';
 import { requestWithRetry } from './api-core.js';
+import { normalizeReviewResult } from '../review-normalizer.js';
 import { CommandError } from '../../utils/command-errors.js';
 
 type RequestWithRetry = <T>(
@@ -114,7 +115,9 @@ export class RealReviewApi implements IReviewApi {
         if (!enqueueResponse?.jobId) {
             // Server didn't honor async (older deployment). It must have
             // returned the legacy synchronous body, so just hand it back.
-            return enqueueResponse as unknown as ReviewResult;
+            return normalizeReviewResult(
+                enqueueResponse as unknown as ReviewResult,
+            );
         }
 
         return this.pollReviewJob(
@@ -154,7 +157,7 @@ export class RealReviewApi implements IReviewApi {
                         `CLI review job ${jobId} completed but no result was returned`,
                     );
                 }
-                return statusResponse.result;
+                return normalizeReviewResult(statusResponse.result);
             }
 
             if (statusResponse.status === 'FAILED') {

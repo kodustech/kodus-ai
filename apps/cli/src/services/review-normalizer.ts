@@ -50,15 +50,22 @@ export function mapPrLevelSuggestions(
     }));
 }
 
+export function normalizeIssueSeverities(issues: ReviewIssue[]): ReviewIssue[] {
+    return issues.map((issue) => ({
+        ...issue,
+        severity: normalizeSeverity(issue.severity),
+    }));
+}
+
 export function normalizeSuggestionsResponse(
     response: PullRequestSuggestionsResponse,
 ): ReviewResult {
     let issues: ReviewIssue[] = [];
 
     if (Array.isArray(response.issues)) {
-        issues = response.issues;
+        issues = normalizeIssueSeverities(response.issues);
     } else if (Array.isArray(response.suggestions)) {
-        issues = response.suggestions;
+        issues = normalizeIssueSeverities(response.suggestions);
     } else if (
         response.suggestions &&
         typeof response.suggestions === 'object'
@@ -78,4 +85,16 @@ export function normalizeSuggestionsResponse(
             new Set(issues.map((issue) => issue.file)).size,
         duration: response.duration ?? 0,
     };
+}
+
+/**
+ * Normalizes severities on a result returned by the `/cli/review` job API,
+ * which emits low/medium/high/critical, so `kodus review` and
+ * `kodus pr suggestions` share the same severity vocabulary.
+ */
+export function normalizeReviewResult(result: ReviewResult): ReviewResult {
+    if (!result || !Array.isArray(result.issues)) {
+        return result;
+    }
+    return { ...result, issues: normalizeIssueSeverities(result.issues) };
 }
