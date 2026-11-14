@@ -1,3 +1,6 @@
+import { normalizeScanPath } from '@libs/issues/domain/scan-fingerprint';
+import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
+import { VULN_CLASSES } from '../scan-prompts';
 import { LANGUAGE_SURFACES } from './languages';
 import {
     GrepFn,
@@ -5,27 +8,12 @@ import {
     SurfaceHit,
     SurfaceMap,
     SurfacePattern,
-    SurfaceRole,
     VulnClass,
 } from './surface.types';
 
 export const MAX_HITS_PER_PATTERN = 2000;
 const MAX_TEXT_CHARS = 300;
-/** Lines longer than this are generated/minified; only their head is re-tested. */
-const MAX_RETEST_CHARS = 5000;
-/** Above this a role's combined regex is split, so one rg call stays a sane command line. */
-const MAX_COMBINED_REGEX_CHARS = 12000;
 const NO_MATCHES = 'No matches found.';
-const ROLES: SurfaceRole[] = ['entry_point', 'auth_check', 'sink'];
-const VULN_CLASS_ORDER: VulnClass[] = [
-    'authz',
-    'injection',
-    'ssrf',
-    'data_exposure',
-    'secret_identity',
-    'misconfiguration',
-    'resource_exhaustion',
-];
 
 export interface RgLine {
     file: string;
@@ -34,7 +22,7 @@ export interface RgLine {
 }
 
 function normalizePath(path: string): string {
-    return path.replace(/\\/g, '/').replace(/^(?:\.\/)+/, '');
+    return normalizeScanPath(path);
 }
 
 function parseRgLines(stdout: string): RgLine[] {
@@ -66,7 +54,18 @@ export function parseRgOutput(stdout: string): RgLine[] {
 }
 
 const SKIP_DIR =
-    /(?:^|\/)(?:test|tests|__tests__|__test__|spec|specs|__mocks__|fixtures?|__fixtures__|testdata|test_data|vendor|third_party|node_modules|bower_components|dist|build|coverage|\.next|_build|deps|Pods|DerivedData|\.dart_tool)\//;
+    /(?:^|\/)(?:test|tests|__tests__|__test__|spec|specs|__mocks__|fixtures?|__fixtures__|testdata|test_data|third_party|node_modules|bower_components|coverage|\.next|_build|Pods|DerivedData|\.dart_tool)\//;
+export const SCAN_EXCLUDE_GLOBS = [
+    '.git/**',
+    '**/{test,tests,__tests__,__test__,spec,specs,__mocks__,fixture,fixtures,__fixtures__,testdata,test_data,third_party,node_modules,bower_components,coverage,.next,_build,Pods,DerivedData,.dart_tool}/**',
+    '/{build,deps,dist,vendor}/**',
+    '**/*.{spec,test,e2e-spec,stories}.*',
+    '**/*.min.*',
+    '**/*.d.ts',
+    '**/*.pb.go',
+    '**/*_pb2.py',
+    '**/*.generated.*',
+];
 const SKIP_FILE =
     /(?:\.(?:spec|test|e2e-spec|stories)\.\w+|_test\.(?:go|py|rb|exs?|dart|c|cc|cpp)|_spec\.rb|\.min\.\w+|\.d\.ts|\.pb\.go|_pb2\.py|\.generated\.\w+|(?:^|\/)test_[^/]*\.py|(?:^|\/)conftest\.py|[a-z0-9](?:Tests?|Spec|IT)\.(?:java|kt|scala|cs|swift))$/;
 
@@ -75,58 +74,20 @@ const SKIP_FILE =
  *  build never is, and an app may live under it. */
 export function isSkippedPath(path: string): boolean {
     const p = normalizePath(path);
-    return SKIP_DIR.test(p) || SKIP_FILE.test(p);
-}
-
-function escapeRegExp(s: string): string {
-    return s.replace(/[.+^$(){}|[\]\\]/g, '\\$&');
-}
-
-function globBody(glob: string): string {
-    let out = '';
-    for (let i = 0; i < glob.length; i++) {
-        const c = glob[i];
-        if (c === '*') {
-            if (glob[i + 1] === '*') {
-                if (glob[i + 2] === '/') {
-                    out += '(?:.*/)?';
-                    i += 2;
-                } else {
-                    out += '.*';
-                    i += 1;
-                }
-            } else {
-                out += '[^/]*';
-            }
-        } else if (c === '?') {
-            out += '[^/]';
-        } else if (c === '{' && glob.indexOf('}', i) !== -1) {
-            const close = glob.indexOf('}', i);
-            const alts = glob
-                .slice(i + 1, close)
-                .split(',')
-                .map(globBody);
-            out += `(?:${alts.join('|')})`;
-            i = close;
-        } else {
-            out += escapeRegExp(c);
-        }
-    }
-    return out;
-}
-
-/** Minimal gitignore-flavoured glob: `**`, `*`, `?`, `{a,b}`; no `/` means a basename match. */
-export function globToRegExp(glob: string): RegExp {
-    const g = normalizePath(glob).replace(/^\//, '');
-    const body = globBody(g);
-    return new RegExp(g.includes('/') ? `^${body}$` : `^(?:.*/)?${body}$`);
+    return (
+        SKIP_DIR.test(p) ||
+        /^(?:build|deps|dist|vendor)\//.test(p) ||
+        SKIP_FILE.test(p)
+    );
 }
 
 export function matchesGlob(path: string, glob: string): boolean {
-    return globToRegExp(glob).test(normalizePath(path));
+    return isFileMatchingGlob(normalizePath(path), [
+        glob.includes('/') ? glob : `**/${glob}`,
+    ]);
 }
 
-const EXTENSION_LANGUAGE: Record<string, string> = {
+export const EXTENSION_LANGUAGE: Record<string, string> = {
     ts: 'typescript',
     tsx: 'typescript',
     js: 'typescript',
@@ -205,61 +166,24 @@ export function detectLanguages(listing: string[]): string[] {
     return LANGUAGE_SURFACES.map((s) => s.language).filter((l) => found.has(l));
 }
 
-export function combineRegex(patterns: SurfacePattern[]): string {
-    return patterns.map((p) => `(?:${p.regex})`).join('|');
-}
-
 interface GrepBatch {
     language: string;
     glob: string;
     patterns: SurfacePattern[];
 }
 
-/** One batch per (glob, role); a role whose combined regex is too long is split. */
+/** One search per pattern: ripgrep is the sole regex engine. */
 export function planBatches(surface: LanguageSurface): GrepBatch[] {
-    const groups = [
+    return [
         { glob: surface.glob, patterns: surface.patterns },
         ...(surface.extraGlobs ?? []),
-    ];
-    const batches: GrepBatch[] = [];
-    for (const group of groups) {
-        for (const role of ROLES) {
-            let current: SurfacePattern[] = [];
-            let size = 0;
-            for (const p of group.patterns.filter((x) => x.role === role)) {
-                const len = p.regex.length + 5;
-                if (current.length && size + len > MAX_COMBINED_REGEX_CHARS) {
-                    batches.push({
-                        language: surface.language,
-                        glob: group.glob,
-                        patterns: current,
-                    });
-                    current = [];
-                    size = 0;
-                }
-                current.push(p);
-                size += len;
-            }
-            if (current.length) {
-                batches.push({
-                    language: surface.language,
-                    glob: group.glob,
-                    patterns: current,
-                });
-            }
-        }
-    }
-    return batches;
-}
-
-const compiled = new Map<string, RegExp>();
-function jsRegex(pattern: SurfacePattern): RegExp {
-    let re = compiled.get(pattern.regex);
-    if (!re) {
-        re = new RegExp(pattern.regex);
-        compiled.set(pattern.regex, re);
-    }
-    return re;
+    ].flatMap((group) =>
+        group.patterns.map((pattern) => ({
+            language: surface.language,
+            glob: group.glob,
+            patterns: [pattern],
+        })),
+    );
 }
 
 export interface CollectSurfaceOptions {
@@ -268,6 +192,7 @@ export interface CollectSurfaceOptions {
     excludeGlobs?: string[];
     /** Concurrent grep calls (each one is a sandbox round-trip). */
     concurrency?: number;
+    signal?: AbortSignal;
     /** Overridable for tests. */
     surfaces?: LanguageSurface[];
 }
@@ -276,12 +201,13 @@ async function runPool<T>(
     items: T[],
     concurrency: number,
     worker: (item: T) => Promise<void>,
+    signal?: AbortSignal,
 ): Promise<void> {
     let next = 0;
     const lanes = Array.from(
         { length: Math.max(1, Math.min(concurrency, items.length)) },
         async () => {
-            while (next < items.length) {
+            while (next < items.length && !signal?.aborted) {
                 const item = items[next++];
                 await worker(item);
             }
@@ -291,9 +217,8 @@ async function runPool<T>(
 }
 
 /**
- * Maps entry points, auth checks and sinks with a handful of rg calls per
- * language. Each rg hit is attributed back to the pattern(s) it came from by
- * re-testing the line in JS. A failing grep is recorded, never thrown.
+ * Maps entry points, auth checks and sinks with bounded, per-pattern searches.
+ * No repository text is re-tested by V8. A failing grep is recorded, never thrown.
  */
 export async function collectSurface(
     grep: GrepFn,
@@ -303,7 +228,7 @@ export async function collectSurface(
     const surfaces = (opts.surfaces ?? LANGUAGE_SURFACES).filter((s) =>
         opts.languages.includes(s.language),
     );
-    const excludes = (opts.excludeGlobs ?? []).map(globToRegExp);
+    const excludes = opts.excludeGlobs ?? [];
     const batches = surfaces.flatMap(planBatches);
 
     const errors: SurfaceMap['errors'] = [];
@@ -313,10 +238,13 @@ export async function collectSurface(
         batches.map((b, i) => ({ b, i })),
         opts.concurrency ?? 4,
         async ({ b, i }) => {
-            const regex = combineRegex(b.patterns);
+            const regex = b.patterns[0].regex;
             let stdout: string;
             try {
-                stdout = await grep(regex, root, b.glob);
+                stdout = await grep(regex, root, b.glob, {
+                    securityScan: true,
+                    excludeGlobs: [...SCAN_EXCLUDE_GLOBS, ...excludes],
+                });
             } catch (err) {
                 errors.push({
                     language: b.language,
@@ -335,10 +263,8 @@ export async function collectSurface(
             }
             for (const l of parseRgLines(stdout)) {
                 if (isSkippedPath(l.file)) continue;
-                if (excludes.some((re) => re.test(l.file))) continue;
-                const probe = l.text.slice(0, MAX_RETEST_CHARS);
+                if (isFileMatchingGlob(l.file, excludes)) continue;
                 for (const p of b.patterns) {
-                    if (!jsRegex(p).test(probe)) continue;
                     perBatchHits[i].push({
                         file: l.file,
                         line: l.line,
@@ -353,6 +279,7 @@ export async function collectSurface(
                 }
             }
         },
+        opts.signal,
     );
 
     // Deterministic order regardless of pool scheduling, then cap + dedupe.
@@ -406,7 +333,7 @@ export async function collectSurface(
             }
         }
     }
-    const classRank = new Map(VULN_CLASS_ORDER.map((c, i) => [c, i]));
+    const classRank = new Map(VULN_CLASSES.map((c, i) => [c, i]));
     for (const f of Object.values(files)) {
         f.classes.sort(
             (a, b) => (classRank.get(a) ?? 0) - (classRank.get(b) ?? 0),

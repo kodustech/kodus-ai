@@ -17,6 +17,7 @@ import { RunSecurityScanButton } from "../issues/_components/security-scan/run-s
 import { useRefreshIssuesAsScansProgress } from "../issues/_components/security-scan/use-refresh-issues-as-scans-progress";
 import {
     FindingsList,
+    selectShownFindings,
     type FindingsStatusFilter,
 } from "./_components/findings-list";
 import { ScanHistoryButton } from "./_components/scan-history";
@@ -53,6 +54,13 @@ export default function DeepScanPage() {
                     }),
             ),
         [issues, permissions, organizationId],
+    );
+
+    // The list and the issue sheet's next/previous walk the same findings,
+    // in the same order.
+    const shown = useMemo(
+        () => selectShownFindings(findings, status, severity),
+        [findings, status, severity],
     );
 
     return (
@@ -97,6 +105,7 @@ export default function DeepScanPage() {
 
                 <FindingsList
                     findings={findings}
+                    shown={shown}
                     loading={isLoading}
                     status={status}
                     onStatusChange={setStatus}
@@ -104,7 +113,7 @@ export default function DeepScanPage() {
                 />
             </Page.Content>
 
-            <IssueDetailsRightSheet issues={findings} />
+            <IssueDetailsRightSheet issues={shown} />
         </Page.Root>
     );
 }

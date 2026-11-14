@@ -58,6 +58,8 @@ export interface ScanUnitProgress {
      */
     lensesRun?: VulnClass[];
     lensesExamined?: VulnClass[];
+    /** Files fully read by each class, recorded with this unit. */
+    examinedByClass?: ScanExaminedClass[];
 }
 
 export interface SecurityScanOutcomeCounts {

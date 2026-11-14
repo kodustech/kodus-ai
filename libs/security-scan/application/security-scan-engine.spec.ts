@@ -99,7 +99,7 @@ const SURFACE: SurfaceMap = {
 
 /** The command a reproduction runs as its own user, unwrapped. */
 function asRepro(command: string): string | undefined {
-    const m = /^runuser -l kodus-repro -c '([\s\S]*)'$/.exec(command);
+    const m = /^unshare --net -- runuser -l kodus-repro -c '([\s\S]*)'$/.exec(command);
     return m ? m[1].replace(/'\\''/g, "'") : undefined;
 }
 
@@ -303,6 +303,7 @@ describe('SecurityScanEngine', () => {
 
         const result = await engine.run({
             ...baseParams(),
+            maxUnits: 2,
             sandbox: fakeSandbox(),
             meter,
         } as any);
@@ -460,6 +461,7 @@ describe('SecurityScanEngine', () => {
 
         const result = await engine.run({
             ...baseParams(),
+            maxUnits: 2,
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
@@ -485,6 +487,7 @@ describe('SecurityScanEngine', () => {
 
         const result = await engine.run({
             ...baseParams(),
+            maxUnits: 2,
             sandbox: fakeSandbox(),
             meter,
         } as any);
@@ -568,6 +571,7 @@ describe('SecurityScanEngine', () => {
 
         const result = await engine.run({
             ...baseParams(),
+            maxUnits: 2,
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             deadlineAt: 30_000,
@@ -577,12 +581,12 @@ describe('SecurityScanEngine', () => {
         expect(result.finished).toBe(false);
         expect(result.stoppedByBudget).toBe(false);
         expect(result.progress.map((p) => p.state)).toEqual([
-            'done',
+            'pending',
             'pending',
         ]);
     });
 
-    it('stops a unit between lenses at the deadline and keeps what it found for the next slice', async () => {
+    it('leaves a lens that outlived the deadline pending without issuing finalize calls', async () => {
         let now = 0;
         const lens = fakeLens((file, cls) =>
             file.endsWith('orders.controller.ts') && cls === 'authz'
@@ -626,20 +630,23 @@ describe('SecurityScanEngine', () => {
             ),
         ).toHaveLength(1);
         expect(result.progress[0].state).toBe('pending');
-        expect(onUnitDone).toHaveBeenCalledWith(
-            expect.objectContaining({ state: 'pending' }),
-            [expect.objectContaining({ vulnerabilityClass: 'authz' })],
-            [],
-        );
+        expect(onUnitDone).not.toHaveBeenCalled();
+        expect(result.findings).toEqual([]);
     });
 
     it('never stores twice a bug a unit stopped mid-way repeats from one folded before it', async () => {
         let now = 0;
+        let stored!: () => void;
+        const firstStored = new Promise<void>(resolve => { stored = resolve; });
         const lens = fakeLens((file, cls) =>
             cls === 'authz' ? [IDOR] : [],
         );
         const runLens = jest.fn(async (input: any, secrets: any) => {
-            now += 60_000;
+            const start = /Start from this file:\n`{3,}\n(.+)\n/.exec(input.userPrompt)?.[1];
+            if (start?.endsWith('orders.service.ts')) {
+                await firstStored;
+                now = 120_000;
+            }
             return lens(input, secrets);
         });
         const engine = new SecurityScanEngine({
@@ -660,6 +667,7 @@ describe('SecurityScanEngine', () => {
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             deadlineAt: 90_000,
+            onUnitDone: async (_p: any, findings: any[]) => { if (findings.length) stored(); },
         } as any);
 
         expect(result.progress.find((p) => p.state === 'pending')).toBeDefined();
@@ -1960,7 +1968,7 @@ describe('SecurityScanEngine: across slices and units', () => {
         } as any);
 
         const service = result.units.find((u) => u.file === 'src/orders/orders.service.ts');
-        expect(service?.classes).toEqual(['authz']);
+        expect(service?.classes).toEqual(expect.arrayContaining(['authz']));
         // Examined for that class: its finding, gone now, can be resolved.
         expect(
             result.examinedByClass.find((e) => e.vulnerabilityClass === 'authz')?.filePaths,
@@ -2090,7 +2098,7 @@ describe('SecurityScanEngine: across slices and units', () => {
         } as any);
 
         expect(result.units).toHaveLength(1);
-        expect(result.filesBeyondPlan).toBe(rankCandidates(SURFACE).length - 1);
+        expect(result.filesBeyondPlan).toBe(3);
     });
 
     it('counts a candidate a planner-added file crowded out of a full plan', async () => {
@@ -2111,7 +2119,7 @@ describe('SecurityScanEngine: across slices and units', () => {
         } as any);
 
         expect(result.units.map((u) => u.file)).toEqual(['src/admin/exec.ts']);
-        expect(result.filesBeyondPlan).toBe(1);
+        expect(result.filesBeyondPlan).toBe(3);
     });
 
     it('never counts a file the plan would not take as left out by its limit', async () => {
@@ -2136,8 +2144,8 @@ describe('SecurityScanEngine: across slices and units', () => {
             maxUnits: 1,
         } as any);
 
-        expect(result.filesBeyondPlan).toBe(rankCandidates(surface).length - 1);
-        expect(result.filesBeyondPlan).toBe(Object.keys(surface.files).length - 2);
+        expect(result.filesBeyondPlan).toBe(3);
+        expect(result.units).toHaveLength(1);
     });
 
     it('says which earlier finding a unit found again, so the job can sight it', async () => {
@@ -2176,6 +2184,20 @@ describe('SecurityScanEngine: across slices and units', () => {
             expect.objectContaining({ state: 'done' }),
             [],
             [expect.objectContaining({ fingerprint: 'fp-earlier' })],
+        );
+    });
+
+    it('drops a finding stored as an open issue that another unit of this scan already stored', () => {
+        const engine = new SecurityScanEngine({} as any) as any;
+        const open = { fingerprint: 'fp-open' };
+        engine.known = new Set([open]);
+        // The first unit's finding, stored as the same open issue.
+        const firstUnit: any = { storedAs: 'fp-open' };
+        const secondUnit: any = { storedAs: 'fp-open' };
+        const sighted: any[] = [];
+
+        expect(engine.refreshes(secondUnit, [open, firstUnit], sighted)).toBe(
+            false,
         );
     });
 
@@ -2435,7 +2457,7 @@ describe('SecurityScanEngine: across slices and units', () => {
             ...baseParams(),
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-            units: first.units,
+            units: [unit],
             progress: [
                 {
                     unitId: unit.id,
@@ -2491,6 +2513,7 @@ describe('SecurityScanEngine: across slices and units', () => {
             sandbox: fakeSandbox(),
             meter: meter(),
             deadlineAt: 20 * 60_000,
+            maxUnits: 1,
         } as any);
         const classes = first.units[0].classes;
         expect(classes.length).toBeGreaterThan(3);
@@ -2498,7 +2521,7 @@ describe('SecurityScanEngine: across slices and units', () => {
         expect(first.progress[0]).toEqual(
             expect.objectContaining({
                 state: 'pending',
-                lensesRun: classes.slice(0, 3),
+                lensesRun: classes.slice(0, 2),
             }),
         );
 
@@ -2514,7 +2537,7 @@ describe('SecurityScanEngine: across slices and units', () => {
 
         // Only the lenses the first slice never reached.
         expect(runLens.mock.calls.map(([input]) => lensOf(input))).toEqual(
-            classes.slice(3),
+            classes.slice(2),
         );
         expect(second.finished).toBe(true);
         expect(
@@ -2817,5 +2840,72 @@ describe('SecurityScanEngine: a unit that cannot be stored', () => {
         expect(
             started.filter((f) => f.endsWith('orders.controller.ts')),
         ).toHaveLength(1);
+    });
+});
+
+describe('slice cancellation', () => {
+    it('hands off a lens that never settles at the deadline, aborting its model signal', async () => {
+        jest.useFakeTimers();
+        try {
+            const lens = jest.fn(() => new Promise<any>(() => {}));
+            const engine = new SecurityScanEngine({runLens: lens, collectSurface: async () => SURFACE});
+            const pending = engine.run({...baseParams(), sandbox: fakeSandbox(), meter: new ScanBudgetMeter({maxUsd: 100}, RATES),
+                units: [{id: 'only', file: 'src/admin/exec.ts', relatedFiles: [], language: 'typescript', classes: ['injection'], priority: 1, reasons: []}],
+                deadlineAt: Date.now() + 100 } as any);
+            await jest.advanceTimersByTimeAsync(99);
+            expect(lens).toHaveBeenCalledTimes(1);
+            await jest.advanceTimersByTimeAsync(1);
+            const result = await pending;
+            expect(result.finished).toBe(false);
+            expect(result.progress[0].state).toBe('pending');
+            expect((lens.mock.calls[0] as any)[0].parentSignal.aborted).toBe(true);
+        } finally { jest.useRealTimers(); }
+    });
+    it('counts a submitted completion-policy stop as examined, as the real harness emits it', async () => {
+        const engine = new SecurityScanEngine({collectSurface: async () => SURFACE, llm: fakeLlm({units: []}),
+            runLens: async () => ({findings: {suggestions: []}, finishReason: 'stopped', submittedResult: true} as any)});
+        const result = await engine.run({...baseParams(), sandbox: fakeSandbox(), meter: new ScanBudgetMeter({maxUsd: 100}, RATES), maxUnits: 1} as any);
+        expect(result.progress[0].state).toBe('done');
+        expect(result.examinedByClass.length).toBeGreaterThan(0);
+    });
+    it('audits tracked source files even when every pattern misses them', async () => {
+        const engine = new SecurityScanEngine({collectSurface: async () => ({languages: ['typescript'], files: {}, hits: [], errors: []}),
+            llm: fakeLlm({units: []}), runLens: fakeLens(() => [])});
+        const result = await engine.run({...baseParams(), sandbox: fakeSandbox(), meter: new ScanBudgetMeter({maxUsd: 100}, RATES)} as any);
+        expect(result.units.map(u => u.file).sort()).toEqual(['src/admin/exec.ts', 'src/orders/orders.controller.ts', 'src/orders/orders.service.ts', 'src/util/date.ts']);
+        expect(result.progress.every(p => p.state === 'done')).toBe(true);
+    });
+    it('executes no repository code when repro egress cannot be blocked', async () => {
+        const sandbox = fakeSandbox();
+        const original = sandbox.run.getMockImplementation()!;
+        sandbox.run.mockImplementation(async (command: string, opts: any) => command.includes('unshare --net') ? {exitCode: 1, stdout: ''} : original(command, opts));
+        const engine = new SecurityScanEngine() as any;
+        const record = {path: 'test.repro.ts', content: '', command: 'npx jest test.repro.ts', executed: false};
+        await engine.runReproduction({sandbox}, 'typescript', record);
+        expect(record.executed).toBe(false);
+        expect(sandbox.run.mock.calls.some(([command]: any) => command.includes('npx jest'))).toBe(false);
+    });
+});
+
+describe('requests after a slice ended', () => {
+    it('refuses an uncooperative background caller after the deadline', async () => {
+        jest.useFakeTimers();
+        let refused = false;
+        const meter = new ScanBudgetMeter({maxUsd: 100}, RATES);
+        try {
+            const engine = new SecurityScanEngine({collectSurface: async () => SURFACE, runLens: async () => {
+                await new Promise(r => setTimeout(r, 200));
+                try { await bill(1, 1, 'late-dedup'); } catch { refused = true; }
+                return {findings: {suggestions: []}, finishReason: 'completed'} as any;
+            }});
+            const pending = engine.run({...baseParams(), sandbox: fakeSandbox(), meter,
+                units: [{id:'one',file:'src/admin/exec.ts',relatedFiles:[],language:'typescript',classes:['injection'],priority:1,reasons:[]}],
+                deadlineAt: Date.now() + 100} as any);
+            await jest.advanceTimersByTimeAsync(100);
+            await pending;
+            await jest.advanceTimersByTimeAsync(100);
+            expect(refused).toBe(true);
+            expect(meter.snapshot().requests).toBe(0);
+        } finally { jest.useRealTimers(); }
     });
 });

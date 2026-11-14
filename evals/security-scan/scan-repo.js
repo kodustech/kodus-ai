@@ -5,12 +5,26 @@
 // the same code. The caller registers TypeScript (eval-kit registerTs) first.
 const fs = require('fs');
 const path = require('path');
+const { AsyncLocalStorage } = require('async_hooks');
 
 const { evalPermissionService, EVAL_ORG } = require('../shared/model-route');
 const { mirrorFor, inlineMirror } = require('../shared/repo-mirror');
 
 const LIBS = path.join(__dirname, '../../libs');
 const lib = (p) => require(path.join(LIBS, p));
+
+// Observe the production entry point; forward every request unchanged.
+const { LLM } = lib('llm/llm.ts');
+const call = LLM.run;
+LLM.run = function(request) {
+    const use = global.__EVAL_CASE_ALS?.getStore();
+    if (use?.scanCalls) {
+        const task = request.runName ?? 'unnamed';
+        use.scanCalls[task] = (use.scanCalls[task] ?? 0) + 1;
+    }
+    return call.call(this, request);
+};
+
 
 // The pricing the job reads (catalog, no org override), with no shared cache.
 function pricingResolver() {
@@ -58,7 +72,9 @@ async function scanRepository({ c, route, pricing, budgetUsd, sandbox: sandboxKi
     const { SecurityScanEngine } = lib('security-scan/application/security-scan-engine.ts');
     const { resolveScanModel } = lib('security-scan/application/scan-model.ts');
     const { ScanBudgetMeter } = lib('security-scan/domain/budget-meter.ts');
-    const { computeScanFingerprint } = lib('issues/domain/scan-fingerprint.ts');
+    const { asServedSlot } = lib('llm/served-slot.ts');
+    const { fingerprintOf } = lib('security-scan/domain/finding-fingerprint.ts');
+    const { SCAN_MAX_UNITS } = lib('security-scan/application/security-scan-job.processor.ts');
 
     const sandbox = await openSandbox(c, sandboxKind);
     try {
@@ -69,7 +85,9 @@ async function scanRepository({ c, route, pricing, budgetUsd, sandbox: sandboxKi
         });
         const meter = new ScanBudgetMeter(rates ? { maxUsd: budgetUsd } : { maxTokens: budgetUsd * 2_000_000 }, rates);
         const repositoryId = c.repo ?? c.id;
-        const result = await new SecurityScanEngine().run({
+        const usage = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, calls: 0, byTask: {}, scanCalls: {} };
+        global.__EVAL_CASE_ALS ??= new AsyncLocalStorage();
+        const result = await global.__EVAL_CASE_ALS.run(usage, () => new SecurityScanEngine().run({
             organizationId: EVAL_ORG.organizationId,
             teamId: EVAL_ORG.teamId,
             repositoryId,
@@ -77,21 +95,23 @@ async function scanRepository({ c, route, pricing, budgetUsd, sandbox: sandboxKi
             sandbox,
             model,
             meter,
-            maxUnits: 400,
+            maxUnits: SCAN_MAX_UNITS,
             reproduce: sandboxKind === 'e2b',
-        });
+        }));
+        result.modelCalls = usage.scanCalls;
+        result.runtime = { provider: model.slot?.provider, servedModel: model.slot ? asServedSlot(model.slot).model : null };
 
         // What ships: the job stores one issue per fingerprint, so findings
         // that share one are one issue (the first is the one stored).
         const shipped = [];
         const seen = new Set();
         for (const f of result.findings) {
-            const fp = computeScanFingerprint({ repositoryPlatform: 'github', repositoryId, vulnerabilityClass: f.vulnerabilityClass, filePath: f.filePath, symbol: f.symbol, cwe: f.cwe, appWide: f.appWide });
+            const fp = fingerprintOf({ repository: { platform: 'github', host: 'github.com', id: repositoryId } }, f);
             if (seen.has(fp)) continue;
             seen.add(fp);
             shipped.push(f);
         }
-        return { result, shipped, spend: meter.snapshot() };
+        return { result, shipped, spend: meter.committedSpend() };
     } finally {
         await sandbox.cleanup().catch(() => undefined);
     }

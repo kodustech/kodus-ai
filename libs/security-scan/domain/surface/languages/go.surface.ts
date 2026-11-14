@@ -27,7 +27,7 @@ export const GO_SURFACE: LanguageSurface = {
         ),
         entry(
             'go.router.route',
-            String.raw`\b\w+\.(?:GET|POST|PUT|PATCH|DELETE|Any|Get|Post|Put|Patch|Delete|Options|Head|Group|Route|Mount|All)\(\s*"/`,
+            String.raw`\b\w+\.(?:\w+\([^;\n]*?\)\.)*(?:GET|POST|PUT|PATCH|DELETE|Any|Get|Post|Put|Patch|Delete|Options|Head|Group|Route|Mount|All)\(\s*"/`,
             'gin/echo/chi/fiber',
         ),
         entry(

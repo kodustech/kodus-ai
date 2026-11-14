@@ -21,7 +21,7 @@ export const RUBY_SURFACE: LanguageSurface = {
     glob: '*.{rb,rake}',
     extraGlobs: [
         {
-            glob: 'routes.rb',
+            glob: '**/{routes.rb,routes/**/*.rb}',
             patterns: [
                 entry(
                     'rb.rails.routes',

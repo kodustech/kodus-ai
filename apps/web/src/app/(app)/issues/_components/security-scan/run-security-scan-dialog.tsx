@@ -38,7 +38,11 @@ import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { extractRejectionMessage } from "src/core/utils/extract-error-message";
 import { hasPermission } from "src/core/utils/permission-map";
 
-import { formatTokenCount, isNoKnownPriceMessage } from "./format";
+import {
+    formatTokenCount,
+    isNoKnownPriceMessage,
+    parseScanLimit,
+} from "./format";
 
 type LimitBy = "usd" | "tokens";
 
@@ -102,20 +106,20 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
     const [apiError, setApiError] = useState<string>();
     const [submitting, setSubmitting] = useState(false);
 
-    const usdValue = Number(maxUsd);
-    const tokensValue = Number(maxTokens);
+    // Text inputs read strictly: a number input reports what it cannot parse
+    // ("20usd", "1e") as empty, which would start the scan with no limit.
     const limit = limitBy === "usd" ? maxUsd.trim() : maxTokens.trim();
-    const limitError = !limit
-        ? undefined
-        : limitBy === "usd"
-          ? !Number.isFinite(usdValue) || usdValue < 1
-              ? "Enter at least $1, or leave it empty."
-              : undefined
-          : !Number.isInteger(tokensValue) || tokensValue < 1
-            ? "Enter a whole number of tokens, or leave it empty."
-            : undefined;
+    const { value: limitValue, error: limitError } = parseScanLimit(
+        limit,
+        limitBy,
+    );
 
-    const canSubmit = !!teamId && !!repositoryId && !limitError && !submitting;
+    const canSubmit =
+        !!teamId &&
+        !!repositoryId &&
+        !limitError &&
+        (!limit || limitValue !== undefined) &&
+        !submitting;
 
     const submit = async () => {
         if (!canSubmit) return;
@@ -127,11 +131,11 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
             await startSecurityScan({
                 teamId,
                 repositoryId,
-                ...(!limit
+                ...(limitValue === undefined
                     ? {}
                     : limitBy === "usd"
-                      ? { maxUsd: usdValue }
-                      : { maxTokens: tokensValue }),
+                      ? { maxUsd: limitValue }
+                      : { maxTokens: limitValue }),
             });
 
             await queryClient.invalidateQueries({
@@ -240,7 +244,7 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                                 <Input
                                     id="security-scan-max-usd"
                                     size="md"
-                                    type="number"
+                                    type="text"
                                     inputMode="decimal"
                                     min={1}
                                     step="any"
@@ -281,7 +285,7 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                                 <Input
                                     id="security-scan-max-tokens"
                                     size="md"
-                                    type="number"
+                                    type="text"
                                     inputMode="numeric"
                                     min={1}
                                     step={1}
@@ -301,7 +305,7 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                             ) : (
                                 <FormControl.Helper>
                                     {limit
-                                        ? `${formatTokenCount(tokensValue)} input and output tokens.`
+                                        ? `${formatTokenCount(limitValue ?? 0)} input and output tokens.`
                                         : "Leave it empty to scan the whole repository."}
                                 </FormControl.Helper>
                             )}

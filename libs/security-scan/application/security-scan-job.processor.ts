@@ -1,3 +1,4 @@
+import { fingerprintOf } from '../domain/finding-fingerprint';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -29,10 +30,7 @@ import {
     IIssuesService,
     ISSUES_SERVICE_TOKEN,
 } from '@libs/issues/domain/contracts/issues.service.contract';
-import {
-    computeScanFingerprint,
-    normalizeScanPath,
-} from '@libs/issues/domain/scan-fingerprint';
+import { normalizeScanPath } from '@libs/issues/domain/scan-fingerprint';
 import {
     IKodyIssuesManagementService,
     KODY_ISSUES_MANAGEMENT_SERVICE_TOKEN,
@@ -582,6 +580,18 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         unitsDone: countIn('done'),
                         unitsFailed: countIn('failed'),
                         unitsSkippedByBudget: countIn('skipped_budget'),
+                        examinedByClass: mergeExamined(
+                            liveCoverage.examinedByClass ?? [],
+                            progress.examinedByClass ?? [],
+                        ),
+                        examinedFiles: [
+                            ...new Set([
+                                ...(liveCoverage.examinedFiles ?? []),
+                                ...(progress.examinedByClass ?? []).flatMap(
+                                    (e) => e.filePaths,
+                                ),
+                            ]),
+                        ],
                     };
                 }
                 await this.scans.recordUnit(
@@ -617,7 +627,12 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         const coverage = {
             examinedFiles: [...examined],
             examinedByClass: mergeExamined(
-                scan.coverage?.examinedByClass ?? [],
+                mergeExamined(
+                    scan.coverage?.examinedByClass ?? [],
+                    [...unitStates.values()].flatMap(
+                        (p) => p.examinedByClass ?? [],
+                    ),
+                ),
                 result.examinedByClass,
             ),
             inheritedExaminedByClass:
@@ -668,6 +683,11 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
 
         // Not one area examined, and some failed (the provider down for every
         // lens): that is a failed scan, never a clean one.
+        if (!coverage.unitsTotal && !result.stoppedByBudget) {
+            throw new ScanFailure(
+                'No source files could be planned for examination. This scan provides no security coverage.',
+            );
+        }
         if (!coverage.unitsDone && coverage.unitsFailed) {
             throw new ScanFailure(SCAN_NO_AREA_EXAMINED_MESSAGE);
         }
@@ -713,12 +733,9 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             repositoryHost: scan.repository.host ?? '',
             repositoryId: scan.repository.id,
             scanId: scan.uuid,
-            // What this scan read, and what a carried-on plan's finished
-            // areas read at this commit.
-            examined: mergeExamined(
-                coverage.examinedByClass,
-                coverage.inheritedExaminedByClass,
-            ),
+            // A carried-on plan did not read its inherited areas again:
+            // they cannot supply a second independent miss.
+            examined: coverage.examinedByClass,
             trackedFiles: result.trackedFiles,
             scanStartedAt: scan.startedAt ?? new Date().toISOString(),
         });
@@ -732,13 +749,17 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 ? SecurityScanStatus.STOPPED_BY_BUDGET
                 : SecurityScanStatus.COMPLETED,
             progress: result.progress,
-            spend: meter.snapshot(),
+            spend: meter.committedSpend(),
             coverage,
             outcome: counts,
             finishedAt: new Date().toISOString(),
         });
 
-        return { status: 'finished', outcome: counts, spend: meter.snapshot() };
+        return {
+            status: 'finished',
+            outcome: counts,
+            spend: meter.committedSpend(),
+        };
     }
 
     private async storeFinding(
@@ -895,22 +916,6 @@ function carriedSpend(scan: SecurityScanRecord): SecurityScanSpend {
         outputTokens: most(spent?.outputTokens, committed.outputTokens),
         requests: most(spent?.requests, committed.requests),
     };
-}
-
-function fingerprintOf(scan: SecurityScanRecord, finding: ScanFinding): string {
-    if (finding.storedAs) {
-        return finding.storedAs;
-    }
-    return computeScanFingerprint({
-        repositoryPlatform: scan.repository.platform,
-        repositoryHost: scan.repository.host ?? '',
-        repositoryId: scan.repository.id,
-        vulnerabilityClass: finding.vulnerabilityClass,
-        filePath: finding.filePath,
-        symbol: finding.symbol,
-        cwe: finding.cwe,
-        appWide: finding.appWide,
-    });
 }
 
 function toReported(

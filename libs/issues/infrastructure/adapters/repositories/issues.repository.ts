@@ -180,7 +180,12 @@ export class IssuesRepository implements IIssuesRepository {
     ): Promise<IssuesEntity | null> {
         const doc = await this.issuesModel.findByIdAndUpdate(
             uuid,
-            { $set: { status: status } },
+            status === IssueStatus.RESOLVED
+                ? { $set: { status, resolvedAt: new Date().toISOString() } }
+                : {
+                      $set: { status, consecutiveScanMisses: 0 },
+                      $unset: { resolvedAt: '' },
+                  },
             { new: true },
         );
         return doc ? mapSimpleModelToEntity(doc, IssuesEntity) : null;
@@ -196,7 +201,10 @@ export class IssuesRepository implements IIssuesRepository {
                 ? // Resolved always carries when, as the scan's own path does.
                   { $set: { status, resolvedAt: new Date().toISOString() } }
                 : // Out of resolved (reopened by hand), it no longer has one.
-                  { $set: { status }, $unset: { resolvedAt: '' } },
+                  {
+                      $set: { status, consecutiveScanMisses: 0 },
+                      $unset: { resolvedAt: '' },
+                  },
         );
 
         const docs = await this.issuesModel.find({ _id: { $in: uuids } });
@@ -273,6 +281,7 @@ export class IssuesRepository implements IIssuesRepository {
                         status: IssueStatus.OPEN,
                         contributingSuggestions: [],
                         lastSeenAt: now,
+                        consecutiveScanMisses: 0,
                     });
                     return {
                         issue: mapSimpleModelToEntity(created, IssuesEntity),
@@ -357,7 +366,9 @@ export class IssuesRepository implements IIssuesRepository {
             ) {
                 return {
                     outcome: 'still_open',
-                    update: { $set: { lastSeenAt: now } },
+                    update: {
+                        $set: { lastSeenAt: now, consecutiveScanMisses: 0 },
+                    },
                 };
             }
             // This scan already stored a finding under this identity: a
@@ -378,6 +389,7 @@ export class IssuesRepository implements IIssuesRepository {
                             finding.severity,
                         ),
                         lastSeenAt: now,
+                        consecutiveScanMisses: 0,
                     },
                 },
             };
@@ -390,6 +402,7 @@ export class IssuesRepository implements IIssuesRepository {
                     $set: {
                         lastSeenScanId: finding.lastSeenScanId,
                         lastSeenAt: now,
+                        consecutiveScanMisses: 0,
                     },
                 },
             };
@@ -409,6 +422,7 @@ export class IssuesRepository implements IIssuesRepository {
             lastSeenScanId: finding.lastSeenScanId,
             lastSeenCommitSha: finding.lastSeenCommitSha,
             lastSeenAt: now,
+            consecutiveScanMisses: 0,
             // An owner the scan decided (CODEOWNERS, last author) follows the
             // repository as it changes; one a person set is kept.
             ...(finding.owner &&
@@ -526,7 +540,13 @@ export class IssuesRepository implements IIssuesRepository {
                 status: IssueStatus.OPEN,
                 lastSeenScanId: { $ne: params.scanId },
             },
-            { $set: { lastSeenScanId: params.scanId, lastSeenAt: now } },
+            {
+                $set: {
+                    lastSeenScanId: params.scanId,
+                    lastSeenAt: now,
+                    consecutiveScanMisses: 0,
+                },
+            },
         );
         // Found again after a scan resolved it: back open. A dismissed one
         // stays dismissed, as on a stored sighting.
@@ -538,6 +558,7 @@ export class IssuesRepository implements IIssuesRepository {
                           status: IssueStatus.OPEN,
                           lastSeenScanId: params.scanId,
                           lastSeenAt: now,
+                          consecutiveScanMisses: 0,
                       },
                       $unset: { resolvedAt: '' },
                   },
@@ -563,6 +584,7 @@ export class IssuesRepository implements IIssuesRepository {
             'lastSeenScanId': { $ne: params.scanId },
             // Sighted by a newer scan that overlapped this one: not gone.
             'lastSeenAt': { $lt: params.scanStartedAt },
+            'lastMissedScanId': { $ne: params.scanId },
         };
 
         const where: Record<string, unknown>[] = params.examined
@@ -587,12 +609,36 @@ export class IssuesRepository implements IIssuesRepository {
             return 0;
         }
 
+        // A single model miss is not a fix. Two distinct completed scans
+        // must miss it in an examined area; a replay cannot add another miss.
         const result = await this.issuesModel.updateMany(
-            { ...unseen, $or: where },
+            { ...unseen, $or: where, consecutiveScanMisses: { $gte: 1 } },
             {
                 $set: {
                     status: IssueStatus.RESOLVED,
                     resolvedAt: new Date().toISOString(),
+                    lastMissedScanId: params.scanId,
+                },
+                $inc: { consecutiveScanMisses: 1 },
+            },
+        );
+        await this.issuesModel.updateMany(
+            {
+                ...unseen,
+                $or: where,
+                $and: [
+                    {
+                        $or: [
+                            { consecutiveScanMisses: { $exists: false } },
+                            { consecutiveScanMisses: 0 },
+                        ],
+                    },
+                ],
+            },
+            {
+                $set: {
+                    consecutiveScanMisses: 1,
+                    lastMissedScanId: params.scanId,
                 },
             },
         );

@@ -87,8 +87,7 @@ export async function issuesListAction(
 
         if (options.promptOnly) {
             if (issues.length === 0) {
-                cliInfo('No issues match.');
-                return;
+                throw new CommandError('INVALID_INPUT', 'No issues match.');
             }
             if (issues.length > FIX_PROMPT_MAX_ISSUES) {
                 cliWarn(

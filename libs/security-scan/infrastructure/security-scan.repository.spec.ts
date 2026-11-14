@@ -193,7 +193,7 @@ describe('SecurityScanRepository: one active scan per repository', () => {
         await repository.failStale('org-1', { runningMs: 60_000, queuedMs: 60_000 });
 
         const [, update] = updateMany.mock.calls[0] as unknown as [any, any];
-        expect(update.$unset).toEqual({ activeKey: '' });
+        expect(update.$unset).toEqual({ activeKey: '', runningJobId: '', leaseExpiresAt: '' });
     });
 });
 
@@ -214,7 +214,7 @@ describe('SecurityScanRepository.recordUnit', () => {
         // One write: the check that the area has no entry is its filter.
         expect(updateOne).toHaveBeenCalledTimes(1);
         const [filter, update] = updateOne.mock.calls[0] as unknown as [any, any];
-        expect(filter).toEqual({ '_id': 'scan-1', 'progress.unitId': { $ne: 'u1' } });
+        expect(filter).toEqual({ '_id': 'scan-1', 'progress.unitId': { $ne: 'u1' }, status: 'running' });
         expect(update.$set).toEqual({ outcome: { created: 1 } });
         expect(update.$push).toEqual({ progress, reported: { $each: reported } });
     });
@@ -227,7 +227,7 @@ describe('SecurityScanRepository.recordUnit', () => {
 
         expect(updateOne).toHaveBeenCalledTimes(2);
         const [filter, update] = updateOne.mock.calls[1] as unknown as [any, any];
-        expect(filter).toEqual({ '_id': 'scan-1', 'progress.unitId': 'u1' });
+        expect(filter).toEqual({ '_id': 'scan-1', 'progress.unitId': 'u1', status: 'running' });
         expect(update.$set).toEqual({ 'outcome': { created: 1 }, 'progress.$': progress });
         expect(update.$push).toEqual({ reported: { $each: reported } });
     });

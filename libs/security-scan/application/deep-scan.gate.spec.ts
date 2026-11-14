@@ -1,3 +1,5 @@
+import { environment } from '@libs/ee/configs/environment/environment';
+
 import { DEEP_SCAN_ALPHA_ORGS_ENV, DeepScanGate } from './deep-scan.gate';
 
 function gateWith(flag: boolean | Error) {
@@ -17,8 +19,22 @@ function gateWith(flag: boolean | Error) {
 }
 
 describe('DeepScanGate', () => {
+    const cloud = environment.API_CLOUD_MODE;
+    beforeEach(() => {
+        (environment as any).API_CLOUD_MODE = true;
+    });
     afterEach(() => {
         delete process.env[DEEP_SCAN_ALPHA_ORGS_ENV];
+        (environment as any).API_CLOUD_MODE = cloud;
+    });
+
+    it('is off on a self-hosted install, allow-list or not: no worker there runs a scan', async () => {
+        (environment as any).API_CLOUD_MODE = false;
+        process.env[DEEP_SCAN_ALPHA_ORGS_ENV] = '*';
+        const { gate, featureGate } = gateWith(true);
+
+        await expect(gate.isEnabledFor('org-1')).resolves.toBe(false);
+        expect(featureGate.isEnabled).not.toHaveBeenCalled();
     });
 
     it("asks the catalog with the organization's release track", async () => {

@@ -323,6 +323,7 @@ export function enclosingSymbol(
     line: number,
 ): string | undefined {
     const lines = codeLines(source);
+    const raw = source.split(/\r?\n/);
     // codeLines returns at least one line, so this is a valid index.
     let start = Math.min(Math.max(line, 1), lines.length) - 1;
     // A decorator or attribute names the declaration it sits on.
@@ -353,6 +354,10 @@ export function enclosingSymbol(
         ) {
             continue;
         }
+        // kodus-graph 0.3.0 emits no node for inline route callbacks. Their
+        // method and literal route are stable names, unlike line numbers.
+        const route = routeCallback(raw, lines, i, start);
+        if (route) return route;
         const name = declarationAt(lines, i);
         if (name && encloses(lines, i, start) && !isBlockCall(lines, i)) {
             fn = name;
@@ -391,4 +396,37 @@ export function enclosingSymbol(
     }
 
     return fn;
+}
+
+function routeCallback(
+    raw: string[],
+    code: string[],
+    from: number,
+    target: number,
+): string | undefined {
+    const header = raw
+        .slice(from, Math.min(from + 6, target + 1))
+        .join('\n')
+        .slice(0, MAX_DECLARATION_CHARS);
+    const route =
+        /^\s*([\w$.]+)\.(get|post|put|patch|delete|all|options|head|use)\s*\(\s*(['"`])([^'"`\n]*)\3\s*,/.exec(
+            header,
+        );
+    if (
+        !route ||
+        !/(?:=>|\bfunction\b)[\s\S]*\{/.test(header.slice(route[0].length))
+    )
+        return undefined;
+    let depth = 0;
+    let opened = false;
+    for (let i = from; i < target; i++) {
+        for (const ch of code[i]) {
+            if (ch === '{') {
+                depth++;
+                opened = true;
+            } else if (ch === '}' && --depth === 0 && opened) return undefined;
+        }
+    }
+    if (target !== from && !opened) return undefined;
+    return `${route[1]}.${route[2]}(${JSON.stringify(route[4])})`;
 }

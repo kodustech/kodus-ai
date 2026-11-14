@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// security-scan on RealVuln (v1.0.0, MIT, https://huggingface.co/datasets/Kolega-Dev/RealVuln):
+// security-scan on RealVuln (v1.0.0, see realvuln/LICENSE, https://huggingface.co/datasets/Kolega-Dev/RealVuln):
 // 26 Python repositories at a pinned commit, 676 labelled vulnerabilities and
 // 120 false-positive traps. Production's scan runs on each repository
 // (scan-repo.js, the same call as run.js) and is scored with RealVuln's own
@@ -201,6 +201,7 @@ async function main() {
                 commit: r.commit_sha,
                 ...scored,
                 raw: { findings: result.findings.length, tp: raw.tp, fp: raw.fp },
+                surface: { errors: result.surfaceErrors ?? [] },
                 coverage: {
                     units: result.units.length,
                     done: result.progress.filter((p) => p.state === 'done').length,

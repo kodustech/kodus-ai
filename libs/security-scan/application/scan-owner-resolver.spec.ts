@@ -80,8 +80,12 @@ describe('ScanOwnerResolver', () => {
         );
         expect(fetches).toHaveLength(1);
         expect(fetches[0][0]).not.toContain('Basic abc');
+        expect(fetches[0][0]).not.toContain('$GIT_AUTH_HEADER');
+        expect(fetches[0][0]).toContain('--no-recurse-submodules');
         expect(fetches[0][1].envs).toEqual({
-            GIT_AUTH_HEADER: 'Authorization: Basic abc',
+            GIT_CONFIG_COUNT: '1',
+            GIT_CONFIG_KEY_0: 'http.extraHeader',
+            GIT_CONFIG_VALUE_0: 'Authorization: Basic abc',
         });
         // No hook or fsmonitor the repository set can run beside the token.
         expect(fetches[0][0]).toContain('-c core.hooksPath=/dev/null');

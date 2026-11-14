@@ -53,6 +53,13 @@ describe('resolveScanModel', () => {
         expect(model.slot).toBeUndefined();
     });
 
+    it('prices the served replacement instead of a retired saved model id', async () => {
+        resolveModel.mockResolvedValue({byokConfig: {provider: 'openai_compatible', model: 'accounts/fireworks/models/glm-5p2'}, main: {modelName: 'openai_compatible:glm-5p2'}});
+        const pricing = { resolve: jest.fn(async () => ({priced: false})) };
+        await resolveScanModel({organizationAndTeamData: {organizationId: 'org-1'}, permissionValidationService: {} as any, pricingResolver: pricing as any});
+        expect(pricing.resolve).toHaveBeenCalledWith('accounts/fireworks/models/glm-5p3', undefined);
+    });
+
     it('has no price for rates with one missing, negative or not a number', async () => {
         resolveModel.mockResolvedValue({
             byokConfig: { provider: 'openai_compatible', model: 'deepseek-v4' },

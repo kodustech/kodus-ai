@@ -1,3 +1,4 @@
+import type { RepositoryGrepOptions } from '@libs/common/utils/repository-grep';
 /**
  * Cross-file-context shared types.
  *
@@ -21,7 +22,12 @@ import { CrossFileContextPlannerSchemaType } from '@libs/common/utils/prompts/co
  * Abstracts shell commands executed in remote sandbox environments (E2B).
  */
 export interface RemoteCommands {
-    grep: (pattern: string, path: string, glob?: string) => Promise<string>;
+    grep: (
+        pattern: string,
+        path: string,
+        glob?: string,
+        options?: RepositoryGrepOptions,
+    ) => Promise<string>;
     /**
      * Read a file, or a 1-based line range of it, without following a
      * symlink or leaving the root. `root` is a linked repository's clone

@@ -195,18 +195,10 @@ describe('collectSurface', () => {
             ...extra,
         });
 
-    it('runs one grep per (glob, role) with the language glob and root', async () => {
+    it('attributes a search to one pattern without re-testing repository text', async () => {
         const grep = createFakeGrep(MINI_FILES);
-        await run(MINI_FILES, grep, { root: '.' });
-        expect(grep.calls.map((c) => [c.glob, c.path])).toEqual([
-            ['*.mini', '.'],
-            ['*.mini', '.'],
-            ['*.mini', '.'],
-            ['routes.mini', '.'],
-        ]);
-        expect(grep.calls[2].pattern).toBe(
-            String.raw`(?:\bexec\()|(?:\bfetch\()|(?:\bexec\(fetch\()`,
-        );
+        await run(MINI_FILES, grep);
+        expect(grep.calls.map(c => c.pattern)).toEqual([...MINI.patterns, ...MINI.extraGlobs![0].patterns].map(p => p.regex));
     });
 
     it('attributes each line to every pattern it matches and aggregates per file', async () => {
@@ -299,7 +291,7 @@ describe('collectSurface', () => {
         };
         const map = await run(MINI_FILES, grep);
         expect(map.hits).toEqual([]);
-        expect(map.errors).toHaveLength(4);
+        expect(map.errors).toHaveLength(MINI.patterns.length + MINI.extraGlobs![0].patterns.length);
         expect(map.errors[0].message).toBe('grep failed: sandbox gone');
     });
 
@@ -384,7 +376,6 @@ describe('collectSurface', () => {
                 });
                 expect(map.errors).toHaveLength(1);
                 expect(map.errors[0].patternIds).toEqual([
-                    'mini.guard',
                     'mini.bad',
                 ]);
                 expect(map.errors[0].message).toMatch(/^Error:/);
@@ -397,14 +388,38 @@ describe('collectSurface', () => {
         },
     );
 
-    it('plans one batch per role per glob for the real surfaces', () => {
-        const [ts] = LANGUAGE_SURFACES.filter(
-            (s) => s.language === 'typescript',
-        );
-        expect(planBatches(ts).map((b) => b.patterns[0].role)).toEqual([
-            'entry_point',
-            'auth_check',
-            'sink',
-        ]);
+    it('runs exactly one grep per real pattern', () => {
+        const ts = LANGUAGE_SURFACES.find(s => s.language === 'typescript')!;
+        expect(planBatches(ts).map(b => b.patterns)).toEqual(ts.patterns.map(p => [p]));
+    });
+});
+
+describe('bounded tracked-source searches', () => {
+    (hasRipgrep() ? it : it.skip)('ignores repository ignore rules, preserves Unicode hits and skips large vendor bundles', async () => {
+        const rg = createRipgrep({
+            '.rgignore': 'api/\n', '.ignore': 'api/\n',
+            'api/views.py': 'def visão_pedido(request):\n    return request.GET["q"]',
+            'vendor/lib/bundle.py': 'x'.repeat(7 * 1024 * 1024),
+        });
+        try {
+            const map = await collectSurface(rg.grep, {languages: ['python']});
+            expect(map.hits.some(h => h.file === 'api/views.py' && h.role === 'entry_point')).toBe(true);
+            expect(map.hits.some(h => h.file.startsWith('vendor/'))).toBe(false);
+            expect(map.errors).toEqual([]);
+        } finally { rg.cleanup(); }
+    });
+    (hasRipgrep() ? it : it.skip)('does not re-test a hostile SQL line with V8', async () => {
+        const rg = createRipgrep({'app/views.py': '"' + 'select a from b {x} '.repeat(260)});
+        const start = performance.now();
+        try {
+            await collectSurface(rg.grep, {languages: ['python']});
+            expect(performance.now() - start).toBeLessThan(2000);
+        } finally { rg.cleanup(); }
+    });
+    it('does not exclude real nested build/deps/vendor packages', () => {
+        for (const file of ['cmd/build/main.go', 'internal/deps/resolver.go', 'pkg/vendor/client.go']) {
+            expect(isSkippedPath(file)).toBe(false);
+        }
+        expect(isSkippedPath('vendor/library.go')).toBe(true);
     });
 });

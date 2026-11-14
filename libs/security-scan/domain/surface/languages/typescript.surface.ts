@@ -37,12 +37,12 @@ export const TYPESCRIPT_SURFACE: LanguageSurface = {
         entry(
             'ts.graphql.resolver',
             // `@Query()` without a return-type thunk is Nest's REST param decorator.
-            String.raw`@(?:Query|Mutation|Subscription|ResolveField)\(\s*(?:\(\)|returns\b|['"]\w+['"]\s*,\s*\(\))|^\s*(?:Query|Mutation|Subscription)\s*:\s*\{`,
+            String.raw`@(?:Query|Mutation|Subscription|ResolveField)\(\s*(?:\(\s*\w*\s*\)\s*=>|returns\b|['"]\w+['"]\s*,\s*\(\))|^\s*(?:Query|Mutation|Subscription)\s*:\s*\{`,
             'graphql',
         ),
         entry(
             'ts.http.route',
-            String.raw`\b(?:app|server|fastify|hono|\w*[Rr]outer|routes)\.(?:get|post|put|patch|delete|all|options|head|route|use)\(\s*['"\x60]/|\b(?:fastify|server|app)\.route\(\s*\{`,
+            String.raw`(?:^|[;{}])\s*[\w$.]+\.(?:get|post|put|patch|delete|all|options|head|route|use)\(\s*['"\x60]/|\b(?:fastify|server|app)\.route\(\s*\{`,
             'express/koa/fastify/hono',
         ),
         entry(

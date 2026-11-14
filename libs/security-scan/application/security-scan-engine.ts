@@ -6,11 +6,12 @@
  * this same engine and scores its findings, so both see one code path.
  */
 import { z } from 'zod';
+import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
 
-import { LLM } from '@libs/llm/llm';
+import { LLM, type LlmRequest } from '@libs/llm/llm';
 import { redactSecrets } from '@libs/llm/review-error-diagnostics';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { runWithUsageMeter } from '@libs/llm/usage-meter';
+import { runWithUsageMeter, type UsageMeter } from '@libs/llm/usage-meter';
 import { cweFamily, cweId } from '@libs/issues/domain/scan-fingerprint';
 import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
 import type {
@@ -41,6 +42,7 @@ import {
 } from '../domain/scan-prompts';
 import {
     heuristicUnits,
+    isSourceFile,
     mergeMapPlan,
     rankCandidates,
     withRevisits,
@@ -120,7 +122,7 @@ export interface SecurityScanEngineParams {
     meter: ScanBudgetMeter;
     /** The job's signal; aborting it stops the scan at once. */
     signal?: AbortSignal;
-    /** Stop starting new units after this time (epoch ms); the rest resumes later. */
+    /** Abort in-flight lenses at this time (epoch ms); unfinished work resumes later. */
     deadlineAt?: number;
     maxUnits: number;
     /** A plan from an earlier run of the same scan: skip mapping. */
@@ -177,6 +179,7 @@ export interface SecurityScanEngineResult {
     mapFailedLanguages?: string[];
     /** Candidate files the plan's limit left out: this scan never reads them. */
     filesBeyondPlan?: number;
+    surfaceErrors?: SurfaceMap['errors'];
 }
 
 const MAP_SCHEMA = z.object({
@@ -236,24 +239,82 @@ export class SecurityScanEngine {
         // A unit that could not be stored fails the scan: the lenses still
         // running stop too, instead of spending on work nothing will keep.
         const failureAbort = new AbortController();
+        const sliceAbort = new AbortController();
+        const left =
+            params.deadlineAt === undefined
+                ? undefined
+                : Math.max(0, params.deadlineAt - this.now());
+        const timer =
+            left === undefined
+                ? undefined
+                : setTimeout(
+                      () => sliceAbort.abort(new Error('slice deadline')),
+                      left,
+                  );
+        if (left === 0) sliceAbort.abort(new Error('slice deadline'));
         const signal = anySignal([
             params.signal,
             budgetAbort.signal,
             failureAbort.signal,
+            sliceAbort.signal,
         ]);
-
-        return runWithUsageMeter(
-            params.meter,
-            () =>
-                this.runMetered(params, signal, budgetAbort.signal, () =>
-                    failureAbort.abort(new Error('a unit could not be stored')),
-                ),
-            {
-                organizationId: params.organizationId,
-                teamId: params.teamId,
-                repositoryId: params.repositoryId,
+        const bounded = { ...params, signal };
+        const mayCall = () => {
+            signal.throwIfAborted();
+            if (
+                params.deadlineAt !== undefined &&
+                this.now() >= params.deadlineAt
+            )
+                throw new Error('slice deadline');
+        };
+        // Dedup/SDK work can settle after the outer await gave up. Its next
+        // request must still be refused, even while the job persists results.
+        const guardedMeter: UsageMeter = {
+            record: (observation) => params.meter.record(observation),
+            admit: async (request) => {
+                mayCall();
+                const admission = await params.meter.admit(request);
+                try {
+                    mayCall();
+                    return admission;
+                } catch (error) {
+                    admission.settle(undefined);
+                    throw error;
+                }
             },
-        );
+        };
+
+        try {
+            return await runWithUsageMeter(
+                guardedMeter,
+                () =>
+                    this.runMetered(bounded, signal, budgetAbort.signal, () =>
+                        failureAbort.abort(
+                            new Error('a unit could not be stored'),
+                        ),
+                    ),
+                {
+                    organizationId: params.organizationId,
+                    teamId: params.teamId,
+                    repositoryId: params.repositoryId,
+                },
+            );
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    /** One-shot calls do not cancel their socket; carry their reservation on. */
+    private async modelCall<S extends z.ZodType>(
+        params: SecurityScanEngineParams,
+        request: LlmRequest & { schema: S },
+    ): Promise<z.infer<S>> {
+        params.signal?.throwIfAborted();
+        if (params.deadlineAt !== undefined && this.now() >= params.deadlineAt)
+            throw new Error('slice deadline');
+        return scanAwait(this.llm(request), params.signal) as Promise<
+            z.infer<S>
+        >;
     }
 
     private async runMetered(
@@ -270,16 +331,27 @@ export class SecurityScanEngine {
 
         // Collected on every run, a continuation too: the lenses read its
         // hits as leads, and a resumed plan would audit without them.
-        const surface = await this.collect(
+        const rawSurface = await this.collect(
             params.sandbox.remoteCommands.grep as GrepFn,
-            { languages },
+            { languages, signal },
         );
+        // rg may see untracked files; only the checkout's listing can admit
+        // a candidate or a finding into this scan.
+        const surface: SurfaceMap = {
+            ...rawSurface,
+            hits: rawSurface.hits.filter((hit) => existingFiles.has(hit.file)),
+            files: Object.fromEntries(
+                Object.entries(rawSurface.files).filter(([file]) =>
+                    existingFiles.has(file),
+                ),
+            ),
+        };
         // Every search that ran failed: an empty map is a broken sandbox, not
         // a clean repository, and a scan of nothing must not end "completed".
         const searchFailures = surface.errors.filter(
             (e) => !e.message.startsWith('truncated'),
         );
-        if (searchFailures.length && !surface.hits.length) {
+        if (searchFailures.length && !surface.hits.length && !signal.aborted) {
             logger.error({
                 message: 'Security scan could not map the repository',
                 context: SecurityScanEngine.name,
@@ -342,9 +414,11 @@ export class SecurityScanEngine {
             // out by files the planner added. Only files a lens would read
             // count; an auth check alone is no candidate.
             const planned = new Set(units.map((u) => u.file));
-            planGaps.filesBeyondPlan = rankCandidates(surface).filter(
-                (c) => !planned.has(c.file),
-            ).length;
+            planGaps.filesBeyondPlan = rankCandidates(
+                surface,
+                Infinity,
+                listing.filter(isSourceFile),
+            ).filter((c) => !planned.has(c.file)).length;
             await params.onPlanned?.(units, languages);
         }
 
@@ -463,7 +537,11 @@ export class SecurityScanEngine {
                         lensesExamined: result.lensesExamined,
                     };
                     progress.set(unit.id, pending);
-                    if (result.findings.length || result.sighted?.length) {
+                    if (
+                        result.findings.length ||
+                        result.sighted?.length ||
+                        result.lensesRun?.length
+                    ) {
                         await params.onUnitDone?.(
                             pending,
                             result.findings,
@@ -501,6 +579,12 @@ export class SecurityScanEngine {
                 unitId: unit.id,
                 state: result.error ? 'failed' : 'done',
                 findings: result.findings.length,
+                examinedByClass: (result.examinedClasses ?? []).map(
+                    (vulnerabilityClass) => ({
+                        vulnerabilityClass,
+                        filePaths: [unit.file],
+                    }),
+                ),
                 ...(result.error ? { error: result.error } : {}),
             };
             progress.set(unit.id, unitProgress);
@@ -604,6 +688,7 @@ export class SecurityScanEngine {
             findings,
             languages,
             finished,
+            surfaceErrors: surface.errors,
             stoppedByBudget,
             ...planGaps,
             examinedFiles: [...examined],
@@ -640,6 +725,11 @@ export class SecurityScanEngine {
         /** Receives the other issues it repeats: found again too. */
         sighted: ScanReportedFinding[],
     ): boolean {
+        // Anything of this scan's own among them (another unit already
+        // stored the bug): a duplicate, whatever it was stored as.
+        if (!repeats.length || !repeats.every((r) => this.known.has(r))) {
+            return false;
+        }
         // Stored as one already (absorbed through more than one path, or
         // compared again after its unit): it stays that one, and every other
         // issue it repeats is found again.
@@ -650,7 +740,7 @@ export class SecurityScanEngine {
             return true;
         }
         const [first, ...others] = repeats;
-        if (!first?.fingerprint || !repeats.every((r) => this.known.has(r))) {
+        if (!first.fingerprint) {
             return false;
         }
         finding.storedAs = first.fingerprint;
@@ -680,18 +770,22 @@ export class SecurityScanEngine {
             suggestionContent: f.description,
         });
         try {
-            const { suggestions, trace } = await this.dedup(
-                // Findings go to the client's own model alone (#2451): never
-                // embedded on the platform key, the BYOK tiebreak decides.
-                (this.dedupDeps ??= createFindingDedupDeps({
-                    logger,
-                    context: SecurityScanEngine.name,
-                    platformEmbeddings: false,
-                })),
-                all.map(asSuggestion) as any,
-                0,
-                params.model.slot,
-                { organizationId: params.organizationId } as any,
+            params.signal?.throwIfAborted();
+            const { suggestions, trace } = await scanAwait(
+                this.dedup(
+                    // Findings go to the client's own model alone (#2451): never
+                    // embedded on the platform key, the BYOK tiebreak decides.
+                    (this.dedupDeps ??= createFindingDedupDeps({
+                        logger,
+                        context: SecurityScanEngine.name,
+                        platformEmbeddings: false,
+                    })),
+                    all.map(asSuggestion) as any,
+                    0,
+                    params.model.slot,
+                    { organizationId: params.organizationId } as any,
+                ),
+                params.signal,
             );
             const kept = new Set(suggestions.map((s) => s.id));
             // An earlier finding is already stored: when the dedup kept a
@@ -860,7 +954,11 @@ export class SecurityScanEngine {
     ): Promise<ScanUnit[]> {
         // As many candidates as the plan may hold: a cut below it would drop
         // files from the plan, and from every scan run after it.
-        const candidates = rankCandidates(surface, params.maxUnits);
+        const candidates = rankCandidates(
+            surface,
+            params.maxUnits,
+            listing.filter(isSourceFile),
+        );
         if (Object.keys(surface.files).length > params.maxUnits) {
             logger.warn({
                 message: `Security scan plan holds ${params.maxUnits} of the repository's candidate files`,
@@ -873,12 +971,8 @@ export class SecurityScanEngine {
                 },
             });
         }
-        if (!candidates.length) {
-            return [];
-        }
-
         try {
-            const plan = await this.llm({
+            const plan = await this.modelCall(params, {
                 byokConfig: params.model.slot,
                 schema: MAP_SCHEMA,
                 system: MAP_SYSTEM_PROMPT,
@@ -987,11 +1081,18 @@ export class SecurityScanEngine {
                         .map((f) => `- ${f.filePath}:${f.startLine} ${f.title}`)
                         .join('\n')}`;
                 }
-                const output = await this.runLens(input, {
-                    remoteCommands: params.sandbox.remoteCommands,
-                    byokConfig: params.model.slot,
-                });
-                if (signal.aborted) {
+                const output = await scanAwait(
+                    this.runLens(input, {
+                        remoteCommands: params.sandbox.remoteCommands,
+                        byokConfig: params.model.slot,
+                    }),
+                    signal,
+                );
+                if (
+                    signal.aborted ||
+                    (params.deadlineAt !== undefined &&
+                        this.now() >= params.deadlineAt)
+                ) {
                     return { findings, aborted: true, ...progressSoFar() };
                 }
                 // The harness reports a provider error or a run out of steps
@@ -1012,7 +1113,11 @@ export class SecurityScanEngine {
                         },
                     });
                 } else if (
-                    output.finishReason !== 'completed' ||
+                    (output.finishReason !== 'completed' &&
+                        !(
+                            output.finishReason === 'stopped' &&
+                            output.submittedResult === true
+                        )) ||
                     output.incompleteReason ||
                     output.submittedResult === false ||
                     // The verifier failed on some of them: neither confirmed
@@ -1054,6 +1159,12 @@ export class SecurityScanEngine {
                         { ...suggestion, relevantFile: path.file },
                         files,
                     );
+                    if (
+                        signal.aborted ||
+                        (params.deadlineAt && this.now() >= params.deadlineAt)
+                    ) {
+                        return { findings, aborted: true, ...progressSoFar() };
+                    }
                     // Its CWE or its function could not be read, and both
                     // are its identity: stored now, it would open a second
                     // issue beside the one it is, and the class counted as
@@ -1081,7 +1192,11 @@ export class SecurityScanEngine {
                     }
                 }
             } catch (error) {
-                if (signal.aborted) {
+                if (
+                    signal.aborted ||
+                    (params.deadlineAt !== undefined &&
+                        this.now() >= params.deadlineAt)
+                ) {
                     return { findings, aborted: true, ...progressSoFar() };
                 }
                 failures++;
@@ -1266,7 +1381,7 @@ export class SecurityScanEngine {
 
         let structured: z.infer<typeof FINALIZE_SCHEMA> | undefined;
         try {
-            structured = await this.llm({
+            structured = await this.modelCall(params, {
                 byokConfig: params.model.slot,
                 schema: FINALIZE_SCHEMA,
                 system: FINALIZE_SYSTEM_PROMPT,
@@ -1358,7 +1473,7 @@ export class SecurityScanEngine {
                 finding.endLine,
                 60,
             );
-            const repro = await this.llm({
+            const repro = await this.modelCall(params, {
                 byokConfig: params.model.slot,
                 schema: REPRO_SCHEMA,
                 system: REPRO_SYSTEM_PROMPT,
@@ -1430,8 +1545,19 @@ export class SecurityScanEngine {
         const work = shellQuote(workdir);
         const target = `${workdir}/${record.path}`;
         const quoted = shellQuote(target);
-        const run = (command: string, timeoutMs: number) =>
-            asReproUser(sandbox, command, timeoutMs);
+        const run = (command: string, timeoutMs: number) => {
+            params.signal?.throwIfAborted();
+            const left =
+                params.deadlineAt === undefined
+                    ? timeoutMs
+                    : params.deadlineAt - this.now();
+            if (left <= 0) throw new Error('slice deadline');
+            return asReproUser(
+                sandbox,
+                command,
+                Math.max(1, Math.min(timeoutMs, left)),
+            );
+        };
 
         // Without the scanned commit and the checkout's state, nothing could
         // be checked afterwards: no test runs.
@@ -1466,7 +1592,7 @@ export class SecurityScanEngine {
         this.reproClone = true;
 
         try {
-            await this.ensureDependencies(sandbox, language, workdir);
+            await this.ensureDependencies(sandbox, language, workdir, run);
             // A file (or link) already there is the repository's own: never
             // written over. The test stays on the issue, not run.
             // Free only on test's own "no" (exit 1): a probe that failed or
@@ -1759,6 +1885,7 @@ export class SecurityScanEngine {
         sandbox: SandboxInstance,
         language: string,
         workdir: string,
+        run: (command: string, timeoutMs: number) => Promise<unknown>,
     ): Promise<void> {
         if (this.installed.has(language)) {
             return;
@@ -1768,11 +1895,7 @@ export class SecurityScanEngine {
         if (!command) {
             return;
         }
-        await asReproUser(
-            sandbox,
-            `cd ${shellQuote(workdir)} && (${command})`,
-            300_000,
-        );
+        await run(`cd ${shellQuote(workdir)} && (${command})`, 300_000);
     }
 
     private async testHints(
@@ -1877,7 +2000,9 @@ async function runCommand(
 const REPRO_USER = 'kodus-repro';
 const REPRO_WORKDIR = `/home/${REPRO_USER}/repo`;
 
-/** A command run as REPRO_USER, in its own login environment. */
+/** Each command runs as REPRO_USER in a fresh network namespace: no egress,
+ *  no host loopback proxy, for dependency hooks as well as the test.
+ *  Failure to create it refuses the command before any repository code. */
 function asReproUser(
     sandbox: SandboxInstance,
     command: string,
@@ -1885,7 +2010,7 @@ function asReproUser(
 ) {
     return runCommand(
         sandbox,
-        `runuser -l ${REPRO_USER} -c ${shellQuote(command)}`,
+        `unshare --net -- runuser -l ${REPRO_USER} -c ${shellQuote(command)}`,
         timeoutMs,
         { asRoot: true },
     );
@@ -2051,4 +2176,11 @@ function anySignal(signals: Array<AbortSignal | undefined>): AbortSignal {
         });
     }
     return controller.signal;
+}
+
+/** The meter can abort synchronously while a request promise is being made. */
+function scanAwait<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
+    // Even when already aborted, the metered promise must have a rejection handler.
+    void work.catch(() => undefined);
+    return raceWithAbortSignal(work, signal);
 }

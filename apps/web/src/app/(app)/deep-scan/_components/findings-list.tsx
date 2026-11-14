@@ -28,26 +28,16 @@ const STATUS_TABS: { value: FindingsStatusFilter; label: string }[] = [
 ];
 
 /**
- * What the scans found, worst first. A row is one vulnerability: its title on
- * one line, then where it is (file, CWE) and who owns it, so the list reads
- * without opening every finding. A click opens the issue beside the list.
+ * The findings a status tab and a severity show, worst first, newest first
+ * within a severity: the order of the list, and of next/previous in the
+ * issue sheet beside it.
  */
-export const FindingsList = ({
-    findings,
-    loading,
-    status,
-    onStatusChange,
-    severity,
-}: {
-    findings: IssueListItem[];
-    loading: boolean;
-    status: FindingsStatusFilter;
-    onStatusChange: (status: FindingsStatusFilter) => void;
-    severity: SeverityLevel | null;
-}) => {
-    const [peek, setPeek] = useQueryState("peek");
-
-    const shown = findings
+export const selectShownFindings = (
+    findings: IssueListItem[],
+    status: FindingsStatusFilter,
+    severity: SeverityLevel | null,
+): IssueListItem[] =>
+    findings
         .filter((f) => status === "all" || f.status === status)
         .filter((f) => !severity || f.severity === severity)
         .sort(
@@ -57,6 +47,29 @@ export const FindingsList = ({
                 new Date(b.createdAt).getTime() -
                     new Date(a.createdAt).getTime(),
         );
+
+/**
+ * What the scans found, worst first. A row is one vulnerability: its title on
+ * one line, then where it is (file, CWE) and who owns it, so the list reads
+ * without opening every finding. A click opens the issue beside the list.
+ */
+export const FindingsList = ({
+    findings,
+    shown,
+    loading,
+    status,
+    onStatusChange,
+    severity,
+}: {
+    findings: IssueListItem[];
+    /** `findings` under `status` and `severity`, from `selectShownFindings`. */
+    shown: IssueListItem[];
+    loading: boolean;
+    status: FindingsStatusFilter;
+    onStatusChange: (status: FindingsStatusFilter) => void;
+    severity: SeverityLevel | null;
+}) => {
+    const [peek, setPeek] = useQueryState("peek");
 
     // Counted under the same severity filter the list shows.
     const countOf = (value: FindingsStatusFilter) =>

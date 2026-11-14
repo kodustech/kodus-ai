@@ -62,7 +62,7 @@ export const PYTHON_SURFACE: LanguageSurface = {
 
         auth(
             'py.django.auth',
-            String.raw`@(?:login_required|permission_required|user_passes_test|staff_member_required)\b|\b(?:LoginRequiredMixin|PermissionRequiredMixin|UserPassesTestMixin)\b|\b(?:permission_classes|authentication_classes)\s*=|\bdef\s+has_(?:object_)?permission\(`,
+            String.raw`@(?:login_required|permission_required|user_passes_test|staff_member_required)\b|\b(?:LoginRequiredMixin|PermissionRequiredMixin|UserPassesTestMixin)\b|\bpermission_classes\s*=\s*\[\s*(?:permissions\.)?(?:IsAuthenticated(?:OrReadOnly)?|IsAdminUser|DjangoModelPermissions|DjangoObjectPermissions)\b|\bauthentication_classes\s*=\s*\[\s*(?:\w+\.)?\w+Authentication\b|\bdef\s+has_(?:object_)?permission\(`,
             'django',
         ),
         auth(

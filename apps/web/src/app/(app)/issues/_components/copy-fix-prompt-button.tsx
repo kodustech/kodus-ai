@@ -8,6 +8,7 @@ import {
     getIssuesFixPrompt,
 } from "@services/issues/fetch";
 import { CheckIcon, CopyIcon } from "lucide-react";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { ClipboardHelpers } from "src/core/utils/clipboard";
 
 /**
@@ -15,6 +16,9 @@ import { ClipboardHelpers } from "src/core/utils/clipboard";
  * agent (Claude Code, Cursor, Codex); the API builds it. The request runs
  * inside a ClipboardItem so the browser still counts the copy as part of the
  * click; where that is missing, the text is copied once it arrives.
+ *
+ * Part of the deep scan's private alpha: it renders nothing for an
+ * organization without it, whose fix-prompt requests the API refuses.
  */
 export const CopyFixPromptButton = ({
     ids,
@@ -25,7 +29,10 @@ export const CopyFixPromptButton = ({
     label?: string;
     size?: "xs" | "sm";
 }) => {
+    const { deepScan } = useFeatureFlags();
     const [state, setState] = useState<"idle" | "copying" | "copied">("idle");
+
+    if (deepScan !== true) return null;
 
     const copy = async () => {
         setState("copying");

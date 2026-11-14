@@ -387,3 +387,13 @@ describe('codeLines: trailing comments', () => {
     });
 });
 
+
+describe('inline HTTP handlers', () => {
+    const routes = "app.get('/run', (req, res) => {\n  db.query(req.query.q);\n});\napp.post('/q', function (req, res) {\n db.query(req.body.q);\n});\nconst outside = 1;";
+    it('gives distinct stable symbols to two anonymous route callbacks', () => {
+        expect(enclosingSymbol(routes, 2)).toBe('app.get("/run")');
+        expect(enclosingSymbol(routes, 5)).toBe('app.post("/q")');
+        expect(enclosingSymbol('\n\n' + routes, 7)).toBe(enclosingSymbol(routes, 5));
+        expect(enclosingSymbol(routes, 7)).toBeUndefined();
+    });
+});

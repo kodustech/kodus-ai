@@ -26,7 +26,7 @@ export const PHP_SURFACE: LanguageSurface = {
     patterns: [
         entry(
             'php.laravel.route',
-            String.raw`\bRoute::(?:get|post|put|patch|delete|any|match|resource|apiResource|group|prefix|controller)\(`,
+            String.raw`\bRoute::(?:\w+\([^;\n]*?\)->)*(?:get|post|put|patch|delete|any|match|resource|apiResource|group|prefix|controller)\(`,
             'laravel',
         ),
         entry('php.symfony.route', String.raw`#\[Route\(|@Route\(`, 'symfony'),

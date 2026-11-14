@@ -100,7 +100,10 @@ export class WorkerModule {
                 imports: [
                     ...baseImports,
                     SharedPostgresModule.forRoot({ poolSize: 6 }),
-                    RabbitMQWrapperModule.register({ enableConsumers: true }),
+                    RabbitMQWrapperModule.register({
+                        enableConsumers: true,
+                        securityScanOnly: true,
+                    }),
                     WorkflowModule.register({ type: 'security-scan-worker' }),
                     ...jobImports,
                 ],

@@ -117,18 +117,22 @@ export class ScanOwnerResolver {
         if (!this.history) {
             return false;
         }
-        const header = this.history.authHeader
-            ? '-c http.extraHeader="$GIT_AUTH_HEADER" '
-            : '';
-        // Nothing the repository could configure runs with the token in env.
-        const inert = '-c core.hooksPath=/dev/null -c core.fsmonitor= ';
+        // Git reads the credential from its environment, never from argv.
+        // Disable hooks, filesystem monitors and recursive submodule fetches
+        // before any repository code can run.
         const result = await this.sandbox
             .run(
-                `git -C ${this.sandbox.repoDir} ${inert}${header}fetch --quiet --filter=blob:none --deepen=${HISTORY_DEPTH} ${shellQuote(this.history.cloneUrl)} ${shellQuote(`refs/heads/${this.history.branch}`)}`,
+                `git -C ${this.sandbox.repoDir} -c core.hooksPath=/dev/null -c core.fsmonitor= fetch --no-recurse-submodules --quiet --filter=blob:none --deepen=${HISTORY_DEPTH} ${shellQuote(this.history.cloneUrl)} ${shellQuote(`refs/heads/${this.history.branch}`)}`,
                 {
                     timeoutMs: 180_000,
                     ...(this.history.authHeader
-                        ? { envs: { GIT_AUTH_HEADER: this.history.authHeader } }
+                        ? {
+                              envs: {
+                                  GIT_CONFIG_COUNT: '1',
+                                  GIT_CONFIG_KEY_0: 'http.extraHeader',
+                                  GIT_CONFIG_VALUE_0: this.history.authHeader,
+                              },
+                          }
                         : {}),
                 },
             )

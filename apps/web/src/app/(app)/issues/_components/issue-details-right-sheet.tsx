@@ -43,9 +43,9 @@ import {
     ThumbsUpIcon,
 } from "lucide-react";
 import { useQueryState } from "nuqs";
+import { apiProxyPath } from "src/core/utils/api-proxy";
 import { ClipboardHelpers } from "src/core/utils/clipboard";
 import { cn } from "src/core/utils/components";
-import { apiProxyPath } from "src/core/utils/api-proxy";
 import { generateQueryKey } from "src/core/utils/reactQuery";
 
 import { CopyFixPromptButton } from "./copy-fix-prompt-button";
@@ -76,12 +76,12 @@ export const IssueDetailsRightSheet = ({
 
     const previousIssueId = useMemo<string | undefined>(
         () => issues[currentIssueIndex - 1]?.uuid,
-        [currentIssueIndex],
+        [issues, currentIssueIndex],
     );
 
     const nextIssueId = useMemo<string | undefined>(
         () => issues[currentIssueIndex + 1]?.uuid,
-        [currentIssueIndex],
+        [issues, currentIssueIndex],
     );
 
     useEffect(() => {

@@ -68,7 +68,7 @@ export interface ISecurityScanRepository {
     ): Promise<void>;
     findRecent(
         organizationId: string,
-        repositoryIds: string[] | undefined,
+        repositories: ScanRepositoryKey[] | undefined,
         limit: number,
     ): Promise<SecurityScanRecord[]>;
     /** A scan of this repository that has not finished yet, if any. */
@@ -282,11 +282,14 @@ export class SecurityScanRepository implements ISecurityScanRepository {
         appendReported?: ScanReportedFinding[],
         ownedBy?: string,
     ): Promise<void> {
-        const owned = ownedBy ? { runningJobId: ownedBy } : {};
+        const owned = {
+            status: SecurityScanStatus.RUNNING,
+            ...(ownedBy ? { runningJobId: ownedBy } : {}),
+        };
         const reported = appendReported?.length
             ? { reported: { $each: appendReported } }
             : undefined;
-        if (progress.state === 'pending') {
+        if (progress.state === 'pending' && !progress.lensesRun?.length) {
             await this.model
                 .updateOne(
                     { _id: uuid, ...owned },
@@ -327,14 +330,16 @@ export class SecurityScanRepository implements ISecurityScanRepository {
 
     async findRecent(
         organizationId: string,
-        repositoryIds: string[] | undefined,
+        repositories: ScanRepositoryKey[] | undefined,
         limit: number,
     ): Promise<SecurityScanRecord[]> {
         const docs = await this.model
             .find({
                 organizationId,
-                ...(repositoryIds
-                    ? { 'repository.id': { $in: repositoryIds } }
+                ...(repositories
+                    ? repositories.length
+                        ? { $or: repositories.map(sameRepository) }
+                        : { _id: { $in: [] } }
                     : {}),
             })
             // The plan and the per-unit progress can be large; the list does
@@ -399,7 +404,7 @@ export class SecurityScanRepository implements ISecurityScanRepository {
                     error: STALE_SCAN_ERROR,
                     finishedAt: new Date().toISOString(),
                 },
-                $unset: { activeKey: '' },
+                $unset: { activeKey: '', runningJobId: '', leaseExpiresAt: '' },
             },
         );
         return result.modifiedCount;

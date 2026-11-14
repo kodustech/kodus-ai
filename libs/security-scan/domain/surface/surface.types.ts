@@ -1,3 +1,4 @@
+import type { RepositoryGrepOptions } from '@libs/common/utils/repository-grep';
 export type VulnClass =
     | 'authz'
     | 'injection'
@@ -14,8 +15,8 @@ export interface SurfacePattern {
     id: string;
     role: SurfaceRole;
     /**
-     * Ripgrep (Rust regex) syntax that is ALSO a valid JS RegExp: no
-     * lookaround, no backreferences, no inline flags, braces always escaped.
+     * Ripgrep (Rust regex) syntax; evaluated only by ripgrep in production.
+     * No lookaround or backreferences.
      */
     regex: string;
     /** Required when role === 'sink'. */
@@ -67,4 +68,5 @@ export type GrepFn = (
     pattern: string,
     path: string,
     glob?: string,
+    options?: RepositoryGrepOptions,
 ) => Promise<string>;

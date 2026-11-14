@@ -9,6 +9,7 @@ import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents
 import { resolveContextWindow } from '@libs/llm/model-context-window';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import { BYOKProvider } from '@libs/llm/model-providers';
+import { asServedSlot } from '@libs/llm/served-slot';
 
 import type { SecurityScanModel } from './security-scan-engine';
 
@@ -47,7 +48,9 @@ export async function resolveScanModel(params: {
         LLM_TASK.securityScan,
     );
 
-    const priceKey = byokConfig?.model ?? main.modelName.split(':').pop();
+    const priceKey = byokConfig
+        ? asServedSlot(byokConfig).model
+        : main.modelName.split(':').pop();
     const pricing = priceKey
         ? await params.pricingResolver
               .resolve(priceKey, params.pricingOverrides)

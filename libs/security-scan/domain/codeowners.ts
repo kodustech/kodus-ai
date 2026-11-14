@@ -15,7 +15,7 @@ export const CODEOWNERS_LOCATIONS = [
 export interface CodeownersRule {
     pattern: string;
     owners: string[];
-    matcher: RegExp;
+    matcher: { test(path: string): boolean };
 }
 
 export function parseCodeowners(content: string): CodeownersRule[] {
@@ -49,45 +49,56 @@ export function ownersFor(rules: CodeownersRule[], filePath: string): string[] {
     return [];
 }
 
-function toMatcher(pattern: string): RegExp {
-    let p = pattern;
-    // A pattern with a slash anywhere but the end is relative to the root;
-    // without one it matches at any depth, like gitignore.
-    const anchored = p.startsWith('/') || p.slice(0, -1).includes('/');
-    p = p.replace(/^\//, '');
-    const directory = p.endsWith('/');
-    p = p.replace(/\/$/, '');
-
-    let body = '';
-    for (let i = 0; i < p.length; i++) {
-        const c = p[i];
-        if (c === '*') {
-            if (p[i + 1] === '*') {
-                // `**/` = any number of directories; `**` alone = anything.
-                if (p[i + 2] === '/') {
-                    body += '(?:.*/)?';
-                    i += 2;
-                } else {
-                    body += '.*';
-                    i += 1;
-                }
-            } else {
-                body += '[^/]*';
-            }
-        } else if (c === '?') {
-            body += '[^/]';
-        } else {
-            body += c.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-        }
+/** Segment matching with a remembered star: no regular-expression backtracking. */
+function matchesSegment(pattern: string, text: string): boolean {
+    let p = 0,
+        t = 0,
+        star = -1,
+        retry = 0;
+    while (t < text.length) {
+        if (pattern[p] === '?' || pattern[p] === text[t]) {
+            p++;
+            t++;
+        } else if (pattern[p] === '*') {
+            star = p++;
+            retry = t;
+        } else if (star >= 0) {
+            p = star + 1;
+            t = ++retry;
+        } else return false;
     }
+    while (pattern[p] === '*') p++;
+    return p === pattern.length;
+}
 
-    const prefix = anchored ? '^' : '^(?:.*/)?';
-    // A directory pattern owns everything under it; a file-like pattern also
-    // owns a directory of that name and its contents, except one whose last
-    // segment has a single `*`: GitHub's `docs/*` owns docs/a.md, not
-    // docs/a/b.md.
-    const last = p.split('/').pop() ?? '';
-    const shallow = last.includes('*') && !last.includes('**');
-    const suffix = directory ? '/.*$' : shallow ? '$' : '(?:/.*)?$';
-    return new RegExp(prefix + body + suffix);
+function toMatcher(pattern: string): CodeownersRule['matcher'] {
+    let p = pattern.replace(/^\\#/, '#');
+    const anchored = p.startsWith('/') || p.slice(0, -1).includes('/');
+    const directory = p.endsWith('/');
+    p = p.replace(/^\//, '').replace(/\/$/, '');
+    const parts = p.split('/');
+    const last = parts[parts.length - 1] ?? '';
+    if (!anchored) parts.unshift('**');
+    if (directory) parts.push('*', '**');
+    else if (!last.includes('*') || last.includes('**')) parts.push('**');
+    return {
+        test(path) {
+            const names = path.split('/');
+            let previous = Array<boolean>(names.length + 1).fill(false);
+            previous[0] = true;
+            for (const part of parts) {
+                const next = Array<boolean>(names.length + 1).fill(false);
+                next[0] = part === '**' && previous[0];
+                for (let i = 1; i <= names.length; i++) {
+                    next[i] =
+                        part === '**'
+                            ? previous[i] || next[i - 1]
+                            : previous[i - 1] &&
+                              matchesSegment(part, names[i - 1]);
+                }
+                previous = next;
+            }
+            return previous[names.length];
+        },
+    };
 }

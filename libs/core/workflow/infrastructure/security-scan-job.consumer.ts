@@ -23,6 +23,7 @@ export class SecurityScanJobConsumer extends WorkflowJobConsumerBase {
      * a sandbox and runs model calls for up to half an hour.
      */
     @RabbitSubscribe({
+        name: 'security-scan',
         exchange: 'workflow.exchange',
         routingKey: 'workflow.jobs.*.SECURITY_SCAN',
         queue: 'workflow.jobs.security_scan.queue',

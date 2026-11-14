@@ -15,7 +15,7 @@
 //
 // A finding matches an advisory when it is of the advisory's class and in a
 // file of the advisory's path (the vulnerable operation, the entry point or a
-// step between) within LINE_WINDOW lines of it. Findings that match none are written out for a
+// step between) within 15 lines of it. Findings that match none are written out for a
 // person to judge (adjudications.json); precision counts only judged findings.
 //
 // Exit: 0 pass, 1 below a floor (--gate), 2 did not measure (evals/README.md).
@@ -26,6 +26,8 @@ const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { countTokens, tokensUsed, registerTs } = require('../shared/eval-kit');
 const { orgRouteOrExit } = require('../shared/model-route');
 const { pricingResolver, scanRepository } = require('./scan-repo');
+const { runProvenance } = require('./provenance');
+let measurement;
 
 registerTs();
 countTokens();
@@ -40,7 +42,7 @@ const MODEL = args.model || 'deepseek-v4-flash@fireworks';
 const BUDGET_USD = Number(args.budget || 3);
 const SANDBOX = args.sandbox === 'e2b' ? 'e2b' : 'local';
 const CONCURRENCY = Math.max(1, Number(args.concurrency || 2));
-const LINE_WINDOW = 15;
+let runSettings = { model: MODEL, budgetUsd: BUDGET_USD, sandbox: SANDBOX };
 const OUT = args.output || path.join(__dirname, '..', 'results', `security-scan-${MODEL.replace(/[^\w.-]/g, '_')}.json`);
 
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
@@ -52,43 +54,16 @@ const ADJUDICATIONS = fs.existsSync(path.join(__dirname, 'adjudications.json'))
     ? require('./adjudications.json')
     : {};
 
-const norm = (f) => String(f || '').replace(/\\/g, '/').replace(/^\.?\/+/, '');
-
-/**
- * The key a person's judgment of one off-list finding is stored under: the
- * issue's own identity (class, file, function), so a judgment holds for the
- * same finding in a later run.
- */
-const findingKey = (caseId, f) => `${caseId}|${f.vulnerabilityClass}|${norm(f.filePath)}|${f.symbol || ''}`;
-
-/** A location's lines: a number, or a range written "221-223". */
-function lineRange(line) {
-    const m = String(line).match(/^\s*(\d+)(?:\s*-\s*(\d+))?\s*$/);
-    return m ? [Number(m[1]), Number(m[2] ?? m[1])] : [NaN, NaN];
-}
-
-function matches(finding, advisory) {
-    // Another kind of weakness at the same place (an SSRF beside an
-    // authorization flaw) is another bug: it goes to a person to judge.
-    if (advisory.class && finding.vulnerabilityClass !== advisory.class) return false;
-    const file = norm(finding.filePath);
-    return advisory.locations.some((l) => {
-        const [from, to] = lineRange(l.line);
-        return (
-            norm(l.file) === file &&
-            from <= finding.endLine + LINE_WINDOW &&
-            to >= finding.startLine - LINE_WINDOW
-        );
-    });
-}
+const { findingKey, assignAdvisories } = require('./scoring');
 
 async function runCase(c, route, pricing) {
     const startedAt = Date.now();
     {
         const { result, shipped, spend } = await scanRepository({ c, route, pricing, budgetUsd: BUDGET_USD, sandbox: SANDBOX });
         const inScope = c.advisories.filter((a) => a.class);
-        const found = inScope.filter((a) => shipped.some((f) => matches(f, a)));
-        const offList = shipped.filter((f) => !c.advisories.some((a) => matches(f, a)));
+        const { assignments, consumed } = assignAdvisories(shipped, c.advisories);
+        const found = inScope.filter(a => consumed.has(a));
+        const offList = shipped.filter((f, i) => !assignments[i]);
         const judged = offList.map((f) => ({ finding: f, verdict: ADJUDICATIONS[findingKey(c.id, f)] }));
         const listed = shipped.length - offList.length;
         const judgedReal = judged.filter((j) => j.verdict === 'real').length;
@@ -97,7 +72,9 @@ async function runCase(c, route, pricing) {
         return {
             id: c.id,
             language: c.language,
-            checks: `Of ${inScope.length} published ${inScope.length === 1 ? 'vulnerability' : 'vulnerabilities'} in ${c.repo}${c.commit ? `@${c.commit.slice(0, 8)}` : ''}, how many does a scan capped at $${BUDGET_USD} report?`,
+            ...(c.expectedFindings !== undefined ? { expectedFindings: c.expectedFindings } : {}),
+            runtime: result.runtime,
+            checks: c.expectedFindings === 0 ? `Does the scan of ${c.repo}@${c.commit} avoid reporting security findings on this negative control?` : `Of ${inScope.length} published ${inScope.length === 1 ? 'vulnerability' : 'vulnerabilities'} in ${c.repo}${c.commit ? `@${c.commit.slice(0, 8)}` : ''}, how many does a scan capped at $${BUDGET_USD} report?`,
             hits: found.length,
             total: inScope.length,
             // A miss in a file no unit reached is the budget's or the map's; a
@@ -130,7 +107,9 @@ async function runCase(c, route, pricing) {
                 description: f.description,
                 reproduction: f.reproduction ? { executed: f.reproduction.executed, reproduced: f.reproduction.reproduced } : undefined,
             })),
+            surface: { errors: result.surfaceErrors ?? [] },
             coverage: {
+                modelCalls: result.modelCalls,
                 units: result.units.length,
                 done: result.progress.filter((p) => p.state === 'done').length,
                 skippedByBudget: result.progress.filter((p) => p.state === 'skipped_budget').length,
@@ -181,19 +160,20 @@ function rescore(file) {
         const known = DATA.cases.find((k) => k.id === c.id);
         if (known) {
             const asFinding = (f) => ({ vulnerabilityClass: f.class, filePath: f.file, startLine: f.lines[0], endLine: f.lines[1] });
-            for (const f of c.findings) f.matched = known.advisories.some((a) => matches(asFinding(f), a));
-            const inScope = known.advisories.filter((a) => a.class);
-            c.hits = inScope.filter((a) => c.findings.some((f) => matches(asFinding(f), a))).length;
+            const { assignments, consumed } = assignAdvisories(c.findings.map(asFinding), known.advisories);
+            c.findings.forEach((f, i) => { f.matched = !!assignments[i]; });
+            const inScope = known.advisories.filter(a => a.class);
+            c.hits = inScope.filter(a => consumed.has(a)).length;
             for (const d of c.detail ?? []) {
-                const a = inScope.find((x) => d.what.startsWith(`${x.id} `));
-                if (a) d.ok = c.findings.some((f) => matches(asFinding(f), a));
+                const a = inScope.find(x => d.what.startsWith(`${x.id} `));
+                if (a) d.ok = consumed.has(a);
             }
         }
         let judgedReal = 0;
         let judgedFalse = 0;
         let unjudged = 0;
         for (const f of c.findings) {
-            f.key = findingKey(c.id, { vulnerabilityClass: f.class, filePath: f.file, symbol: f.symbol });
+            f.key = findingKey(c.id, { vulnerabilityClass: f.class, filePath: f.file, symbol: f.symbol, startLine: f.lines?.[0] });
             f.verdict = f.matched ? null : (ADJUDICATIONS[f.key] ?? null);
             if (f.matched) continue;
             if (f.verdict === 'real') judgedReal++;
@@ -208,11 +188,14 @@ function rescore(file) {
 async function main() {
     if (args.rescore) {
         const saved = rescore(args.rescore);
+        runSettings = { model: saved.model, budgetUsd: saved.budgetUsd, sandbox: saved.sandbox };
+        measurement = saved.provenance ?? { engineCommit: null, note: 'Original run did not record provenance.' };
         return report(saved.cases, saved.infra?.errors ?? [], saved.cases.length, saved.tokens);
     }
     const route = orgRouteOrExit(MODEL);
     const pricing = pricingResolver();
-    const all = args.set === 'wiring' ? [require('./wiring-case')] : DATA.cases;
+    const all = args.set === 'wiring' ? [require('./wiring-case')] : args.set === 'negative' ? require('./clean-controls.json').cases : DATA.cases;
+    measurement = runProvenance([path.join(__dirname, args.set === 'negative' ? 'clean-controls.json' : 'vulngym-cases.json')]);
     const picked = args.cases ? all.filter((c) => String(args.cases).split(',').includes(c.id)) : all;
 
     const errors = [];
@@ -245,17 +228,19 @@ function report(cases, errors, pickedCount, tokens) {
     const total = cases.reduce((s, c) => s + c.total, 0);
     const precision = precisionOf(cases);
 
-    const target = (TARGETS.models || {})[MODEL] || {};
+    const target = (TARGETS.models || {})[runSettings.model] || {};
     const result = {
         eval: 'security-scan',
+        provenance: measurement,
+        scoredAt: new Date().toISOString(),
         question: evalQuestion('evals/security-scan'),
-        model: MODEL,
+        model: runSettings.model,
         runs: 1,
         metric: { name: 'recall', value: total ? hits / total : 0, floor: target.recall ?? null, baseline: null },
         precision,
         byLanguage,
-        budgetUsd: BUDGET_USD,
-        sandbox: SANDBOX,
+        budgetUsd: runSettings.budgetUsd,
+        sandbox: runSettings.sandbox,
         cases,
         tokens,
         infra: { errored: errors.length, total: pickedCount, errors },
@@ -271,9 +256,12 @@ function report(cases, errors, pickedCount, tokens) {
     const problems = resultProblems(result);
     if (problems.length) console.error(`result problems: ${problems.join('; ')}`);
     if (errors.length > Math.floor(pickedCount * 0.05) || !cases.length) process.exit(2);
+    if (args.gate && cases.every(c => c.expectedFindings !== undefined)) {
+        process.exit(cases.some(c => c.findings.length > c.expectedFindings) ? 1 : 0);
+    }
     if (args.gate) {
         if (!target.precision) {
-            console.error(`not measured: no precision floor for ${MODEL} in targets.json`);
+            console.error(`not measured: no precision floor for ${runSettings.model} in targets.json`);
             process.exit(2);
         }
         const minJudged = target.minJudgedPerLanguage ?? 20;

@@ -2,8 +2,6 @@ name: "Backend: PR Tests"
 
 on:
     pull_request:
-        branches:
-            - main
         paths:
             - "apps/api/**"
             - "apps/web/**"

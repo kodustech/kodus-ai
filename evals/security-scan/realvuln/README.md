@@ -149,4 +149,4 @@ Full scoring pipeline and dashboard in the [GitHub repository](https://github.co
 
 ## License
 
-MIT. Scanner outputs are reproduced from their respective tools under fair use for benchmarking. The vulnerable repositories themselves retain their upstream licenses and are referenced by URL+SHA rather than redistributed.
+The upstream repository ships the Apache License 2.0, Copyright 2025 Kolega; its complete notice is included in [LICENSE](LICENSE) (upstream LICENSE blob `d7f139fa36e6d5c321a7d5b19271e4ca124fdb88`, retrieved 2026-11-14). The original Hugging Face card called the dataset MIT; this copy now carries the actual repository license rather than an unsupported MIT notice. Scanner outputs are reproduced from their respective tools under fair use for benchmarking. The vulnerable repositories themselves retain their upstream licenses and are referenced by URL+SHA rather than redistributed.

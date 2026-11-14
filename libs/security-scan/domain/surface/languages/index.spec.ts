@@ -3,7 +3,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { execFileSync } from 'child_process';
 
-import { combineRegex, planBatches } from '../collect-surface';
+import { planBatches } from '../collect-surface';
 import { hasRipgrep } from '../testing/fake-grep';
 import { LANGUAGE_SURFACES } from './index';
 
@@ -79,15 +79,14 @@ describe('LANGUAGE_SURFACES', () => {
         expect(offending.map((p) => p.id)).toEqual([]);
     });
 
-    it('plans at most 3 grep calls per glob (one per role)', () => {
+    it('attributes each rg call to exactly one pattern', () => {
         for (const surface of LANGUAGE_SURFACES) {
-            const globs = 1 + (surface.extraGlobs?.length ?? 0);
-            expect(planBatches(surface).length).toBeLessThanOrEqual(globs * 3);
+            expect(planBatches(surface).every(batch => batch.patterns.length === 1)).toBe(true);
         }
     });
 
     (hasRipgrep() ? it : it.skip)(
-        'every combined regex compiles in ripgrep',
+        'every pattern compiles in ripgrep',
         () => {
             const dir = mkdtempSync(join(tmpdir(), 'surface-compile-'));
             const failures: string[] = [];
@@ -103,7 +102,7 @@ describe('LANGUAGE_SURFACES', () => {
                                     '--glob',
                                     batch.glob,
                                     '-e',
-                                    combineRegex(batch.patterns),
+                                    batch.patterns[0].regex,
                                     '--',
                                     '.',
                                 ],

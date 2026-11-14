@@ -775,7 +775,7 @@ describe('SecurityScanJobProcessor', () => {
         ).not.toContain('fp-old');
     });
 
-    it("resolves with what a carried-on plan's finished areas read, and keeps it through the plan", async () => {
+    it("does not count inherited areas as a second independent miss", async () => {
         const inherited = [{ vulnerabilityClass: 'injection', filePaths: ['src/done.ts'] }];
         const { processor, scans, issuesService } = setup(
             { result: finishedResult() },
@@ -800,7 +800,6 @@ describe('SecurityScanJobProcessor', () => {
         expect(issuesService.resolveUnseenScanFindings).toHaveBeenCalledWith(
             expect.objectContaining({
                 examined: expect.arrayContaining([
-                    { vulnerabilityClass: 'injection', filePaths: ['src/done.ts'] },
                     { vulnerabilityClass: 'authz', filePaths: ['src/orders.controller.ts'] },
                 ]),
             }),
@@ -1004,5 +1003,34 @@ describe('scanErrorMessage', () => {
         expect(scanErrorMessage(new Error('E11000 duplicate key one_active_scan'))).toMatch(
             /^The scan stopped on an internal error/,
         );
+    });
+});
+
+describe('durable unit accounting', () => {
+    it('stores examined areas with a finished unit before a worker can die', async () => {
+        const examined = [{vulnerabilityClass: 'authz', filePaths: ['src/a.ts']}];
+        const {processor, scans} = setup({unitEvents: [[{unitId: 'u1', state: 'done', findings: 0, examinedByClass: examined}, []]], result: finishedResult()});
+        await processor.process('job-1');
+        const changes = (scans.recordUnit.mock.calls[0] as any)[2];
+        expect(changes.coverage.examinedByClass).toEqual(examined);
+        expect(changes.coverage.examinedFiles).toContain('src/a.ts');
+    });
+    it('recovers coverage from a unit recorded before a redelivery', async () => {
+        const examined = [{vulnerabilityClass: 'authz', filePaths: ['src/already-read.ts']}];
+        const {processor, issuesService} = setup({result: finishedResult({examinedByClass: [], examinedFiles: []})},
+            scanRecord({progress: [{unitId: 'u1', state: 'done', findings: 0, examinedByClass: examined}]}));
+        await processor.process('job-1');
+        expect(issuesService.resolveUnseenScanFindings).toHaveBeenCalledWith(expect.objectContaining({examined}));
+    });
+    it('stores settled-but-unrecorded usage in final spend', async () => {
+        const {processor, scans} = setup({result: finishedResult()});
+        (SecurityScanEngine as any).mockImplementation(() => ({run: async ({meter}: any) => {
+            const admission = await meter.admit({inputTokens: 200_000, inputTokensUpperBound: 200_000, maxOutputTokens: 8_000});
+            admission.settle({usage: {inputTokens: 200_000, outputTokens: 8_000}});
+            return finishedResult();
+        }}));
+        await processor.process('job-1');
+        expect(lastUpdate(scans).spend.inputTokens).toBe(200_000);
+        expect(lastUpdate(scans).spend.outputTokens).toBe(8_000);
     });
 });

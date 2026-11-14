@@ -77,6 +77,16 @@ describe('issues command actions', () => {
         expect(logged.map((l) => JSON.parse(l))).toContainEqual(result);
     });
 
+    it('keeps stdout empty and fails a prompt-only list with no matches', async () => {
+        service.list.mockResolvedValue([]);
+        await expect(
+            issuesListAction({ promptOnly: true }),
+        ).rejects.toMatchObject({ exitCode: 1 });
+        expect(stdout).toBe('');
+        expect(console.error).toHaveBeenCalled();
+        expect(service.fixPrompt).not.toHaveBeenCalled();
+    });
+
     it('prints the prompt of the given ids with show', async () => {
         service.fixPrompt.mockResolvedValue({
             prompt: 'Fix this issue',

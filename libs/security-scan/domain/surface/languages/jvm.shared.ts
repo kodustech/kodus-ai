@@ -32,7 +32,7 @@ export function springEntries(prefix: string): SurfacePattern[] {
 export function springAuth(prefix: string): SurfacePattern {
     return auth(
         `${prefix}.spring.auth`,
-        String.raw`@(?:PreAuthorize|PostAuthorize|Secured|RolesAllowed|PreFilter|PostFilter|EnableWebSecurity|EnableMethodSecurity)\b|\.(?:authorizeRequests|authorizeHttpRequests|hasRole|hasAuthority|hasAnyRole|hasAnyAuthority|authenticated)\(|\bSecurityFilterChain\b|\bContainerRequestFilter\b`,
+        String.raw`@(?:PreAuthorize|PostAuthorize|Secured|RolesAllowed|PreFilter|PostFilter)\b|\.(?:hasRole|hasAuthority|hasAnyRole|hasAnyAuthority|authenticated)\(|\bContainerRequestFilter\b`,
         'spring/jax-rs',
     );
 }

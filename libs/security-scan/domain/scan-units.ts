@@ -1,42 +1,21 @@
 import { createHash } from 'crypto';
 
-import type { SurfaceHit, SurfaceMap, VulnClass } from './surface/surface.types';
+import type {
+    SurfaceHit,
+    SurfaceMap,
+    VulnClass,
+} from './surface/surface.types';
 import type { ScanUnit } from './security-scan.types';
 import { VULN_CLASSES } from './scan-prompts';
 
-const EXTENSION_LANGUAGE: Record<string, string> = {
-    ts: 'typescript',
-    tsx: 'typescript',
-    js: 'typescript',
-    jsx: 'typescript',
-    mjs: 'typescript',
-    cjs: 'typescript',
-    py: 'python',
-    go: 'go',
-    java: 'java',
-    kt: 'kotlin',
-    kts: 'kotlin',
-    rs: 'rust',
-    cpp: 'cpp',
-    cc: 'cpp',
-    cxx: 'cpp',
-    hpp: 'cpp',
-    scala: 'scala',
-    cs: 'csharp',
-    swift: 'swift',
-    dart: 'dart',
-    ex: 'elixir',
-    exs: 'elixir',
-    rb: 'ruby',
-    php: 'php',
-    c: 'c',
-    h: 'c',
-    sh: 'bash',
-    bash: 'bash',
-};
+import { EXTENSION_LANGUAGE, isSkippedPath } from './surface/collect-surface';
 
 export function languageOf(file: string): string {
-    const ext = file.split('.').pop()?.toLowerCase() ?? '';
+    const base = file.split('/').pop() ?? '';
+    const ext =
+        base === 'Rakefile'
+            ? 'rake'
+            : (base.split('.').pop()?.toLowerCase() ?? '');
     return EXTENSION_LANGUAGE[ext] ?? 'unknown';
 }
 
@@ -63,7 +42,9 @@ export function rankCandidates(
     surface: SurfaceMap,
     /** The plan's own limit; no default cut, so no file falls out unseen. */
     limit = Number.POSITIVE_INFINITY,
+    sourceFiles: string[] = [],
 ): MapCandidate[] {
+    const sourceSet = new Set(sourceFiles);
     const hitsByFile = new Map<string, SurfaceHit[]>();
     for (const hit of surface.hits) {
         const list = hitsByFile.get(hit.file) ?? [];
@@ -102,12 +83,29 @@ export function rankCandidates(
             entryPoints: f.entryPoints,
             authChecks: f.authChecks,
             sinks: f.sinks,
-            classes: VULN_CLASSES.filter((c) => classes.has(c)),
+            classes: classes.size
+                ? VULN_CLASSES.filter((c) => classes.has(c))
+                : sourceSet.has(file)
+                  ? [...VULN_CLASSES]
+                  : [],
             sample,
             score,
         };
     });
 
+    const mapped = new Set(candidates.map((c) => c.file));
+    for (const file of sourceFiles) {
+        if (mapped.has(file) || isSkippedPath(file)) continue;
+        candidates.push({
+            file,
+            entryPoints: 0,
+            authChecks: 0,
+            sinks: 0,
+            classes: [...VULN_CLASSES],
+            sample: [],
+            score: -10,
+        });
+    }
     return candidates
         .filter((c) => c.classes.length > 0)
         .sort((a, b) => b.score - a.score || a.file.localeCompare(b.file))
@@ -159,7 +157,12 @@ export function mergeMapPlan(params: {
 
     for (const item of params.plan) {
         const file = normalize(item.file);
-        if (!file || seen.has(file) || !params.existingFiles.has(file)) {
+        if (
+            !file ||
+            isSkippedPath(file) ||
+            seen.has(file) ||
+            !params.existingFiles.has(file)
+        ) {
             continue;
         }
         // The model adds classes; it never drops what the pattern scan saw.
@@ -294,4 +297,15 @@ export function withRevisits(
         });
     }
     return merged;
+}
+
+/** Source without a framework hit still belongs at the tail of the plan. */
+export function isSourceFile(file: string): boolean {
+    return (
+        !isSkippedPath(file) &&
+        (languageOf(file) !== 'unknown' ||
+            /\.(?:vue|svelte|astro|html?|ejs|pug|hbs|erb|jsp|xml|sql|lua|clj[sc]?|erl|hs|m|mm|pl|pm|r)$/i.test(
+                file,
+            ))
+    );
 }

@@ -292,8 +292,10 @@ export function buildFinalizeUserPrompt(params: {
     finding: string;
     code: string;
 }): string {
+    // The path too is the repository's: git allows a newline in a name.
     return `Vulnerability class: ${params.vulnClass}
-Location: ${params.filePath}:${params.startLine}-${params.endLine}
+Location (lines ${params.startLine}-${params.endLine} of the file below):
+${fenced(params.filePath)}
 
 Finding:
 ${fenced(params.finding)}
@@ -324,7 +326,10 @@ export function buildReproUserPrompt(params: {
     testHints: string;
 }): string {
     return `Language: ${params.language}
-Vulnerable code (${params.filePath}):
+Vulnerable file:
+${fenced(params.filePath)}
+
+Vulnerable code:
 ${fenced(params.code)}
 
 Finding:

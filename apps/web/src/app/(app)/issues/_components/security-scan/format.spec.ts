@@ -1,5 +1,6 @@
 import {
     cweUrl,
+    parseScanLimit,
     formatScanCoverage,
     formatScanOutcome,
     formatScanSpend,
@@ -167,5 +168,19 @@ describe("isNoKnownPriceMessage", () => {
             ),
         ).toBe(true);
         expect(isNoKnownPriceMessage("Repository not connected")).toBe(false);
+    });
+});
+
+describe('scan limit input', () => {
+    it.each(['20usd', '1e', 'Infinity', '-1', '0'])('refuses %s instead of starting an uncapped scan', raw => {
+        expect(parseScanLimit(raw, 'usd').error).toBeTruthy();
+        expect(parseScanLimit(raw, 'tokens').error).toBeTruthy();
+    });
+    it('allows only an intentionally empty limit or valid numbers', () => {
+        expect(parseScanLimit('', 'usd')).toEqual({});
+        expect(parseScanLimit('20', 'usd')).toEqual({value: 20});
+        expect(parseScanLimit('12.50', 'usd')).toEqual({value: 12.5});
+        expect(parseScanLimit('1000', 'tokens')).toEqual({value: 1000});
+        expect(parseScanLimit('1.5', 'tokens').error).toBeTruthy();
     });
 });

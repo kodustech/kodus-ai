@@ -1,3 +1,4 @@
+import { repositoryGrepArgs } from '@libs/common/utils/repository-grep';
 import { execFile, execFileSync } from 'child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
@@ -59,9 +60,14 @@ export function createRipgrep(files: Record<string, string>): {
     }
     const env = { ...process.env };
     delete env.RIPGREP_CONFIG_PATH;
-    const grep: GrepFn = (pattern, path, glob) =>
+    const grep: GrepFn = (pattern, path, glob, options) =>
         new Promise((resolve) => {
-            const args = ['--no-heading', '-n', '--no-follow'];
+            const args = [
+                '--no-heading',
+                '-n',
+                '--no-follow',
+                ...repositoryGrepArgs(options),
+            ];
             if (glob) args.push('--glob', glob);
             args.push('-e', pattern, '--', path);
             execFile(

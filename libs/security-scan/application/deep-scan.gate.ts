@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 
 import { createLogger } from '@libs/core/log/logger';
+import { environment } from '@libs/ee/configs/environment/environment';
 import { FEATURE_KEYS, FeatureGateService } from '@libs/feature-gate';
 import { isOnAlphaAllowList } from '@libs/feature-gate/domain/alpha-allow-list';
 import {
@@ -34,6 +35,11 @@ export class DeepScanGate {
 
     async isEnabledFor(organizationId: string | undefined): Promise<boolean> {
         if (!organizationId) {
+            return false;
+        }
+        // Cloud only, before the allow-list: a self-hosted install ships no
+        // security-scan worker, so a scan it started would never run.
+        if (!environment.API_CLOUD_MODE) {
             return false;
         }
         if (

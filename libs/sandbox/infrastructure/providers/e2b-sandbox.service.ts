@@ -1,3 +1,7 @@
+import {
+    repositoryGrepArgs,
+    type RepositoryGrepOptions,
+} from '@libs/common/utils/repository-grep';
 import { createLogger, SimpleLogger } from '@libs/core/log/logger';
 import { PlatformType } from '@libs/core/domain/enums';
 import { Injectable } from '@nestjs/common';
@@ -157,6 +161,7 @@ export function buildE2BRemoteCommands(
             pattern: string,
             path: string,
             glob?: string,
+            options?: RepositoryGrepOptions,
         ): Promise<string> => {
             // Validate path (throws on '..' / absolute). rg then runs the ORIGINAL
             // relative path inside REPO_DIR via `cd`, so only the throw is used.
@@ -164,12 +169,15 @@ export function buildE2BRemoteCommands(
             const globArg = glob
                 ? ` --glob '${glob.replace(/'/g, "'\\''")}'`
                 : '';
+            const scanArgs = repositoryGrepArgs(options)
+                .map((arg) => `'${arg.replace(/'/g, "'\\''")}'`)
+                .join(' ');
             const escapedPattern = pattern.replace(/'/g, "'\\''");
             const safeRelativePath = path.replace(/'/g, "'\\''");
             const result = await runCmd(
                 // `-e` and `--`: a pattern or path starting with "-" is never
                 // read as an rg flag (`--pre` would run a command).
-                `cd ${REPO_DIR} && rg --no-heading -n${globArg} -e '${escapedPattern}' -- '${safeRelativePath}'`,
+                `cd ${REPO_DIR} && rg --no-heading -n${globArg}${scanArgs ? ` ${scanArgs}` : ''} -e '${escapedPattern}' -- '${safeRelativePath}'`,
                 { timeoutMs: TIMEOUTS.COMMAND_LONG_MS },
             );
             // rg exit 1 = "no matches" (valid); exit >= 2 with stderr = real error.

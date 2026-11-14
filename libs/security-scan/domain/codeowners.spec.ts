@@ -55,3 +55,14 @@ apps/*/auth.ts          @acme/security
         ).toEqual([]);
     });
 });
+
+describe('untrusted CODEOWNERS', () => {
+    it('matches an escaped hash at the start of a filename', () => {
+        expect(ownersFor(parseCodeowners('\\#file @owner'), '#file')).toEqual(['@owner']);
+    });
+    it('finishes a hostile wildcard pattern without exponential backtracking', () => {
+        const start = performance.now();
+        expect(ownersFor(parseCodeowners('*a'.repeat(30) + '*b @owner'), 'a'.repeat(400))).toEqual([]);
+        expect(performance.now() - start).toBeLessThan(100);
+    });
+});

@@ -169,3 +169,32 @@ export const reproductionStatus = (
 /** The API's "no known price" refusal: the scan can only be capped in tokens. */
 export const isNoKnownPriceMessage = (message: string | undefined) =>
     !!message && /no known price/i.test(message);
+
+/**
+ * A scan's spend limit as typed: empty is no limit; anything else must be a
+ * plain number of dollars (at least 1) or a whole number of tokens. Read
+ * strictly, so "20usd" or "1e" is an error, never a scan without a limit.
+ */
+export const parseScanLimit = (
+    raw: string,
+    limitBy: "usd" | "tokens",
+): { value?: number; error?: string } => {
+    const text = raw.trim();
+    if (!text) return {};
+
+    const value = Number(text);
+
+    if (limitBy === "usd") {
+        return /^\d+(\.\d+)?$/.test(text) &&
+            Number.isFinite(value) &&
+            value >= 1
+            ? { value }
+            : {
+                  error: "Enter at least $1, like 20 or 12.50, or leave it empty.",
+              };
+    }
+
+    return /^\d+$/.test(text) && Number.isSafeInteger(value) && value >= 1
+        ? { value }
+        : { error: "Enter a whole number of tokens, or leave it empty." };
+};
