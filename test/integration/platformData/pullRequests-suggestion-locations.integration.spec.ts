@@ -130,6 +130,18 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
             ]);
         });
 
+        it('returns the projected paths also when returnDocument is false', async () => {
+            const pr = await repository.updateSuggestion('s-2', {}, org, {
+                addToSet: { [LOCATIONS]: [] },
+                projection: ['files.suggestions.id'],
+                returnDocument: false,
+            });
+
+            expect(pr?.files).toEqual([
+                { suggestions: [{ id: 's-1' }, { id: 's-2' }] },
+            ]);
+        });
+
         it('keeps what two checks running at once each add', async () => {
             await Promise.all([
                 repository.updateSuggestion('s-1', {}, org, {

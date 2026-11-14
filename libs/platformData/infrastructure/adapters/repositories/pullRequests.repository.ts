@@ -2704,15 +2704,16 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                           ],
                     new: true,
                     // Callers that only need to know a suggestion was written
-                    // skip the whole PR document coming back.
-                    ...(options?.returnDocument === false
-                        ? { projection: { _id: 1 } }
-                        : options?.projection?.length
-                          ? {
-                                projection: Object.fromEntries(
-                                    options.projection.map((path) => [path, 1]),
-                                ),
-                            }
+                    // skip the whole PR document coming back. Paths asked for
+                    // win: dropping them would hand back only the id.
+                    ...(options?.projection?.length
+                        ? {
+                              projection: Object.fromEntries(
+                                  options.projection.map((path) => [path, 1]),
+                              ),
+                          }
+                        : options?.returnDocument === false
+                          ? { projection: { _id: 1 } }
                           : {}),
                 },
             )

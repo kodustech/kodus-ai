@@ -402,7 +402,10 @@ export class SuggestionService implements ISuggestionService {
         const write = (
             id: string,
             data: Partial<ISuggestion>,
-            options?: Omit<UpdateSuggestionOptions, 'returnDocument'>,
+            options?: Omit<
+                UpdateSuggestionOptions,
+                'returnDocument' | 'projection'
+            >,
         ) =>
             this.pullRequestService.updateSuggestion(
                 id,
