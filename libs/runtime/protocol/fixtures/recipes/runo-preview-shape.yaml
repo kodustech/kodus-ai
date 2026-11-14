@@ -1,0 +1,26 @@
+# The shape of a Runo PR preview recipe without files.copy: profiles, a list
+# of public services, Runo's expose and limits. Both tools boot it.
+version: 1
+setup:
+  - docker network create shared-network 2>/dev/null || true
+services:
+  compose:
+    files: [docker-compose.yml, docker-compose.preview.yml]
+    profiles: [mcp]
+    public: [web, webhooks]
+    health: /health
+    health_timeout: 1800
+    env:
+      PUBLIC_URL: "${RUNO_PUBLIC_URL}"
+  expose:
+    - { service: web, port: 3000, kind: http }
+data:
+  migrate: pnpm run migration:run
+  seed: pnpm run seed
+expose:
+  mode: https
+limits:
+  instance: t3.xlarge
+  disk: 100gb
+  idle_suspend: 2h
+  idle_activity: [ssh, agent]

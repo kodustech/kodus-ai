@@ -1,0 +1,14 @@
+cellId: ""
+runtimeClass:
+  name: gvisor
+  handler: runsc
+# Images by digest only (S-17).
+images:
+  cell: ""
+  holder: ""
+  observer: ""
+namespaces:
+  cell: kodus-cell
+  egress: kodus-egress
+reaper:
+  schedule: "* * * * *"

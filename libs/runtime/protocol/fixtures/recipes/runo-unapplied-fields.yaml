@@ -1,0 +1,18 @@
+# Mixes normalized size/egress requirements with fields still unapplied.
+# Legacy instance is identified; it is not guessed into neutral hardware.
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    public: web
+  expose:
+    - { service: web, port: 3000, kind: http }
+validate:
+  - { name: lint, run: npm run lint }
+size: large
+fakes: { stripe: true }
+flags: { NEW_CHECKOUT: true }
+llm: { provider: fake }
+egress: { allow: [api.stripe.com] }
+ui: { login: /login }
+limits: { instance: t3.xlarge }

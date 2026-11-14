@@ -1,0 +1,19 @@
+# Runs the cell's test suite on Linux, where the extraction child gets its
+# own network namespace and the proxy reads SO_ORIGINAL_DST.
+#   GOMODCACHE=$(go env GOMODCACHE) docker compose -f test/linux/docker-compose.yml run --rm go-test
+services:
+  go-test:
+    image: golang:1.25
+    working_dir: /src
+    environment:
+      GOFLAGS: -mod=mod -p=2
+      GOPROXY: "off"
+      GOTOOLCHAIN: local
+    volumes:
+      - ../..:/src:ro
+      - ${GOMODCACHE:?set GOMODCACHE}:/go/pkg/mod:ro
+    # Unprivileged user namespaces are what the extraction child uses.
+    security_opt:
+      - seccomp=unconfined
+    user: "1000:1000"
+    command: ["sh", "-c", "export HOME=/tmp GOCACHE=/tmp/gocache && go vet ./... && go test -count=1 ./... && go test -count=1 -v -run Isolated ./internal/tarball/"]

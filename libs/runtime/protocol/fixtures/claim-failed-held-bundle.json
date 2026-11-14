@@ -1,0 +1,55 @@
+{
+  "name": "claim-failed-held-bundle",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "type": "claim.failed",
+    "body": {
+      "kind": "platform",
+      "signature": "repo_upload",
+      "reason": "compose up failed",
+      "held": true,
+      "bundle": {
+        "services": [
+          {
+            "name": "api",
+            "state": "exited (1)",
+            "logTail": [
+              "Error: [redacted:aws-access-token]"
+            ]
+          }
+        ],
+        "ports": [
+          {
+            "service": "api",
+            "port": 3000,
+            "listening": false
+          }
+        ],
+        "disk": [
+          {
+            "path": "/",
+            "totalBytes": 64424509440,
+            "freeBytes": 1048576
+          }
+        ],
+        "deniedEgress": [
+          {
+            "host": "registry.npmjs.org",
+            "port": 443,
+            "at": "2026-10-31T12:00:00Z"
+          }
+        ],
+        "redactions": 1,
+        "truncated": false,
+        "collectedAt": "2026-10-31T12:00:01Z"
+      }
+    },
+    "claimId": "claim-1"
+  },
+  "expect": {
+    "ok": true,
+    "type": "claim.failed"
+  }
+}

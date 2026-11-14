@@ -1,0 +1,18 @@
+{
+  "name": "image-bake-without-sha",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "type": "image.bake",
+    "body": {
+      "environmentId": "env-1",
+      "orgId": "org-1",
+      "recipeSha": "r1"
+    }
+  },
+  "expect": {
+    "ok": false,
+    "code": "invalid_body"
+  }
+}

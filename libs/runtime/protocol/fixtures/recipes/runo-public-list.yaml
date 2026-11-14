@@ -1,0 +1,5 @@
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    public: [web, webhooks]

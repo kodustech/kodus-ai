@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: runtime-cell-reaper
+  namespace: {{ .Values.namespaces.cell }}
+spec:
+  schedule: {{ .Values.reaper.schedule | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: runtime-cell-reaper
+          restartPolicy: Never
+          containers:
+            - name: reaper
+              image: {{ .Values.images.cell }}
+              command: ["/usr/local/bin/reaper", "-once", "-driver", "k8s-sandbox", "-cell-id", {{ .Values.cellId | quote }}]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }

@@ -1,0 +1,8 @@
+version: 1
+setup: [pnpm install]
+services:
+  compose:
+    file: docker-compose.yml
+    public: api
+expose:
+  mode: https

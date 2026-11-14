@@ -1,0 +1,2 @@
+version: 1
+egress: { allow: ["127.0.0.1"] }

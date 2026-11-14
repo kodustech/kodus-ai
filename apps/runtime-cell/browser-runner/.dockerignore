@@ -1,0 +1,13 @@
+*
+!package.json
+!package-lock.json
+!runner.mjs
+!run-job.mjs
+!tar.mjs
+!steps.mjs
+!download-agent-browser.mjs
+!network-guard.mjs
+!agent-browser-client.mjs
+!explore-job.mjs
+!runner-job.mjs
+!agent-browser.json

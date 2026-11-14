@@ -1,0 +1,2 @@
+version: 1
+fakes: { stripe: true, email: { image: mailpit } }

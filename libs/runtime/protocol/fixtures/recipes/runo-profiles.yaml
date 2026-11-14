@@ -1,0 +1,6 @@
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    profiles: [mcp]
+    public: web

@@ -1,0 +1,479 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": ".kodus/workspace.yaml",
+  "description": "The environment recipe Runo and the Kody Runtime read. Secrets never go here; a cell also refuses files.copy.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "setup": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "services": {
+      "type": "object",
+      "properties": {
+        "compose": {
+          "type": "object",
+          "properties": {
+            "files": {
+              "description": "Compose files, merged in order like docker compose -f a -f b.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "file": {
+              "description": "Runo's one-file form of files.",
+              "type": "string"
+            },
+            "profiles": {
+              "description": "Compose profiles whose services start beside the ones with no profile.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "public": {
+              "description": "The service whose health path says the app is up; a list puts the primary first.",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "public_port": {
+              "description": "Runo's: which published port of the primary its VM serves. One public service only.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "health": {
+              "description": "HTTP path asked on the public service, over its http entry in services.expose.",
+              "type": "string"
+            },
+            "health_timeout": {
+              "description": "How long the boot waits for health: seconds, or 120s, 10m. Unset or 0 waits 2 minutes; more than 15 minutes waits 15.",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "env": {
+              "description": "Variables every service gets, over the compose file. Never secrets.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "expose": {
+          "description": "The ports the probes reach, by service.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string"
+              },
+              "port": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "http",
+                  "postgres",
+                  "mysql",
+                  "grpc"
+                ]
+              },
+              "readonly_user_from_seed": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "service",
+              "port",
+              "kind"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "needs": {}
+      },
+      "additionalProperties": false
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "migrate": {
+          "type": "string"
+        },
+        "seed": {
+          "description": "A host command, or a command or SQL file run in a service.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "service": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "command": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "sql": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "user": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "database": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "service"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "reset": {
+          "type": "string",
+          "enum": [
+            "recreate",
+            "reseed",
+            "snapshot"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "files": {
+      "description": "Runo only: a cell refuses files.copy.",
+      "type": "object",
+      "properties": {
+        "copy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "validate": {
+      "maxItems": 32,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "run": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192
+          }
+        },
+        "required": [
+          "name",
+          "run"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "limits": {
+      "description": "Version 1 alias for size; legacy instance and idle settings remain unapplied.",
+      "type": "object",
+      "properties": {
+        "cpu": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "memory": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "disk": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "instance": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "idle_suspend": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "idle_activity": {
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "size": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "cpu": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 64
+            },
+            "memory": {
+              "type": "string",
+              "maxLength": 32
+            },
+            "disk": {
+              "type": "string",
+              "maxLength": 32
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "string",
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ]
+        }
+      ]
+    },
+    "fakes": {
+      "type": "object",
+      "properties": {
+        "stripe": {
+          "anyOf": [
+            {
+              "type": "boolean",
+              "const": true
+            },
+            {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "stripe-mock"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^stripe\\/stripe-mock@sha256:[a-f0-9]{64}$"
+                    }
+                  ]
+                },
+                "env": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "additionalProperties": {
+                    "type": "string",
+                    "maxLength": 2048
+                  }
+                }
+              },
+              "required": [
+                "image"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "email": {
+          "anyOf": [
+            {
+              "type": "boolean",
+              "const": true
+            },
+            {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "mailpit"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^axllent\\/mailpit@sha256:[a-f0-9]{64}$"
+                    }
+                  ]
+                },
+                "env": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "additionalProperties": {
+                    "type": "string",
+                    "maxLength": 2048
+                  }
+                }
+              },
+              "required": [
+                "image"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "flags": {},
+    "llm": {},
+    "egress": {
+      "type": "object",
+      "properties": {
+        "allow": {
+          "maxItems": 256,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 253
+          }
+        }
+      },
+      "required": [
+        "allow"
+      ],
+      "additionalProperties": false
+    },
+    "ui": {},
+    "expose": {
+      "description": "Runo's: how its VM is reached from outside; a cell ignores it."
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "additionalProperties": false
+}

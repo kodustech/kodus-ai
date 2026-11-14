@@ -1,0 +1,4 @@
+version: 1
+services:
+  compose:
+    files: [../other/docker-compose.yml]

@@ -1,0 +1,3 @@
+version: 1
+size: { cpu: 2, memory: 4gb }
+limits: { disk: 100gb }

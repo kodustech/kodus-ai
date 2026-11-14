@@ -1,0 +1,18 @@
+{
+  "name": "blocked-unsolicited-without-claim-id",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a52",
+    "cellId": "cell-dev-1",
+    "type": "blocked",
+    "body": {
+      "kind": "security_violation",
+      "signature": "bait_exfiltration",
+      "message": "a planted bait left the machine"
+    }
+  },
+  "expect": {
+    "ok": false,
+    "code": "invalid_envelope"
+  }
+}

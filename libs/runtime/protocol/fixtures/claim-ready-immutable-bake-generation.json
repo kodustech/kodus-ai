@@ -1,0 +1,37 @@
+{
+  "name": "claim-ready-immutable-bake-generation",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-1",
+    "type": "claim.ready",
+    "body": {
+      "manifest": {
+        "services": [
+          {
+            "name": "api",
+            "health": "ok"
+          }
+        ],
+        "expose": [
+          {
+            "service": "api",
+            "port": 3000,
+            "kind": "http"
+          }
+        ],
+        "imageId": "kodus-bake/87cc0b05c3937386884d6c8e@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbb",
+        "seedSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "observer": {
+        "id": "claim-1-observer",
+        "state": "ready"
+      }
+    }
+  },
+  "expect": {
+    "ok": true,
+    "type": "claim.ready"
+  }
+}

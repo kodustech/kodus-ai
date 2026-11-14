@@ -1,0 +1,20 @@
+{
+  "name": "unknown-body-field",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-1",
+    "type": "claim.failed",
+    "body": {
+      "kind": "resources",
+      "signature": "x",
+      "reason": "y",
+      "retry": true
+    }
+  },
+  "expect": {
+    "ok": false,
+    "code": "invalid_body"
+  }
+}

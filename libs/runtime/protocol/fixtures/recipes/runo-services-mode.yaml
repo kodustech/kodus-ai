@@ -1,0 +1,4 @@
+version: 1
+services:
+  db: { image: "postgres:16", port: 5432 }
+  app: { run: bun app.ts, port: 3000, public: true }

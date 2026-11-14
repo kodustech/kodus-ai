@@ -1,0 +1,62 @@
+{
+  "name": "claim-ready-build-steps-unknown-key",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-1",
+    "type": "claim.ready",
+    "body": {
+      "manifest": {
+        "services": [
+          {
+            "name": "api",
+            "health": "ok"
+          }
+        ],
+        "expose": [
+          {
+            "service": "api",
+            "port": 3000,
+            "kind": "http"
+          }
+        ],
+        "imageId": "img-1",
+        "seedSha": "none"
+      },
+      "observer": {
+        "id": "claim-1-observer",
+        "state": "ready"
+      },
+      "timing": {
+        "prepareMs": 462000,
+        "bootMs": 455000,
+        "buildMs": 450000,
+        "upMs": 5000,
+        "buildSteps": {
+          "steps": 14,
+          "done": 9,
+          "cached": 5,
+          "errored": 0,
+          "slowest": [
+            {
+              "service": "grafana",
+              "name": "[build 5/6] RUN go build ./pkg/cmd/grafana",
+              "ms": 380200,
+              "output": "compiled"
+            },
+            {
+              "service": "grafana",
+              "name": "[internal] load build context",
+              "ms": 44100
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expect": {
+    "ok": false,
+    "code": "invalid_body"
+  }
+}

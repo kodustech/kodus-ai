@@ -1,0 +1,18 @@
+{
+  "hubUrl": "wss://localhost:3410/cells",
+  "cellId": "cell-local-dev",
+  "driver": "local-docker",
+  "regions": ["local"],
+  "workDir": "./.kody-cell",
+  "stateDir": "./.kody-cell/state",
+  "gitApi": "https://api.github.com",
+  "dev": true,
+  "tls": {
+    "ca": "./.kody-cell/pki/ca.pem",
+    "cert": "./.kody-cell/pki/cert.pem",
+    "key": "./.kody-cell/pki/key.pem"
+  },
+  "observer": {
+    "mode": "inprocess"
+  }
+}

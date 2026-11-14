@@ -1,0 +1,10 @@
+# Kody Runtime recipe (docs §6). The same file Runo reads on a developer's machine.
+version: 1
+services:
+  compose:
+    files: [.kodus/compose.yaml]
+    public: grafana
+    health: /api/health
+    health_timeout: 300s
+  expose:
+    - { service: grafana, port: 3000, kind: http }
