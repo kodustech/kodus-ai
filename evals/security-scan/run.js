@@ -86,6 +86,7 @@ async function runCase(c, route, pricing) {
                 return {
                     what: `${a.id} (${a.class}) ${a.title}`.slice(0, 200),
                     ok: found.includes(a),
+                    vulnerabilityClass: a.class,
                     examined: result.examinedFiles.some((f) => files.has(f)),
                     // A unit reached the file, but did its lenses include the advisory's class?
                     classPlanned: touching.some((u) => u.classes.includes(a.class)),
@@ -228,6 +229,22 @@ function report(cases, errors, pickedCount, tokens) {
     const total = cases.reduce((s, c) => s + c.total, 0);
     const precision = precisionOf(cases);
 
+    const byClass = {};
+    const classOf = d => d.vulnerabilityClass ?? /\((\w+)\)/.exec(d.what)?.[1];
+    const classes = new Set(cases.flatMap(c => [...(c.detail ?? []).map(classOf), ...c.findings.map(f => f.class)]).filter(Boolean));
+    for (const cls of classes) {
+        const detail = cases.flatMap(c => c.detail ?? []).filter(d => classOf(d) === cls);
+        const findings = cases.flatMap(c => c.findings).filter(f => f.class === cls);
+        const hits = detail.filter(d => d.ok).length;
+        byClass[cls] = { hits, total: detail.length, recall: detail.length ? hits / detail.length : null,
+            precision: precisionOf([{precision: {
+                listed: findings.filter(f => f.matched).length,
+                judgedReal: findings.filter(f => !f.matched && f.verdict === 'real').length,
+                judgedFalse: findings.filter(f => !f.matched && f.verdict === 'false').length,
+                unjudged: findings.filter(f => !f.matched && !f.verdict).length,
+            }}]) };
+    }
+
     const target = (TARGETS.models || {})[runSettings.model] || {};
     const result = {
         eval: 'security-scan',
@@ -239,6 +256,7 @@ function report(cases, errors, pickedCount, tokens) {
         metric: { name: 'recall', value: total ? hits / total : 0, floor: target.recall ?? null, baseline: null },
         precision,
         byLanguage,
+        byClass,
         budgetUsd: runSettings.budgetUsd,
         sandbox: runSettings.sandbox,
         cases,
@@ -257,6 +275,10 @@ function report(cases, errors, pickedCount, tokens) {
     if (problems.length) console.error(`result problems: ${problems.join('; ')}`);
     if (errors.length > Math.floor(pickedCount * 0.05) || !cases.length) process.exit(2);
     if (args.gate && cases.every(c => c.expectedFindings !== undefined)) {
+        if (cases.some(c => c.coverage.stoppedByBudget || c.coverage.done !== c.coverage.units)) {
+            console.error('not measured: a negative control was not fully examined');
+            process.exit(2);
+        }
         process.exit(cases.some(c => c.findings.length > c.expectedFindings) ? 1 : 0);
     }
     if (args.gate) {
