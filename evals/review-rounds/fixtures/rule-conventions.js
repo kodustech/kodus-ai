@@ -1,7 +1,7 @@
 // Repository convention files the rules point at (`sourcePath`), so the rule
 // judge sees what production sends: KodyRulesAgentProvider reads each rule's
-// sourcePath through the sandbox and appends up to 6,000 characters to the
-// rule (inlineRuleReferences). In the production DeepSeek reposts the rules
+// sourcePath through the sandbox (loadRuleSourceReferences) and the shard
+// prints up to 6,000 characters of it with the rule. In the production DeepSeek reposts the rules
 // block was 400K–550K characters, ~6K per rule, while the diff was under 2K.
 // Invented text, built deterministically.
 

@@ -80,6 +80,14 @@ export class CodeAreaHistorySyncModel {
 
     @Prop({ type: Boolean, default: false })
     complete: boolean;
+
+    /** Consecutive runs whose PR listing failed; 0 once one succeeds. */
+    @Prop({ type: Number, default: 0 })
+    listingFailures: number;
+
+    /** Until when the scheduler leaves an unreadable repository alone. */
+    @Prop({ type: String, default: null })
+    retryAfter: string | null;
 }
 
 export const CodeAreaHistorySyncSchema = SchemaFactory.createForClass(

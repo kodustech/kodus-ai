@@ -29,6 +29,37 @@ export interface IApprovalReasonDeliveryFailure {
     reviewedBaseSha?: string;
 }
 
+/** A request as it is recorded: one summary at a time, added to the ones on record. */
+export interface KodyChangeRequestRecord {
+    requestedAt: string;
+    commentIds: string[];
+    summaryCommentId?: string;
+}
+
+/**
+ * Kody's "changes requested" standing on a PR. Written when the request is
+ * made, so it can be taken back once the findings behind it are resolved,
+ * with or without an approval.
+ */
+export interface IKodyChangeRequest {
+    /** Of the latest request; a later one replaces it. */
+    requestedAt: string;
+    /** Review comments of the critical findings behind the request. */
+    commentIds: string[];
+    /**
+     * Summary comments the host keeps open next to the request (a GitLab
+     * discussion, an Azure thread), resolved when it is withdrawn.
+     */
+    summaryCommentIds?: string[];
+}
+
+export interface IPullRequestWithKodyChangeRequest {
+    number: number;
+    provider: string;
+    repository: { id: string; name: string };
+    kodyChangeRequest: IKodyChangeRequest;
+}
+
 export interface ApprovalReasonDeliveryGuard {
     /** Logical publication attempt time, captured before provider I/O. */
     notAfter?: string;
@@ -70,6 +101,7 @@ export interface SuggestionCountsBySeverity {
 export interface IPullRequests {
     uuid?: string;
     approvalReasonDeliveryFailure?: IApprovalReasonDeliveryFailure | null;
+    kodyChangeRequest?: IKodyChangeRequest;
     title: string;
     status: string;
     merged: boolean;

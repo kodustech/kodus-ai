@@ -23,6 +23,10 @@ import {
     isUnresolvedDeliveredSuggestion,
 } from './utils/pull-request-metrics';
 import {
+    intersectPullRequestKeys,
+    MAX_OPEN_PULL_REQUEST_KEYS,
+} from './utils/open-awaiting-pull-requests.util';
+import {
     IPullRequests,
     SuggestionCountsBySeverity,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
@@ -44,6 +48,7 @@ import { AuthorizationService } from '@libs/identity/infrastructure/adapters/ser
 import {
     PaginatedEnrichedPullRequestsResponse,
     PaginationMetadata,
+    PullRequestExecutionsTotals,
 } from '@libs/code-review/dtos/dashboard/paginated-enriched-pull-requests.dto';
 import { EnrichedPullRequestsQueryDto } from '@libs/code-review/dtos/dashboard/enriched-pull-requests-query.dto';
 import { EnrichedPullRequestResponse } from '@libs/code-review/dtos/dashboard/enriched-pull-request-response.dto';
@@ -69,7 +74,9 @@ import {
  */
 type ExecutionCursor = { createdAt: Date | string; uuid: string };
 
-const encodeExecutionCursor = (cursor?: ExecutionCursor): string | undefined => {
+const encodeExecutionCursor = (
+    cursor?: ExecutionCursor,
+): string | undefined => {
     if (!cursor?.uuid || !cursor?.createdAt) {
         return undefined;
     }
@@ -79,9 +86,9 @@ const encodeExecutionCursor = (cursor?: ExecutionCursor): string | undefined => 
             ? cursor.createdAt.toISOString()
             : new Date(cursor.createdAt).toISOString();
 
-    return Buffer.from(JSON.stringify({ createdAt, uuid: cursor.uuid })).toString(
-        'base64url',
-    );
+    return Buffer.from(
+        JSON.stringify({ createdAt, uuid: cursor.uuid }),
+    ).toString('base64url');
 };
 
 const decodeExecutionCursor = (raw?: string): ExecutionCursor | undefined => {
@@ -148,7 +155,6 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             page = 1,
             cursor,
             hasSentSuggestions,
-            pullRequestTitle,
             pullRequestNumber,
             teamId,
             authorPolicy = 'all',
@@ -186,52 +192,44 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         };
 
         try {
-            const assignedRepositoryIds =
-                await this.authorizationService.getRepositoryScope({
-                    user: this.request.user,
-                    action: Action.Read,
-                    resource: ResourceType.PullRequests,
-                });
-
-            if (
-                assignedRepositoryIds !== null &&
-                assignedRepositoryIds.length === 0
-            ) {
+            // Shared with `countTotals`, so the list and its totals can never
+            // be resolved against different repositories or title matches.
+            // Neither read depends on the other.
+            const [filters, authorPolicyConfig] = await Promise.all([
+                this.resolveExecutionFilters(query, organizationAndTeamData),
+                this.getCompiledAuthorPolicyConfig(
+                    authorPolicy,
+                    organizationAndTeamData,
+                ),
+            ]);
+            if (!filters) {
                 return this.buildEmptyResponse(limit, page);
             }
+            const { allowedRepositoryIds, repositoryNameFilter } = filters;
+            let { prFilters } = filters;
 
-            let requestedRepositoryIds: string[] | undefined;
-            let repositoryNameFilter = repositoryName;
+            // "Needs attention" and "open" are decided by the PR document, so
+            // the scan below can only apply them after reading a batch. Open
+            // PRs are a sliver of a team's history: the scan read 300
+            // executions per request to keep a handful, page after page.
+            // Asking MongoDB for those PRs first lets the scan start from
+            // exactly their executions. The filters in the loop stay as they
+            // are — this only narrows what the loop is given.
+            if (needsAttention || prState === 'open') {
+                const openKeys = await this.findOpenPullRequestKeys({
+                    organizationId,
+                    repositoryIds: allowedRepositoryIds,
+                    unresolvedOnly: Boolean(needsAttention),
+                });
 
-            if (repositoryId) {
-                requestedRepositoryIds = [String(repositoryId)];
-                repositoryNameFilter = undefined;
-            } else if (repositoryName) {
-                const resolvedRepositoryIds =
-                    await this.resolveRepositoryIdsByName({
-                        organizationAndTeamData,
-                        repositoryName,
-                    });
-
-                if (resolvedRepositoryIds?.length) {
-                    requestedRepositoryIds = resolvedRepositoryIds;
-                    repositoryNameFilter = undefined;
-                }
-            }
-
-            let allowedRepositoryIds = requestedRepositoryIds;
-
-            if (assignedRepositoryIds !== null) {
-                if (allowedRepositoryIds?.length) {
-                    allowedRepositoryIds = allowedRepositoryIds.filter((id) =>
-                        assignedRepositoryIds.includes(id),
-                    );
-
-                    if (allowedRepositoryIds.length === 0) {
+                if (openKeys) {
+                    const narrowed = prFilters
+                        ? intersectPullRequestKeys(prFilters, openKeys)
+                        : openKeys;
+                    if (narrowed.length === 0) {
                         return this.buildEmptyResponse(limit, page);
                     }
-                } else {
-                    allowedRepositoryIds = assignedRepositoryIds;
+                    prFilters = narrowed;
                 }
             }
 
@@ -241,11 +239,6 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             // offset as well would skip a whole page of rows past it.
             const initialSkip = resumeCursor ? 0 : (page - 1) * limit;
             let accumulatedExecutions = 0;
-            let totalExecutions = 0;
-            // Distinct PRs matching the DB-level filters — captured from the same
-            // first batch that computes totalExecutions. Surfaced so the header
-            // shows an accurate PR count instead of the loaded-window estimate.
-            let distinctPrTotal = 0;
             let hasMoreExecutions = true;
             // Keyset cursor for the intra-request loop. The page offset
             // (initialSkip) still positions the first batch, but once the
@@ -264,39 +257,6 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             // mid-batch the remaining rows have not been served yet and must
             // not be skipped.
             let lastConsumed: ExecutionCursor | undefined = resumeCursor;
-            const authorPolicyConfig = await this.getCompiledAuthorPolicyConfig(
-                authorPolicy,
-                organizationAndTeamData,
-            );
-
-            // If filtering by title, fetch PR numbers from MongoDB first
-            let prFilters:
-                Array<{ number: number; repositoryId: string }> | undefined;
-            if (pullRequestTitle) {
-                const prNumbers =
-                    await this.pullRequestsService.findPRNumbersByTitleAndOrganization(
-                        pullRequestTitle,
-                        organizationId,
-                        allowedRepositoryIds,
-                    );
-
-                if (prNumbers.length === 0) {
-                    // No PRs match the title filter
-                    return {
-                        data: [],
-                        pagination: {
-                            currentPage: page,
-                            totalPages: 0,
-                            totalItems: 0,
-                            itemsPerPage: limit,
-                            hasNextPage: false,
-                            hasPreviousPage: false,
-                        },
-                    };
-                }
-
-                prFilters = prNumbers;
-            }
 
             // A page is filled by scanning executions and discarding the ones
             // that fail a post-query filter, so a selective filter makes the
@@ -312,43 +272,38 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             // client fetches again; the list stays complete because the client
             // continues on the cursor alone and never on page length.
             let batchesRead = 0;
+            let teamAutomationIds: string[] | undefined;
             while (
                 enrichedPullRequests.length < limit &&
                 hasMoreExecutions &&
                 batchesRead < MAX_BATCHES_PER_REQUEST
             ) {
                 batchesRead++;
-                const {
-                    data: executionsBatch,
-                    total,
-                    distinctPrTotal: batchDistinctPrTotal,
-                } = await this.automationExecutionService.findPullRequestExecutionsByOrganizationAndTeam(
-                    {
-                        organizationAndTeamData: {
-                            organizationId,
-                            teamId,
+                const { data: executionsBatch, teamAutomationIds: resolved } =
+                    await this.automationExecutionService.findPullRequestExecutionsByOrganizationAndTeam(
+                        {
+                            organizationAndTeamData: {
+                                organizationId,
+                                teamId,
+                            },
+                            repositoryIds: allowedRepositoryIds,
+                            repositoryName: repositoryNameFilter,
+                            pullRequestNumber,
+                            prFilters,
+                            status,
+                            createdAtFrom,
+                            createdAtTo,
+                            // First batch: page offset. Subsequent batches:
+                            // keyset cursor (no OFFSET over-scan).
+                            skip: lastConsumed ? undefined : initialSkip,
+                            cursor: lastConsumed,
+                            take: limit,
+                            order: 'DESC',
+                            teamAutomationIds,
                         },
-                        repositoryIds: allowedRepositoryIds,
-                        repositoryName: repositoryNameFilter,
-                        pullRequestNumber,
-                        prFilters,
-                        status,
-                        createdAtFrom,
-                        createdAtTo,
-                        // First batch: page offset. Subsequent batches:
-                        // keyset cursor (no OFFSET over-scan).
-                        skip: lastConsumed ? undefined : initialSkip,
-                        cursor: lastConsumed,
-                        take: limit,
-                        order: 'DESC',
-                        includeTotal: totalExecutions === 0,
-                    },
-                );
-
-                if (totalExecutions === 0) {
-                    totalExecutions = total;
-                    distinctPrTotal = batchDistinctPrTotal ?? 0;
-                }
+                    );
+                // Resolved by the first batch; the same for every batch.
+                teamAutomationIds = resolved;
 
                 if (!executionsBatch.length) {
                     hasMoreExecutions = false;
@@ -356,8 +311,8 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 }
 
                 // A batch smaller than the page size means the scan reached
-                // the end of the matching set. That — not arithmetic over
-                // `totalExecutions` — is what tells a keyset scan it is done,
+                // the end of the matching set. That — not arithmetic over a
+                // total — is what tells a keyset scan it is done,
                 // and it is the only signal that stays correct once a resume
                 // cursor makes the page offset meaningless.
                 const batchWasFull = executionsBatch.length >= limit;
@@ -631,7 +586,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                         // Severity filter: keep only PRs that delivered at least
                         // one suggestion of the requested severity. Applied
                         // post-aggregation like hasSentSuggestions (same caveat:
-                        // does not adjust totalItems, which counts executions).
+                        // `countTotals` counts executions and does not see it).
                         if (
                             severity &&
                             !(
@@ -644,7 +599,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
 
                         // Category filter: keep only PRs with a delivered
                         // suggestion of the requested category (same post-query
-                        // caveat as severity re: totalItems).
+                        // caveat as severity).
                         if (
                             category &&
                             !(
@@ -767,54 +722,37 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 accumulatedExecutions += executionsBatch.length;
 
                 if (stoppedMidBatch) {
-                    // Rows of this batch were never served — there is more,
-                    // whatever the totals say.
+                    // Rows of this batch were never served — there is more.
                     hasMoreExecutions = true;
                 } else if (!batchWasFull) {
-                    hasMoreExecutions = false;
-                } else if (
-                    !resumeCursor &&
-                    initialSkip + accumulatedExecutions >= totalExecutions
-                ) {
-                    // Offset callers (no cursor) can still finish early on the
-                    // execution total, which is exact for them.
                     hasMoreExecutions = false;
                 }
             }
 
-            if (totalExecutions === 0) {
+            // Nothing matched at all. Known only when the scan started at the
+            // very beginning and read no row; a later page that comes back
+            // empty says nothing about the total.
+            const nothingMatched =
+                accumulatedExecutions === 0 &&
+                !resumeCursor &&
+                initialSkip === 0;
+            if (nothingMatched) {
                 this.logger.warn({
                     message: 'No automation executions with PR data found',
                     context: GetEnrichedPullRequestsUseCase.name,
                     metadata: { organizationId },
                 });
-                return {
-                    data: [],
-                    pagination: {
-                        currentPage: page,
-                        totalPages: 0,
-                        totalItems: 0,
-                        itemsPerPage: limit,
-                        hasNextPage: false,
-                        hasPreviousPage: false,
-                    },
-                };
+                return this.buildEmptyResponse(limit, page);
             }
 
             const paginatedData = enrichedPullRequests.slice(0, limit);
 
-            const totalPages = Math.ceil(totalExecutions / limit);
             const paginationMetadata: PaginationMetadata = {
                 currentPage: page,
-                totalPages,
-                totalItems: totalExecutions,
-                distinctPrTotal,
                 itemsPerPage: limit,
-                // Whether the SCAN has more to give — not whether the page
-                // number is below a total counted in a different unit.
-                // `totalPages` divides executions by a page size measured in
-                // surviving rows, so `page < totalPages` promised pages that
-                // came back empty and, for the infinite list, never ended.
+                // Whether the SCAN has more to give. A page count derived from
+                // a total of executions promised pages that came back empty
+                // and, for the infinite list, never ended.
                 hasNextPage: hasMoreExecutions,
                 hasPreviousPage: page > 1 || Boolean(resumeCursor),
                 nextCursor: hasMoreExecutions
@@ -828,7 +766,6 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 context: GetEnrichedPullRequestsUseCase.name,
                 metadata: {
                     organizationId,
-                    totalExecutions,
                     returnedItems: paginatedData.length,
                     page,
                     limit,
@@ -848,6 +785,215 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             });
             throw error;
         }
+    }
+
+    /**
+     * Totals for the same filters the list takes: executions that match, and
+     * the distinct pull requests behind them.
+     *
+     * Counting walks every matching execution, which for a team with a long
+     * history is the slowest thing the Reviews screen asks for. It used to ride
+     * on the first page of the list and hold the rows back; it is its own call
+     * now, so only a view that shows the number pays for it.
+     *
+     * Like `pagination.distinctPrTotal` before it, this covers the DB-level
+     * filters only (status, dates, repository, PR number, title). The
+     * suggestion/author filters run after the query and are not reflected.
+     */
+    async countTotals(
+        query: EnrichedPullRequestsQueryDto,
+    ): Promise<PullRequestExecutionsTotals> {
+        const {
+            repositoryId,
+            repositoryName,
+            teamId,
+            pullRequestNumber,
+            status,
+            createdAtFrom,
+            createdAtTo,
+        } = query;
+
+        if (!this.request.user?.organization?.uuid) {
+            throw new Error('No organization found in request');
+        }
+
+        if (repositoryId) {
+            await this.authorizationService.ensure({
+                user: this.request.user,
+                action: Action.Read,
+                resource: ResourceType.PullRequests,
+                repoIds: [repositoryId],
+            });
+        }
+
+        const organizationId = this.request.user.organization.uuid;
+        const organizationAndTeamData: OrganizationAndTeamData = {
+            organizationId,
+            teamId,
+        };
+
+        try {
+            const filters = await this.resolveExecutionFilters(
+                query,
+                organizationAndTeamData,
+            );
+            if (!filters) {
+                return { totalItems: 0, distinctPrTotal: 0 };
+            }
+
+            const { total, distinctPrTotal } =
+                await this.automationExecutionService.findPullRequestExecutionsByOrganizationAndTeam(
+                    {
+                        organizationAndTeamData,
+                        repositoryIds: filters.allowedRepositoryIds,
+                        repositoryName: filters.repositoryNameFilter,
+                        pullRequestNumber,
+                        prFilters: filters.prFilters,
+                        status,
+                        createdAtFrom,
+                        createdAtTo,
+                        countOnly: true,
+                    },
+                );
+
+            return { totalItems: total, distinctPrTotal };
+        } catch (error) {
+            this.logger.error({
+                message: 'Error counting pull request executions',
+                context: GetEnrichedPullRequestsUseCase.name,
+                error,
+                metadata: { repositoryId, repositoryName, organizationId },
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * The organization's open pull requests — only those with an unresolved
+     * delivered suggestion when `unresolvedOnly` — as keys the execution query
+     * can filter on.
+     *
+     * `undefined` means "do not narrow": there are more open PRs than is
+     * worth sending as a filter, or the lookup failed. The caller then scans
+     * and filters as it always did, so this can make a request faster but
+     * never change its answer.
+     */
+    private async findOpenPullRequestKeys(params: {
+        organizationId: string;
+        repositoryIds?: string[];
+        unresolvedOnly: boolean;
+    }): Promise<Array<{ number: number; repositoryId: string }> | undefined> {
+        try {
+            const { keys, truncated } =
+                await this.pullRequestsService.findOpenPullRequestKeys(
+                    params.organizationId,
+                    params.repositoryIds,
+                    {
+                        unresolvedOnly: params.unresolvedOnly,
+                        limit: MAX_OPEN_PULL_REQUEST_KEYS,
+                    },
+                );
+
+            return truncated ? undefined : keys;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve the open pull requests up front; scanning instead',
+                context: GetEnrichedPullRequestsUseCase.name,
+                error,
+                metadata: { organizationId: params.organizationId },
+            });
+            return undefined;
+        }
+    }
+
+    /**
+     * Which executions a request may see and is asking for: the caller's
+     * repository scope, the repository filter resolved to ids, and a title
+     * search resolved to PR keys. `null` means the filters cannot match
+     * anything, so the caller answers empty without querying.
+     */
+    private async resolveExecutionFilters(
+        query: EnrichedPullRequestsQueryDto,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<{
+        allowedRepositoryIds?: string[];
+        repositoryNameFilter?: string;
+        prFilters?: Array<{ number: number; repositoryId: string }>;
+    } | null> {
+        const { repositoryId, repositoryName, pullRequestTitle } = query;
+
+        const assignedRepositoryIds =
+            await this.authorizationService.getRepositoryScope({
+                user: this.request.user,
+                action: Action.Read,
+                resource: ResourceType.PullRequests,
+            });
+
+        if (
+            assignedRepositoryIds !== null &&
+            assignedRepositoryIds.length === 0
+        ) {
+            return null;
+        }
+
+        let requestedRepositoryIds: string[] | undefined;
+        let repositoryNameFilter = repositoryName;
+
+        if (repositoryId) {
+            requestedRepositoryIds = [String(repositoryId)];
+            repositoryNameFilter = undefined;
+        } else if (repositoryName) {
+            const resolvedRepositoryIds = await this.resolveRepositoryIdsByName(
+                {
+                    organizationAndTeamData,
+                    repositoryName,
+                },
+            );
+
+            if (resolvedRepositoryIds?.length) {
+                requestedRepositoryIds = resolvedRepositoryIds;
+                repositoryNameFilter = undefined;
+            }
+        }
+
+        let allowedRepositoryIds = requestedRepositoryIds;
+
+        if (assignedRepositoryIds !== null) {
+            if (allowedRepositoryIds?.length) {
+                const assigned = new Set(assignedRepositoryIds);
+                allowedRepositoryIds = allowedRepositoryIds.filter((id) =>
+                    assigned.has(id),
+                );
+
+                if (allowedRepositoryIds.length === 0) {
+                    return null;
+                }
+            } else {
+                allowedRepositoryIds = assignedRepositoryIds;
+            }
+        }
+
+        // A title search is answered by MongoDB first: the executions table
+        // has no title to filter on.
+        let prFilters:
+            Array<{ number: number; repositoryId: string }> | undefined;
+        if (pullRequestTitle) {
+            const prNumbers =
+                await this.pullRequestsService.findPRNumbersByTitleAndOrganization(
+                    pullRequestTitle,
+                    organizationAndTeamData.organizationId,
+                    allowedRepositoryIds,
+                );
+
+            if (prNumbers.length === 0) {
+                return null;
+            }
+
+            prFilters = prNumbers;
+        }
+
+        return { allowedRepositoryIds, repositoryNameFilter, prFilters };
     }
 
     private buildEmptyResponse(
@@ -1090,7 +1236,12 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         pullRequest: IPullRequests,
     ): SuggestionCountsBySeverity {
         const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
-        const unresolvedBySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
+        const unresolvedBySeverity = {
+            critical: 0,
+            high: 0,
+            medium: 0,
+            low: 0,
+        };
         const categorySet = new Set<string>();
         let sent = 0;
         let filtered = 0;
@@ -1127,8 +1278,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 categories: Array.isArray(precomputed.categories)
                     ? precomputed.categories
                     : [],
-                firstSentSuggestion:
-                    precomputed.firstSentSuggestion ?? null,
+                firstSentSuggestion: precomputed.firstSentSuggestion ?? null,
             };
         }
 

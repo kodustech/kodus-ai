@@ -91,6 +91,25 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         organizationId: string,
         repositoryIds?: string[],
     ): Promise<Array<{ number: number; repositoryId: string }>>;
+    findPullRequestAuthorsOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>>;
+    hasStoredPullRequests(
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<boolean>;
+    // Keys of open PRs, optionally only those with an unresolved delivered
+    // suggestion. `truncated` = more than `limit` exist; the keys are partial.
+    findOpenPullRequestKeys(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: { unresolvedOnly?: boolean; limit: number },
+    ): Promise<{
+        keys: Array<{ number: number; repositoryId: string }>;
+        truncated: boolean;
+    }>;
     findDistinctAuthorsByRepositoryIds(
         organizationId: string,
         repositoryIds: string[] | undefined,

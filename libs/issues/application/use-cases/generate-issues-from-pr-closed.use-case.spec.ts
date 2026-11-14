@@ -302,6 +302,99 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
         });
     });
 
+    describe('Forgejo - resolves the instance that sent the webhook', () => {
+        // Forgejo numbers repositories per instance: repository 26 is
+        // alpha/app on git.alpha.example and beta/api on git.beta.example.
+        const forgejoConfig = (org: string, host: string, name: string) => ({
+            team: { uuid: `team-${org}`, organization: { uuid: `org-${org}` } },
+            integration: { authIntegration: { authDetails: { host } } },
+            configValue: [{ id: '26', name }],
+        });
+        const forgejoClosedPayload = {
+            action: 'closed',
+            pull_request: {
+                number: 7,
+                title: 'Add feature Y',
+                body: 'Implements feature Y',
+                user: { id: 303, login: 'fj-user' },
+                head: { ref: 'feat/y', sha: 'def456' },
+                base: { ref: 'main' },
+                html_url: 'https://git.beta.example/beta/api/pulls/7',
+                merged: true,
+            },
+            repository: {
+                id: 26,
+                name: 'api',
+                full_name: 'beta/api',
+                default_branch: 'main',
+                html_url: 'https://git.beta.example/beta/api',
+            },
+        };
+
+        beforeEach(() => {
+            pullRequestServiceMock.findByNumberAndRepositoryName.mockResolvedValue(
+                { files: mockPrFiles },
+            );
+        });
+
+        it('generates issues for the organization on the sending instance', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    forgejoConfig(
+                        'alpha',
+                        'https://git.alpha.example',
+                        'alpha/app',
+                    ),
+                    forgejoConfig(
+                        'beta',
+                        'https://git.beta.example',
+                        'beta/api',
+                    ),
+                ],
+            );
+
+            await useCase.execute({
+                payload: forgejoClosedPayload,
+                platformType: PlatformType.FORGEJO,
+            });
+
+            expect(
+                kodyIssuesManagementServiceMock.processClosedPr,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    organizationAndTeamData: {
+                        organizationId: 'org-beta',
+                        teamId: 'team-beta',
+                    },
+                }),
+            );
+        });
+
+        it('generates nothing when only another instance has the repository id', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    forgejoConfig(
+                        'alpha',
+                        'https://git.alpha.example',
+                        'alpha/app',
+                    ),
+                ],
+            );
+
+            await useCase.execute({
+                payload: forgejoClosedPayload,
+                platformType: PlatformType.FORGEJO,
+            });
+
+            expect(
+                kodyIssuesManagementServiceMock.processClosedPr,
+            ).not.toHaveBeenCalled();
+            expect(
+                pullRequestServiceMock.findByNumberAndRepositoryName,
+            ).not.toHaveBeenCalled();
+        });
+    });
+
     describe('early exit scenarios - should NOT call processClosedPr', () => {
         it('should skip when no integration config found (organizationAndTeamData is null)', async () => {
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(

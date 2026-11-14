@@ -1,5 +1,6 @@
 import { IssueStatus } from '@libs/core/infrastructure/config/types/general/issues.type';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
+import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 
 import { KodyIssuesTools } from './kodyIssues.tools';
 
@@ -97,6 +98,36 @@ describe('KodyIssuesTools listKodyIssues', () => {
 
         expect(issuesService.findByFilters).toHaveBeenCalledWith({
             organizationId: 'org-1',
+        });
+    });
+
+    it('drops the teamId a team key pins onto the call', async () => {
+        // McpToolAuthorizer fills teamId in from a team key, and no issue
+        // document stores that field, so forwarding it matched nothing (#2388).
+        await tools.listKodyIssues().execute({
+            organizationId: 'org-1',
+            teamId: 'team-7',
+        } as any);
+
+        expect(issuesService.findByFilters).toHaveBeenCalledWith({
+            organizationId: 'org-1',
+        });
+    });
+
+    it('keeps the declared filters next to a pinned teamId', async () => {
+        await tools.listKodyIssues().execute({
+            organizationId: 'org-1',
+            teamId: 'team-7',
+            repositoryName: 'kodus-ai',
+            severity: SeverityLevel.CRITICAL,
+            label: LabelType.BUG,
+        } as any);
+
+        expect(issuesService.findByFilters).toHaveBeenCalledWith({
+            'organizationId': 'org-1',
+            'severity': SeverityLevel.CRITICAL,
+            'label': LabelType.BUG,
+            'repository.name': 'kodus-ai',
         });
     });
 });

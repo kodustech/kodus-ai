@@ -1,3 +1,4 @@
+import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import type {
     ApprovalTeamMembership,
     ApprovalTeamMembershipParams,
@@ -4701,10 +4702,11 @@ export class GitlabService implements Omit<
             const requestChangeBodyTitle =
                 '# Found critical issues please review the requested changes';
 
-            const formattedBody =
-                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`.trim();
+            const formattedBody = withChangeRequestExitNote(
+                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`,
+            );
 
-            await gitlabAPI.MergeRequestDiscussions.create(
+            const discussion = await gitlabAPI.MergeRequestDiscussions.create(
                 repository.id,
                 prNumber,
                 formattedBody,
@@ -4716,6 +4718,13 @@ export class GitlabService implements Omit<
                 serviceName: 'GitlabService requestChangesPullRequest',
                 metadata: params,
             });
+
+            // On GitLab this discussion IS the request: it stays unresolved,
+            // and blocks the merge where every thread must be resolved, until
+            // it is resolved by id.
+            return discussion?.id
+                ? { summaryCommentId: String(discussion.id) }
+                : undefined;
         } catch (error) {
             this.logger.error({
                 message: `Error requesting changes on MR #${params.prNumber}`,

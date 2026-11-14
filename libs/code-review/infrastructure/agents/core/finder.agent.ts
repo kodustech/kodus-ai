@@ -842,6 +842,10 @@ export interface ConventionCheckParams {
     /** The custom agent's instructions: a rule cited from `TeamInstructions`
      *  is checked against them. */
     teamInstructions?: string;
+    /** The coding-agent instruction files the review loaded for this PR
+     *  (repository instructions): a rule quoted from one of them is checked
+     *  against the text the agent read. */
+    instructionFiles?: ReadonlyArray<{ path: string; content: string }>;
     /** What the ast-grep tool returned during this review (see
      *  recordAstGrepOutputs). Absent → no finding is proven by ast-grep. */
     astGrepLog?: AstGrepOutputLog;
@@ -1486,6 +1490,7 @@ async function routeByKind(
         check.guideFiles ?? [],
         check.listGuideDir,
         check.teamInstructions,
+        check.instructionFiles,
     );
     if (quoted.rejected.length > 0) {
         finderLogger.log({

@@ -544,6 +544,118 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         expect(lastCall.previousDecisions).toBe(previousDecisions);
     });
 
+    // #2508: a rule decomposed into atoms reaches the provider as one unit per
+    // atom, all carrying the parent's uuid and sourcePath.
+    it('keeps the references that loaded and warns with the review when the other source fails', async () => {
+        const { provider } = makeProvider([{ violations: [] }]);
+        const warn = jest.fn();
+        (provider as any).shardLogger = { warn, log: jest.fn() };
+        jest.spyOn(
+            provider as any,
+            'loadContextOsReferences',
+        ).mockRejectedValue(new Error('boom'));
+        const read = jest.fn().mockResolvedValue('# the convention');
+
+        await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        uuid: 'r1',
+                        title: 't',
+                        rule: 'r',
+                        status: 'active',
+                        path: '**/*.ts',
+                        sourcePath: 'CLAUDE.md',
+                    },
+                ],
+                remoteCommands: { read },
+            }) as any,
+        );
+
+        const lastCall =
+            mockJudge.mock.calls[mockJudge.mock.calls.length - 1][0];
+        // The source file still reaches the judge; only the failed half is lost.
+        expect([...lastCall.references.keys()]).toEqual(['r1']);
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining(
+                    'Context OS reference load failed',
+                ),
+                metadata: expect.objectContaining({
+                    organizationAndTeamData: input().organizationAndTeamData,
+                    prNumber: 1,
+                }),
+            }),
+        );
+    });
+
+    it('reads a rule source file once and hands it to the judge as a reference, not as rule text', async () => {
+        const { provider } = makeProvider([{ violations: [] }]);
+        const read = jest.fn().mockResolvedValue('# the convention');
+        const atoms = Array.from({ length: 12 }, (_, i) => ({
+            uuid: 'parent',
+            title: `atom ${i}`,
+            rule: `spec ${i}`,
+            status: 'active',
+            severity: 'high',
+            path: '**/*.ts',
+            sourcePath: 'CLAUDE.md',
+        }));
+
+        await provider.execute(
+            input({ kodyRules: atoms, remoteCommands: { read } }) as any,
+        );
+
+        expect(read).toHaveBeenCalledTimes(1);
+        const lastCall =
+            mockJudge.mock.calls[mockJudge.mock.calls.length - 1][0];
+        expect(lastCall.rules.map((r: any) => r.rule)).toEqual(
+            atoms.map((a) => a.rule),
+        );
+        expect(lastCall.references.get('parent')).toEqual([
+            {
+                source: 'rule-source',
+                filePath: 'CLAUDE.md',
+                content: '# the convention',
+            },
+        ]);
+    });
+
+    it('logs the references the judge printed with the review they belong to', async () => {
+        const { provider } = makeProvider([{ violations: [] }]);
+        const log = jest.fn();
+        (provider as any).shardLogger = { warn: jest.fn(), log };
+        const read = jest.fn().mockResolvedValue('# the convention');
+        const atoms = Array.from({ length: 12 }, (_, i) => ({
+            uuid: 'parent',
+            title: `atom ${i}`,
+            rule: `spec ${i}`,
+            status: 'active',
+            severity: 'high',
+            path: '**/*.ts',
+            sourcePath: 'CLAUDE.md',
+        }));
+
+        await provider.execute(
+            input({ kodyRules: atoms, remoteCommands: { read } }) as any,
+        );
+
+        expect(log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining(
+                    'printed 1 reference file(s) across 1 shard(s); per-rule inlining would have printed 12',
+                ),
+                metadata: expect.objectContaining({
+                    organizationAndTeamData: input().organizationAndTeamData,
+                    prNumber: 1,
+                    shards: 1,
+                    entries: 1,
+                    perUnitCopies: 12,
+                }),
+            }),
+        );
+    });
+
     // ── language resolution + forwarding (customer-reported) ──────────
     // The sharded judge's system prompts have zero language templating on
     // their own; execute() must resolve `input.languageResultPrompt` via the
@@ -924,46 +1036,99 @@ describe('KodyRulesAgentProvider — Context OS reference loading', () => {
     };
 
     const call = (p: any, rules: any[], input: any) =>
-        (p as any).inlineContextOsReferences(rules, input);
+        (p as any).loadContextOsReferences(rules, input);
 
-    it('inlines resolved content and does NOT warn', async () => {
-        const loader = {
-            loadReferencesForRules: jest.fn().mockResolvedValue({
-                referencesMap: new Map([
-                    [
-                        'r1',
-                        [{ filePath: 'CLAUDE.md', content: 'the convention' }],
-                    ],
-                ]),
-                mcpResultsMap: new Map(),
-            }),
-        };
+    const resolved = (entries: Array<[string, any[]]>) => ({
+        loadReferencesForRules: jest.fn().mockResolvedValue({
+            referencesMap: new Map(entries),
+            mcpResultsMap: new Map(),
+        }),
+    });
+
+    it('returns the resolved files per rule, leaves the rule text alone, and does NOT warn', async () => {
+        const loader = resolved([
+            ['r1', [{ filePath: 'CLAUDE.md', content: 'the convention' }]],
+        ]);
         const p = makeProvider(loader);
         const rules = [
             { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'base' },
         ];
 
-        const out = await call(p, rules, makeInput());
+        const index = await call(p, rules, makeInput());
 
-        expect(out[0].rule).toContain('the convention');
+        expect(index.get('r1')).toEqual([
+            {
+                source: 'context-os',
+                filePath: 'CLAUDE.md',
+                content: 'the convention',
+            },
+        ]);
+        expect(rules[0].rule).toBe('base');
         expect((p as any).shardLogger.warn).not.toHaveBeenCalled();
     });
 
-    it('WARNS (with organizationId) when a contextReferenceId rule resolves ZERO references', async () => {
-        const loader = {
-            loadReferencesForRules: jest.fn().mockResolvedValue({
-                referencesMap: new Map(),
-                mcpResultsMap: new Map(),
-            }),
-        };
+    // A rule decomposed into atoms reaches here as one unit per atom, all
+    // carrying the parent's uuid (#2508). One load per rule, not per atom.
+    it('sends each rule to the loader once, however many units share its uuid', async () => {
+        const loader = resolved([]);
         const p = makeProvider(loader);
+        const atoms = Array.from({ length: 12 }, (_, i) => ({
+            uuid: 'parent',
+            contextReferenceId: 'ctx',
+            title: `atom ${i}`,
+            rule: `spec ${i}`,
+        }));
+
+        await call(p, atoms, makeInput());
+
+        const passed = loader.loadReferencesForRules.mock.calls[0][0];
+        expect(passed).toHaveLength(1);
+        expect(passed[0].uuid).toBe('parent');
+    });
+
+    it('names the repository only for a file outside the pull request repository', async () => {
+        const loader = resolved([
+            [
+                'r1',
+                [
+                    {
+                        filePath: 'docs/a.md',
+                        content: 'ours',
+                        repositoryId: 'repo-1',
+                        repositoryName: 'repo',
+                    },
+                    {
+                        filePath: 'docs/a.md',
+                        content: 'theirs',
+                        repositoryId: 'repo-2',
+                        repositoryName: 'design-system',
+                    },
+                ],
+            ],
+        ]);
+        const p = makeProvider(loader);
+
+        const index = await call(
+            p,
+            [{ uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'b' }],
+            makeInput(),
+        );
+
+        expect(index.get('r1').map((r: any) => r.repository)).toEqual([
+            undefined,
+            'design-system',
+        ]);
+    });
+
+    it('WARNS (with organizationId) when a contextReferenceId rule resolves ZERO references', async () => {
+        const p = makeProvider(resolved([]));
         const rules = [
             { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'base' },
         ];
 
-        const out = await call(p, rules, makeInput());
+        const index = await call(p, rules, makeInput());
 
-        expect(out).toEqual(rules); // judged blind, unchanged
+        expect(index.size).toBe(0);
         const warn = (p as any).shardLogger.warn as jest.Mock;
         expect(warn).toHaveBeenCalledTimes(1);
         const entry = warn.mock.calls[0][0];
@@ -974,12 +1139,7 @@ describe('KodyRulesAgentProvider — Context OS reference loading', () => {
     });
 
     it('sends ONLY rules with a contextReferenceId to the loader (pre-filter)', async () => {
-        const loader = {
-            loadReferencesForRules: jest.fn().mockResolvedValue({
-                referencesMap: new Map(),
-                mcpResultsMap: new Map(),
-            }),
-        };
+        const loader = resolved([]);
         const p = makeProvider(loader);
         const rules = [
             { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'a' },
@@ -997,11 +1157,14 @@ describe('KodyRulesAgentProvider — Context OS reference loading', () => {
     it('skips the loader entirely when no rule carries a contextReferenceId', async () => {
         const loader = { loadReferencesForRules: jest.fn() };
         const p = makeProvider(loader);
-        const rules = [{ uuid: 'r1', title: 't', rule: 'a' }];
 
-        const out = await call(p, rules, makeInput());
+        const index = await call(
+            p,
+            [{ uuid: 'r1', title: 't', rule: 'a' }],
+            makeInput(),
+        );
 
-        expect(out).toBe(rules);
+        expect(index.size).toBe(0);
         expect(loader.loadReferencesForRules).not.toHaveBeenCalled();
     });
 
@@ -1016,9 +1179,9 @@ describe('KodyRulesAgentProvider — Context OS reference loading', () => {
             { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'base' },
         ];
 
-        const out = await call(p, rules, makeInput());
+        const index = await call(p, rules, makeInput());
 
-        expect(out).toBe(rules);
+        expect(index.size).toBe(0);
         const warn = (p as any).shardLogger.warn as jest.Mock;
         expect(warn).toHaveBeenCalledTimes(1);
         expect(warn.mock.calls[0][0].metadata.organizationAndTeamData).toEqual(
@@ -1032,9 +1195,9 @@ describe('KodyRulesAgentProvider — Context OS reference loading', () => {
             { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'base' },
         ];
 
-        const out = await call(p, rules, makeInput());
+        const index = await call(p, rules, makeInput());
 
-        expect(out).toBe(rules);
+        expect(index.size).toBe(0);
         expect((p as any).shardLogger.warn).not.toHaveBeenCalled();
     });
 });
@@ -1163,21 +1326,29 @@ describe('KodyRulesAgentProvider — LLM.run request assembly (runJudge)', () =>
             return { violations: [], shardsRun: 1, shardsErrored: 0 };
         });
         await provider.execute(boundaryInput() as any);
-        mockRunStructuredReviewCall.mockImplementationOnce(async (params: any) => {
-            // What the executor does with a wrapped reply, then a re-ask.
-            params.schema.validate({ answer: 'none' });
-            return params.schema.validate({ result: { violations: [] } }).value;
-        });
+        mockRunStructuredReviewCall.mockImplementationOnce(
+            async (params: any) => {
+                // What the executor does with a wrapped reply, then a re-ask.
+                params.schema.validate({ answer: 'none' });
+                return params.schema.validate({ result: { violations: [] } })
+                    .value;
+            },
+        );
         warn.mockClear();
 
         await invoke(runJudge!);
 
         const entries = warn.mock.calls
             .map((c: any[]) => c[0])
-            .filter((e: any) => /off-shape kody-rules shard reply/.test(e.message));
+            .filter((e: any) =>
+                /off-shape kody-rules shard reply/.test(e.message),
+            );
         expect(entries).toHaveLength(1);
         expect(entries[0].metadata).toMatchObject({
-            organizationAndTeamData: { organizationId: 'org-xyz', teamId: 'team-1' },
+            organizationAndTeamData: {
+                organizationId: 'org-xyz',
+                teamId: 'team-1',
+            },
             prNumber: 42,
             file: 'src/a.ts',
             reshapes: [
@@ -2180,10 +2351,15 @@ describe('KodyRulesAgentProvider — a PR whose changed files start with "/" (Az
         }));
         dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kody-azure-paths-'));
         const write = (rel: string, content: string) => {
-            fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+            fs.mkdirSync(path.dirname(path.join(dir, rel)), {
+                recursive: true,
+            });
             fs.writeFileSync(path.join(dir, rel), content);
         };
-        write('src/main.ts', 'export const total = (n: number[]) => n.length;\n');
+        write(
+            'src/main.ts',
+            'export const total = (n: number[]) => n.length;\n',
+        );
         write('src/util.ts', 'export const slugify = (t: string) => t;\n');
         write('src/main.spec.ts', "import { total } from './main';\n");
     });
@@ -2203,7 +2379,10 @@ describe('KodyRulesAgentProvider — a PR whose changed files start with "/" (Az
 
         const out = await provider.execute({
             prNumber: 9,
-            organizationAndTeamData: { organizationId: 'org-xyz', teamId: 'team-1' },
+            organizationAndTeamData: {
+                organizationId: 'org-xyz',
+                teamId: 'team-1',
+            },
             changedFiles: [
                 {
                     filename: '/src/util.ts',
@@ -2241,7 +2420,9 @@ describe('KodyRulesAgentProvider — a PR whose changed files start with "/" (Az
 
         expect(lookup.available).toBe(true);
         expect(
-            out.warnings?.some((w: any) => w.kind === 'RULE_CONTEXT_UNAVAILABLE'),
+            out.warnings?.some(
+                (w: any) => w.kind === 'RULE_CONTEXT_UNAVAILABLE',
+            ),
         ).toBeFalsy();
         const prompts = mockRunStructuredReviewCall.mock.calls
             .map((call) => call[0]?.user as string)

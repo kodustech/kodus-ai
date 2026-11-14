@@ -50,6 +50,7 @@ export class ObservabilitySystem {
     private alsContext = new AsyncLocalStorage<ObservabilityContext>();
     private exporters: ObservabilityExporter[] = [];
     private otelAdapter = new OtelAdapter();
+    private shutdownPromise?: Promise<void>;
 
     constructor(config: Partial<ObservabilityConfig> = {}) {
         this.config = {
@@ -541,9 +542,15 @@ export class ObservabilitySystem {
     }
 
     /**
-     * Shutdown the observability system gracefully
+     * Shutdown the observability system gracefully. Idempotent: every caller
+     * gets the same run, so a second signal cannot close the exporters twice.
      */
-    async shutdown(): Promise<void> {
+    shutdown(): Promise<void> {
+        this.shutdownPromise ??= this.runShutdown();
+        return this.shutdownPromise;
+    }
+
+    private async runShutdown(): Promise<void> {
         this.logger.log({
             message: 'Shutting down observability system',
             context: this.constructor.name,
@@ -850,8 +857,11 @@ export class ObservabilitySystem {
             this.handleGlobalError(error, 'unhandled_rejection');
         });
 
-        // Setup graceful shutdown
-        process.on('SIGTERM', () => {
+        // Setup graceful shutdown. `once`: a persistent listener would swallow
+        // the signal Nest re-sends after its shutdown hooks (enableShutdownHooks
+        // removes its own listener, then kills the process with the same
+        // signal), so the process would never exit.
+        process.once('SIGTERM', () => {
             this.logger.log({
                 message: 'SIGTERM received, shutting down gracefully',
                 context: this.constructor.name,
@@ -866,7 +876,7 @@ export class ObservabilitySystem {
             });
         });
 
-        process.on('SIGINT', () => {
+        process.once('SIGINT', () => {
             this.logger.log({
                 message: 'SIGINT received, shutting down gracefully',
                 context: this.constructor.name,

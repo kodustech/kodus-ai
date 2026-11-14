@@ -1,3 +1,5 @@
+import { classifyGitHubError } from '@libs/core/workflow/domain/errors/classify-github-error';
+import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 import { createLogger } from '@libs/core/log/logger';
 import { EnqueueAstGraphUpdateOnMergedUseCase } from '@libs/code-review/application/use-cases/enqueue-ast-graph-update-on-merged.use-case';
 import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
@@ -38,6 +40,9 @@ import {
 } from '@libs/sandbox/domain/events/sandbox-invalidate.event';
 import { SyncAllRepositoriesUseCase } from '@libs/platform/application/use-cases/codeManagement/sync-all-repositories.use-case';
 import { isNewRepositoryEvent } from './new-repository-event';
+import { requestedReviewerOf } from './review-request';
+import type { HostAccount } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
+import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 /**
  * Handler for GitHub webhook events.
@@ -101,7 +106,10 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
             ];
 
             // If the action is in the allowed list, we can process it
-            return allowedActions.includes(params.payload?.action);
+            return (
+                allowedActions.includes(params.payload?.action) ||
+                !!requestedReviewerOf(params.event, params.payload)
+            );
         }
 
         // If all checks pass, return true
@@ -122,9 +130,18 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         }
 
         switch (event) {
-            case 'pull_request':
-                await this.handlePullRequest(params);
+            case 'pull_request': {
+                const requestedReviewer = requestedReviewerOf(
+                    event,
+                    params.payload,
+                );
+                if (requestedReviewer) {
+                    await this.handleReviewRequested(params, requestedReviewer);
+                } else {
+                    await this.handlePullRequest(params);
+                }
                 break;
+            }
             case 'issue_comment':
             case 'pull_request_review_comment':
                 await this.handleComment(params);
@@ -139,6 +156,99 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                 });
                 return;
         }
+    }
+
+    /**
+     * "Re-request review" on Kody is `@kody start-review` as a click: it
+     * resumes a paused PR, runs a manual-mode review and retries a failed one.
+     * GitHub shows that button for user accounts only, so the click exists
+     * where Kody reviews as one (a personal access token), not as the App.
+     * It is a RE-request only on a PR Kody already reviewed. GitHub sends the
+     * same event when an account is asked for the first time (CODEOWNERS, a
+     * reviewer picked while opening the PR), and there the `opened` event
+     * already decides whether a review runs.
+     */
+    private async handleReviewRequested(
+        params: IWebhookEventParams,
+        requestedReviewer: HostAccount,
+    ): Promise<void> {
+        const { payload, event } = params;
+        const prNumber = payload?.pull_request?.number || payload?.number;
+        const repository = {
+            id: String(payload?.repository?.id),
+            name: payload?.repository?.name,
+        };
+        const metadata = { prNumber, repositoryId: repository.id };
+
+        const context = await this.webhookContextService.getContext(
+            PlatformType.GITHUB,
+            repository.id,
+        );
+        if (!context?.organizationAndTeamData) {
+            return;
+        }
+        const { organizationAndTeamData } = context;
+
+        try {
+            const forKody = await this.codeManagement.isOwnAccount(
+                { organizationAndTeamData, account: requestedReviewer },
+                PlatformType.GITHUB,
+            );
+            if (!forKody) {
+                return;
+            }
+            const reviewed =
+                await this.codeManagement.getReviewStatusByPullRequest({
+                    organizationAndTeamData,
+                    repository,
+                    prNumber,
+                });
+            if (!reviewed || reviewed === PullRequestReviewState.NONE) {
+                return;
+            }
+        } catch (error) {
+            // A rate limit lifts: the event goes back to the queue, so the
+            // click is not lost.
+            const classified = classifyGitHubError(error);
+            if (isRateLimitError(classified)) throw classified;
+            // Anything else would fail the same way again, and nearly every
+            // review request is for somebody else.
+            this.logger.warn({
+                message: `Could not tell whether the review requested on PR#${prNumber} is for Kody`,
+                context: GitHubPullRequestHandler.name,
+                error,
+                metadata,
+            });
+            return;
+        }
+
+        this.logger.log({
+            message: `Review re-requested from Kody on PR#${prNumber}`,
+            context: GitHubPullRequestHandler.name,
+            metadata,
+        });
+
+        // Saved as the event it is: a faked `synchronize` would refetch the
+        // PR's files and commits, and nothing was pushed.
+        await this.savePullRequestUseCase.execute(params);
+        const jobId = await this.enqueueCodeReviewJobUseCase.execute({
+            codeManagementPayload: {
+                ...payload,
+                action: 'synchronize',
+                origin: 'command',
+            },
+            event,
+            platformType: PlatformType.GITHUB,
+            organizationAndTeamData,
+            teamAutomationId: context.teamAutomationId,
+            correlationId: params.correlationId,
+        });
+        this.logger.log({
+            message:
+                'Code review job enqueued from a review re-request for asynchronous processing',
+            context: GitHubPullRequestHandler.name,
+            metadata: { ...metadata, jobId },
+        });
     }
 
     private async handlePullRequest(

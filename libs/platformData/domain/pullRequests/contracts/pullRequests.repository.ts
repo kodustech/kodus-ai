@@ -1,4 +1,7 @@
-import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import type {
+    UpdateSuggestionOptions,
+    KodyChangeRequestRecord,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -13,6 +16,7 @@ import {
     ISuggestion,
     ISuggestionByPR,
     IPullRequestWithDeliveredSuggestions,
+    IPullRequestWithKodyChangeRequest,
     IPullRequestUserMapping,
     SuggestionCountsBySeverity,
 } from '../interfaces/pullRequests.interface';
@@ -149,6 +153,25 @@ export interface IPullRequestsRepository {
         organizationId: string,
         repositoryIds?: string[],
     ): Promise<Array<{ number: number; repositoryId: string }>>;
+    findPullRequestAuthorsOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>>;
+    hasStoredPullRequests(
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<boolean>;
+    // Keys of open PRs, optionally only those with an unresolved delivered
+    // suggestion. `truncated` = more than `limit` exist; the keys are partial.
+    findOpenPullRequestKeys(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: { unresolvedOnly?: boolean; limit: number },
+    ): Promise<{
+        keys: Array<{ number: number; repositoryId: string }>;
+        truncated: boolean;
+    }>;
     // Distinct PR authors (by display name) for the Author search autocomplete.
     findDistinctAuthorsByRepositoryIds(
         organizationId: string,
@@ -239,6 +262,37 @@ export interface IPullRequestsRepository {
         ruleId: string,
         organizationId: string,
     ): Promise<ISuggestion[]>;
+    /**
+     * Records that Kody requested changes, over these review comments. A
+     * second request on the same PR adds to the first.
+     */
+    recordKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        request: KodyChangeRequestRecord,
+    ): Promise<boolean>;
+    /**
+     * Forgets the request read at `requestedAt`. One made since then stays:
+     * it is a different request, over findings the reader did not see.
+     */
+    clearKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean>;
+    /** Whether the PR is open and still carries the request read at `requestedAt`. */
+    hasOpenKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean>;
+    /** The open PRs of an organization that carry Kody's change request. */
+    findOpenPullRequestsWithKodyChangeRequest(
+        organizationId: string,
+    ): Promise<IPullRequestWithKodyChangeRequest[]>;
     findPullRequestsWithDeliveredSuggestions(
         organizationId: string,
         prNumbers: number[],

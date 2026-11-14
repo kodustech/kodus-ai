@@ -148,6 +148,13 @@ if [ -z "${SPECS[0]-}" ]; then
     exit 0
 fi
 
+# This job starts no database. Integration specs that need one skip themselves
+# under this opt-out (Postgres: describe.skip; Mongo: resolveMongoTestGate,
+# which otherwise throws on import in CI and fails the dry run), while the ones
+# that need none still run. Forced, not defaulted: Stryker's concurrent runners
+# would share one test database.
+export SKIP_INTEGRATION=true
+
 # Emit the spec list as a JSON array for jest.stryker.config.ts (node does the
 # quoting so a path with odd characters can't corrupt it).
 export STRYKER_JEST_TESTMATCH="$(node -e 'process.stdout.write(JSON.stringify(process.argv.slice(1)))' "${SPECS[@]}")"
