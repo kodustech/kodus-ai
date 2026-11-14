@@ -36,6 +36,7 @@ import {
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { IssueStatus } from '@libs/core/infrastructure/config/types/general/issues.type';
+import { IssueSource } from '@libs/issues/domain/interfaces/issues.interface';
 import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 import { IssueCreationConfig } from '@libs/issues/domain/entities/issue-creation-config.entity';
@@ -189,11 +190,23 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
 
         try {
             // 1. Buscar issues abertas para o arquivo
-            const existingIssues = await this.issuesService.findByFileAndStatus(
-                organizationAndTeamData.organizationId,
-                repository.id,
-                filePath,
-                IssueStatus.OPEN,
+            // A scan issue names its repository by platform and instance
+            // too: a GitLab project can carry the id of a GitHub repository,
+            // and two GitLab servers each have a project 1. Without the PR's
+            // instance, no scan issue is known to be its own.
+            const existingIssues = (
+                await this.issuesService.findByFileAndStatus(
+                    organizationAndTeamData.organizationId,
+                    repository.id,
+                    filePath,
+                    IssueStatus.OPEN,
+                )
+            )?.filter(
+                (issue) =>
+                    issue.source !== IssueSource.SECURITY_SCAN ||
+                    (issue.repository?.platform === repository.platform &&
+                        !!repository.host &&
+                        issue.repository?.host === repository.host),
             );
 
             if (!existingIssues || existingIssues?.length === 0) {
@@ -207,6 +220,25 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                 filePath,
                 existingIssues: await Promise.all(
                     existingIssues.map(async (issue) => {
+                        // A security-scan issue has no PR suggestion behind it;
+                        // the issue itself is what a new suggestion matches.
+                        if (!issue.contributingSuggestions?.length) {
+                            return {
+                                issueId: issue.uuid,
+                                representativeSuggestion: [
+                                    {
+                                        id: issue.uuid,
+                                        language: issue.language,
+                                        relevantFile: issue.filePath,
+                                        suggestionContent: issue.description,
+                                        existingCode: '',
+                                        improvedCode: '',
+                                        oneSentenceSummary: issue.title,
+                                    },
+                                ],
+                            };
+                        }
+
                         const enrichedSuggestions =
                             await this.enrichContributingSuggestions(
                                 [issue.contributingSuggestions[0]],
@@ -218,9 +250,9 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                                 id: suggestion.id,
                                 language: suggestion.language,
                                 relevantFile: suggestion.relevantFile,
-                                suggestionContent:
-                                    suggestion.fullExplanation ||
-                                    suggestion.suggestionContent,
+                                // enrichContributingSuggestions already put
+                                // the full explanation here when there is one.
+                                suggestionContent: suggestion.suggestionContent,
                                 existingCode: suggestion.existingCode,
                                 improvedCode: suggestion.improvedCode,
                                 oneSentenceSummary:
@@ -258,7 +290,12 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                 );
 
             // 4. Processar resultado do merge
-            await this.processMergeResult(context, mergeResult, newSuggestions);
+            await this.processMergeResult(
+                context,
+                mergeResult,
+                newSuggestions,
+                new Set(existingIssues.map((issue) => issue.uuid)),
+            );
         } catch (error) {
             // Terminal BYOK billing/auth → warn (user's provider config; one
             // suspended key fans out per-file), real fault → error.
@@ -319,22 +356,11 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                             label: suggestion?.label as LabelType,
                             severity: suggestion?.severity as SeverityLevel,
                             contributingSuggestions: [
-                                {
-                                    id: suggestion.id,
-                                    prNumber: context.pullRequest.number,
-                                    prAuthor: {
-                                        id:
-                                            pullRequest?.user?.id.toString() ||
-                                            '',
-                                        name: pullRequest?.user?.name || '',
-                                    },
-                                    ...(suggestion.brokenKodyRulesIds?.length
-                                        ? {
-                                              brokenKodyRulesIds:
-                                                  suggestion.brokenKodyRulesIds,
-                                          }
-                                        : {}),
-                                },
+                                this.toContributingSuggestion(
+                                    suggestion,
+                                    context.pullRequest.number,
+                                    pullRequest,
+                                ),
                             ],
                             repository: {
                                 id: context.repository.id,
@@ -375,6 +401,24 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
         }
     }
 
+    private toContributingSuggestion(
+        suggestion: Partial<CodeSuggestion>,
+        prNumber: number,
+        pullRequest: { user?: { id?: string | number; name?: string } },
+    ): IContributingSuggestion {
+        return {
+            id: suggestion.id,
+            prNumber,
+            prAuthor: {
+                id: pullRequest?.user?.id?.toString() || '',
+                name: pullRequest?.user?.name || '',
+            },
+            ...(suggestion.brokenKodyRulesIds?.length
+                ? { brokenKodyRulesIds: suggestion.brokenKodyRulesIds }
+                : {}),
+        };
+    }
+
     async resolveExistingIssues(
         context: Pick<
             contextToGenerateIssues,
@@ -407,12 +451,18 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                 const fileData = file;
                 if (!fileData) continue;
 
-                // Buscar issues abertas para o arquivo
-                const openIssues = await this.issuesService.findByFileAndStatus(
-                    context.organizationAndTeamData.organizationId,
-                    context.repository.id,
-                    file.path,
-                    IssueStatus.OPEN,
+                // A scan finding is about the branch the scan read. A closed
+                // pull request, merged or not, may target another branch or
+                // never land: only the next scan resolves a scan finding.
+                const openIssues = (
+                    await this.issuesService.findByFileAndStatus(
+                        context.organizationAndTeamData.organizationId,
+                        context.repository.id,
+                        file.path,
+                        IssueStatus.OPEN,
+                    )
+                )?.filter(
+                    (issue) => issue.source !== IssueSource.SECURITY_SCAN,
                 );
 
                 if (!openIssues?.length) continue;
@@ -450,12 +500,19 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     );
 
                 if (llmResult?.issueVerificationResults) {
+                    // Only an issue it was shown: the id is model output.
+                    const shownIssueIds = new Set(
+                        openIssues.map((issue) => issue.uuid),
+                    );
                     // Push into the existing `updatePromises` array
                     // instead of awaiting sequentially — the outer
                     // Promise.all below then runs every updateStatus
                     // in parallel. Was N × RTT, becomes max(RTT).
                     for (const resolution of llmResult.issueVerificationResults) {
-                        if (!resolution.isIssuePresentInCode) {
+                        if (
+                            !resolution.isIssuePresentInCode &&
+                            shownIssueIds.has(resolution.issueId)
+                        ) {
                             updatePromises.push(
                                 this.issuesService.updateStatus(
                                     resolution.issueId,
@@ -545,6 +602,8 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
         >,
         mergeResult: any,
         newSuggestions: Partial<CodeSuggestion>[],
+        /** The issues the model was shown: it may only match one of these. */
+        shownIssueIds: Set<string>,
     ): Promise<void> {
         if (!mergeResult?.matches) {
             return;
@@ -554,22 +613,39 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
         const suggestionsMap = new Map(newSuggestions.map((s) => [s.id, s]));
 
         const unmatchedSuggestions: Partial<CodeSuggestion>[] = [];
+        let pullRequest: Awaited<
+            ReturnType<IPullRequestsService['findByNumberAndRepositoryName']>
+        >;
 
         for (const match of mergeResult.matches) {
             const suggestion = suggestionsMap.get(match.suggestionId);
 
             if (!suggestion) continue;
 
-            if (match.existingIssueId) {
-                const existingIssue = await this.issuesService.findById(
-                    match.existingIssueId,
-                );
-                if (existingIssue) {
-                    await this.issuesService.addSuggestionIds(
-                        match.existingIssueId,
-                        [suggestion.id],
+            // An id the model was not shown (made up, or of another file) is
+            // no match: the suggestion becomes an issue of its own.
+            if (
+                match.existingIssueId &&
+                shownIssueIds.has(match.existingIssueId)
+            ) {
+                pullRequest ??=
+                    await this.pullRequestsService.findByNumberAndRepositoryName(
+                        context.pullRequest.number,
+                        context.repository.name,
+                        context.organizationAndTeamData,
                     );
-                }
+
+                await this.issuesService.addContributingSuggestions(
+                    match.existingIssueId,
+                    [
+                        this.toContributingSuggestion(
+                            suggestion,
+                            context.pullRequest.number,
+                            pullRequest,
+                        ),
+                    ],
+                    context.organizationAndTeamData.organizationId,
+                );
             } else {
                 unmatchedSuggestions.push(suggestion);
             }
@@ -616,7 +692,6 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
 
         const exactMatchFields = [
             'severity',
-            'category',
             'organizationId',
             'filePath',
             'status',
@@ -626,6 +701,11 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                 filter[field] = filters[field];
             }
         });
+
+        // The API calls it `category`; the stored field is `label`.
+        if (filters.category) {
+            filter['label'] = filters.category;
+        }
 
         if (filters.repositoryName) {
             filter['repository.name'] = {

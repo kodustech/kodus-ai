@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { IssueSource } from '@libs/issues/domain/interfaces/issues.interface';
 import { REQUEST } from '@nestjs/core';
 
 import {
@@ -24,6 +25,7 @@ import {
 } from '@libs/issues/domain/contracts/issues.service.contract';
 
 import { IssuesEntity } from '@libs/issues/domain/entities/issues.entity';
+import { repositoryHost } from '@libs/issues/domain/scan-fingerprint';
 import { IIssueDetails } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
 import { KodyIssuesManagementService } from '@libs/issues/infrastructure/adapters/service/kodyIssuesManagement.service';
 
@@ -86,18 +88,13 @@ export class GetIssueByIdUseCase implements IUseCase {
 
         let httpUrl = issue.repository.url ?? null;
 
-        if (issue.repository.platform === PlatformType.AZURE_REPOS) {
-            const integrationConfig =
-                await this.integrationConfigService.findOne({
-                    configKey: IntegrationConfigKey.REPOSITORIES,
-                    configValue: [{ id: issue.repository.id }],
-                });
-
-            const repoConfig = integrationConfig?.configValue?.find(
-                (x) => x.id === issue.repository.id,
-            );
-
-            httpUrl = repoConfig?.http_url ?? null;
+        // Azure and Forgejo links are built from the repository's own URL,
+        // which only its integration config holds.
+        if (
+            issue.repository.platform === PlatformType.AZURE_REPOS ||
+            issue.repository.platform === PlatformType.FORGEJO
+        ) {
+            httpUrl = (await this.configuredHttpUrl(issue)) ?? httpUrl;
         }
 
         const dataToBuildUrls = {
@@ -106,6 +103,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryFullName: issue.repository.full_name,
             httpUrl: httpUrl,
             repositoryUrl: issue.repository.url ?? null,
+            instance: await this.instanceOrigin(issue, httpUrl),
         };
 
         const prUrls = await this.selectAllPrNumbers(issue, dataToBuildUrls);
@@ -136,7 +134,15 @@ export class GetIssueByIdUseCase implements IUseCase {
             ),
             fileLink: {
                 label: issue.filePath,
-                url: this.buildFileUrl(dataToBuildUrls, issue.filePath),
+                // A scan finding is at the commit its last scan read, which
+                // may be on any branch; a review issue keeps the main link.
+                url: this.buildFileUrl(
+                    dataToBuildUrls,
+                    issue.filePath,
+                    issue.source === IssueSource.SECURITY_SCAN
+                        ? issue.lastSeenCommitSha
+                        : undefined,
+                ),
             },
             prLinks: prUrls.map((pr) => ({
                 label: pr.number,
@@ -153,10 +159,81 @@ export class GetIssueByIdUseCase implements IUseCase {
                 id: issue.repository.id,
                 name: issue.repository.name,
             },
+            ...(issue.source === IssueSource.SECURITY_SCAN && {
+                source: issue.source,
+                security: {
+                    cwe: issue.cwe,
+                    vulnerabilityClass: issue.vulnerabilityClass,
+                    symbol: issue.symbol,
+                    startLine: issue.startLine,
+                    endLine: issue.endLine,
+                    evidence: issue.evidence,
+                    lastSeenAt: issue.lastSeenAt,
+                },
+                owner: issue.owner,
+            }),
         };
     }
 
     //#region Auxiliary functions
+    /**
+     * Where a scan finding's Git instance serves its pages (GitHub
+     * Enterprise, a self-hosted GitLab or Forgejo) when the issue holds no
+     * URL of its own: the origin of the URL its organization lists the
+     * repository with, scheme and port as served. `https` on the recorded
+     * host only when that URL cannot be read.
+     */
+    private async instanceOrigin(
+        issue: IssuesEntity,
+        listedForPlatform: string | null,
+    ): Promise<string | undefined> {
+        const { host, url, platform } = issue.repository;
+        if (!host || url) return undefined;
+        // Azure and Forgejo had theirs read already.
+        const listed =
+            platform === PlatformType.AZURE_REPOS ||
+            platform === PlatformType.FORGEJO
+                ? listedForPlatform
+                : await this.configuredHttpUrl(issue);
+        try {
+            if (listed) return new URL(listed).origin;
+        } catch {
+            // Unreadable: the recorded host.
+        }
+        return `https://${host}`;
+    }
+
+    /**
+     * The repository's URL as the issue's own organization lists it, on the
+     * issue's platform: another organization (or platform) can hold a
+     * repository with the same id, and so can another instance of the
+     * platform, which a scan finding records (`repository.host`).
+     */
+    private async configuredHttpUrl(
+        issue: IssuesEntity,
+    ): Promise<string | null> {
+        const { id, platform, host } = issue.repository;
+        // A failed read leaves the issue without that link, not unreadable.
+        const configs = await this.integrationConfigService
+            .findByOrganizationAndConfigKey(
+                issue.organizationId,
+                IntegrationConfigKey.REPOSITORIES,
+            )
+            .catch(() => null);
+        for (const config of configs ?? []) {
+            if (config.integration?.platform !== platform) continue;
+            const listed = (
+                Array.isArray(config.configValue) ? config.configValue : []
+            ).find(
+                (r) =>
+                    String(r?.id) === String(id) &&
+                    (!host || repositoryHost(r?.http_url) === host),
+            );
+            if (listed?.http_url) return listed.http_url;
+        }
+        return null;
+    }
+
     private async calculateTotalReactions(
         issue: IssuesEntity,
         codeReviewFeedback: any[],
@@ -209,6 +286,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryFullName: string;
             httpUrl: string;
             repositoryUrl?: string;
+            instance?: string;
         },
     ): Promise<
         {
@@ -250,15 +328,20 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryFullName: string;
             httpUrl: string;
             repositoryUrl?: string;
+            instance?: string;
         },
         filePath: string,
-        branch: string = 'main',
+        commitSha?: string,
     ): string {
         const cleanFilePath = filePath.startsWith('/')
             ? filePath.substring(1)
             : filePath;
+        const branch = commitSha || 'main';
 
         const repositoryUrl = this.buildRepositoryUrl(data);
+        if (!repositoryUrl) {
+            return '';
+        }
 
         switch (data.platform) {
             case PlatformType.GITHUB:
@@ -266,9 +349,13 @@ export class GetIssueByIdUseCase implements IUseCase {
             case PlatformType.GITLAB:
                 return `${repositoryUrl}/-/blob/${branch}/${cleanFilePath}`;
             case PlatformType.AZURE_REPOS:
-                return `${data.httpUrl}?path=/${cleanFilePath}`;
+                return `${repositoryUrl}?path=/${cleanFilePath}${commitSha ? `&version=GC${commitSha}` : ''}`;
             case PlatformType.BITBUCKET:
                 return `https://bitbucket.org/${data.repositoryFullName}/src/${branch}/${cleanFilePath}`;
+            case PlatformType.FORGEJO:
+                return commitSha
+                    ? `${repositoryUrl}/src/commit/${commitSha}/${cleanFilePath}`
+                    : `${repositoryUrl}/src/branch/${branch}/${cleanFilePath}`;
             default:
                 throw new Error(`Platform not supported: ${data.platform}`);
         }
@@ -281,10 +368,14 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryFullName: string;
             httpUrl: string;
             repositoryUrl?: string;
+            instance?: string;
         },
         prNumber: string,
     ): string {
         const repositoryUrl = this.buildRepositoryUrl(data);
+        if (!repositoryUrl) {
+            return '';
+        }
 
         switch (data.platform) {
             case PlatformType.GITHUB:
@@ -292,19 +383,23 @@ export class GetIssueByIdUseCase implements IUseCase {
             case PlatformType.GITLAB:
                 return `${repositoryUrl}/-/merge_requests/${prNumber}`;
             case PlatformType.AZURE_REPOS:
-                return `${data.httpUrl}/pullrequest/${prNumber}`;
+                return `${repositoryUrl}/pullrequest/${prNumber}`;
             case PlatformType.BITBUCKET:
                 return `https://bitbucket.org/${data.repositoryFullName}/pull-requests/${prNumber}`;
+            case PlatformType.FORGEJO:
+                return `${repositoryUrl}/pulls/${prNumber}`;
             default:
                 throw new Error(`Platform not supported: ${data.platform}`);
         }
     }
 
+    /** Empty when the repository's URL is unknown: no link, never "null/…". */
     private buildRepositoryUrl(data: {
         platform: PlatformType;
         repositoryFullName: string;
         httpUrl: string;
         repositoryUrl?: string;
+        instance?: string;
     }): string {
         switch (data.platform) {
             case PlatformType.GITHUB:
@@ -317,17 +412,29 @@ export class GetIssueByIdUseCase implements IUseCase {
                     }
                 }
 
-                return `https://github.com/${data.repositoryFullName}`;
+                return `${data.instance ?? 'https://github.com'}/${data.repositoryFullName}`;
             case PlatformType.GITLAB: {
-                const gitlabUrl = process.env.WEB_GITLAB_OAUTH_URL
-                    ? new URL(process.env.WEB_GITLAB_OAUTH_URL).origin
-                    : 'https://gitlab.com';
+                const gitlabUrl = data.instance
+                    ? data.instance
+                    : process.env.WEB_GITLAB_OAUTH_URL
+                      ? new URL(process.env.WEB_GITLAB_OAUTH_URL).origin
+                      : 'https://gitlab.com';
                 return `${gitlabUrl}/${data.repositoryFullName}`;
             }
             case PlatformType.AZURE_REPOS:
-                return data.httpUrl;
+                return data.httpUrl ?? '';
             case PlatformType.BITBUCKET:
                 return `https://bitbucket.org/${data.repositoryFullName}`;
+            case PlatformType.FORGEJO: {
+                // The clone URL, without its `.git`.
+                const url =
+                    data.repositoryUrl ||
+                    data.httpUrl ||
+                    (data.instance
+                        ? `${data.instance}/${data.repositoryFullName}`
+                        : '');
+                return url.replace(/\.git$/, '').replace(/\/$/, '');
+            }
             default:
                 throw new Error(`Platform not supported: ${data.platform}`);
         }

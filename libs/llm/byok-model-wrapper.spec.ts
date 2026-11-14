@@ -12,6 +12,7 @@ jest.mock('@libs/llm/token-estimate', () => ({
 
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 import { wrapByokModel } from './byok-model-wrapper';
+import { runWithUsageMeter } from './usage-meter';
 import { clearRefusals, MAX_REFUSAL_RETRIES } from './rejected-reasoning-field';
 import { getLimiterForSlot } from './byok-to-vercel';
 
@@ -675,5 +676,406 @@ describe('wrapByokModel — a reasoning field the upstream refuses', () => {
             reporter,
         }).doGenerate(withThinking);
         expect(reporter).not.toHaveBeenCalled();
+    });
+});
+
+describe('wrapByokModel — spend cap admission (#2451)', () => {
+    const answering = (usage: unknown) => ({
+        specificationVersion: 'v4',
+        provider: 'test-provider',
+        modelId: 'test-model',
+        supportedUrls: {},
+        doGenerate: jest.fn(async () => ({
+            content: [{ type: 'text', text: 'ok' }],
+            finishReason: 'stop',
+            usage,
+            warnings: [],
+        })),
+        doStream: jest.fn(),
+    });
+
+    beforeEach(() => {
+        estimateMock.mockReset();
+        estimateMock.mockReturnValue(1200);
+    });
+
+    it('admits each request with its prompt and answer cap, then settles what it billed', async () => {
+        const settle = jest.fn();
+        const admit = jest.fn(() => ({ settle }));
+        const model = answering({
+            inputTokens: { total: 1000, cacheRead: 200, cacheWrite: 0 },
+            outputTokens: { total: 50, reasoning: 10 },
+        });
+
+        const tools = [
+            { type: 'function', name: 'readFile', inputSchema: {} },
+        ];
+
+        await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+            wrap(model).doGenerate({
+                prompt: PROMPT,
+                tools,
+                maxOutputTokens: 500,
+            } as any),
+        );
+
+        // The ceiling counts the prompt and the tool definitions it sends.
+        const counted = estimateMock.mock.calls[0][0] as string;
+        expect(counted).toContain('hello world');
+        expect(counted).toContain('readFile');
+        expect(admit).toHaveBeenCalledWith({
+            inputTokens: 1200,
+            // No tokenizer makes more tokens than the bytes sent, plus framing.
+            inputTokensUpperBound: expect.any(Number),
+            maxOutputTokens: 500,
+        });
+        const { inputTokensUpperBound } = (admit.mock.calls[0] as any[])[0];
+        expect(inputTokensUpperBound).toBe(Buffer.byteLength(counted, 'utf8') + 2_000);
+        expect(settle).toHaveBeenCalledWith({
+            inputTokens: 1000,
+            outputTokens: 50,
+            totalTokens: 1050,
+            reasoningTokens: 10,
+            cacheReadTokens: 200,
+            cacheWriteTokens: 0,
+        });
+    });
+
+    it('settles an answer that carried no usage as answered, with its totals unknown', async () => {
+        const settle = jest.fn();
+
+        await runWithUsageMeter(
+            { record: jest.fn(), admit: () => ({ settle }) },
+            async () => wrap(answering(undefined)).doGenerate({ prompt: PROMPT }),
+        );
+
+        expect(settle).toHaveBeenCalledWith({});
+    });
+
+    it('settles unknown totals as unknown, never as a zero', async () => {
+        const settle = jest.fn();
+
+        await runWithUsageMeter(
+            { record: jest.fn(), admit: () => ({ settle }) },
+            async () =>
+                wrap(
+                    answering({ inputTokens: {}, outputTokens: {} }),
+                ).doGenerate({ prompt: PROMPT }),
+        );
+
+        expect(settle.mock.calls[0][0].totalTokens).toBeUndefined();
+    });
+
+    const thinking = {
+        anthropic: { thinking: { type: 'enabled', budgetTokens: 32_000 } },
+    };
+    const admittedWith = async (slot: NormalizedModel, providerOptions: any) => {
+        const admit = jest.fn(() => ({ settle: jest.fn() }));
+        await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+            wrap(answering({}), slot).doGenerate({
+                prompt: PROMPT,
+                maxOutputTokens: 16_000,
+                providerOptions,
+            } as any),
+        );
+        return (admit.mock.calls as unknown[][])[0][0] as any;
+    };
+
+    it('admits an Anthropic request with the thinking budget its adapter adds to max_tokens', async () => {
+        const slot = { provider: BYOKProvider.ANTHROPIC, apiKey: 'k-anthropic-budget', model: 'claude-sonnet-4-5' } as NormalizedModel;
+        // A larger budget under a key the Anthropic adapter never reads is not
+        // counted.
+        const elsewhere = {
+            ...thinking,
+            amazonBedrock: { reasoningConfig: { type: 'enabled', budgetTokens: 64_000 } },
+        };
+
+        expect(await admittedWith(slot, elsewhere)).toEqual(
+            expect.objectContaining({
+                maxOutputTokens: 16_000,
+                reasoningBudgetTokens: 32_000,
+            }),
+        );
+    });
+
+    it("reserves Anthropic's default thinking budget when thinking is enabled without one", async () => {
+        const slot = { provider: BYOKProvider.ANTHROPIC, apiKey: 'k-anthropic-default', model: 'claude-sonnet-4-5' } as NormalizedModel;
+
+        expect(
+            (await admittedWith(slot, { anthropic: { thinking: { type: 'enabled' } } }))
+                .reasoningBudgetTokens,
+        ).toBe(1024);
+    });
+
+    it('bounds a prompt it cannot serialize as unbounded, so a cap refuses it', async () => {
+        const admit = jest.fn(() => ({ settle: jest.fn() }));
+        const cyclic: any = { role: 'user', content: 'x' };
+        cyclic.self = cyclic;
+        await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+            wrap(answering({})).doGenerate({ prompt: [cyclic] } as any),
+        ).catch(() => undefined);
+
+        expect((admit.mock.calls as any[])[0][0].inputTokensUpperBound).toBe(Number.POSITIVE_INFINITY);
+    });
+
+    it('never counts a budget the served adapter does not add or does not read', async () => {
+        // OpenAI keeps reasoning inside the answer cap, and never reads the
+        // anthropic namespace anyway.
+        const openai = tpmSlot('k-openai-budget');
+
+        expect((await admittedWith(openai, thinking)).reasoningBudgetTokens).toBeUndefined();
+    });
+
+    it('never counts a budget under the own key of an adapter that keeps it inside the answer cap', async () => {
+        // The shape the OpenAI-compatible module sends a thinking model.
+        const compatible = {
+            provider: BYOKProvider.OPENAI_COMPATIBLE,
+            apiKey: 'k-compatible-budget',
+            model: 'deepseek-v4',
+            baseURL: 'https://api.deepseek.com/v1',
+        } as NormalizedModel;
+
+        const admitted = await admittedWith(compatible, {
+            openaiCompatible: { thinking: { type: 'enabled', budget_tokens: 32_000 } },
+        });
+
+        expect(admitted.reasoningBudgetTokens).toBeUndefined();
+    });
+
+    it("counts a Bedrock budget under the adapter's legacy alias, and its own key over the alias", async () => {
+        const bedrock = {
+            provider: BYOKProvider.AMAZON_BEDROCK,
+            awsAccessKeyId: 'k-bedrock-budget',
+            awsSecretAccessKey: 's',
+            awsRegion: 'us-east-1',
+            model: 'anthropic.claude-sonnet-4-5-20250929-v1:0',
+        } as unknown as NormalizedModel;
+        const budget = (budgetTokens: number) => ({
+            reasoningConfig: { type: 'enabled', budgetTokens },
+        });
+
+        expect((await admittedWith(bedrock, { bedrock: budget(24_000) })).reasoningBudgetTokens).toBe(24_000);
+        // @ai-sdk/amazon-bedrock parses `amazonBedrock` and reads `bedrock`
+        // only when it is absent.
+        expect(
+            (await admittedWith(bedrock, { amazonBedrock: budget(8_000), bedrock: budget(24_000) }))
+                .reasoningBudgetTokens,
+        ).toBe(8_000);
+    });
+
+    it('sends the answer cap a request was admitted at when it set none', async () => {
+        const capped = answering({});
+        const admit = () => ({ settle: jest.fn(), maxOutputTokens: 4_000 });
+
+        await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+            wrap(capped).doGenerate({ prompt: PROMPT }),
+        );
+        const sentCapped = (capped.doGenerate.mock.calls as unknown[][])[0];
+        expect((sentCapped[0] as any).maxOutputTokens).toBe(4_000);
+
+        // Zero is no cap: the request goes as it was.
+        const zero = answering({});
+        await runWithUsageMeter(
+            {
+                record: jest.fn(),
+                admit: () => ({ settle: jest.fn(), maxOutputTokens: 0 }),
+            },
+            async () => wrap(zero).doGenerate({ prompt: PROMPT }),
+        );
+        const sentZero = (zero.doGenerate.mock.calls as unknown[][])[0];
+        expect((sentZero[0] as any).maxOutputTokens).toBeUndefined();
+
+        const own = answering({});
+        await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+            wrap(own).doGenerate({ prompt: PROMPT, maxOutputTokens: 900 }),
+        );
+        const sentOwn = (own.doGenerate.mock.calls as unknown[][])[0];
+        expect((sentOwn[0] as any).maxOutputTokens).toBe(900);
+    });
+
+    it('never sends a request the meter refuses', async () => {
+        const model = answering({});
+        const admit = jest.fn(() => {
+            throw new Error('spend cap reached');
+        });
+
+        await expect(
+            runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+                wrap(model).doGenerate({ prompt: PROMPT }),
+            ),
+        ).rejects.toThrow('spend cap reached');
+        expect(model.doGenerate).not.toHaveBeenCalled();
+    });
+
+    it('settles a request lost after it left as billed, its totals unknown', async () => {
+        const settle = jest.fn();
+        const model = answering({});
+        // The provider may have processed it before the connection dropped.
+        model.doGenerate.mockRejectedValue(new Error('socket hang up'));
+
+        await expect(
+            runWithUsageMeter(
+                { record: jest.fn(), admit: () => ({ settle }) },
+                async () => wrap(model).doGenerate({ prompt: PROMPT }),
+            ),
+        ).rejects.toThrow('socket hang up');
+        expect(settle).toHaveBeenCalledWith({});
+    });
+
+    it('settles a request the provider refused with an error status as unbilled, and one lost after it left as billed', async () => {
+        const run = async (error: Error) => {
+            const settle = jest.fn();
+            const model = answering({});
+            model.doGenerate.mockRejectedValue(error);
+            await runWithUsageMeter(
+                { record: jest.fn(), admit: () => ({ settle }) },
+                async () => wrap(model).doGenerate({ prompt: PROMPT }),
+            ).catch(() => undefined);
+            return settle.mock.calls[0][0];
+        };
+
+        // The provider answered with a status: refused, nothing billed,
+        // wherever the error carries it.
+        expect(await run(Object.assign(new Error('Too Many Requests'), { statusCode: 429 }))).toBeUndefined();
+        expect(
+            await run(Object.assign(new Error('retries exhausted'), {
+                lastError: Object.assign(new Error('Overloaded'), { status: 529 }),
+            })),
+        ).toBeUndefined();
+        // No answer at all: it may have been processed, so it is billed.
+        expect(await run(new Error('socket hang up'))).toEqual({});
+        // A server error or a timeout says nothing of whether it ran: a
+        // gateway answers 502/504 after forwarding a billable inference.
+        for (const status of [500, 502, 503, 504, 408]) {
+            expect(await run(Object.assign(new Error(`HTTP ${status}`), { statusCode: status }))).toEqual({});
+        }
+    });
+
+    it('never asks the meter for room on behalf of a caller that already aborted', async () => {
+        const admit = jest.fn(() => ({ settle: jest.fn() }));
+        const caller = new AbortController();
+        caller.abort(new Error('caller gave up'));
+
+        await expect(
+            runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+                wrap(answering({})).doGenerate({ prompt: PROMPT, abortSignal: caller.signal } as any),
+            ),
+        ).rejects.toThrow('caller gave up');
+        expect(admit).not.toHaveBeenCalled();
+    });
+
+    it('stops waiting for room when the caller aborts, giving back room granted later', async () => {
+        const settle = jest.fn();
+        let grant!: (a: any) => void;
+        const admit = jest.fn(() => new Promise((resolve) => (grant = resolve)));
+        const model = answering({});
+        const caller = new AbortController();
+
+        const call = runWithUsageMeter({ record: jest.fn(), admit } as any, async () =>
+            wrap(model).doGenerate({ prompt: PROMPT, abortSignal: caller.signal } as any),
+        );
+        await new Promise((r) => setImmediate(r));
+        caller.abort(new Error('caller gave up'));
+
+        await expect(call).rejects.toThrow('caller gave up');
+        grant({ settle });
+        await new Promise((r) => setImmediate(r));
+        expect(model.doGenerate).not.toHaveBeenCalled();
+        expect(settle).toHaveBeenCalledWith(undefined);
+    });
+
+    it('settles a request aborted after its admission, before it left, as unbilled', async () => {
+        const settle = jest.fn();
+        const model = answering({});
+        model.doGenerate.mockRejectedValue(
+            Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }),
+        );
+        const aborted = new AbortController();
+        // The caller gives up once the request is admitted (waiting in the
+        // provider's queue): the transport refuses it before sending.
+        const admit = () => {
+            aborted.abort();
+            return { settle };
+        };
+
+        await expect(
+            runWithUsageMeter(
+                { record: jest.fn(), admit },
+                async () =>
+                    wrap(model).doGenerate({
+                        prompt: PROMPT,
+                        abortSignal: aborted.signal,
+                    } as any),
+            ),
+        ).rejects.toThrow('aborted');
+        expect(settle).toHaveBeenCalledWith(undefined);
+    });
+
+    it('holds a request until the meter has room for it', async () => {
+        const settle = jest.fn();
+        let grant!: (a: any) => void;
+        const admit = jest.fn(() => new Promise((resolve) => (grant = resolve)));
+        const model = answering({});
+
+        const call = runWithUsageMeter({ record: jest.fn(), admit } as any, async () =>
+            wrap(model).doGenerate({ prompt: PROMPT }),
+        );
+        await new Promise((r) => setImmediate(r));
+        expect(model.doGenerate).not.toHaveBeenCalled();
+
+        grant({ settle });
+        await call;
+        expect(model.doGenerate).toHaveBeenCalledTimes(1);
+    });
+
+    it('counts the prompt only inside a run that admits its requests', async () => {
+        const admit = jest.fn(() => ({ settle: jest.fn() }));
+        await runWithUsageMeter({ record: jest.fn(), admit }, async () =>
+            wrap(answering({})).doGenerate({ prompt: PROMPT }),
+        );
+        expect(admit).toHaveBeenCalledTimes(1);
+        expect(estimateMock).toHaveBeenCalledTimes(1);
+
+        estimateMock.mockClear();
+        await wrap(answering({})).doGenerate({ prompt: PROMPT });
+        await runWithUsageMeter({ record: jest.fn() }, async () =>
+            wrap(answering({})).doGenerate({ prompt: PROMPT }),
+        );
+        expect(estimateMock).not.toHaveBeenCalled();
+    });
+
+    it('settles what a failed request was billed when the error carries it', async () => {
+        const settle = jest.fn();
+        const model = answering({});
+        model.doGenerate.mockRejectedValue(
+            Object.assign(new Error('no object generated'), {
+                usage: { inputTokens: 700, outputTokens: 30 },
+            }),
+        );
+
+        await expect(
+            runWithUsageMeter(
+                { record: jest.fn(), admit: () => ({ settle }) },
+                async () => wrap(model).doGenerate({ prompt: PROMPT }),
+            ),
+        ).rejects.toThrow('no object generated');
+        expect(settle).toHaveBeenCalledWith(
+            expect.objectContaining({ inputTokens: 700, outputTokens: 30 }),
+        );
+    });
+
+    it('refuses to stream in a run that admits its requests, and streams elsewhere', async () => {
+        const model = answering({});
+        model.doStream.mockResolvedValue({ stream: 'ok' });
+
+        await expect(
+            runWithUsageMeter(
+                { record: jest.fn(), admit: () => ({ settle: jest.fn() }) },
+                async () => wrap(model).doStream({ prompt: PROMPT }),
+            ),
+        ).rejects.toThrow(/spend-capped run cannot stream/);
+        await expect(
+            wrap(model).doStream({ prompt: PROMPT }),
+        ).resolves.toEqual({ stream: 'ok' });
     });
 });

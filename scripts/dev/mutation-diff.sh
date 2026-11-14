@@ -57,7 +57,7 @@ UNREACHED_PATH="reports/mutation/unreached.json"
 rm -f "$UNREACHED_PATH"
 record_unreached() {
     mkdir -p "${UNREACHED_PATH%/*}"
-    node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify(process.argv.slice(2)))' "$UNREACHED_PATH" "$@"
+    node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify([...new Set(process.argv.slice(2).filter(Boolean))]))' "$UNREACHED_PATH" "$@"
 }
 
 echo "[mutation:diff] Mutating ${#FILES[@]} changed file(s) vs ${MERGE_BASE}:"

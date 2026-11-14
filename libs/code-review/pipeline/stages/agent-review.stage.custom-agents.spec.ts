@@ -761,13 +761,20 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
                     }),
                 ]),
             );
-            honorEveryMerge(stage);
+            const merge = honorEveryMerge(stage);
 
             const result = await run(stage, makeContext([agent()]));
 
             expect(contents(result.validSuggestions)).toEqual([
                 'The entry is booked on one side only.',
             ]);
+            // The cross-stream call names its org and PR for its logs.
+            const crossCall = merge.mock.calls.find((c: any[]) => c[6]?.crossStream);
+            expect(crossCall?.[6]).toEqual(
+                expect.objectContaining({
+                    logMeta: expect.objectContaining({ prNumber: expect.any(Number) }),
+                }),
+            );
         });
 
         it('credits the agent with a group only for a finding in its lane', async () => {

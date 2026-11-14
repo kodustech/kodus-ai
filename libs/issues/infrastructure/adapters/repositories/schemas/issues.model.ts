@@ -8,6 +8,11 @@ import {
 } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
+import {
+    IIssueEvidence,
+    IIssueOwner,
+    IssueSource,
+} from '@libs/issues/domain/interfaces/issues.interface';
 
 @Schema({
     collection: 'issues',
@@ -46,21 +51,60 @@ export class IssuesModel extends CoreDocument {
     public organizationId: string;
 
     @Prop({ type: Object, required: false })
-    public owner?: {
-        gitId: string;
-        username: string;
-    };
+    public owner?: IIssueOwner;
 
     @Prop({ type: Object, required: false })
     public reporter?: {
         gitId: string;
         username: string;
     };
+
+    @Prop({ type: String, required: false, enum: Object.values(IssueSource) })
+    public source?: IssueSource;
+
+    @Prop({ type: String, required: false })
+    public fingerprint?: string;
+
+    @Prop({ type: String, required: false })
+    public cwe?: string;
+
+    @Prop({ type: String, required: false })
+    public vulnerabilityClass?: string;
+
+    @Prop({ type: String, required: false })
+    public symbol?: string;
+
+    @Prop({ type: Number, required: false })
+    public startLine?: number;
+
+    @Prop({ type: Number, required: false })
+    public endLine?: number;
+
+    @Prop({ type: Object, required: false })
+    public evidence?: IIssueEvidence;
+
+    @Prop({ type: String, required: false })
+    public lastSeenScanId?: string;
+
+    @Prop({ type: String, required: false })
+    public lastSeenCommitSha?: string;
+
+    @Prop({ type: String, required: false })
+    public lastSeenAt?: string;
+
+    @Prop({ type: String, required: false })
+    public resolvedAt?: string;
 }
 
 export const IssuesSchema = SchemaFactory.createForClass(IssuesModel);
 
 // 1. Main - organization + status open
+// Whether a cached list is still current (changedSince): the latest write.
+IssuesSchema.index(
+    { organizationId: 1, updatedAt: -1 },
+    { name: 'organization_updated', background: true },
+);
+
 IssuesSchema.index(
     { organizationId: 1, createdAt: -1 },
     {
@@ -105,4 +149,17 @@ IssuesSchema.index(
 IssuesSchema.index(
     { 'organizationId': 1, 'repository.name': 1 },
     { name: 'organization_repository_any_status', background: true },
+);
+
+// 6. One issue per security-scan finding. The partial filter leaves every
+// code-review issue (no fingerprint) out of the uniqueness rule, so the index
+// builds on existing data and a concurrent re-scan cannot write a duplicate.
+IssuesSchema.index(
+    { 'organizationId': 1, 'repository.id': 1, 'fingerprint': 1 },
+    {
+        unique: true,
+        partialFilterExpression: { fingerprint: { $exists: true } },
+        name: 'organization_repository_fingerprint_unique',
+        background: true,
+    },
 );

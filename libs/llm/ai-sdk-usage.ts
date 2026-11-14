@@ -101,6 +101,39 @@ export function readAiSdkUsage(usage: AiSdkUsageInput): AiSdkUsage {
     };
 }
 
+/**
+ * Map a provider's own answer usage (what `doGenerate` returns, before the SDK
+ * folds it into its step usage) onto {@link AiSdkUsage}: the same totals the
+ * SDK reports for that step.
+ */
+export function readProviderUsage(usage: unknown): AiSdkUsage | undefined {
+    const u = usage as
+        | {
+              inputTokens?: {
+                  total?: number;
+                  cacheRead?: number;
+                  cacheWrite?: number;
+              };
+              outputTokens?: { total?: number; reasoning?: number };
+          }
+        | null
+        | undefined;
+    if (!u) return undefined;
+    const inputTokens = u.inputTokens?.total;
+    const outputTokens = u.outputTokens?.total;
+    return {
+        inputTokens,
+        outputTokens,
+        totalTokens:
+            inputTokens === undefined && outputTokens === undefined
+                ? undefined
+                : (inputTokens ?? 0) + (outputTokens ?? 0),
+        reasoningTokens: u.outputTokens?.reasoning,
+        cacheReadTokens: u.inputTokens?.cacheRead,
+        cacheWriteTokens: u.inputTokens?.cacheWrite,
+    };
+}
+
 const USAGE_KEYS: (keyof AiSdkUsage)[] = [
     'inputTokens',
     'outputTokens',
