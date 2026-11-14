@@ -180,7 +180,9 @@ export class IssuesRepository implements IIssuesRepository {
     ): Promise<IssuesEntity | null> {
         const doc = await this.issuesModel.findByIdAndUpdate(
             uuid,
-            { $set: { status: status } },
+            status === IssueStatus.RESOLVED
+                ? { $set: { status, resolvedAt: new Date().toISOString() } }
+                : { $set: { status }, $unset: { resolvedAt: '' } },
             { new: true },
         );
         return doc ? mapSimpleModelToEntity(doc, IssuesEntity) : null;

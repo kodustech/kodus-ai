@@ -725,3 +725,14 @@ describe('IssuesRepository.markScanFindingsSeen', () => {
         expect(updateMany).not.toHaveBeenCalled();
     });
 });
+
+describe('single issue status transition', () => {
+    it.each([IssueStatus.OPEN, IssueStatus.DISMISSED])('clears resolvedAt when moving a single resolved issue to %s', async status => {
+        const findByIdAndUpdate = jest.fn(async () => null);
+        const repository = new IssuesRepository({findByIdAndUpdate} as any);
+        await repository.updateStatus('issue-1', status);
+        expect(findByIdAndUpdate).toHaveBeenCalledWith('issue-1', expect.objectContaining({
+            $set: expect.objectContaining({status}), $unset: {resolvedAt: ''},
+        }), {new: true});
+    });
+});
