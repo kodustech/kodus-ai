@@ -1,0 +1,24 @@
+diff --git a/apps/cli/src/services/custom-agents.service.ts b/apps/cli/src/services/custom-agents.service.ts
+index 7125e81db..c9a185086 100644
+--- a/apps/cli/src/services/custom-agents.service.ts
++++ b/apps/cli/src/services/custom-agents.service.ts
+@@ -62,7 +62,6 @@ export const CUSTOM_AGENT_TEMPLATES = [
+         instructions: [
+             'Review the change against the architecture this repository already follows.',
+             'Flag imports that cross a layer boundary the rest of the code respects, business logic placed in controllers or adapters, and new modules that duplicate one that already exists.',
+-            'Dependencies point inward: domain or model code that imports from a controller, route handler, adapter, job, page or web framework, even only a type such as the request object, reverses that direction. A component built on the UI primitives follows it.',
+             'Cite the file or doc that shows the existing pattern; do not flag style or naming.',
+         ].join('\n'),
+     },
+diff --git a/apps/web/src/lib/services/custom-agents/drafts.ts b/apps/web/src/lib/services/custom-agents/drafts.ts
+index 78c75d162..8f1b507c1 100644
+--- a/apps/web/src/lib/services/custom-agents/drafts.ts
++++ b/apps/web/src/lib/services/custom-agents/drafts.ts
+@@ -118,7 +118,6 @@ export const CUSTOM_AGENT_TEMPLATES: CustomAgentTemplate[] = [
+         instructions: [
+             "Review the change against the architecture this repository already follows.",
+             "Flag imports that cross a layer boundary the rest of the code respects, business logic placed in controllers or adapters, and new modules that duplicate one that already exists.",
+-            "Dependencies point inward: domain or model code that imports from a controller, route handler, adapter, job, page or web framework, even only a type such as the request object, reverses that direction. A component built on the UI primitives follows it.",
+             "Cite the file or doc that shows the existing pattern; do not flag style or naming.",
+         ].join("\n"),
+     },

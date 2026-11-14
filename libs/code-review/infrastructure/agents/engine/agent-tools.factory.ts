@@ -6,6 +6,7 @@ import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import { createSubmoduleProbe } from '@libs/code-review/infrastructure/agents/engine/uninitialized-submodules';
 import { isLineNumber } from '@libs/sandbox/infrastructure/providers/read-within-root';
+import { hasParentDirSegment } from '@libs/sandbox/infrastructure/providers/path-segments';
 import {
     isSecretFilePath,
     secretFileRefusal,
@@ -369,7 +370,7 @@ export function buildAgentTools(
         relativePath: string,
     ): { ok: true; abs: string } | { ok: false; error: string } => {
         const rel = (relativePath || '.').replace(/^\/+/, '') || '.';
-        if (rel.includes('..')) {
+        if (hasParentDirSegment(rel)) {
             return {
                 ok: false,
                 error: 'Path traversal using ".." is not allowed',
@@ -447,7 +448,7 @@ export function buildAgentTools(
                 }
                 // rg reads whatever the sandbox user can: a path climbing out
                 // of the checkout would reach other processes' /proc files.
-                if (searchPath.split('/').includes('..')) {
+                if (hasParentDirSegment(searchPath)) {
                     return 'Error: Path traversal using ".." is not allowed';
                 }
 
@@ -458,9 +459,6 @@ export function buildAgentTools(
                 if (linked.rootPath) {
                     if (!remoteCommands.exec) {
                         return 'Error: sandbox exec unavailable for linked-repo search';
-                    }
-                    if (searchPath.includes('..')) {
-                        return 'Error: Path traversal using ".." is not allowed';
                     }
                     try {
                         const safePattern = pattern.replace(/'/g, "'\\''");

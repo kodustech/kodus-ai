@@ -1,0 +1,273 @@
+{
+ "source": "head",
+ "destination": "base",
+ "diffstat": [
+  {
+   "type": "diffstat",
+   "lines_added": 0,
+   "lines_removed": 0,
+   "status": "modified",
+   "old": {
+    "path": "assets/logo.png",
+    "type": "commit_file",
+    "escaped_path": "assets/logo.png"
+   },
+   "new": {
+    "path": "assets/logo.png",
+    "type": "commit_file",
+    "escaped_path": "assets/logo.png"
+   }
+  },
+  {
+   "type": "diffstat",
+   "lines_added": 1,
+   "lines_removed": 0,
+   "status": "modified",
+   "old": {
+    "path": "docs/a b/space file.md",
+    "type": "commit_file",
+    "escaped_path": "docs/a b/space file.md"
+   },
+   "new": {
+    "path": "docs/a b/space file.md",
+    "type": "commit_file",
+    "escaped_path": "docs/a b/space file.md"
+   }
+  },
+  {
+   "type": "diffstat",
+   "lines_added": 1,
+   "lines_removed": 0,
+   "status": "modified",
+   "old": {
+    "path": "docs/ação.md",
+    "type": "commit_file",
+    "escaped_path": "docs/a\\303\\247\\303\\243o.md"
+   },
+   "new": {
+    "path": "docs/ação.md",
+    "type": "commit_file",
+    "escaped_path": "docs/a\\303\\247\\303\\243o.md"
+   }
+  },
+  {
+   "type": "diffstat",
+   "lines_added": 1,
+   "lines_removed": 0,
+   "status": "added",
+   "old": null,
+   "new": {
+    "path": "docs/nová série.md",
+    "type": "commit_file",
+    "escaped_path": "docs/nov\\303\\241 s\\303\\251rie.md"
+   }
+  },
+  {
+   "type": "diffstat",
+   "lines_added": 1,
+   "lines_removed": 0,
+   "status": "modified",
+   "old": {
+    "path": "docs/x b/y.md",
+    "type": "commit_file",
+    "escaped_path": "docs/x b/y.md"
+   },
+   "new": {
+    "path": "docs/x b/y.md",
+    "type": "commit_file",
+    "escaped_path": "docs/x b/y.md"
+   }
+  },
+  {
+   "type": "diffstat",
+   "lines_added": 0,
+   "lines_removed": 0,
+   "status": "modified",
+   "old": {
+    "path": "scripts/run.sh",
+    "type": "commit_file",
+    "escaped_path": "scripts/run.sh"
+   },
+   "new": {
+    "path": "scripts/run.sh",
+    "type": "commit_file",
+    "escaped_path": "scripts/run.sh"
+   }
+  },
+  {
+   "type": "diffstat",
+   "lines_added": 0,
+   "lines_removed": 40,
+   "status": "removed",
+   "old": {
+    "path": "src/delete-me.ts",
+    "type": "commit_file",
+    "escaped_path": "src/delete-me.ts"
+   },
+   "new": null
+  },
+  {
+   "type": "diffstat",
+   "lines_added": 0,
+   "lines_removed": 0,
+   "status": "added",
+   "old": null,
+   "new": {
+    "path": "src/empty.ts",
+    "type": "commit_file",
+    "escaped_path": "src/empty.ts"
+   }
+  },
+  {
+   "type": "diffstat",
+   "lines_added": 3,
+   "lines_removed": 2,
+   "status": "modified",
+   "old": {
+    "path": "src/keep.ts",
+    "type": "commit_file",
+    "escaped_path": "src/keep.ts"
+   },
+   "new": {
+    "path": "src/keep.ts",
+    "type": "commit_file",
+    "escaped_path": "src/keep.ts"
+   }
+  },
+  {
+   "type": "diffstat",
+   "lines_added": 1,
+   "lines_removed": 1,
+   "status": "renamed",
+   "old": {
+    "path": "src/old-name.ts",
+    "type": "commit_file",
+    "escaped_path": "src/old-name.ts"
+   },
+   "new": {
+    "path": "src/new-name.ts",
+    "type": "commit_file",
+    "escaped_path": "src/new-name.ts"
+   }
+  },
+  {
+   "type": "diffstat",
+   "lines_added": 2,
+   "lines_removed": 1,
+   "status": "modified",
+   "old": {
+    "path": "src/no-newline.ts",
+    "type": "commit_file",
+    "escaped_path": "src/no-newline.ts"
+   },
+   "new": {
+    "path": "src/no-newline.ts",
+    "type": "commit_file",
+    "escaped_path": "src/no-newline.ts"
+   }
+  },
+  {
+   "type": "diffstat",
+   "lines_added": 0,
+   "lines_removed": 0,
+   "status": "renamed",
+   "old": {
+    "path": "src/pure-rename.ts",
+    "type": "commit_file",
+    "escaped_path": "src/pure-rename.ts"
+   },
+   "new": {
+    "path": "src/renamed.ts",
+    "type": "commit_file",
+    "escaped_path": "src/renamed.ts"
+   }
+  }
+ ],
+ "wholeDiff": "diff --git a/assets/logo.png b/assets/logo.png\nindex f1540d6..b4f6842 100644\nBinary files a/assets/logo.png and b/assets/logo.png differ\ndiff --git a/docs/a b/space file.md b/docs/a b/space file.md\nindex 20889f9..2ada4e3 100644\n--- a/docs/a b/space file.md\t\n+++ b/docs/a b/space file.md\t\n@@ -2,3 +2,4 @@\n \n line one\n line two\n+line three\ndiff --git \"a/docs/a\\303\\247\\303\\243o.md\" \"b/docs/a\\303\\247\\303\\243o.md\"\nindex f7e90e9..1f7af00 100644\n--- \"a/docs/a\\303\\247\\303\\243o.md\"\n+++ \"b/docs/a\\303\\247\\303\\243o.md\"\n@@ -1,3 +1,4 @@\n # ação\n \n conteúdo com acentuação\n+mais uma linha ção\ndiff --git \"a/docs/nov\\303\\241 s\\303\\251rie.md\" \"b/docs/nov\\303\\241 s\\303\\251rie.md\"\nnew file mode 100644\nindex 0000000..bba9070\n--- /dev/null\n+++ \"b/docs/nov\\303\\241 s\\303\\251rie.md\"\t\n@@ -0,0 +1 @@\n+# novo arquivo com acento\ndiff --git a/docs/x b/y.md b/docs/x b/y.md\nindex 4a8b8dc..95be79d 100644\n--- a/docs/x b/y.md\t\n+++ b/docs/x b/y.md\t\n@@ -1,3 +1,4 @@\n # tricky b/ path\n \n alpha\n+beta\ndiff --git a/scripts/run.sh b/scripts/run.sh\nold mode 100644\nnew mode 100755\ndiff --git a/src/delete-me.ts b/src/delete-me.ts\ndeleted file mode 100644\nindex 6968b4a..0000000\n--- a/src/delete-me.ts\n+++ /dev/null\n@@ -1,40 +0,0 @@\n-export const delete_me0 = 0;\n-export const delete_me1 = 1;\n-export const delete_me2 = 2;\n-export const delete_me3 = 3;\n-export const delete_me4 = 4;\n-export const delete_me5 = 5;\n-export const delete_me6 = 6;\n-export const delete_me7 = 7;\n-export const delete_me8 = 8;\n-export const delete_me9 = 9;\n-export const delete_me10 = 10;\n-export const delete_me11 = 11;\n-export const delete_me12 = 12;\n-export const delete_me13 = 13;\n-export const delete_me14 = 14;\n-export const delete_me15 = 15;\n-export const delete_me16 = 16;\n-export const delete_me17 = 17;\n-export const delete_me18 = 18;\n-export const delete_me19 = 19;\n-export const delete_me20 = 20;\n-export const delete_me21 = 21;\n-export const delete_me22 = 22;\n-export const delete_me23 = 23;\n-export const delete_me24 = 24;\n-export const delete_me25 = 25;\n-export const delete_me26 = 26;\n-export const delete_me27 = 27;\n-export const delete_me28 = 28;\n-export const delete_me29 = 29;\n-export const delete_me30 = 30;\n-export const delete_me31 = 31;\n-export const delete_me32 = 32;\n-export const delete_me33 = 33;\n-export const delete_me34 = 34;\n-export const delete_me35 = 35;\n-export const delete_me36 = 36;\n-export const delete_me37 = 37;\n-export const delete_me38 = 38;\n-export const delete_me39 = 39;\ndiff --git a/src/empty.ts b/src/empty.ts\nnew file mode 100644\nindex 0000000..e69de29\ndiff --git a/src/keep.ts b/src/keep.ts\nindex 33717d8..e5b590e 100644\n--- a/src/keep.ts\n+++ b/src/keep.ts\n@@ -3,7 +3,7 @@ export const keep1 = 1;\n export const keep2 = 2;\n export const keep3 = 3;\n export const keep4 = 4;\n-export const keep5 = 5;\n+export const keep5 = 500;\n export const keep6 = 6;\n export const keep7 = 7;\n export const keep8 = 8;\n@@ -28,7 +28,7 @@ export const keep26 = 26;\n export const keep27 = 27;\n export const keep28 = 28;\n export const keep29 = 29;\n-export const keep30 = 30;\n+export const keep30 = 3000;\n export const keep31 = 31;\n export const keep32 = 32;\n export const keep33 = 33;\n@@ -38,3 +38,4 @@ export const keep36 = 36;\n export const keep37 = 37;\n export const keep38 = 38;\n export const keep39 = 39;\n+export const added = true;\ndiff --git a/src/old-name.ts b/src/new-name.ts\nsimilarity index 97%\nrename from src/old-name.ts\nrename to src/new-name.ts\nindex 136c6a6..2d5ae01 100644\n--- a/src/old-name.ts\n+++ b/src/new-name.ts\n@@ -1,7 +1,7 @@\n export const old_name0 = 0;\n export const old_name1 = 1;\n export const old_name2 = 2;\n-export const old_name3 = 3;\n+export const old_name3 = 33;\n export const old_name4 = 4;\n export const old_name5 = 5;\n export const old_name6 = 6;\ndiff --git a/src/no-newline.ts b/src/no-newline.ts\nindex 0dfd835..ac0bb00 100644\n--- a/src/no-newline.ts\n+++ b/src/no-newline.ts\n@@ -1,2 +1,3 @@\n export const a = 1;\n-export const b = 2;\n\\ No newline at end of file\n+export const b = 2;\n+export const c = 3;\n\\ No newline at end of file\ndiff --git a/src/pure-rename.ts b/src/renamed.ts\nsimilarity index 100%\nrename from src/pure-rename.ts\nrename to src/renamed.ts\n",
+ "expected": [
+  {
+   "filename": "assets/logo.png",
+   "status": "modified",
+   "additions": 0,
+   "deletions": 0,
+   "patch": ""
+  },
+  {
+   "filename": "docs/a b/space file.md",
+   "status": "modified",
+   "additions": 1,
+   "deletions": 0,
+   "patch": "@@ -2,3 +2,4 @@\n \n line one\n line two\n+line three"
+  },
+  {
+   "filename": "docs/ação.md",
+   "status": "modified",
+   "additions": 1,
+   "deletions": 0,
+   "patch": "@@ -1,3 +1,4 @@\n # ação\n \n conteúdo com acentuação\n+mais uma linha ção"
+  },
+  {
+   "filename": "docs/nová série.md",
+   "status": "added",
+   "additions": 1,
+   "deletions": 0,
+   "patch": "@@ -0,0 +1 @@\n+# novo arquivo com acento"
+  },
+  {
+   "filename": "docs/x b/y.md",
+   "status": "modified",
+   "additions": 1,
+   "deletions": 0,
+   "patch": "@@ -1,3 +1,4 @@\n # tricky b/ path\n \n alpha\n+beta"
+  },
+  {
+   "filename": "scripts/run.sh",
+   "status": "modified",
+   "additions": 0,
+   "deletions": 0,
+   "patch": ""
+  },
+  {
+   "filename": "src/delete-me.ts",
+   "status": "removed",
+   "additions": 0,
+   "deletions": 40,
+   "patch": "@@ -1,40 +0,0 @@\n-export const delete_me0 = 0;\n-export const delete_me1 = 1;\n-export const delete_me2 = 2;\n-export const delete_me3 = 3;\n-export const delete_me4 = 4;\n-export const delete_me5 = 5;\n-export const delete_me6 = 6;\n-export const delete_me7 = 7;\n-export const delete_me8 = 8;\n-export const delete_me9 = 9;\n-export const delete_me10 = 10;\n-export const delete_me11 = 11;\n-export const delete_me12 = 12;\n-export const delete_me13 = 13;\n-export const delete_me14 = 14;\n-export const delete_me15 = 15;\n-export const delete_me16 = 16;\n-export const delete_me17 = 17;\n-export const delete_me18 = 18;\n-export const delete_me19 = 19;\n-export const delete_me20 = 20;\n-export const delete_me21 = 21;\n-export const delete_me22 = 22;\n-export const delete_me23 = 23;\n-export const delete_me24 = 24;\n-export const delete_me25 = 25;\n-export const delete_me26 = 26;\n-export const delete_me27 = 27;\n-export const delete_me28 = 28;\n-export const delete_me29 = 29;\n-export const delete_me30 = 30;\n-export const delete_me31 = 31;\n-export const delete_me32 = 32;\n-export const delete_me33 = 33;\n-export const delete_me34 = 34;\n-export const delete_me35 = 35;\n-export const delete_me36 = 36;\n-export const delete_me37 = 37;\n-export const delete_me38 = 38;\n-export const delete_me39 = 39;"
+  },
+  {
+   "filename": "src/empty.ts",
+   "status": "added",
+   "additions": 0,
+   "deletions": 0,
+   "patch": ""
+  },
+  {
+   "filename": "src/keep.ts",
+   "status": "modified",
+   "additions": 3,
+   "deletions": 2,
+   "patch": "@@ -3,7 +3,7 @@ export const keep1 = 1;\n export const keep2 = 2;\n export const keep3 = 3;\n export const keep4 = 4;\n-export const keep5 = 5;\n+export const keep5 = 500;\n export const keep6 = 6;\n export const keep7 = 7;\n export const keep8 = 8;\n@@ -28,7 +28,7 @@ export const keep26 = 26;\n export const keep27 = 27;\n export const keep28 = 28;\n export const keep29 = 29;\n-export const keep30 = 30;\n+export const keep30 = 3000;\n export const keep31 = 31;\n export const keep32 = 32;\n export const keep33 = 33;\n@@ -38,3 +38,4 @@ export const keep36 = 36;\n export const keep37 = 37;\n export const keep38 = 38;\n export const keep39 = 39;\n+export const added = true;"
+  },
+  {
+   "filename": "src/new-name.ts",
+   "status": "renamed",
+   "additions": 1,
+   "deletions": 1,
+   "patch": "@@ -1,7 +1,7 @@\n export const old_name0 = 0;\n export const old_name1 = 1;\n export const old_name2 = 2;\n-export const old_name3 = 3;\n+export const old_name3 = 33;\n export const old_name4 = 4;\n export const old_name5 = 5;\n export const old_name6 = 6;"
+  },
+  {
+   "filename": "src/no-newline.ts",
+   "status": "modified",
+   "additions": 2,
+   "deletions": 1,
+   "patch": "@@ -1,2 +1,3 @@\n export const a = 1;\n-export const b = 2;\n\\ No newline at end of file\n+export const b = 2;\n+export const c = 3;\n\\ No newline at end of file"
+  },
+  {
+   "filename": "src/renamed.ts",
+   "status": "renamed",
+   "additions": 0,
+   "deletions": 0,
+   "patch": ""
+  }
+ ]
+}

@@ -282,7 +282,9 @@ export function isLinkedGuide(
  * it read the rule from. With `listGuideDir`, a quote missing from a cited
  * SKILL.md is looked up in that same skill's text files, and the finding is
  * re-pointed at the file that holds it. Other skills and repository files
- * never count.
+ * never count, except `instructionFiles`: the coding-agent instruction files
+ * (CLAUDE.md, AGENTS.md, ...) the review loaded from the target branch for
+ * this PR, which the agent read as they are here.
  */
 export async function checkConventionQuotes(
     candidates: readonly FinderSuggestion[],
@@ -290,6 +292,7 @@ export async function checkConventionQuotes(
     guideFiles: readonly string[] = [],
     listGuideDir?: GuideDirLister,
     teamInstructions?: string,
+    instructionFiles: ReadonlyArray<{ path: string; content: string }> = [],
 ): Promise<ConventionCheckResult> {
     const passed: ConventionCheckPassed[] = [];
     const rejected: ConventionCheckRejected[] = [];
@@ -305,6 +308,9 @@ export async function checkConventionQuotes(
     };
     const reject = (finding: FinderSuggestion, detail: string) =>
         rejected.push({ finding, reason: QUOTE_NOT_FOUND, detail });
+    const instructionByPath = new Map(
+        instructionFiles.map((f) => [stripLeading(f.path), f]),
+    );
 
     for (const cited of candidates) {
         const file = canonicalGuideCitation(
@@ -379,8 +385,26 @@ export async function checkConventionQuotes(
             return true;
         };
         if (!isLinkedGuide(file, guideFiles)) {
-            if (!passFromInstructions()) {
-                reject(finding, `${file} is not a guide linked to this review`);
+            const instruction = instructionByPath.get(file);
+            const instructionSection = instruction
+                ? findQuoteSection(instruction.content, quote)
+                : null;
+            if (instructionSection != null) {
+                // Named as the review loaded it, so the comment cites that file.
+                passed.push({
+                    finding: {
+                        ...finding,
+                        source: { ...finding.source!, file },
+                    },
+                    sectionText: instructionSection,
+                });
+            } else if (!passFromInstructions()) {
+                reject(
+                    finding,
+                    instruction
+                        ? `quote not found in ${file}`
+                        : `${file} is not a guide linked to this review`,
+                );
             }
             continue;
         }
@@ -585,6 +609,9 @@ export function makeTargetBranchGuideLister(
  * through the knowledge reader, which reads that repository at its
  * configured ref or default branch; the reviewed repository's guides keep
  * the sandbox reader, or the knowledge reader when there is no sandbox.
+ * A sandbox whose command channel cannot read the target branch (the local
+ * sandbox refuses git) falls back to the knowledge reader, which reads the
+ * same target branch the guides were loaded from.
  */
 export function guideSourcesFor(
     guideFiles: readonly string[],
@@ -593,48 +620,59 @@ export function guideSourcesFor(
     targetBranchReader: GuideFileReader | undefined,
     targetBranchLister: GuideDirLister | undefined,
 ): { readGuide: GuideFileReader; listGuideDir?: GuideDirLister } | undefined {
-    const hasOtherRepository = guideFiles.some(
-        (file) => parseKnowledgeSourcePath(stripLeading(file)) != null,
-    );
-    if (hasOtherRepository && !knowledgeReader) {
+    const isOther = (path: string) =>
+        parseKnowledgeSourcePath(stripLeading(path)) != null;
+    const hasOtherRepository = guideFiles.some(isOther);
+    if (!knowledgeReader) {
+        if (!targetBranchReader) return undefined;
         // Nothing can read another repository here: its guides read as
         // unreadable (their quotes are rejected), never through the target
         // branch, which would look `owner/repo:path` up in this repository.
-        return targetBranchReader
-            ? {
-                  readGuide: (file) =>
-                      parseKnowledgeSourcePath(stripLeading(file)) != null
+        return {
+            readGuide: hasOtherRepository
+                ? (file) =>
+                      isOther(file)
                           ? Promise.resolve(null)
-                          : targetBranchReader(file),
-                  listGuideDir: targetBranchLister,
-              }
-            : undefined;
+                          : targetBranchReader(file)
+                : targetBranchReader,
+            listGuideDir: targetBranchLister,
+        };
     }
-    if (!hasOtherRepository) {
-        return targetBranchReader
-            ? {
-                  readGuide: targetBranchReader,
-                  listGuideDir: targetBranchLister,
-              }
-            : undefined;
-    }
+    if (!hasOtherRepository && !targetBranchReader) return undefined;
     const fromKnowledge: GuideFileReader = async (file) => {
         const read = await knowledgeReader.readFile(stripLeading(file));
         return read.status === 'ok' ? read.content : null;
     };
-    const isOther = (path: string) =>
-        parseKnowledgeSourcePath(stripLeading(path)) != null;
+    const listFromKnowledge: GuideDirLister = (dir) =>
+        knowledgeReader.listFiles(stripLeading(dir).replace(/\/+$/, ''));
+    // The reviewed repository's guides: the sandbox's target-branch reads,
+    // and the knowledge reader when those come back empty or fail.
+    const readLocal: GuideFileReader = async (file) => {
+        try {
+            const read = await targetBranchReader?.(file);
+            if (read != null) return read;
+        } catch {
+            // A timed-out command or a dead sandbox: same target branch below.
+        }
+        return fromKnowledge(file);
+    };
+    const listLocal: GuideDirLister = targetBranchLister
+        ? async (dir) => {
+              try {
+                  return await targetBranchLister(dir);
+              } catch {
+                  return listFromKnowledge(dir);
+              }
+          }
+        : listFromKnowledge;
+    if (!hasOtherRepository) {
+        return { readGuide: readLocal, listGuideDir: listLocal };
+    }
     return {
         readGuide: (file) =>
-            isOther(file) || !targetBranchReader
-                ? fromKnowledge(file)
-                : targetBranchReader(file),
+            isOther(file) ? fromKnowledge(file) : readLocal(file),
         listGuideDir: (dir) =>
-            isOther(dir) || !targetBranchLister
-                ? knowledgeReader.listFiles(
-                      stripLeading(dir).replace(/\/+$/, ''),
-                  )
-                : targetBranchLister(dir),
+            isOther(dir) ? listFromKnowledge(dir) : listLocal(dir),
     };
 }
 

@@ -70,6 +70,8 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
 
         for (let i = 1; i < sorted.length; i++) {
             const dup = sorted[i];
+            // A duplicate with no file names no other place to look at.
+            if (!dup.relevantFile) continue;
             const loc = `${dup.relevantFile}:${dup.relevantLinesStart ?? '?'}-${dup.relevantLinesEnd ?? '?'}`;
             if (loc !== keptLocation && !otherLocations.includes(loc)) {
                 otherLocations.push(loc);
@@ -95,6 +97,9 @@ export function mergeKodyRuleFindings<T extends Partial<CodeSuggestion>>(
 
     return result;
 }
+
+/** Heads the list of a comment's other locations; the implementation check reads it back. */
+export const OTHER_LOCATIONS_HEADING = '**Also found in:**';
 
 /**
  * The merged locations to render under "Also found in", without the comment's

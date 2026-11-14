@@ -185,6 +185,7 @@ import { applyRevisionLinks } from '@libs/code-review/infrastructure/agents/engi
 import { checkRepeats } from '@libs/code-review/infrastructure/agents/engine/repeat-check';
 import {
     mergeKodyRuleFindings,
+    OTHER_LOCATIONS_HEADING,
     otherLocationsToRender,
 } from '@libs/code-review/infrastructure/agents/engine/kody-rules-merge';
 import {
@@ -492,16 +493,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             return undefined;
         }
 
-        // The generalist, the only agent that reads them, runs only when at
-        // least one of these categories is on.
+        // The generalist reads them, and runs only when at least one of these
+        // categories is on; a custom agent's quote gate checks rules quoted
+        // from them, so an enabled custom agent needs them too.
         const options = context.codeReviewConfig?.reviewOptions;
+        const customAgentRuns = this.customAgentsToRun(context).length > 0;
         if (
             options?.bug === false &&
             options?.security === false &&
-            options?.performance === false
+            options?.performance === false &&
+            !customAgentRuns
         ) {
             this.logger.warn({
-                message: `[repo-instructions] skipped for PR#${prNumber}: bug, security and performance are all off, so no agent reads them`,
+                message: `[repo-instructions] skipped for PR#${prNumber}: bug, security and performance are all off and no custom agent runs, so no agent reads them`,
                 context: this.stageName,
                 metadata: logMetadata,
             });
@@ -681,14 +685,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     async resolveCustomAgents(
         context: CodeReviewPipelineContext,
     ): Promise<CustomAgentConfig[]> {
+        return this.customAgentsToRun(context);
+    }
+
+    private customAgentsToRun(
+        context: CodeReviewPipelineContext,
+    ): CustomAgentConfig[] {
         const configured = context.codeReviewConfig?.customAgents ?? [];
-        const wanted = context.onlyCustomAgent
+        return context.onlyCustomAgent
             ? configured
             : configured.filter((agent) => agent?.enabled);
-        if (!wanted.length) {
-            return [];
-        }
-        return wanted;
     }
 
     /**
@@ -1776,7 +1782,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 const locationsList = otherLocations
                     .map((loc) => `- \`${loc}\``)
                     .join('\n');
-                const otherLocationsSection = `\n\n**Also found in:**\n${locationsList}`;
+                const otherLocationsSection = `\n\n${OTHER_LOCATIONS_HEADING}\n${locationsList}`;
                 s.suggestionContent = `${s.suggestionContent}${otherLocationsSection}`;
                 // llmPrompt is built from fullExplanation below; without the
                 // list an agent working from the prompt fixes only the kept

@@ -460,6 +460,7 @@ export async function runAgentLoopViaCore(
                     listGuideDir,
                     guideFiles: input.conventionGuides,
                     teamInstructions: input.teamInstructions,
+                    instructionFiles: input.repoInstructions?.files,
                     astGrepLog,
                 },
             }),

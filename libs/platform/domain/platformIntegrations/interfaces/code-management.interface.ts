@@ -60,6 +60,14 @@ export type CodeManagementConnectionStatus = {
     category?: IntegrationCategory;
 };
 
+/** An account as a host webhook names it. */
+export interface HostAccount {
+    login: string;
+    node_id: string;
+    /** GitHub: `Bot` for an App, `User` for a person. */
+    type?: string;
+}
+
 export interface ICodeManagementService extends ICommonPlatformIntegrationService {
     getApprovalTeamMembership?(
         params: ApprovalTeamMembershipParams,
@@ -167,6 +175,9 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
                 lastNDays?: number;
                 limit?: number;
             };
+            // A screen is waiting: providers that back off on rate limits
+            // give up sooner. Only Bitbucket Cloud reads it today.
+            interactive?: boolean;
         };
     }): Promise<Repositories[]>;
     getListMembers(
@@ -188,6 +199,14 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     getOrganizations(params: any): Promise<Organization[]>;
 
     getFilesByPullRequestId(params): Promise<any[] | null>;
+    /**
+     * The PR's files changed since `lastCommit`. `keepRemovedFiles` also
+     * keeps the files deleted since then that the PR no longer lists (one it
+     * added and later deleted), with status `removed`. Honored by GitHub,
+     * GitLab and Bitbucket Data Center; Azure Repos, Bitbucket Cloud and
+     * Forgejo ignore it and leave such a file out, so a grouped suggestion
+     * with a location in it stays partial there.
+     */
     getChangedFilesSinceLastCommit(params: any): Promise<any | null>;
     /**
      * The PR's diff as it stood when `headSha` was its head: from the merge
@@ -288,7 +307,10 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     getCloneParams(params: any): Promise<GitCloneParams>;
     mergePullRequest(params: any): Promise<any>;
     approvePullRequest(params: any): Promise<any>;
-    requestChangesPullRequest(params: any): Promise<any>;
+    /** Hands back the summary comment the host keeps open next to the request, where it leaves one. */
+    requestChangesPullRequest(
+        params: any,
+    ): Promise<{ summaryCommentId?: string } | null | void>;
 
     getAllCommentsInPullRequest(params: any): Promise<any[]>;
 
@@ -368,6 +390,9 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     getPullRequestAuthors(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         determineBots?: boolean;
+        // Fail rather than answer [] when the provider cannot tell "no recent
+        // author" from "not loaded yet". For callers that revoke on absence.
+        requireLoaded?: boolean;
     }): Promise<PullRequestAuthor[]>;
 
     checkIfPullRequestShouldBeApproved(params: {
@@ -460,6 +485,22 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     }): Promise<PullRequestReviewState | null>;
 
     dismissOwnPullRequestApprovals?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number>;
+    /** Whether an account, as a webhook names it, is the one Kody acts as. */
+    isOwnAccount?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        account: HostAccount;
+    }): Promise<boolean>;
+    /**
+     * Withdraws Kody's own "changes requested" without approving. Returns how
+     * many requests it withdrew. Absent on a host where a change request
+     * leaves no review state (GitLab: a thread only).
+     */
+    dismissOwnPullRequestChangeRequests?(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;

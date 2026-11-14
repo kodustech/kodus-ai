@@ -18,6 +18,8 @@ export type ChangedFilesSource = 'incremental' | 'interdiff' | 'full' | 'none';
 
 export type ChangedFilesOptions = {
     onDiffSource?: (source: ChangedFilesSource) => void;
+    /** The files the diff deleted; they are left out of the files returned. */
+    onRemovedFiles?: (filenames: string[]) => void;
 };
 
 export interface IPullRequestManagerService {

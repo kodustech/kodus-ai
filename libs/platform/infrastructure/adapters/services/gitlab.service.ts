@@ -1,3 +1,4 @@
+import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import type {
     ApprovalTeamMembership,
     ApprovalTeamMembershipParams,
@@ -2339,8 +2340,13 @@ export class GitlabService implements Omit<
     }
 
     async getChangedFilesSinceLastCommit(params: any) {
-        const { organizationAndTeamData, repository, prNumber, lastCommit } =
-            params;
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            lastCommit,
+            keepRemovedFiles,
+        } = params;
 
         const gitlabAuthDetail = await this.getAuthDetails(
             organizationAndTeamData,
@@ -2424,9 +2430,15 @@ export class GitlabService implements Omit<
 
         const mrFileNames = new Set(mrDiffs.map((f) => f.new_path));
 
-        // 5. Keep only files that exist in both compare AND MR diffs list
+        // 5. Keep only files that exist in both compare AND MR diffs list.
+        // A file the MR added and a later push deleted is no longer in the
+        // MR's diffs; a caller that asks for removed files gets it too.
         return diffs
-            .filter((file) => mrFileNames.has(file.new_path))
+            .filter(
+                (file) =>
+                    mrFileNames.has(file.new_path) ||
+                    (keepRemovedFiles && file.deleted_file),
+            )
             .map((file) => {
                 const changeCount = this.countChanges(file.diff);
 
@@ -4701,10 +4713,11 @@ export class GitlabService implements Omit<
             const requestChangeBodyTitle =
                 '# Found critical issues please review the requested changes';
 
-            const formattedBody =
-                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`.trim();
+            const formattedBody = withChangeRequestExitNote(
+                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`,
+            );
 
-            await gitlabAPI.MergeRequestDiscussions.create(
+            const discussion = await gitlabAPI.MergeRequestDiscussions.create(
                 repository.id,
                 prNumber,
                 formattedBody,
@@ -4716,6 +4729,13 @@ export class GitlabService implements Omit<
                 serviceName: 'GitlabService requestChangesPullRequest',
                 metadata: params,
             });
+
+            // On GitLab this discussion IS the request: it stays unresolved,
+            // and blocks the merge where every thread must be resolved, until
+            // it is resolved by id.
+            return discussion?.id
+                ? { summaryCommentId: String(discussion.id) }
+                : undefined;
         } catch (error) {
             this.logger.error({
                 message: `Error requesting changes on MR #${params.prNumber}`,

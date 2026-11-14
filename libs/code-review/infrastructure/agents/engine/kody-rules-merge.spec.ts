@@ -1,4 +1,34 @@
-import { otherLocationsToRender } from './kody-rules-merge';
+import {
+    mergeKodyRuleFindings,
+    otherLocationsToRender,
+} from './kody-rules-merge';
+
+describe('mergeKodyRuleFindings', () => {
+    it('lists only the duplicates that name a file as other locations', () => {
+        const [kept] = mergeKodyRuleFindings([
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'a.ts',
+                relevantLinesStart: 1,
+                relevantLinesEnd: 2,
+                suggestionContent: 'The longest text is the one kept.',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                suggestionContent: 'No file on this one.',
+            },
+            {
+                brokenKodyRulesIds: ['rule-1'],
+                relevantFile: 'b.ts',
+                relevantLinesStart: 3,
+                relevantLinesEnd: 4,
+                suggestionContent: 'Same rule in b.',
+            },
+        ]);
+
+        expect(kept.kodyRuleOtherLocations).toEqual(['b.ts:3-4']);
+    });
+});
 
 describe('otherLocationsToRender', () => {
     it("leaves out the comment's own range", () => {

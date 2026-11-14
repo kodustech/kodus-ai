@@ -7,7 +7,11 @@ import {
 
 import { decryptCliSecret } from '@libs/code-review/domain/custom-agents/cli-secret-cipher';
 import { CLI_SECRET_MASK } from '@libs/code-review/domain/custom-agents/cli-secrets';
-import { CUSTOM_AGENTS_PLAN_REQUIRED } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import {
+    CUSTOM_AGENTS_BETA_REQUIRED,
+    CUSTOM_AGENTS_PLAN_REQUIRED,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import { environment } from '@libs/ee/configs/environment';
 
 import {
     GetCustomAgentsStatusUseCase,
@@ -18,6 +22,16 @@ import {
     TRY_RUN_STALE_MS,
     TryCustomAgentUseCase,
 } from './try-custom-agent.use-case';
+
+// Custom agents read the install's mode. Pinned to Cloud here, as CI runs;
+// the self-hosted cases below switch it.
+jest.mock('@libs/ee/configs/environment', () => {
+    const actual = jest.requireActual('@libs/ee/configs/environment');
+    return {
+        ...actual,
+        environment: { ...actual.environment, API_CLOUD_MODE: true },
+    };
+});
 
 const organizationAndTeamData = { organizationId: 'org-1', teamId: 'team-1' };
 
@@ -1173,6 +1187,56 @@ describe('TryCustomAgentUseCase', () => {
         await expect(run).rejects.toBeInstanceOf(ForbiddenException);
         await expect(run).rejects.toThrow(CUSTOM_AGENTS_PLAN_REQUIRED);
         expect(runner.runCustomAgentOnPullRequest).not.toHaveBeenCalled();
+    });
+
+    // Custom agents are a beta feature: a self-hosted install runs them only
+    // with BETA_FEATURES=true, whatever its plan (#2425).
+    describe('on a self-hosted install', () => {
+        const betaFeatures = process.env.BETA_FEATURES;
+        const tryIt = (runner: { runCustomAgentOnPullRequest: jest.Mock }) =>
+            new TryCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                licenseService(TEAMS) as any,
+                runner,
+            ).execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                prUrl: 'https://git.example.test/ledger/pull/7',
+                agent: ledgerAgent(),
+            });
+
+        beforeEach(() => {
+            environment.API_CLOUD_MODE = false;
+            delete process.env.BETA_FEATURES;
+        });
+
+        afterEach(() => {
+            environment.API_CLOUD_MODE = true;
+            if (betaFeatures === undefined) {
+                delete process.env.BETA_FEATURES;
+            } else {
+                process.env.BETA_FEATURES = betaFeatures;
+            }
+        });
+
+        it.each([
+            ['unset', undefined],
+            ['false', 'false'],
+        ])(
+            'refuses with BETA_FEATURES %s without running the agent',
+            async (_name, value) => {
+                if (value !== undefined) process.env.BETA_FEATURES = value;
+                const runner = { runCustomAgentOnPullRequest: jest.fn() };
+
+                const run = tryIt(runner);
+
+                await expect(run).rejects.toBeInstanceOf(ForbiddenException);
+                await expect(run).rejects.toThrow(CUSTOM_AGENTS_BETA_REQUIRED);
+                expect(
+                    runner.runCustomAgentOnPullRequest,
+                ).not.toHaveBeenCalled();
+            },
+        );
     });
 
     it('runs on a trial', async () => {

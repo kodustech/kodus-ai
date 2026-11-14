@@ -115,3 +115,67 @@ describe('GithubController repository events', () => {
         expect(enqueue).not.toHaveBeenCalled();
     });
 });
+
+describe('GithubController review requests', () => {
+    let enqueue: jest.Mock;
+    let controller: GithubController;
+
+    const send = async (payload: Record<string, unknown>) => {
+        const res: any = {};
+        res.status = jest.fn().mockReturnValue(res);
+        res.send = jest.fn().mockReturnValue(res);
+        controller.handleWebhook(
+            {
+                headers: { 'x-github-event': 'pull_request' },
+                body: payload,
+            } as any,
+            res,
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+        return res;
+    };
+
+    beforeEach(() => {
+        enqueue = jest.fn().mockResolvedValue(undefined);
+        controller = new GithubController({ execute: enqueue } as any);
+    });
+
+    it('enqueues a review request that names an account', async () => {
+        const payload = {
+            action: 'review_requested',
+            requested_reviewer: { login: 'kody-ai[bot]', node_id: 'BOT_kody' },
+        };
+
+        const res = await send(payload);
+
+        expect(res.send).toHaveBeenCalledWith('Webhook received');
+        expect(enqueue).toHaveBeenCalledWith(
+            expect.objectContaining({ event: 'pull_request', payload }),
+        );
+    });
+
+    it.each([
+        [
+            'a review request made to a team',
+            { action: 'review_requested', requested_team: { slug: 'backend' } },
+        ],
+        [
+            'a removed review request',
+            {
+                action: 'review_request_removed',
+                requested_reviewer: {
+                    login: 'kody-ai[bot]',
+                    node_id: 'BOT_kody',
+                },
+            },
+        ],
+        ['a label change', { action: 'labeled' }],
+    ])('ignores %s', async (_name, payload) => {
+        const res = await send(payload);
+
+        expect(res.send).toHaveBeenCalledWith(
+            'Webhook ignored (action not supported)',
+        );
+        expect(enqueue).not.toHaveBeenCalled();
+    });
+});

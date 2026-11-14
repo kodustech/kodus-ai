@@ -1,4 +1,7 @@
-import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import type {
+    UpdateSuggestionOptions,
+    KodyChangeRequestRecord,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import {
     BulkApplyResult,
     FileBulkOp,
@@ -16,6 +19,7 @@ import {
     IPullRequestUser,
     IPullRequestUserMapping,
     IPullRequestWithDeliveredSuggestions,
+    IPullRequestWithKodyChangeRequest,
     ISuggestion,
     ISuggestionByPR,
     SuggestionCountsBySeverity,
@@ -121,6 +125,56 @@ export class PullRequestsService implements IPullRequestsService {
             prNumber,
             failure,
             guard,
+        );
+    }
+
+    recordKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        request: KodyChangeRequestRecord,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.recordKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            request,
+        );
+    }
+
+    clearKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.clearKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            requestedAt,
+        );
+    }
+
+    hasOpenKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.hasOpenKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            requestedAt,
+        );
+    }
+
+    findOpenPullRequestsWithKodyChangeRequest(
+        organizationId: string,
+    ): Promise<IPullRequestWithKodyChangeRequest[]> {
+        return this.pullRequestsRepository.findOpenPullRequestsWithKodyChangeRequest(
+            organizationId,
         );
     }
 
@@ -254,6 +308,28 @@ export class PullRequestsService implements IPullRequestsService {
     ): Promise<Array<{ number: number; repositoryId: string }>> {
         return this.pullRequestsRepository.findOpenPullRequestKeysOpenedSince(
             since,
+            organizationId,
+            repositoryIds,
+        );
+    }
+
+    findPullRequestAuthorsOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>> {
+        return this.pullRequestsRepository.findPullRequestAuthorsOpenedSince(
+            since,
+            organizationId,
+            repositoryIds,
+        );
+    }
+
+    hasStoredPullRequests(
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.hasStoredPullRequests(
             organizationId,
             repositoryIds,
         );
