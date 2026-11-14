@@ -199,6 +199,11 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     getOrganizations(params: any): Promise<Organization[]>;
 
     getFilesByPullRequestId(params): Promise<any[] | null>;
+    /**
+     * The PR's files changed since `lastCommit`. `keepRemovedFiles` also
+     * keeps the files deleted since then that the PR no longer lists (one it
+     * added and later deleted), with status `removed`.
+     */
     getChangedFilesSinceLastCommit(params: any): Promise<any | null>;
     /**
      * The PR's diff as it stood when `headSha` was its head: from the merge

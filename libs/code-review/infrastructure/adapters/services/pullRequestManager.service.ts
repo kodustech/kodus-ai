@@ -84,6 +84,9 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                     lastCommit,
                     reviewedBaseBranch,
                     options?.onDiffSource,
+                    // Removed files leave the list below; only a caller that
+                    // reads them asks for the ones the PR no longer lists.
+                    !!options?.onRemovedFiles,
                 );
             } else {
                 options?.onDiffSource?.('none');
@@ -370,6 +373,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         lastCommit: string | Commit,
         reviewedBaseBranch?: string,
         onDiffSource?: (source: ChangedFilesSource) => void,
+        keepRemovedFiles = false,
     ): Promise<FileChange[]> {
         const lastCommitSha =
             typeof lastCommit === 'string' ? lastCommit : lastCommit?.sha;
@@ -383,6 +387,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                     typeof lastCommit === 'string'
                         ? { sha: lastCommit }
                         : lastCommit,
+                ...(keepRemovedFiles ? { keepRemovedFiles } : {}),
             });
         if (changedFiles) {
             onDiffSource?.('incremental');
