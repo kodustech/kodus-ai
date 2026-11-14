@@ -180,6 +180,25 @@ describe('AgentReviewStage — losses the run records (#2066)', () => {
     });
 });
 
+describe('AgentReviewStage — warnings recorded by earlier stages', () => {
+    it('keeps a DIFF_TRUNCATED recorded before it ran (#2206)', async () => {
+        const { stage } = makeStage();
+        const cut = {
+            kind: 'DIFF_TRUNCATED',
+            reason: 'patch_line_limit',
+            contextWindowTokens: 0,
+            modelName: '',
+            detail: '1 file diff(s) cut at 50000 lines, the rest was not reviewed: data/big.sql',
+        };
+
+        // No checkout, so this stage records a warning of its own too.
+        const result = await run(stage, makeContext({ reviewWarnings: [cut] }));
+
+        expect(result.reviewWarnings).toContainEqual(cut);
+        expect(kinds(result)).toContain('SANDBOX_UNAVAILABLE');
+    });
+});
+
 describe('AgentReviewStage — kodus-config.yml keys set in the app', () => {
     it('records customAgents dropped from the file, and the review still runs', async () => {
         const { stage } = makeStage();

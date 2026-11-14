@@ -4,7 +4,16 @@ import {
     convertToUnifiedDiffWithLineNumbers,
     extractLinesFromDiffHunk,
     extractLinesFromUnifiedDiff,
+    exceedsPatchLineLimit,
+    MAX_PATCH_LINES,
 } from './patch';
+
+/** A patch of exactly `lines` lines: one hunk header, the rest added. */
+const patchOfLines = (lines: number): string =>
+    [
+        `@@ -0,0 +1,${lines - 1} @@`,
+        ...Array.from({ length: lines - 1 }, (_, i) => `+line ${i + 1}`),
+    ].join('\n');
 
 describe('patch utils (mutation-killing)', () => {
     describe('handlePatchDeletions', () => {
@@ -190,6 +199,63 @@ describe('patch utils (mutation-killing)', () => {
                 '     2 +b',
             ].join('\n');
             expect(out).toBe(expected);
+        });
+    });
+
+    describe('patches longer than MAX_PATCH_LINES (#2206)', () => {
+        it('ends the unified diff with a note naming the cut', () => {
+            const out = convertToUnifiedDiffWithLineNumbers(
+                patchOfLines(MAX_PATCH_LINES + 10),
+                { filename: 'big.ts' },
+            );
+            const outLines = out.split('\n');
+
+            expect(outLines[outLines.length - 1]).toBe(
+                `... (diff truncated: first ${MAX_PATCH_LINES} of ${MAX_PATCH_LINES + 10} lines shown; the rest of this file's changes are not in this diff)`,
+            );
+            // header + MAX_PATCH_LINES patch lines + the note
+            expect(outLines).toHaveLength(MAX_PATCH_LINES + 2);
+            expect(out).not.toContain('+line 50000');
+        });
+
+        it('adds no note to a patch right at the limit', () => {
+            const out = convertToUnifiedDiffWithLineNumbers(
+                patchOfLines(MAX_PATCH_LINES),
+                { filename: 'big.ts' },
+            );
+
+            expect(out).not.toContain('diff truncated');
+            expect(exceedsPatchLineLimit(patchOfLines(MAX_PATCH_LINES))).toBe(
+                false,
+            );
+            expect(
+                exceedsPatchLineLimit(patchOfLines(MAX_PATCH_LINES + 1)),
+            ).toBe(true);
+            expect(exceedsPatchLineLimit(undefined)).toBe(false);
+        });
+
+        it('keeps the note out of the added-line ranges', () => {
+            const out = convertToUnifiedDiffWithLineNumbers(
+                patchOfLines(MAX_PATCH_LINES + 10),
+                { filename: 'big.ts' },
+            );
+
+            expect(extractLinesFromUnifiedDiff(out)).toEqual([
+                { start: 1, end: MAX_PATCH_LINES - 1 },
+            ]);
+        });
+
+        it('ends the __new hunk__ diff with the same note', () => {
+            const out = convertToHunksWithLinesNumbers(
+                patchOfLines(MAX_PATCH_LINES + 10),
+                { filename: 'big.ts' },
+            );
+
+            expect(
+                out.endsWith(
+                    `... (diff truncated: first ${MAX_PATCH_LINES} of ${MAX_PATCH_LINES + 10} lines shown; the rest of this file's changes are not in this diff)`,
+                ),
+            ).toBe(true);
         });
     });
 
