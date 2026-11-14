@@ -1,14 +1,19 @@
 import {
+    BadRequestException,
     Body,
     Controller,
+    ForbiddenException,
     Get,
+    Inject,
     Param,
     Patch,
     Post,
     Query,
     UseGuards,
 } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
 
+import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
     Action,
     ResourceType,
@@ -24,6 +29,10 @@ import { GetIssuesUseCase } from '@libs/issues/application/use-cases/get-issues.
 import { GetTotalIssuesUseCase } from '@libs/issues/application/use-cases/get-total-issues.use-case';
 import { UpdateIssuePropertyUseCase } from '@libs/issues/application/use-cases/update-issue-property.use-case';
 import { IssuesEntity } from '@libs/issues/domain/entities/issues.entity';
+import {
+    DEEP_SCAN_NOT_ENABLED_MESSAGE,
+    DeepScanGate,
+} from '@libs/security-scan/application/deep-scan.gate';
 
 import { GetIssuesByFiltersDto } from '../dtos/get-issues-by-filters.dto';
 import {
@@ -51,11 +60,14 @@ import {
 @Controller('issues')
 export class IssuesController {
     constructor(
+        @Inject(REQUEST)
+        private readonly request: UserRequest,
         private readonly getIssuesUseCase: GetIssuesUseCase,
         private readonly getTotalIssuesUseCase: GetTotalIssuesUseCase,
         private readonly getIssueByIdUseCase: GetIssueByIdUseCase,
         private readonly updateIssuePropertyUseCase: UpdateIssuePropertyUseCase,
         private readonly buildFixPromptUseCase: BuildFixPromptUseCase,
+        private readonly deepScanGate: DeepScanGate,
     ) {}
 
     @Get()
@@ -103,10 +115,18 @@ export class IssuesController {
     @ApiOperation({
         summary: 'Build a fix prompt',
         description:
-            "A prompt for the developer's own coding agent to fix the given issues: location, explanation, suggested fix, attack path and reproduction test. Only issues in repositories the caller may read are included.",
+            "A prompt for the developer's own coding agent to fix the given issues: location, explanation, suggested fix, attack path and reproduction test. Only issues in repositories the caller may read are included. Part of the deep scan's private alpha: refused for an organization it is not enabled for.",
     })
     @ApiOkResponse({ type: IssuesFixPromptResponseDto })
     async buildFixPrompt(@Body() body: IssuesFixPromptRequestDto) {
+        // Part of the deep scan's private alpha, behind the same gate.
+        const organizationId = this.request?.user?.organization?.uuid;
+        if (!organizationId) {
+            throw new BadRequestException('Organization not found');
+        }
+        if (!(await this.deepScanGate.isEnabledFor(organizationId))) {
+            throw new ForbiddenException(DEEP_SCAN_NOT_ENABLED_MESSAGE);
+        }
         return await this.buildFixPromptUseCase.execute(body.ids);
     }
 
