@@ -8,7 +8,7 @@ import type { RiskCriterion } from '@libs/core/infrastructure/config/types/gener
 import type { CodeAreaRiskMap } from '@libs/platformData/domain/code-area-risk/build-area-risk-map';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { assessChangeRisk, buildChangeRiskDiff } from './assess-change-risk';
+import { assessChangeRisk } from './assess-change-risk';
 import { approvalPathsOf } from '../approval/approval-decision';
 import type { RiskAssessmentResult, RiskSnapshot } from './risk-assessment';
 
@@ -103,13 +103,6 @@ export async function assessPrRisk(
         )
     ) {
         return unavailable('Kody could not verify the complete PR diff.');
-    }
-    // The legacy assessor bounds its diff. The independent engine must never
-    // classify an omitted part as safe, so an oversized snapshot stays unknown.
-    if (buildChangeRiskDiff(input.files).length > 50_000) {
-        return unavailable(
-            'The complete PR diff exceeds the assessment limit.',
-        );
     }
     const criteria = applicableRiskCriteria(input.criteria, input.files);
     const teamInstructions = criteria

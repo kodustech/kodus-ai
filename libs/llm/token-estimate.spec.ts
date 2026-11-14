@@ -90,6 +90,29 @@ describe('estimateTextTokens — falsy guard', () => {
 });
 
 describe('estimateTextTokens — encoder success path', () => {
+    it('can bypass the prompt memo without reading or replacing cached estimates', () => {
+        const encode = jest
+            .fn()
+            .mockReturnValueOnce([1])
+            .mockReturnValueOnce([1, 2])
+            .mockReturnValueOnce([1, 2, 3])
+            .mockReturnValueOnce([1, 2, 3, 4]);
+        withFreshModule(
+            (getEncoding) =>
+                getEncoding.mockReturnValue({ encode_ordinary: encode }),
+            ({ estimateTextTokens }) => {
+                expect(estimateTextTokens('stored')).toBe(1);
+                expect(estimateTextTokens('stored', { cache: false })).toBe(2);
+                expect(estimateTextTokens('stored')).toBe(1);
+                expect(estimateTextTokens('transient', { cache: false })).toBe(
+                    3,
+                );
+                expect(estimateTextTokens('transient')).toBe(4);
+                expect(encode).toHaveBeenCalledTimes(4);
+            },
+        );
+    });
+
     it('returns the EXACT encode_ordinary length, not the char fallback', () => {
         const encodeSpy = jest.fn();
         withFreshModule(
