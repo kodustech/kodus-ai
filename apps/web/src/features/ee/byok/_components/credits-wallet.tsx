@@ -57,6 +57,8 @@ import {
     useKodusCreditBalance,
 } from "../_hooks/use-kodus-credit-balance";
 
+import { AutoTopUpMonthlyLimit } from "./auto-topup-monthly-limit";
+
 const usd = (n: number | undefined | null, digits = 2) =>
     `$${(n ?? 0).toLocaleString("en-US", {
         minimumFractionDigits: digits,
@@ -500,7 +502,11 @@ const AutoTopUpRow = ({
     const [save, { loading: saving }] = useAsyncAction(
         async (
             enabled: boolean,
-            next?: { thresholdUsd?: number; amountUsd?: number },
+            next?: {
+                thresholdUsd?: number;
+                amountUsd?: number;
+                monthlyLimitUsd?: number | null;
+            },
         ) => {
             const thresholdUsd = next?.thresholdUsd ?? effectiveThreshold;
             const amountUsd = next?.amountUsd ?? effectiveAmount;
@@ -510,7 +516,14 @@ const AutoTopUpRow = ({
                     enabled,
                     thresholdUsd,
                     amountUsd,
+                    ...(next?.monthlyLimitUsd !== undefined
+                        ? { monthlyLimitUsd: next.monthlyLimitUsd }
+                        : {}),
                 });
+                if (saved && "saveError" in saved) {
+                    toast({variant: "warning", title: "Previous top-up pending", description: saved.saveError});
+                    return;
+                }
                 // The switch is driven by server state, so writing the
                 // mutation's OWN answer into the cache is what moves it. This
                 // used to discard `saved` and rely on the refetch below, which
@@ -550,8 +563,14 @@ const AutoTopUpRow = ({
                 const savedThreshold = saved?.thresholdUsd ?? thresholdUsd;
                 toast({
                     variant: "success",
-                    title: nowOn ? "Auto top-up on" : "Auto top-up off",
-                    description: nowOn
+                    title: next?.monthlyLimitUsd !== undefined
+                        ? "Monthly auto top-up limit saved"
+                        : nowOn ? "Auto top-up on" : "Auto top-up off",
+                    description: next?.monthlyLimitUsd !== undefined
+                        ? next.monthlyLimitUsd === null
+                            ? "Automatic purchases have no monthly limit."
+                            : `Automatic purchases are limited to ${usd(next.monthlyLimitUsd, 0)} of credits per UTC month, before fees.`
+                        : nowOn
                         ? `We'll add ${usd(savedAmount, 0)} whenever the balance drops below ${usd(savedThreshold, 0)}.`
                         : undefined,
                 });
@@ -585,7 +604,11 @@ const AutoTopUpRow = ({
     });
 
     const [removeCard, { loading: removingCard }] = useAsyncAction(async () => {
-        await removeCreditPaymentMethodAction({ teamId });
+        const removed = await removeCreditPaymentMethodAction({ teamId });
+        if (removed && "saveError" in removed) {
+            toast({variant: "warning", title: "Previous top-up pending", description: removed.saveError});
+            return;
+        }
         toast({ variant: "info", title: "Card removed" });
         onChanged();
     });
@@ -701,6 +724,13 @@ const AutoTopUpRow = ({
                     </Button>
                 )}
             </span>
+
+            <AutoTopUpMonthlyLimit
+                key={teamId}
+                auto={auto}
+                disabled={!canEdit || busy}
+                onSave={(monthlyLimitUsd) => save(enabled, { monthlyLimitUsd })}
+            />
 
             {auto.lastError && (
                 <span

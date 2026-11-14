@@ -402,6 +402,7 @@ export const updateCreditAutoTopUp = async (params: {
     enabled: boolean;
     thresholdUsd?: number;
     amountUsd?: number;
+    monthlyLimitUsd?: number | null;
 }): Promise<CreditAutoTopUp> => {
     const organizationId = await getOrganizationId();
     return billingRequest<CreditAutoTopUp>(`credits/auto-topup`, {

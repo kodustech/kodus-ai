@@ -110,6 +110,13 @@ export type CreditBalance = {
 
 /** Auto top-up as the UI sees it — never the Stripe ids. */
 export type CreditAutoTopUp = {
+    /** Optional during rollout: older billing versions do not enforce a cap. */
+    monthlyLimitUsd?: number | null;
+    monthlyPurchasedUsd?: number;
+    monthlyReservedUsd?: number;
+    monthlyRemainingUsd?: number | null;
+    monthlyLimitReached?: boolean;
+    resetsAt?: string;
     enabled: boolean;
     thresholdUsd: number | null;
     amountUsd: number | null;

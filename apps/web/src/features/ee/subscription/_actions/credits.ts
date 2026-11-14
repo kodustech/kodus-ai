@@ -14,6 +14,18 @@ import {
 } from "../_services/billing/fetch";
 import { BillingHttpError } from "../_services/billing/utils";
 
+// Current pending responses use {code, error: readableMessage}; legacy
+// responses put the machine code in error. Preserve both envelope formats.
+const billingErrorCode = (error: unknown): string | undefined => {
+    if (!(error instanceof BillingHttpError)) return undefined;
+    const body = error.body as { code?: unknown; error?: unknown } | null;
+    if (typeof body?.code === "string") return body.code;
+    return typeof body?.error === "string" ? body.error : undefined;
+};
+const autoTopUpPendingResult = {
+    saveError: "Resolve the previous charge before changing its amount or card",
+} as const;
+
 /** Balance + commercial parameters; null when billing has none / is down. */
 export const getCreditBalanceAction = async ({
     teamId,
@@ -114,16 +126,62 @@ export const updateCreditAutoTopUpAction = async (params: {
     enabled: boolean;
     thresholdUsd?: number;
     amountUsd?: number;
+    monthlyLimitUsd?: number | null;
 }) => {
     await assertCanManageCredits();
     try {
-        return await updateCreditAutoTopUp(params);
+        let result = await updateCreditAutoTopUp(params);
+        // A successful mutation may return only the saved fields. Recover
+        // the budget from its read endpoint before deciding this save failed.
+        if (
+            params.monthlyLimitUsd !== undefined &&
+            result?.monthlyLimitUsd === params.monthlyLimitUsd &&
+            result.monthlyPurchasedUsd === undefined
+        ) {
+            await assertCanReadCredits();
+            const balance = await getCreditBalance({ teamId: params.teamId });
+            if (
+                !balance?.autoTopUp ||
+                (balance.autoTopUp.monthlyLimitUsd ?? null) !==
+                    (params.monthlyLimitUsd ?? null)
+            ) {
+                throw new Error(
+                    "Monthly auto top-up limit could not be confirmed",
+                );
+            }
+            result = {
+                ...balance.autoTopUp,
+                ...result,
+                monthlyPurchasedUsd: balance.autoTopUp.monthlyPurchasedUsd,
+            };
+            if (
+                typeof result.monthlyRemainingUsd === "number" &&
+                typeof result.amountUsd === "number"
+            ) {
+                result.monthlyLimitReached =
+                    result.monthlyRemainingUsd < result.amountUsd;
+            }
+        }
+        // During a rolling deploy an older billing instance can ignore new
+        // fields. Never claim a spending cap was saved without its response.
+        if (
+            params.monthlyLimitUsd !== undefined &&
+            (result?.monthlyLimitUsd !== params.monthlyLimitUsd ||
+                typeof result?.monthlyPurchasedUsd !== "number" ||
+                !Number.isFinite(result.monthlyPurchasedUsd) ||
+                result.monthlyPurchasedUsd < 0)
+        ) {
+            throw new Error("Monthly auto top-up limit was not saved");
+        }
+        return result;
     } catch (error) {
+        if (billingErrorCode(error) === "AUTO_TOP_UP_PENDING")
+            return autoTopUpPendingResult;
         console.error("Failed to update auto top-up:", error);
         // Billing answers 409 NO_PAYMENT_METHOD when no card is saved and
         // 400 INVALID_* for a bad pair; surface the code so the UI can react.
         if (error instanceof BillingHttpError) {
-            const code = (error.body as { error?: string } | null)?.error;
+            const code = billingErrorCode(error);
             if (code === "NO_PAYMENT_METHOD")
                 throw new Error("NO_PAYMENT_METHOD");
             if (code) throw new Error(code);
@@ -153,6 +211,8 @@ export const removeCreditPaymentMethodAction = async (params: {
     try {
         return await removeCreditPaymentMethod(params);
     } catch (error) {
+        if (billingErrorCode(error) === "AUTO_TOP_UP_PENDING")
+            return autoTopUpPendingResult;
         console.error("Failed to remove the card:", error);
         throw new Error("Failed to remove the card");
     }
