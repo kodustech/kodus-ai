@@ -40,7 +40,8 @@ afterEach(() => jest.clearAllMocks());
 it.each([
     ['byok', 'unknown', 0],
     ['litellm', 'unknown', 0],
-    ['override', 'low', 1],
+    ['override', 'unknown', 0],
+    ['litellm-partial', 'low', 1],
     ['models.dev', 'low', 1],
     ['default', 'low', 1],
 ] as const)(
@@ -66,6 +67,86 @@ it.each([
         expect(LLM.run).toHaveBeenCalledTimes(calls);
     },
 );
+
+it.each([
+    ['qwen', 40_000],
+    ['llama3', 140_000],
+    ['deepseek-chat-v4', 140_000],
+    ['auto', 140_000],
+    ['openrouter/auto', 140_000],
+    ['coder', 140_000],
+] as const)(
+    'lets the provider decide the window for the %s model alias',
+    async (model, repetitions) => {
+        const body = 'documentation '.repeat(repetitions);
+        jest.mocked(LLM.run).mockResolvedValue({
+            level: 'low',
+            reason: 'The provider accepted the complete input.',
+        } as any);
+
+        const result = await assessApprovalRisk({
+            ...input,
+            body,
+            modelSlot: { provider: 'openai_compatible', model } as any,
+        });
+
+        expect(result.level).toBe('low');
+        expect(LLM.run).toHaveBeenCalledTimes(1);
+        expect(
+            JSON.parse(jest.mocked(LLM.run).mock.calls[0][0].user as string)
+                .body,
+        ).toBe(body);
+    },
+);
+
+it.each([
+    ['gpt-4o-mini', 140_000],
+    ['GPT_4O_MINI', 140_000],
+    ['glm-4-7', 210_000],
+] as const)(
+    'pre-rejects above the known window for the exact model %s',
+    async (model, repetitions) => {
+        const result = await assessApprovalRisk({
+            ...input,
+            body: 'documentation '.repeat(repetitions),
+            modelSlot: { provider: 'openai_compatible', model } as any,
+        });
+
+        expect(result).toMatchObject({
+            level: 'unknown',
+            failure: {
+                errorName: 'RiskPromptTooLargeError',
+                category: 'CONTEXT_OVERFLOW',
+                code: 'diff_too_large',
+            },
+        });
+        expect(LLM.run).not.toHaveBeenCalled();
+    },
+);
+
+it('classifies provider overflow after deferring a partial model match', async () => {
+    jest.mocked(LLM.run).mockRejectedValue(
+        new Error('maximum context length exceeded'),
+    );
+    const result = await assessApprovalRisk({
+        ...input,
+        body: 'documentation '.repeat(40_000),
+        modelSlot: {
+            provider: 'openai_compatible',
+            model: 'qwen',
+        } as any,
+    });
+
+    expect(LLM.run).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+        level: 'unknown',
+        failure: {
+            errorName: 'Error',
+            category: 'CONTEXT_OVERFLOW',
+            code: 'diff_too_large',
+        },
+    });
+});
 
 it.each(['title', 'body', 'teamInstructions'])(
     'checks the complete prompt when %s exceeds the configured model input window',

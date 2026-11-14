@@ -180,9 +180,13 @@ export async function assessChangeRisk(input: {
             byokMaxInputTokens: input.modelSlot?.maxInputTokens,
             modelName: getModelId(input.modelSlot),
         });
-        // Only explicit limits or the model registry can reject before the call.
-        // Routing aliases, lower-bound estimates and defaults stay with the provider.
-        if (window.source === 'byok' || window.source === 'litellm') {
+        // Only explicit limits or exact/normalized model matches can pre-reject.
+        // Partial matches, routing aliases and floors stay with the provider.
+        if (
+            window.source === 'byok' ||
+            window.source === 'litellm' ||
+            window.source === 'override'
+        ) {
             const promptTokens = await estimateRiskPromptTokens(
                 [
                     CHANGE_RISK_PROMPT,

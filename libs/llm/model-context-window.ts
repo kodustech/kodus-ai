@@ -41,7 +41,7 @@ export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
  */
 const MANUAL_OVERRIDES: Record<string, number> = {
     // OpenAI
-    'gptoss': 131_072,
+    gptoss: 131_072,
     // Google — the 2.0 Flash pair lost its windowed row upstream on 2026-09-23.
     // LiteLLM kept `vertex_ai/gemini-2.0-flash` but without `max_input_tokens`,
     // and the refresh drops any row that cannot answer the question, so both
@@ -57,35 +57,34 @@ const MANUAL_OVERRIDES: Record<string, number> = {
     // 1,048,576 is Google's documented input limit and the value the mirror
     // itself carried until upstream dropped the row. Delete both the day
     // upstream publishes a window again.
-    'gemini20flash': 1_048_576,
-    'gemini20flash001': 1_048_576,
+    gemini20flash: 1_048_576,
+    gemini20flash001: 1_048_576,
     // Google — the 3.x line is not in the mirror yet.
-    'gemini31pro': 1_048_576,
-    'gemini3pro': 1_048_576,
-    'gemini3flash': 1_048_576,
+    gemini31pro: 1_048_576,
+    gemini3pro: 1_048_576,
+    gemini3flash: 1_048_576,
     // Moonshot
-    'kimik27': 262_144,
-    'kimik2': 262_144,
+    kimik27: 262_144,
+    kimik2: 262_144,
     // Z.ai
-    'glm51': 200_000,
-    'glm5': 200_000,
-    'glm47': 202_752,
-    'glm46': 200_000,
-    'glm45': 131_072,
+    glm51: 200_000,
+    glm5: 200_000,
+    glm47: 202_752,
+    glm46: 200_000,
+    glm45: 131_072,
     // Alibaba Qwen
-    'qwen35': 262_144,
-    'qwen3coder': 262_144,
-    // Short ids that step 4 sends to the longest key CONTAINING them, the least
-    // related row: `auto` lands on an autoglm phone model (65,536), `coder` on a
-    // 32k Qwen coder, `glm-4.7-flash` on a Cloudflare row (131,072, against
-    // Z.ai's 200,000), `meta/llama-3.3-70b-instruct` on a Cloudflare fp8 row
-    // (24,000). Gateway aliases (`auto`, `openrouter/auto`, `coder`) route to
-    // models we cannot know, so they keep the default.
-    'auto': DEFAULT_CONTEXT_WINDOW_TOKENS,
-    'coder': DEFAULT_CONTEXT_WINDOW_TOKENS,
-    'glm47flash': 200_000,
-    'metallama3370binstruct': 128_000,
+    qwen35: 262_144,
+    qwen3coder: 262_144,
+    // Short ids that step 4 sends to an unrelated, smaller row:
+    // `glm-4.7-flash` lands on a Cloudflare row (131,072, against Z.ai's
+    // 200,000), `meta/llama-3.3-70b-instruct` on a Cloudflare fp8 row (24,000).
+    glm47flash: 200_000,
+    metallama3370binstruct: 128_000,
 };
+
+// These select models we cannot know. Preserve the planning default without
+// presenting it as a known model limit, or matching an unrelated mirror row.
+const ROUTING_ALIASES = new Set(['auto', 'coder']);
 
 /**
  * Normalizes a model name for fuzzy matching.
@@ -94,7 +93,10 @@ const MANUAL_OVERRIDES: Record<string, number> = {
 function normalize(name: string): string {
     return name
         .toLowerCase()
-        .replace(/^(openai|anthropic|google|gemini|vertex_ai|bedrock|azure|together_ai|openrouter|novita|fireworks_ai|deepseek|mistral|moonshot|hf|huggingface)\//, '')
+        .replace(
+            /^(openai|anthropic|google|gemini|vertex_ai|bedrock|azure|together_ai|openrouter|novita|fireworks_ai|deepseek|mistral|moonshot|hf|huggingface)\//,
+            '',
+        )
         .replace(/[-_.\s/:]/g, '');
 }
 
@@ -117,8 +119,8 @@ for (const [name, info] of Object.entries(MODELS_DEV)) {
  * Resolution order, most precise first:
  *   1. Exact match in the mirror
  *   2. Normalized match (strips provider prefix, punctuation, case)
- *   3. Manual override, exact on the normalized name — only reachable for a
- *      model the mirror does not have
+ *   3. Routing alias default or manual override, exact on the normalized name
+ *      — only reachable for a model the mirror does not have
  *   4. Partial/substring match on normalized names, LiteLLM rows only
  *   5. models.dev row, exact or normalized
  *   6. Default (128k)
@@ -151,11 +153,12 @@ export function lookupModelContextWindow(
     return lookupContextWindowWithSource(modelName)?.tokens;
 }
 
-/** Where a context window came from. `models.dev` is a floor that can sit below
- *  the real window, so a caller that logs the window should say so. */
+/** Where a context window came from. Partial matches, models.dev floors and
+ *  routing defaults are estimates, not known input limits for rejection. */
 export type ContextWindowSource =
     | 'byok'
     | 'litellm'
+    | 'litellm-partial'
     | 'override'
     | 'models.dev'
     | 'default';
@@ -186,7 +189,12 @@ function lookupContextWindowWithSource(
         return { tokens: normalizedHit, source: 'litellm' };
     }
 
-    // 3. Manual override — a model upstream does not carry yet. Exact only: a
+    // 3. Gateway aliases keep a planning budget, not a known input limit.
+    if (ROUTING_ALIASES.has(normalized)) {
+        return { tokens: DEFAULT_CONTEXT_WINDOW_TOKENS, source: 'default' };
+    }
+
+    // Manual override — a model upstream does not carry yet. Exact only: a
     //    substring match here is what pinned claude-opus-4-7 to its 4.x sibling.
     if (MANUAL_OVERRIDES[normalized]) {
         return { tokens: MANUAL_OVERRIDES[normalized], source: 'override' };
@@ -205,7 +213,7 @@ function lookupContextWindowWithSource(
         }
     }
     if (bestMatch > 0) {
-        return { tokens: bestMatch, source: 'litellm' };
+        return { tokens: bestMatch, source: 'litellm-partial' };
     }
 
     // 5. models.dev — a floor for a model nobody else knows.
