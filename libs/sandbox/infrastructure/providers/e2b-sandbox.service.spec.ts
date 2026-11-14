@@ -209,6 +209,44 @@ describe('buildE2BRemoteCommands', () => {
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             await expect(rc.read('src/a.ts', 0, 0)).resolves.toBe('x');
         });
+
+        it.each([
+            'app/[...slug]/page.tsx',
+            'app/(..)photo/page.tsx',
+            'src/foo..bar.ts',
+        ])('reads %p, whose ".." is part of a file name', async (routePath) => {
+            const run = jest
+                .fn()
+                .mockResolvedValue({ stdout: 'x', stderr: '', exitCode: 0 });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await expect(rc.read(routePath, 0, 0)).resolves.toBe('x');
+            await expect(rc.grep('x', routePath)).resolves.toBe('x');
+        });
+
+        it.each(['a/../../secret', '..\\secret', 'app/[...slug]/../../x'])(
+            'rejects %p, which has a ".." segment',
+            async (escapePath) => {
+                const run = jest.fn();
+                const rc = buildE2BRemoteCommands(makeSandbox(run));
+                await expect(rc.read(escapePath, 0, 0)).rejects.toThrow(
+                    'Path traversal using ".." is not allowed',
+                );
+                expect(run).not.toHaveBeenCalled();
+            },
+        );
+
+        it('reads under a linked root whose name holds ".."', async () => {
+            const run = jest
+                .fn()
+                .mockResolvedValue({ stdout: 'x', stderr: '', exitCode: 0 });
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await expect(
+                rc.read('src/a.ts', 0, 0, '/home/user/_linked/acme_shop..web'),
+            ).resolves.toBe('x');
+            await expect(
+                rc.read('src/a.ts', 0, 0, '/home/user/_linked/../repo'),
+            ).rejects.toThrow('Not a repository root of this sandbox');
+        });
     });
 
     describe('grep', () => {

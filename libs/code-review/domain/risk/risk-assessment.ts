@@ -27,6 +27,8 @@ export type RiskAssessmentResult =
           status: 'unavailable';
           reason: string;
           snapshot?: RiskSnapshot;
+          /** A routine outcome, such as a push during the diff read: not a failure. */
+          expected?: true;
           failure?: {
               category: string;
               errorName: string;

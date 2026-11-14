@@ -16,7 +16,6 @@ import {
 } from '@libs/automation/domain/codeReviewExecutions/contracts/codeReviewExecution.service.contract';
 import { CodeReviewExecutionEntity } from '@libs/automation/domain/codeReviewExecutions/entities/codeReviewExecution.entity';
 import { CodeReviewExecution } from '@libs/automation/domain/codeReviewExecutions/interfaces/codeReviewExecution.interface';
-import { CacheService } from '@libs/core/cache/cache.service';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
 export const PR_EXECUTION_UPDATED_EVENT = 'pr-execution.updated';
@@ -29,7 +28,6 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         private readonly automationExecutionRepository: IAutomationExecutionRepository,
         @Inject(CODE_REVIEW_EXECUTION_SERVICE)
         private readonly codeReviewExecutionService: ICodeReviewExecutionService<IAutomationExecution>,
-        private readonly cacheService: CacheService,
         private readonly eventEmitter: EventEmitter2,
     ) {}
 
@@ -82,26 +80,6 @@ export class AutomationExecutionService implements IAutomationExecutionService {
             await this.automationExecutionRepository.create(
                 automationExecution,
             );
-
-        try {
-            await this.cacheService.deleteByKeyPattern(
-                '/pull-requests/executions*',
-            );
-            this.logger.log({
-                message:
-                    'Cache invalidated after automation execution creation',
-                context: AutomationExecutionService.name,
-                metadata: { executionUuid: result?.uuid },
-            });
-        } catch (error) {
-            this.logger.warn({
-                message:
-                    'Failed to invalidate cache after automation execution creation',
-                context: AutomationExecutionService.name,
-                error,
-                metadata: { executionUuid: result?.uuid },
-            });
-        }
 
         if (result) {
             this.emitExecutionUpdate(result);
@@ -171,11 +149,13 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         cursor?: { createdAt: string | Date; uuid: string };
         take?: number;
         order?: 'ASC' | 'DESC';
-        includeTotal?: boolean;
+        countOnly?: boolean;
+        teamAutomationIds?: string[];
     }): Promise<{
         data: AutomationExecutionEntity[];
         total: number;
         distinctPrTotal: number;
+        teamAutomationIds?: string[];
     }> {
         return this.automationExecutionRepository.findPullRequestExecutionsByOrganizationAndTeam(
             params,

@@ -19,6 +19,7 @@ import {
 import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
 import { buildRunCliAgentTool } from '@libs/code-review/infrastructure/agents/custom-agent-cli/run-cli.tool';
 import { makeTargetBranchGuideReader } from '@libs/code-review/infrastructure/agents/core/convention-check';
+import { sandboxBaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
 
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import type {
@@ -270,6 +271,8 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
         const tooling = input.customAgentTooling;
         const sandbox = tooling?.sandbox;
         const reader = input.knowledgeReader;
+        const targetReader =
+            reader ?? sandboxBaseBranchReader(sandbox, input.baseBranch);
         const org = input.organizationAndTeamData;
         const mcpManager = this.toolServices.mcpManager;
         const logContext = {
@@ -296,10 +299,11 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
                 .filter(Boolean),
             // The target branch, never the checkout (the PR head): the
             // knowledge reader when the review has one, else the sandbox's
-            // fetched base ref, as the convention check reads guides.
-            readTargetFile: reader
+            // fetched base ref read through sandbox.run, since the local
+            // sandbox's command channel refuses git.
+            readTargetFile: targetReader
                 ? async (path) => {
-                      const read = await reader.readFile(path);
+                      const read = await targetReader.readFile(path);
                       return read.status === 'ok' ? read.content : null;
                   }
                 : makeTargetBranchGuideReader(

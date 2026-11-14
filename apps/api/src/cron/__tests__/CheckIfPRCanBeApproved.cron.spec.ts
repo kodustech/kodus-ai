@@ -1,5 +1,6 @@
 import CodeBaseConfigService from '@libs/ee/codeBase/codeBaseConfig.service';
 import { ApprovalPoliciesService } from '@libs/code-review/pipeline/services/approval-policies.service';
+import { OwnChangeRequestService } from '@libs/code-review/pipeline/services/own-change-request.service';
 import { frozenContext } from '../../../../../test/fixtures/frozen-pipeline-context';
 import { RequestChangesOrApproveStage } from '@libs/code-review/pipeline/stages/finish-process-review.stage';
 import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
@@ -69,6 +70,11 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             findPullRequestsWithoutDeliveredSuggestionsForApproval: jest
                 .fn()
                 .mockResolvedValue([]),
+            findOpenPullRequestsWithKodyChangeRequest: jest
+                .fn()
+                .mockResolvedValue([]),
+            hasOpenKodyChangeRequest: jest.fn().mockResolvedValue(true),
+            clearKodyChangeRequest: jest.fn().mockResolvedValue(true),
         } as any;
 
         const codeBaseConfigService = {
@@ -88,6 +94,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 .mockResolvedValue(undefined),
             getReviewStatusByPullRequest: jest.fn(),
             getAllCommentsInPullRequest: jest.fn().mockResolvedValue([]),
+            dismissOwnPullRequestChangeRequests: jest.fn().mockResolvedValue(1),
             createIssueComment: jest.fn().mockResolvedValue(undefined),
             updateIssueComment: jest.fn().mockResolvedValue(undefined),
         } as any;
@@ -145,6 +152,11 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             conditionalApprovalAccess as any,
             organizationParameters as any,
             approvalPolicies as any,
+            // The real service: what the cron withdraws is decided there.
+            new OwnChangeRequestService(
+                codeManagementService,
+                pullRequestService,
+            ),
         );
 
         return {
@@ -258,6 +270,81 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         }
     });
 
+    describe('approval reason writes', () => {
+        const request = {
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            repository: { id: 'repo-a', name: 'repo-a' },
+            prNumber: 1,
+        };
+        const hold = { kind: 'hold', reason: 'The review is not clean.' };
+
+        // A comment queued behind GitHub's write throttle still posts after a
+        // raced timeout; recording it as failed let the next run post a
+        // second one.
+        it('waits for a slow write instead of recording it as failed', async () => {
+            jest.useFakeTimers();
+            try {
+                const { cron, deps } = makeCron();
+                deps.codeManagementService.createIssueComment.mockImplementation(
+                    () =>
+                        new Promise((resolve) =>
+                            setTimeout(() => resolve({ id: 7 }), 60_000),
+                        ),
+                );
+                const post = (cron as any).postConditionalApprovalReason(
+                    request,
+                    PlatformType.GITHUB,
+                    hold,
+                );
+                await jest.advanceTimersByTimeAsync(60_000);
+                await post;
+
+                expect(
+                    deps.codeManagementService.createIssueComment,
+                ).toHaveBeenCalledTimes(1);
+                expect(
+                    deps.pullRequestService.setApprovalReasonDeliveryFailure.mock.calls.every(
+                        (call) => call[3] === null,
+                    ),
+                ).toBe(true);
+            } finally {
+                jest.useRealTimers();
+            }
+        });
+
+        it('leaves a hold for the next run after the write deadline but still posts an approval', async () => {
+            const { cron, deps } = makeCron();
+            (cron as any).reasonWriteDeadline = Date.now() - 1;
+
+            await (cron as any).postConditionalApprovalReason(
+                request,
+                PlatformType.GITHUB,
+                hold,
+            );
+            expect(
+                deps.codeManagementService.getAllCommentsInPullRequest,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.pullRequestService.setApprovalReasonDeliveryFailure,
+            ).not.toHaveBeenCalled();
+
+            deps.codeManagementService.createIssueComment.mockResolvedValue({
+                id: 8,
+            });
+            await (cron as any).postConditionalApprovalReason(
+                request,
+                PlatformType.GITHUB,
+                { kind: 'approve', reason: 'Approved by policy “Docs”.' },
+            );
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalledTimes(1);
+        });
+    });
+
     it('approves a new named policy on its exact reviewed head and publishes the policy name', async () => {
         const { deps, run } = namedPolicyCase();
         expect(await run()).toBe(true);
@@ -344,6 +431,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 { emit: jest.fn() } as any,
                 { resolve: async () => null } as any,
                 manager,
+                new OwnChangeRequestService(
+                    deps.codeManagementService,
+                    deps.pullRequestService,
+                ),
             );
             const result = await stage.execute(
                 frozenContext({
@@ -3197,5 +3288,378 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             }),
             PlatformType.GITLAB,
         );
+    });
+
+    // Kody's "changes requested" leaves through an approval, or, on a PR this
+    // pass does not approve, once the findings behind it are resolved.
+    describe("Kody's own change request", () => {
+        const REQUESTED_AT = '2026-11-11T17:23:13.000Z';
+        const marked = (over: Record<string, unknown> = {}) => ({
+            number: 1,
+            provider: PlatformType.FORGEJO,
+            repository: { id: 'repo-a', name: 'Repo A' },
+            kodyChangeRequest: {
+                requestedAt: REQUESTED_AT,
+                commentIds: ['c1'],
+            },
+            ...over,
+        });
+
+        /**
+         * One PR carrying Kody's change request, with the host keeping the
+         * state of Kody's review. Nothing is eligible for approval unless a
+         * test says so: the PR was last reviewed outside the approval window.
+         */
+        const setUp = (resolved: string[], pullRequests = [marked()]) => {
+            const { cron, deps } = makeCron();
+            const host = {
+                kodyReview: PullRequestReviewState.CHANGES_REQUESTED,
+            };
+            const service = deps.codeManagementService;
+            service.getReviewStatusByPullRequest.mockImplementation(
+                async () => host.kodyReview,
+            );
+            service.dismissOwnPullRequestChangeRequests.mockImplementation(
+                async () => {
+                    host.kodyReview = PullRequestReviewState.DISMISSED;
+                    return 1;
+                },
+            );
+            service.getPullRequestReviewComments.mockResolvedValue(
+                ['c1', 'c2'].map((id) => ({
+                    id,
+                    isResolved: resolved.includes(id),
+                })),
+            );
+            deps.pullRequestService.findOpenPullRequestsWithKodyChangeRequest.mockResolvedValue(
+                pullRequests,
+            );
+            return { cron, deps, host, service };
+        };
+
+        it('takes it back once its findings are resolved, on a PR no approval pass looks at', async () => {
+            const { cron, deps, host, service } = setUp(['c1']);
+
+            await cron.handleCron();
+
+            expect(host.kodyReview).toBe(PullRequestReviewState.DISMISSED);
+            expect(
+                service.dismissOwnPullRequestChangeRequests,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    prNumber: 1,
+                    repository: { id: 'repo-a', name: 'Repo A' },
+                    reason: expect.stringContaining('resolved'),
+                }),
+                PlatformType.FORGEJO,
+            );
+            expect(
+                deps.pullRequestService.clearKodyChangeRequest,
+            ).toHaveBeenCalledWith('org-1', 'repo-a', 1, REQUESTED_AT);
+            expect(service.approvePullRequest).not.toHaveBeenCalled();
+        });
+
+        it('keeps it while a finding behind it is open', async () => {
+            const { cron, deps, host, service } = setUp(['c2']);
+
+            await cron.handleCron();
+
+            expect(host.kodyReview).toBe(
+                PullRequestReviewState.CHANGES_REQUESTED,
+            );
+            expect(
+                service.dismissOwnPullRequestChangeRequests,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.pullRequestService.clearKodyChangeRequest,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('keeps it while a review of the PR is running', async () => {
+            const { cron, host } = setUp(['c1']);
+            jest.spyOn(
+                cron as any,
+                'hasInProgressReviewExecution',
+            ).mockResolvedValue(true);
+
+            await cron.handleCron();
+
+            expect(host.kodyReview).toBe(
+                PullRequestReviewState.CHANGES_REQUESTED,
+            );
+        });
+
+        // The approval of this same pass already cleared it on the host:
+        // nothing to dismiss, only the record to drop.
+        it('dismisses nothing on a PR this pass approved', async () => {
+            const { cron, deps, host, service } = setUp(['c1']);
+            host.kodyReview = PullRequestReviewState.APPROVED;
+
+            await cron.handleCron();
+
+            expect(
+                service.dismissOwnPullRequestChangeRequests,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.pullRequestService.clearKodyChangeRequest,
+            ).toHaveBeenCalledTimes(1);
+        });
+
+        it('leaves a PR of a repository the team does not review', async () => {
+            const { cron, service } = setUp(
+                ['c1'],
+                [marked({ repository: { id: 'repo-x', name: 'Elsewhere' } })],
+            );
+
+            await cron.handleCron();
+
+            expect(service.getReviewStatusByPullRequest).not.toHaveBeenCalled();
+        });
+
+        it('asks whether a review of that PR, for that team, is running', async () => {
+            const { cron } = setUp(['c1']);
+            const running = jest
+                .spyOn(cron as any, 'hasInProgressReviewExecution')
+                .mockResolvedValue(false);
+
+            await cron.handleCron();
+
+            expect(running).toHaveBeenCalledWith({
+                teamAutomationId: 'team-automation-1',
+                pullRequestNumber: 1,
+                repositoryId: 'repo-a',
+            });
+        });
+
+        it.each([
+            [
+                'no review automation',
+                (deps: any) =>
+                    deps.teamAutomationService.find.mockResolvedValue([]),
+            ],
+            [
+                'no repository configured',
+                (deps: any) =>
+                    deps.parametersService.findOne.mockResolvedValue({
+                        team: { uuid: 'team-1' },
+                        configValue: {},
+                    }),
+            ],
+            [
+                'no organization',
+                (deps: any) =>
+                    deps.teamService.findTeamsWithIntegrations.mockResolvedValue(
+                        [{ uuid: 'team-1' }],
+                    ),
+            ],
+        ])('reads no list for a team with %s', async (_name, arrange) => {
+            const { cron, deps } = setUp(['c1']);
+            arrange(deps);
+
+            await cron.handleCron();
+
+            expect(
+                deps.pullRequestService
+                    .findOpenPullRequestsWithKodyChangeRequest,
+            ).not.toHaveBeenCalled();
+        });
+
+        // The wait after a refusal is kept per PR, and ends with a success.
+        it('keeps trying the other PRs while one is refused, and forgets a refusal once it succeeds', async () => {
+            const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+            try {
+                const second = marked({ number: 2 });
+                const { cron, service } = setUp(['c1'], [marked(), second]);
+                const refusedFor = (prNumber: number) =>
+                    service.dismissOwnPullRequestChangeRequests.mockImplementation(
+                        async (params: any) => {
+                            if (params.prNumber === prNumber) {
+                                throw new Error('403');
+                            }
+                            return 1;
+                        },
+                    );
+                const attempts = (prNumber: number) =>
+                    service.dismissOwnPullRequestChangeRequests.mock.calls.filter(
+                        ([params]: [any]) => params.prNumber === prNumber,
+                    ).length;
+
+                refusedFor(1);
+                await cron.handleCron();
+                expect([attempts(1), attempts(2)]).toEqual([1, 1]);
+
+                // Inside PR 1's wait: PR 2 is still tried.
+                now.mockReturnValue(1_000_000 + 2 * 60_000);
+                await cron.handleCron();
+                expect([attempts(1), attempts(2)]).toEqual([1, 2]);
+
+                // PR 1 succeeds at the end of its wait...
+                refusedFor(0);
+                now.mockReturnValue(1_000_000 + 15 * 60_000);
+                await cron.handleCron();
+                expect(attempts(1)).toBe(2);
+
+                // ...so a later refusal starts from the short wait again.
+                refusedFor(1);
+                now.mockReturnValue(1_000_000 + 16 * 60_000);
+                await cron.handleCron();
+                expect(attempts(1)).toBe(3);
+                now.mockReturnValue(1_000_000 + (16 + 14) * 60_000);
+                await cron.handleCron();
+                expect(attempts(1)).toBe(3);
+                now.mockReturnValue(1_000_000 + (16 + 15) * 60_000);
+                await cron.handleCron();
+                expect(attempts(1)).toBe(4);
+            } finally {
+                now.mockRestore();
+            }
+        });
+
+        /** Two teams of one organization that review the same repositories. */
+        const shareRepositories = (
+            deps: ReturnType<typeof makeCron>['deps'],
+        ) => {
+            deps.teamService.findTeamsWithIntegrations.mockResolvedValue([
+                { uuid: 'team-1', organization: { uuid: 'org-1' } },
+                { uuid: 'team-2', organization: { uuid: 'org-1' } },
+            ]);
+            deps.parametersService.findOne.mockImplementation(
+                async (filter: any) => ({
+                    team: { uuid: filter?.team?.uuid },
+                    configValue: makeParameter().configValue,
+                }),
+            );
+            deps.teamAutomationService.find.mockImplementation(
+                async (filter: any) => [
+                    {
+                        uuid: `ta-${filter?.team?.uuid}`,
+                        team: { uuid: filter?.team?.uuid },
+                    },
+                ],
+            );
+        };
+
+        it('judges a PR once when two teams of its organization review the repository', async () => {
+            // An open finding: the pass stops before re-reading the request.
+            const { cron, deps, service } = setUp(['c2']);
+            shareRepositories(deps);
+
+            await cron.handleCron();
+
+            expect(
+                deps.pullRequestService
+                    .findOpenPullRequestsWithKodyChangeRequest,
+            ).toHaveBeenCalledTimes(1);
+            expect(service.getPullRequestReviewComments).toHaveBeenCalledTimes(
+                1,
+            );
+        });
+
+        it('keeps it while a review of the PR is running for the other team', async () => {
+            const { cron, deps, host } = setUp(['c1']);
+            shareRepositories(deps);
+            const running = jest
+                .spyOn(cron as any, 'hasInProgressReviewExecution')
+                .mockImplementation(
+                    async ({ teamAutomationId }: any) =>
+                        teamAutomationId === 'ta-team-2',
+                );
+
+            await cron.handleCron();
+
+            expect(running).toHaveBeenCalledWith(
+                expect.objectContaining({ teamAutomationId: 'ta-team-1' }),
+            );
+            expect(host.kodyReview).toBe(
+                PullRequestReviewState.CHANGES_REQUESTED,
+            );
+        });
+
+        it('forgets a refusal once the PR leaves the list, and asks again at once if it comes back', async () => {
+            const { cron, deps, service } = setUp(['c1']);
+            service.dismissOwnPullRequestChangeRequests.mockRejectedValue(
+                new Error('403'),
+            );
+            const list =
+                deps.pullRequestService
+                    .findOpenPullRequestsWithKodyChangeRequest;
+
+            await cron.handleCron();
+            list.mockResolvedValue([]);
+            await cron.handleCron();
+            expect((cron as any).changeRequestRefusals.size).toBe(0);
+
+            list.mockResolvedValue([marked()]);
+            await cron.handleCron();
+            expect(
+                service.dismissOwnPullRequestChangeRequests,
+            ).toHaveBeenCalledTimes(2);
+        });
+
+        it('keeps the wait of a refusal through a pass that could not list the PRs', async () => {
+            const { cron, deps, service } = setUp(['c1']);
+            service.dismissOwnPullRequestChangeRequests.mockRejectedValue(
+                new Error('403'),
+            );
+            const list =
+                deps.pullRequestService
+                    .findOpenPullRequestsWithKodyChangeRequest;
+
+            await cron.handleCron();
+            list.mockRejectedValueOnce(new Error('connection lost'));
+            await expect(cron.handleCron()).resolves.toBeUndefined();
+            await cron.handleCron();
+
+            expect(
+                service.dismissOwnPullRequestChangeRequests,
+            ).toHaveBeenCalledTimes(1);
+        });
+
+        it('finishes the pass when the host refuses, and waits longer each time before asking again', async () => {
+            const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+            try {
+                const { cron, deps, service } = setUp(['c1']);
+                service.dismissOwnPullRequestChangeRequests.mockRejectedValue(
+                    new Error('403'),
+                );
+
+                await expect(cron.handleCron()).resolves.toBeUndefined();
+                expect(deps.lock.release).toHaveBeenCalled();
+                expect(
+                    service.dismissOwnPullRequestChangeRequests,
+                ).toHaveBeenCalledTimes(1);
+                expect(
+                    deps.pullRequestService.clearKodyChangeRequest,
+                ).not.toHaveBeenCalled();
+
+                // Two minutes later: still inside the wait.
+                now.mockReturnValue(1_000_000 + 2 * 60_000);
+                await cron.handleCron();
+                expect(
+                    service.dismissOwnPullRequestChangeRequests,
+                ).toHaveBeenCalledTimes(1);
+
+                now.mockReturnValue(1_000_000 + 15 * 60_000);
+                await cron.handleCron();
+                expect(
+                    service.dismissOwnPullRequestChangeRequests,
+                ).toHaveBeenCalledTimes(2);
+
+                // Refused again: the next wait is four times the first.
+                now.mockReturnValue(1_000_000 + (15 + 59) * 60_000);
+                await cron.handleCron();
+                expect(
+                    service.dismissOwnPullRequestChangeRequests,
+                ).toHaveBeenCalledTimes(2);
+
+                now.mockReturnValue(1_000_000 + (15 + 60) * 60_000);
+                await cron.handleCron();
+                expect(
+                    service.dismissOwnPullRequestChangeRequests,
+                ).toHaveBeenCalledTimes(3);
+            } finally {
+                now.mockRestore();
+            }
+        });
     });
 });

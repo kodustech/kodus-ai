@@ -15,6 +15,8 @@ import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approva
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { SUMMARY_GENERATION_FAILED_REASON } from '../constants/error-reasons';
 import type { ApprovalDecision } from '@libs/code-review/domain/approval/approval-decision';
+import { isCriticalFinding } from '@libs/code-review/domain/approval/own-change-request';
+import { OwnChangeRequestService } from '../services/own-change-request.service';
 import { reviewsOnlyIgnoredFiles } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import {
     approvalPolicyForPlatform,
@@ -41,6 +43,7 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         private readonly prAuthorRecipientResolver: PrAuthorRecipientResolver,
         @Inject(COMMENT_MANAGER_SERVICE_TOKEN)
         private readonly commentManagerService: ICommentManagerService,
+        private readonly ownChangeRequest: OwnChangeRequestService,
     ) {
         super();
     }
@@ -337,11 +340,11 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                 return;
             }
 
-            const criticalComments = lineComments.filter((comment) => {
-                const severity =
-                    comment.comment.suggestion?.severity?.toLowerCase();
-                return severity === 'critical';
-            });
+            const criticalComments = lineComments.filter(
+                (comment) =>
+                    !!comment.comment.suggestion &&
+                    isCriticalFinding(comment.comment.suggestion),
+            );
 
             if (criticalComments.length === 0) {
                 return;
@@ -352,11 +355,23 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                 context: this.stageName,
             });
 
-            await this.codeManagementService.requestChangesPullRequest({
+            const requested =
+                await this.codeManagementService.requestChangesPullRequest({
+                    organizationAndTeamData,
+                    prNumber,
+                    repository,
+                    criticalComments,
+                });
+            // What lets the request leave later without an approval.
+            await this.ownChangeRequest.record({
                 organizationAndTeamData,
-                prNumber,
                 repository,
-                criticalComments,
+                prNumber,
+                commentIds: criticalComments
+                    .map((comment) => comment.codeReviewFeedbackData?.commentId)
+                    .filter((id) => id !== undefined && id !== null)
+                    .map(String),
+                summaryCommentId: requested?.summaryCommentId,
             });
         } catch (error) {
             this.logger.error({

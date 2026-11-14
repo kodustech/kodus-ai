@@ -59,10 +59,10 @@ describe('GetIssuesUseCase — a cached list another process made stale', () => 
         const { useCase, issuesService, store } = useCaseWith(true);
         const read = issuesService.find.getMockImplementation()!;
         let readStartedAt = 0;
-        issuesService.find.mockImplementation(async (...args: any[]) => {
+        issuesService.find.mockImplementation(async () => {
             readStartedAt = Date.now();
             await new Promise((resolve) => setTimeout(resolve, 5));
-            return read(...args);
+            return read();
         });
 
         await useCase.execute({} as any);

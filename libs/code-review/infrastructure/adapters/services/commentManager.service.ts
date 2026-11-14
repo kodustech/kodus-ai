@@ -3,6 +3,7 @@ import { LLM } from '@libs/llm/llm';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
 import { Inject, Injectable } from '@nestjs/common';
 import {
+    APPROVAL_REASON_WRITE_TIMEOUT_MS,
     formatApprovalReasonComment,
     isApprovalReasonComment,
 } from '@libs/code-review/infrastructure/approval/approval-reason-comment';
@@ -251,7 +252,7 @@ export class CommentManagerService implements ICommentManagerService {
                         noteId: commentId,
                         threadId: existing?.threadId,
                     }),
-                    15_000,
+                    APPROVAL_REASON_WRITE_TIMEOUT_MS,
                     `approval hold comment update org=${organizationAndTeamData.organizationId} team=${organizationAndTeamData.teamId} repo=${repository.id} pr=${prNumber}`,
                 );
                 if (updatedComment === null) {
@@ -268,7 +269,7 @@ export class CommentManagerService implements ICommentManagerService {
                     ...request,
                     body,
                 }),
-                15_000,
+                APPROVAL_REASON_WRITE_TIMEOUT_MS,
                 `approval hold comment create org=${organizationAndTeamData.organizationId} team=${organizationAndTeamData.teamId} repo=${repository.id} pr=${prNumber}`,
             );
             if (createdComment === null) {

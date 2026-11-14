@@ -46,6 +46,7 @@ import {
 import { useAuth } from "src/core/providers/auth.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { IntegrationCategory } from "src/core/types";
+import { apiErrorMessage } from "src/core/utils/api-error";
 import { generateQueryKey } from "src/core/utils/reactQuery";
 import { safeArray } from "src/core/utils/safe-array";
 import { pluralize } from "src/core/utils/string";
@@ -79,6 +80,9 @@ export default function App() {
         data: repositories = [],
         isLoading: isLoadingRepositories,
         isFetching,
+        isError: isRepositoriesError,
+        error: repositoriesError,
+        refetch: refetchRepositories,
     } = useGetRepositories(teamId);
 
     useEffect(() => {
@@ -294,6 +298,24 @@ export default function App() {
                             <p className="text-text-secondary text-sm">
                                 Loading repositories...
                             </p>
+                        </div>
+                    ) : isRepositoriesError ? (
+                        <div className="flex flex-col items-center gap-4 text-center">
+                            <Heading variant="h2">
+                                Couldn&apos;t load repositories
+                            </Heading>
+                            <p className="text-text-secondary max-w-md text-sm">
+                                {apiErrorMessage(repositoriesError) ??
+                                    "Something went wrong while loading your repositories."}
+                            </p>
+                            <Button
+                                size="lg"
+                                variant="primary"
+                                onClick={() => {
+                                    refetchRepositories();
+                                }}>
+                                Try again
+                            </Button>
                         </div>
                     ) : hasRepositories === false ? (
                         <>

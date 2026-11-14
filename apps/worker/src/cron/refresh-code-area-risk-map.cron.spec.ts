@@ -1,5 +1,6 @@
 import { RefreshCodeAreaRiskMapCron } from './refresh-code-area-risk-map.cron';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { CodeAreaHistoryUnavailableError } from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
 
 it('scans only eligible teams and releases the scheduler lock', async () => {
     const teams = {
@@ -436,5 +437,51 @@ describe('refresh order and batch budget', () => {
         } finally {
             jest.useRealTimers();
         }
+    });
+
+    it('skips a repository until its listing backoff runs out', async () => {
+        const later = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        const earlier = new Date(Date.now() - 60 * 1000).toISOString();
+        const { cron, order } = build(
+            [
+                { id: 'waiting', name: 'waiting' },
+                { id: 'due', name: 'due' },
+            ],
+            {
+                waiting: { complete: false, retryAfter: later },
+                due: { complete: false, retryAfter: earlier },
+            },
+            {},
+        );
+
+        await cron.handleCron();
+
+        expect(order()).toEqual(['due']);
+    });
+
+    it('reports an unreadable repository when it starts failing, not on each retry', async () => {
+        const { cron, refresh } = build(
+            [
+                { id: 'new-failure', name: 'a' },
+                { id: 'still-failing', name: 'b' },
+            ],
+            {},
+            {},
+        );
+        refresh.refreshOneBatch.mockImplementation(async ({ repository }) => {
+            throw new CodeAreaHistoryUnavailableError(
+                repository.id === 'new-failure' ? 1 : 3,
+                new Date().toISOString(),
+            );
+        });
+        const warn = jest.spyOn((cron as any).logger, 'warn');
+
+        await cron.handleCron();
+
+        expect(refresh.refreshOneBatch).toHaveBeenCalledTimes(2);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toMatchObject({
+            metadata: { repositoryId: 'new-failure' },
+        });
     });
 });

@@ -501,3 +501,79 @@ describe('convention findings: the judge runs on the check model', () => {
         expect(conventionCalls(checkRun)).toHaveLength(2);
     });
 });
+
+describe('convention findings quoting a repository instruction file the review loaded', () => {
+    const INSTRUCTIONS = {
+        path: 'AGENTS.md',
+        content: `# Valves
+
+- Valve handlers never retry an open themselves; the scheduler retries.
+`,
+    };
+    const QUOTES_INSTRUCTIONS = {
+        relevantFile: 'src/valves/open-valve.handler.ts',
+        suggestionContent:
+            'CONV-AGENTS: the handler retries a failed open in a loop.',
+        existingCode: 'for (let i = 0; i < 3; i++) await valve.open(zone);',
+        improvedCode: 'await valve.open(zone);',
+        oneSentenceSummary: 'Leave retries to the scheduler',
+        kind: 'convention',
+        source: {
+            file: 'AGENTS.md',
+            section: 'Valves',
+            quote: 'Valve handlers never retry an open themselves; the scheduler retries.',
+        },
+    };
+
+    async function runWith(
+        instructionFiles?: Array<{ path: string; content: string }>,
+    ) {
+        submitted = {
+            reasoning: 'one convention from AGENTS.md',
+            suggestions: [QUOTES_INSTRUCTIONS, BUG],
+        };
+        const astGrepLog = new AstGrepOutputLog();
+        const registry = recordAstGrepOutputs(tools(), astGrepLog);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'review valves against the team conventions',
+            modelId: 'mock',
+            tools: registry,
+            coverageLedger: ledger,
+            acceptsConventions: true,
+        });
+        finderStep = 0;
+        return runFinderWithVerify(
+            {
+                runner: new AiSdkAgentRunner(undefined),
+                finderSpec,
+                modelId: 'mock',
+                tools: registry,
+                skipHeavyPasses: true,
+                conventionCheck: {
+                    readGuide: async () => null,
+                    guideFiles: [],
+                    astGrepLog,
+                    ...(instructionFiles && { instructionFiles }),
+                },
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+    }
+
+    it('takes it to the convention judge instead of dropping it at the quote gate', async () => {
+        const r = await runWith([INSTRUCTIONS]);
+
+        expect(r.droppedByQuoteCheck).toEqual([]);
+        expect(r.kept.map(tagOf)).toEqual(['CONV-AGENTS', 'BUG']);
+        expect(r.kept[0].source?.file).toBe('AGENTS.md');
+    });
+
+    it('still drops it when the review loaded no instruction files', async () => {
+        const r = await runWith();
+
+        expect(r.droppedByQuoteCheck.map((q) => tagOf(q.finding))).toEqual([
+            'CONV-AGENTS',
+        ]);
+    });
+});

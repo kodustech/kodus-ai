@@ -319,3 +319,96 @@ describe('SavePullRequestUseCase deterministic predicates', () => {
         });
     });
 });
+
+describe('SavePullRequestUseCase on Forgejo saves under the instance that sent the webhook', () => {
+    // Forgejo numbers repositories per instance: repository 26 is
+    // alpha/app on git.alpha.example and beta/api on git.beta.example.
+    const forgejoConfig = (org: string, host: string, name: string) => ({
+        team: { uuid: `team-${org}`, organization: { uuid: `org-${org}` } },
+        integration: { authIntegration: { authDetails: { host } } },
+        configValue: [{ id: '26', name }],
+    });
+    const openedPayload = {
+        action: 'opened',
+        number: 7,
+        pull_request: {
+            number: 7,
+            title: 'Add feature Y',
+            user: { id: 303, login: 'fj-user' },
+            head: { ref: 'feat/y', sha: 'def456' },
+            base: { ref: 'main' },
+            html_url: 'https://git.beta.example/beta/api/pulls/7',
+        },
+        repository: {
+            id: 26,
+            name: 'api',
+            full_name: 'beta/api',
+            html_url: 'https://git.beta.example/beta/api',
+        },
+    };
+
+    const makeUseCase = (configs: unknown[]) => {
+        const integrationConfigService = {
+            findIntegrationConfigWithTeams: jest
+                .fn()
+                .mockResolvedValue(configs),
+        };
+        const pullRequestsService = {
+            aggregateAndSaveDataStructure: jest.fn().mockResolvedValue({}),
+        };
+        const codeManagement = {
+            getFilesByPullRequestId: jest.fn().mockResolvedValue([]),
+            getCommitsForPullRequestForCodeReview: jest
+                .fn()
+                .mockResolvedValue([]),
+        };
+        const useCase = new SavePullRequestUseCase(
+            integrationConfigService as any,
+            pullRequestsService as any,
+            { findByNumberAndRepositoryId: jest.fn() } as any,
+            codeManagement as any,
+        );
+        return { useCase, codeManagement, pullRequestsService };
+    };
+
+    it('reads the pull request with the integration on the sending instance', async () => {
+        const { useCase, codeManagement } = makeUseCase([
+            forgejoConfig('alpha', 'https://git.alpha.example', 'alpha/app'),
+            forgejoConfig('beta', 'https://git.beta.example', 'beta/api'),
+        ]);
+
+        await useCase.execute({
+            payload: openedPayload,
+            platformType: PlatformType.FORGEJO,
+            event: 'pull_request',
+        });
+
+        expect(codeManagement.getFilesByPullRequestId).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationAndTeamData: {
+                    organizationId: 'org-beta',
+                    teamId: 'team-beta',
+                },
+            }),
+            PlatformType.FORGEJO,
+        );
+    });
+
+    it('saves nothing when only another instance has the repository id', async () => {
+        const { useCase, codeManagement, pullRequestsService } = makeUseCase([
+            forgejoConfig('alpha', 'https://git.alpha.example', 'alpha/app'),
+        ]);
+
+        const saved = await useCase.execute({
+            payload: openedPayload,
+            platformType: PlatformType.FORGEJO,
+            event: 'pull_request',
+        });
+
+        expect(saved).toBeNull();
+        expect(codeManagement.getFilesByPullRequestId).not.toHaveBeenCalled();
+        expect(
+            pullRequestsService.aggregateAndSaveDataStructure,
+        ).not.toHaveBeenCalled();
+    });
+});

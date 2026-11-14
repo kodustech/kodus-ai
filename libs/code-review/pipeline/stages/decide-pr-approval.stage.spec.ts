@@ -129,6 +129,51 @@ it('blocks approval on shared assessment failure while leaving the review availa
     expect(LLM.run).not.toHaveBeenCalled();
 });
 
+const sharedRiskFailure = {
+    stage: 'AssessPrRiskStage',
+    severity: 'partial' as const,
+    error: new Error('Kody could not assess risk for this PR.'),
+    metadata: { reason: 'approval_risk_assessment_failed' },
+};
+
+it('names a failed shared assessment in the hold and does not record it twice', async () => {
+    const result = await stage.execute({
+        ...context({ riskAssessmentActive: true }),
+        riskAssessment: {
+            status: 'unavailable',
+            reason: 'Kody could not assess risk for this PR.',
+            failure: { category: 'unexpected', errorName: 'Error' },
+        },
+        errors: [sharedRiskFailure],
+    });
+    expect(result.approvalDecision).toMatchObject({
+        kind: 'hold',
+        reason: 'Risk assessment is unavailable for the current PR head.',
+    });
+    expect(result.errors).toEqual([sharedRiskFailure]);
+});
+
+it('does not count a failed shared assessment as an unclean review for named policies', async () => {
+    const evaluate = jest.fn().mockResolvedValue({
+        decision: { kind: 'hold', reason: 'Risk assessment is unavailable.' },
+        eligibility: {},
+    });
+    const policyStage = new DecidePrApprovalStage(
+        codeManagement as unknown as CodeManagementService,
+        areaMaps as unknown as CodeAreaRiskMapService,
+        conditionalApprovalAccess as any,
+        { evaluate } as any,
+    );
+    const result = await policyStage.execute({
+        ...context({ riskAssessmentActive: true, approvalPolicies: [] }),
+        errors: [sharedRiskFailure],
+    });
+    expect(evaluate).toHaveBeenCalledWith(
+        expect.objectContaining({ reviewClean: true }),
+    );
+    expect(result.approvalReviewSummary.complete).toBe(true);
+});
+
 it('holds a saved conditional policy when beta or paid access is unavailable', async () => {
     conditionalApprovalAccess.isEnabled.mockResolvedValueOnce(false);
     const result = await stage.execute(context({ approvalLabels: ['ready'] }));
@@ -370,6 +415,37 @@ it('holds approval when a new commit arrives during review', async () => {
     });
     const result = await stage.execute(context({ approvalLabels: ['ready'] }));
 
-    expect(result.approvalDecision?.kind).toBe('hold');
+    expect(result.approvalDecision).toEqual({
+        kind: 'hold',
+        reason: 'A newer commit arrived while Kody reviewed this one; Kody decides on the next reviewed commit.',
+    });
     expect(LLM.run).not.toHaveBeenCalled();
+});
+
+it.each([
+    [
+        'the PR cannot be read',
+        null,
+        'Kody could not read the current PR from the Git provider.',
+    ],
+    [
+        'the target branch moved',
+        { head: { sha: 'head-1' }, base: { sha: 'base-2' }, labels: ['ready'] },
+        'The target branch changed during the review, so this review cannot approve the PR.',
+    ],
+    [
+        'labels cannot be read',
+        { head: { sha: 'head-1' }, base: { sha: 'base-1' } },
+        'Kody could not read the PR labels from the Git provider.',
+    ],
+])('holds with its own reason when %s', async (_case, livePr, reason) => {
+    codeManagement.getPullRequest.mockResolvedValueOnce(livePr);
+    const ctx = context({ approvalLabels: ['ready'] });
+
+    const result = await stage.execute({
+        ...ctx,
+        pullRequest: { ...ctx.pullRequest, base: { sha: 'base-1' } },
+    });
+
+    expect(result.approvalDecision).toEqual({ kind: 'hold', reason });
 });
