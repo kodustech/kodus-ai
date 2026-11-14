@@ -4378,6 +4378,9 @@ export class AzureReposService implements Omit<
                 deletions: file.deletions,
                 changes: file.changes,
                 patch: file.patch,
+                // A rename's old path; consumers such as the Kody rules
+                // sync need it to retire the old path's records.
+                previous_filename: file.previous_filename,
                 content: file.content, // Added content
                 blob_url: null, // Populate if needed/available
                 raw_url: null, // Populate if needed/available
