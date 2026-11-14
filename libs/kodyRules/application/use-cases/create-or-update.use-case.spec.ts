@@ -216,3 +216,51 @@ describe('CreateOrUpdateKodyRulesUseCase — isInternalSyncActor', () => {
         );
     });
 });
+
+describe('CreateOrUpdateKodyRulesUseCase — detector compile on save', () => {
+    it('passes the stored compileAttempt and contextNeed to compileAndSave so unchanged rules are skipped', async () => {
+        const compileAttempt = {
+            sourceHash: 'hash-1',
+            attemptedAt: new Date('2026-01-01'),
+            declineReason: 'not mechanical',
+        };
+        const contextNeed = { need: 'none', promptVersion: 1 };
+        const stored = {
+            uuid: 'rule-1',
+            detector: undefined,
+            compileAttempt,
+            contextNeed,
+        };
+        const compileAndSave = jest.fn().mockResolvedValue({});
+        const useCase = new CreateOrUpdateKodyRulesUseCase(
+            {
+                createOrUpdate: jest.fn().mockResolvedValue(stored),
+            } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            { compileAndSave } as any,
+            { kodyRuleChanged: jest.fn() } as any,
+        );
+
+        await useCase.execute(
+            {
+                uuid: 'rule-1',
+                title: 't',
+                rule: 'r',
+                repositoryId: 'repo-1',
+            } as any,
+            'org-1',
+            { userId: 'kody', userEmail: 'kody@kodus.io' },
+        );
+
+        expect(compileAndSave).toHaveBeenCalledTimes(1);
+        expect(compileAndSave.mock.calls[0][2]).toMatchObject({
+            uuid: 'rule-1',
+            compileAttempt,
+            contextNeed,
+        });
+    });
+});

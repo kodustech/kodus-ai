@@ -214,6 +214,11 @@ export class CreateOrUpdateKodyRulesUseCase {
                         // compileAndSave can clear a stale one when an edited
                         // rule stops being mechanical.
                         detector: (result as IKodyRule).detector,
+                        // Carry the stored compile records too: the compile
+                        // gate skips a rule only when it finds its own
+                        // compileAttempt/contextNeed, which the DTO never has.
+                        compileAttempt: (result as IKodyRule).compileAttempt,
+                        contextNeed: (result as IKodyRule).contextNeed,
                     })
                     .catch((error) => {
                         this.logger.error({
