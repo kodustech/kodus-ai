@@ -22,6 +22,8 @@ import { CollectCrossFileContextsResult } from '@libs/code-review/infrastructure
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import { LlmErrorCategory } from '@libs/llm/error-classifier';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
+import { environment } from '@libs/ee/configs/environment';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import type { CustomAgentCliProvisioning } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 import type { LinkedRepositoriesReviewMetadata } from '@libs/ee/linked-repositories';
@@ -520,4 +522,23 @@ export const resolvedProvider = (
     return typeof provider === 'string' && provider.length > 0
         ? provider
         : undefined;
+};
+
+/**
+ * Whether an exhausted API quota is the org's to fix. True when the key is the
+ * org's own: any key on a self-hosted install (the installer owns the env key),
+ * or a BYOK slot (only those carry a `credentialId`) on cloud. False for the
+ * Kodus-managed env default and for a `kodus` credential, which is routed like
+ * a BYOK slot but calls Kodus's own upstream key, so running out there is ours.
+ */
+export const usesOrgOwnedKey = (
+    context: Pick<CodeReviewPipelineContext, 'codeReviewConfig'>,
+): boolean => {
+    if (!environment.API_CLOUD_MODE) {
+        return true;
+    }
+
+    const slot = context.codeReviewConfig?.resolvedModelSlot;
+
+    return !!slot?.credentialId && !isPlatformFundedProvider(slot.provider);
 };
