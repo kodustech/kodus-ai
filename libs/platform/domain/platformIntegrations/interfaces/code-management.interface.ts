@@ -202,7 +202,10 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     /**
      * The PR's files changed since `lastCommit`. `keepRemovedFiles` also
      * keeps the files deleted since then that the PR no longer lists (one it
-     * added and later deleted), with status `removed`.
+     * added and later deleted), with status `removed`. Honored by GitHub,
+     * GitLab and Bitbucket Data Center; Azure Repos, Bitbucket Cloud and
+     * Forgejo ignore it and leave such a file out, so a grouped suggestion
+     * with a location in it stays partial there.
      */
     getChangedFilesSinceLastCommit(params: any): Promise<any | null>;
     /**
