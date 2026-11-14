@@ -476,8 +476,14 @@ describe('scripts on a sandbox shell whose exit hook fails (E2B)', () => {
     });
 
     it('a fence with no domains exits 0', () => {
+        // The fence starts a real proxy on the identity's fixed port. This
+        // CLI's port (36226) sits in Linux's ephemeral range, where any
+        // connection another test worker opens can hold it first; the
+        // fence then exits 4 because its proxy cannot listen. lintkit's
+        // (29148), which every other fence case uses, is below that range.
+        const fenced = cliSandboxIdentity('agent-1', 'lintkit');
         withStubs(fenceStubs('93.184.216.34'), (dir) => {
-            const result = runFence(dir, identity, [], onE2bShell);
+            const result = runFence(dir, fenced, [], onE2bShell);
             expect(result.status).toBe(0);
         });
     });

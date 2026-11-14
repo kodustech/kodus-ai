@@ -53,6 +53,9 @@ on:
             - 'apps/mcp-manager/src/clients/kodusMCP/**'
             - 'apps/mcp-manager/src/config/managed-mcp-servers.json'
             - 'apps/mcp-manager/src/modules/providers/interfaces/**'
+            # The built-in custom agent templates: evals/custom-agents scores
+            # the Architecture template's text (P13).
+            - 'apps/web/src/lib/services/custom-agents/drafts.ts'
             - '.github/workflows/code-review-evals-*.yml'
             # What the review's sandbox finds on the runner, at the worker
             # image's versions (bun, kodus-graph).

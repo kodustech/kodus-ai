@@ -6,6 +6,7 @@ import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/pri
 import {
     ICommit,
     IApprovalReasonDeliveryFailure,
+    IKodyChangeRequest,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { ReviewModeResponse } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { CoreDocument } from '@libs/core/infrastructure/repositories/model/mongodb';
@@ -23,6 +24,10 @@ export class PullRequestsModel extends CoreDocument {
     /** Retained after a clear so a late older failure cannot reappear. */
     @Prop({ type: String, required: false })
     public approvalReasonDeliveryUpdatedAt?: string;
+
+    /** Absent, never null, on a PR Kody is not requesting changes on. */
+    @Prop({ type: Object, required: false })
+    public kodyChangeRequest?: IKodyChangeRequest;
 
     @Prop({ type: String, required: true })
     public title: string;
@@ -217,6 +222,7 @@ export const OPEN_PULL_REQUESTS_INDEX =
  * reads, so the search never loads a PR document.
  */
 export const PULL_REQUEST_TITLE_INDEX = 'idx_org_title_repo_number';
+export const KODY_CHANGE_REQUEST_INDEX = 'idx_org_kody_change_request';
 
 export const PullRequestsSchema =
     SchemaFactory.createForClass(PullRequestsModel);
@@ -309,6 +315,23 @@ PullRequestsSchema.index(
 PullRequestsSchema.index(
     { organizationId: 1, status: 1, merged: 1, openedAt: 1 },
     { name: OPEN_PULL_REQUESTS_INDEX },
+);
+
+// The approval cron lists, on every pass, the PRs of an organization that
+// carry Kody's change request (findOpenPullRequestsWithKodyChangeRequest).
+// Partial on the marker, so it holds only those few PRs and the list never
+// reads an organization's whole history. `status` is in the key because a PR
+// closed with the request standing keeps its marker: the list must not walk
+// those. Building it still walks the collection once: create it ahead of the
+// deploy on large collections.
+PullRequestsSchema.index(
+    { 'organizationId': 1, 'status': 1, 'kodyChangeRequest.requestedAt': 1 },
+    {
+        name: KODY_CHANGE_REQUEST_INDEX,
+        partialFilterExpression: {
+            'kodyChangeRequest.requestedAt': { $exists: true },
+        },
+    },
 );
 
 // Title search on the Reviews screen (findPRNumbersByTitleAndOrganization): an

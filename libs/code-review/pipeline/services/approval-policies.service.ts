@@ -27,7 +27,10 @@ import {
     policyEligibilityKey,
     type PolicyEligibilityInput,
 } from '@libs/code-review/domain/approval/assess-policy-eligibility';
-import type { ApprovalDecision } from '@libs/code-review/domain/approval/approval-decision';
+import {
+    reviewedSnapshotHoldReason,
+    type ApprovalDecision,
+} from '@libs/code-review/domain/approval/approval-decision';
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 import {
     riskApprovalVeto,
@@ -97,12 +100,6 @@ export class ApprovalPoliciesService {
             return hold(REVIEW_SETTINGS_HOLD_REASON);
         if (!input.reviewClean)
             return hold('The review is not clean or did not complete.');
-        const riskVeto = riskApprovalVeto(
-            input.config.riskAssessmentActive === true,
-            input.risk,
-            headSha,
-        );
-        if (riskVeto) return hold(riskVeto);
         if (
             !headSha ||
             !baseSha ||
@@ -151,8 +148,13 @@ export class ApprovalPoliciesService {
                 ...request,
                 includeLabels: true,
             });
-            if (live?.head?.sha !== headSha || live?.base?.sha !== baseSha)
-                return hold('The PR changed after it was reviewed.');
+            // Before the risk veto: a push during the review also leaves the
+            // risk unavailable, and that reason would hide the push.
+            const snapshotHold = reviewedSnapshotHoldReason(live, {
+                headSha,
+                baseSha,
+            });
+            if (snapshotHold) return hold(snapshotHold);
             const currentRiskVeto = riskApprovalVeto(
                 input.config.riskAssessmentActive === true,
                 input.risk,

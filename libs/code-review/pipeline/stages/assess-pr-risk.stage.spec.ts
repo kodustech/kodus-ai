@@ -335,3 +335,95 @@ it.each([0, 1])(
         expect(assessPrRisk).toHaveBeenCalledTimes(2);
     },
 );
+
+it('records a failed model judgment as a partial stage error (#2385)', async () => {
+    jest.mocked(assessPrRisk).mockResolvedValue({
+        status: 'unavailable',
+        reason: 'Kody could not assess risk for this PR.',
+        failure: { category: 'schema', errorName: 'NoObjectGeneratedError' },
+    });
+    const result = await stage.execute(context());
+    expect(result.riskAssessment).toMatchObject({ status: 'unavailable' });
+    expect(result.errors).toEqual([
+        expect.objectContaining({
+            stage: 'AssessPrRiskStage',
+            severity: 'partial',
+            metadata: {
+                reason: 'approval_risk_assessment_failed',
+                category: 'schema',
+                errorName: 'NoObjectGeneratedError',
+            },
+        }),
+    ]);
+});
+
+it('records an unexpected failure while collecting the assessment input', async () => {
+    maps.read.mockRejectedValue(new Error('database failed'));
+    expect((await stage.execute(context())).errors).toEqual([
+        expect.objectContaining({
+            stage: 'AssessPrRiskStage',
+            severity: 'partial',
+            metadata: expect.objectContaining({
+                reason: 'approval_risk_assessment_failed',
+                errorName: 'Error',
+            }),
+        }),
+    ]);
+});
+
+it.each([
+    [
+        'exhausted credits',
+        () =>
+            permissions.gateKodusCreditsForSlot.mockResolvedValue({
+                reason: 'credits',
+            }),
+    ],
+    ['no entitlement', () => access.isEnabled.mockResolvedValue(false)],
+    [
+        'an incomplete provider diff',
+        () =>
+            management.getFilesByPullRequestId.mockResolvedValue([
+                { ...files[0], filename: undefined },
+            ]),
+    ],
+])('records an assessment left unavailable by %s', async (_, arrange) => {
+    arrange();
+    expect((await stage.execute(context())).errors).toEqual([
+        expect.objectContaining({
+            stage: 'AssessPrRiskStage',
+            severity: 'partial',
+            metadata: { reason: 'approval_risk_assessment_failed' },
+        }),
+    ]);
+});
+
+it('flags a failed assessment but not a judgment, a push during the diff read or a CLI run', async () => {
+    expect((await stage.execute(context())).errors ?? []).toEqual([]);
+    management.getPullRequest.mockResolvedValueOnce({
+        ...live,
+        head: { sha: 'new-head' },
+    });
+    expect((await stage.execute(context())).errors ?? []).toEqual([]);
+    const cli = context();
+    cli.origin = 'cli';
+    expect((await stage.execute(cli)).errors ?? []).toEqual([]);
+    maps.read.mockRejectedValue(new Error('database failed'));
+    expect((await stage.execute(context())).errors).toHaveLength(1);
+});
+
+it('flags unresolved risk settings only when risk may be active', async () => {
+    const unresolved = (active: boolean) =>
+        stage.execute({
+            ...context({ riskAssessmentActive: active }),
+            riskConfigurationUnavailable: true,
+        });
+    // Only approval settings failed: no assessment was part of this review.
+    expect((await unresolved(false)).errors ?? []).toEqual([]);
+    expect((await unresolved(true)).errors).toEqual([
+        expect.objectContaining({
+            stage: 'AssessPrRiskStage',
+            metadata: { reason: 'approval_risk_assessment_failed' },
+        }),
+    ]);
+});

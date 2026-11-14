@@ -31,6 +31,7 @@ const args = Object.fromEntries(
 const MODEL = args.model || 'deepseek-v4-flash@fireworks';
 
 const SPEC = {
+    architectureTemplate: 'evals/custom-agents/architecture-template.spec.ts',
     provider:
         'libs/code-review/infrastructure/agents/providers/custom-agent.provider.spec.ts',
     prompt: 'libs/code-review/infrastructure/agents/prompts/prompt-builder.custom-agent.spec.ts',
@@ -52,6 +53,8 @@ const SPEC = {
         'libs/code-review/infrastructure/agents/core/incomplete-and-unverified.spec.ts',
     recovery:
         'libs/code-review/infrastructure/agents/core/finder.recovery-nulls.spec.ts',
+    localSandboxQuote:
+        'libs/code-review/infrastructure/agents/core/convention-check.local-sandbox.spec.ts',
     instructionQuote:
         'libs/code-review/infrastructure/agents/core/convention-check.repo-instructions.spec.ts',
     secondPass:
@@ -62,7 +65,9 @@ const SPEC = {
 const MODEL_CASES = {
     P1: 'money-float-tax,money-discount-decimal,money-cents-helpers,api-error-leak,api-error-contract',
     P2: 'money-float-tax,api-error-leak,api-only-general-bug',
+    P11: 'guide-skill-violated,guide-doc-violated-among-other-changes,guide-near-miss',
     P12: 'instructions-rule-violated,instructions-rule-followed',
+    P13: 'architecture-domain-imports-http,architecture-controller-maps-input,architecture-logic-in-controller,architecture-controller-delegates,architecture-shared-imports-controller,architecture-shared-component-uses-ui-primitive',
     P14: 'code-pattern-departed,code-pattern-followed',
 };
 
@@ -122,7 +127,7 @@ const MUTATIONS = [
         property: 'P8',
         patch: 'P8-other-repository-guides-unread.patch',
         break: 'the quote gate reads a guide of another repository from the reviewed one, where it is not',
-        checks: [{ jest: [SPEC.otherRepoKnowledge] }],
+        checks: [{ jest: [SPEC.otherRepoKnowledge, SPEC.localSandboxQuote] }],
     },
     {
         property: 'P8',
@@ -155,12 +160,30 @@ const MUTATIONS = [
         checks: [{ jest: [SPEC.recovery] }],
     },
     {
+        property: 'P11',
+        patch: 'P11-local-sandbox-guides-unread.patch',
+        break: 'the quote gate reads a guide of the reviewed repository only through the sandbox command channel, which the local sandbox refuses for git, so every finding quoting it is dropped',
+        checks: [
+            { jest: [SPEC.localSandboxQuote] },
+            { model: MODEL_CASES.P11 },
+        ],
+    },
+    {
         property: 'P12',
         patch: 'P12-instruction-files-unquotable.patch',
         break: 'the quote gate takes no repository instruction file as a source, so a rule quoted from the CLAUDE.md or AGENTS.md the review loaded is dropped as not a linked guide',
         checks: [
             { jest: [SPEC.instructionQuote, SPEC.secondPass] },
             { model: MODEL_CASES.P12 },
+        ],
+    },
+    {
+        property: 'P13',
+        patch: 'P13-architecture-direction-rule-dropped.patch',
+        break: 'the Architecture template loses its dependency-direction rule, so an agent saved from it no longer names a domain module that depends on the web layer',
+        checks: [
+            { jest: [SPEC.architectureTemplate] },
+            { model: MODEL_CASES.P13 },
         ],
     },
     {

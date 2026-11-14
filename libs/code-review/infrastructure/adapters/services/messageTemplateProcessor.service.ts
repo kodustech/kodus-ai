@@ -167,11 +167,15 @@ export class MessageTemplateProcessor {
 
         const translation = this.getTranslation(context.language);
 
+        // Only GitHub gives a page for the file; elsewhere the name stands
+        // alone instead of linking to "undefined".
         const filesTable = context.changedFiles
-            .map(
-                (file) =>
-                    `| [${file.filename}](${file.blob_url}) | ${file.status} | ${file.additions} | ${file.deletions} | ${file.changes} |`,
-            )
+            .map((file) => {
+                const name = file.blob_url
+                    ? `[${file.filename}](${file.blob_url})`
+                    : file.filename;
+                return `| ${name} | ${file.status} | ${file.additions} | ${file.deletions} | ${file.changes} |`;
+            })
             .join('\n');
 
         return `

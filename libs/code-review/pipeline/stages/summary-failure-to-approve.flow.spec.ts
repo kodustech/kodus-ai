@@ -77,6 +77,7 @@ describe('#1844 flow: summary generation failure -> auto-approve decision', () =
             {
                 postApprovalReason: jest.fn().mockResolvedValue(undefined),
             } as any,
+            { record: jest.fn().mockResolvedValue(undefined) } as any,
         );
         return { stage, codeManagement, notificationService };
     };

@@ -1,4 +1,7 @@
-import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import type {
+    UpdateSuggestionOptions,
+    KodyChangeRequestRecord,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -13,6 +16,7 @@ import {
     ISuggestion,
     ISuggestionByPR,
     IPullRequestWithDeliveredSuggestions,
+    IPullRequestWithKodyChangeRequest,
     IPullRequestUserMapping,
     SuggestionCountsBySeverity,
 } from '../interfaces/pullRequests.interface';
@@ -258,6 +262,37 @@ export interface IPullRequestsRepository {
         ruleId: string,
         organizationId: string,
     ): Promise<ISuggestion[]>;
+    /**
+     * Records that Kody requested changes, over these review comments. A
+     * second request on the same PR adds to the first.
+     */
+    recordKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        request: KodyChangeRequestRecord,
+    ): Promise<boolean>;
+    /**
+     * Forgets the request read at `requestedAt`. One made since then stays:
+     * it is a different request, over findings the reader did not see.
+     */
+    clearKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean>;
+    /** Whether the PR is open and still carries the request read at `requestedAt`. */
+    hasOpenKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean>;
+    /** The open PRs of an organization that carry Kody's change request. */
+    findOpenPullRequestsWithKodyChangeRequest(
+        organizationId: string,
+    ): Promise<IPullRequestWithKodyChangeRequest[]>;
     findPullRequestsWithDeliveredSuggestions(
         organizationId: string,
         prNumbers: number[],

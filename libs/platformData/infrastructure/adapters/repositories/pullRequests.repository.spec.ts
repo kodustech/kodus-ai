@@ -41,6 +41,123 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         repo = new PullRequestsRepository(model as any);
     });
 
+    describe("Kody's change request", () => {
+        const T1 = '2026-11-11T17:23:13.000Z';
+        const target = {
+            'organizationId': 'org-A',
+            'repository.id': 'repo-alpha',
+            'number': 7,
+        };
+
+        it('records a request on the targeted PR, adding to an earlier one', async () => {
+            model.updateOne = jest.fn().mockResolvedValue({ matchedCount: 1 });
+
+            await expect(
+                repo.recordKodyChangeRequest('org-A', 'repo-alpha', 7, {
+                    requestedAt: T1,
+                    commentIds: ['101', '102'],
+                    summaryCommentId: 'd-1',
+                }),
+            ).resolves.toBe(true);
+
+            expect(model.updateOne).toHaveBeenCalledWith(target, {
+                $set: { 'kodyChangeRequest.requestedAt': T1 },
+                $addToSet: {
+                    'kodyChangeRequest.commentIds': { $each: ['101', '102'] },
+                    'kodyChangeRequest.summaryCommentIds': 'd-1',
+                },
+            });
+        });
+
+        it('adds no summary when the host left none, and says when no PR matched', async () => {
+            model.updateOne = jest.fn().mockResolvedValue({ matchedCount: 0 });
+
+            await expect(
+                repo.recordKodyChangeRequest('org-A', 'repo-alpha', 7, {
+                    requestedAt: T1,
+                    commentIds: ['101'],
+                }),
+            ).resolves.toBe(false);
+
+            expect(model.updateOne.mock.calls[0][1].$addToSet).toEqual({
+                'kodyChangeRequest.commentIds': { $each: ['101'] },
+            });
+        });
+
+        it('forgets only the request it was handed, by unsetting the field', async () => {
+            model.updateOne = jest
+                .fn()
+                .mockResolvedValueOnce({ modifiedCount: 1 })
+                .mockResolvedValueOnce({ modifiedCount: 0 });
+
+            await expect(
+                repo.clearKodyChangeRequest('org-A', 'repo-alpha', 7, T1),
+            ).resolves.toBe(true);
+            // A request made again since: another `requestedAt`, no match.
+            await expect(
+                repo.clearKodyChangeRequest('org-A', 'repo-alpha', 7, T1),
+            ).resolves.toBe(false);
+
+            expect(model.updateOne).toHaveBeenCalledWith(
+                { ...target, 'kodyChangeRequest.requestedAt': T1 },
+                { $unset: { kodyChangeRequest: '' } },
+            );
+        });
+
+        it('tells whether the open PR still carries the request it was handed', async () => {
+            model.exists = jest
+                .fn()
+                .mockResolvedValueOnce({ _id: 'pr-7' })
+                .mockResolvedValueOnce(null);
+
+            await expect(
+                repo.hasOpenKodyChangeRequest('org-A', 'repo-alpha', 7, T1),
+            ).resolves.toBe(true);
+            await expect(
+                repo.hasOpenKodyChangeRequest('org-A', 'repo-alpha', 7, T1),
+            ).resolves.toBe(false);
+
+            expect(model.exists).toHaveBeenCalledWith({
+                ...target,
+                'status': 'open',
+                'kodyChangeRequest.requestedAt': T1,
+            });
+        });
+
+        it('lists the open PRs of one organization that carry a request, through its index', async () => {
+            const listed = [{ number: 7 }];
+            const query: any = {};
+            query.lean = jest.fn().mockReturnValue(query);
+            query.hint = jest.fn().mockReturnValue(query);
+            query.maxTimeMS = jest.fn().mockReturnValue(query);
+            query.exec = jest.fn().mockResolvedValue(listed);
+            model.find = jest.fn().mockReturnValue(query);
+
+            await expect(
+                repo.findOpenPullRequestsWithKodyChangeRequest('org-A'),
+            ).resolves.toBe(listed);
+
+            expect(model.find).toHaveBeenCalledWith(
+                {
+                    'organizationId': 'org-A',
+                    'kodyChangeRequest.requestedAt': { $exists: true },
+                    'status': 'open',
+                },
+                {
+                    '_id': 0,
+                    'number': 1,
+                    'provider': 1,
+                    'repository.id': 1,
+                    'repository.name': 1,
+                    'kodyChangeRequest': 1,
+                },
+            );
+            expect(query.hint).toHaveBeenCalledWith(
+                'idx_org_kody_change_request',
+            );
+        });
+    });
+
     describe('setApprovalReasonDeliveryFailure', () => {
         it('scopes ordered writes and clears to the targeted PR', async () => {
             model.updateOne = jest.fn().mockResolvedValue({ matchedCount: 1 });

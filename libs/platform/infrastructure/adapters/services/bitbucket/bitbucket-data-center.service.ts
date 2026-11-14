@@ -1,3 +1,4 @@
+import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import {
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
@@ -1340,6 +1341,46 @@ export class BitbucketDataCenterService implements Omit<
         await this.getAxiosInstance(authDetails).put(
             `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/pull-requests/${prNumber}/participants/${authDetails.username}`,
             { status: 'UNAPPROVED' },
+        );
+        return 1;
+    }
+
+    /**
+     * Clears the NEEDS_WORK status `requestChangesPullRequest` sets, on the
+     * same participant path it used.
+     */
+    async dismissOwnPullRequestChangeRequests(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        const state = await this.getReviewStatusByPullRequest({
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        });
+        if (state === null) {
+            throw new Error(
+                `Could not read Kody's change request on PR #${prNumber}`,
+            );
+        }
+        if (state !== PullRequestReviewState.CHANGES_REQUESTED) return 0;
+        const [authDetails, repoConfig, currentUser] = await Promise.all([
+            this.getAuthDetails(organizationAndTeamData),
+            this.getRepoConfig(
+                organizationAndTeamData,
+                repository.id || repository.name,
+            ),
+            this.getCurrentUser({ organizationAndTeamData }),
+        ]);
+        if (!authDetails || !repoConfig || !currentUser) {
+            throw new Error('Bitbucket Data Center repository not found');
+        }
+        await this.getAxiosInstance(authDetails).put(
+            `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/pull-requests/${prNumber}/participants/${currentUser.id}`,
+            { user: { name: currentUser.id }, status: 'UNAPPROVED' },
         );
         return 1;
     }
@@ -3061,7 +3102,9 @@ export class BitbucketDataCenterService implements Omit<
                     )
                     .join('\n');
 
-                const bodyFormatted = `${title}\n\n${listOfCriticalIssues}`;
+                const bodyFormatted = withChangeRequestExitNote(
+                    `${title}\n\n${listOfCriticalIssues}`,
+                );
 
                 await this.createCommentInPullRequest({
                     organizationAndTeamData,
@@ -3565,6 +3608,8 @@ export class BitbucketDataCenterService implements Omit<
         repository: { name: string; id: string };
         prNumber: number;
         lastCommit: any;
+        /** Also the files deleted since the review that the PR no longer lists. */
+        keepRemovedFiles?: boolean;
     }): Promise<any | null> {
         try {
             const {
@@ -3572,6 +3617,7 @@ export class BitbucketDataCenterService implements Omit<
                 repository,
                 prNumber,
                 lastCommit,
+                keepRemovedFiles,
             } = params;
             const authDetails = await this.getAuthDetails(
                 organizationAndTeamData,
@@ -3629,8 +3675,14 @@ export class BitbucketDataCenterService implements Omit<
                 prChanges.values.map((change: any) => change.path?.toString),
             );
 
+            // A file the PR added and a later push deleted is no longer in
+            // the PR's changes; a caller that asks for removed files gets it.
             return compared.values
-                .filter((change: any) => prPaths.has(change.path?.toString))
+                .filter(
+                    (change: any) =>
+                        prPaths.has(change.path?.toString) ||
+                        (keepRemovedFiles && change.type === 'DELETE'),
+                )
                 .map((change: any) => ({
                     filename: change.path.toString,
                     sha: latestPrCommit,

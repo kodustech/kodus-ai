@@ -1,3 +1,4 @@
+import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { forgejoConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -2633,13 +2634,43 @@ export class ForgejoService implements Omit<
         prNumber: number;
         reason: string;
     }): Promise<number> {
+        return this.dismissOwnReviews(
+            params,
+            'APPROVED',
+            'Kody held automatic approval after a new review.',
+        );
+    }
+
+    async dismissOwnPullRequestChangeRequests(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        return this.dismissOwnReviews(
+            params,
+            'REQUEST_CHANGES',
+            params.reason,
+        );
+    }
+
+    private async dismissOwnReviews(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: Partial<Repository>;
+            prNumber: number;
+        },
+        state: 'APPROVED' | 'REQUEST_CHANGES',
+        message: string,
+    ): Promise<number> {
+        const what = state === 'APPROVED' ? 'approval' : 'change request';
         const authDetail = await this.getAuthDetails(
             params.organizationAndTeamData,
         );
         if (!authDetail) throw new Error('No auth details');
         const repoInfo = this.extractRepoInfo(
             params.repository?.name ?? '',
-            'dismissOwnPullRequestApprovals',
+            'dismissOwnReviews',
         );
         if (!repoInfo) throw new Error('Invalid repository name');
         const client = this.createForgejoClient(authDetail);
@@ -2663,7 +2694,7 @@ export class ForgejoService implements Omit<
         if (!me.data?.id) throw new Error('Unable to identify the token user');
         const own = reviews.filter(
             (review) =>
-                review.state === 'APPROVED' &&
+                review.state === state &&
                 !review.dismissed &&
                 review.user?.id === me.data.id &&
                 review.id,
@@ -2672,15 +2703,13 @@ export class ForgejoService implements Omit<
             const result = await repoDismissPullReview({
                 client,
                 path: { ...path, id: review.id! },
-                body: {
-                    message: 'Kody held automatic approval after a new review.',
-                },
+                body: { message },
             });
             if (isAxiosError(result) && result.response?.status === 403) {
                 // Forgejo lets only a repository admin dismiss a review, the
                 // same role it needs to create the webhook automatically.
                 throw new Error(
-                    `Forgejo refused to dismiss Kody's approval on PR #${params.prNumber}: the token user must be an admin of ${repoInfo.owner}/${repoInfo.repo}.`,
+                    `Forgejo refused to dismiss Kody's ${what} on PR #${params.prNumber}: the token user must be an admin of ${repoInfo.owner}/${repoInfo.repo}.`,
                 );
             }
             if (result.error) throw result.error;
@@ -2762,8 +2791,9 @@ export class ForgejoService implements Omit<
             const requestChangeBodyTitle =
                 '# Found critical issues please review the requested changes';
 
-            const formattedBody =
-                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`.trim();
+            const formattedBody = withChangeRequestExitNote(
+                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`,
+            );
 
             const result = await repoCreatePullReview({
                 client,

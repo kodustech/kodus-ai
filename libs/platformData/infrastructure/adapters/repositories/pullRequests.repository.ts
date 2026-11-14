@@ -1,10 +1,14 @@
-import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import type {
+    UpdateSuggestionOptions,
+    KodyChangeRequestRecord,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as crypto from 'crypto';
 import { Model } from 'mongoose';
 import mongoose from 'mongoose';
 import {
+    KODY_CHANGE_REQUEST_INDEX,
     OPEN_PULL_REQUESTS_INDEX,
     PULL_REQUEST_TITLE_INDEX,
     PullRequestsModel,
@@ -30,6 +34,7 @@ import {
     IPullRequests,
     IPullRequestUserMapping,
     IPullRequestWithDeliveredSuggestions,
+    IPullRequestWithKodyChangeRequest,
     ISuggestion,
     ISuggestionByPR,
     SuggestionCountsBySeverity,
@@ -150,6 +155,96 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             },
         );
         return result.matchedCount > 0;
+    }
+
+    async recordKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        request: KodyChangeRequestRecord,
+    ): Promise<boolean> {
+        const result = await this.pullRequestsModel.updateOne(
+            {
+                organizationId,
+                'repository.id': repositoryId,
+                'number': prNumber,
+            },
+            {
+                $set: { 'kodyChangeRequest.requestedAt': request.requestedAt },
+                $addToSet: {
+                    'kodyChangeRequest.commentIds': {
+                        $each: request.commentIds,
+                    },
+                    ...(request.summaryCommentId
+                        ? {
+                              'kodyChangeRequest.summaryCommentIds':
+                                  request.summaryCommentId,
+                          }
+                        : {}),
+                },
+            },
+        );
+        return result.matchedCount > 0;
+    }
+
+    async clearKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        const result = await this.pullRequestsModel.updateOne(
+            {
+                organizationId,
+                'repository.id': repositoryId,
+                'number': prNumber,
+                'kodyChangeRequest.requestedAt': requestedAt,
+            },
+            // Unset, not null: the partial index and the list below key on
+            // the field existing.
+            { $unset: { kodyChangeRequest: '' } },
+        );
+        return result.modifiedCount > 0;
+    }
+
+    async hasOpenKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        const found = await this.pullRequestsModel.exists({
+            organizationId,
+            'repository.id': repositoryId,
+            'number': prNumber,
+            'status': PullRequestState.OPENED,
+            'kodyChangeRequest.requestedAt': requestedAt,
+        });
+        return found !== null;
+    }
+
+    async findOpenPullRequestsWithKodyChangeRequest(
+        organizationId: string,
+    ): Promise<IPullRequestWithKodyChangeRequest[]> {
+        return this.withIndexHint(KODY_CHANGE_REQUEST_INDEX, () =>
+            this.pullRequestsModel
+                .find(
+                    {
+                        organizationId,
+                        'kodyChangeRequest.requestedAt': { $exists: true },
+                        'status': PullRequestState.OPENED,
+                    },
+                    {
+                        '_id': 0,
+                        'number': 1,
+                        'provider': 1,
+                        'repository.id': 1,
+                        'repository.name': 1,
+                        'kodyChangeRequest': 1,
+                    },
+                )
+                .lean<IPullRequestWithKodyChangeRequest[]>(),
+        );
     }
 
     //#region Create
@@ -2534,13 +2629,34 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         organizationAndTeamData: OrganizationAndTeamData,
         options?: UpdateSuggestionOptions,
     ): Promise<PullRequestsEntity | null> {
+        const path = (key: string) =>
+            `files.$[file].suggestions.$[suggestion].${key}`;
         const updateFields = Object.entries(updateData).reduce(
             (acc, [key, value]) => {
-                acc[`files.$[file].suggestions.$[suggestion].${key}`] = value;
+                acc[path(key)] = value;
                 return acc;
             },
             {},
         );
+        const update = {
+            ...(Object.keys(updateFields).length ? { $set: updateFields } : {}),
+            ...(options?.addToSet
+                ? {
+                      $addToSet: Object.fromEntries(
+                          Object.entries(options.addToSet).map(
+                              ([key, values]) => [path(key), { $each: values }],
+                          ),
+                      ),
+                  }
+                : {}),
+            ...(options?.unset?.length
+                ? {
+                      $unset: Object.fromEntries(
+                          options.unset.map((key) => [path(key), '']),
+                      ),
+                  }
+                : {}),
+        };
 
         // With a condition, a suggestion whose stored status is one of the
         // excluded ones matches nothing, so a concurrent check that already
@@ -2566,7 +2682,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                           'organizationId':
                               organizationAndTeamData.organizationId,
                       },
-                { $set: updateFields },
+                update,
                 {
                     arrayFilters: suggestionMatch
                         ? [
@@ -2588,10 +2704,17 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                           ],
                     new: true,
                     // Callers that only need to know a suggestion was written
-                    // skip the whole PR document coming back.
-                    ...(options?.returnDocument === false
-                        ? { projection: { _id: 1 } }
-                        : {}),
+                    // skip the whole PR document coming back. Paths asked for
+                    // win: dropping them would hand back only the id.
+                    ...(options?.projection?.length
+                        ? {
+                              projection: Object.fromEntries(
+                                  options.projection.map((path) => [path, 1]),
+                              ),
+                          }
+                        : options?.returnDocument === false
+                          ? { projection: { _id: 1 } }
+                          : {}),
                 },
             )
             .exec();
