@@ -184,6 +184,7 @@ import { applyRevisionLinks } from '@libs/code-review/infrastructure/agents/engi
 import { checkRepeats } from '@libs/code-review/infrastructure/agents/engine/repeat-check';
 import {
     mergeKodyRuleFindings,
+    OTHER_LOCATIONS_HEADING,
     otherLocationsToRender,
 } from '@libs/code-review/infrastructure/agents/engine/kody-rules-merge';
 import {
@@ -1772,7 +1773,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 const locationsList = otherLocations
                     .map((loc) => `- \`${loc}\``)
                     .join('\n');
-                const otherLocationsSection = `\n\n**Also found in:**\n${locationsList}`;
+                const otherLocationsSection = `\n\n${OTHER_LOCATIONS_HEADING}\n${locationsList}`;
                 s.suggestionContent = `${s.suggestionContent}${otherLocationsSection}`;
                 // llmPrompt is built from fullExplanation below; without the
                 // list an agent working from the prompt fixes only the kept

@@ -3608,6 +3608,8 @@ export class BitbucketDataCenterService implements Omit<
         repository: { name: string; id: string };
         prNumber: number;
         lastCommit: any;
+        /** Also the files deleted since the review that the PR no longer lists. */
+        keepRemovedFiles?: boolean;
     }): Promise<any | null> {
         try {
             const {
@@ -3615,6 +3617,7 @@ export class BitbucketDataCenterService implements Omit<
                 repository,
                 prNumber,
                 lastCommit,
+                keepRemovedFiles,
             } = params;
             const authDetails = await this.getAuthDetails(
                 organizationAndTeamData,
@@ -3672,8 +3675,14 @@ export class BitbucketDataCenterService implements Omit<
                 prChanges.values.map((change: any) => change.path?.toString),
             );
 
+            // A file the PR added and a later push deleted is no longer in
+            // the PR's changes; a caller that asks for removed files gets it.
             return compared.values
-                .filter((change: any) => prPaths.has(change.path?.toString))
+                .filter(
+                    (change: any) =>
+                        prPaths.has(change.path?.toString) ||
+                        (keepRemovedFiles && change.type === 'DELETE'),
+                )
                 .map((change: any) => ({
                     filename: change.path.toString,
                     sha: latestPrCommit,

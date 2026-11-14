@@ -4460,8 +4460,13 @@ export class GithubService
     }
 
     async getChangedFilesSinceLastCommit(params: any): Promise<any | null> {
-        const { organizationAndTeamData, repository, prNumber, lastCommit } =
-            params;
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            lastCommit,
+            keepRemovedFiles,
+        } = params;
 
         const githubAuthDetail = await this.getGithubAuthDetails(
             organizationAndTeamData,
@@ -4530,9 +4535,16 @@ export class GithubService
 
         const prFileNames = new Set(prFiles.map((f) => f.filename));
 
-        // 5. Keep only files that exist in both compare AND PR file list
+        // 5. Keep only files that exist in both compare AND PR file list.
+        // A file the PR added and a later push deleted is in neither the base
+        // nor the head, so the PR list no longer names it; a caller that asks
+        // for removed files gets it too.
         return compareFiles
-            .filter((file) => prFileNames.has(file.filename))
+            .filter(
+                (file) =>
+                    prFileNames.has(file.filename) ||
+                    (keepRemovedFiles && file.status === 'removed'),
+            )
             .map((file) => ({
                 filename: file.filename,
                 status: file.status,

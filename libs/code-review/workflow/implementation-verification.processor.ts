@@ -193,6 +193,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
             // Which diff came back: only the changes since the last review
             // say what the developer did about its suggestions.
             let diffSource: ChangedFilesSource | undefined;
+            let removedFiles: string[] = [];
             const changedFiles =
                 await this.pullRequestManagerService.getChangedFiles(
                     payload.organizationAndTeamData,
@@ -205,7 +206,10 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     [],
                     lastAnalyzedCommit,
                     lastExecution?.dataExecution?.reviewedBaseBranch,
-                    { onDiffSource: (source) => (diffSource = source) },
+                    {
+                        onDiffSource: (source) => (diffSource = source),
+                        onRemovedFiles: (filenames) => (removedFiles = filenames),
+                    },
                 );
 
             // 4. Verify Implementation
@@ -216,6 +220,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     changedFiles,
                     savedSuggestions,
                     diffSource,
+                    removedFiles,
                 });
 
             if (check.skipped) {

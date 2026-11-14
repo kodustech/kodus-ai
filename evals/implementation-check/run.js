@@ -90,7 +90,9 @@ async function runCase(testCase, makeService) {
     // outcome takes it out of the score.
     return suggestions.map((s) => {
         const written = writes.get(s.id) || {};
-        const unmeasured = written.implementationCheck?.outcome === 'unmeasured';
+        // A grouped suggestion's record is written field by field.
+        const outcome = written.implementationCheck?.outcome ?? written['implementationCheck.outcome'];
+        const unmeasured = outcome === 'unmeasured';
         const stored = written.implementationStatus !== undefined ? written.implementationStatus : s.implementationStatus;
         return { id: s.id, stored, unmeasured, expected: testCase.expected[s.id] };
     });

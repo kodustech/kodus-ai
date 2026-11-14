@@ -142,8 +142,27 @@ describe('ImplementationVerificationProcessor', () => {
             [],
             { sha: 'reviewed-sha' },
             'develop',
-            { onDiffSource: expect.any(Function) },
+            {
+                onDiffSource: expect.any(Function),
+                onRemovedFiles: expect.any(Function),
+            },
         );
+    });
+
+    it('tells the check which files the push deleted', async () => {
+        pullRequestManagerService.getChangedFiles.mockImplementation(
+            async (...args: any[]) => {
+                args[6].onRemovedFiles(['app/b.rb']);
+                return [{ filename: 'app/a.rb', patch: '@@ -1 +1 @@' }];
+            },
+        );
+
+        await processor.process('job-1');
+
+        expect(
+            suggestionService.checkImplementedSuggestions.mock.calls[0][0]
+                .removedFiles,
+        ).toEqual(['app/b.rb']);
     });
 
     it('tells the check which diff it got, and records what it decided in the job', async () => {
@@ -198,6 +217,7 @@ describe('ImplementationVerificationProcessor', () => {
             changedFiles: [{ filename: 'app/a.rb', patch: '@@ -1 +1 @@' }],
             savedSuggestions: [expect.objectContaining({ id: 's-1' })],
             diffSource: undefined,
+            removedFiles: [],
         });
         expect(
             suggestionService.resolveImplementedSuggestionsOnPlatform,
