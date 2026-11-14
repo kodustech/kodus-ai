@@ -165,6 +165,24 @@ describe("GTM first-touch tag", () => {
             // The shrunk cookie drops the landing page's query.
             expect(touch?.landing_page).toBe("https://kodus.io/");
             expect(touch?.utm_campaign).toBe(id);
+            // 365 days before creator links existed.
+            expect(cookieOn(jar)?.maxAge).toBe(90 * DAY);
+        });
+
+        // The API strips them before storing and would credit the creator, so
+        // the tag has to treat the link as theirs too.
+        it("reads a creator id through the invisible characters the API strips", () => {
+            const jar = new CookieJar();
+            visit(jar, "https://kodus.io/", "https://www.google.com/");
+            visit(
+                jar,
+                "https://kodus.io/?utm_medium=creator&utm_campaign=joao123%E2%80%8B",
+            );
+
+            const touch = firstTouchOn(jar, "https://app.kodus.io/");
+            expect(touch?.utm_campaign).toBe("joao123");
+            expect(touch?.landing_page).toBe(CREATOR);
+            expect(cookieOn(jar)?.maxAge).toBe(90 * DAY);
         });
 
         // Moves the jar's clock with no read in between: tough-cookie counts
@@ -212,8 +230,16 @@ describe("GTM first-touch tag", () => {
                 `https://kodus.io/?utm_medium=creator&utm_campaign=${"a".repeat(41)}`,
             ],
             [
-                "an id with a character a creator id cannot have",
+                "an id that is only an invisible character",
                 "https://kodus.io/?utm_medium=creator&utm_campaign=%E2%80%8B",
+            ],
+            [
+                "an id with a letter outside a-z",
+                "https://kodus.io/?utm_medium=creator&utm_campaign=joao%C5%BF23",
+            ],
+            [
+                "a one-character id, shorter than a creator id can be",
+                "https://kodus.io/?utm_medium=creator&utm_campaign=a",
             ],
         ])("counts a link with %s as any other visit", (_label, url) => {
             const jar = new CookieJar();
