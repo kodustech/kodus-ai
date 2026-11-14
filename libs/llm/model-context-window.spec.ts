@@ -134,7 +134,6 @@ describe('model-context-window', () => {
         it.each([
             ['byok', { byokMaxInputTokens: 999, modelName: 'gpt-5' }, 999],
             ['litellm (exact)', { modelName: 'gpt-5' }, 272_000],
-            ['litellm (normalized)', { modelName: 'GPT_5' }, 272_000],
             [
                 'litellm-partial (substring)',
                 { modelName: 'jamba-instruct' },
@@ -162,6 +161,15 @@ describe('model-context-window', () => {
                 tokens,
                 source: label.split(' ')[0],
             });
+        });
+
+        it('distinguishes normalized model hits from partial family matches', () => {
+            expect(
+                resolveContextWindowWithSource({ modelName: 'GPT_5' }),
+            ).toEqual({ tokens: 272_000, source: 'litellm' });
+            expect(
+                resolveContextWindowWithSource({ modelName: 'qwen' }),
+            ).toEqual({ tokens: 32_768, source: 'litellm-partial' });
         });
     });
 

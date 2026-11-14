@@ -41,7 +41,6 @@ it.each([
     ['byok', 'unknown', 0],
     ['litellm', 'unknown', 0],
     ['override', 'unknown', 0],
-    ['litellm-partial', 'low', 1],
     ['models.dev', 'low', 1],
     ['default', 'low', 1],
 ] as const)(
@@ -72,9 +71,6 @@ it.each([
     ['qwen', 40_000],
     ['llama3', 140_000],
     ['deepseek-chat-v4', 140_000],
-    ['auto', 140_000],
-    ['openrouter/auto', 140_000],
-    ['coder', 140_000],
 ] as const)(
     'lets the provider decide the window for the %s model alias',
     async (model, repetitions) => {
@@ -99,30 +95,51 @@ it.each([
     },
 );
 
-it.each([
-    ['gpt-4o-mini', 140_000],
-    ['GPT_4O_MINI', 140_000],
-    ['glm-4-7', 210_000],
-] as const)(
-    'pre-rejects above the known window for the exact model %s',
-    async (model, repetitions) => {
+it('enforces trusted model windows while leaving routing aliases to the provider', async () => {
+    jest.mocked(LLM.run).mockResolvedValue({
+        level: 'low',
+        reason: 'The provider accepted the complete input.',
+    } as any);
+    for (const [model, repetitions] of [
+        ['gpt-4o-mini', 140_000],
+        ['GPT_4O_MINI', 140_000],
+        ['glm-4-7', 210_000],
+    ] as const) {
         const result = await assessApprovalRisk({
             ...input,
             body: 'documentation '.repeat(repetitions),
             modelSlot: { provider: 'openai_compatible', model } as any,
         });
 
-        expect(result).toMatchObject({
-            level: 'unknown',
-            failure: {
-                errorName: 'RiskPromptTooLargeError',
-                category: 'CONTEXT_OVERFLOW',
-                code: 'diff_too_large',
+        expect({ model, result }).toMatchObject({
+            model,
+            result: {
+                level: 'unknown',
+                failure: {
+                    errorName: 'RiskPromptTooLargeError',
+                    category: 'CONTEXT_OVERFLOW',
+                    code: 'diff_too_large',
+                },
             },
         });
         expect(LLM.run).not.toHaveBeenCalled();
-    },
-);
+    }
+    const body = 'documentation '.repeat(140_000);
+    for (const model of ['auto', 'openrouter/auto', 'coder']) {
+        jest.mocked(LLM.run).mockClear();
+        const result = await assessApprovalRisk({
+            ...input,
+            body,
+            modelSlot: { provider: 'openai_compatible', model } as any,
+        });
+        expect({ model, level: result.level }).toEqual({ model, level: 'low' });
+        expect(LLM.run).toHaveBeenCalledTimes(1);
+        expect(
+            JSON.parse(jest.mocked(LLM.run).mock.calls[0][0].user as string)
+                .body,
+        ).toBe(body);
+    }
+});
 
 it('classifies provider overflow after deferring a partial model match', async () => {
     jest.mocked(LLM.run).mockRejectedValue(
