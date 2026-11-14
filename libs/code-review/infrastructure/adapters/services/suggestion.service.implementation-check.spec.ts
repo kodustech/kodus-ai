@@ -799,6 +799,51 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
             });
         });
 
+        // Every location is stored as fixed, but the status write after it
+        // did not land (the write failed, the worker stopped). The next push
+        // touches none of them: the status still follows what is stored.
+        it('is implemented once every location is stored as fixed, with none in this diff', async () => {
+            const result = await check(
+                [
+                    grouped({
+                        implementationStatus:
+                            ImplementationStatus.PARTIALLY_IMPLEMENTED,
+                        implementationCheck: {
+                            implementedLocations: [
+                                'app/a.rb:1-2',
+                                'app/b.rb:10-12',
+                            ],
+                        },
+                    }),
+                ],
+                [{ filename: 'app/other.rb', patch: '@@ other @@' }],
+            );
+
+            expect(result.skipped).toBeUndefined();
+            expect(statusWritten()).toEqual([ImplementationStatus.IMPLEMENTED]);
+            expect(
+                aiAnalysisService.checkSuggestionImplementation,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('leaves alone a group with a location still open and none in this diff', async () => {
+            const result = await check(
+                [
+                    grouped({
+                        implementationStatus:
+                            ImplementationStatus.PARTIALLY_IMPLEMENTED,
+                        implementationCheck: {
+                            implementedLocations: ['app/a.rb:1-2'],
+                        },
+                    }),
+                ],
+                [{ filename: 'app/other.rb', patch: '@@ other @@' }],
+            );
+
+            expect(result.skipped).toBe('NO_RELEVANT_CHANGES');
+            expect(pullRequestService.updateSuggestion).not.toHaveBeenCalled();
+        });
+
         it('asks about each location on its own file, without the code of another one', async () => {
             answerAll(ImplementationStatus.NOT_IMPLEMENTED);
 

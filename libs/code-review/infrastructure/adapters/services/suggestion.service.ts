@@ -172,9 +172,17 @@ export class SuggestionService implements ISuggestionService {
                         (patches.has(location.file) ||
                             (grouped && removed.has(location.file))),
                 ),
+                // Every location already stored as fixed while the status
+                // stayed below: the write that raises it did not land. It is
+                // decided again from what is stored, with nothing to read.
+                settled:
+                    grouped &&
+                    locations.every((location) => fixed.has(location.key)),
             };
         });
-        const groupsOnChangedFiles = groups.filter((g) => g.changed.length);
+        const groupsOnChangedFiles = groups.filter(
+            (g) => g.changed.length || g.settled,
+        );
         const onChangedFiles = groupsOnChangedFiles.map((g) => g.suggestion);
 
         if (!onChangedFiles.length) {
