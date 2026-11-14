@@ -148,6 +148,7 @@ export function stripReasoningBlocks(text: string): string | null {
     // `<thinking>` is the same block under the other name models use.
     let kept = '';
     let pos = 0;
+    // `<thinking>` is the same block under the other name models use.
     const openTag = /<(think|thinking)>/g;
     for (;;) {
         openTag.lastIndex = pos;
@@ -499,36 +500,86 @@ export async function repairAndValidate<T = unknown>(
     wire: unknown,
     rawText: string,
 ): Promise<T | undefined> {
-    const candidate = extractJsonFromText(rawText);
-    if (candidate == null) {
-        return undefined;
-    }
-    let value: unknown;
-    try {
-        value = JSON.parse(candidate);
-    } catch {
-        // A single invalid escape inside a string literal - code quoted in a
-        // suggestion, such as Swift `\(title)` or a regex `\d` - makes the whole
-        // payload unparseable, and the reroute-json caller then loses every
-        // finding for that shard (#2259). Legalise the string escapes and retry;
-        // a payload broken any other way still fails, so a cut list is never
-        // accepted as a whole one.
-        const escaped = escapeStringLiterals(candidate);
-        if (escaped === candidate) {
-            return undefined;
-        }
-        const retried = tryParse(escaped);
-        if (!retried.ok) {
-            return undefined;
-        }
-        value = retried.value;
-    }
     const schema = asSchema(wire as any);
-    if (typeof schema.validate !== 'function') {
-        return value as T;
+    for (const candidate of jsonCandidates(rawText)) {
+        let value: unknown;
+        try {
+            value = JSON.parse(candidate);
+        } catch {
+            // A single invalid escape inside a string literal - code quoted in a
+            // suggestion, such as Swift `\(title)` or a regex `\d` - makes the whole
+            // payload unparseable, and the reroute-json caller then loses every
+            // finding for that shard (#2259). Legalise the string escapes and retry;
+            // a payload broken any other way still fails, so a cut list is never
+            // accepted as a whole one.
+            const escaped = escapeStringLiterals(candidate);
+            if (escaped === candidate) {
+                continue;
+            }
+            const retried = tryParse(escaped);
+            if (!retried.ok) {
+                continue;
+            }
+            value = retried.value;
+        }
+        if (typeof schema.validate !== 'function') {
+            return value as T;
+        }
+        const r = await schema.validate(value);
+        if (r.success) return r.value as T;
     }
-    const r = await schema.validate(value);
-    return r.success ? (r.value as T) : undefined;
+    return undefined;
+}
+
+/**
+ * The places the answer can be in free-form text, best guess first. The first is
+ * what {@link extractJsonFromText} returns; when the model quotes a code block
+ * before its answer that is the quote, so the remaining candidates give the
+ * validating caller the answer to fall back on: every balanced value in the
+ * text after each fenced block, in order (last fence first, so a bare answer
+ * written after the quotes wins over an example quoted earlier, and bracketed
+ * prose before it only adds a candidate that fails), then each fenced block
+ * itself, last first. Fences
+ * are never stripped from the text: a bare answer can carry Markdown fences
+ * inside its string values (`improvedCode`), and removing them would corrupt it.
+ * Reasoning is dropped first, so a schema-valid example quoted in a <think>
+ * block is never mistaken for the answer. A wrong candidate is harmless: the
+ * caller only keeps one that validates against its schema.
+ */
+function jsonCandidates(rawText: string): string[] {
+    const candidates: string[] = [];
+    const seen = new Set<string>();
+    const add = (candidate: string | null) => {
+        if (candidate != null && !seen.has(candidate)) {
+            seen.add(candidate);
+            candidates.push(candidate);
+        }
+    };
+    add(extractJsonFromText(rawText));
+    const answerText = stripReasoningBlocks(rawText);
+    if (answerText === null) return candidates;
+    const fenced = [...answerText.matchAll(/```[^\n`]*\n?([\s\S]*?)```/g)];
+    for (const block of [...fenced].reverse()) {
+        // Every balanced value after the fence, in order: bracketed prose such as
+        // `opts[:secret]` between the quote and the answer is one more candidate
+        // that fails to parse, not the end of the search.
+        let rest = answerText.slice((block.index ?? 0) + block[0].length);
+        for (;;) {
+            const start = rest.search(/[{[]/);
+            if (start < 0) break;
+            const value = sliceBalancedJson(rest.slice(start));
+            if (value == null) {
+                rest = rest.slice(start + 1);
+                continue;
+            }
+            add(value.replace(/,(\s*[}\]])/g, '$1'));
+            rest = rest.slice(start + value.length);
+        }
+    }
+    for (const block of fenced.reverse()) {
+        add(extractJsonFromText(block[1]));
+    }
+    return candidates;
 }
 
 /**
