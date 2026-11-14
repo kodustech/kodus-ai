@@ -28,6 +28,9 @@
   var MAX_AGE = DAY * 365;
   var CREATOR_MEDIUM = 'creator';
   var CREATOR_MAX_AGE = DAY * 90;
+  // The id format of seo-copilot's creators table. At most 40 characters, so
+  // it fits whole at the shortest cut below. Anything else credits no creator.
+  var CREATOR_ID = /^[a-z0-9][a-z0-9_-]{1,39}$/i;
   var PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid'];
   // The API is the filter and cleans every value again. This only keeps out of
   // the cookie a newsletter link's reader address carried in a UTM, which
@@ -50,7 +53,7 @@
 
   // Rebuilt whole at each size, so the landing page's query always carries
   // the same values as the fields.
-  function build(valueMax, urlMax, landingQuery) {
+  function build(valueMax, urlMax, landingQuery, creator) {
     var touch = {};
     var kept = [];
     var query = new URLSearchParams(location.search);
@@ -62,8 +65,8 @@
       if (PARAMS[i] === 'gclid' && !GCLID.test(full)) continue;
       var value = PARAMS[i] === 'gclid' ? full : cut(full, valueMax);
       // Matched case-insensitively below; stored in the one form the
-      // commission query looks for.
-      if (PARAMS[i] === 'utm_medium' && value.toLowerCase() === CREATOR_MEDIUM) value = CREATOR_MEDIUM;
+      // commission query compares against.
+      if (creator && (PARAMS[i] === 'utm_medium' || PARAMS[i] === 'utm_campaign')) value = value.toLowerCase();
       touch[PARAMS[i]] = value;
       kept.push(encodeURIComponent(PARAMS[i]) + '=' + encodeURIComponent(value));
     }
@@ -85,7 +88,7 @@
     var query = new URLSearchParams(location.search);
     var medium = (query.get('utm_medium') || '').replace(/^\s+|\s+$/g, '').toLowerCase();
     var campaign = (query.get('utm_campaign') || '').replace(/^\s+|\s+$/g, '');
-    return medium === CREATOR_MEDIUM && campaign !== '' && !AT.test(campaign);
+    return medium === CREATOR_MEDIUM && CREATOR_ID.test(campaign);
   }
 
   try {
@@ -93,11 +96,11 @@
     var creator = isCreatorVisit();
     if (!creator && new RegExp('(?:^|;\\s*)' + COOKIE + '=').test(document.cookie)) return;
 
-    var cookie = build(100, 300, true);
+    var cookie = build(100, 300, true, creator);
     // Browsers drop cookies over 4KB without a word; non-ASCII UTMs can get
     // there. Shorter values, and the landing page without its query (the
     // fields still carry the values).
-    if (cookie.length > 3500) cookie = build(40, 100, false);
+    if (cookie.length > 3500) cookie = build(40, 100, false, creator);
 
     document.cookie = COOKIE + '=' + cookie + '; Domain=.kodus.io; Path=/; Max-Age=' + (creator ? CREATOR_MAX_AGE : MAX_AGE) +
       '; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : '');

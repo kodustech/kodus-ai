@@ -81,7 +81,8 @@ describe("GTM first-touch tag", () => {
 
     describe("creator links", () => {
         const DAY = 24 * 60 * 60;
-        const CREATOR = "https://kodus.io/?utm_medium=creator&utm_campaign=joao123";
+        const CREATOR =
+            "https://kodus.io/?utm_medium=creator&utm_campaign=joao123";
 
         const cookieOn = (jar: CookieJar) =>
             jar
@@ -137,6 +138,35 @@ describe("GTM first-touch tag", () => {
             );
         });
 
+        it("stores the creator id in the lowercase form the creators table holds", () => {
+            const jar = new CookieJar();
+            visit(
+                jar,
+                "https://kodus.io/?utm_medium=creator&utm_campaign=Joao123",
+            );
+
+            const touch = firstTouchOn(jar, "https://app.kodus.io/");
+            expect(touch?.utm_campaign).toBe("joao123");
+            expect(touch?.landing_page).toBe(
+                "https://kodus.io/?utm_medium=creator&utm_campaign=joao123",
+            );
+        });
+
+        it("keeps the whole creator id when the cookie has to shrink", () => {
+            const jar = new CookieJar();
+            const id = "a".repeat(40);
+            const big = encodeURIComponent("é".repeat(100));
+            visit(
+                jar,
+                `https://kodus.io/?utm_medium=creator&utm_campaign=${id}&utm_source=${big}&utm_term=${big}&utm_content=${big}`,
+            );
+
+            const touch = firstTouchOn(jar, "https://app.kodus.io/");
+            // The shrunk cookie drops the landing page's query.
+            expect(touch?.landing_page).toBe("https://kodus.io/");
+            expect(touch?.utm_campaign).toBe(id);
+        });
+
         // Moves the jar's clock with no read in between: tough-cookie counts
         // Max-Age from the last access, where a browser fixes the expiry when
         // the cookie is written, so a read here would push the expiry out.
@@ -162,7 +192,9 @@ describe("GTM first-touch tag", () => {
                 "https://kodus.io/pricing/?utm_medium=creator&utm_campaign=joao123",
             );
 
-            expect(firstTouchOn(jar, "https://app.kodus.io/")?.landing_page).toBe(
+            expect(
+                firstTouchOn(jar, "https://app.kodus.io/")?.landing_page,
+            ).toBe(
                 "https://kodus.io/pricing/?utm_medium=creator&utm_campaign=joao123",
             );
             expect(cookieOn(jar)?.maxAge).toBe(90 * DAY);
@@ -174,6 +206,15 @@ describe("GTM first-touch tag", () => {
                 "an email as the creator id",
                 "https://kodus.io/?utm_medium=creator&utm_campaign=jane%40acme.com",
             ],
+            // Cut to fit the cookie, it would credit an id no creator has.
+            [
+                "an id longer than a creator id can be",
+                `https://kodus.io/?utm_medium=creator&utm_campaign=${"a".repeat(41)}`,
+            ],
+            [
+                "an id with a character a creator id cannot have",
+                "https://kodus.io/?utm_medium=creator&utm_campaign=%E2%80%8B",
+            ],
         ])("counts a link with %s as any other visit", (_label, url) => {
             const jar = new CookieJar();
             visit(jar, CREATOR);
@@ -181,9 +222,9 @@ describe("GTM first-touch tag", () => {
 
             // The real creator link is kept, with its 90 days (365 before
             // creator links existed).
-            expect(firstTouchOn(jar, "https://app.kodus.io/")?.landing_page).toBe(
-                CREATOR,
-            );
+            expect(
+                firstTouchOn(jar, "https://app.kodus.io/")?.landing_page,
+            ).toBe(CREATOR);
             expect(cookieOn(jar)?.maxAge).toBe(90 * DAY);
         });
     });
