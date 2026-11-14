@@ -249,6 +249,27 @@ async function main() {
             model: true,
             args: ['evals/memories/run.js', '--model=eval-fake', '--gate'],
         },
+        // The security scan's engine over a repository written for it: map,
+        // lenses, verify and finalize reach the scripted model; nothing ships.
+        {
+            name: 'security-scan',
+            result: 'shared',
+            model: true,
+            check: ({ result, verdictPrompts }) => {
+                const droveLenses = result?.cases?.length && result.cases.every(c =>
+                    c.coverage?.done > 0 && Object.entries(c.coverage.modelCalls ?? {}).some(([name, count]) =>
+                        /^security-scan-(authz|injection|ssrf|data_exposure|secret_identity|misconfiguration|resource_exhaustion)$/.test(name) && count > 0));
+                if (!droveLenses) return `scan reached no completed lens unit: ${JSON.stringify(result?.cases?.map(c => c.coverage))}`;
+                if (!verdictPrompts.length) return 'scan reached no verifier';
+                return null;
+            },
+            args: [
+                'evals/security-scan/run.js',
+                '--model=eval-fake',
+                '--set=wiring',
+                '--budget=1',
+            ],
+        },
         // Each team's custom agents through production's stage on a repository
         // written for it: the gate holds what the review hands every agent (its
         // globs, an ignored file a glob names, a disabled agent), no model needed.
@@ -601,6 +622,7 @@ async function main() {
         else if (step.check) {
             problem = step.check({
                 models,
+                result: readJson(resultFile),
                 verdictPrompts:
                     server.stats.verdictPrompts.slice(verdictsBefore),
                 finderToolResults:

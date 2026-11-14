@@ -1,9 +1,11 @@
 import { cache } from "react";
+import { isOnAlphaAllowList } from "@libs/feature-gate/domain/alpha-allow-list";
 import { getLLMConfigStatus } from "@services/organizationParameters/fetch";
 import { getOrganizationName } from "@services/organizations/fetch";
 import { getOrganizationReleaseTrack } from "@services/organizations/release-track";
 import { getPermissions } from "@services/permissions/fetch";
 import { getTeams } from "@services/teams/fetch";
+import { auth } from "src/core/config/auth";
 import { FEATURE_FLAGS } from "src/core/config/feature-flags";
 import { isFeatureEnabled } from "src/core/feature-gate/resolver";
 import {
@@ -30,6 +32,7 @@ export const getLayoutData = cache(async (teamId: string) => {
         kodusProviderFeatureFlag,
         deterministicEvidenceFeatureFlag,
         conditionalPrApprovalFeatureFlag,
+        deepScanFeatureFlag,
     ] = await Promise.all([
         getPermissions().catch(() => ({})),
         getOrganizationName().catch(() => ""),
@@ -73,6 +76,7 @@ export const getLayoutData = cache(async (teamId: string) => {
                 }),
             )
             .catch(() => false),
+        isDeepScanEnabled().catch(() => false),
     ]);
 
     return {
@@ -86,8 +90,29 @@ export const getLayoutData = cache(async (teamId: string) => {
             kodusProvider: kodusProviderFeatureFlag,
             deterministicEvidence: deterministicEvidenceFeatureFlag,
             conditionalPrApproval: conditionalPrApprovalFeatureFlag,
+            deepScan: deepScanFeatureFlag,
         },
     };
+});
+
+/**
+ * Whether the organization is in the deep scan's private alpha. The same env
+ * allow-list the API's gate reads (`*` or comma-separated organization ids)
+ * opens it first, on dev VMs and previews, so the page and the API agree.
+ */
+export const isDeepScanEnabled = cache(async () => {
+    const allow = process.env.API_DEEP_SCAN_ALPHA_ORGS;
+    if (
+        allow?.trim() &&
+        isOnAlphaAllowList(allow, (await auth())?.user?.organizationId)
+    ) {
+        return true;
+    }
+    return isFeatureEnabled({
+        feature: FEATURE_FLAGS.deepScan,
+        identifier: "organization",
+        releaseTrack: await getOrganizationReleaseTrack(),
+    });
 });
 
 /**

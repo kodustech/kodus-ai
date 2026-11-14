@@ -83,4 +83,6 @@ export interface IIssue {
     lastSeenCommitSha?: string;
     lastSeenAt?: string;
     resolvedAt?: string;
+    consecutiveScanMisses?: number;
+    lastMissedScanId?: string;
 }

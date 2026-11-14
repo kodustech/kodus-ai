@@ -15,6 +15,9 @@ export const FEATURE_FLAGS = {
      *  closed, so without this the toggles save but nothing would run. */
     deterministicEvidence: "deterministic-evidence",
     conditionalPrApproval: "conditional-pr-approval",
+    /** Deep scan — private alpha. Gates the menu entry, the page and its
+     *  routing card; the API refuses the scans themselves. */
+    deepScan: "deep-scan",
 } as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAGS)[keyof typeof FEATURE_FLAGS];

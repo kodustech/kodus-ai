@@ -1,0 +1,29 @@
+{
+    "purpose": "Small mature libraries as negative controls. Inspect any reported finding against its pinned source before adjudicating it; this set does not certify that a library has no vulnerabilities.",
+    "cases": [
+        {
+            "id": "uuid-control",
+            "repo": "google/uuid",
+            "language": "go",
+            "commit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+            "advisories": [],
+            "expectedFindings": 0
+        },
+        {
+            "id": "itsdangerous-control",
+            "repo": "pallets/itsdangerous",
+            "language": "python",
+            "commit": "672971d66a2ef9f85151e53283113f33d642dabd",
+            "advisories": [],
+            "expectedFindings": 0
+        },
+        {
+            "id": "is-control",
+            "repo": "sindresorhus/is",
+            "language": "typescript",
+            "commit": "e9c026c611c1160eaad50da00be4e676b626018f",
+            "advisories": [],
+            "expectedFindings": 0
+        }
+    ]
+}

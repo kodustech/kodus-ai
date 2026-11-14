@@ -1,3 +1,7 @@
+import {
+    repositoryGrepArgs,
+    type RepositoryGrepOptions,
+} from '@libs/common/utils/repository-grep';
 import { buildGitAuthHeader } from './git-auth-header';
 import { createLogger } from '@libs/core/log/logger';
 import { PlatformType } from '@libs/core/domain/enums';
@@ -72,10 +76,10 @@ const MAX_BUFFER = 5 * 1024 * 1024; // 5 MB — cap output to prevent memory iss
  * outright for every traversing reader.
  */
 const DANGEROUS_FLAGS: Record<string, RegExp> = {
-    find: /^-(exec|execdir|ok|okdir|delete|fprint|fprintf|fprint0|fls|L|H|follow)$/,
-    fd: /^(-x|-X|--exec|--exec-batch|-L|--follow)$/,
-    grep: /^(-R|--dereference-recursive|--dereference)$/,
-    sg: /^(-U|--update-all|--follow)$/,
+    'find': /^-(exec|execdir|ok|okdir|delete|fprint|fprintf|fprint0|fls|L|H|follow)$/,
+    'fd': /^(-x|-X|--exec|--exec-batch|-L|--follow)$/,
+    'grep': /^(-R|--dereference-recursive|--dereference)$/,
+    'sg': /^(-U|--update-all|--follow)$/,
     'ast-grep': /^(-U|--update-all|--follow)$/,
 };
 
@@ -91,9 +95,9 @@ const DANGEROUS_FLAGS: Record<string, RegExp> = {
  * cluster short flags, so it has no entry and keeps its exact match above.
  */
 const DANGEROUS_SHORT_FLAGS: Record<string, Set<string>> = {
-    fd: new Set(['x', 'X', 'L']),
-    grep: new Set(['R']),
-    sg: new Set(['U']),
+    'fd': new Set(['x', 'X', 'L']),
+    'grep': new Set(['R']),
+    'sg': new Set(['U']),
     'ast-grep': new Set(['U']),
 };
 
@@ -468,6 +472,7 @@ export class LocalSandboxService implements ISandboxProvider {
                 pattern: string,
                 path: string,
                 glob?: string,
+                options?: RepositoryGrepOptions,
             ): Promise<string> => {
                 await this.resolveSafePath(repoDir, path);
 
@@ -479,6 +484,7 @@ export class LocalSandboxService implements ISandboxProvider {
                     '--no-heading',
                     '-n',
                     '--no-follow',
+                    ...repositoryGrepArgs(options),
                     ...(glob ? ['--glob', glob] : []),
                     '-e',
                     pattern,

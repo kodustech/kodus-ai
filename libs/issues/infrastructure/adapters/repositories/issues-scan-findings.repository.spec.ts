@@ -200,6 +200,7 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(outcome).toBe('dismissed');
         const update = model.findOneAndUpdate.mock.calls[0][1];
         expect(Object.keys(update.$set).sort()).toEqual([
+            'consecutiveScanMisses',
             'lastSeenAt',
             'lastSeenScanId',
         ]);
@@ -243,7 +244,7 @@ describe('IssuesRepository — security-scan findings', () => {
 
         expect(outcome).toBe('still_open');
         const [, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [any, any];
-        expect(update.$set).toEqual({ lastSeenAt: expect.any(String) });
+        expect(update.$set).toEqual({ lastSeenAt: expect.any(String), consecutiveScanMisses: 0 });
     });
 
     it('keeps a second weakness of the same identity in one scan as another occurrence', async () => {
@@ -380,6 +381,7 @@ describe('IssuesRepository — security-scan findings', () => {
         'lastSeenScanId': { $ne: 'scan-2' },
         // A newer, overlapping scan's sightings are not this one's to resolve.
         'lastSeenAt': { $lt: '2026-11-08T10:00:00.000Z' },
+        'lastMissedScanId': { $ne: 'scan-2' },
     };
 
     it('resolves only open scan issues of a class in the files a lens of that class examined', async () => {
@@ -403,6 +405,7 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(resolved).toBe(3);
         expect((model.updateMany.mock.calls[0] as unknown[])[0]).toEqual({
             ...unseen,
+            consecutiveScanMisses: { $gte: 1 },
             $or: [
                 {
                     vulnerabilityClass: 'authz',
@@ -431,6 +434,7 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(model.distinct).toHaveBeenCalledWith('filePath', unseen);
         expect((model.updateMany.mock.calls[0] as unknown[])[0]).toEqual({
             ...unseen,
+            consecutiveScanMisses: { $gte: 1 },
             $or: [{ filePath: { $in: ['src/gone.ts'] } }],
         });
     });
@@ -509,6 +513,7 @@ describe('IssuesRepository.updateStatusByIds', () => {
         });
         expect(model.updateMany.mock.calls[1][1].$set).toEqual({
             status: IssueStatus.DISMISSED,
+            consecutiveScanMisses: 0,
         });
     });
 
@@ -522,7 +527,7 @@ describe('IssuesRepository.updateStatusByIds', () => {
         await repository.updateStatusByIds(['i-1'], IssueStatus.OPEN);
 
         expect(model.updateMany.mock.calls[0][1]).toEqual({
-            $set: { status: IssueStatus.OPEN },
+            $set: { status: IssueStatus.OPEN, consecutiveScanMisses: 0 },
             $unset: { resolvedAt: '' },
         });
     });

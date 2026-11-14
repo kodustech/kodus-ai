@@ -1,0 +1,9 @@
+{
+    "_metadata": {
+        "schema": 2,
+        "key": "case|class|file|symbol|startLine",
+        "migrationDate": "2026-11-14",
+        "droppedLegacyVerdicts": 228,
+        "reason": "Legacy verdicts have no start line, source run, judge or date. Their source findings could not be recovered; none is reused by guessing. New verdicts must record source result hash, judge and date here."
+    }
+}

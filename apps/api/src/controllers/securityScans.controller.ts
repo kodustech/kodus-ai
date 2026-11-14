@@ -1,0 +1,194 @@
+import {
+    BadRequestException,
+    Body,
+    Controller,
+    ForbiddenException,
+    Get,
+    Inject,
+    Param,
+    Post,
+    Query,
+    UseGuards,
+} from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import {
+    ApiBearerAuth,
+    ApiOperation,
+    ApiProperty,
+    ApiPropertyOptional,
+    ApiTags,
+} from '@nestjs/swagger';
+import { IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+
+import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import {
+    Action,
+    ResourceType,
+} from '@libs/identity/domain/permissions/enums/permissions.enum';
+import {
+    CheckPolicies,
+    PolicyGuard,
+} from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
+import {
+    checkPermissions,
+    checkRepoPermissions,
+} from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
+import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import { StartSecurityScanUseCase } from '@libs/security-scan/application/start-security-scan.use-case';
+import { GetSecurityScansUseCase } from '@libs/security-scan/application/get-security-scans.use-case';
+import {
+    DEEP_SCAN_NOT_ENABLED_MESSAGE,
+    DeepScanGate,
+} from '@libs/security-scan/application/deep-scan.gate';
+
+import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
+import { TenantScopeGuard } from '../guards/tenant-scope.guard';
+
+export class StartSecurityScanDto {
+    @ApiProperty()
+    @IsString()
+    teamId: string;
+
+    @ApiProperty({ description: "The repository's id on the git provider." })
+    @IsString()
+    repositoryId: string;
+
+    @ApiPropertyOptional({
+        description:
+            'Spend limit for this scan, in USD. Without a limit the scan covers the whole repository.',
+    })
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @IsPositive()
+    maxUsd?: number;
+
+    @ApiPropertyOptional({
+        description:
+            'Spend limit in tokens (input + output), for a model without a known price.',
+    })
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @IsPositive()
+    maxTokens?: number;
+}
+
+// A scan spends the organization's model budget on one repository.
+const canStartScan = checkRepoPermissions({
+    action: Action.Create,
+    resource: ResourceType.SecurityScan,
+    repo: { key: { body: 'repositoryId' } },
+});
+
+// The scans list says which repositories were scanned and what each found,
+// scoped to the caller's repositories below.
+const canReadScans = checkPermissions({
+    action: Action.Read,
+    resource: ResourceType.SecurityScan,
+});
+
+@ApiTags('Security Scans')
+@ApiBearerAuth('jwt')
+@ApiStandardResponses()
+@UseGuards(TenantScopeGuard)
+@Controller('security-scans')
+export class SecurityScansController {
+    constructor(
+        @Inject(REQUEST)
+        private readonly request: UserRequest,
+        private readonly startSecurityScan: StartSecurityScanUseCase,
+        private readonly getSecurityScans: GetSecurityScansUseCase,
+        private readonly authorizationService: AuthorizationService,
+        private readonly deepScanGate: DeepScanGate,
+    ) {}
+
+    /** The caller's organization, once the deep scan is enabled for it. */
+    private async organizationId(): Promise<string> {
+        const organizationId = this.request?.user?.organization?.uuid;
+        if (!organizationId) {
+            throw new BadRequestException('Organization not found');
+        }
+        if (!(await this.deepScanGate.isEnabledFor(organizationId))) {
+            throw new ForbiddenException(DEEP_SCAN_NOT_ENABLED_MESSAGE);
+        }
+        return organizationId;
+    }
+
+    private visibleRepositories(): Promise<string[] | null> {
+        return this.authorizationService.getRepositoryScope({
+            user: this.request.user,
+            action: Action.Read,
+            resource: ResourceType.SecurityScan,
+        });
+    }
+
+    @Post()
+    @ApiOperation({
+        summary: 'Start a security scan',
+        description:
+            "Scans a repository's default branch for security vulnerabilities, within the given spend limit. Findings become Kody Issues.",
+    })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(canStartScan)
+    async start(@Body() body: StartSecurityScanDto) {
+        // On the very repository the scan runs on: the id the use case reads.
+        await this.authorizationService.ensure({
+            user: this.request.user,
+            action: Action.Create,
+            resource: ResourceType.SecurityScan,
+            repoIds: [body.repositoryId],
+        });
+        return this.startSecurityScan.execute({
+            organizationAndTeamData: {
+                organizationId: await this.organizationId(),
+                teamId: body.teamId,
+            },
+            repositoryId: body.repositoryId,
+            budget: {
+                ...(body.maxUsd !== undefined ? { maxUsd: body.maxUsd } : {}),
+                ...(body.maxTokens !== undefined
+                    ? { maxTokens: body.maxTokens }
+                    : {}),
+            },
+            requestedBy: {
+                userId: this.request.user?.uuid,
+                email: this.request.user?.email,
+            },
+        });
+    }
+
+    @Get()
+    @ApiOperation({
+        summary: 'List security scans',
+        description: 'The most recent scans of the repositories you can see.',
+    })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(canReadScans)
+    async list(@Query('limit') limit?: string) {
+        // Only a positive whole number is a limit; anything else (blank,
+        // zero, negative, not a number) keeps the default.
+        const asked = Number(limit);
+        return this.getSecurityScans.list(
+            await this.organizationId(),
+            (await this.visibleRepositories()) ?? undefined,
+            Number.isInteger(asked) && asked > 0 ? asked : undefined,
+        );
+    }
+
+    @Get(':id')
+    @ApiOperation({
+        summary: 'Get a security scan',
+        description: 'Status, spend, coverage and outcome of one scan.',
+    })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(canReadScans)
+    async get(@Param('id') id: string) {
+        return this.getSecurityScans.get(
+            await this.organizationId(),
+            id,
+            (await this.visibleRepositories()) ?? undefined,
+        );
+    }
+}

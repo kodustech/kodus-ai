@@ -1573,26 +1573,39 @@ export class ForgejoService implements Omit<
     async getDefaultBranch(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string };
+        /**
+         * Only the branch the provider confirmed: a failed or empty lookup
+         * throws instead of falling back to a usual name, which a caller
+         * acting on the branch (the security scan) would read as the answer.
+         */
+        strict?: boolean;
     }): Promise<string> {
+        const fallback = (why: string) => {
+            if (params.strict) {
+                throw new Error(`Forgejo default branch not confirmed: ${why}`);
+            }
+            return 'main';
+        };
         try {
             const authDetail = await this.getAuthDetails(
                 params.organizationAndTeamData,
             );
-            if (!authDetail) return 'main';
+            if (!authDetail) return fallback('no credentials');
 
             const repoInfo = this.extractRepoInfo(
                 params.repository.name,
                 'getDefaultBranch',
             );
-            if (!repoInfo) return 'main';
+            if (!repoInfo) return fallback('unreadable repository name');
 
             const client = this.createForgejoClient(authDetail);
             const result = await repoGet({
                 client,
                 path: { owner: repoInfo.owner, repo: repoInfo.repo },
             });
-            return result.data?.default_branch || 'main';
+            return result.data?.default_branch || fallback('none returned');
         } catch (error) {
+            if (params.strict) throw error;
             this.logger.error({
                 message: 'Error getting default branch',
                 context: ForgejoService.name,

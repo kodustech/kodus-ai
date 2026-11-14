@@ -66,6 +66,11 @@ const repoAdmin: PolicyRule[] = [
     { action: Action.Read, resource: ResourceType.TokenUsage, scope: 'org' },
 
     { action: Action.Read, resource: ResourceType.CliReview, scope: 'org' },
+
+    // Security scans — read across the org, start one on assigned repos (it
+    // spends the organization's model budget on that repository).
+    { action: Action.Read, resource: ResourceType.SecurityScan, scope: 'org' },
+    { action: Action.Create, resource: ResourceType.SecurityScan, scope: 'repo' },
 ];
 
 const billingManager: PolicyRule[] = [
@@ -92,6 +97,7 @@ const contributor: PolicyRule[] = [
     { action: Action.Read, resource: ResourceType.Issues, scope: 'org' },
     { action: Action.Read, resource: ResourceType.IssuesSettings, scope: 'org' },
     { action: Action.Read, resource: ResourceType.CliReview, scope: 'org' },
+    { action: Action.Read, resource: ResourceType.SecurityScan, scope: 'org' },
     { action: Action.Read, resource: ResourceType.PullRequests, scope: 'org' },
     { action: Action.Read, resource: ResourceType.Logs, scope: 'org' },
     { action: Action.Read, resource: ResourceType.GitSettings, scope: 'org' },

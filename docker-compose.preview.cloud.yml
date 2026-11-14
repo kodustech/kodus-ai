@@ -5,10 +5,16 @@ services:
     kodus-api:
         environment:
             - API_CLOUD_MODE=true
+            # The deep scan is in private alpha: a preview opens it to its
+            # seeded organization, so a reviewer can run one.
+            - API_DEEP_SCAN_ALPHA_ORGS=*
     worker:
         environment:
             - API_CLOUD_MODE=true
     worker-analytics:
+        environment:
+            - API_CLOUD_MODE=true
+    worker-security-scan:
         environment:
             - API_CLOUD_MODE=true
     webhooks:
@@ -21,3 +27,5 @@ services:
     web:
         environment:
             - API_CLOUD_MODE=true
+            # The page reads the same allow-list as the API's gate.
+            - API_DEEP_SCAN_ALPHA_ORGS=*

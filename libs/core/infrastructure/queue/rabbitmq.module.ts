@@ -28,6 +28,8 @@ import { RABBITMQ_TOPOLOGY_CONFIG } from './config/rabbitmq-topology.config';
 
 export interface RabbitMQWrapperOptions {
     enableConsumers: boolean;
+    /** Only the deep-scan handler may register in this process. */
+    securityScanOnly?: boolean;
 }
 
 @Global()
@@ -117,6 +119,12 @@ export class RabbitMQWrapperModule {
                         reconnectTimeInSeconds: 10,
                     },
                     enableControllerDiscovery: options.enableConsumers,
+                    ...(options.securityScanOnly
+                        ? {
+                              defaultHandler: 'disabled',
+                              handlers: { 'security-scan': {} },
+                          }
+                        : {}),
                     prefetchCount:
                         configService.get<number>(
                             'workflowQueue.WORKFLOW_QUEUE_PUBLISHER_PREFETCH',
@@ -167,6 +175,13 @@ export class RabbitMQWrapperModule {
                         },
                         'channel-ast-graph-incremental': {
                             prefetchCount: 5,
+                            default: false,
+                        },
+                        'channel-security-scan': {
+                            prefetchCount:
+                                configService.get<number>(
+                                    'workflowQueue.WORKFLOW_QUEUE_SECURITY_SCAN_PREFETCH',
+                                ) ?? 5,
                             default: false,
                         },
                     },

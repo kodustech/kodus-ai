@@ -24,6 +24,7 @@ describe('INBOX_REAPER_CONSUMER_TIMEOUTS', () => {
                 'workflow-job-consumer.ast_graph_incremental',
                 'workflow-job-consumer.check_implementation',
                 'workflow-job-consumer.code_review',
+                'workflow-job-consumer.security_scan',
                 'workflow-job-consumer.webhook',
             ].sort(),
         );

@@ -15,6 +15,7 @@ import {
 import { CodeReviewPipelineModule } from '@libs/code-review/pipeline/code-review-pipeline.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { CliReviewModule } from '@libs/cli-review/cli-review.module';
+import { SecurityScanModule } from '@libs/security-scan/security-scan.module';
 import { WorkflowCoreModule } from './workflow-core.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 
@@ -24,6 +25,7 @@ import { HeavyStageEventHandler } from '@libs/core/workflow/engine/heavy-stage-e
 // Infrastructure - Services
 import { WorkflowJobQueueService } from '@libs/core/workflow/infrastructure/workflow-job-queue.service';
 import { WorkflowJobConsumer } from '@libs/core/workflow/infrastructure/workflow-job-consumer.service';
+import { SecurityScanJobConsumer } from '@libs/core/workflow/infrastructure/security-scan-job.consumer';
 import { CrossProcessEventsBridge } from '@libs/core/workflow/infrastructure/cross-process-events.bridge';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { ErrorClassifierService } from '@libs/core/workflow/infrastructure/error-classifier.service';
@@ -102,9 +104,6 @@ const workerProviders = [
     AstGraphBuildJobProcessor,
     AstGraphIncrementalJobProcessor,
 
-    // Consumers
-    WorkflowJobConsumer,
-
     // Use Cases
     ProcessWorkflowJobUseCase,
 ];
@@ -115,10 +114,21 @@ import { SharedMongoModule } from '@libs/shared/database/shared-mongo.module';
 
 @Module({})
 export class WorkflowModule {
+    /**
+     * `worker` consumes the code-review queues; `security-scan-worker` only
+     * the deep scan's (#2451), on a worker of its own so a scan never shares
+     * a process with reviews. Both run the job processors.
+     */
     static register(options: {
-        type: 'worker' | 'api' | 'webhook';
+        type: 'worker' | 'security-scan-worker' | 'api' | 'webhook';
     }): DynamicModule {
-        const isWorker = options.type === 'worker';
+        const isWorker =
+            options.type === 'worker' ||
+            options.type === 'security-scan-worker';
+        const consumer =
+            options.type === 'security-scan-worker'
+                ? SecurityScanJobConsumer
+                : WorkflowJobConsumer;
         const useEcs = environment.API_CLOUD_MODE;
 
         const imports: ModuleMetadata['imports'] = [
@@ -131,12 +141,17 @@ export class WorkflowModule {
             forwardRef(() => PermissionValidationModule),
             SharedMongoModule, // Ensure MongoDB is available for worker
             ...(isWorker && useEcs ? [EcsModule] : []),
-            ...(isWorker ? [forwardRef(() => CliReviewModule)] : []),
+            ...(isWorker
+                ? [
+                      forwardRef(() => CliReviewModule),
+                      forwardRef(() => SecurityScanModule),
+                  ]
+                : []),
         ];
 
         const providers: Provider[] = [
             ...sharedProviders,
-            ...(isWorker ? workerProviders : []),
+            ...(isWorker ? [...workerProviders, consumer] : []),
         ];
 
         // If not using ECS Module (which provides the token), provide NoOp
@@ -154,7 +169,7 @@ export class WorkflowModule {
             exports: [
                 WorkflowCoreModule,
                 ...sharedExports,
-                ...(isWorker ? workerProviders : []),
+                ...(isWorker ? [...workerProviders, consumer] : []),
             ],
         };
     }

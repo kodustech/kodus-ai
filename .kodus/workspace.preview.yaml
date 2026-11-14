@@ -24,9 +24,11 @@ services:
     # Billing is shared with the dev recipe; the remaining overlays supply
     # the public preview settings and cloud edition.
     files: [docker-compose.dev.yml, docker-compose.billing.yml, docker-compose.preview.yml, docker-compose.preview.cloud.yml]
-    # MCP is intentionally opt-in for laptops, but a preview must represent the
-    # complete product rather than the lightweight default developer stack.
-    profiles: [mcp]
+    # MCP and the deep scan worker are opt-in for laptops, but a preview must
+    # represent the complete product rather than the lightweight default
+    # developer stack. The deep scan is cloud-only: the self-hosted preview
+    # recipe leaves its worker out.
+    profiles: [mcp, security-scan]
     # the web app is what a reviewer opens; it proxies to the API over the
     # compose network, so the API needs no public address of its own.
     # `webhooks` is public for a different reason: the git provider calls it

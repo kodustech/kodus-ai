@@ -33,6 +33,10 @@ export const WorkflowQueueLoader = registerAs(
             process.env.WORKFLOW_QUEUE_FEEDBACK_PREFETCH,
             20,
         ),
+        WORKFLOW_QUEUE_SECURITY_SCAN_PREFETCH: parseIntOrDefault(
+            process.env.WORKFLOW_QUEUE_SECURITY_SCAN_PREFETCH,
+            5,
+        ),
         WORKFLOW_QUEUE_WORKER_MAX_RETRIES: parseIntOrDefault(
             process.env.WORKFLOW_QUEUE_WORKER_MAX_RETRIES,
             5,

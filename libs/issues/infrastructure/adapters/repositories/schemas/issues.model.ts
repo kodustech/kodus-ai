@@ -94,6 +94,12 @@ export class IssuesModel extends CoreDocument {
 
     @Prop({ type: String, required: false })
     public resolvedAt?: string;
+
+    @Prop({ type: Number, default: 0 })
+    public consecutiveScanMisses?: number;
+
+    @Prop({ type: String })
+    public lastMissedScanId?: string;
 }
 
 export const IssuesSchema = SchemaFactory.createForClass(IssuesModel);
