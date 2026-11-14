@@ -58,6 +58,18 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(update.$set.lastSeenCommitSha).toBe('abc123');
     });
 
+    it('refreshes only while no other writer of this scan stored the identity first', async () => {
+        const model = modelWith({ _id: 'i-1', status: IssueStatus.OPEN, lastSeenScanId: 'scan-1' });
+        const repository = new IssuesRepository(model as any);
+
+        await repository.upsertScanFinding(finding);
+
+        // The second writer of scan-2 finds lastSeenScanId moved and goes
+        // round again, into the merge, instead of replacing the first's text.
+        const [filter] = model.findOneAndUpdate.mock.calls[0] as unknown as [any, any];
+        expect(filter).toEqual(expect.objectContaining({ lastSeenScanId: 'scan-1' }));
+    });
+
     it('creates an open security-scan issue the first time a finding is seen', async () => {
         const model = modelWith(null);
         const repository = new IssuesRepository(model as any);
@@ -132,6 +144,7 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(model.findOneAndUpdate.mock.calls[0][0]).toEqual({
             _id: 'i-1',
             status: IssueStatus.RESOLVED,
+            lastSeenScanId: null,
         });
     });
 
@@ -496,6 +509,21 @@ describe('IssuesRepository.updateStatusByIds', () => {
         });
         expect(model.updateMany.mock.calls[1][1].$set).toEqual({
             status: IssueStatus.DISMISSED,
+        });
+    });
+
+    it('clears resolvedAt when an issue is moved out of resolved', async () => {
+        const model = {
+            updateMany: jest.fn(async (_filter: any, _update: any) => ({})),
+            find: jest.fn(async () => []),
+        };
+        const repository = new IssuesRepository(model as any);
+
+        await repository.updateStatusByIds(['i-1'], IssueStatus.OPEN);
+
+        expect(model.updateMany.mock.calls[0][1]).toEqual({
+            $set: { status: IssueStatus.OPEN },
+            $unset: { resolvedAt: '' },
         });
     });
 });

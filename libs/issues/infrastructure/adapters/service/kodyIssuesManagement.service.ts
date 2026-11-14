@@ -500,12 +500,19 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     );
 
                 if (llmResult?.issueVerificationResults) {
+                    // Only an issue it was shown: the id is model output.
+                    const shownIssueIds = new Set(
+                        openIssues.map((issue) => issue.uuid),
+                    );
                     // Push into the existing `updatePromises` array
                     // instead of awaiting sequentially — the outer
                     // Promise.all below then runs every updateStatus
                     // in parallel. Was N × RTT, becomes max(RTT).
                     for (const resolution of llmResult.issueVerificationResults) {
-                        if (!resolution.isIssuePresentInCode) {
+                        if (
+                            !resolution.isIssuePresentInCode &&
+                            shownIssueIds.has(resolution.issueId)
+                        ) {
                             updatePromises.push(
                                 this.issuesService.updateStatus(
                                     resolution.issueId,

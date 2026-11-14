@@ -192,15 +192,11 @@ export class IssuesRepository implements IIssuesRepository {
     ): Promise<IssuesEntity[] | null> {
         await this.issuesModel.updateMany(
             { _id: { $in: uuids } },
-            {
-                $set: {
-                    status,
-                    // Resolved always carries when, as the scan's own path does.
-                    ...(status === IssueStatus.RESOLVED && {
-                        resolvedAt: new Date().toISOString(),
-                    }),
-                },
-            },
+            status === IssueStatus.RESOLVED
+                ? // Resolved always carries when, as the scan's own path does.
+                  { $set: { status, resolvedAt: new Date().toISOString() } }
+                : // Out of resolved (reopened by hand), it no longer has one.
+                  { $set: { status }, $unset: { resolvedAt: '' } },
         );
 
         const docs = await this.issuesModel.find({ _id: { $in: uuids } });
@@ -420,14 +416,18 @@ export class IssuesRepository implements IIssuesRepository {
                 ? { owner: finding.owner }
                 : {}),
         };
+        // Lands only while no other writer of this scan stored the identity
+        // first: the loser goes round again, into the merge.
+        const guard = { lastSeenScanId: existing.lastSeenScanId ?? null };
         if (existing.status === IssueStatus.RESOLVED) {
             refreshed.status = IssueStatus.OPEN;
             return {
                 outcome: 'reopened',
+                guard,
                 update: { $set: refreshed, $unset: { resolvedAt: '' } },
             };
         }
-        return { outcome: 'still_open', update: { $set: refreshed } };
+        return { outcome: 'still_open', guard, update: { $set: refreshed } };
     }
 
     async findOpenScanFindingAreas(
