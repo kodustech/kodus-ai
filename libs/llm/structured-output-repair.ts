@@ -497,6 +497,47 @@ function parseLenient(slice: string): unknown | undefined {
     }
 }
 
+/** The offset an oversized scan starts at so no top-level span is cut in
+ *  half: `o` (text.length - SALVAGE_MAX_CHARS) when o falls BETWEEN
+ *  top-level spans; otherwise the first position at/after o where the span
+ *  o cuts into has closed. One linear string/escape-aware depth pass over
+ *  the text — O(N) time, O(1) space, no per-char regex or allocations; a
+ *  `{` inside a string literal never counts. Depth at the cut is only
+ *  knowable from index 0, so the pass cannot start later; an early span
+ *  that never closes extends the same single pass to the text's end (the
+ *  window is then empty and nothing is recovered). The expensive part —
+ *  sliceBalancedJson and a parse per delimiter — stays capped at
+ *  SALVAGE_MAX_CHARS by the caller. A raw cut would sever a container's
+ *  opener and promote its nested spans to candidates — a payload fragment
+ *  shipped as the answer. */
+function windowStartAfterCutSpans(text: string): number {
+    const o = text.length - SALVAGE_MAX_CHARS;
+    let depth = 0;
+    let inStr = false;
+    for (let i = 0; i < text.length; i++) {
+        if (i >= o && depth === 0 && !inStr) {
+            return i;
+        }
+        const ch = text[i];
+        if (inStr) {
+            if (ch === '\\') {
+                i++;
+            } else if (ch === '"') {
+                inStr = false;
+            }
+        } else if (ch === '"') {
+            inStr = true;
+        } else if (ch === '{' || ch === '[') {
+            depth++;
+        } else if (ch === '}' || ch === ']') {
+            if (depth > 0) {
+                depth--;
+            }
+        }
+    }
+    return text.length;
+}
+
 /**
  * The LAST top-level balanced JSON object in `text` that parses and (when the
  * wire schema carries a validate fn) clears it. {@link extractJsonFromText}
@@ -516,10 +557,13 @@ function parseLenient(slice: string): unknown | undefined {
  * escape-legalising retry as the primary path (#2259), and candidates are tried
  * from the END, so the walk stops at the first object that validates; without a
  * validate fn (raw jsonSchema, no validator) parse success accepts, matching
- * the primary path. An oversized text (> SALVAGE_MAX_CHARS) is scanned only in
- * its last SALVAGE_MAX_CHARS chars: the walk stays bounded at the #2112 limit
- * while END-favoring keeps the answer — which trails the quote — inside the
- * window. The accepted residual: when garbage precedes the answer AND a
+ * the primary path. An oversized text (> SALVAGE_MAX_CHARS) walks only its
+ * last SALVAGE_MAX_CHARS chars, from an enclosure-aware cut that never starts
+ * inside a top-level span (one linear string-aware pass over the full input
+ * places it; a severed container cannot promote its nested spans) — the
+ * per-delimiter character work stays bounded at the #2112 limit while
+ * END-favoring keeps the answer, which trails the quote, inside the window.
+ * The accepted residual: when garbage precedes the answer AND a
  * schema-valid restatement follows it, END-favoring returns the restatement —
  * schema alone cannot tell them apart ({@link scanLastJson} leans on a
  * caller-supplied accept predicate; this walk has none). Garbage-before is the
@@ -536,12 +580,16 @@ async function lastValidatingObject<T = unknown>(
               | PromiseLike<ValidationResult<unknown>>)
         | null,
 ): Promise<T | undefined> {
-    // Same #2112 bound as salvageJsonText, without declining the payload
-    // outright: the walk is END-favoring and the #2255 answer sits at the
-    // end, so an oversized text scans only its last SALVAGE_MAX_CHARS chars —
-    // bounded work, and only an answer outside the window is lost.
+    // Same #2112 bound as salvageJsonText for the EXPENSIVE part: the
+    // candidate walk (sliceBalancedJson + a parse per delimiter) scans at
+    // most the last SALVAGE_MAX_CHARS chars. The walk is END-favoring and
+    // the #2255 answer sits at the end, so only an answer outside the
+    // window is lost. The cut itself is enclosure-aware — one linear,
+    // allocation-free, string/escape-aware pass over the whole input
+    // (O(N) time, O(1) space) places it so a severed container cannot
+    // promote its nested spans to candidates.
     if (text.length > SALVAGE_MAX_CHARS) {
-        text = text.slice(-SALVAGE_MAX_CHARS);
+        text = text.slice(windowStartAfterCutSpans(text));
     }
     const candidates: unknown[] = [];
     for (let i = 0; i < text.length; i++) {

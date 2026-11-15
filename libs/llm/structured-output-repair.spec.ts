@@ -646,6 +646,54 @@ describe('repairAndValidate', () => {
             ).toBeUndefined();
         });
 
+        it('does NOT let a nested child stand in above the cap either', async () => {
+            // A raw tail cut severed the array's `[` and promoted its member
+            // to a top-level candidate (red on 0b2035f30, which returned
+            // {keep:7}): the cut is enclosure-aware — the window starts only
+            // after the cut container has closed.
+            const wireKeep = ensureValidatingSchema(
+                jsonSchema({
+                    type: 'object',
+                    properties: { keep: { type: 'number' } },
+                    required: ['keep'],
+                    additionalProperties: false,
+                } as any),
+            );
+            expect(
+                await repairAndValidate(
+                    wireKeep,
+                    '[{"keep":7}]' + 'y'.repeat(999_989),
+                ),
+            ).toBeUndefined();
+        });
+
+        it('recovers a trailing answer when the cut lands inside a leading container', async () => {
+            // The huge leading array is atomic (top-level-only rule); the
+            // enclosure-aware cut starts the window after it CLOSES, so the
+            // trailing top-level answer behind it still recovers.
+            const text =
+                '[' +
+                '{"pad":1},'.repeat(100_000) +
+                '{"pad":2}]\n' +
+                answer('const a = 1;');
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('keeps a brace inside a string literal from opening a span at the cut', async () => {
+            // The in-string `{` never counts as an opener: the container
+            // closes before the cut, the window starts in the padding, and
+            // nothing is promoted — deterministic, not luck.
+            expect(
+                await repairAndValidate(
+                    codeWire,
+                    '{"s":"a{b"}' + 'y'.repeat(999_990),
+                ),
+            ).toBeUndefined();
+        });
+
         it('unwraps a known envelope around the answer behind a quote', async () => {
             // `result`/`data`/… are the wrappers models put around the payload
             // (normalizeEnvelope's keys); an envelope-wrapped answer behind a
