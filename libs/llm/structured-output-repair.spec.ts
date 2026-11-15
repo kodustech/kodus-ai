@@ -591,6 +591,38 @@ describe('repairAndValidate', () => {
             });
         });
 
+        it('keeps a comma that is payload content inside a string literal', async () => {
+            // `f(a, }` — the comma before the `}` is INSIDE the answer
+            // string. The lenient trailing-comma strip is string-aware
+            // (tryParseLenient's rule), so the caller receives the code the
+            // model wrote, not `f(a }`.
+            const text =
+                '```ruby\n[x || "y"]\n```\n' +
+                '{"improvedCode":"f(a, }","fixStatus":"fixed"}';
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'f(a, }',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('does not let schema-valid JSON quoted INSIDE the block win', async () => {
+            // The first fence is ruby (the primary fails on it), but a LATER
+            // fence restates the prompt's example — a full schema-valid
+            // object, what prompts embed — before the real answer. A forward
+            // walk would stop at the restated example; end-favoring
+            // (scanLastJson's rule) hands the win to the real answer.
+            const text =
+                '```ruby\nheader = fetch\n```\n' +
+                'Example given:\n```json\n' +
+                answer('const example = 0;') +
+                '\n```\nAnswer:\n' +
+                answer('const real = 1;');
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const real = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
         it('does NOT let a nested child stand in for the answer', async () => {
             // Top-level-only: the array-member and wrapper-nested `keep`
             // objects stay undefined (→ the caller re-asks), as before the
@@ -652,6 +684,18 @@ describe('repairAndValidate', () => {
                     '<think>draft {"improvedCode":"x","fixStatus":"fixed"} never closes',
                 ),
             ).toBeUndefined();
+        });
+
+        it('declines an oversized text instead of scanning it (re-ask)', async () => {
+            // Guard for the SALVAGE_MAX_CHARS cap, salvageJsonText's #2112
+            // rule: above it the caller re-asks rather than block on the
+            // character walk.
+            const text =
+                '```ruby\n[x]\n```\n' +
+                'x'.repeat(1_000_000) +
+                '\n' +
+                answer('const a = 1;');
+            expect(await repairAndValidate(codeWire, text)).toBeUndefined();
         });
     });
 

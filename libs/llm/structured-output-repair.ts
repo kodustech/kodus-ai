@@ -528,6 +528,11 @@ async function lastValidatingObject<T = unknown>(
               | PromiseLike<ValidationResult<unknown>>)
         | null,
 ): Promise<T | undefined> {
+    // Same #2112 rule as salvageJsonText: above this size the character walk
+    // is not worth the request-thread time — the caller re-asks instead.
+    if (text.length > SALVAGE_MAX_CHARS) {
+        return undefined;
+    }
     const candidates: unknown[] = [];
     for (let i = 0; i < text.length; i++) {
         const ch = text[i];
@@ -535,7 +540,12 @@ async function lastValidatingObject<T = unknown>(
         const slice = sliceBalancedJson(text.slice(i));
         // Unbalanced from HERE says nothing about a later `{` — keep scanning.
         if (!slice) continue;
-        const parsed = parseLenient(slice.replace(/,(\s*[}\]])/g, '$1'));
+        // String-aware (tryParseLenient's rule): a comma inside a literal
+        // (`f(a, }` in improvedCode) is payload content and stays; only
+        // commas OUTSIDE string literals are stripped.
+        const parsed = parseLenient(
+            slice.replace(/("(?:[^"\\]|\\[\s\S])*")|,(\s*[}\]])/g, '$1$2'),
+        );
         // A PARSEABLE container is atomic: an object competes as a whole and
         // its children — nested or array members — never stand in for the
         // answer.
