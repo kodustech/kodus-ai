@@ -5,9 +5,36 @@ import {
     normalizeSeverity,
     normalizeSuggestionsResponse,
 } from '../review-normalizer.js';
-import type { PullRequestSuggestionsResponse } from '../../types/review.js';
+import type {
+    PullRequestSuggestionsResponse,
+    Severity,
+} from '../../types/review.js';
 
 describe('review normalizer', () => {
+    it.each([
+        ['high', 'error'],
+        ['medium', 'warning'],
+        ['low', 'info'],
+        ['critical', 'critical'],
+        ['error', 'error'],
+        ['warning', 'warning'],
+        ['info', 'info'],
+    ])('normalizes issues-array severity %s to %s', (severity, expected) => {
+        const issue = {
+            file: 'a.ts',
+            line: 10,
+            endLine: 15,
+            severity: severity as Severity,
+            message: 'Fix this',
+            suggestion: 'Fix summary',
+            ruleId: 'security',
+        };
+
+        const result = normalizeSuggestionsResponse({ issues: [issue] });
+
+        expect(result.issues).toEqual([{ ...issue, severity: expected }]);
+    });
+
     it('maps severities consistently', () => {
         expect(normalizeSeverity('critical')).toBe('critical');
         expect(normalizeSeverity('high')).toBe('error');

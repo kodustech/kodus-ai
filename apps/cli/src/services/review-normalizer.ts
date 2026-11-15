@@ -56,7 +56,10 @@ export function normalizeSuggestionsResponse(
     let issues: ReviewIssue[] = [];
 
     if (Array.isArray(response.issues)) {
-        issues = response.issues;
+        issues = response.issues.map((issue) => ({
+            ...issue,
+            severity: normalizeSeverity(issue.severity),
+        }));
     } else if (Array.isArray(response.suggestions)) {
         issues = response.suggestions;
     } else if (
