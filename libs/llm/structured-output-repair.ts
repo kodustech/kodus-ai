@@ -481,11 +481,115 @@ export function salvageJsonText(
     };
 }
 
+/** Parse a JSON slice, retrying once with legalised string literals (#2259):
+ *  code quoted in a payload often carries invalid escapes (regex `\d`, Swift
+ *  `\(title)`), so the strict parse fails on an otherwise-complete object. */
+function parseLenient(slice: string): unknown | undefined {
+    try {
+        return JSON.parse(slice);
+    } catch {
+        const escaped = escapeStringLiterals(slice);
+        if (escaped === slice) {
+            return undefined;
+        }
+        const retried = tryParse(escaped);
+        return retried.ok ? retried.value : undefined;
+    }
+}
+
+/**
+ * The LAST top-level balanced JSON object in `text` that parses and (when the
+ * wire schema carries a validate fn) clears it. {@link extractJsonFromText}
+ * takes the FIRST fence / outermost value, which is the wrong end of the text
+ * when the model QUOTES code or an example object before its real answer
+ * (#2255): the quote is what it returns and the answer behind it is lost. This
+ * walks the same end-favoring rule as {@link scanLastJson} — the answer wins
+ * over anything quoted on the way there — with the schema, not key matching, as
+ * the test. Only TOP-LEVEL objects compete: a PARSEABLE container is atomic —
+ * an object competes as a whole and its nested children or array members never
+ * stand in for the answer (those stay undefined → the caller re-asks, as
+ * before) — while a balanced span that is NOT JSON (quoted code, prose with an
+ * unmatched brace) is scanned within, since the answer can sit inside it. The
+ * one sanctioned nesting is the wrapper envelope: a top-level object that fails
+ * validation is retried through its ENVELOPE_WRAPPER_KEYS child, mirroring the
+ * rule {@link normalizeEnvelope} applies. Each candidate takes the same
+ * escape-legalising retry as the primary path (#2259), and candidates are tried
+ * from the END, so the walk stops at the first object that validates; without a
+ * validate fn (raw jsonSchema, no validator) parse success accepts, matching
+ * the primary path.
+ */
+async function lastValidatingObject<T = unknown>(
+    text: string,
+    validate:
+        | ((
+              value: unknown,
+          ) =>
+              | ValidationResult<unknown>
+              | PromiseLike<ValidationResult<unknown>>)
+        | null,
+): Promise<T | undefined> {
+    const candidates: unknown[] = [];
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (ch !== '{' && ch !== '[') continue;
+        const slice = sliceBalancedJson(text.slice(i));
+        // Unbalanced from HERE says nothing about a later `{` — keep scanning.
+        if (!slice) continue;
+        const parsed = parseLenient(slice.replace(/,(\s*[}\]])/g, '$1'));
+        // A PARSEABLE container is atomic: an object competes as a whole and
+        // its children — nested or array members — never stand in for the
+        // answer.
+        if (parsed !== undefined) {
+            if (
+                parsed &&
+                typeof parsed === 'object' &&
+                !Array.isArray(parsed)
+            ) {
+                candidates.push(parsed);
+            }
+            i += slice.length - 1;
+            continue;
+        }
+        // Not JSON — a quoted code span or prose. The answer can sit inside
+        // it (an unmatched brace before the answer, its closer after), so
+        // keep scanning within instead of skipping the span whole.
+    }
+    for (let i = candidates.length - 1; i >= 0; i--) {
+        const value = candidates[i];
+        if (!validate) {
+            return value as T;
+        }
+        const r = await validate(value);
+        if (r.success) {
+            return r.value as T;
+        }
+        // The envelope models wrap around the payload (normalizeEnvelope's
+        // keys): retry the wrapper's child before giving up on this candidate.
+        if (!Array.isArray(value)) {
+            for (const key of ENVELOPE_WRAPPER_KEYS) {
+                const child = (value as Record<string, unknown>)[key];
+                if (
+                    !child ||
+                    typeof child !== 'object' ||
+                    Array.isArray(child)
+                ) {
+                    continue;
+                }
+                const rc = await validate(child);
+                if (rc.success) {
+                    return rc.value as T;
+                }
+            }
+        }
+    }
+    return undefined;
+}
+
 /**
  * Extract the JSON out of `rawText` (clean, fenced, or prose-wrapped), then
  * validate it against `wire` (the same schema `Output.object` used). Returns the
- * parsed+validated value, or undefined when no JSON is present, it doesn't parse,
- * or it fails the shape (→ caller escalates to a model re-ask). Reuses the wire
+ * parsed+validated value, or undefined when no JSON is present, nothing parses,
+ * or nothing validates (→ caller escalates to a model re-ask). Reuses the wire
  * schema's own validate fn so the object is held to the exact contract.
  *
  * Uses {@link extractJsonFromText}, NOT {@link repairJsonText}: this is a PRIMARY
@@ -494,41 +598,41 @@ export function salvageJsonText(
  * `{"…":…}` with no fence/whitespace must validate. `repairJsonText` nulls
  * unchanged input by design (its "nothing to repair" signal for the salvage-after-
  * SDK-failure path), which would reject exactly that clean output.
+ *
+ * When the primary candidate is absent — the first fence quoted bracketless
+ * code, so nothing JSON-shaped surfaced — or it does not parse or validate (the
+ * model quoted a code block or an example object AHEAD of its real answer,
+ * #2255, so the first-fence extractor returned the quote), the LAST top-level
+ * object that clears the schema wins instead ({@link lastValidatingObject}).
  */
 export async function repairAndValidate<T = unknown>(
     wire: unknown,
     rawText: string,
 ): Promise<T | undefined> {
-    const candidate = extractJsonFromText(rawText);
-    if (candidate == null) {
+    // A reasoning block that opens first and never closes carries no answer at
+    // all — no primary candidate, and no fallback either: the reasoning quotes
+    // objects, and they are not the answer.
+    const stripped = stripReasoningBlocks(rawText);
+    if (stripped === null) {
         return undefined;
     }
-    let value: unknown;
-    try {
-        value = JSON.parse(candidate);
-    } catch {
-        // A single invalid escape inside a string literal - code quoted in a
-        // suggestion, such as Swift `\(title)` or a regex `\d` - makes the whole
-        // payload unparseable, and the reroute-json caller then loses every
-        // finding for that shard (#2259). Legalise the string escapes and retry;
-        // a payload broken any other way still fails, so a cut list is never
-        // accepted as a whole one.
-        const escaped = escapeStringLiterals(candidate);
-        if (escaped === candidate) {
-            return undefined;
-        }
-        const retried = tryParse(escaped);
-        if (!retried.ok) {
-            return undefined;
-        }
-        value = retried.value;
-    }
     const schema = asSchema(wire as any);
-    if (typeof schema.validate !== 'function') {
-        return value as T;
+    const validate =
+        typeof schema.validate === 'function' ? schema.validate : null;
+    const candidate = extractJsonFromText(rawText);
+    if (candidate != null) {
+        const value = parseLenient(candidate);
+        if (value !== undefined) {
+            if (!validate) {
+                return value as T;
+            }
+            const r = await validate(value);
+            if (r.success) {
+                return r.value as T;
+            }
+        }
     }
-    const r = await schema.validate(value);
-    return r.success ? (r.value as T) : undefined;
+    return lastValidatingObject<T>(stripped, validate);
 }
 
 /**

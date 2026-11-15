@@ -474,6 +474,187 @@ describe('repairAndValidate', () => {
         });
     });
 
+    describe('#2255 a code block quoted before the answer', () => {
+        const codeWire = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: {
+                    improvedCode: { type: 'string' },
+                    fixStatus: { type: 'string', enum: ['fixed'] },
+                },
+                required: ['improvedCode', 'fixStatus'],
+                additionalProperties: false,
+            } as any),
+        );
+        const answer = (code: string) =>
+            `{"improvedCode":${JSON.stringify(code)},"fixStatus":"fixed"}`;
+
+        it('recovers the answer after a fenced code block in another language', async () => {
+            // The extractor unwraps the FIRST fence whatever its language, so
+            // the primary candidate is the quoted Ruby, not the JSON behind it.
+            const text =
+                'The header is built like this:\n' +
+                '```ruby\nheader = [process.env.X || "y"]\n```\n' +
+                'Fixed version:\n' +
+                answer('const y = 2;');
+
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const y = 2;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('recovers the answer after an unlabeled fence holding a bare {}', async () => {
+            // The fence content parses but fails the schema → the primary path
+            // used to stop there; the fallback walks on to the real answer.
+            const text =
+                'Example shape:\n```\n{}\n```\nAnswer:\n' + answer('{}');
+
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: '{}',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('keeps the PRIMARY result for bare clean JSON (fallback must not hijack)', async () => {
+            // Both objects validate; the first — the primary's — must win,
+            // proving the fallback never runs on the success path.
+            const text =
+                answer('const a = 1;') +
+                '\nrestated: ' +
+                answer('const b = 2;');
+
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('keeps the PRIMARY result for fenced clean JSON (fallback must not hijack)', async () => {
+            const text =
+                '```json\n' +
+                answer('const a = 1;') +
+                '\n```\nrestated: ' +
+                answer('const b = 2;');
+
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('still returns undefined when NO object anywhere validates', async () => {
+            expect(
+                await repairAndValidate(
+                    codeWire,
+                    '```json\n{"nope":7}\n```\nalso {"nope":8}',
+                ),
+            ).toBeUndefined();
+            // A quoted code block with no answer behind it at all.
+            expect(
+                await repairAndValidate(codeWire, '```ruby\n[x || "y"]\n```'),
+            ).toBeUndefined();
+        });
+
+        it('accepts the last PARSED object when the wire has no validate fn', async () => {
+            // Same rule as the primary path: a raw jsonSchema without a
+            // validator accepts on parse-success alone.
+            const raw = jsonSchema({ type: 'object' } as any);
+            const text = '```ruby\n[x || "y"]\n```\n' + answer('const a = 1;');
+            expect(await repairAndValidate(raw, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('recovers the answer after a bracketless quoted code block', async () => {
+            // The first fence held no `{`/`[` at all, so the extractor surfaced
+            // NO candidate — the fallback must still walk the text.
+            const text =
+                'The fix:\n```ruby\nheader = fetch_header\n```\n' +
+                answer("header = ENV['X']");
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: "header = ENV['X']",
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('retries fallback candidates with legalised escapes (#2259 composed)', async () => {
+            // A quoted code block is one failure class, the invalid `\d`
+            // escape inside the answer another — both must clear together.
+            const text =
+                '```ruby\n[x || "y"]\n```\n' +
+                '{"improvedCode":"const r = /\\d+/;","fixStatus":"fixed"}';
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const r = /\\d+/;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('does NOT let a nested child stand in for the answer', async () => {
+            // Top-level-only: the array-member and wrapper-nested `keep`
+            // objects stay undefined (→ the caller re-asks), as before the
+            // fallback existed.
+            const wireKeep = ensureValidatingSchema(
+                jsonSchema({
+                    type: 'object',
+                    properties: { keep: { type: 'number' } },
+                    required: ['keep'],
+                    additionalProperties: false,
+                } as any),
+            );
+            expect(
+                await repairAndValidate(wireKeep, '```json\n[{"keep":7}]\n```'),
+            ).toBeUndefined();
+            expect(
+                await repairAndValidate(
+                    wireKeep,
+                    '```json\n{"wrapper":{"keep":7}}\n```',
+                ),
+            ).toBeUndefined();
+        });
+
+        it('unwraps a known envelope around the answer behind a quote', async () => {
+            // `result`/`data`/… are the wrappers models put around the payload
+            // (normalizeEnvelope's keys); an envelope-wrapped answer behind a
+            // quoted block still recovers through its wrapper child.
+            const text =
+                '```ruby\n[x || "y"]\n```\n' +
+                `{"result":${answer('const a = 1;')}}`;
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('finds the answer inside a balanced NON-JSON span', async () => {
+            // An unmatched brace before the answer — its closer after it —
+            // makes the region look balanced; only PARSEABLE containers are
+            // skipped whole, so the span is scanned within and the answer
+            // survives.
+            const text =
+                '```json\n{}\n```\n' +
+                'Broken: { unmatched\n' +
+                answer('const y = 2;') +
+                '\n}';
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const y = 2;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('still returns undefined for an unclosed leading reasoning block', async () => {
+            // No answer at all — the fallback must not fish objects out of the
+            // reasoning itself.
+            expect(
+                await repairAndValidate(
+                    codeWire,
+                    '<think>draft {"improvedCode":"x","fixStatus":"fixed"} never closes',
+                ),
+            ).toBeUndefined();
+        });
+    });
+
     it('returns undefined when repaired JSON has the wrong shape', async () => {
         // Deterministic repair fixes the fence, but the shape is wrong → the
         // executor must escalate to a model re-ask, not accept bad data.
