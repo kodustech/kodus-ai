@@ -507,8 +507,8 @@ function parseLenient(slice: string): unknown | undefined {
  * over anything quoted on the way there — with the schema, not key matching, as
  * the test. Only TOP-LEVEL objects compete: a PARSEABLE container is atomic —
  * an object competes as a whole and its nested children or array members never
- * stand in for the answer (those stay undefined → the caller re-asks, as
- * before) — while a balanced span that is NOT JSON (quoted code, prose with an
+ * stand in for the answer (those stay undefined, exactly as before this
+ * fallback existed) — while a balanced span that is NOT JSON (quoted code, prose with an
  * unmatched brace) is scanned within, since the answer can sit inside it. The
  * one sanctioned nesting is the wrapper envelope: a top-level object that fails
  * validation is retried through its ENVELOPE_WRAPPER_KEYS child, mirroring the
@@ -516,7 +516,15 @@ function parseLenient(slice: string): unknown | undefined {
  * escape-legalising retry as the primary path (#2259), and candidates are tried
  * from the END, so the walk stops at the first object that validates; without a
  * validate fn (raw jsonSchema, no validator) parse success accepts, matching
- * the primary path.
+ * the primary path. An oversized text (> SALVAGE_MAX_CHARS) is scanned only in
+ * its last SALVAGE_MAX_CHARS chars: the walk stays bounded at the #2112 limit
+ * while END-favoring keeps the answer — which trails the quote — inside the
+ * window. The accepted residual: when garbage precedes the answer AND a
+ * schema-valid restatement follows it, END-favoring returns the restatement —
+ * schema alone cannot tell them apart ({@link scanLastJson} leans on a
+ * caller-supplied accept predicate; this walk has none). Garbage-before is the
+ * common #2255 shape, and a forward walk would resurface it, so the rare
+ * trailing case is the price of recovering the common one.
  */
 async function lastValidatingObject<T = unknown>(
     text: string,
@@ -528,10 +536,12 @@ async function lastValidatingObject<T = unknown>(
               | PromiseLike<ValidationResult<unknown>>)
         | null,
 ): Promise<T | undefined> {
-    // Same #2112 rule as salvageJsonText: above this size the character walk
-    // is not worth the request-thread time — the caller re-asks instead.
+    // Same #2112 bound as salvageJsonText, without declining the payload
+    // outright: the walk is END-favoring and the #2255 answer sits at the
+    // end, so an oversized text scans only its last SALVAGE_MAX_CHARS chars —
+    // bounded work, and only an answer outside the window is lost.
     if (text.length > SALVAGE_MAX_CHARS) {
-        return undefined;
+        text = text.slice(-SALVAGE_MAX_CHARS);
     }
     const candidates: unknown[] = [];
     for (let i = 0; i < text.length; i++) {
@@ -542,7 +552,9 @@ async function lastValidatingObject<T = unknown>(
         if (!slice) continue;
         // String-aware (tryParseLenient's rule): a comma inside a literal
         // (`f(a, }` in improvedCode) is payload content and stays; only
-        // commas OUTSIDE string literals are stripped.
+        // commas OUTSIDE string literals are stripped. The string
+        // alternative swallows the whole literal, so its commas are never
+        // visited — a bare comma pattern reintroduces the corruption.
         const parsed = parseLenient(
             slice.replace(/("(?:[^"\\]|\\[\s\S])*")|,(\s*[}\]])/g, '$1$2'),
         );

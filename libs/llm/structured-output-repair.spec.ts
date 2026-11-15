@@ -686,16 +686,36 @@ describe('repairAndValidate', () => {
             ).toBeUndefined();
         });
 
-        it('declines an oversized text instead of scanning it (re-ask)', async () => {
-            // Guard for the SALVAGE_MAX_CHARS cap, salvageJsonText's #2112
-            // rule: above it the caller re-asks rather than block on the
-            // character walk.
+        it('recovers the answer in an oversized text from its tail window', async () => {
+            // > SALVAGE_MAX_CHARS: the walk stays bounded by scanning only
+            // the last 1M chars (#2112 limit). The #2255 shape has the
+            // answer at the END, behind the quote, so it stays inside the
+            // window. Red on 7fcaa58eb, which declined the whole text —
+            // and on origin/main, which had no fallback at all; f295240d
+            // also recovered it, uncapped, at unbounded scan cost.
             const text =
                 '```ruby\n[x]\n```\n' +
                 'x'.repeat(1_000_000) +
                 '\n' +
                 answer('const a = 1;');
-            expect(await repairAndValidate(codeWire, text)).toBeUndefined();
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('scans a text of EXACTLY the limit whole (boundary: >, not >=)', async () => {
+            // At SALVAGE_MAX_CHARS the text scans in full — the window
+            // opens only strictly above it.
+            const head = '```ruby\n[x]\n```\n';
+            const tail = '\n' + answer('const a = 1;');
+            const text =
+                head + 'x'.repeat(1_000_000 - head.length - tail.length) + tail;
+            expect(text.length).toBe(1_000_000);
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
         });
     });
 
