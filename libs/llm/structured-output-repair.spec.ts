@@ -682,6 +682,19 @@ describe('repairAndValidate', () => {
             });
         });
 
+        it('recovers the trailing answer when a junk container precedes the cut', async () => {
+            // The cut falls in the padding AFTER the junk container: its
+            // member is outside the window entirely, and the trailing
+            // TOP-LEVEL answer recovers — red on origin/main (no fallback
+            // at all) and on 7fcaa58eb (which declined all oversized texts).
+            const text =
+                '[{"keep":7}]' + 'y'.repeat(999_989) + answer('const a = 1;');
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
         it('keeps a brace inside a string literal from opening a span at the cut', async () => {
             // The in-string `{` never counts as an opener: the container
             // closes before the cut, the window starts in the padding, and
