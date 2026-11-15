@@ -53,7 +53,7 @@ export function mapPrLevelSuggestions(
 export function normalizeReviewResult<T extends ReviewResult>(result: T): T {
     return {
         ...result,
-        issues: result.issues.map((issue) => ({
+        issues: (result.issues ?? []).map((issue) => ({
             ...issue,
             severity: normalizeSeverity(issue.severity),
         })),

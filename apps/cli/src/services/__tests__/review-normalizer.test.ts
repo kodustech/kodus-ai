@@ -8,6 +8,7 @@ import {
 } from '../review-normalizer.js';
 import type {
     PullRequestSuggestionsResponse,
+    ReviewResult,
     Severity,
 } from '../../types/review.js';
 
@@ -52,6 +53,17 @@ describe('review normalizer', () => {
                 message: 'style issue',
             },
         ]);
+    });
+
+    it('treats a missing issues array as empty instead of crashing', () => {
+        const result = normalizeReviewResult({
+            summary: 'Found nothing',
+            filesAnalyzed: 1,
+            duration: 0,
+        } as ReviewResult);
+
+        expect(result.issues).toEqual([]);
+        expect(result.summary).toBe('Found nothing');
     });
 
     it('normalizes every issue in a review result and keeps other fields', () => {
