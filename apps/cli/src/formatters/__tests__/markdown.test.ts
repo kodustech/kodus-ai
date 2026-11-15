@@ -41,12 +41,20 @@ describe('markdown formatter', () => {
         }
     });
 
-    it('renders the no issues found block for an empty review', () => {
-        const output = markdownFormatter.format({ ...result, issues: [] });
+    it('renders a critical-only review instead of the empty block', () => {
+        const output = markdownFormatter.format({
+            ...result,
+            issues: [
+                {
+                    file: 'a.ts',
+                    line: 1,
+                    severity: 'critical',
+                    message: 'critical issue',
+                },
+            ],
+        });
 
-        expect(output).toContain(
-            '## ✅ No issues found!\n\nYour code looks good!',
-        );
-        expect(output).not.toContain('## Issues\n');
+        expect(output).toContain('| 🔴 Critical | 1 |');
+        expect(output).toContain('### 🔴 CRITICAL: a.ts:1');
     });
 });

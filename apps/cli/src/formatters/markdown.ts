@@ -10,8 +10,6 @@ function getSeverityEmoji(severity: Severity): string {
             return '🟡';
         case 'info':
             return '🔵';
-        default:
-            return '⚪';
     }
 }
 

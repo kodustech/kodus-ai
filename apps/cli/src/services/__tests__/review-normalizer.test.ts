@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     mapFileSuggestions,
     mapPrLevelSuggestions,
+    normalizeReviewResult,
     normalizeSeverity,
     normalizeSuggestionsResponse,
 } from '../review-normalizer.js';
@@ -15,10 +16,6 @@ describe('review normalizer', () => {
         ['high', 'error'],
         ['medium', 'warning'],
         ['low', 'info'],
-        ['critical', 'critical'],
-        ['error', 'error'],
-        ['warning', 'warning'],
-        ['info', 'info'],
     ])('normalizes issues-array severity %s to %s', (severity, expected) => {
         const issue = {
             file: 'a.ts',
@@ -33,6 +30,59 @@ describe('review normalizer', () => {
         const result = normalizeSuggestionsResponse({ issues: [issue] });
 
         expect(result.issues).toEqual([{ ...issue, severity: expected }]);
+    });
+
+    it('normalizes severity in the flat suggestions-array branch', () => {
+        const result = normalizeSuggestionsResponse({
+            suggestions: [
+                {
+                    file: 'b.ts',
+                    line: 5,
+                    severity: 'high' as Severity,
+                    message: 'style issue',
+                },
+            ],
+        });
+
+        expect(result.issues).toEqual([
+            {
+                file: 'b.ts',
+                line: 5,
+                severity: 'error',
+                message: 'style issue',
+            },
+        ]);
+    });
+
+    it('normalizes every issue in a review result and keeps other fields', () => {
+        const result = {
+            summary: 'Found 2 issues',
+            issues: [
+                {
+                    file: 'a.ts',
+                    line: 1,
+                    severity: 'high' as Severity,
+                    message: 'a',
+                },
+                {
+                    file: 'b.ts',
+                    line: 2,
+                    severity: 'medium' as Severity,
+                    message: 'b',
+                },
+            ],
+            filesAnalyzed: 2,
+            duration: 10,
+            notices: ['heavy mode'],
+        };
+
+        expect(normalizeReviewResult(result)).toEqual({
+            ...result,
+            issues: [
+                { file: 'a.ts', line: 1, severity: 'error', message: 'a' },
+                { file: 'b.ts', line: 2, severity: 'warning', message: 'b' },
+            ],
+        });
     });
 
     it('maps severities consistently', () => {
