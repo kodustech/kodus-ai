@@ -1,0 +1,463 @@
+{
+  "kind": "completed-case-from-remote-checkpoint",
+  "note": "One completed engine case, not an aggregate benchmark or passing gate; no aggregate tokens attributed to this case.",
+  "capturedAt": "2026-11-16T19:03:06.063453+00:00",
+  "provenance": {
+    "measuredAt": "2026-11-16T17:29:07.006Z",
+    "engineCommit": "e5223d6a0664a663adb9a6d241cee0b2034c2003",
+    "dirty": false,
+    "datasets": {
+      "vulngym-cases.json": "782e60de00d6de9f4d6518a87e5a45b8284c67da3dde447fe6c717de347e774e",
+      "clean-controls.json": "9c2d8f82db429e1fe75b7e0f3234abc10fbbdd57cb06365cd9b4d6bb13b549bc"
+    },
+    "scoringVersion": 4
+  },
+  "scoring": {
+    "version": 4,
+    "matcherSha256": "d6bc9cabca5ae11af8178baf6673e2aa41fbb4b1dd8c812f20c0a655061094c0",
+    "adjudicationsSha256": "67dc6365d1ae8f564986f4e8f7696237da3574ec609e054644603205fe2e429d"
+  },
+  "model": "deepseek-v4-flash@fireworks",
+  "budgetUsd": 3,
+  "sourceCase": {
+    "id": "ollama-73257915",
+    "repo": "ollama/ollama",
+    "commit": "7325791599409de52534429897481918717a9e85",
+    "language": "go"
+  },
+  "cases": [
+    {
+      "id": "ollama-73257915",
+      "language": "go",
+      "runtime": {
+        "provider": "openai_compatible",
+        "servedModel": "accounts/fireworks/models/deepseek-v4p1-flash"
+      },
+      "checks": "Of 1 published vulnerability in ollama/ollama@73257915, how many does a scan capped at $3 report?",
+      "hits": 1,
+      "total": 1,
+      "detail": [
+        {
+          "what": "GHSA-F6MR-38G8-39RG (authz) Ollama \u591a\u4e2a API \u7aef\u70b9\u7f3a\u5c11\u670d\u52a1\u7aef\u8ba4\u8bc1\u5bfc\u81f4\u672a\u6388\u6743\u6a21\u578b\u7ba1\u7406\u64cd\u4f5c (CVE-2025-63389) - routes.go",
+          "ok": true,
+          "vulnerabilityClass": "authz",
+          "examined": true,
+          "classPlanned": true,
+          "planRank": 0
+        }
+      ],
+      "precision": {
+        "listed": 1,
+        "judgedReal": 0,
+        "judgedFalse": 0,
+        "unjudged": 23
+      },
+      "rawFindings": 24,
+      "findings": [
+        {
+          "key": "ollama-73257915|authz|server/images.go|makeRequestWithRetry|737",
+          "matched": false,
+          "verdict": null,
+          "class": "authz",
+          "severity": "critical",
+          "file": "server/images.go",
+          "lines": [
+            737,
+            746
+          ],
+          "symbol": "makeRequestWithRetry",
+          "title": "Malicious registry can steal user's ollama.com token via auth challenge",
+          "description": "Entry: server/routes.go:848 (/api/pull, same flow at /api/push server/routes.go:899) - the model name comes straight from the JSON body and may name any registry host (\"attacker.example/ns/model\").\nAttacker: the operator of the registry the user pulls from (any unauthenticated third party the user can be induced to pull from), crossing from a third-party server to possession of the user's ollama.com credentials.\nPath: PullHandler -> PullModel (server/images.go:587) -> makeRequestWithRetry (server/images.go:725) sends GET https://attacker.example/v2/ns/model/manifests/latest. The attacker answers 401 with an entirely attacker-controlled `www-authenticate: Bearer realm=\"https://ollama.com/token\",service=...,scope=...` header. parseRegistryChallenge (server/images.go:853) copies realm/service/scope with no validation, and getAuthorizationToken (server/auth.go:53) signs the request with the user's private key (~/.ollama/id_ed25519, auth.Sign) and issues a GET to that attacker-chosen realm (server/auth.go:70), returning whatever token the realm responds with. makeRequestWithRetry stores it in regOpts.Token (server/images.go:746) and replays the original request to the attacker's registry with `Authorization: Bearer <token>` (server/images.go:801-802).\nNothing on this path checks that the challenge realm belongs to the registry being contacted, that the requested scope matches the model being pulled, or that the issued token is only sent back to the host that issued it. By pointing realm at the real ollama.com token endpoint with scope `repository:<victim-namespace>/<model>:push`, the attacker makes the daemon authenticate as the user to ollama.com and then hands the resulting bearer token to attacker.example; the attacker can replay it at ollama.com to read, push or delete models in the victim's namespace. The same realm field can point at internal addresses (e.g. http://169.254.169.254/...), making the daemon send a signed GET there.\nFix: reject challenges whose realm is not on the same host as the registry being contacted (or a fixed allow-list), never forward an issued token to a host other than the one that issued it, and drop the challenge flow for arbitrary user-supplied registries."
+        },
+        {
+          "key": "ollama-73257915|authz|server/download.go|blobDownload.run|238",
+          "matched": false,
+          "verdict": null,
+          "class": "authz",
+          "severity": "medium",
+          "file": "server/download.go",
+          "lines": [
+            238,
+            266
+          ],
+          "symbol": "blobDownload.run",
+          "title": "Blind SSRF: registry redirect target fetched without host or IP validation",
+          "description": "Entry: server/routes.go:848 (/api/pull) - the model name selects the registry host, which the caller controls.\nAttacker: anyone who can name a registry in a pull (or who can get a user to pull from their host), crossing from an external caller to the daemon's internal network and cloud metadata services.\nPath: PullHandler -> PullModel (server/images.go:587) -> downloadBlob -> blobDownload.run (server/download.go:227). The code GETs the manifest from the user-supplied registry (server/download.go:254) with a CheckRedirect that stops at the first cross-host redirect, but then takes that redirect's Location anyway (`return resp.Location()`, server/download.go:266) and uses it as `directURL` for every chunk download (server/download.go:285). downloadChunk (server/download.go:329-337) then issues a plain GET with http.DefaultClient to that attacker-chosen URL.\nNothing validates the redirect target: no host or scheme allow-list and no loopback/private/link-local address block, and the Location header is fully controlled by the registry named in the request. The daemon can therefore be coerced into fetching http://169.254.169.254/..., http://127.0.0.1:<port>/... or other internal services, with the caller learning success/failure from the subsequent digest-verification error - a blind SSRF usable for metadata access attempts and internal port scanning.\nFix: only accept redirect targets on the registry's own host (or an explicit allow-list of known storage hosts) and reject loopback, private and link-local addresses before fetching."
+        },
+        {
+          "key": "ollama-73257915|ssrf|server/images.go|pullModelManifest|693",
+          "matched": false,
+          "verdict": null,
+          "class": "ssrf",
+          "severity": "critical",
+          "file": "server/images.go",
+          "lines": [
+            693,
+            698
+          ],
+          "symbol": "pullModelManifest",
+          "title": "Unauthenticated SSRF via model name reaches internal network and metadata",
+          "description": "Entry: server/routes.go:848 (POST /api/pull) - the model name is read from the JSON body at server/routes.go:860 and passed to PullModel at server/routes.go:886; the same sink is also reachable from POST /api/create via server/create.go:118 and server/model.go:31.\nAttacker: an unauthenticated caller of the daemon's HTTP API (any local process, and any network peer when OLLAMA_HOST binds a non-loopback address) crossing from API caller into the server's internal network.\nPath: req.Model -> model.ParseName (types/model/name.go:135) -> IsValid only checks character set and length, and ':' is explicitly allowed in the host part (types/model/name.go:336-339), so a value like \"169.254.169.254:80/ns/model:tag\" passes -> getExistingName (server/routes.go:958) only case-canonicalizes existing parts -> DisplayShortest keeps the host -> PullModel -> ParseModelPath (server/modelpath.go:40-75) copies parts[0] into Registry -> BaseURL (server/modelpath.go:109-114) -> pullModelManifest builds the URL at server/images.go:694 and fetches it at server/images.go:698 -> makeRequestWithRetry/makeRequest (server/images.go:725-827). The request-body 'insecure' flag (server/routes.go:879-881) additionally rewrites the scheme to plain http at server/images.go:787-789, so internal HTTP-only services are reachable. Nothing on this path resolves the host or rejects loopback, private, link-local or ULA addresses, and there is no registry allow-list; the only host-related guard, allowedHostsMiddleware (server/routes.go:1423-1459), validates the incoming Host header for DNS-rebinding protection and never inspects outbound destinations.\nImpact: the daemon is turned into a proxy for the caller. For any non-2xx status other than 404 the response body is read unbounded and returned verbatim in the pull error stream (server/images.go:756-762 -> server/routes.go:887), giving unauthenticated read access to internal HTTP services such as cloud metadata (169.254.169.254), localhost admin APIs and Docker sockets; the same primitive can scan internal networks.\nFix: validate the registry host before dialing - resolve it and reject loopback/private/link-local/ULA results (and re-check on every redirect hop, e.g. via a custom DialContext/CheckRedirect) - or restrict pulls to an operator-configured allow-list of registries, require https unless explicitly configured, and stop echoing upstream response bodies to clients."
+        },
+        {
+          "key": "ollama-73257915|ssrf|server/images.go|PushModel|566",
+          "matched": false,
+          "verdict": null,
+          "class": "ssrf",
+          "severity": "high",
+          "file": "server/images.go",
+          "lines": [
+            566,
+            576
+          ],
+          "symbol": "PushModel",
+          "title": "Unauthenticated /api/push can exfiltrate local models to any attacker-controlled host",
+          "description": "Entry: server/routes.go:899 (POST /api/push) - the model name is parsed at server/routes.go:935 and passed to PushModel at server/routes.go:941.\nAttacker: an unauthenticated caller of the daemon's HTTP API crossing from API caller into the server's internal network and into the daemon's local model store.\nPath: the caller-supplied name (arbitrary host with optional port) -> model.ParseName/IsValid (only charset checks, ':' allowed in host) -> getExistingName -> PushModel -> ParseModelPath (server/modelpath.go:40-75) -> BaseURL (server/modelpath.go:109-114) -> uploadBlob (server/upload.go:367-371, 391-392) issues HEAD/POST/PUT to the caller's host, and PushModel issues the manifest PUT at server/images.go:576 via makeRequestWithRetry/makeRequest (server/images.go:725-827), where the request-body 'insecure' flag again permits plain http (server/images.go:787-789). No allow-list or private-address check exists on any of these requests, and the inbound-only allowedHostsMiddleware does not apply.\nImpact: the daemon uploads the named local model's manifest and blob contents to any host the caller chooses - data the API caller cannot otherwise read through the API (only HEAD /api/blobs/:digest and manifest metadata are exposed) - which is exfiltration of locally stored models from a shared or LAN-exposed instance; pointing the name at internal hosts also makes the daemon issue requests into its internal network, with upstream error bodies echoed back to the caller (server/upload.go:291-296, server/images.go:756-762).\nFix: apply the same destination validation as for pulls (allow-list of registries, or DNS-resolve and reject loopback/private/link-local/ULA addresses including on redirects), require https unless explicitly configured, and avoid returning upstream bodies."
+        },
+        {
+          "key": "ollama-73257915|secret_identity|server/internal/client/ollama/registry.go|Registry.newRequest|954",
+          "matched": false,
+          "verdict": null,
+          "class": "secret_identity",
+          "severity": "high",
+          "file": "server/internal/client/ollama/registry.go",
+          "lines": [
+            954,
+            959
+          ],
+          "symbol": "Registry.newRequest",
+          "title": "Ollama.com signing key token sent to any third-party registry host",
+          "description": "Entry: server/routes.go:1503 (POST /api/pull, handled by PullHandler at server/routes.go:848; in client2 mode the request reaches Local.handlePull at server/internal/registry/server.go:340).\nAttacker: the operator of the third-party registry host named in the pull request (any caller who can reach /api/pull, which has no authentication), crossing the boundary between \"a registry I chose to download a model from\" and \"my ollama.com account credential\".\nPath: the model name from the request body is parsed by Registry.Pull (server/internal/client/ollama/registry.go:464) and the manifest URL is built from that name's host; r.send (registry.go:1025) calls newRequest (registry.go:946), which sees r.Key != nil (set from ~/.ollama/id_ed25519 by DefaultRegistry, registry.go:267-292) and calls makeAuthToken (registry.go:1038) to set `Authorization: Bearer <token>` on the request. makeAuthToken signs the fixed string `GET,https://ollama.com?ts=<unix time>,<base64(hex(sha256(nil)))>` with the user's Ed25519 private key and embeds that URL, the public key and the signature in the token (registry.go:1044-1075).\nNothing on the path stops it: newRequest attaches the key for every host with no check that the destination is ollama.com or an allow-listed registry, and the signed data names https://ollama.com, not the registry being contacted. A malicious or compromised registry therefore receives, in the clear over TLS to itself, a token that ollama.com accepts as proof of the user's identity.\nImpact: the registry operator can replay the Bearer token to https://ollama.com within the timestamp validity window and act as the victim on their ollama.com account (e.g. access private models, push/delete content tied to the account), and the leaked public key plus signature format can be reused for further legacy-format requests; every pull from a non-ollama.com host leaks a fresh credential.\nFix: attach the signing key only when the request target host is ollama.com (or an explicit operator allow-list), and bind the signature payload to the actual target registry host so a token minted for one host is never valid at another; stop reusing the legacy ollama.com-bound token format for third-party registries."
+        },
+        {
+          "key": "ollama-73257915|resource_exhaustion|server/create.go|Server.CreateHandler|199",
+          "matched": false,
+          "verdict": null,
+          "class": "resource_exhaustion",
+          "severity": "high",
+          "file": "server/create.go",
+          "lines": [
+            199,
+            215
+          ],
+          "symbol": "Server.CreateHandler",
+          "title": "Unauthenticated /api/create type assertion panic crashes the ollama daemon",
+          "description": "Entry: server/routes.go:1517 (r.POST(\"/api/create\", s.CreateHandler))\nAttacker: an unauthenticated API caller (any local process or web page that can reach the daemon, and any network client when OLLAMA_HOST exposes it), crossing the boundary that the daemon must survive malformed request JSON.\nPath: CreateHandler binds api.CreateRequest, whose Info field is map[string]any (api/types.go:558) and can hold any JSON type. The handler spawns a goroutine at create.go:85 and reaches the `if r.Info != nil` block at create.go:182. strFromInfo does `val := v.(string)` (create.go:202) and vFromInfo does `val := v.(float64)` (create.go:211) without the comma-ok form, so POST /api/create {\"model\":\"x\",\"from\":\"nonexistent\",\"info\":{\"model_family\":1}} panics. Nothing on the path validates the types, and because the panic happens in the goroutine spawned at create.go:85 it is outside gin's Recovery middleware, so the Go runtime aborts the entire ollama process. Fix: use `val, ok := v.(string)` / `(float64)` and return 400 on a type mismatch, and add a recover in the spawned goroutine."
+        },
+        {
+          "key": "ollama-73257915|resource_exhaustion|server/download.go|blobDownload.Prepare|152",
+          "matched": false,
+          "verdict": null,
+          "class": "resource_exhaustion",
+          "severity": "high",
+          "file": "server/download.go",
+          "lines": [
+            152,
+            173
+          ],
+          "symbol": "blobDownload.Prepare",
+          "title": "Attacker-controlled registry Content-Length forces unbounded part files and disk use",
+          "description": "Entry: server/routes.go:1503 (r.POST(\"/api/pull\", s.PullHandler))\nAttacker: an unauthenticated API caller who names a registry host they control in the model name (e.g. `evil.example.com/ns/model` with \"insecure\":true), crossing the boundary that the daemon trusts the remote registry's response.\nPath: PullHandler -> PullModel (images.go:612) -> downloadBlob (download.go:466) -> blobDownload.Prepare (download.go:126). Prepare issues a HEAD to the registry (download.go:146) and assigns b.Total from the response Content-Length (download.go:152) with no upper bound. The part size is capped at 1000MB (download.go:154-160) but the loop at download.go:163 runs `for offset < b.Total`, calling newPart once per part, and each newPart writes a JSON part file to the blobs directory and appends a struct to b.Parts. A single HEAD response with Content-Length 2^62 therefore makes the server create ~4.6 billion files and structs; run() additionally calls file.Truncate(b.Total) (download.go:225) and then downloads each part, so disk, inodes and memory are consumed without limit from one small request. Fix: reject a Content-Length above a sane maximum, cap the number of parts, and never size allocations directly from a remote header."
+        },
+        {
+          "key": "ollama-73257915|resource_exhaustion|server/routes.go|Server.EmbedHandler|745",
+          "matched": false,
+          "verdict": null,
+          "class": "resource_exhaustion",
+          "severity": "high",
+          "file": "server/routes.go",
+          "lines": [
+            745,
+            763
+          ],
+          "symbol": "Server.EmbedHandler",
+          "title": "Unauthenticated embed request with huge input list exhausts memory",
+          "description": "Entry: server/routes.go:1526 (r.POST(\"/api/embed\", s.EmbedHandler)) and server/routes.go:1532 (/v1/embeddings via middleware.EmbeddingsMiddleware, which forwards Input unchanged)\nAttacker: an unauthenticated API caller, crossing the boundary that one request must not be amplified into unbounded model work.\nPath: EmbedHandler converts req.Input (type any) into a []string at routes.go:653-673 with no length limit; `embeddings := make([][]float32, len(input))` at routes.go:746; and the loop at routes.go:748-763 launches one goroutine per element through `var g errgroup.Group` (routes.go:745) with no SetLimit, each calling r.Embedding on the runner and retaining the returned vector. A roughly 1MB body containing 100k short strings produces 100k concurrent embedding calls and 100k retained vectors (a 4096-dimension float32 vector is ~16KB, so ~1.6GB) plus goroutine stacks. Nothing on the path caps the number of inputs or the concurrency. Fix: enforce a maximum input count (e.g. a few thousand) and use errgroup.SetLimit."
+        },
+        {
+          "key": "ollama-73257915|resource_exhaustion|server/images.go|pullModelManifest|704",
+          "matched": false,
+          "verdict": null,
+          "class": "resource_exhaustion",
+          "severity": "medium",
+          "file": "server/images.go",
+          "lines": [
+            704,
+            707
+          ],
+          "symbol": "pullModelManifest",
+          "title": "Unauthenticated pull of attacker manifest exhausts memory via unbounded decode",
+          "description": "Entry: server/routes.go:1503 (r.POST(\"/api/pull\", s.PullHandler))\nAttacker: an unauthenticated caller who points the pull at a registry they control, crossing the boundary of trusting a remote manifest's size.\nPath: PullHandler -> PullModel (images.go:612) -> pullModelManifest (images.go:693), which does `json.NewDecoder(resp.Body).Decode(&m)` at images.go:705 with no io.LimitReader. The attacker's registry can stream an arbitrarily large or endless JSON manifest; the decoder buffers and builds the Manifest, and PullModel then iterates m.Layers (images.go:617-636) issuing a HEAD and download per layer. Memory and follow-on work grow with the remote body, not with the request the caller sent. Fix: wrap the response body in io.LimitReader with a small manifest cap and reject manifests with more than a fixed number of layers."
+        },
+        {
+          "key": "ollama-73257915|resource_exhaustion|fs/ggml/gguf.go|newArray|401",
+          "matched": false,
+          "verdict": null,
+          "class": "resource_exhaustion",
+          "severity": "high",
+          "file": "fs/ggml/gguf.go",
+          "lines": [
+            401,
+            422
+          ],
+          "symbol": "newArray",
+          "title": "Unauthenticated GGUF array count forces huge allocation and daemon crash",
+          "description": "Entry: server/routes.go:1507 (POST /api/show with \"verbose\":true) and server/create.go:144 (POST /api/create with a .gguf file)\nAttacker: an unauthenticated caller who uploads a tiny crafted GGUF via POST /api/blobs/:digest, crossing the boundary that attacker-declared metadata must not dictate allocations.\nPath: ShowHandler -> GetModelInfo -> getModelData(..., req.Verbose) (routes.go:1168) -> llm.LoadModel(path, -1), and CreateHandler's goroutine -> convertModelFromFiles -> ggufLayers -> ggml.Decode(blob, -1) (create.go:639). In fs/ggml/gguf.go, readGGUFArray reads the element type and count straight from the file (gguf.go:409-418) and newArray executes `make([]T, size)` before any element data is read (gguf.go:401-404); the only guard, maxArraySize, is -1 on these paths. A few-hundred-byte file declaring an array count of 2^60 makes the process attempt an enormous allocation, and in the create path the resulting panic occurs in the goroutine spawned at create.go:85, outside gin's recovery, so the daemon dies. Fix: validate the declared count against the bytes remaining in the file and a hard maximum before allocating."
+        },
+        {
+          "key": "ollama-73257915|resource_exhaustion|server/images.go|makeRequestWithRetry|756",
+          "matched": false,
+          "verdict": null,
+          "class": "resource_exhaustion",
+          "severity": "high",
+          "file": "server/images.go",
+          "lines": [
+            756,
+            762
+          ],
+          "symbol": "makeRequestWithRetry",
+          "title": "Malicious registry 4xx body read without size cap exhausts daemon memory",
+          "description": "Entry: server/routes.go:1503 (r.POST(\"/api/pull\", s.PullHandler))\nAttacker: an unauthenticated caller who names a registry they control, crossing the boundary that remote error responses are untrusted data.\nPath: PullHandler -> PullModel -> makeRequestWithRetry (images.go:725). For any status >= 400 the function reads the entire response body with io.ReadAll (images.go:758) and formats it into the returned error, with no size cap. A malicious registry simply answers the manifest or blob request with an endless 4xx body, and the daemon reads it all into memory, one buffer per pull attempt. Fix: read at most a small fixed number of bytes (io.LimitReader) when turning an error response into an error message."
+        },
+        {
+          "key": "ollama-73257915|resource_exhaustion|server/auth.go|getAuthorizationToken|76",
+          "matched": false,
+          "verdict": null,
+          "class": "resource_exhaustion",
+          "severity": "high",
+          "file": "server/auth.go",
+          "lines": [
+            76,
+            79
+          ],
+          "symbol": "getAuthorizationToken",
+          "title": "Unauthenticated caller can exhaust daemon memory via unbounded token response read on /api/pull",
+          "description": "Entry: server/routes.go:1503 (r.POST(\"/api/pull\", s.PullHandler))\nAttacker: an unauthenticated caller who names a registry they control and makes it answer 401 with a WWW-Authenticate header, crossing the boundary that the daemon trusts a remote challenge.\nPath: PullHandler -> PullModel -> makeRequestWithRetry sees 401, parses the registry-supplied WWW-Authenticate realm (images.go:741, images.go:853) and calls getAuthorizationToken, which fetches that realm URL (auth.go:70) and then does io.ReadAll(response.Body) at auth.go:76 with no cap. The attacker's realm endpoint can stream unbounded data, and the same read happens on the retry path for every pull. Fix: bound the token response with io.LimitReader (and validate the realm host against expected registries)."
+        },
+        {
+          "key": "ollama-73257915|authz|server/internal/client/ollama/registry.go|Registry.Pull|594",
+          "matched": false,
+          "verdict": null,
+          "class": "authz",
+          "severity": "high",
+          "file": "server/internal/client/ollama/registry.go",
+          "lines": [
+            594,
+            603
+          ],
+          "symbol": "Registry.Pull",
+          "title": "Malicious registry forces daemon to fetch arbitrary internal URLs (SSRF)",
+          "description": "Entry: server/internal/registry/server.go:340 (s.Client.Pull(ctx, p.model()) from POST /api/pull), reaching the GET at server/internal/client/ollama/registry.go:598.\nAttacker: a malicious/compromised registry that the daemon pulls from (the host is chosen by the caller-supplied model name, e.g. attacker.example/ns/model:latest), crossing from the daemon into the host's internal network.\nPath: Registry.Pull -> chunksums (registry.go:817-935) GETs the registry's chunksums endpoint and reads the raw Content-Location response header into blobURL (registry.go:894); every chunksum it parses gets URL: blobURL (registry.go:925-929); the download loop then calls http.NewRequestWithContext(ctx, \"GET\", cs.URL, nil) with cs.URL used verbatim (registry.go:598-603) and fetches it with a Range header.\nWhy nothing stops it: the Content-Location value is never resolved against, or constrained to, the registry's own origin, and no private/loopback/link-local/metadata-address filtering exists in the client; the request is even made outside r.newRequest, so it is a raw GET to whatever URL the registry names.\nImpact: a registry the user was induced to pull from (which finding 3 makes reachable from any web page) can force the daemon to issue requests to arbitrary internal URLs such as http://169.254.169.254/latest/meta-data/ or internal admin endpoints, i.e. blind SSRF from the server's network position; the fetched bytes are only cached if they hash to the declared chunk digest, but the request itself is the boundary crossing.\nFix: require the Content-Location URL to be same-origin with the registry (scheme+host) that returned it, and reject loopback/private/link-local/metadata destinations before issuing the request."
+        },
+        {
+          "key": "ollama-73257915|authz|server/internal/registry/server.go|Local.serveHTTP|114",
+          "matched": false,
+          "verdict": null,
+          "class": "authz",
+          "severity": "critical",
+          "file": "server/internal/registry/server.go",
+          "lines": [
+            114,
+            129
+          ],
+          "symbol": "Local.serveHTTP",
+          "title": "DNS rebinding lets remote pages delete models via unguarded /api/delete and /api/pull",
+          "description": "Entry: server/internal/registry/server.go:117-121 (the switch that takes over \"/api/delete\" and \"/api/pull\" before the Fallback handler runs).\nAttacker: a remote web page in the victim's browser using DNS rebinding (Host: attacker.example resolving to 127.0.0.1), or any unauthenticated client that can reach the daemon, crossing into the victim's local model store.\nPath: when the client2 experiment is enabled, GenerateRoutes wraps the whole Gin router in registry.Local as the outermost handler (server/routes.go:1537-1547), so Local.serveHTTP sees the request first; it dispatches /api/delete to handleDelete and /api/pull to handlePull (server/internal/registry/server.go:117-121) and only sends everything else to the Gin fallback; handleDelete decodes the caller's JSON and calls s.Client.Unlink (line 238), which removes the local manifest and prunes layers (DiskCache.Unlink, server/internal/cache/blob/cache.go:308-318), while handlePull drives a full pull from a caller-named registry (line 340).\nWhy nothing stops it: the only network-access guard, allowedHostsMiddleware, plus the CORS policy, are installed on the Gin engine (server/routes.go:1491-1494) and therefore run only for requests that reach the fallback. Requests to /api/delete and /api/pull are answered by Local before that, so they skip the host allow-list entirely (allowedHostsMiddleware at server/routes.go:1423-1459 is what normally 403s a rebound Host header). There is no authentication on the local API and no check in Local either, so the two most destructive model-management routes are the only ones without the guard every sibling route gets.\nImpact: on a default loopback-bound install, any website the user visits can delete the user's models (DELETE /api/delete with {\"model\":\"llama3\"}) and force pulls of arbitrary registries (enabling the SSRF findings above); every other API route is correctly rejected with 403 in the same scenario.\nFix: run the same host/allow-list and CORS middleware in front of Local (or register /api/delete and /api/pull on the Gin engine so they pass through allowedHostsMiddleware), and reject requests whose Host is not local before handling them."
+        },
+        {
+          "key": "ollama-73257915|secret_identity|server/internal/registry/server.go|Local.serveHTTP|117",
+          "matched": false,
+          "verdict": null,
+          "class": "secret_identity",
+          "severity": "high",
+          "file": "server/internal/registry/server.go",
+          "lines": [
+            117,
+            128
+          ],
+          "symbol": "Local.serveHTTP",
+          "title": "Anti-rebinding Host check bypassed for /api/pull and /api/delete",
+          "description": "Entry: server/routes.go:1539-1546, where GenerateRoutes wraps the gin router as registry.Local.Fallback and returns Local as the top-level handler.\nAttacker: a remote web page performing a DNS-rebinding style request (Host: attacker-domain resolving to 127.0.0.1) against a loopback-bound Ollama server, crossing the operator's boundary that only requests addressed to loopback/private/allowed hosts may reach the local API.\nPath: http.Handle(\"/\", Local) (server/routes.go:1600) -> Local.ServeHTTP (server/internal/registry/server.go:109) -> serveHTTP switch (server/internal/registry/server.go:117) matches \"/api/delete\" (line 118) and \"/api/pull\" (line 120) and handles them inline, returning before the default branch that forwards to s.Fallback (gin). Because gin is never entered for those two paths, its middleware chain built at server/routes.go:1491-1494 (cors.New and allowedHostsMiddleware) never runs.\nWhy nothing stops it: allowedHostsMiddleware (server/routes.go:1423-1458) is the code that aborts with 403 when the Host header is not loopback/private/unspecified/isLocalIP/allowedHost; the interception at server/internal/registry/server.go:117-121 short-circuits it for exactly the two routes that matter, and nothing inside handlePull or handleDelete re-checks the Host header (only the HTTP method and JSON body are validated, server/internal/registry/server.go:230-262).\nImpact: the anti-rebinding/anti-CSRF guard the operator relies on is absent for /api/delete (arbitrary model deletion by name) and for /api/pull (which, per the first finding, also forwards the user's registry bearer credential to a caller-chosen host), so a malicious web page can drive both operations through the browser even though the same requests would be rejected if they reached the gin router.\nFix: apply the same Host/allowed-hosts check inside Local.serveHTTP (or mount Local behind the gin middleware chain) so /api/pull and /api/delete cannot be reached without passing allowedHostsMiddleware."
+        },
+        {
+          "key": "ollama-73257915|resource_exhaustion|server/internal/client/ollama/registry.go|Registry.Resolve|796",
+          "matched": false,
+          "verdict": null,
+          "class": "resource_exhaustion",
+          "severity": "high",
+          "file": "server/internal/client/ollama/registry.go",
+          "lines": [
+            796,
+            799
+          ],
+          "symbol": "Registry.Resolve",
+          "title": "Unauthenticated attacker OOMs the server with an unbounded manifest read",
+          "description": "Entry: server/internal/registry/server.go:259 handlePull (POST /api/pull when the client2 experiment is enabled) -> server/internal/registry/server.go:271 s.Client.Pull -> Registry.Resolve.\nAttacker: an unauthenticated caller of the HTTP API who names a model whose host they control (the registry host comes from the model name and only has to satisfy the name grammar), crossing the boundary of \"I name a model\" into \"I stream unlimited bytes into the server's heap\".\nPath: server/internal/registry/server.go:271 s.Client.Pull(ctx, p.model()) -> registry.go:465 Registry.Resolve -> registry.go:786 manifestURL built from the attacker-controlled host -> registry.go:791 r.send(ctx, \"GET\", manifestURL, nil) -> registry.go:796 io.ReadAll(res.Body) -> registry.go:801 unmarshalManifest. Nothing bounds the read: the response body is drained completely into a []byte before any parsing or validation, and the parsed manifest then drives the layer list used by Pull.\nWhy nothing stops it: Resolve has no io.LimitReader/MaxBytesReader and no Content-Length check; the only response-side handling is sendRequest (registry.go:968), which just checks the status code. Reaching this code requires the operator to set OLLAMA_EXPERIMENT=client2 (routes.go:73,1587), which is why this is reported second, but when the experimental client is on, a single GET to /api/pull with a model on an attacker-controlled registry lets that registry return an arbitrarily large body (or an endless chunked stream) that is buffered whole in the server process; it can also return a manifest with an enormous layers array, which Pull then iterates.\nImpact: a small request body from the caller plus a hostile (or compromised) registry response causes heap exhaustion / OOM-kill of the ollama server, taking down all inference and model management for every user of that instance; the server is also blocked while the body streams in.\nFix: cap the manifest read with io.LimitReader (a few MiB is far beyond any legitimate manifest) and fail with ErrManifestInvalid when the limit is hit or when Content-Length exceeds it, and bound the number of layers accepted from a remote manifest before iterating them."
+        },
+        {
+          "key": "ollama-73257915|ssrf|server/internal/client/ollama/registry.go|Registry.newRequest|947",
+          "matched": false,
+          "verdict": null,
+          "class": "ssrf",
+          "severity": "high",
+          "file": "server/internal/client/ollama/registry.go",
+          "lines": [
+            947,
+            947
+          ],
+          "symbol": "Registry.newRequest",
+          "title": "Unauthenticated SSRF via caller-controlled model name in Ollama pull",
+          "description": "Entry: server/internal/registry/server.go:259 (handlePull; the model name comes from the request body via params.model(), line 220), active when the operator sets OLLAMA_EXPERIMENT=client2 (server/routes.go:73 and 1587-1593).\nAttacker: an API caller who chooses the model-name host, crossing from an unauthenticated request into the server's internal network; the same sink also consumes registry-supplied redirect targets.\nPath: Registry.Pull (registry.go:464) -> Resolve (registry.go:780) builds manifestURL with fmt.Sprintf(\"%s://%s/v2/%s/%s/manifests/%s\", scheme, n.Host(), ...) at line 786 (blobs at 788, push URLs at 383/427, chunksums at 870) -> r.send -> r.newRequest -> http.NewRequestWithContext(ctx, method, url, body) at line 947 -> sendRequest -> client.Do at line 997. parseNameExtended (lines 1124-1153) accepts the caller-supplied schemes \"http\" and \"https+insecure\" (the latter flips InsecureSkipVerify at lines 969-991), and names.IsValid (server/internal/internal/names/name.go:113-130) only enforces character classes, so IP literals such as 169.254.169.254:80 or localhost pass.\nWhy nothing stops it: no code between the request body and line 947 checks whether the host is internal or whether it resolves to a private/loopback/link-local address, and http, not just https, is accepted without any opt-in flag. The Authorization token is even attached to the attacker-chosen destination (lines 954-959).\nImpact: with the experiment enabled, the same SSRF as the legacy pull path - server-side requests to internal services and cloud metadata - plus caller-selected TLS-verification bypass via the \"https+insecure\" scheme.\nFix: validate the parsed host before building the URL: allow only operator-approved registries, reject non-public addresses after DNS resolution (dial the vetted IP), and do not honor http or https+insecure from untrusted names."
+        },
+        {
+          "key": "ollama-73257915|resource_exhaustion|server/internal/client/ollama/registry.go|sendRequest|1001",
+          "matched": false,
+          "verdict": null,
+          "class": "resource_exhaustion",
+          "severity": "high",
+          "file": "server/internal/client/ollama/registry.go",
+          "lines": [
+            1001,
+            1010
+          ],
+          "symbol": "sendRequest",
+          "title": "Unauthenticated caller can exhaust server memory via unbounded registry error body read",
+          "description": "Entry: server/routes.go:1537-1547 (client2 path) -> /api/pull or /api/push -> Registry.Resolve/Push -> send -> sendRequest (registry.go:968).\nAttacker: an unauthenticated network caller naming a registry they control, crossing from a small request into unbounded server memory holding that registry's error body.\nPath: sendRequest calls c.Do(r) and, for any non-2xx status, executes io.ReadAll(res.Body) at registry.go:1002 and then json.Unmarshal (or string(out)) on the result.\nNothing on the path stops it: no size limit is imposed on the error body, and the default client transparently decompresses gzip, so a compressed body expands by orders of magnitude in memory. Any request in this client (manifest fetch, chunksums, blob upload commit) reaches this branch as soon as the remote host answers with an error status.\nImpact: memory exhaustion and process death from one request whose response body the attacker fully controls, with no work required from the victim beyond the request itself.\nFix: limit the error body read (io.LimitReader with a few KB) before unmarshalling or embedding it in the returned error."
+        },
+        {
+          "key": "ollama-73257915|authz|server/routes.go|Server.PullHandler|886",
+          "matched": true,
+          "verdict": null,
+          "class": "authz",
+          "severity": "high",
+          "file": "server/routes.go",
+          "lines": [
+            886,
+            886
+          ],
+          "symbol": "Server.PullHandler",
+          "title": "Unauthenticated /api/pull pulls models as the signed-in account",
+          "description": "Entry: server/routes.go:848 (POST /api/pull; registered at server/routes.go:1503 with no authentication, and the same handlers are also exposed unauthenticated under /v1 at server/routes.go:1530-1535).\nAttacker: any local user/process that can reach the loopback listener (or any network client if the server was exposed), crossing into the machine owner's ollama.com account.\nPath: PullHandler binds api.PullRequest.Model/Name from the request body (line 860), validates only the model-name syntax (line 861), then calls PullModel at line 886; PullModel issues the registry request and, on a 401 challenge, server/images.go:742 calls getAuthorizationToken (server/auth.go:53-70), which signs the challenge with the machine's private key via auth.Sign and sends the token to the registry, so the fetch is performed as the signed-in user.\nWhy nothing stops it: GenerateRoutes installs only cors.New and allowedHostsMiddleware (server/routes.go:1491-1494); there is no authentication or caller-to-account check on the /api or /v1 trees, and neither PullHandler nor PullModel compares the caller with the account that owns the signing key.\nImpact: an attacker sharing the machine (or reaching the exposed port) can pull any private/pro model the signed-in user can access onto the machine and then query it via /api/generate, /api/chat or the /v1 routes, and inspect its Modelfile/template via /api/show, i.e. exfiltrate the user's account-scoped model data.\nFix: require an authenticated caller credential (bound to the OS user or an operator-configured API key) on model-management routes, and never sign cloud/registry requests with the machine key for callers that are not the signed-in user; alternatively serve the API on a per-user socket instead of a shared loopback port."
+        },
+        {
+          "key": "ollama-73257915|authz|server/routes.go|Server.SignoutHandler|1768",
+          "matched": false,
+          "verdict": null,
+          "class": "authz",
+          "severity": "medium",
+          "file": "server/routes.go",
+          "lines": [
+            1768,
+            1787
+          ],
+          "symbol": "Server.SignoutHandler",
+          "title": "Unauthenticated callers can read account identity and revoke the ollama.com session",
+          "description": "Entry: server/routes.go:1512 (POST /api/signout) and server/routes.go:1514 (DELETE /api/user/keys/:encodedKey), plus server/routes.go:1510 (POST /api/me), none of which authenticate the caller.\nAttacker: any local caller that can reach the API, crossing into the machine owner's ollama.com session.\nPath: WhoamiHandler (line 1737) forwards to ollama.com via api.NewClient and returns the account identity (line 1747, line 1765); SignoutHandler (line 1768) fetches the machine's own public key with auth.GetPublicKey, encodes it, and calls client.Disconnect(c, encKey) at line 1787, which signs and sends a revocation for the machine's cloud key.\nWhy nothing stops it: no authentication or CSRF/authorization check exists on these routes (only cors and allowedHostsMiddleware are installed), and the DELETE /api/user/keys/:encodedKey route's :encodedKey parameter is never read - the handler always acts on the local machine key - so the caller-supplied key identifier is neither validated nor used while the operation still executes.\nImpact: any unauthenticated caller can read the user's account identity and force the user's ollama.com session to be revoked (a denial of service / credential-lifecycle operation performed for an unauthenticated party).\nFix: require an authenticated caller on /api/me and /api/signout, and for DELETE /api/user/keys/:encodedKey verify that the key named in the path belongs to the authenticated caller before revoking it instead of silently acting on the local key."
+        },
+        {
+          "key": "ollama-73257915|authz|server/routes.go|Server.GenerateHandler|290",
+          "matched": false,
+          "verdict": null,
+          "class": "authz",
+          "severity": "high",
+          "file": "server/routes.go",
+          "lines": [
+            290,
+            290
+          ],
+          "symbol": "Server.GenerateHandler",
+          "title": "Unauthenticated callers can invoke the signed-in user's cloud models",
+          "description": "Entry: server/routes.go:176 (POST /api/generate) and server/routes.go:1854 (POST /api/chat), also reachable unauthenticated through middleware/openai.go:395 (POST /v1/chat/completions) and middleware/openai.go:493 (POST /v1/responses).\nAttacker: any local caller that can reach the API, crossing into the machine owner's ollama.com account and cloud-model entitlement.\nPath: when the requested model's manifest has RemoteHost/RemoteModel (lines 226-227), GenerateHandler checks only that the host is in the operator's OLLAMA_REMOTES list (line 235), rewrites req.Model to the remote model (line 241), builds api.NewClient(remoteURL, http.DefaultClient) and calls client.Generate at line 290; the client signs the outgoing request with the machine's private key (api/client.go getAuthorizationToken), so the remote call is made as the signed-in user.\nWhy nothing stops it: the route has no authentication, the caller never proves they are the signed-in user, and the only gate is the host allow-list and the existence of a local manifest - the caller can pick any installed cloud model, so the server proxies the user's credentialed request for them.\nImpact: an unauthenticated caller can invoke the user's cloud/private models and read the completions, consuming the user's quota and accessing account-scoped models without being the account holder.\nFix: authenticate callers on inference routes and refuse to attach the machine's cloud signature to remote-model requests made by callers that were not authenticated as the signed-in user."
+        },
+        {
+          "key": "ollama-73257915|misconfiguration|server/routes.go|Server.GenerateRoutes|1489",
+          "matched": false,
+          "verdict": null,
+          "class": "misconfiguration",
+          "severity": "medium",
+          "file": "server/routes.go",
+          "lines": [
+            1489,
+            1494
+          ],
+          "symbol": "Server.GenerateRoutes",
+          "title": "Any website can drive state-changing Ollama API routes cross-origin (CSRF)",
+          "description": "Entry: server/routes.go:1503 (r.POST(\"/api/pull\", s.PullHandler)); the same missing protection applies to the other state-changing POST routes at lines 1504, 1507, 1510, 1512, 1517, 1518, 1520, 1524-1527, 1530-1532 and 1535.\nAttacker: any website the user visits (an untrusted web origin), crossing the browser-origin boundary that the OLLAMA_ORIGINS/CORS allow-list is supposed to enforce, to reach the victim's local Ollama HTTP API and change its state.\nPath: a page served from evil.com runs fetch(\"http://localhost:11434/api/pull\", {method:\"POST\", mode:\"no-cors\", headers:{\"Content-Type\":\"text/plain\"}, body:'{\"name\":\"...\"}'}); text/plain is a CORS-safelisted content type so the browser sends a simple request with no preflight. The middleware installed at server/routes.go:1491-1492 (cors.New(corsConfig)) only adds or withholds response headers on non-preflight requests and never rejects them, and allowedHostsMiddleware (server/routes.go:1423) sees Host \"localhost:11434\" and calls c.Next(). The handlers then parse the attacker's body with c.ShouldBindJSON (e.g. server/routes.go:643, 805, 901, 1028), which decodes JSON regardless of Content-Type, and nothing on any route checks Origin, Sec-Fetch-Site, a CSRF token or a custom header.\nImpact: any website the user visits can silently drive the local, unauthenticated Ollama server: force large model pulls until the disk fills (DoS), create/copy models, start/stop generations (GPU exhaustion), or sign the user out, and the official image binds this API on 0.0.0.0:11434 (Dockerfile:183), so the same requests work against LAN-exposed instances. CORS prevents the page from reading the response, but the state change already happened.\nFix: on state-changing methods, validate the Origin header server-side and reject requests whose Origin is present but not in the allow-list, or require Content-Type: application/json plus a custom header so browsers must preflight; do not rely on gin-contrib/cors alone, which does not stop simple cross-origin requests."
+        },
+        {
+          "key": "ollama-73257915|resource_exhaustion|openai/responses.go|convertInputMessage|492",
+          "matched": false,
+          "verdict": null,
+          "class": "resource_exhaustion",
+          "severity": "high",
+          "file": "openai/responses.go",
+          "lines": [
+            492,
+            508
+          ],
+          "symbol": "convertInputMessage",
+          "title": "Unauthenticated quadratic CPU/memory DoS via Responses API content items",
+          "description": "Entry: server/routes.go:1535 (/v1/responses -> middleware.ResponsesMiddleware, middleware/openai.go:493).\nAttacker: an unauthenticated HTTP caller of the Responses API, crossing the boundary between a modest request body and quadratic server CPU/memory consumption.\nPath: ResponsesMiddleware binds openai.ResponsesRequest (middleware/openai.go:495-499) and calls FromResponsesRequest (openai/responses.go:321), which iterates the caller's input items (line 344) and for each message calls convertInputMessage; there, for every content item in the caller-supplied `content` array, `content += v.Text` (lines 495 and 497) rebuilds the entire accumulated string each iteration.\nWhy nothing stops it: the content array length and item sizes are limited only by the request body; there is no cap on the number of content items and no size check before the concatenation loop, and Go strings are immutable so each `+=` copies the whole accumulated string.\nImpact: a body with K small content items performs O(K x total-length) copying (~K/2 times the body size in memcpy, i.e. a quadratic blow-up): a ~1 MB request with tens of thousands of one-character text items forces gigabytes of allocation and memcpy while holding a server worker, which is a cheap CPU/memory denial of service on the API.\nFix: build the message content with strings.Builder (or a []string joined once) and impose an upper bound on the number of content items and total content size accepted per request."
+        },
+        {
+          "key": "ollama-73257915|secret_identity|server/internal/client/ollama/registry.go|sendRequest|969",
+          "matched": false,
+          "verdict": null,
+          "class": "secret_identity",
+          "severity": "high",
+          "file": "server/internal/client/ollama/registry.go",
+          "lines": [
+            969,
+            994
+          ],
+          "symbol": "sendRequest",
+          "title": "Remote Content-Location can force InsecureSkipVerify on outbound registry request",
+          "description": "Entry: server/routes.go:848 (PullHandler) for large layers; the URL is taken from the registry's Content-Location response header at registry.go:894.\nAttacker: whoever controls the remote registry (or any response the server is made to read), crossing from \"remote data\" into \"the client's TLS policy for an outbound request\".\nPath: Registry.Pull (registry.go:464) -> chunksums (registry.go:817) reads \"Content-Location\" into blobURL (registry.go:894) and puts it into chunksum.URL (registry.go:926) -> registry.go:598 creates the GET request against that URL -> sendRequest (registry.go:603/968) sees r.URL.Scheme == \"https+insecure\" and at registry.go:980-994 clones the transport and sets tr.TLSClientConfig.InsecureSkipVerify = true, then rewrites the scheme to https and issues the request.\nNothing on the path validates the scheme or host of the Content-Location value: the value is remote input, and the only reason this branch exists is the operator's explicit \"https+insecure\" model-name opt-in (registry.go:1105-1111), which remote data can now trigger on the operator's behalf. Requests to an unverified TLS peer can then be intercepted or redirected by a network attacker, and the same mechanism (sendRequest with a caller/remote-supplied URL) is the one that carries the signed identity token in newRequest, so weakening verification here undermines the only remaining protection for those requests.\nFix: restrict the \"https+insecure\" scheme to URLs derived from the operator-supplied model name, reject or re-derive any Content-Location/redirect URL that does not match the expected registry host and scheme, and never enable InsecureSkipVerify for a request whose URL came from a response body or header."
+        }
+      ],
+      "surface": {
+        "errors": []
+      },
+      "coverage": {
+        "modelCalls": {
+          "security-scan-map": 1,
+          "security-scan-authz": 5,
+          "security-scan-ssrf": 5,
+          "security-scan-authz-verify": 11,
+          "security-scan-ssrf-verify": 16,
+          "security-scan-finalize": 56,
+          "security-scan-injection": 5,
+          "security-scan-secret_identity": 5,
+          "security-scan-injection-recovery": 2,
+          "security-scan-data_exposure": 2,
+          "security-scan-injection-verify": 3,
+          "security-scan-secret_identity-verify": 12,
+          "security-scan-resource_exhaustion": 5,
+          "security-scan-data_exposure-recovery": 1,
+          "security-scan-misconfiguration": 3,
+          "security-scan-resource_exhaustion-verify": 21,
+          "security-scan-data_exposure-verify": 1,
+          "security-scan-misconfiguration-verify": 4,
+          "code-review-dedup": 1,
+          "dedup-tiebreak": 2
+        },
+        "units": 670,
+        "done": 3,
+        "failed": 2,
+        "skippedByBudget": 665,
+        "stoppedByBudget": true
+      },
+      "spend": {
+        "usd": 2.9427673920000017,
+        "inputTokens": 31730420,
+        "outputTokens": 1294057,
+        "requests": 1209
+      },
+      "requestFailures": {
+        "total": 6,
+        "rateLimited": 0
+      },
+      "ms": 1562987
+    }
+  ]
+}

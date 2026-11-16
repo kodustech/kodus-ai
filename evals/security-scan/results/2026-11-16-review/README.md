@@ -8,10 +8,11 @@ preserved separately from later scoring. The model is
 Each public repository has the same $3 request-level cap.
 
 Release state: the original precision baseline fails Python and Go. The
-local follow-up stopped on ENOSPC. A clean `e5223d6a0` checkout is now measuring
-the six missing development/confirmation cases on the VM, in one paid queue.
-The frozen three development samples are judged; confirmation scoring and
-valid negative-control evidence remain pending. No release pass is claimed.
+local follow-up stopped on ENOSPC. A clean `e5223d6a0` checkout completed all
+six development/confirmation cases on the VM in one paid queue, retaining the
+final output without infrastructure errors. Three development samples are
+judged; confirmation scoring and the candidate control run remain pending.
+No release pass is claimed.
 
 ## Development baseline
 
@@ -109,7 +110,13 @@ controls cannot be claimed from this set.
 clean `e5223d6a0`, with the same DeepSeek route and $3 per-case cap ($18 maximum
 case budgets), one runner and two repositories at a time. Completed case
 snapshots and hash-selected samples are retained in `vm-followup.cases/` and
-were committed before their descriptions were inspected.
+were committed before their descriptions were inspected. The complete retained
+run is `vm-continuation.raw.json`; `vm-continuation-integrity.json` verifies all
+six immutable case snapshots equal its final cases. Its committed meter spend
+is $17.551285068, within the $18 sum of case caps. The initial exit 2 reflects
+unjudged findings, not a missing final report: infrastructure errors are zero.
+Confirmation descriptions remain uninspected while the library candidate
+controls are evaluated.
 
 The three completed development cases have the following **partial** source
 judgments. They do not include controls or the separate confirmation group:
