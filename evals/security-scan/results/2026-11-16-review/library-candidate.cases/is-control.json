@@ -1,0 +1,85 @@
+{
+  "kind": "completed-case-from-remote-checkpoint",
+  "note": "One completed engine case, not an aggregate benchmark or passing gate. No aggregate tokens attributed to this case. UUID retains its original expected-zero assumption and remains a diagnostic positive, not a valid clean negative.",
+  "capturedAt": "2026-11-16T19:22:22.933403+00:00",
+  "provenance": {
+    "measuredAt": "2026-11-16T19:05:15.180Z",
+    "engineCommit": "71dfbcbb63f3d6aa3c422a4caeabb07576c29a3f",
+    "dirty": false,
+    "datasets": {
+      "clean-controls.json": "cea9ef1a799f44969e14a62e61e6501f3dec519dccf5224c4f8071234fd0c80f"
+    },
+    "scoringVersion": 4
+  },
+  "scoring": {
+    "version": 4,
+    "matcherSha256": "d6bc9cabca5ae11af8178baf6673e2aa41fbb4b1dd8c812f20c0a655061094c0",
+    "adjudicationsSha256": "67dc6365d1ae8f564986f4e8f7696237da3574ec609e054644603205fe2e429d"
+  },
+  "model": "deepseek-v4-flash@fireworks",
+  "budgetUsd": 3,
+  "sourceCase": {
+    "id": "is-control",
+    "repo": "sindresorhus/is",
+    "language": "typescript",
+    "commit": "e9c026c611c1160eaad50da00be4e676b626018f",
+    "expectedFindings": 0
+  },
+  "cases": [
+    {
+      "id": "is-control",
+      "language": "typescript",
+      "expectedFindings": 0,
+      "runtime": {
+        "provider": "openai_compatible",
+        "servedModel": "accounts/fireworks/models/deepseek-v4p1-flash"
+      },
+      "checks": "Does the scan of sindresorhus/is@e9c026c611c1160eaad50da00be4e676b626018f avoid reporting security findings on this negative control?",
+      "hits": 0,
+      "total": 0,
+      "detail": [],
+      "precision": {
+        "listed": 0,
+        "judgedReal": 0,
+        "judgedFalse": 0,
+        "unjudged": 0
+      },
+      "rawFindings": 0,
+      "findings": [],
+      "surface": {
+        "errors": []
+      },
+      "coverage": {
+        "modelCalls": {
+          "security-scan-map": 1,
+          "security-scan-authz": 3,
+          "security-scan-injection": 3,
+          "security-scan-authz-recovery": 2,
+          "security-scan-injection-recovery": 3,
+          "security-scan-ssrf": 3,
+          "security-scan-data_exposure": 3,
+          "security-scan-secret_identity": 3,
+          "security-scan-misconfiguration": 3,
+          "security-scan-resource_exhaustion": 3,
+          "security-scan-data_exposure-recovery": 1
+        },
+        "units": 3,
+        "done": 3,
+        "failed": 0,
+        "skippedByBudget": 0,
+        "stoppedByBudget": false
+      },
+      "spend": {
+        "usd": 0.5523036240000002,
+        "inputTokens": 7874379,
+        "outputTokens": 210175,
+        "requests": 327
+      },
+      "requestFailures": {
+        "total": 0,
+        "rateLimited": 0
+      },
+      "ms": 615394
+    }
+  ]
+}

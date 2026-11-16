@@ -1,0 +1,15 @@
+{
+  "commit": "aa70a7791ae13586d492566bd8c924d1a5f385ef",
+  "workflowRun": 43936284750,
+  "job": 133541615191,
+  "conclusion": "success",
+  "runUrl": "https://github.com/kodustech/kodus-ai/actions/runs/43936284750",
+  "jobUrl": "https://github.com/kodustech/kodus-ai/actions/runs/43936284750/job/133541615191",
+  "passedSuites": 1391,
+  "skippedSuites": 7,
+  "passedTests": 20203,
+  "skippedTests": 61,
+  "passedSnapshots": 8,
+  "seconds": 733.699,
+  "source": "GitHub Actions job log summary retrieved through the GitHub connector."
+}

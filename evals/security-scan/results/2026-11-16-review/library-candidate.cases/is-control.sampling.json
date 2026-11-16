@@ -1,0 +1,11 @@
+{
+  "method": "All reported control findings.",
+  "group": "controls",
+  "seed": "wellington-review-2451-2026-11-16",
+  "case": "is-control",
+  "language": "typescript",
+  "sourceResult": "results/2026-11-16-review/library-candidate.cases/is-control.json",
+  "sourceResultSha256": "6a5a5dcf00b43caf89760fd42a2be048cd9c770449b589d1d89909e7722302ba",
+  "offListPopulation": 0,
+  "selected": []
+}

@@ -1,0 +1,89 @@
+{
+  "kind": "completed-case-from-remote-checkpoint",
+  "note": "One completed engine case, not an aggregate benchmark or passing gate. No aggregate tokens attributed to this case. UUID retains its original expected-zero assumption and remains a diagnostic positive, not a valid clean negative.",
+  "capturedAt": "2026-11-16T19:40:33.638523+00:00",
+  "provenance": {
+    "measuredAt": "2026-11-16T19:05:15.180Z",
+    "engineCommit": "71dfbcbb63f3d6aa3c422a4caeabb07576c29a3f",
+    "dirty": false,
+    "datasets": {
+      "clean-controls.json": "cea9ef1a799f44969e14a62e61e6501f3dec519dccf5224c4f8071234fd0c80f"
+    },
+    "scoringVersion": 4
+  },
+  "scoring": {
+    "version": 4,
+    "matcherSha256": "d6bc9cabca5ae11af8178baf6673e2aa41fbb4b1dd8c812f20c0a655061094c0",
+    "adjudicationsSha256": "67dc6365d1ae8f564986f4e8f7696237da3574ec609e054644603205fe2e429d"
+  },
+  "model": "deepseek-v4-flash@fireworks",
+  "budgetUsd": 3,
+  "sourceCase": {
+    "id": "xxhash-control",
+    "repo": "cespare/xxhash",
+    "language": "go",
+    "commit": "998dce232f17418a7a5721ecf87ca714025a3243",
+    "expectedFindings": 0
+  },
+  "cases": [
+    {
+      "id": "xxhash-control",
+      "language": "go",
+      "expectedFindings": 0,
+      "runtime": {
+        "provider": "openai_compatible",
+        "servedModel": "accounts/fireworks/models/deepseek-v4p1-flash"
+      },
+      "checks": "Does the scan of cespare/xxhash@998dce232f17418a7a5721ecf87ca714025a3243 avoid reporting security findings on this negative control?",
+      "hits": 0,
+      "total": 0,
+      "detail": [],
+      "precision": {
+        "listed": 0,
+        "judgedReal": 0,
+        "judgedFalse": 0,
+        "unjudged": 0
+      },
+      "rawFindings": 0,
+      "findings": [],
+      "surface": {
+        "errors": []
+      },
+      "coverage": {
+        "modelCalls": {
+          "security-scan-map": 1,
+          "security-scan-authz": 8,
+          "security-scan-injection": 8,
+          "security-scan-authz-recovery": 4,
+          "security-scan-injection-recovery": 8,
+          "security-scan-ssrf": 7,
+          "security-scan-misconfiguration": 8,
+          "security-scan-ssrf-recovery": 4,
+          "security-scan-data_exposure": 7,
+          "security-scan-misconfiguration-recovery": 7,
+          "security-scan-resource_exhaustion": 8,
+          "security-scan-data_exposure-recovery": 5,
+          "security-scan-secret_identity": 7,
+          "security-scan-secret_identity-recovery": 4,
+          "security-scan-resource_exhaustion-recovery": 3
+        },
+        "units": 8,
+        "done": 7,
+        "failed": 1,
+        "skippedByBudget": 0,
+        "stoppedByBudget": false
+      },
+      "spend": {
+        "usd": 0.9003144960000005,
+        "inputTokens": 6534929,
+        "outputTokens": 439301,
+        "requests": 465
+      },
+      "requestFailures": {
+        "total": 0,
+        "rateLimited": 0
+      },
+      "ms": 701574
+    }
+  ]
+}

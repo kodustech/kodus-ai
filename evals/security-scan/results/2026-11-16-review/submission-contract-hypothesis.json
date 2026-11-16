@@ -1,0 +1,32 @@
+{
+  "beforeCommit": "71dfbcbb63f3d6aa3c422a4caeabb07576c29a3f",
+  "hypothesis": "Naming the native result tool and its object schema in the security finder prompt may prevent naturally completed analyses from ending without a formal findings result. This does not infer an empty result from prose or relax completion validation.",
+  "observations": [
+    {
+      "case": "xxhash-control",
+      "agent": "security-scan-data_exposure",
+      "finishReason": "completed",
+      "submittedResult": false,
+      "incompleteReason": null,
+      "unverified": 0,
+      "kept": 0
+    },
+    {
+      "case": "itsdangerous-control",
+      "agent": "security-scan-resource_exhaustion",
+      "finishReason": "completed",
+      "submittedResult": false,
+      "incompleteReason": null,
+      "unverified": 0,
+      "kept": 0
+    }
+  ],
+  "sourceEvidence": [
+    "libs/security-scan/domain/scan-prompts.ts:138 currently asks for an empty list without naming submitResult or the required object.",
+    "libs/code-review/infrastructure/agents/core/finder.agent.ts:325 passes that system prompt unchanged.",
+    "libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.ts:268 requires a whole tool artifact or a whole structured final answer; plain prose is not a submitted result."
+  ],
+  "changeScope": "Clarify only the security finder completion instruction with the existing submitResult tool and reasoning/suggestions fields. Keep the library boundary paragraph, verifier focus, engine completion predicate, source cases, model route, reasoning, step limit, tools, caps, matcher, sampling and 60% floor unchanged.",
+  "measurement": "Retain the entire active 71df control run, including incomplete units and reports. Never advance it to positive measurements unless the frozen criteria pass. Validate the revised source on the same complete control set before its positive cases.",
+  "limitation": "The observer proves the missing formal result, not the exact raw reply or the efficacy of this correction. Its security findings have not been inspected for this hypothesis. Confirmation descriptions remain blind."
+}
