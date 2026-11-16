@@ -236,13 +236,13 @@ async function main() {
                 error: saved.error,
                 issueCount: after.length,
                 addedIdentities: after.filter(
-                    (a) => !before.some((b) => a.uuid === b.uuid),
+                    (a) => !before.some((b) => String(a._id) === String(b._id)),
                 ).length,
                 removedIdentities: before.filter(
-                    (b) => !after.some((a) => a.uuid === b.uuid),
+                    (b) => !after.some((a) => String(a._id) === String(b._id)),
                 ).length,
                 issues: after.map((i) => ({
-                    uuid: i.uuid,
+                    id: String(i._id),
                     fingerprint: i.fingerprint,
                     status: i.status,
                     lastSeenScanId: i.lastSeenScanId,
@@ -263,6 +263,9 @@ async function main() {
                     r.coverage?.unitsDone === r.coverage?.unitsTotal,
             ),
             sameCommit: rounds.every((r) => r.commitSha === commit),
+            sameIssueIds:
+                first.issues.length === second.issues.length &&
+                first.issues.every((a) => second.issues.some((b) => a.id === b.id)),
             nonVacuous: first.issueCount > 0 && first.outcome?.created > 0,
             noNewIssues:
                 second.addedIdentities === 0 && second.outcome?.created === 0,
