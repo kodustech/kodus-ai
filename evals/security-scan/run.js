@@ -55,17 +55,25 @@ const ADJUDICATIONS = fs.existsSync(path.join(__dirname, 'adjudications.json'))
     ? require('./adjudications.json')
     : {};
 
-const { findingKey, assignAdvisories } = require('./scoring');
+const { findingKey, assignAdvisories, judgmentFor } = require('./scoring');
+// These are the files loaded for this run, even if a developer edits them
+// while a long measurement is still running.
+const scoringAtStart = scoringProvenance();
+const abort = new AbortController();
+for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.once(signal, () => abort.abort(new Error(`Measurement interrupted by ${signal}`)));
+}
 
 async function runCase(c, route, pricing) {
     const startedAt = Date.now();
     {
-        const { result, shipped, spend } = await scanRepository({ c, route, pricing, budgetUsd: BUDGET_USD, sandbox: SANDBOX });
+        abort.signal.throwIfAborted();
+        const { result, shipped, spend } = await scanRepository({ c, route, pricing, budgetUsd: BUDGET_USD, sandbox: SANDBOX, signal: abort.signal });
         const inScope = c.advisories.filter((a) => a.class);
         const { assignments, consumed } = assignAdvisories(shipped, c.advisories);
         const found = inScope.filter(a => consumed.has(a));
         const offList = shipped.filter((f, i) => !assignments[i]);
-        const judged = offList.map((f) => ({ finding: f, verdict: ADJUDICATIONS[findingKey(c.id, f)] }));
+        const judged = offList.map((f) => ({ finding: f, verdict: judgmentFor(c.id, f, ADJUDICATIONS) }));
         const listed = shipped.length - offList.length;
         const judgedReal = judged.filter((j) => j.verdict === 'real').length;
         const judgedFalse = judged.filter((j) => j.verdict === 'false').length;
@@ -96,10 +104,10 @@ async function runCase(c, route, pricing) {
             }),
             precision: { listed, judgedReal, judgedFalse, unjudged: judged.length - judgedReal - judgedFalse },
             rawFindings: result.findings.length,
-            findings: shipped.map((f) => ({
+            findings: shipped.map((f, i) => ({
                 key: findingKey(c.id, f),
-                matched: !offList.includes(f),
-                verdict: ADJUDICATIONS[findingKey(c.id, f)] ?? null,
+                matched: !!assignments[i],
+                verdict: assignments[i] ? null : (judgmentFor(c.id, f, ADJUDICATIONS) ?? null),
                 class: f.vulnerabilityClass,
                 severity: f.severity,
                 file: f.filePath,
@@ -114,10 +122,12 @@ async function runCase(c, route, pricing) {
                 modelCalls: result.modelCalls,
                 units: result.units.length,
                 done: result.progress.filter((p) => p.state === 'done').length,
+                failed: result.progress.filter((p) => p.state === 'failed').length,
                 skippedByBudget: result.progress.filter((p) => p.state === 'skipped_budget').length,
                 stoppedByBudget: result.stoppedByBudget,
             },
             spend,
+            requestFailures: result.requestFailures,
             ms: Date.now() - startedAt,
         };
     }
@@ -176,7 +186,7 @@ function rescore(file) {
         let unjudged = 0;
         for (const f of c.findings) {
             f.key = findingKey(c.id, { vulnerabilityClass: f.class, filePath: f.file, symbol: f.symbol, startLine: f.lines?.[0] });
-            f.verdict = f.matched ? null : (ADJUDICATIONS[f.key] ?? null);
+            f.verdict = f.matched ? null : (judgmentFor(c.id, f, ADJUDICATIONS) ?? null);
             if (f.matched) continue;
             if (f.verdict === 'real') judgedReal++;
             else if (f.verdict === 'false') judgedFalse++;
@@ -196,20 +206,37 @@ async function main() {
     }
     const route = orgRouteOrExit(MODEL);
     const pricing = pricingResolver();
-    const all = args.set === 'wiring' ? [require('./wiring-case')] : args.set === 'negative' ? require('./clean-controls.json').cases : DATA.cases;
-    measurement = runProvenance([path.join(__dirname, args.set === 'negative' ? 'clean-controls.json' : 'vulngym-cases.json')]);
-    const picked = args.cases ? all.filter((c) => String(args.cases).split(',').includes(c.id)) : all;
+    const controls = require('./clean-controls.json').cases;
+    const all = args.set === 'wiring' ? [require('./wiring-case')] : args.set === 'negative' ? controls : args.set === 'all' ? [...DATA.cases, ...controls] : DATA.cases;
+    const datasets = args.set === 'all' ? ['vulngym-cases.json', 'clean-controls.json'] : [args.set === 'negative' ? 'clean-controls.json' : 'vulngym-cases.json'];
+    measurement = runProvenance(datasets.map(file => path.join(__dirname, file)));
+    const picked = args.cases ? [...new Set(String(args.cases).split(','))].map(id => all.find(c => c.id === id)).filter(Boolean) : all;
 
     const errors = [];
+    const completed = new Map();
+    const checkpoint = () => {
+        fs.mkdirSync(path.dirname(OUT), { recursive: true });
+        fs.writeFileSync(`${OUT}.partial`, JSON.stringify({
+            kind: 'incomplete-measurement', provenance: measurement,
+            scoring: scoringAtStart, cases: [...completed.values()], errors,
+            pending: picked.filter(c => !completed.has(c.id) && !errors.some(e => e.id === c.id)).map(c => c.id),
+            tokens: tokensUsed(), interrupted: abort.signal.aborted,
+        }, null, 2));
+    };
     const cases = (
         await pool(picked, CONCURRENCY, async (c) => {
             try {
                 const r = await runCase(c, route, pricing);
+                completed.set(c.id, r);
+                if (r.requestFailures?.rateLimited) errors.push({ id: c.id, error: `${r.requestFailures.rateLimited} model calls exhausted HTTP 429 retries; not a clean measurement.` });
+                if (abort.signal.aborted && !errors.some(e => e.id === c.id)) errors.push({ id: c.id, error: 'Measurement interrupted; partial findings are not release evidence.' });
+                checkpoint();
                 console.log(`${c.id}: ${r.hits}/${r.total} found · ${r.findings.length} issues from ${r.rawFindings} findings (${r.precision.listed} listed, ${r.precision.unjudged} to judge) · $${r.spend.usd.toFixed(2)}`);
                 return r;
             } catch (error) {
                 console.error(`${c.id}: not measured — ${error.message}`);
                 errors.push({ id: c.id, error: String(error.message).slice(0, 300) });
+                checkpoint();
                 return null;
             }
         })
@@ -250,7 +277,7 @@ function report(cases, errors, pickedCount, tokens) {
     const result = {
         eval: 'security-scan',
         provenance: measurement,
-        scoring: scoringProvenance(),
+        scoring: scoringAtStart,
         scoredAt: new Date().toISOString(),
         question: evalQuestion('evals/security-scan'),
         model: runSettings.model,

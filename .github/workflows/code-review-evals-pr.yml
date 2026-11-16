@@ -130,6 +130,12 @@ jobs:
             - name: Run wiring smoke
               run: node evals/wiring-smoke.js --eval-files-dir=eval-files
 
+            - name: Check security scan scoring and judgment isolation
+              run: node --test evals/security-scan/scoring.test.js
+
+            - name: Reject a rate-limited security scan measurement
+              run: node evals/security-scan/rate-limit.contract.js --output=eval-results/security-scan-429-contract.json
+
             - name: Check approval and history paths
               id: approval-evidence
               env:

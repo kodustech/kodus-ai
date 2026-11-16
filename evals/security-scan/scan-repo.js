@@ -22,7 +22,21 @@ LLM.run = function(request) {
         const task = request.runName ?? 'unnamed';
         use.scanCalls[task] = (use.scanCalls[task] ?? 0) + 1;
     }
-    return call.call(this, request);
+    const result = call.call(this, request);
+    if (!use?.requestFailures) return result;
+    return result.catch(error => {
+        // Observe exhausted provider failures; forward the exact error.
+        // Never treat invalid model output as infrastructure to hide it.
+        let last = error;
+        for (let i = 0; i < 5; i++) {
+            const next = last?.lastError ?? (Array.isArray(last?.errors) ? last.errors.at(-1) : undefined) ?? last?.cause;
+            if (!next || next === last) break;
+            last = next;
+        }
+        use.requestFailures.total++;
+        if (last?.statusCode === 429) use.requestFailures.rateLimited++;
+        throw error;
+    });
 };
 
 
@@ -68,7 +82,7 @@ async function openSandbox(c, sandboxKind) {
  * Scans `c` within `budgetUsd` and returns the engine's result, the meter's
  * spend and `shipped`: one finding per issue identity, as the job stores them.
  */
-async function scanRepository({ c, route, pricing, budgetUsd, sandbox: sandboxKind = 'local' }) {
+async function scanRepository({ c, route, pricing, budgetUsd, sandbox: sandboxKind = 'local', signal }) {
     const { SecurityScanEngine } = lib('security-scan/application/security-scan-engine.ts');
     const { resolveScanModel } = lib('security-scan/application/scan-model.ts');
     const { ScanBudgetMeter } = lib('security-scan/domain/budget-meter.ts');
@@ -85,7 +99,7 @@ async function scanRepository({ c, route, pricing, budgetUsd, sandbox: sandboxKi
         });
         const meter = new ScanBudgetMeter(rates ? { maxUsd: budgetUsd } : { maxTokens: budgetUsd * 2_000_000 }, rates);
         const repositoryId = c.repo ?? c.id;
-        const usage = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, calls: 0, byTask: {}, scanCalls: {} };
+        const usage = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, calls: 0, byTask: {}, scanCalls: {}, requestFailures: { total: 0, rateLimited: 0 } };
         global.__EVAL_CASE_ALS ??= new AsyncLocalStorage();
         const result = await global.__EVAL_CASE_ALS.run(usage, () => new SecurityScanEngine().run({
             organizationId: EVAL_ORG.organizationId,
@@ -95,10 +109,12 @@ async function scanRepository({ c, route, pricing, budgetUsd, sandbox: sandboxKi
             sandbox,
             model,
             meter,
+            signal,
             maxUnits: SCAN_MAX_UNITS,
             reproduce: sandboxKind === 'e2b',
         }));
         result.modelCalls = usage.scanCalls;
+        result.requestFailures = usage.requestFailures;
         result.runtime = { provider: model.slot?.provider, servedModel: model.slot ? asServedSlot(model.slot).model : null };
 
         // What ships: the job stores one issue per fingerprint, so findings

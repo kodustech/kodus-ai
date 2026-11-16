@@ -1,0 +1,82 @@
+TAP version 13
+# Subtest: one finding cannot claim three advisories at the same location
+ok 1 - one finding cannot claim three advisories at the same location
+  ---
+  duration_ms: 0.517875
+  type: 'test'
+  ...
+# Subtest: duplicate reports cannot inflate listed precision
+ok 2 - duplicate reports cannot inflate listed precision
+  ---
+  duration_ms: 0.356209
+  type: 'test'
+  ...
+# Subtest: another class at the same location is not a listed hit
+ok 3 - another class at the same location is not a listed hit
+  ---
+  duration_ms: 0.104792
+  type: 'test'
+  ...
+# Subtest: an unclassified advisory cannot certify a finding at the same location
+ok 4 - an unclassified advisory cannot certify a finding at the same location
+  ---
+  duration_ms: 0.066625
+  type: 'test'
+  ...
+# Subtest: line ranges and the established line window are preserved
+ok 5 - line ranges and the established line window are preserved
+  ---
+  duration_ms: 0.131875
+  type: 'test'
+  ...
+# Subtest: judgments do not cross different findings inside one symbol
+ok 6 - judgments do not cross different findings inside one symbol
+  ---
+  duration_ms: 0.548917
+  type: 'test'
+  ...
+# Subtest: another claim at the same class/file/symbol/line cannot inherit a verdict
+ok 7 - another claim at the same class/file/symbol/line cannot inherit a verdict
+  ---
+  duration_ms: 1.415458
+  type: 'test'
+  ...
+# Subtest: a legacy key without source and content provenance is unjudged
+ok 8 - a legacy key without source and content provenance is unjudged
+  ---
+  duration_ms: 0.104917
+  type: 'test'
+  ...
+# Subtest: different measured claims under the same key keep separate verdict history
+ok 9 - different measured claims under the same key keep separate verdict history
+  ---
+  duration_ms: 0.33
+  type: 'test'
+  ...
+# Subtest: engine and saved-result forms have the same content digest
+ok 10 - engine and saved-result forms have the same content digest
+  ---
+  duration_ms: 0.3155
+  type: 'test'
+  ...
+# Subtest: missing source provenance cannot certify a finding
+ok 11 - missing source provenance cannot certify a finding
+  ---
+  duration_ms: 0.149708
+  type: 'test'
+  ...
+# Subtest: rescoring metadata cannot change the content a judgment was about
+ok 12 - rescoring metadata cannot change the content a judgment was about
+  ---
+  duration_ms: 0.046333
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 39.956959

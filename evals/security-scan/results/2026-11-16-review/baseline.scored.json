@@ -39,11 +39,11 @@
     ]
   },
   "scoring": {
-    "version": 3,
-    "matcherSha256": "7d5a6d5637b9f312d901aaa14048ada2b876bdf542ac8e5e1189fdfec915621d",
-    "adjudicationsSha256": "d0c8bd0fdead607b028aed5e2cb8fc622afeed5b6b94ef0cdf19749257f591c6"
+    "version": 4,
+    "matcherSha256": "983c861cfcf927f39ce1544650f5d197cbdf410b5d7df4a11f2b5a453c1c68d7",
+    "adjudicationsSha256": "3b8cfda2a2427c30dcad55a4afa138964a2cbfd28c39aef881e4beb9ba4dcb33"
   },
-  "scoredAt": "2026-11-16T12:52:30.466Z",
+  "scoredAt": "2026-11-16T13:39:56.821Z",
   "question": "Of the published vulnerabilities in a repository, how many does a security scan capped at a few dollars report, and of what it reports, how much is real?",
   "model": "deepseek-v4-flash@fireworks",
   "runs": 1,

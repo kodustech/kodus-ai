@@ -25,3 +25,33 @@ test('line ranges and the established line window are preserved', () => {
 test('judgments do not cross different findings inside one symbol', () => {
     assert.notEqual(findingKey('repo', finding), findingKey('repo', {...finding, startLine: 300}));
 });
+
+const { judgmentDigest, judgmentFor } = require('./scoring');
+const report = { class: 'authz', file: 'routes.ts', lines: [221, 223], symbol: 'handle', title: 'Foreign record read', description: 'A caller reads another tenant record.' };
+const record = (f, verdict = 'real') => ({ findingSha256: judgmentDigest(f), sourceResultSha256: 'a'.repeat(64), judge: 'source reviewer', date: '2026-11-16', verdict });
+const withRecords = (...records) => ({ [findingKey('repo', finding)]: 'real', _metadata: { judgments: { [findingKey('repo', finding)]: records } } });
+test('another claim at the same class/file/symbol/line cannot inherit a verdict', () => {
+    const judgments = withRecords(record(report));
+    assert.equal(judgmentFor('repo', report, judgments), 'real');
+    assert.equal(judgmentFor('repo', {...report, description: 'A different alleged vulnerability.'}, judgments), undefined);
+});
+test('a legacy key without source and content provenance is unjudged', () => {
+    assert.equal(judgmentFor('repo', report, {[findingKey('repo', finding)]: 'real'}), undefined);
+});
+test('different measured claims under the same key keep separate verdict history', () => {
+    const changed = {...report, title: 'An ordinary public resource'};
+    const judgments = withRecords(record(report), record(changed, 'false'));
+    assert.equal(judgmentFor('repo', report, judgments), 'real');
+    assert.equal(judgmentFor('repo', changed, judgments), 'false');
+});
+test('engine and saved-result forms have the same content digest', () => {
+    assert.equal(judgmentDigest({...finding, title: report.title, description: report.description}), judgmentDigest(report));
+});
+test('missing source provenance cannot certify a finding', () => {
+    const bad = {...record(report), sourceResultSha256: ''};
+    assert.equal(judgmentFor('repo', report, withRecords(bad)), undefined);
+    assert.equal(judgmentFor('repo', report, withRecords({...record(report), judge: ''})), undefined);
+});
+test('rescoring metadata cannot change the content a judgment was about', () => {
+    assert.equal(judgmentDigest(report), judgmentDigest({...report, matched: false, verdict: 'false', key: 'display only'}));
+});

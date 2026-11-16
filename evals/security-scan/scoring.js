@@ -1,5 +1,5 @@
 const norm = (f) => String(f || '').replace(/\\/g, '/').replace(/^\.?\/+/, '');
-const SCORING_VERSION = 3;
+const SCORING_VERSION = 4;
 
 function findingKey(caseId, f) {
     return `${caseId}|${f.vulnerabilityClass}|${norm(f.filePath)}|${f.symbol || ''}|${f.startLine}`;
@@ -32,4 +32,35 @@ function assignAdvisories(findings, advisories) {
     return { assignments, consumed };
 }
 
-module.exports = { SCORING_VERSION, findingKey, lineRange, matches, assignAdvisories };
+/** A verdict certifies this exact claim, not every future claim at its location. */
+function judgmentDigest(finding) {
+    const { createHash } = require('crypto');
+    const contents = {
+        class: finding.vulnerabilityClass ?? finding.class,
+        file: norm(finding.filePath ?? finding.file),
+        lines: finding.lines ?? [finding.startLine, finding.endLine],
+        symbol: finding.symbol ?? '',
+        title: finding.title ?? '',
+        description: finding.description ?? '',
+    };
+    return createHash('sha256').update(JSON.stringify(contents)).digest('hex');
+}
+
+function judgmentFor(caseId, finding, adjudications) {
+    const asFinding = {
+        vulnerabilityClass: finding.vulnerabilityClass ?? finding.class,
+        filePath: finding.filePath ?? finding.file,
+        symbol: finding.symbol,
+        startLine: finding.startLine ?? finding.lines?.[0],
+    };
+    const key = findingKey(caseId, asFinding);
+    const saved = adjudications._metadata?.judgments?.[key];
+    const records = Array.isArray(saved) ? saved : saved ? [saved] : [];
+    const digest = judgmentDigest(finding);
+    const record = records.find(r => r.findingSha256 === digest &&
+        /^[a-f0-9]{64}$/.test(r.sourceResultSha256 ?? '') && r.judge && r.date);
+    const verdict = record?.verdict;
+    return verdict === 'real' || verdict === 'false' ? verdict : undefined;
+}
+
+module.exports = { SCORING_VERSION, findingKey, lineRange, matches, assignAdvisories, judgmentDigest, judgmentFor };

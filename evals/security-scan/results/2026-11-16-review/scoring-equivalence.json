@@ -1,0 +1,13 @@
+{
+  "beforeSha256": "5cbbe9788fd91cde8152a245b91cfc36b6d8c6774a5fe965a76cf38d1b9a8e0f",
+  "afterSha256": "b0576bdf2f7d68d54f6f6d205f5d213100b2791ecc96c569a90ada90485f9967",
+  "beforeVersion": 3,
+  "afterVersion": 4,
+  "unchanged": {
+    "metric": true,
+    "precision": true,
+    "byLanguage": true,
+    "byClass": true
+  },
+  "note": "Exact-content provenance accepts the same 61 source judgments and changes no baseline number; separate tests reject stale claims and absent provenance."
+}

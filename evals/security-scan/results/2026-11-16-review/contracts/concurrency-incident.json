@@ -1,0 +1,17 @@
+{
+  "timeUtc": "2026-11-16T13:26:21.183558+00:00",
+  "pausedPids": [
+    88882,
+    96318,
+    96295
+  ],
+  "reason": "Concurrent candidate, control and confirmation processes exceeded provider rate limits (HTTP429). Suspended controls/confirmation; development case process remains active. Affected runs are diagnostic, not clean release evidence.",
+  "allPausedAtUtc": "2026-11-16T13:28:08.101985+00:00",
+  "resumed": [
+    {
+      "pid": 96318,
+      "timeUtc": "2026-11-16T13:30:11.816001+00:00",
+      "note": "Controls only; development and confirmation remain suspended. A minimal same-route provider diagnostic succeeded."
+    }
+  ]
+}

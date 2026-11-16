@@ -1,6 +1,6 @@
 {
   "_metadata": {
-    "schema": 2,
+    "schema": 3,
     "key": "case|class|file|symbol|startLine",
     "migrationDate": "2026-11-14",
     "droppedLegacyVerdicts": 228,
@@ -8,12 +8,12 @@
     "judge": "Codex (source inspection; no independent human adjudication)",
     "date": "2026-11-16",
     "sampling": "results/2026-11-16-review/sampling.json",
-    "findingHashEncoding": "SHA-256 of UTF-8 JSON, keys sorted, compact separators, ensure_ascii=False",
+    "findingHashEncoding": "SHA-256 of JSON.stringify({class,file,lines,symbol,title,description}) with normalized path; see scoring.js judgmentDigest.",
     "judgments": {
       "flowise-f0c12941|authz|packages/server/src/enterprise/routes/role.route.ts||8": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "4b523b79e53cdfb1bc490f09b09554a2e8ab85c54f3e1a3b7f89fe93ba601151",
+        "findingSha256": "2f3c06be968c704e053d473f82fd113065db9aaea08e5ef2af8de7da856faf96",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The GET controller accepts a caller-chosen role or organization id, and the service queries it without the authenticated organization's predicate. A plan-feature check supplies no object authorization.",
@@ -30,12 +30,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/role.service.ts#L35",
             "sha256": "11e74c22c976099840259e602285c653f4bae9229893cc2cb08b1d904d7cd27e"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "flowise-f0c12941|misconfiguration|packages/server/src/enterprise/utils/tempTokenUtils.ts|encryptToken|33": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "af7abccda324ac84314ed29abda6ab51738fb9e8d072333fc7ef41dba568cbed",
+        "findingSha256": "badd099d62c84474bbb3d430bb4fb0618dde3ca4d11378fb8152652509a33041",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The meta is inside a signed JWT. AuthStrategy also requires an existing server-side req.user session and compares its id; knowledge of the fallback encryption key does not create another user's session or bypass the outer signature.",
@@ -52,12 +53,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/index.ts#L393",
             "sha256": "bc4881d6aaab0f90f7c4d1413f5043ca73561beec97e4416126cb180a59cd038"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "flowise-f0c12941|ssrf|packages/server/src/enterprise/sso/Auth0SSO.ts|Auth0SSO.testSetup|117": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "ad41930048da3a7d5c2b0add6e2257b6e7e3cc46120281487e33cec4e9a34da2",
+        "findingSha256": "c19ae5fbf3fb042b44fd1f443c7321d2ff97336d60ffd85c3a0d7755d465eda9",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The named attacker already has the administrator SSO configuration permission and supplies the SSO issuer domain by design. No lower-privilege access or bypass of an enforced network restriction is demonstrated; the example also assumes metadata works over HTTPS with a valid certificate.",
@@ -70,12 +72,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/sso/Auth0SSO.ts#L113",
             "sha256": "478f3ada588936f3ebba785de643587b38784e8046853d871e1049870d0cbb64"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "flowise-f0c12941|authz|packages/server/src/services/evaluations/index.ts|deleteEvaluation|431": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "a8a7670413705ee85a52ee8283716816bba02578767c190331476cd9fa905a7d",
+        "findingSha256": "5c9014f3445b482b7c09acd07695998cdde62010eba41cfc01d8d6cd04f10e60",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The controller passes the authenticated workspace id, but deletion filters only by the request's evaluation id, then deletes all associated runs. The workspace argument restricts only the response listing, so the write crosses tenant boundaries.",
@@ -88,12 +91,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/services/evaluations/index.ts#L428",
             "sha256": "ee5a5c58b5fa629f55b428dfb79d5db5415029ee4fd743aa86d6b87658c635af"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/middleware/passport/index.ts|app.post(\"/api/v1/auth/refreshToken\")|260": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "362ba00c29ec308abf311afa8946c5274eb2e4ba95ef8afdc65ac98e17684415",
+        "findingSha256": "bb3b0c537c4ce851037f6b2883f44b10f6b145184575f6dc4312062c1ef9fa77",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The claimed subject-substitution mechanism is not established (a server session is still required), but the reported revocation bypass is: refresh uses serialized req.user without reloading workspace membership/permissions, whereas login requires a workspace assignment. Only password updates invalidate sessions.",
@@ -114,12 +118,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/user.service.ts#L183",
             "sha256": "c993b1190fd866a0d25e0bc5810bbe2f30a496ef7495afb6058aad958448aa97"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "flowise-f0c12941|misconfiguration|packages/server/src/routes/oauth2/index.ts|router.get(\"/callback\")|183": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "13c06edcf973a75696d4de55ead8a255d70add89f7561c5b1c84c338972d789e",
+        "findingSha256": "0c7249ef6c2b64994e4b0da0ad95151d089dda64c786cec7f7f7251ec4b11c18",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The unauthenticated OAuth callback trusts state as credential UUID without session/nonce binding and saves exchanged tokens into that credential; knowledge of a victim credential UUID crosses the intended ownership boundary.",
@@ -140,12 +145,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/utils/constants.ts#L39",
             "sha256": "6a73a561ec0a9bd3235fe82d0247619ef18a9a561bdd34aba05f781700aee06f"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "flowise-f0c12941|misconfiguration|packages/server/src/enterprise/middleware/passport/index.ts||38": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "de0863df20118c2f0a65c5e50ade669a72cd65e3c0d098b7961aca2bc7c4e8cd",
+        "findingSha256": "bc4910417a7dab56973634818a9df8b30d782005961c895012cd6c6e46376b6d",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The claim depends on a particular TLS-proxy misconfiguration absent from the supplied source. APP_URL=https or SECURE_COOKIES enables Secure; an explicitly HTTP setup already sends login credentials over HTTP. No concrete new attacker path is shown.",
@@ -154,12 +160,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/index.ts#L38",
             "sha256": "bc4881d6aaab0f90f7c4d1413f5043ca73561beec97e4416126cb180a59cd038"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "flowise-f0c12941|misconfiguration|packages/server/src/index.ts|App.config|203": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "7481db3ac14dd476af3d26ebe16ea3ae1b76dbf5a0cc58998cc761078538eebd",
+        "findingSha256": "eb66c0d18552502d0b7926faabb2885db60c74a2ae2bbb932a77e3fbf9037d39",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Wildcard origin configuration alone does not make authenticated cross-site reads possible: session/auth cookies are SameSite=Lax and the alternate API path requires a key. The report does not establish an ambient-credential read path.",
@@ -172,12 +179,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/index.ts#L38",
             "sha256": "bc4881d6aaab0f90f7c4d1413f5043ca73561beec97e4416126cb180a59cd038"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.getCustomerWithDefaultSource|84": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "018d6832338c76afc0bc54732a560883a909e7ffe65eff6ab6eedb8d5a0b5d82",
+        "findingSha256": "cc7c8c1c36e6b1fb02815bb9d3f674590906c9d165fb60730bf8cd701400f4c7",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The organization route forwards caller-supplied customerID to Stripe's customer retrieval with expanded payment method without verifying the customer belongs to the caller.",
@@ -194,12 +202,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/StripeManager.ts#L262",
             "sha256": "e4db16d4e6e3c52c1c6953826a89a9a9399299d61c6dd604586ae0b8eb2f4923"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.getPlanProration|120": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "edafa4e34379ad182d7ebc537584c99ba768e6ec39e24cc4f486a32cdcf1eb6e",
+        "findingSha256": "103d2e4e3f20d8edee4bca20aa1bb61238e9e62cc082735f40accb3b83f090c2",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Authenticated callers choose subscription IDs; the route has no object-scope guard and getProration retrieves that subscription/customer without checking the caller's organization.",
@@ -216,12 +225,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/StripeManager.ts#L429",
             "sha256": "e4db16d4e6e3c52c1c6953826a89a9a9399299d61c6dd604586ae0b8eb2f4923"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "flowise-f0c12941|authz|packages/server/src/services/documentstore/index.ts|deleteDocumentStoreFileChunk|375": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "276caea2119564d05c4f14b8a8649b19aed29a16b11cb62fceb7cd3644ecc475",
+        "findingSha256": "76ec0c91c3a924e7ee23f984b02bd1ef57036ee8187bf07a82f46e5aadad3110",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The parent document store is workspace scoped, but the subsequent chunk lookup and deletion use only caller-controlled chunkId, allowing a valid own-store request to delete a different store's chunk.",
@@ -234,12 +244,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/services/documentstore/index.ts#L375",
             "sha256": "e270774274091f47cc2f7c3559e6b0140e7465519294706889dd4fc2e26d3e74"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "flowise-f0c12941|resource_exhaustion|packages/components/nodes/textsplitters/RecursiveCharacterTextSplitter/RecursiveCharacterTextSplitter.ts|RecursiveCharacterTextSplitter_TextSplitters.init|62": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "c235348873a22ab97156467afc8e1c15c446687c018565b3d43733bd00c42581",
+        "findingSha256": "831e458772fddb8c1487ab0a36b07e9c5fdff2ac959fd39065bdcc639d346c78",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Document-preview permission exposes caller-supplied splitter configuration. A valid chunkSize=1/overlap=0 materializes a Document per character for multi-MB text before any preview truncation, with no total-chunk bound; this amplifies a modest input into shared-process heap exhaustion.",
@@ -260,12 +271,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/components/nodes/documentloaders/Text/Text.ts#L112",
             "sha256": "6afbced656c97151ab4a359a1d2b54dadf81774d7b674d6861fbd9592dfeb27c"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "flowise-f0c12941|authz|packages/server/src/services/evaluations/index.ts|patchDeleteEvaluations|619": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "40c455047b4bc6085d965ae4c80a27892e72cd4940f4c68cc5a84c0a7990aef2",
+        "findingSha256": "dd2abe8af402ac137d182ac6aae87fb6ed01bec42a1fa2d4f2393c43d3e9560d",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "patchDeleteEvaluations performs a workspace-scoped read but deletes the original raw ID list, allowing IDs excluded by that read to be deleted across workspaces.",
@@ -282,12 +294,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/services/evaluations/index.ts#L619",
             "sha256": "ee5a5c58b5fa629f55b428dfb79d5db5415029ee4fd743aa86d6b87658c635af"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "flowise-f0c12941|resource_exhaustion|packages/server/src/services/evaluations/index.ts|createEvaluation|125": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "f85aede413009ca073915f1f6ab0054eb2f1d56e95dcf9a7de1841d66ea9bc92",
+        "findingSha256": "fcb04eabfd14e1ba32937b0e7b9586c8c1b1536101ab62bbacf915c7dae5d5f7",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The report's unbounded concurrent execution premise is contradicted by EvaluationRunner awaiting each chatflow/prediction sequentially. Batch evaluation is an authorized feature; a concrete cheaper resource amplification or quota bypass was not established.",
@@ -300,12 +313,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/components/evaluation/EvaluationRunner.ts#L104",
             "sha256": "af8cdf3241178304e817c17f90a5507b5a8d64823b6d7fbf5f80de2549403440"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/workspace-user.controller.ts|WorkspaceUserController.read|36": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "706cabca4091827cefbefa35592131ce7af43af0121c43b24b9ff7ce417aa2ce",
+        "findingSha256": "111f8c01304e5eb4dc7215eddbb07cb8da215487f2c065e575efdd6f98e0fcfa",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "WorkspaceUserController accepts target workspace/user/organization selectors without binding them to req.user. The service's workspaceId-only query returns members of an unrelated workspace.",
@@ -318,12 +332,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/workspace-user.service.ts#L84",
             "sha256": "b59c2fc81c6ae60ef69800321f0ddd130958c81f5e3b54e0233e2229a1405937"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.updateSubscriptionPlan|149": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "2c4dc03b6ebcc50d5e7ce2d19eca691cd6b19d87dab33569c5922cc54ac1a83c",
+        "findingSha256": "5c907e78363952607cd33fc34ae7c673f8247d90fa23a5d217165f352b9ab1d7",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "updateSubscriptionPlan takes an arbitrary subscription ID; IdentityManager checks only that req.user exists before updating that Stripe subscription, without binding it to the caller's organization.",
@@ -340,12 +355,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/StripeManager.ts#L461",
             "sha256": "e4db16d4e6e3c52c1c6953826a89a9a9399299d61c6dd604586ae0b8eb2f4923"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "flowise-f0c12941|ssrf|packages/components/src/httpSecurity.ts|resolveAndValidate|188": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "f56b134cb5f6cf9fda82789768db10730e31e9995a8e63080ea47783531bc849",
+        "findingSha256": "89dbf0a5776cd310d7912845de6c76ecc043b902e3a2754d0fcbc872b1d52462",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "No violated boundary is established: the flow author is intentionally allowed to configure arbitrary HTTP tools. HTTP_DENY_LIST is an optional operator policy and its absence is not a bypass of an enforced network restriction.",
@@ -354,12 +370,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/components/src/httpSecurity.ts#L188",
             "sha256": "7d71c187482b3b106d9005d0b3cad72f2ea007b18fc7ed782d01b3e8f13b803a"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "flowise-f0c12941|authz|packages/server/src/services/assistants/index.ts|generateAssistantInstruction|512": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "69b248638f501e950be76a6b8058f8d3a7d79f1f96ffa838696b5249e58e7cbe",
+        "findingSha256": "69f84512912be6fa9fe3c7f5bc2645bdfa793e39fab5b4337b7350b66b00d47f",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "generate/instruction accepts a selected model's credential UUID without a workspace permission check; getCredentialData resolves by credential ID alone and decrypts it for the model call.",
@@ -376,12 +393,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/components/src/utils.ts#L621",
             "sha256": "4ad3fabe2dc5db58a38a7a145647080214aa959fab1cc331d7416258ca4a351b"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/routes/organization-user.route.ts||9": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "bb425d38d5f953c4d8c17d3b58555a2c37b6e43a7d9826db37af6dcaf4807d9f",
+        "findingSha256": "3a533d551e3abd44190c461dd05e6db39f0e6368779872df6a84b506959cc152",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The organization-user GET route accepts a caller-selected organizationId and returns users' emails, roles and status using an organizationId-only query, without checking caller membership.",
@@ -398,12 +416,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/organization-user.service.ts#L86",
             "sha256": "1d49b75f76c86cd653e2609a7b31319dba930b700642ad78976f9b6d032bf283"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "flowise-f0c12941|authz|packages/server/src/enterprise/services/user.service.ts|UserService.updateUser|178": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "a018057ba9fb27e058b7d54f403aab00d9658bbf6d8afc63b49b5bd21dc4ff1a",
+        "findingSha256": "74ba75507baf59edda0c7a580bffbe15bc8b9d9910ef2caf8836eeaf246e6123",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "An own-account update merges credential directly. Unlike the password-change branch, it neither verifies oldPassword nor hashes the supplied value. A stolen session can install an attacker-chosen valid hash and bypass password-change reauthentication.",
@@ -420,12 +439,13 @@
             "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/user.service.ts#L178",
             "sha256": "c993b1190fd866a0d25e0bc5810bbe2f30a496ef7495afb6058aad958448aa97"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "langflow-73c1f203|data_exposure|src/backend/base/langflow/api/v1/voice_mode.py|ElevenLabsClientManager.get_client|177": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "9072d8e906f1b52864048b82a284c044b3b44108c52f55b415a8b20f0bb45080",
+        "findingSha256": "308ce5cd83b8f09a51d9a38cb03301d7b56ee68c9a58912f85a97b8c51ed9b82",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "ElevenLabsClientManager caches one class-wide decrypted user key/client. After user A initializes it, user B's request bypasses the user-scoped variable lookup and receives A's client and account-specific voice results.",
@@ -442,12 +462,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/variable/service.py#L65",
             "sha256": "63d23dd4b400bdc49445e1c6af9890b6833e985841f532b46dc501f15aca5f47"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/api/v1/voice_mode.py|get_tts_config|255": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "bed7f5d28442b198251bd2429b506aa7d2db1115607bc2550ee7ea7458a70b24",
+        "findingSha256": "b79d4080acbdd27cfac9bc7debfec01aa7272992a35a2aa3e5174f722e928953",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The cache has a real missing-eviction concern, but the report supplies no concrete amplification beyond one authenticated, own-provider-key session per retained object. It does not meet this lens's bar for an exploitable resource amplification rather than routine lifecycle hardening.",
@@ -460,12 +481,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L1204",
             "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "langflow-73c1f203|injection|src/backend/base/langflow/utils/validate.py|create_class|194": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "af2db68089b2ded9fe400b6d1c921a638614225d652684bb66a93fe5849dbdae",
+        "findingSha256": "57a2e88f6a432ce445aadea3e23488a12079f245daaf29806bf74460e5a44ff9",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The deprecated build/vertices route accepts a supplied graph without CurrentActiveUser. Its graph preparation consumes attacker-supplied custom component code which is compiled/executed by create_class. Unlike the authenticated editor feature, this crosses the login boundary.",
@@ -486,12 +508,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/router.py#L34",
             "sha256": "7f9e53b7490a51107223bca46975fc4488300752456f0e686163f44d97917880"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "langflow-73c1f203|data_exposure|src/backend/base/langflow/api/v1/chat.py|get_build_events|210": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "d6d0273c2f0f27040402b3dbf0690e28a3cbb0c5aa7333c3a5f0e2a484f4411c",
+        "findingSha256": "a2e842a56674802d7ca8b7da737d0751092b2e20aea1fbe33b4b2a3cd77feb02",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Existing jobs use unpredictable uuid4 IDs with bounded lifetime. The public-flow start route returns the caller's newly created job ID, not another user's existing job ID. No path obtains a victim's random job capability.",
@@ -508,12 +531,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/chat.py#L609",
             "sha256": "de93b52b174ee408f7bd509b4a100ae062ab0ce06ef6c65160642d4febd63528"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "langflow-73c1f203|misconfiguration|src/backend/base/langflow/services/settings/auth.py||46": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "a6b08a5958b5c376097ef62741285557fc19e4ffcd8633a9219d3f15b48aa538",
+        "findingSha256": "50abe44aa19923d2a82914dee6b8b5eb21e290b9258dc8fc078f98b5985900b4",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The access/API-key cookie defaults keep Secure false even for a normal authenticated HTTPS deployment, and login directly applies that setting. An active network attacker can induce an HTTP request for that origin and collect the bearer cookies; HttpOnly is also false.",
@@ -530,12 +554,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/api_key.py#L75",
             "sha256": "2779c9a51944936e40b37b427d7ec0fcf60d39c29d8f15c6905b0c718f40d873"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/monitor.py|update_session_id|139": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "466b52d797d0bedb7663be28e080174be10f6a8837ba5eed77ecf63926bc7f36",
+        "findingSha256": "a36caf7a3d1e5b8156d1825e8b03084301a98507707ff38c3ec7301dd53a1a96",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "An authenticated caller updates all messages selected by old_session_id without scoping to owned flows. /monitor/messages/session IDs and messages are globally listed, so the caller can obtain victim session identifiers and mutate victim messages.",
@@ -552,12 +577,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/monitor.py#L49",
             "sha256": "daf3147487736c868577256faf946b5d0bcd42a2cd2dc1e7946c33764aa4888e"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/files.py|download_image|122": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "bc4fbdb9337b833f8544fd2a39ab78c514aff623c938ddae198e4cfd9dac0441",
+        "findingSha256": "b5f61dc0eaaace67bc894131c05afd332ebad3eb2a37a26bfe7882ae5bccbc54",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Private-flow uploads use get_flow ownership enforcement, but image reads omit authentication and ownership. A legitimate/previous API user can learn other flow/file identifiers through MCP's unscoped resource listing and then retrieve their stored images without the owning user's permission.",
@@ -574,12 +600,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/mcp.py#L111",
             "sha256": "4badfa7ab18f70d20335954484a3f5ce50c8622f2e3da55ae3815906ee59e55c"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/files.py|download_profile_picture|140": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "374588af539ff14904fec96c34f696642470fa99162f2ff11ac3b74d995e9d0f",
+        "findingSha256": "8a81810b42ea269687d958e8749f29bdbba16ef916023fe7d6c708ef2da45aa9",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "This serves bundled public avatar assets, copied from People/Space by initial setup, rather than private user-uploaded pictures. The plain path parameters do not accept encoded slashes as one route segment. No private-file disclosure is established.",
@@ -592,12 +619,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/initial_setup/setup.py#L540",
             "sha256": "3987244c4924311a776fe3a70a541bca98bc9ec440bd6dc38c2de738f66be17e"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/api/v1/files.py|download_image|122": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "8bf1c30ca9ae5793c6b3dc331e9139dbb18ee408f7695a4cb7002cf1b26c4cec",
+        "findingSha256": "4aa0b7a60646979f44b5dc263d7c5c2dcc324f16451c126e26c15400f4242727",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The claimed slash traversal does not fit these single-segment FastAPI str parameters. Uploaded files are already size bounded. Reading an existing image into memory is not evidence of the claimed arbitrary unbounded host-file read or disproportionate amplification.",
@@ -614,12 +642,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/storage/local.py#L58",
             "sha256": "632700d90c7aee2bf1e96ea73d1038bfa4f4903621448e223d88433ad4ac1519"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "langflow-73c1f203|secret_identity|src/backend/base/langflow/services/settings/auth.py|AuthSettings.validate_superuser|71": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "315ff8bb0d17a65a0943e8b01087565ac514b43fb73ce5dcf1f6338d1f635d08",
+        "findingSha256": "fbb1c8e4cc4a0c599c0d01ef42efce98f5e46e4e4acf5e56b230d961050e5110",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "AUTO_LOGIN deliberately grants anonymous superuser access through /auto_login; it is an explicit single-user mode. Resetting that mode's credentials does not confer a capability the remote caller lacked, and when AUTO_LOGIN is disabled the configured password is preserved.",
@@ -632,12 +661,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/login.py#L80",
             "sha256": "cf17c61176981de6c593ea583fdc5ca7f6946d5b7ca943a29375b83bfbbc2117"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "langflow-73c1f203|secret_identity|src/backend/base/langflow/services/auth/utils.py|ensure_valid_key|429": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "0d4f8db824f76a514064808cea8050ff28c5770040c42df261acf98e8333259c",
+        "findingSha256": "12e4cecf5020de6464505b3fb9e2cee41cb515fc943fedc8f49acba2fe367f93",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The attacker is assumed to know SECRET_KEY already; that is the encryption root regardless of deterministic key derivation. The default is secrets.token_urlsafe(32). A weak operator-supplied key alone is not the reported remote secret disclosure.",
@@ -650,12 +680,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/settings/auth.py#L83",
             "sha256": "8e955144e985b4da75aeaa0760520dcec76743f42b825c8b801fee5478693552"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "langflow-73c1f203|injection|src/backend/base/langflow/api/v1/flows.py|_verify_fs_path|46": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "4682ef6081652b113b022739d8bdf20e670f908e0e4d356d3db9072f13063b48",
+        "findingSha256": "e1ffe1ac846515034ed022b9d2d0a67726f9a639273caa96b3b65beef1f4fd82",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "An authenticated flow editor can intentionally execute arbitrary Python on the same unsandboxed host through custom components. This alternate JSON write path establishes no additional privilege or escape from an enforced filesystem restriction.",
@@ -676,12 +707,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/utils/validate.py#L194",
             "sha256": "949be0614324e84c042582e7096080f354d06456a7edb5485810c964bc281594"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "langflow-73c1f203|injection|src/backend/base/langflow/api/v1/flows.py|download_multiple_file|519": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "a46ebe7ac07c6238c98cd699672929e11358cf693410acbd7939d55382a10105",
+        "findingSha256": "e47fc5fa430e691aaa280c45116020fb4958da1653baf7e9d115bf257f153fa8",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "This creates a ZIP entry, not a host-file extraction. The report assumes a vulnerable external extractor and incorrectly asserts Python ZipFile.extractall preserves traversal. No victim extraction path in this repository establishes the claimed overwrite.",
@@ -694,12 +726,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/flows.py#L525",
             "sha256": "fcf299a6938e825329f1f72b1da21da1080254077c3079e7a7c18179ad6e73c9"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/api/v1/store.py|get_components|102": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "615dec50a8e757514aa69459336d96739e7637d876a39fc1430a1ebbb1ec51c3",
+        "findingSha256": "13681f8b1a6684d85aeb44b0d18692b4e0b5586b0f9b251bf95bd0eb3181f167",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The limit is forwarded to an external store service; the report never establishes its accepted maximum, available record count, or a working memory amplification. Absence of a local clamp is insufficient to prove the claimed huge upstream response.",
@@ -712,12 +745,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/store/service.py#L273",
             "sha256": "147924845c17d889889c8fedc4414eaba89a490dbf09315548f5095f54e3784d"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "langflow-73c1f203|authz|src/backend/base/langflow/helpers/flow.py|get_flow_by_id_or_endpoint_name|282": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "9b1de810dd315965030f34433468390473b1f4ca010d59199093b659c7924048",
+        "findingSha256": "fb06092a71cf9ad3af2a858d8fedbd2035eb3f222af0f3ff59b5dd457fafc6ff",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The /run route authenticates an API key but resolves a UUID flow by primary key only, then executes its stored graph. Ownership is enforced by the experimental sibling route. MCP's global listing provides foreign flow IDs; this is cross-user flow execution.",
@@ -738,12 +772,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/mcp.py#L111",
             "sha256": "4badfa7ab18f70d20335954484a3f5ce50c8622f2e3da55ae3815906ee59e55c"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "langflow-73c1f203|misconfiguration|src/backend/base/langflow/api/v1/projects.py|download_file|283": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "1be318b7959214755d135b5b58bcc194306aba40bfc6985868c844fccc73d5f7",
+        "findingSha256": "0840d08871eac6a96e2da6775979bd64ae96e8a49254c80a33f389aa74527716",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "create_project moves raw foreign flow IDs to the caller's project without ownership filtering; the download checks the project's owner but then exports all flows in that folder without checking flow.user_id. MCP listing exposes flow identifiers, so IDs are not an effective secret.",
@@ -764,12 +799,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/mcp.py#L111",
             "sha256": "4badfa7ab18f70d20335954484a3f5ce50c8622f2e3da55ae3815906ee59e55c"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "langflow-73c1f203|injection|src/backend/base/langflow/base/mcp/util.py|MCPStdioClient._connect_to_server|571": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "a2d620438b7a19ce766fc48b0d5a84b940511ad296a5d4f81058521dd77c8ac5",
+        "findingSha256": "bc84b997dd987e1907d05467e8e6b3db1f165d6f0c15e9b26152dc5b14b68567",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Running a caller-selected stdio MCP executable is the feature's explicit capability. There is no executable allow-list or sandbox to escape, and authenticated flow authors already execute arbitrary custom Python. Shell metacharacters do not grant a new boundary-crossing capability here.",
@@ -790,12 +826,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/endpoints.py#L652",
             "sha256": "50e27ee2eac663e2968ee427c5a2acd5d48b9b1394f092c6889fc2308ebecb51"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/services/auth/utils.py|authenticate_user|407": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "1d10454c9ee889caa1bf0609f17a7921649656fc20832d8c021cf9749bc824cf",
+        "findingSha256": "b031ba9f5ae9065b41f7259476aebe071a9df21d74a4f5284e85be6c6bc11c05",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "This is ordinary bcrypt login plus missing throttling, with one verification per request. The resource-exhaustion lens explicitly excludes 'add rate limiting' on ordinary endpoints; no algorithmic amplification or concrete authentication bypass is shown.",
@@ -808,12 +845,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/auth/utils.py#L407",
             "sha256": "43f53ccd468c4920fda1c869679d03921ee25168dbddac6449c57d69ae18f1c7"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "langflow-73c1f203|injection|src/backend/base/langflow/api/v1/mcp.py|handle_read_resource|155": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "f9c244fae4492d0e1a6773a90f74981996cabb7df7cbac7b28b90643a266b002",
+        "findingSha256": "49fc8c773d4309a6ce434ccb5b53334dc80f7f48d7f0c991e1e21a48a7c64043",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The MCP resource callback explicitly unquotes a filename after splitting the URI and passes it to an unconstrained filesystem join. Encoded slashes survive until this callback, allowing an authenticated MCP client to escape the flow-file directory and read host secrets.",
@@ -830,12 +868,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/storage/local.py#L58",
             "sha256": "632700d90c7aee2bf1e96ea73d1038bfa4f4903621448e223d88433ad4ac1519"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "langflow-73c1f203|ssrf|src/backend/base/langflow/components/ollama/ollama_embeddings.py|OllamaEmbeddingsComponent.get_model|81": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "73612a704192177e9004b46f7b0183dee1b443edcf8823a8891a352012fc6b5b",
+        "findingSha256": "4dda0bd8ddda223dac6b74e7e275964cbab0e63564b5182023dec15ddfc1f4da",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Ollama's server URL is an intentional flow-author capability, including local servers. The same authenticated editor can execute custom Python without a network sandbox. No enforced URL/network restriction is bypassed.",
@@ -852,12 +891,13 @@
             "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/utils/validate.py#L194",
             "sha256": "949be0614324e84c042582e7096080f354d06456a7edb5485810c964bc281594"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "weknora-a20541cd|authz|internal/handler/tenant.go|TenantHandler.GetTenant|106": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "52abc984475b1732d70123c3fd1496807c68af90752775a9f7dd576b400a3c66",
+        "findingSha256": "2b8d46fc9b874cf16815ba08b47bccc61c4cdba02793868c8f12f4d555879a2d",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Tenant IDs are enumerable integers. Any authenticated caller can select a different tenant ID; the handler and repository omit the cross-tenant authorization check used by list/search and return that tenant record including its API key.",
@@ -874,12 +914,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/tenant.go#L83",
             "sha256": "342a7eef2e65a241f0fac3682a9efc607aaac6c63bc36ada8f5fc6c43ed114e0"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "weknora-a20541cd|authz|internal/handler/tenant.go|TenantHandler.UpdateTenant|147": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "2b196cf262ca991373cd3eef3920e7731034ddeb28773726522b5a632e627d6e",
+        "findingSha256": "73a1b4b76e2e3e8766d1e990174a64196bad06db49e2aeee1d6387560c1263f8",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "An authenticated caller chooses another enumerable tenant ID and raw Tenant fields; UpdateTenant neither scopes the target to the caller nor requires cross-tenant permission. It can overwrite or regenerate the victim tenant's API key.",
@@ -896,12 +937,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/tenant.go#L113",
             "sha256": "342a7eef2e65a241f0fac3682a9efc607aaac6c63bc36ada8f5fc6c43ed114e0"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "weknora-a20541cd|resource_exhaustion|internal/application/service/user.go|userService.Login|160": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "7e33a7f98e3a7d7e72e8ab19c7e68048ca4225523cb14ffd4e40712e3434bb74",
+        "findingSha256": "8cb0efabff3f35dbdb0518be04cd6115a3d66f393857a8081393398ea7d8510f",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "One normal bcrypt verification per login attempt plus missing throttling is not the specified algorithmic/resource amplification. No bypass of the password check is established.",
@@ -914,12 +956,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/auth.go#L106",
             "sha256": "c702b41d113f8d8d0a08305e9ede22b7d51ed027f6485eb840289e65eb556208"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "weknora-a20541cd|secret_identity|internal/application/service/user.go|userService.ChangePassword|228": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "e71bbd9e146b2c1741aad86f0445688c272ea51c36f183aed4327691848903ec",
+        "findingSha256": "ca9ad1b2c0a84821c7a8d6cf506c9ef6d81041f616549c0497fead3c250240ba",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Changing a compromised account's password updates only PasswordHash. Existing access/refresh rows remain unrevoked and are accepted by both token paths; the implemented RevokeTokensByUserID mechanism is not used here, so credential rotation does not evict a stolen refresh session.",
@@ -940,12 +983,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/repository/user.go#L150",
             "sha256": "fb5d49b99a1b6393ddd5b010bd29d3682a2718c8d5436567762b9d86b0192980"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "weknora-a20541cd|misconfiguration|.env.example||67": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "1be75b0785ec01a9516cae4cf5adc076d839a0673aaed751ea2a868defba2162",
+        "findingSha256": "a11ac9990b625bf3ef8a14e335be8f8721e37c5330552a79373705f06acaf441",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The finding itself acknowledges the defeating guard: access and refresh validation require an existing exact token row and reject a forged token with no row. The example secret is poor configuration but the asserted remote impersonation does not work without a separate database-write compromise.",
@@ -962,12 +1006,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L387",
             "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "weknora-a20541cd|resource_exhaustion|internal/application/service/user.go|userService.Register|88": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "cf70125660a1e5a5d39529df5d36e0d6ff7d42012c94257ba971abddd84dbb13",
+        "findingSha256": "dd5629f777e182a9cb80364f58878abb53dedfc3f5c824f446f7aae5bd6b3365",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Ordinary public registration performs one bcrypt hash and creates one account/tenant. The report adds rate limiting/captcha rather than identifying an exploitable amplification; ordinary endpoint throttling is explicitly outside this resource lens.",
@@ -980,12 +1025,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/auth.go#L77",
             "sha256": "c702b41d113f8d8d0a08305e9ede22b7d51ed027f6485eb840289e65eb556208"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "weknora-a20541cd|misconfiguration|internal/router/router.go|NewRouter|78": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "7a8163eec1bd8ccac6dc42b4ed5d6bb94fb340d422b4a502430dc603fa2a45c5",
+        "findingSha256": "76ee8086be192191c9b89d8263cb0dc14c221bd56124ec60c0283120f7e0c550",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Public Swagger serves the already-public open-source API specification, not private tenant data or credentials. API enumeration alone does not cross an authorization boundary.",
@@ -994,12 +1040,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/router/router.go#L78",
             "sha256": "3c8b711e3409d2dc525a68e81ce12bdc333939a3012bfa969dd87942d3de4dd8"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "weknora-a20541cd|ssrf|internal/agent/tools/web_fetch.go|WebFetchTool.fetchWithTimeout|463": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "b0b699bc65ed8797c928772cd4ca2bcad3e9a9d9148ad39a8819976d0998408a",
+        "findingSha256": "d423f5dc9d7de7cff975b173f3e66680c15ac698bea93f77392fe91431f18b20",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The same authenticated tenant can intentionally configure arbitrary MCP HTTP endpoints/stdio programs. The web-fetch path does not escape an enforced network limit or confer a capability the caller lacks.",
@@ -1016,12 +1063,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/mcp/client.go#L133",
             "sha256": "18ae185069de3aa0e774db92654d3615d53b1ac2e0ab8459d2f465e12284c470"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "weknora-a20541cd|resource_exhaustion|internal/handler/initialization.go|InitializationHandler.DownloadOllamaModel|994": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "7fc76518f7627d750f65c06098c48c066c8f5723a4d6af22e8a18ed7cf44fb63",
+        "findingSha256": "19f0fa12759705a73d54cd61405152f2bb4611ec02c25ac6724ab25adfbfb7ce",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "An ordinary tenant can trigger shared Ollama model pulls by short model name. There is only same-name deduplication, no global concurrency/storage bound or operator authorization, and each valid distinct large model persists on shared disk. Fabricated model names fail rather than downloading, but valid distinct pulls supply the claimed disproportionate disk/bandwidth cost.",
@@ -1042,12 +1090,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/initialization.go#L1163",
             "sha256": "c08e36f55d229a6876ff87afb4f11b6b0a30d501d42660dd839a00604492f7c9"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "weknora-a20541cd|resource_exhaustion|docreader/splitter/splitter.py|TextSplitter.__init__|70": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "a1e1940db8a93f3a1c5ece5791564fcb24988085a532de1d75f30635dbf8086b",
+        "findingSha256": "0f41e0bc4d722de72fdaba5598926b6ce9b3774853fbb13cf418c21430b9ec2f",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The table regex is unanchored and retries a long pipe suffix at every offset. A bounded primary-pattern probe measured 20.7/82.5/337.1ms for 1000/2000/4000 pipes: quadratic rather than the report's claimed exponential growth, but still an exploitable small-document CPU amplification before parsing limits.",
@@ -1064,12 +1113,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/docreader/parser/base_parser.py#L350",
             "sha256": "6ef3eecb7c26c99e14df8e9501cb4090b25a49ae797d4cfe59fc1af152daa625"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "weknora-a20541cd|resource_exhaustion|docreader/splitter/splitter.py|TextSplitter._merge|249": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "50599ce40aac6f9df3c4b8f548c896639638967964a48786b3883e589a7b88ec",
+        "findingSha256": "44743ed5fde3f8aeecf6914e2a5030a410e7d9415e32561451083fc0bde53a00",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Caller-controlled chunk settings permit overlap equal to a large chunk size. The sliding window repeatedly materializes overlapping text; the max_chunks clamp happens only after split_text and conversion materialize the whole list, too late to prevent memory amplification.",
@@ -1090,12 +1140,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/docreader/parser/base_parser.py#L345",
             "sha256": "6ef3eecb7c26c99e14df8e9501cb4090b25a49ae797d4cfe59fc1af152daa625"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "weknora-a20541cd|authz|internal/handler/knowledgebase.go|KnowledgeBaseHandler.GetKBCloneProgress|436": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "519e96b5dc76566cdce3392b7f844cc291731e314fada8b7cfb70d1b9fab7012",
+        "findingSha256": "46c80fb666c1e2c69b755651c36103866ace9e194fa374e170feb1e9ffe2c9cd",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The clone task ID is a fresh uuid4 returned only to the initiating caller. Speculative log/screenshot/referrer leaks do not establish a path for a different tenant to obtain that capability; no practical guessing or enumeration is shown.",
@@ -1108,12 +1159,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/knowledgebase.go#L436",
             "sha256": "b4e27607d98bbc551d94c84b84c20ca260e58cc90e7083255f00f6eb24c531b6"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "weknora-a20541cd|injection|internal/handler/knowledgebase.go||1": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "133ae614c16662a06ab4a3e600fe7d8a8a284d56c9dc590d6588e416258b6c04",
+        "findingSha256": "d1d0cba67c36f110cde984738de39c725dd0de7f37527b14027458cd5e2a2f0a",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "HybridSearch skips the handler's normal validateAndGetKnowledgeBase ownership check and accepts SearchParams from the caller. DisableVectorMatch=true avoids the tenant-scoped model lookup and keyword retrieval uses only KB IDs. The reported issue is real authz despite its injection label.",
@@ -1130,12 +1182,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/knowledgebase.go#L506",
             "sha256": "a681752964cd91a79a1bc98163bc4e133721910862e4eb4087c9e85749a54e18"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "weknora-a20541cd|injection|internal/mcp/client.go|NewMCPClient|113": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "5e854685cfa0278b85857541a6c0538e5689dbd52f6470b6475cc829e23962e1",
+        "findingSha256": "8010f818774a1470693df867b0937d132ad6c53965485ff253cb09ac6a1919e2",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Authenticated tenants intentionally configure MCP endpoints and arbitrary stdio commands. This HTTP transport reaches no network capability the same caller lacks, and bypasses no URL allow-list/sandbox. It is also misclassified as injection in the raw output.",
@@ -1152,12 +1205,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/mcp_service.go#L37",
             "sha256": "2f25778f8a225cc4eade6a21b38777a10876422072ce24591a4088f96feb6c08"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "weknora-a20541cd|authz|internal/application/service/session.go|sessionService.buildSearchTargets|754": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "e4d7d58f5f3890a7d83e9bff3dce68ca83aca6e89cb3cd27a0663347e584e4b9",
+        "findingSha256": "585cd90545a6be3c07dbc4d660349bceed7dc1a16c70a3eeb6f7048de83080d9",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Raw KB IDs are accepted without ownership checks. Initial vector lookup may reject a foreign model, but low-recall query expansion explicitly sets DisableVectorMatch=true and reaches keyword retrieval filtered only by foreign KB ID. SQL tool output provides foreign KB identifiers.",
@@ -1178,12 +1232,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L33",
             "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "weknora-a20541cd|injection|internal/agent/tools/database_query.go|SQLSecurityValidator.injectTenantConditions|746": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "762b235fa1511d14219416995a6e585bd6efe42f15c79415e31b7829dba2f425",
+        "findingSha256": "234c0cc0cb199d072e7e2485fd0d6fb96f9130c02f5d3a0eb561d58501811386",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The SQL tool exposes embeddings in its allowed table list but injects tenant predicates only for five other tables. A plain embeddings SELECT passes unchanged and returns other tenants' embedded text. This defeats the tool's explicit automatic-tenant-isolation policy.",
@@ -1200,12 +1255,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L746",
             "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "weknora-a20541cd|resource_exhaustion|internal/application/service/chat_pipline/search.go|PluginSearch.searchByTargets|323": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "2561f39e9cdd95e5045325db441a642449824cb5541cb6575598ac85d7be311b",
+        "findingSha256": "f09117774319990c10d55817aa9b56b88c7719b1eb0d42b7948cb9aa8e249a69",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The missing goroutine bound is a hardening concern, but the reported cost is proportional to the explicit batch of authenticated retrieval targets. It does not demonstrate a distinct amplification beyond the user's intended searches; cross-tenant retrieval belongs to the separate authz issue.",
@@ -1218,12 +1274,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/session.go#L754",
             "sha256": "01249e54e08080ebfa2ad645d563dcb8f63fe01e7d2d6e195bb1506e38f762dc"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "weknora-a20541cd|resource_exhaustion|internal/application/service/chat_pipline/search.go|len|154": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "1cdf6295d561a9a4ae8c515a498a7b4cee2d8c68dd7111d90d8d1818aac7b74b",
+        "findingSha256": "661d793629cee2e609cb4c244187cf0d7eddd8235f326bf33dc37a9da6ecb3fb",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "The expansion path already bounds concurrent retrieval to 16. Total work scales with the explicitly supplied batch of KB IDs and a bounded expansion set; no amplification beyond an authenticated user's intended retrieval work or independent cost boundary is established.",
@@ -1240,12 +1297,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/chat_pipline/search.go#L159",
             "sha256": "316758dc586e012e0f107ab0d033e02fe6870ed7de9c9c83856998dbcfa9e15f"
           }
-        ]
+        ],
+        "verdict": "false"
       },
       "weknora-a20541cd|authz|internal/application/service/knowledge.go|knowledgeService.validateFAQKnowledgeBase|4069": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "3b030789668bd019a33ca19f8b9b104580871791b0b011154c2c26baf00d5df7",
+        "findingSha256": "515da6e607c94b616511dadbb5523d5a9c67e3df5ed295da977a63ec02e785c3",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "FAQ validation loads an arbitrary KB by id and checks only its type; the repository and FAQ routes never bind that KB to the authenticated tenant. This exposes foreign FAQ operations, unlike the sibling handler's explicit tenant check.",
@@ -1266,12 +1324,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/knowledge.go#L52",
             "sha256": "6bcb7eb06fa51e1ce1932656839c8f900451242a39e74982c048d381fad51abc"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "weknora-a20541cd|injection|internal/application/service/knowledgebase.go||32": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "040b10641967e1aa48c41243df086d2fbfda27e3a5ba4625cdaa7dc1d8b26412",
+        "findingSha256": "e4b881fd08bf4c09a5e838a10cc8c4bda3b3d8fe89ca63c4258fe300f5d475c9",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "This repeats the valid FAQ object-authorization weakness: validateFAQKnowledgeBase delegates to an id-only KB lookup without tenant comparison. The raw class (injection) and location (struct declaration) are inaccurate, but the described cross-tenant FAQ vulnerability exists.",
@@ -1284,12 +1343,13 @@
             "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/repository/knowledgebase.go#L30",
             "sha256": "e818d4cd186686cf63ef92e4b87b11a7a5ddb0154cf80032942496bec4aab876"
           }
-        ]
+        ],
+        "verdict": "real"
       },
       "itsdangerous-control|resource_exhaustion|src/itsdangerous/url_safe.py|URLSafeSerializerMixin.load_payload|44": {
         "sourceResult": "results/2026-11-16-review/negative.raw.json",
         "sourceResultSha256": "1f57bcfeebe142daea53f815d3485067bb29ee7687512b1e1de6fc83caaeb16c",
-        "findingSha256": "cfce5233488991e7e5b2dd0d2cd8c5f0f686829ec15077e0813f598108d22a98",
+        "findingSha256": "c20c07d97e42cd6ee1fac5dab25a4c75b05fb2ffe61e27a5ab88b623ef394e53",
         "judge": "Codex",
         "date": "2026-11-16",
         "reason": "Normal loads verifies the signature before load_payload. The alleged pre-verification decompression path is loads_unsafe, explicitly documented as unsafe debugging and not exposed by an HTTP caller. No untrusted remote caller is shown bypassing verification.",
@@ -1310,7 +1370,8 @@
             "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/docs/serializer.rst#L39",
             "sha256": "5bd1b914ee53d300abd18b3a9b7b0b81ff39d787c0ff8d8c8008500126a339e5"
           }
-        ]
+        ],
+        "verdict": "false"
       }
     }
   },

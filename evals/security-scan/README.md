@@ -25,7 +25,11 @@ wiring smoke requires completed lenses and a verifier call, not only a map.
 
 VulnGym scoring assigns a finding to at most one advisory and an advisory to
 at most one finding, including `--rescore`. Unassigned findings need judgment.
-Judgment keys include the start line. The legacy verdicts lacked source runs,
+Judgment keys include the start line. A verdict also requires the exact
+class/path/line-range/symbol/title/description digest, judge, date and raw run
+hash; another claim at the same key stays unjudged. Records under
+`_metadata.judgments[key]` retain their own verdicts and may be an array when
+different measured claims share a key. The legacy verdicts lacked source runs,
 lines and judge provenance and were removed instead of guessed; their count
 is recorded in `adjudications.json`. New judgments must record the source
 result's hash, judge and date in `_metadata`. Scores before this migration
@@ -36,3 +40,13 @@ with the same engine and limits. `--gate` fails if a control reports a finding;
 inspect that finding against its pinned source before labelling it false.
 Runs record the engine commit, dirty state, dataset hashes, served model and
 measurement time. `--rescore` keeps the original measurement provenance.
+
+`--set=all --cases=<ids>` puts vulnerable cases and clean controls in one
+bounded queue (default two repositories at a time); avoid parallel runner
+processes sharing a provider key. Each completed case is saved immediately to
+`<output>.partial`, explicitly marked as an incomplete measurement. SIGINT or
+SIGTERM cancels through production's engine signal. The final result retains
+provider failure counts and failed units. A case with exhausted HTTP 429
+retries is not a clean measurement: its output is retained, but more than 5%
+such cases exits 2. Rescoring cannot remove that infrastructure failure.
+Scoring hashes are captured when the runner starts, not after a long run.
