@@ -1,0 +1,22 @@
+{
+  "method": "All control findings; otherwise the 20 smallest SHA-256(seed + NUL + finding key) off-list findings, or all when fewer. Fixed before viewing selected descriptions.",
+  "group": "control",
+  "seed": "wellington-review-2451-2026-11-16",
+  "case": "uuid-control",
+  "language": "go",
+  "sourceResult": "results/2026-11-16-review/fresh.cases/uuid-control.json",
+  "sourceResultSha256": "aafb7cea62885bdbb53de7d9ac9a5013d973b6e7f5f6eb404cb06dc2eae3f770",
+  "offListPopulation": 2,
+  "selected": [
+    {
+      "index": 1,
+      "key": "uuid-control|secret_identity|time.go|getTime|51",
+      "hash": "b4091471226eb4d2a5a5c926f8c506392adb0a86b8c0fe1f3195c451e1e1fabe"
+    },
+    {
+      "index": 0,
+      "key": "uuid-control|misconfiguration|version1.go|NewUUID|36",
+      "hash": "da6b35814feb1a6ad1144a7ecc44e031b08ad593e2e69cbe154b98db5b3d7392"
+    }
+  ]
+}
