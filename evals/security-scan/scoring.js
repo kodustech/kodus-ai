@@ -1,4 +1,5 @@
 const norm = (f) => String(f || '').replace(/\\/g, '/').replace(/^\.?\/+/, '');
+const SCORING_VERSION = 3;
 
 function findingKey(caseId, f) {
     return `${caseId}|${f.vulnerabilityClass}|${norm(f.filePath)}|${f.symbol || ''}|${f.startLine}`;
@@ -10,7 +11,8 @@ function lineRange(line) {
 }
 
 function matches(finding, advisory) {
-    if (advisory.class && finding.vulnerabilityClass !== advisory.class) return false;
+    // An unmapped advisory is not evidence for any of the measured classes.
+    if (!advisory.class || finding.vulnerabilityClass !== advisory.class) return false;
     return advisory.locations.some((l) => {
         const [from, to] = lineRange(l.line);
         return norm(l.file) === norm(finding.filePath) &&
@@ -30,4 +32,4 @@ function assignAdvisories(findings, advisories) {
     return { assignments, consumed };
 }
 
-module.exports = { findingKey, lineRange, matches, assignAdvisories };
+module.exports = { SCORING_VERSION, findingKey, lineRange, matches, assignAdvisories };

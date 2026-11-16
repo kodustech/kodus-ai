@@ -14,6 +14,10 @@ test('duplicate reports cannot inflate listed precision', () => {
 test('another class at the same location is not a listed hit', () => {
     assert.equal(assignAdvisories([{...finding, vulnerabilityClass: 'ssrf'}], [advisory('a')]).consumed.size, 0);
 });
+test('an unclassified advisory cannot certify a finding at the same location', () => {
+    const { assignments } = assignAdvisories([finding], [{ ...advisory('out-of-scope'), class: null }]);
+    assert.equal(assignments.filter(Boolean).length, 0);
+});
 test('line ranges and the established line window are preserved', () => {
     assert.equal(assignAdvisories([{...finding, startLine: 238, endLine: 238}], [advisory('a')]).consumed.size, 1);
     assert.equal(assignAdvisories([{...finding, startLine: 239, endLine: 239}], [advisory('a')]).consumed.size, 0);

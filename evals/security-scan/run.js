@@ -30,7 +30,7 @@ const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { countTokens, tokensUsed, registerTs } = require('../shared/eval-kit');
 const { orgRouteOrExit } = require('../shared/model-route');
 const { pricingResolver, scanRepository } = require('./scan-repo');
-const { runProvenance } = require('./provenance');
+const { runProvenance, scoringProvenance } = require('./provenance');
 let measurement;
 
 registerTs();
@@ -250,6 +250,7 @@ function report(cases, errors, pickedCount, tokens) {
     const result = {
         eval: 'security-scan',
         provenance: measurement,
+        scoring: scoringProvenance(),
         scoredAt: new Date().toISOString(),
         question: evalQuestion('evals/security-scan'),
         model: runSettings.model,
