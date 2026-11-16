@@ -1979,6 +1979,9 @@ export class GithubService
                   full_name?: string;
                   organizationName?: string;
                   name?: string;
+                  // A webhook payload spreads GitHub's repository, whose
+                  // owner is the account object.
+                  owner?: string | { login?: string };
               }
             | string
             | null
@@ -2004,6 +2007,9 @@ export class GithubService
             ownerFromFullName(repository?.fullName) ||
             ownerFromFullName(repository?.full_name) ||
             repository?.organizationName ||
+            (typeof repository?.owner === 'string'
+                ? repository.owner
+                : repository?.owner?.login) ||
             ownerFromFullName(repository?.name)
         );
     }
@@ -3409,13 +3415,12 @@ export class GithubService
                 organizationAndTeamData,
             );
 
-            // The webhook mapper spreads GitHub's repository payload, so
-            // `owner` can arrive as the account object instead of its login.
-            const rawOwner = repository.owner as
-                string | { login?: string } | undefined;
-            const owner =
-                (typeof rawOwner === 'string' ? rawOwner : rawOwner?.login) ||
-                (await this.getGithubAuthDetails(organizationAndTeamData))?.org;
+            // The repository comes from the webhook payload: its owner is
+            // resolved against the saved selection like every other call.
+            const owner = this.ownerOf(
+                repository,
+                await this.getGithubAuthDetails(organizationAndTeamData),
+            );
 
             const { data } = await octokit.rest.pulls.get({
                 owner,

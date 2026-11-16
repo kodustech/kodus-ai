@@ -154,6 +154,7 @@ async function ownersSentByEveryMethod(auth: {
             sha: 'abc',
             path: 'a',
             filePath: 'a',
+            paths: ['a'],
             title: 't',
             criticalComments: [],
         };
@@ -191,6 +192,7 @@ const PROBED = [
     'getCommits',
     'getCommitsForPullRequestForCodeReview',
     'getDefaultBranch',
+    'getFilePatches',
     'getFilesByPullRequestId',
     'getListOfValidReviews',
     'getPullRequest',
