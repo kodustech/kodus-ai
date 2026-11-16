@@ -3,7 +3,7 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 
 export interface CheckImplementationJobPayload {
     organizationAndTeamData: OrganizationAndTeamData;
-    repository: { id: string; name: string };
+    repository: { id: string; name: string; fullName?: string };
     pullRequestNumber: number;
     commitSha: string;
     trigger: 'synchronize' | 'synchronized' | 'closed' | 'review_completed';

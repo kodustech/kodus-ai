@@ -40,7 +40,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getPullRequestDetails(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         prNumber: number,
     ): Promise<any> {
         try {
@@ -66,7 +66,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getChangedFiles(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         ignorePaths?: string[],
         lastCommit?: string,
@@ -247,7 +247,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getNewCommitsSinceLastExecution(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         lastCommit?: any,
     ): Promise<Commit[]> {
@@ -312,7 +312,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
      */
     async getChangedFilesMetadata(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         lastCommit?: string,
         reviewedBaseBranch?: string,
@@ -368,7 +368,12 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
      */
     private async getChangedFilesSinceLastCommit(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any; project?: { id: any } },
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
         pullRequest: any,
         lastCommit: string | Commit,
         reviewedBaseBranch?: string,
@@ -462,7 +467,12 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getRebaseInterdiff(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any; project?: { id: any } },
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
         pullRequest: any,
         previousHeadSha: string,
     ): Promise<
@@ -501,7 +511,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
      */
     async enrichFilesWithContent(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         files: FileChange[],
     ): Promise<FileChange[]> {

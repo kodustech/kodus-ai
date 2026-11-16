@@ -86,6 +86,8 @@ import {
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { TreeItem } from '@libs/core/infrastructure/config/types/general/tree.type';
+import { classifyGitHubError } from '@libs/core/workflow/domain/errors/classify-github-error';
+import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 import {
     AUTH_INTEGRATION_SERVICE_TOKEN,
     IAuthIntegrationService,
@@ -4276,6 +4278,12 @@ export class GithubService
                             endDate,
                         );
                     } catch (error) {
+                        // A rate limit is retryable: let it fail the listing
+                        // instead of reporting the repository as empty.
+                        const classified = classifyGitHubError(error);
+                        if (isRateLimitError(classified)) {
+                            throw classified;
+                        }
                         this.logger.warn({
                             message: `Could not list the pull requests of ${repo}`,
                             context: GithubService.name,
@@ -4298,6 +4306,9 @@ export class GithubService
                 }) || null
             );
         } catch (err) {
+            if (isRateLimitError(err)) {
+                throw err;
+            }
             throw new BadRequestException(err);
         }
     }

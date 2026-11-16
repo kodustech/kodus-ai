@@ -636,6 +636,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                     const repository = {
                         id: payload.repository.id,
                         name: payload.repository.name,
+                        fullName: payload.repository.full_name,
                     };
 
                     const userGitId = payload?.sender?.id?.toString();

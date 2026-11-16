@@ -264,4 +264,37 @@ describe('GithubService addresses a repository by its own owner', () => {
                 .sort(),
         );
     });
+    it('fails the listing on a rate limit instead of reporting the repository as empty', async () => {
+        const service = makeService({});
+        jest.spyOn(
+            service as any,
+            'findOneByOrganizationAndTeamDataAndConfigKey',
+        ).mockResolvedValue([
+            {
+                name: 'api',
+                full_name: 'Novaorg01/api',
+                http_url: 'https://github.com/Novaorg01/api',
+            },
+            {
+                name: 'web',
+                full_name: 'Novaorg01/web',
+                http_url: 'https://github.com/Novaorg01/web',
+            },
+        ]);
+        jest.spyOn(service as any, 'getAllPrMessages').mockImplementation(
+            async (_octokit: any, _owner: string, repo: string) => {
+                if (repo === 'api') {
+                    throw Object.assign(new Error('secondary rate limit'), {
+                        status: 403,
+                        response: { headers: { 'retry-after': '60' } },
+                    });
+                }
+                return [{ repo, created_at: '2026-11-16T00:00:00Z' }];
+            },
+        );
+
+        await expect(
+            service.getListPullRequests(organizationAndTeamData, {}),
+        ).rejects.toMatchObject({ name: 'RateLimitError' });
+    });
 });

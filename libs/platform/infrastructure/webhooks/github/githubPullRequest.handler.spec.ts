@@ -310,6 +310,18 @@ describe('GitHubPullRequestHandler', () => {
                 enqueueCodeReviewJobUseCase.execute.mock.calls[0];
             expect(codeManagementPayload.onlyCustomAgent).toBeUndefined();
         });
+
+        it('reads the commented pull request from the repository owner', async () => {
+            await handler.execute(comment('@kody start-review') as any);
+
+            expect(codeManagementService.getPullRequest).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: expect.objectContaining({
+                        fullName: 'org/test-repo',
+                    }),
+                }),
+            );
+        });
     });
     describe('merge queue pushes', () => {
         const queueRef =

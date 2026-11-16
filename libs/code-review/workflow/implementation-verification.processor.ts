@@ -133,6 +133,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     {
                         name: payload.repository.name,
                         id: payload.repository.id,
+                        fullName: payload.repository.fullName,
                     },
                     payload.pullRequestNumber,
                 ));
@@ -200,6 +201,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     {
                         name: payload.repository.name,
                         id: payload.repository.id,
+                        fullName: payload.repository.fullName,
                         project: { id: platformPr.repository?.project?.id },
                     },
                     platformPr,
@@ -236,6 +238,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     repository: {
                         id: payload.repository.id,
                         name: payload.repository.name,
+                        fullName: payload.repository.fullName,
                     },
                     prNumber: payload.pullRequestNumber,
                     platformType: payload.platformType,
