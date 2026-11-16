@@ -189,6 +189,34 @@ const STEP_EVALS = {
         },
         guards: [],
     },
+    'kody-rules': {
+        // On demand only, never a PR's check: every case is a real review on a
+        // real model, and with --quality a judge call per finding on a site.
+        smoke: [],
+        primary: {
+            id: 'kody-rules',
+            label: 'Rule violations flagged',
+            run: ['evals/kody-rules/real-agent.js', '--runs=1', '--quality'],
+            question: 'Of the lines that break a team rule, how many does the Kody Rules agent flag?',
+            // Read from the same cases: flagging more lines would raise recall, so
+            // what it flags, where it stays quiet and what it says must hold too.
+            derived: [
+                { id: 'kody-line-precision', label: 'Flags on a real violation', question: 'Of the lines the agent flagged, how many break the rule?', hits: (c) => c.flagged - c.offSite, total: (c) => (Number.isInteger(c.flagged) ? c.flagged : NaN) },
+                { id: 'kody-specificity', label: 'Clean files left alone', question: 'Of the files that break no rule, how many did the agent leave alone?', hits: (c) => c.cleanFiles - c.falseAlarms, total: (c) => (Number.isInteger(c.cleanFiles) ? c.cleanFiles : NaN) },
+                { id: 'kody-title-quality', label: 'Titles that name the problem', question: 'Of the findings on a real violation, how many have a title the judge says names the problem?', hits: (c) => c.quality?.titleOk, total: (c) => (c.quality ? c.quality.graded : NaN) },
+                { id: 'kody-fix-quality', label: 'Fixes the judge passes', question: 'Of the findings on a real violation, how many carry a fix the judge passes?', hits: (c) => c.quality?.fixPass, total: (c) => (c.quality ? c.quality.fixGraded : NaN) },
+            ],
+        },
+        guards: [
+            {
+                id: 'kody-rules-polyglot',
+                label: "Files outside the rule's language left alone",
+                run: ['evals/kody-rules/real-agent.js', '--runs=1', '--dataset=polyglot-cases'],
+                question: 'With a Ruby-only rule over Ruby, JavaScript and template PRs, how many files outside Ruby does the agent leave alone?',
+                read: (raw) => ({ ...raw, cases: (raw.cases || []).filter((c) => Number.isInteger(c.cleanFiles)).map((c) => ({ id: c.id, checks: 'Leaves every file outside the rule alone', hits: c.cleanFiles - (c.falseAlarms || 0), total: c.cleanFiles })) }),
+            },
+        ],
+    },
     heavy: {
         // On demand only, never a PR's check: every case is a full heavy review
         // (the generalist and nine lenses), about twice a normal review.

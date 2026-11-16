@@ -424,7 +424,13 @@ async function main() {
                 '--model=eval-fake',
                 '--runs=1',
                 '--cases=typeorm/typeorm#12421::no-any-type',
+                '--quality',
+                '--judge=eval-fake',
             ],
+            check: ({ result }) =>
+                result?.metrics && 'titleQuality' in result.metrics && result.latency && Array.isArray(result.tokensByRun)
+                    ? null
+                    : 'expected the quality metrics, the stage latency and the per-run tokens in the result',
         },
         // The finder reads the target branch's CLAUDE.md through
         // readRepoInstruction; the verifier receives that instruction.
@@ -605,6 +611,7 @@ async function main() {
                     server.stats.verdictPrompts.slice(verdictsBefore),
                 finderToolResults:
                     server.stats.finderToolResults.slice(toolResultsBefore),
+                result: step.result ? readJson(resultFile) : undefined,
             });
         }
         if (!problem && step.result) problem = resultProblem(step, resultFile);
