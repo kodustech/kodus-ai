@@ -22,6 +22,7 @@ import (
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/machinetrust"
 )
 
 // Kind is the driver's name in -driver and in the cell's hello.
@@ -64,6 +65,11 @@ type Config struct {
 	ReadyTimeout time.Duration
 	Poll         time.Duration
 	Now          func() time.Time
+	// CellCA is the injector's cell CA certificate (machinetrust.CellCA:
+	// one CA certificate, never its key). Set: a code sandbox of a claim
+	// with org secrets trusts it (sandboxTrust). Empty: such a sandbox is
+	// refused (Capabilities SandboxCellTrust false).
+	CellCA []byte
 }
 
 type Driver struct {
@@ -96,6 +102,13 @@ func New(k KubeAPI, exec Execer, cfg Config) (*Driver, error) {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
+	if len(cfg.CellCA) > 0 {
+		ca, err := machinetrust.CellCA(cfg.CellCA)
+		if err != nil {
+			return nil, fmt.Errorf("k8ssandbox: %w", err)
+		}
+		cfg.CellCA = ca
+	}
 	return &Driver{k: k, exec: exec, cfg: cfg}, nil
 }
 
@@ -106,6 +119,7 @@ func (d *Driver) Capabilities() driver.Capabilities {
 		Isolation: driver.IsolationSandboxedContainer, NestedContainers: d.cfg.RuntimeClass == "kata",
 		Arch: []string{"x86_64", "arm64"}, HostArch: d.cfg.Arch,
 		MaxClaimSize: d.cfg.MaxClaimSize, DefaultClaimSize: d.cfg.DefaultClaimSize,
+		SandboxCellTrust: len(d.cfg.CellCA) > 0,
 	}
 }
 
@@ -210,6 +224,8 @@ type podShape struct {
 	// workspaceMB > 0 mounts /workspace (and a small /tmp) in memory, and
 	// runs the pod read-only as the guest user.
 	workspaceMB int
+	// trust: the sandbox of a claim with org secrets gets the cell's trust files (sandboxTrust).
+	trust bool
 }
 
 // pod is a claim pod: on the RuntimeClass, restricted (non-root, no
@@ -263,6 +279,9 @@ func (d *Driver) pod(spec driver.MachineSpec, shape podShape) (Object, error) {
 			map[string]any{"name": "tmp", "mountPath": "/tmp"},
 		}
 	}
+	if shape.trust {
+		d.sandboxTrust(podSpec, container, shape.image)
+	}
 	return Object{
 		"apiVersion": "v1", "kind": "Pod",
 		"metadata": map[string]any{"name": podName(spec), "namespace": d.cfg.Namespace, "labels": labels, "annotations": map[string]any{
@@ -315,15 +334,15 @@ func (d *Driver) SandboxesEnabled() bool { return d.cfg.SandboxImage != "" }
 // CreateSandbox makes the sandbox pod and waits until it runs: the claim's
 // egress policy names its address, which exists only then. A pod that
 // fails or does not run in ReadyTimeout is deleted. A sandbox that must
-// trust the cell CA is refused: no trust files reach a pod (Capabilities
-// SandboxCellTrust false).
+// trust the cell CA gets the trust files (sandboxTrust); without CellCA it
+// is refused (Capabilities SandboxCellTrust false).
 func (d *Driver) CreateSandbox(ctx context.Context, req driver.SandboxRequest) (driver.MachineRef, error) {
 	spec := req.Spec
 	if !d.SandboxesEnabled() {
 		return driver.MachineRef{}, ErrNoSandboxImage
 	}
-	if req.CellTrust {
-		return driver.MachineRef{}, fmt.Errorf("%w: k8s-sandbox pods take no cell trust files", driver.ErrUnsupported)
+	if req.CellTrust && len(d.cfg.CellCA) == 0 {
+		return driver.MachineRef{}, fmt.Errorf("%w: this k8s-sandbox cell has no cell CA (-cell-ca-cert) for its pods to trust", driver.ErrUnsupported)
 	}
 	if spec.Role != driver.RolePool {
 		spec.Role = driver.RoleWorkload // a blank pool sandbox keeps its role until a claim takes it
@@ -333,7 +352,7 @@ func (d *Driver) CreateSandbox(ctx context.Context, req driver.SandboxRequest) (
 		return driver.MachineRef{}, err
 	}
 	memMB, _ := d.size(spec)
-	p, err := d.pod(spec, podShape{container: containerSandbox, image: d.cfg.SandboxImage, workspaceMB: max(memMB/2, 1)})
+	p, err := d.pod(spec, podShape{container: containerSandbox, image: d.cfg.SandboxImage, workspaceMB: max(memMB/2, 1), trust: req.CellTrust})
 	if err != nil {
 		return driver.MachineRef{}, err
 	}
@@ -567,3 +586,43 @@ var (
 	_ driver.MachineDriver = (*Driver)(nil)
 	_ driver.Sandboxer     = (*Driver)(nil)
 )
+
+// The init container's script: the cell CA from the pod spec, then the
+// bundle, the tool image's own roots followed by the cell CA, as
+// machinetrust.Build makes it on a host. Nothing else is written.
+const trustScript = `set -eu
+umask 022
+printf '%s' "$KODUS_CELL_CA" > /trust/cell-ca.pem
+cat /etc/ssl/certs/ca-certificates.crt /trust/cell-ca.pem > /trust/ca-bundle.pem`
+
+// sandboxTrust gives a sandbox pod the cell's trust (machinetrust): an
+// unprivileged init container of the same tool image writes cell-ca.pem and
+// ca-bundle.pem into a memory volume, and the sandbox mounts them read-only
+// at machinetrust's paths, the bundle over the system store too; the guest
+// agent points the variables at them. The certificate travels in the pod
+// spec (public, a few KiB), so no ConfigMap and no RBAC beyond pods.
+func (d *Driver) sandboxTrust(podSpec, container map[string]any, image string) {
+	podSpec["volumes"] = append(asList(podSpec["volumes"]), map[string]any{"name": "trust", "emptyDir": map[string]any{"medium": "Memory", "sizeLimit": "4Mi"}})
+	small := map[string]any{"cpu": "100m", "memory": "64Mi"}
+	podSpec["initContainers"] = []any{map[string]any{
+		"name": "trust", "image": image, "imagePullPolicy": "IfNotPresent",
+		"command": []any{"sh", "-c", trustScript},
+		"env":     []any{map[string]any{"name": "KODUS_CELL_CA", "value": string(d.cfg.CellCA)}},
+		"securityContext": map[string]any{
+			"allowPrivilegeEscalation": false, "privileged": false, "readOnlyRootFilesystem": true,
+			"runAsNonRoot": true, "capabilities": map[string]any{"drop": []any{"ALL"}},
+		},
+		"resources":    map[string]any{"limits": small, "requests": small},
+		"volumeMounts": []any{map[string]any{"name": "trust", "mountPath": "/trust"}},
+	}}
+	container["volumeMounts"] = append(asList(container["volumeMounts"]),
+		map[string]any{"name": "trust", "mountPath": machinetrust.CellCATarget, "subPath": "cell-ca.pem", "readOnly": true},
+		map[string]any{"name": "trust", "mountPath": machinetrust.BundleTarget, "subPath": "ca-bundle.pem", "readOnly": true},
+		map[string]any{"name": "trust", "mountPath": machinetrust.SystemStoreTarget, "subPath": "ca-bundle.pem", "readOnly": true},
+	)
+}
+
+func asList(v any) []any {
+	l, _ := v.([]any)
+	return l
+}

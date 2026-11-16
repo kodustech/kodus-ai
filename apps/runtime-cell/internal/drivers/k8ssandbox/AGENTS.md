@@ -19,7 +19,7 @@ The cell's driver on Kubernetes (`-driver k8s-sandbox`, or `-driver auto` in a p
 - The ownership rules of [`../../../AGENTS.md`](../../../AGENTS.md) "Untrusted input" apply: `Destroy`, `DialGuest` and `SetExpiry` act only on a pod carrying this cell's label, read from the cluster (`ownPod`, `owns`).
 - Every request is pods (or pods/exec) in the configured namespace.
 - Ids go in labels (`kodus.io/` plus the tag name), times in annotations: label values cannot hold `:` or timestamps.
-- A sandbox that must trust the cell CA is refused (`Capabilities.SandboxCellTrust` is false): no trust files reach a pod.
+- A sandbox that must trust the cell CA (a claim with org secrets) gets it only when the cell has its CA (`Config.CellCA`, `-cell-ca-cert`, checked by `machinetrust.CellCA`: one CA certificate, never a key): `sandboxTrust` adds an unprivileged init container of the sandbox image that writes `cell-ca.pem` and `ca-bundle.pem` (the image's roots, then the CA) into a memory volume, mounted read-only at machinetrust's paths and over the system store. The certificate travels in the pod spec: no ConfigMap, no RBAC beyond pods. Without `CellCA` such a sandbox is refused (`Capabilities.SandboxCellTrust` false).
 - Without a sandbox image the driver makes no sandboxes (`ErrNoSandboxImage`, `SandboxesEnabled`).
 
 ## Where new code goes
@@ -40,6 +40,7 @@ Imports these Runtime modules:
 
 - [`apps/runtime-cell/internal/driver`](../../driver/AGENTS.md)
 - [`apps/runtime-cell/internal/kodyexec`](../../kodyexec/AGENTS.md)
+- [`apps/runtime-cell/internal/machinetrust`](../../machinetrust/AGENTS.md)
 
 Imported by:
 

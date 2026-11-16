@@ -127,20 +127,39 @@ func encode(certs ...*x509.Certificate) []byte {
 // nothing else; roots must hold at least one certificate (an unparsable one
 // is left out).
 func Build(roots, cellCA []byte) (bundle, ca []byte, err error) {
-	cas, other := certificates(cellCA)
-	switch {
-	case len(other) > 0:
-		return nil, nil, fmt.Errorf("machinetrust: the cell CA file holds %s; give the certificate only (its key stays with the injector)", strings.Join(other, ", "))
-	case len(cas) != 1:
-		return nil, nil, fmt.Errorf("machinetrust: the cell CA file holds %d certificates, not one", len(cas))
-	case !cas[0].IsCA || !cas[0].BasicConstraintsValid:
-		return nil, nil, errors.New("machinetrust: the cell CA file's certificate is not a CA")
+	c, err := cellCertificate(cellCA)
+	if err != nil {
+		return nil, nil, err
 	}
 	pub, _ := certificates(roots)
 	if len(pub) == 0 {
 		return nil, nil, errors.New("machinetrust: the public roots hold no certificate")
 	}
-	return encode(append(pub, cas[0])...), encode(cas[0]), nil
+	return encode(append(pub, c)...), encode(c), nil
+}
+
+// CellCA is the cell CA alone, re-encoded, for a driver that builds the
+// bundle inside the machine from the image's own roots (k8s-sandbox): the
+// same rule as Build, exactly one CA certificate and nothing else.
+func CellCA(cellCA []byte) ([]byte, error) {
+	c, err := cellCertificate(cellCA)
+	if err != nil {
+		return nil, err
+	}
+	return encode(c), nil
+}
+
+func cellCertificate(cellCA []byte) (*x509.Certificate, error) {
+	cas, other := certificates(cellCA)
+	switch {
+	case len(other) > 0:
+		return nil, fmt.Errorf("machinetrust: the cell CA file holds %s; give the certificate only (its key stays with the injector)", strings.Join(other, ", "))
+	case len(cas) != 1:
+		return nil, fmt.Errorf("machinetrust: the cell CA file holds %d certificates, not one", len(cas))
+	case !cas[0].IsCA || !cas[0].BasicConstraintsValid:
+		return nil, errors.New("machinetrust: the cell CA file's certificate is not a CA")
+	}
+	return cas[0], nil
 }
 
 // Files are where the two files are on the cell's host, the sources of the

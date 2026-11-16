@@ -121,11 +121,19 @@ func openK8s(ctx context.Context, st settings, cellID string) (*k8ssandbox.Drive
 	if err != nil {
 		return nil, rep, err
 	}
+	// -cell-ca-cert: a sandbox of a claim with org secrets trusts the injector (the driver checks it is one CA certificate).
+	var cellCA []byte
+	if st.Trust.CellCA != "" {
+		if cellCA, err = os.ReadFile(st.Trust.CellCA); err != nil {
+			return nil, rep, fmt.Errorf("-cell-ca-cert: %w", err)
+		}
+	}
 	d, err := k8ssandbox.New(k, k, k8ssandbox.Config{
 		CellID: cellID, Namespace: st.K8s.Namespace, RuntimeClass: st.K8s.RuntimeClass,
 		HolderImage: st.K8s.HolderImage, SandboxImage: st.K8s.SandboxImage, EgressAddress: egressIP, Arch: hostArch(),
 		MaxClaimSize:     driver.ClaimSize{MemoryMB: st.K8s.MaxMemoryMB, CPUs: st.K8s.MaxCPUs},
 		DefaultClaimSize: driver.ClaimSize{MemoryMB: st.Sandbox.MemoryMB, CPUs: st.Sandbox.CPUs},
+		CellCA:           cellCA,
 	})
 	return d, rep, err
 }

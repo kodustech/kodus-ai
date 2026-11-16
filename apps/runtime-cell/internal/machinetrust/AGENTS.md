@@ -42,6 +42,7 @@ Imported by:
 - [`apps/runtime-cell/internal/compose/sandbox`](../compose/sandbox/AGENTS.md)
 - [`apps/runtime-cell/internal/driver/fake`](../driver/fake/AGENTS.md)
 - [`apps/runtime-cell/internal/drivers/dockergvisor`](../drivers/dockergvisor/AGENTS.md)
+- [`apps/runtime-cell/internal/drivers/k8ssandbox`](../drivers/k8ssandbox/AGENTS.md)
 - [`apps/runtime-cell/internal/drivers/microvm`](../drivers/microvm/AGENTS.md)
 - [`apps/runtime-cell/internal/guest`](../guest/AGENTS.md)
 
