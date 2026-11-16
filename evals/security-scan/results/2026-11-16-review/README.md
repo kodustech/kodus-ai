@@ -12,8 +12,8 @@ local follow-up stopped on ENOSPC. A clean `e5223d6a0` checkout completed all
 six development/confirmation cases on the VM in one paid queue, retaining the
 final output without infrastructure errors. Three development samples are
 judged; confirmation scoring remains pending. The first library candidate
-has already failed its control conditions; its final UUID result is pending.
-A revised prompt candidate passes contract checks but has no model result yet.
+completed its four cases and failed its control conditions. A revised prompt
+candidate passes contract checks; its control measurement is running on the VM.
 No release pass is claimed.
 
 ## Development baseline
@@ -186,8 +186,27 @@ The two incomplete lenses returned without a formal submitted result, with
 no provider request failures. The itsdangerous report again invents a
 shipped untrusted web consumer for its explicitly unsafe diagnostic API.
 Its uncapped decompression is real; the claimed security boundary is absent.
-The final UUID case and aggregate accounting remain pending. No positive
-phase will run on this failed candidate, and these results remain retained.
+UUID finishes 7/16 units, with three failed and six skipped at its cap, and
+reports the confirmed v6 concurrency defect plus one false security claim.
+The latter correctly observes a missing random-node multicast marker, but
+does not establish a concrete attack: it relies on a random 48-bit node
+coincidence with another host and matching time/sequence. The actual
+standards deviation is acknowledged in
+`contracts/uuid-random-node-standards.json`, with RFC primary-source links;
+the exact security judgment and its limitation remain visible.
+
+`library-candidate.raw.json` retains all four results and actual token totals;
+the committed meter spend is $7.138201848. All four frozen snapshots match
+the final cases (`library-candidate-integrity.json`). A publication check
+against 66 runtime configuration/credential values found zero matches.
+Official no-model rescoring in `library-candidate.scored.json` records one
+real and two false reports, with none unjudged. Nine observed lenses have
+no formal submitted result; four UUID call failures are AbortError with no
+HTTP status around the capped stop, not evidence of a provider outage.
+The bounded diagnostics are in `contracts/library-candidate-diagnostics.json`.
+No positive phase runs on this failed candidate.
+`library-candidate-assessment.json` verifies that every previous exact-claim
+record in `../../adjudications.json` is preserved.
 
 `submission-contract-hypothesis.json` and `codec-boundary-hypothesis.json`
 were committed before their respective production edits. Revised source
@@ -208,8 +227,8 @@ contracts; scripted wiring passes with 100 scripted calls and no paid calls.
 The tests, wiring, preflight hashes and log are retained in `contracts/`.
 
 `revised-candidate-measurement-plan.json` freezes an additional control run
-(maximum $12 sum of case caps), after the previous runner finishes normally
-and all its results are retained. Only three fully examined clean negatives
+(maximum $12 sum of case caps). It started at 20:01:55 UTC after the previous
+runner finished normally and all its results were retained. Only three fully examined clean negatives
 and preservation of the confirmed UUID intrinsic defect permit the six-case
 positive phase (maximum $18). The same hash samples, separate blind
 confirmation group, source judge and 60% per-language target remain in force.

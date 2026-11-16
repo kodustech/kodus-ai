@@ -1,0 +1,25 @@
+{
+  "checkedAt": "2026-11-16T20:01:36.660863+00:00",
+  "engineCommit": "71dfbcbb63f3d6aa3c422a4caeabb07576c29a3f",
+  "finalRawSha256": "28d2877d788852f109dfd92eebf64c5cb6584f7d109536601310f3a2d65b4f34",
+  "finalRawRetainedLocally": true,
+  "caseSnapshotsExactlyMatchFinal": true,
+  "caseCount": 4,
+  "snapshotHashes": {
+    "is-control": "6a5a5dcf00b43caf89760fd42a2be048cd9c770449b589d1d89909e7722302ba",
+    "itsdangerous-control": "e53eabda29484f1149fcdd8aa677dcd5b93aab822daf055e337390cb657a6b13",
+    "xxhash-control": "035c6419df962670cb008976334dd2867306f0145dcfd77266e2dd9be1444196",
+    "uuid-control": "c6c8f35227c82a6cbc8e7baf6b11049d118ee55805725b8071cf3e7a5419aee9"
+  },
+  "exit": {
+    "exitCode": 2,
+    "finishedAt": "2026-11-16T20:01:03.612Z"
+  },
+  "runtimeValuesChecked": 66,
+  "runtimeSecretMatches": 0,
+  "meterCommittedUsd": 7.138201848000002,
+  "allCasesWithinThreeUsdCap": true,
+  "releaseGatePassed": false,
+  "positivePhaseStarted": false,
+  "note": "All unfavorable outputs retained. Incomplete controls and a false finding prevent advancement; UUID remains a diagnostic positive, not a valid clean negative."
+}

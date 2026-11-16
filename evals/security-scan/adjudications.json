@@ -3207,6 +3207,68 @@
             "sha256": "ad64423ed667f196a4c5cf56a3af6e0f6848cafb0a2752313568c11421d94d13"
           }
         ]
+      },
+      "uuid-control|secret_identity|node.go|setNodeInterface|50": {
+        "sourceResult": "results/2026-11-16-review/library-candidate.cases/uuid-control.json",
+        "sourceResultSha256": "c6c8f35227c82a6cbc8e7baf6b11049d118ee55805725b8071cf3e7a5419aee9",
+        "findingSha256": "a2356d5b67620e440fe7ca356cbef5f1f8823ed70a617aad43a8d4bc6ddaebe8",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The source really omits the random-node multicast bit: node.go:52 fills all 48 bits from the default crypto/rand reader (util.go:14, uuid.go:45), contradicting RFC 4122 section 4.5 and RFC 9562 section 6.10 namespace separation. That conformance defect is retained, not denied. This exact security claim supplies no concrete attacker-controlled collision or additional authority: a random fallback is fixed for the process, matching a target hardware node still requires a 48-bit random coincidence plus matching time/sequence, and a caller already allowed to run host code can explicitly SetNodeID anyway (node.go:70-81). Calling the IEEE namespace an authorization boundary does not establish an exploit. Under the frozen concrete-security-boundary scope this report is false; the standards deviation alone is not treated as demonstrated identity corruption. See contracts/uuid-random-node-standards.json.",
+        "sources": [
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/node.go#L50",
+            "sha256": "73a93d192ca24078e0f93b8c1675e13adb442421252d3974d697b0821c4832cf"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/node.go#L70",
+            "sha256": "73a93d192ca24078e0f93b8c1675e13adb442421252d3974d697b0821c4832cf"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/util.go#L14",
+            "sha256": "4237eba5a7bc7934b938c9b0bce5fa502d832e5660de71cbef130582e517f89e"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/uuid.go#L45",
+            "sha256": "00d93a3f65d8b0063266e63ff0e16ac543e30a911fd35119bcf1a66437161360"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/version1.go#L36",
+            "sha256": "38a2c229a2aad4bb72d45529304f210b1f31e8ef60bbd2605690a10f0d8a8242"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/time.go#L108",
+            "sha256": "4154b2d7897acfff253c4c2ac0d38d1765cfe3f6ca2e482c71c0677d98380d63"
+          }
+        ]
+      },
+      "uuid-control|data_exposure|version6.go|NewV6WithTime|39": {
+        "sourceResult": "results/2026-11-16-review/library-candidate.cases/uuid-control.json",
+        "sourceResultSha256": "c6c8f35227c82a6cbc8e7baf6b11049d118ee55805725b8071cf3e7a5419aee9",
+        "findingSha256": "0ecffb4bfc54f21153a7fcbae302bbee8ba6d608a31e2700e06b3f4e5d3f9aa0",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "NewV6WithTime calls getTime(customTime) directly at version6.go:40 while the public GetTime wrapper takes timeMu (time.go:48-52). getTime reads/writes shared clockSeq and lasttime without its own lock (time.go:65-79), so concurrent supported calls race and can duplicate identifiers. The existing exact-pin bounded race/uniqueness probe in contracts/uuid-race-probe.* confirms the asserted intrinsic integrity defect: 6000 serial calls unique, concurrent calls 1208 duplicates and race detector failure. This terse claim does not assert a session hijack; severity and the data_exposure class are not established by this judgment.",
+        "sources": [
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/version6.go#L40",
+            "sha256": "0bafc74725a9ee94939d6cde6bad8e13804aa594328e7b20d7cf05fb86315307"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/time.go#L48",
+            "sha256": "4154b2d7897acfff253c4c2ac0d38d1765cfe3f6ca2e482c71c0677d98380d63"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/time.go#L65",
+            "sha256": "4154b2d7897acfff253c4c2ac0d38d1765cfe3f6ca2e482c71c0677d98380d63"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/time.go#L79",
+            "sha256": "4154b2d7897acfff253c4c2ac0d38d1765cfe3f6ca2e482c71c0677d98380d63"
+          }
+        ]
       }
     }
   },
@@ -3330,5 +3392,7 @@
   "weknora-a20541cd|ssrf|internal/agent/tools/web_fetch.go|WebFetchTool.fetchWithChromedp|414": "false",
   "weknora-a20541cd|authz|internal/handler/tenant.go|TenantHandler.DeleteTenant|210": "real",
   "weknora-a20541cd|authz|internal/handler/auth.go|AuthHandler.Logout|183": "false",
-  "weknora-a20541cd|authz|docreader/parser/base_parser.py||708": "real"
+  "weknora-a20541cd|authz|docreader/parser/base_parser.py||708": "real",
+  "uuid-control|secret_identity|node.go|setNodeInterface|50": "false",
+  "uuid-control|data_exposure|version6.go|NewV6WithTime|39": "real"
 }

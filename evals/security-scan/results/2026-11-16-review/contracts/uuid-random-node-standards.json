@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-11-16",
+  "case": "uuid-control",
+  "sourceCommit": "2d3c2a9cc518326daf99a383f07c4d3c44317e4d",
+  "primarySources": [
+    {
+      "url": "https://www.rfc-editor.org/rfc/rfc9562.html#section-6.10",
+      "finding": "Random node generation sets the multicast marker to separate random identifiers from network-card addresses."
+    },
+    {
+      "url": "https://www.rfc-editor.org/rfc/rfc4122.html#section-4.5",
+      "finding": "The earlier UUID specification prescribes the same separation using the first-octet multicast bit."
+    }
+  ],
+  "sourceFinding": "Pinned setNodeInterface fallback calls randomBits on six bytes without setting the marker. randomBits uses io.ReadFull; the default reader is crypto/rand.Reader.",
+  "inference": "This is a genuine conformance deviation. The exact reported attacker/impact does not demonstrate a practical collision or extra capability under the declared security scope. A concrete weak-entropy generator or shipped exploitable consumer would require its own evidence.",
+  "judgment": "false for the exact security report, not denial of the missing marker",
+  "limitation": "Codex source judgment; maintainers may disagree on classifying an integrity-relevant standards deviation without a concrete exploit. No collision experiment is claimed for this report."
+}

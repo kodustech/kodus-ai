@@ -1,0 +1,65 @@
+{
+  "engineCommit": "71dfbcbb63f3d6aa3c422a4caeabb07576c29a3f",
+  "rawResultSha256": "28d2877d788852f109dfd92eebf64c5cb6584f7d109536601310f3a2d65b4f34",
+  "scoredResultSha256": "800f848f7928ff1bdebdce35da1e715aa02bdc765e4bd6c6c85c963e7bcbdf5b",
+  "normalExitCode": 2,
+  "runtimeSecretMatches": 0,
+  "meterCommittedUsd": 7.138201848000002,
+  "maximumSumOfCaseCapsUsd": 12,
+  "runnerInfrastructureErrors": 0,
+  "rawTokensUnchangedByRescore": true,
+  "findingClaimsCoverageAndSpendUnchangedByRescore": true,
+  "previousExactClaimRecordsPreserved": 126,
+  "newExactClaimRecords": 2,
+  "sourceJudge": "Codex, not independent human review",
+  "findings": {
+    "listed": 0,
+    "real": 1,
+    "falseCount": 2,
+    "unjudged": 0,
+    "judged": 3,
+    "value": 0.3333333333333333
+  },
+  "validNegatives": [
+    {
+      "id": "is-control",
+      "reports": 0,
+      "done": 3,
+      "planned": 3,
+      "failed": 0,
+      "fullyExaminedAndClean": true
+    },
+    {
+      "id": "itsdangerous-control",
+      "reports": 1,
+      "done": 9,
+      "planned": 10,
+      "failed": 1,
+      "fullyExaminedAndClean": false
+    },
+    {
+      "id": "xxhash-control",
+      "reports": 0,
+      "done": 7,
+      "planned": 8,
+      "failed": 1,
+      "fullyExaminedAndClean": false
+    }
+  ],
+  "uuidDiagnostic": {
+    "done": 7,
+    "planned": 16,
+    "failed": 3,
+    "skippedByBudget": 6,
+    "reported": 2,
+    "real": 1,
+    "false": 1,
+    "confirmedV6DefectDetected": true,
+    "originalExpectedFindings": 0,
+    "newMulticastConformanceDeviationAcknowledged": true,
+    "conformanceDeviationHasNoDemonstratedExploit": true
+  },
+  "assessmentPassed": false,
+  "positivePhaseStarted": false,
+  "reason": "itsdangerous and xxhash not fully examined, itsdangerous false report. Retain all results. The conformance-only UUID report is false under concrete-security scope; the v6 race is real."
+}
