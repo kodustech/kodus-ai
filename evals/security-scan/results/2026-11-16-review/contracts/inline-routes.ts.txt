@@ -1,0 +1,4 @@
+import express from 'express';
+const app = express();
+app.get('/one', (req, res) => { res.send(req.query.x); });
+app.post('/two', function (req, res) { res.send(req.body.x); });

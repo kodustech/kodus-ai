@@ -1,0 +1,6 @@
+{
+  "exitCode": 1,
+  "rejectsLateKey": true,
+  "failedBeforeCalls": true,
+  "cryptoImportError": true
+}
