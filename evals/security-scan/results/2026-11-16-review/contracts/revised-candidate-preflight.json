@@ -1,0 +1,27 @@
+{
+  "checkedAt": "2026-11-16T19:56:24.368Z",
+  "engineCommit": "5617eab0a603cb94cb13d6dabb5de8e51e588e5f",
+  "dirty": false,
+  "provider": "openai_compatible",
+  "servedModel": "accounts/fireworks/models/deepseek-v4p1-flash",
+  "knownUsdRates": true,
+  "modelCalls": 0,
+  "criticalSource": {
+    "libs/security-scan/domain/scan-prompts.ts": "03dda917c837aaedfb4558659cf50fd4c5583081b7a6149b7000fec88f0cc0d2",
+    "libs/security-scan/application/security-scan-engine.ts": "03a539aac96e3a90dbb44e3cebd27f2190c8dcf3331f7ed11a8f94a7a371c2a8",
+    "libs/security-scan/application/scan-model.ts": "a6742b4a0e1fc3fcd291081cb793a662154a1a9e0ac78af075f0819398f4606e",
+    "libs/security-scan/domain/budget-meter.ts": "701936e54342ccda526c106c0718fc14ff00fbd2a452487141afc0a988bb838e",
+    "evals/security-scan/run.js": "a571d251a82ac2ec49fbbe25aa56ab09cb6b4d1956be48b73667767295ef9d75",
+    "evals/security-scan/scan-repo.js": "20470e9388f24dbefb944a8d70d8d3ce17350e31238cf41ec3c8b41be501e933",
+    "evals/security-scan/scoring.js": "d6bc9cabca5ae11af8178baf6673e2aa41fbb4b1dd8c812f20c0a655061094c0",
+    "evals/security-scan/vulngym-cases.json": "782e60de00d6de9f4d6518a87e5a45b8284c67da3dde447fe6c717de347e774e",
+    "evals/security-scan/clean-controls.json": "cea9ef1a799f44969e14a62e61e6501f3dec519dccf5224c4f8071234fd0c80f"
+  },
+  "generatedRuntime": {
+    "file": "libs/ee/configs/environment/environment.ts",
+    "sha256": "748849608dc0f9990fdc8b7abe00983275753d68289cd2a6a89a54b1bd8a25e1",
+    "derivedFrom": "libs/ee/configs/environment/environment.dev.ts",
+    "tracked": false
+  },
+  "aliasPath": "/home/ubuntu/security-scan-eval-5617/libs/issues/domain/scan-fingerprint.ts"
+}

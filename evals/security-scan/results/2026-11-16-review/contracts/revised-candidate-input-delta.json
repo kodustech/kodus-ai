@@ -1,0 +1,17 @@
+{
+  "checkedAt": "2026-11-16T19:56:02.393Z",
+  "beforeCommit": "71dfbcbb63f3d6aa3c422a4caeabb07576c29a3f",
+  "candidateCommit": "5617eab0a603cb94cb13d6dabb5de8e51e588e5f",
+  "productionDiffFiles": [
+    "libs/security-scan/domain/scan-prompts.ts"
+  ],
+  "finderAllSevenClasses": "Only explicit native structured completion, plus resource-class exclusion for resource_exhaustion",
+  "verifier": "Only resource_exhaustion exclusion changes",
+  "genericLibraryParagraphUnchanged": true,
+  "otherPromptExportsUnchanged": true,
+  "caseCatalogsByteIdentical": true,
+  "completionAdapterUnchanged": true,
+  "maxLensStepsUnchanged": 30,
+  "unitConcurrencyUnchanged": 4,
+  "modelCalls": 0
+}

@@ -11,7 +11,9 @@ Release state: the original precision baseline fails Python and Go. The
 local follow-up stopped on ENOSPC. A clean `e5223d6a0` checkout completed all
 six development/confirmation cases on the VM in one paid queue, retaining the
 final output without infrastructure errors. Three development samples are
-judged; confirmation scoring and the candidate control run remain pending.
+judged; confirmation scoring remains pending. The first library candidate
+has already failed its control conditions; its final UUID result is pending.
+A revised prompt candidate passes contract checks but has no model result yet.
 No release pass is claimed.
 
 ## Development baseline
@@ -175,6 +177,44 @@ its original mistaken negative expectation visible; neither it nor its false
 reports are dropped from measurement or precision. The historical `f7723e64b`
 control snapshots are not described as a same-commit paired control run.
 
+## Revised candidate
+
+The retained `71dfbcbb6` controls in `library-candidate.cases/` do not pass:
+is finishes 3/3 units with zero findings; xxhash finishes 7/8 with zero
+findings; itsdangerous finishes 9/10 with one source-judged false report.
+The two incomplete lenses returned without a formal submitted result, with
+no provider request failures. The itsdangerous report again invents a
+shipped untrusted web consumer for its explicitly unsafe diagnostic API.
+Its uncapped decompression is real; the claimed security boundary is absent.
+The final UUID case and aggregate accounting remain pending. No positive
+phase will run on this failed candidate, and these results remain retained.
+
+`submission-contract-hypothesis.json` and `codec-boundary-hypothesis.json`
+were committed before their respective production edits. Revised source
+`5617eab0a` tells the finder to call its existing `submitResult` tool with
+`reasoning` and `suggestions`, including an empty array for a completed
+negative investigation. It also distinguishes intended codec expansion
+from a shipped unbounded hostile-data consumer, bypassed limit or independent
+intrinsic defect. Finder and verifier share that resource-class exclusion.
+It names no case, repository or advisory and retains the generic library
+paragraph, intrinsic-defect scope and strict completion predicate.
+
+`contracts/revised-candidate-input-delta.json` compares all seven actual prompt
+inputs and all other exports: only those two instructions change. The case
+catalogs, engine, native adapter, model route, 30 lens steps, four-unit
+concurrency and caps remain unchanged. On a clean isolated VM checkout,
+111 tests pass, including the actual adapter's prose-only/formal-result
+contracts; scripted wiring passes with 100 scripted calls and no paid calls.
+The tests, wiring, preflight hashes and log are retained in `contracts/`.
+
+`revised-candidate-measurement-plan.json` freezes an additional control run
+(maximum $12 sum of case caps), after the previous runner finishes normally
+and all its results are retained. Only three fully examined clean negatives
+and preservation of the confirmed UUID intrinsic defect permit the six-case
+positive phase (maximum $18). The same hash samples, separate blind
+confirmation group, source judge and 60% per-language target remain in force.
+These validation checks and proposed runs do not establish a quality pass.
+
 ## Kody review corrections
 
 `cc61b7011` refuses hostless scans before queueing, validates a positive
@@ -207,6 +247,12 @@ changes affect tests and the eval-only early guard; application runtime source
 is unchanged. A rate-limit test that mixed wall time with an injected clock
 now gives both components the same controlled clock; its 30 tests pass.
 The clean-cache Mongo/Issues rerun also passes all 35 assertions.
+
+`contracts/ci-backend-aa70.json` records full backend CI for the published
+`aa70a7791`: 1,391 suites, 20,203 tests and eight snapshots pass. Its full
+wiring, type, dependency-injection, permissions, environment and feature-gate
+checks also pass. The advisory mutation workflow was canceled; it supplies
+no complete mutation score. These checks precede revised prompt `5617eab0a`.
 
 ## Contracts and scope
 

@@ -1,0 +1,16 @@
+[
+  {
+    "step": "security-scan",
+    "ok": true,
+    "problem": null,
+    "ms": 9249,
+    "calls": 100
+  },
+  {
+    "step": "pr-paths-filter",
+    "ok": true,
+    "problem": null,
+    "ms": 0,
+    "calls": 0
+  }
+]
