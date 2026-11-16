@@ -65,9 +65,13 @@ func run(log *slog.Logger) (err error) {
 	agentPub := flag.String("agent-pub", "/etc/kodus/injector/agent.pub.pem", "the agent's ed25519 policy key")
 	agentCN := flag.String("agent-cn", "", "the cell agent's certificate CN (the cell id): the control port answers no other certificate of -ca; empty answers any")
 	agentSPKI := flag.String("agent-spki", "", "hex SHA-256 of the agent certificate's public key, pinned with or instead of -agent-cn")
+	maxInspected := flag.Int64("max-inspected-response-gb", 16, "largest response a read on the inspected tier (a download: an image layer, a toolchain) may have, in GiB, 1 to 1024; past it the machine sees a broken response")
 	metricsAddr := flag.String("metrics-addr", "off", "address of /metrics (Prometheus text format: swaps, alerts, cell_openbao_up), e.g. 127.0.0.1:9467; off disables it")
 	flag.Parse()
 	log.Info("injector.start", "version", version.Get())
+	if *maxInspected < 1 || *maxInspected > 1024 {
+		return fmt.Errorf("-max-inspected-response-gb must be between 1 and 1024")
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
 
@@ -136,6 +140,7 @@ func run(log *slog.Logger) (err error) {
 		Policies: store, CA: pair.Leaf, CAKey: signer, TrustedProxies: trusted, InternalCIDRs: cidrs, Alerts: alerts,
 		// Credential values stay inside the owner-managed injector vault.
 		Vault: vault, Secrets: secrets, Log: log, Metrics: im,
+		MaxInspectedResponse: *maxInspected << 30,
 	}
 	l, err := new(net.ListenConfig).Listen(ctx, "tcp4", *listen)
 	if err != nil {

@@ -15,9 +15,9 @@ const inspectedHost = "public.example"
 
 // inspectedRig is the rig with public.example on the inspected tier (no
 // credential) and registry.private both credentialed and inspected.
-func inspectedRig(t *testing.T) *rig {
+func inspectedRig(t *testing.T, opts ...func(*Injector)) *rig {
 	t.Helper()
-	r := newRig(t)
+	r := newRig(t, opts...)
 	pol, _ := r.inj.Policies.ForClaim("claim-1")
 	pol.Inspected = []policy.InspectRule{
 		{Host: host, Paths: []string{"/"}},
@@ -109,5 +109,32 @@ func TestS53PublishToAnInspectedCredentialedRegistryIsRefused(t *testing.T) {
 	}
 	if got := (<-r.seen).Get("Authorization"); got != secret {
 		t.Fatalf("read went without its credential: %q", got)
+	}
+}
+
+// A read on the inspected tier is a download (an image layer, a toolchain):
+// nothing in it is masked or held, and the egress budget is on what leaves.
+// The credentialed cap cut a Docker Hub layer at 256 MiB; the inspected tier
+// has a cap of its own, past any real artifact.
+func TestAnInspectedDownloadIsNotCutAtTheCredentialedCap(t *testing.T) {
+	r := inspectedRig(t, func(in *Injector) { in.MaxResponse = 1024 })
+	code, body := r.do(t, http.MethodGet, "https://"+inspectedHost+"/pkg/big", nil)
+	<-r.seen
+	if code != http.StatusOK || len(body) != 4096 {
+		t.Fatalf("an inspected download past the credentialed cap: %d, %d bytes", code, len(body))
+	}
+	if defaultMaxInspectedResponse < 8<<30 {
+		t.Fatalf("the inspected cap %d is below a large image layer", defaultMaxInspectedResponse)
+	}
+
+	cut := inspectedRig(t, func(in *Injector) { in.MaxInspectedResponse = 1024 })
+	resp, err := cut.vm.Get("https://" + inspectedHost + "/pkg/big")
+	if err == nil {
+		_, err = io.ReadAll(resp.Body)
+		resp.Body.Close()
+	}
+	<-cut.seen
+	if err == nil {
+		t.Fatal("a response past the inspected cap read as complete")
 	}
 }

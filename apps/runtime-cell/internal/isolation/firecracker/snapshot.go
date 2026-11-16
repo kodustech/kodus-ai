@@ -178,9 +178,13 @@ func (b *Backend) Snapshot(ctx context.Context, name string, req isolation.Snaps
 	if err := b.roomForCreate(r); err != nil {
 		return isolation.SnapshotRef{}, err
 	}
+	// Where the write goes, by phase, in the snapshotted transition: the
+	// VMM's create, the disks' clones and the store's publish.
+	began := time.Now()
 	if err := a.doWithin(ctx, createTimeout(r.MemoryMB), http.MethodPut, "/snapshot/create", body, nil); err != nil {
 		return isolation.SnapshotRef{}, err
 	}
+	created := time.Now()
 	id, staged, err := b.store.Stage(r.Org)
 	if err != nil {
 		return isolation.SnapshotRef{}, err
@@ -222,16 +226,19 @@ func (b *Backend) Snapshot(ctx context.Context, name string, req isolation.Snaps
 	if r.Network != "" {
 		m.Network = true
 	}
+	cloned := time.Now()
 	if _, err := b.store.Publish(staged, m); err != nil {
 		return isolation.SnapshotRef{}, err
 	}
+	published := time.Now()
 	if m.Key != "" {
 		// A new template of a key replaces the org's others (a new setup).
 		if _, err := b.store.RetireKey(r.Org, m.Key, id); err != nil {
 			return isolation.SnapshotRef{}, err
 		}
 	}
-	b.transition(r.ID, isolation.StateSnapshotted, string(req.Purpose)+" "+id)
+	b.transition(r.ID, isolation.StateSnapshotted, fmt.Sprintf("%s %s createMs=%d cloneMs=%d publishMs=%d", req.Purpose, id,
+		created.Sub(began).Milliseconds(), cloned.Sub(created).Milliseconds(), published.Sub(cloned).Milliseconds()))
 	if err := b.Destroy(context.WithoutCancel(ctx), name, isolation.DestroyOptions{}); err != nil {
 		return isolation.SnapshotRef{}, errors.Join(err, b.store.Remove(r.Org, id))
 	}

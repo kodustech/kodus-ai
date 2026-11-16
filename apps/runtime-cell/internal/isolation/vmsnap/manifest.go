@@ -110,7 +110,7 @@ func (m Manifest) Check(org, id string) error {
 	}
 	for _, name := range want {
 		f, ok := m.Files[name]
-		if !ok || f.Size <= 0 || len(f.SHA256) != 64 {
+		if !ok || f.Size <= 0 || (len(f.SHA256) != 64 && !(unhashed(m.Purpose, name) && f.SHA256 == "")) {
 			return refuse("snapshot %s: file %s", id, name)
 		}
 	}
@@ -197,4 +197,11 @@ func decodeManifest(raw []byte) (Manifest, error) {
 		return Manifest{}, refuse("snapshot manifest: %v", err)
 	}
 	return m, nil
+}
+
+// unhashed says a file of a snapshot of purpose is published with no
+// digest: a round's memory file and disks (Store.Publish). Its state file,
+// and every file of a template or a session, always has one.
+func unhashed(purpose Purpose, name string) bool {
+	return purpose == isolation.PurposeRound && name != FileState
 }

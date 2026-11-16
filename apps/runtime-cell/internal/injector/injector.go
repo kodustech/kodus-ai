@@ -80,11 +80,14 @@ type Alert struct {
 const Masked = "***"
 
 const (
-	defaultMaxBody      = 16 << 20
-	defaultMaxResponse  = 256 << 20
-	defaultPerClaim     = 8
-	maxProxyLine        = 107 // the PROXY v1 maximum, CRLF included
-	defaultUpstreamPort = "443"
+	defaultMaxBody     = 16 << 20
+	defaultMaxResponse = 256 << 20
+	// defaultMaxInspectedResponse is past any real artifact (Docker Hub
+	// layers run to several GB): only a response that never ends is cut.
+	defaultMaxInspectedResponse = 16 << 30
+	defaultPerClaim             = 8
+	maxProxyLine                = 107 // the PROXY v1 maximum, CRLF included
+	defaultUpstreamPort         = "443"
 )
 
 type Injector struct {
@@ -108,9 +111,13 @@ type Injector struct {
 	// destination is checked again here before the credential goes out.
 	InternalCIDRs []*net.IPNet
 	// MaxBody caps a request body held for the outbound scan; MaxResponse
-	// caps a response (it streams, masked, and is cut past the cap).
-	MaxBody     int64
-	MaxResponse int64
+	// caps a response to a credentialed request (it streams, masked, and is
+	// cut past the cap). MaxInspectedResponse caps a read on the inspected
+	// tier, a download nothing is masked in (an image layer, a toolchain):
+	// the egress budget is on what leaves, and a passthrough CDN has no cap.
+	MaxBody              int64
+	MaxResponse          int64
+	MaxInspectedResponse int64
 	// MaxConcurrentPerClaim bounds the requests one claim has in flight.
 	MaxConcurrentPerClaim int
 	// Alerts is where alerts go for the control port; OnAlert is called
@@ -138,6 +145,9 @@ func (in *Injector) defaults() {
 		}
 		if in.MaxResponse == 0 {
 			in.MaxResponse = defaultMaxResponse
+		}
+		if in.MaxInspectedResponse == 0 {
+			in.MaxInspectedResponse = defaultMaxInspectedResponse
 		}
 		if in.MaxConcurrentPerClaim == 0 {
 			in.MaxConcurrentPerClaim = defaultPerClaim

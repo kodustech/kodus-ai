@@ -14,7 +14,7 @@ The rules and the store of microVM snapshots (`docs/runtime/isolation-p3-snapsho
 
 ## Rules and limits
 - The org must be the machine's own. A machine handed secrets, credentials or canaries never becomes a snapshot of any kind; a pooled machine never does; a template comes only from a setup's machine that never ran a PR's code; a round is the claim's own and is restored only into that claim's same machine.
-- A snapshot opens only for its org, only where it can be restored (same kit and host fingerprint), and only while its files are what was published (digest and time).
+- A snapshot opens only for its org, only where it can be restored (same kit and host fingerprint), and only while its files are what was published (digest and time). A round's memory file and disks are published with no digest and no sync (`manifest.go` `unhashed`): it goes with its claim, and a process that did not publish it refuses it.
 - Only a template leaves its host: `Export` refuses a round or a session, and checks the template as a restore would.
 - The store's disk is bounded in total and per org (`Policy.MaxBytes`, `MaxOrgBytes`); `Room` refuses, before it is taken, a snapshot that would take the org or the store past them. A round whose claim the cell no longer holds goes after `OrphanGrace`.
 

@@ -3,7 +3,7 @@
 The only piece of the cell that holds a test credential or an org secret's value (Inc. 5, [sandbox.md](../../../../docs/runtime/sandbox.md) "Secrets: OpenBao"). The egress proxy sends it the credentialed hosts and the inspected hosts from machines that trust the cell CA, with the address it validated in a PROXY v1 line; the injector ends the machine's TLS with a leaf of the cell CA, checks and rewrites the request, and goes to exactly that address over its own verified TLS. Data plane: it runs in the injector process (`cmd/injector`).
 
 ## Owns
-- A connection: `injector.go` `Injector.Serve`, `handle` (PROXY v1 only from `TrustedProxies`), `leaf` (the cell CA's leaf for the host), `proxyWithCredential`, `relay` (responses masked as they stream, cut past `MaxResponse`).
+- A connection: `injector.go` `Injector.Serve`, `handle` (PROXY v1 only from `TrustedProxies`), `leaf` (the cell CA's leaf for the host), `proxyWithCredential`, `relay` (responses masked as they stream, cut past `MaxResponse`); `inspect.go` `proxyInspected` (reads of the inspected tier, cut only past `MaxInspectedResponse`, 16 GiB by default, `-max-inspected-response-gb`).
 - Org secrets as placeholders: `placeholders.go` `proxyWithSecrets` (a placeholder becomes the value only on a host the admin allowed it for); the store `openbao_secrets.go` `OpenBaoSecrets`, `AppRoleToken`.
 - The inspected tier: `inspect.go` `proxyInspected` (only a GET or HEAD under the rule's paths, no body, no credential), `refuseInspected` (a fixed code, never the request).
 - The request target: `request_target.go` `upstreamURL` (https to the validated host with the request's path and query only); reflected credential header names: `response_headers.go`.

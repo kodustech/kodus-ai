@@ -102,7 +102,7 @@ func newRig(t *testing.T, opts ...func(*Injector)) *rig {
 		case "/always-gzip": // compresses unasked: the injector cannot mask it
 			w.Header().Set("Content-Encoding", "br")
 			_, _ = w.Write([]byte(req.Header.Get("Authorization"))) //nolint:gosec // G705: the fake upstream echoes the header so the test sees what the injector sent
-		case "/big":
+		case "/big", "/pkg/big":
 			_, _ = io.WriteString(w, strings.Repeat("y", 4096))
 		case "/artifact": // a package whose metadata embeds the token (S-28)
 			_, _ = io.WriteString(w, `{"name":"pkg","_resolved":"https://u:`+strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")+`@registry.private/pkg.tgz"}`) //nolint:gosec // G705: the fake upstream echoes the token on purpose (S-28)

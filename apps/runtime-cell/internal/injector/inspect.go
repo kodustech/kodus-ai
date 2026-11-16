@@ -19,7 +19,7 @@ func (in *Injector) refuseInspected(w http.ResponseWriter, info connInfo, why st
 
 // proxyInspected relays a request the inspected rule allowed, to the address
 // the proxy validated, with no credential: the answer goes back as it came
-// (nothing to mask), cut past MaxResponse. A request that carries one of the
+// (nothing to mask), cut past MaxInspectedResponse. A request that carries one of the
 // claim's placeholders is refused: this host has no secret of the claim.
 func (in *Injector) proxyInspected(w http.ResponseWriter, r *http.Request, info connInfo) {
 	// Its own slots: an install's downloads never wait behind (or hold up)
@@ -77,8 +77,8 @@ func (in *Injector) proxyInspected(w http.ResponseWriter, r *http.Request, info 
 		}
 	}
 	w.WriteHeader(resp.StatusCode)
-	n, err := io.Copy(w, io.LimitReader(resp.Body, in.MaxResponse+1))
-	if err != nil || n > in.MaxResponse {
+	n, err := io.Copy(w, io.LimitReader(resp.Body, in.MaxInspectedResponse+1))
+	if err != nil || n > in.MaxInspectedResponse {
 		in.Log.Warn("injector.response_cut", "claim", info.pol.ClaimID, "host", info.host, "bytes", n, "code", "response_incomplete")
 		panic(http.ErrAbortHandler)
 	}

@@ -115,8 +115,21 @@ func (s *Store) Publish(dir string, m Manifest) (Manifest, error) {
 		if err := os.Chmod(p, fileMode(name)); err != nil {
 			return Manifest{}, err
 		}
-		sum, size, err := digestAndSync(p)
-		if err != nil {
+		var (
+			sum  string
+			size int64
+			err  error
+		)
+		if unhashed(m.Purpose, name) {
+			// A round goes with its claim, on this host, in this process
+			// (Open refuses it elsewhere): read back and synced, a heavy
+			// environment's memory and disks were most of a 4.5 min write.
+			fi, err := os.Stat(p)
+			if err != nil {
+				return Manifest{}, err
+			}
+			size = fi.Size()
+		} else if sum, size, err = digestAndSync(p); err != nil {
 			return Manifest{}, err
 		}
 		fi, err := os.Stat(p)
@@ -249,6 +262,9 @@ func (s *Store) open(org, id, name string) (Manifest, string, error) {
 		for name, f := range m.Files {
 			if name == FileState {
 				continue
+			}
+			if f.SHA256 == "" {
+				return Manifest{}, "", refuse("snapshot %s: a round another process published (%s has no digest)", id, name)
 			}
 			if sum, err := digest(filepath.Join(dir, name)); err != nil || sum != f.SHA256 {
 				return Manifest{}, "", refuse("snapshot %s: %s is not the one published", id, name)
