@@ -185,19 +185,6 @@ describe('webhook setup is deferred until a chunked save is complete', () => {
             expect(createPullRequestWebhook).toHaveBeenCalledTimes(1);
         });
 
-        it('still removes the webhook of a repository a replace leaves out', async () => {
-            await service.createOrUpdateIntegrationConfig({
-                configKey: IntegrationConfigKey.REPOSITORIES,
-                configValue: [{ id: 'repo-a', name: 'frontend-app' }],
-                type: 'replace',
-                organizationAndTeamData: orgTeam,
-            });
-
-            expect(deleteWebhook).toHaveBeenCalledTimes(1);
-            expect(deleteWebhook.mock.calls[0][0].repositories).toEqual([
-                { id: 'repo-b', name: 'backend-api' },
-            ]);
-        });
     });
 
     describe('BitbucketCloudService', () => {

@@ -1961,10 +1961,17 @@ export class GithubService
             | undefined,
         githubAuthDetail: { org?: string } | null | undefined,
     ): string {
-        const ownerFromFullName = (value?: string) =>
-            typeof value === 'string' && value.includes('/')
-                ? value.split('/')[0]
+        // `extractRepoData` builds `${organizationName}/${name}`, so a record
+        // without an organization arrives as "undefined/<name>".
+        const ownerFromFullName = (value?: string) => {
+            if (typeof value !== 'string' || !value.includes('/')) {
+                return undefined;
+            }
+            const owner = value.split('/')[0].trim();
+            return owner && owner !== 'undefined' && owner !== 'null'
+                ? owner
                 : undefined;
+        };
 
         if (typeof repository === 'string') {
             return ownerFromFullName(repository) || githubAuthDetail?.org;
@@ -7488,7 +7495,7 @@ This is an experimental feature that generates committable changes. Review the d
 
             const listOfCriticalIssues = this.getListOfCriticalIssues({
                 criticalComments,
-                orgName: githubAuthDetail.org,
+                orgName: this.ownerOf(repository, githubAuthDetail),
                 repository,
                 prNumber,
                 githubHost: githubAuthDetail.host,

@@ -96,13 +96,15 @@ describe('GithubService addresses a repository by its own owner', () => {
         );
     });
 
-    it('keeps the recorded account when the repository carries no owner', async () => {
+    it('falls back to the recorded account when the full name holds no real owner', async () => {
+        // `extractRepoData` builds `${organizationName}/${name}`, so a
+        // record without an organization arrives as "undefined/api".
         const get = jest.fn().mockResolvedValue({ data: null });
         const service = makeService({ pulls: { get } }, 'acme');
 
         await service.getPullRequest({
             organizationAndTeamData,
-            repository: { id: '1', name: 'api' },
+            repository: { id: '1', name: 'api', fullName: 'undefined/api' },
             prNumber: 7,
         });
 
@@ -111,18 +113,27 @@ describe('GithubService addresses a repository by its own owner', () => {
         );
     });
 
-    it('changes nothing when the owner and the recorded account are the same', async () => {
-        const get = jest.fn().mockResolvedValue({ data: null });
-        const service = makeService({ pulls: { get } }, 'Novaorg01');
+    it('links the request-changes review to the repository owner', async () => {
+        const createReview = jest.fn().mockResolvedValue({ data: {} });
+        const service = makeService({
+            pulls: { createReview },
+            rest: { pulls: { createReview } },
+        });
 
-        await service.getPullRequest({
+        await service.requestChangesPullRequest({
             organizationAndTeamData,
             repository: orgRepository,
             prNumber: 1,
+            criticalComments: [
+                {
+                    comment: { suggestion: { suggestionContent: 'Fix it' } },
+                    codeReviewFeedbackData: { commentId: 42 },
+                } as any,
+            ],
         });
 
-        expect(get).toHaveBeenCalledWith(
-            expect.objectContaining({ owner: 'Novaorg01' }),
-        );
+        const body: string = createReview.mock.calls[0][0].body;
+        expect(body).toContain('/Novaorg01/qa2004-empty/pull/1');
+        expect(body).not.toContain('/Wellington01/');
     });
 });
