@@ -1,0 +1,18 @@
+{
+  "observedCandidate": "5617eab0a603cb94cb13d6dabb5de8e51e588e5f",
+  "observedAt": "2026-11-16T20:12:39Z",
+  "evidence": "The revised itsdangerous injection lens returned finishReason=completed, submittedResult=false, incompleteReason=null, no error, zero kept/unverified findings. The bounded observer records this while the pinned four-case queue is still running. Its outcome remains retained; no positive phase will run if the negative unit remains incomplete.",
+  "unknown": "The observer deliberately does not capture model text or tool payloads. These flags do not establish whether the absent whole result was prose, an unusable tool payload or another formatting failure.",
+  "confirmedSource": "scan-prompts.ts requests the native submitResult object, but the protocol is best-effort for this route. security-scan-engine.ts currently consumes a single runLens result; a completed empty run with submittedResult=false leaves its class unfinished. Native prose recovery alone is not a formal submitted investigation.",
+  "hypothesis": "One fresh native investigation of just an empty completed-but-unsubmitted lens can obtain a valid result without turning prose into a clean negative. Retry is bounded to once, under the same scan meter, deadline, signal, model, tools, prompts and per-run step budget.",
+  "scope": "Only the production security-scan engine's handling of an empty completed run without a formal result. Successful runs, findings-bearing runs, provider errors, truncated/budget-exhausted runs and unverified findings are not retried by this rule. Keep their findings and incomplete state as before.",
+  "invariants": [
+    "Never infer an empty formal result or coverage from prose.",
+    "Require the retry to deliver a genuinely whole result through the unchanged native adapter; otherwise the class remains incomplete.",
+    "Do not change limits, thresholds, judgments, case selection, fingerprints or target repositories.",
+    "All retry model calls must use the same request-level meter and cancellation/deadline admission.",
+    "Do not edit the running candidate worktree, replace its results or overlap paid queues."
+  ],
+  "validation": "Exercise success after an empty unsubmitted attempt, repeated protocol failure, no retry of successful/nonempty/error/cut/unverified outputs, deadline/cancellation and spend admission. Prove the real completion predicate still rejects prose. Follow with the same capped controls before any positive phase; freeze a separate candidate/source plan before any paid run.",
+  "confirmation": "Positive and confirmation descriptions remain unread during this correction. No effectiveness or release pass is inferred from this hypothesis or contract tests."
+}
