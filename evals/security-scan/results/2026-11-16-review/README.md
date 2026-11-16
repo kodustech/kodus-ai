@@ -7,9 +7,11 @@ preserved separately from later scoring. The model is
 `accounts/fireworks/models/deepseek-v4p1-flash` through production BYOK routing.
 Each public repository has the same $3 request-level cap.
 
-Release state: the last valid precision baseline fails Python and Go. The
-fresh development/confirmation attempt stopped on local ENOSPC, without a
-retained final positive report. No passing release claim is made.
+Release state: the original precision baseline fails Python and Go. The
+local follow-up stopped on ENOSPC. A clean `e5223d6a0` checkout is now measuring
+the six missing development/confirmation cases on the VM, in one paid queue.
+The frozen TypeScript/Python samples are judged; the other four cases and
+valid negative-control evidence remain pending. No release pass is claimed.
 
 ## Development baseline
 
@@ -100,6 +102,59 @@ not a valid clean negative for that behavior. Its raw result and original
 expected-zero assumption remain intact; it is not replaced with a favorable
 case. The three-control zero-finding check fails, and three proven clean
 controls cannot be claimed from this set.
+
+## VM continuation and library candidate
+
+`continuation-measurement-plan.json` freezes the six-case VM continuation on
+clean `e5223d6a0`, with the same DeepSeek route and $3 per-case cap ($18 maximum
+case budgets), one runner and two repositories at a time. Completed case
+snapshots and hash-selected samples are retained in `vm-followup.cases/` and
+were committed before their descriptions were inspected.
+
+The first two completed cases have the following **partial** source judgments.
+They do not include controls or the remaining four cases:
+
+| Case | Real/listed | Judged | Precision | Unjudged | Coverage | Recall |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Flowise (TypeScript) | 17 | 21 | 81.0% | 16 | 7/1,405 done; 2 failed | 1/5 |
+| Langflow (Python) | 17 | 20 | 85.0% | 1 | 4/1,843 done | 0/1 |
+
+Both stopped within their cap: $2.992663248 and $2.915709216. Those coverage
+limits matter; this is not a complete audit of either repository. Call-failure
+counters include budget admission/cancellation errors and must not all be
+called provider failures. No exhausted HTTP 429 was recorded in either case.
+The 40 new judgments preserve every previous exact-claim record and leave the
+original failing baseline unchanged (`contracts/adjudication-history-invariant.json`).
+The judge remains Codex inspecting pinned source, not an independent human.
+`contracts/express4-query-provenance.json` supports rejecting one report that
+assumes Express 5 getter behavior in a repository using Express 4.
+
+`library-boundary-hypothesis.json` was committed before the production prompt
+edit and before inspecting any new positive or confirmation descriptions.
+Candidate `71dfbcbb6` adds the same generic library/API-contract instruction to
+the finder and verifier. It names no benchmark repository, case or advisory.
+`contracts/library-prompt-delta.json` verifies all seven class inputs differ
+only by that paragraph; other prompt exports and all positive cases are
+unchanged. Existing prompt/engine tests pass (81), and scripted-model wiring
+passes on the clean candidate (`contracts/library-candidate-validation.log`).
+Those checks establish wiring, not model quality.
+
+`library-candidate-measurement-plan.json` freezes conditional measurement:
+finish the active six-case queue, then measure all four controls on the
+candidate (maximum case budgets $12). Only if all three valid negatives are
+fully examined without reports or provider infrastructure errors, and the
+confirmed UUID identity defect remains detectable, advance to the same six
+positive cases (maximum case budgets $18). Keep the 60% per-language floor,
+all unfavorable results and the separate confirmation group unchanged.
+
+`xxhash-control` was selected and inspected before any model run on it, at
+`cespare/xxhash@998dce232f17418a7a5721ecf87ca714025a3243`; its plan is in
+`supplemental-control-plan.json`. The original three control definitions and
+expected-zero fields are unchanged. The valid-negative set is is,
+itsdangerous and xxhash. UUID remains an additional diagnostic positive with
+its original mistaken negative expectation visible; neither it nor its false
+reports are dropped from measurement or precision. The historical `f7723e64b`
+control snapshots are not described as a same-commit paired control run.
 
 ## Kody review corrections
 
@@ -200,6 +255,10 @@ paid BYOK calls. Unit/CLI/fix-prompt and full pre-push totals are in the logs.
 Latest local pre-push: 812 suites, 13,038 passing tests and eight snapshots.
 [Backend CI](https://github.com/kodustech/kodus-ai/actions/runs/43871839598)
 and [wiring CI](https://github.com/kodustech/kodus-ai/actions/runs/43871839811)
-passed on `e64b84cb0`; the `f7723e64b` checks are running. The advisory mutation
-run lost a GitHub runner during shard zero after its dry run passed; no
-mutation score is claimed for that interrupted shard.
+passed on `e64b84cb0`. The published `e5223d6a0` head also passed
+[backend CI](https://github.com/kodustech/kodus-ai/actions/runs/43911722886),
+[wiring CI](https://github.com/kodustech/kodus-ai/actions/runs/43911722714),
+type, DI, permissions, environment, feature-gate and preview checks. Its
+[advisory mutation run](https://github.com/kodustech/kodus-ai/actions/runs/43911722739)
+was cancelled; no mutation score is claimed. These are checks for the
+published head, not a full CI claim for the local prompt candidate.

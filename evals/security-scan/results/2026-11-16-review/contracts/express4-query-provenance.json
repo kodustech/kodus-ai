@@ -1,0 +1,14 @@
+{
+  "repository": "expressjs/express",
+  "ref": "4.17.3",
+  "path": "lib/middleware/query.js",
+  "gitBlob": "7e9166947aff3be10f7ffec3771c92581ce211da",
+  "source": "https://github.com/expressjs/express/blob/4.17.3/lib/middleware/query.js",
+  "observed": "The Express 4 query middleware assigns req.query from parsed request URL once when absent; it is a mutable object, not the Express 5 getter.",
+  "appliesTo": {
+    "case": "flowise-f0c12941",
+    "declaredExpress": "^4.17.3",
+    "manifest": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/package.json"
+  },
+  "reviewedAt": "2026-11-16"
+}

@@ -1,0 +1,15 @@
+{
+  "beforeCommit": "e5223d6a0664a663adb9a6d241cee0b2034c2003",
+  "candidateCommit": "71dfbcbb63f3d6aa3c422a4caeabb07576c29a3f",
+  "productionDiffFiles": [
+    "libs/security-scan/domain/scan-prompts.ts"
+  ],
+  "allSevenClassesSameExceptGenericParagraph": true,
+  "otherPromptExportsUnchanged": true,
+  "positiveCasesUnchanged": true,
+  "originalControlsUnchanged": true,
+  "addedControl": [
+    "xxhash-control"
+  ],
+  "modelCalls": 0
+}

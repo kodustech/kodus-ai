@@ -1,0 +1,11 @@
+{
+  "priorRecordsPreserved": 65,
+  "newExactClaimJudgments": 40,
+  "baselinePrecisionUnchanged": {
+    "listed": 3,
+    "real": 33,
+    "falseCount": 28,
+    "unjudged": 125
+  },
+  "modelCalls": 0
+}

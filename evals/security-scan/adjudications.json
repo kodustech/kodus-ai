@@ -335,29 +335,58 @@
         ],
         "verdict": "real"
       },
-      "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.updateSubscriptionPlan|149": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
-        "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "5c907e78363952607cd33fc34ae7c673f8247d90fa23a5d217165f352b9ab1d7",
-        "judge": "Codex",
-        "date": "2026-11-16",
-        "reason": "updateSubscriptionPlan takes an arbitrary subscription ID; IdentityManager checks only that req.user exists before updating that Stripe subscription, without binding it to the caller's organization.",
-        "sources": [
-          {
-            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/controllers/organization.controller.ts#L149",
-            "sha256": "bdbd7e55986951b69589141c95eeec92f2f92afaca8073fb02632f5821b392d3"
-          },
-          {
-            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/IdentityManager.ts#L373",
-            "sha256": "11ce27baa85cff196ab9946f32c4d32af2dc475c3edc614c8ee137067533dc0c"
-          },
-          {
-            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/StripeManager.ts#L461",
-            "sha256": "e4db16d4e6e3c52c1c6953826a89a9a9399299d61c6dd604586ae0b8eb2f4923"
-          }
-        ],
-        "verdict": "real"
-      },
+      "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.updateSubscriptionPlan|149": [
+        {
+          "sourceResult": "results/2026-11-16-review/positive.raw.json",
+          "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
+          "findingSha256": "5c907e78363952607cd33fc34ae7c673f8247d90fa23a5d217165f352b9ab1d7",
+          "judge": "Codex",
+          "date": "2026-11-16",
+          "reason": "updateSubscriptionPlan takes an arbitrary subscription ID; IdentityManager checks only that req.user exists before updating that Stripe subscription, without binding it to the caller's organization.",
+          "sources": [
+            {
+              "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/controllers/organization.controller.ts#L149",
+              "sha256": "bdbd7e55986951b69589141c95eeec92f2f92afaca8073fb02632f5821b392d3"
+            },
+            {
+              "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/IdentityManager.ts#L373",
+              "sha256": "11ce27baa85cff196ab9946f32c4d32af2dc475c3edc614c8ee137067533dc0c"
+            },
+            {
+              "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/StripeManager.ts#L461",
+              "sha256": "e4db16d4e6e3c52c1c6953826a89a9a9399299d61c6dd604586ae0b8eb2f4923"
+            }
+          ],
+          "verdict": "real"
+        },
+        {
+          "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+          "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+          "findingSha256": "ff9af5fb405312db790a9222b9ecbda61f0b90d2dc733bcb5a203432efdf1138",
+          "verdict": "real",
+          "judge": "Codex",
+          "date": "2026-11-16",
+          "reason": "The unguarded plan-change handler forwards a client subscription id. IdentityManager requires a user but never checks ownership, then StripeManager acts with the server's Stripe account. In the supported cloud billing mode this crosses into another customer's subscription; the ordinary organization read can disclose the needed identifier.",
+          "sources": [
+            {
+              "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/routes/organization.route.ts#L23",
+              "sha256": "62c0f3ef939a1916a13da09f91b1e16bc106e9469dd4534bdba7444748ebaa54"
+            },
+            {
+              "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/controllers/organization.controller.ts#L149",
+              "sha256": "bdbd7e55986951b69589141c95eeec92f2f92afaca8073fb02632f5821b392d3"
+            },
+            {
+              "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/IdentityManager.ts#L373",
+              "sha256": "11ce27baa85cff196ab9946f32c4d32af2dc475c3edc614c8ee137067533dc0c"
+            },
+            {
+              "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/StripeManager.ts#L501",
+              "sha256": "e4db16d4e6e3c52c1c6953826a89a9a9399299d61c6dd604586ae0b8eb2f4923"
+            }
+          ]
+        }
+      ],
       "flowise-f0c12941|ssrf|packages/components/src/httpSecurity.ts|resolveAndValidate|188": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
@@ -442,29 +471,50 @@
         ],
         "verdict": "real"
       },
-      "langflow-73c1f203|data_exposure|src/backend/base/langflow/api/v1/voice_mode.py|ElevenLabsClientManager.get_client|177": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
-        "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "308ce5cd83b8f09a51d9a38cb03301d7b56ee68c9a58912f85a97b8c51ed9b82",
-        "judge": "Codex",
-        "date": "2026-11-16",
-        "reason": "ElevenLabsClientManager caches one class-wide decrypted user key/client. After user A initializes it, user B's request bypasses the user-scoped variable lookup and receives A's client and account-specific voice results.",
-        "sources": [
-          {
-            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L175",
-            "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
-          },
-          {
-            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L1346",
-            "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
-          },
-          {
-            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/variable/service.py#L65",
-            "sha256": "63d23dd4b400bdc49445e1c6af9890b6833e985841f532b46dc501f15aca5f47"
-          }
-        ],
-        "verdict": "real"
-      },
+      "langflow-73c1f203|data_exposure|src/backend/base/langflow/api/v1/voice_mode.py|ElevenLabsClientManager.get_client|177": [
+        {
+          "sourceResult": "results/2026-11-16-review/positive.raw.json",
+          "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
+          "findingSha256": "308ce5cd83b8f09a51d9a38cb03301d7b56ee68c9a58912f85a97b8c51ed9b82",
+          "judge": "Codex",
+          "date": "2026-11-16",
+          "reason": "ElevenLabsClientManager caches one class-wide decrypted user key/client. After user A initializes it, user B's request bypasses the user-scoped variable lookup and receives A's client and account-specific voice results.",
+          "sources": [
+            {
+              "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L175",
+              "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
+            },
+            {
+              "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L1346",
+              "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
+            },
+            {
+              "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/variable/service.py#L65",
+              "sha256": "63d23dd4b400bdc49445e1c6af9890b6833e985841f532b46dc501f15aca5f47"
+            }
+          ],
+          "verdict": "real"
+        },
+        {
+          "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+          "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+          "findingSha256": "474201691d32543c6dcc2ae4dbfa16d5701c572bba96ded4c71640ed74a1a9a0",
+          "verdict": "real",
+          "judge": "Codex",
+          "date": "2026-11-16",
+          "reason": "The class-wide ElevenLabs instance and key are initialized for the first user only, then reused by the current-user voice-list endpoint. No user key is attached to the cached instance, so a later user lists the first account's private voice metadata and consumes its client.",
+          "sources": [
+            {
+              "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L170",
+              "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
+            },
+            {
+              "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L1346",
+              "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
+            }
+          ]
+        }
+      ],
       "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/api/v1/voice_mode.py|get_tts_config|255": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
@@ -1498,6 +1548,1020 @@
             "sha256": "32ae7065267bd8827123c8801511cac781aa4cf45dee47953e07890e7c4b1109"
           }
         ]
+      },
+      "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/voice_mode.py|flow_as_tool_websocket|735": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "221732fe33302f552be9f94c423d9c7ddeb43f8e94c6ed8704af00e73a7a9906",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The authenticated WebSocket accepts a foreign flow id, reads its description without owner scoping, and forwards build events. The called build route checks existence only; the graph loader also has no ownership predicate. This is a cross-user flow boundary, not merely the caller executing their own code.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L735",
+            "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L524",
+            "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/chat.py#L180",
+            "sha256": "de93b52b174ee408f7bd509b4a100ae062ab0ce06ef6c65160642d4febd63528"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/utils.py#L185",
+            "sha256": "638f87e8b45965b649e13a1619b9a82affe4adc10efa93b0d4547cd8670e19eb"
+          }
+        ]
+      },
+      "langflow-73c1f203|injection|src/backend/base/langflow/utils/validate.py|validate_code|57": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "8066e028e161ad4ac01cdbe99ad36bd15360d9a1432d0d2fb1c2ac8e636bc412",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "exec of function defaults/decorators is real, but the endpoint requires CurrentActiveUser, and the same role can submit and run arbitrary custom-component Python. Anonymous access in the report relies on the explicitly enabled auto-login/skip-auth mode that grants the superuser generally. No additional restriction bypassed by validation is established.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/validate.py#L13",
+            "sha256": "4ac256975a8f9ec98ff0e806665f154bdd41c1a0a8c5db2cf9d13b0d57fd3119"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/endpoints.py#L652",
+            "sha256": "50e27ee2eac663e2968ee427c5a2acd5d48b9b1394f092c6889fc2308ebecb51"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/utils/validate.py#L57",
+            "sha256": "949be0614324e84c042582e7096080f354d06456a7edb5485810c964bc281594"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/utils/validate.py#L290",
+            "sha256": "949be0614324e84c042582e7096080f354d06456a7edb5485810c964bc281594"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/auth/utils.py#L142",
+            "sha256": "43f53ccd468c4920fda1c869679d03921ee25168dbddac6449c57d69ae18f1c7"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/auth/utils.py#L51",
+            "sha256": "43f53ccd468c4920fda1c869679d03921ee25168dbddac6449c57d69ae18f1c7"
+          }
+        ]
+      },
+      "langflow-73c1f203|misconfiguration|src/backend/base/langflow/api/v1/validate.py|post_validate_prompt|26": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "93fbc525f0bd6f72555e71175a0f6e0822befc25f9274006bcded1e83c340483",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "This unauthenticated endpoint processes only the caller's prompt and returns its own validation errors. Missing a login dependency does not establish unauthorized data access or a concrete misconfiguration attack. A separate quadratic-work report has a distinct, concrete cause; it does not make this vague missing-auth/error report true.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/validate.py#L26",
+            "sha256": "4ac256975a8f9ec98ff0e806665f154bdd41c1a0a8c5db2cf9d13b0d57fd3119"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/base/prompts/api_utils.py#L201",
+            "sha256": "55b8e750192b58821ce8a897519bd1dac256a03ceac2dc512b8c0d6189183336"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/base/prompts/api_utils.py#L125",
+            "sha256": "55b8e750192b58821ce8a897519bd1dac256a03ceac2dc512b8c0d6189183336"
+          }
+        ]
+      },
+      "langflow-73c1f203|injection|src/backend/base/langflow/utils/validate.py|prepare_global_scope|293": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "d671ca5bb4b7182e0465a085b72a647600b1633ba51ddbdf5a228623c26274d5",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "Custom-component execution deliberately compiles the Python submitted by an authenticated flow editor. CurrentActiveUser gates this capability when authentication is enabled. The report gains anonymity only from the explicit global auto-login mode and names no sandbox or narrower permission bypassed by this component API.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/endpoints.py#L652",
+            "sha256": "50e27ee2eac663e2968ee427c5a2acd5d48b9b1394f092c6889fc2308ebecb51"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/utils/validate.py#L290",
+            "sha256": "949be0614324e84c042582e7096080f354d06456a7edb5485810c964bc281594"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/auth/utils.py#L142",
+            "sha256": "43f53ccd468c4920fda1c869679d03921ee25168dbddac6449c57d69ae18f1c7"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/auth/utils.py#L51",
+            "sha256": "43f53ccd468c4920fda1c869679d03921ee25168dbddac6449c57d69ae18f1c7"
+          }
+        ]
+      },
+      "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/endpoints.py|simplified_run_flow|269": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "1a303e29cdafbb879e55a97906248069c9d3679523fccfa58cab44c174f17f4c",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The UUID lookup is unscoped; the endpoint-name lookup applies an optional caller-supplied user_id only when present. The authenticated API-key owner is never bound to that dependency. An ordinary user can run another owner's named flow, whereas sibling owner-scoped routes establish the intended per-user boundary.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/helpers/flow.py#L278",
+            "sha256": "924dc5c8bebe67ec8852d18779de11e00d0d41f7eec65c9adb2c72486d615c1f"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/endpoints.py#L269",
+            "sha256": "50e27ee2eac663e2968ee427c5a2acd5d48b9b1394f092c6889fc2308ebecb51"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/endpoints.py#L547",
+            "sha256": "50e27ee2eac663e2968ee427c5a2acd5d48b9b1394f092c6889fc2308ebecb51"
+          }
+        ]
+      },
+      "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/chat.py|retrieve_vertices_order|103": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "ecd6c75f32d001984186bc7bfba45b165d951896287ccf5094e1091cc1b26689",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The deprecated vertices route is still mounted without authentication. It accepts graph data and writes a shared cache under the supplied flow id; the authenticated vertex builder consumes that same entry. This permits anonymous replacement of a user's cached graph, beyond executing an authorized caller's own program.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/chat.py#L71",
+            "sha256": "de93b52b174ee408f7bd509b4a100ae062ab0ce06ef6c65160642d4febd63528"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/utils.py#L202",
+            "sha256": "638f87e8b45965b649e13a1619b9a82affe4adc10efa93b0d4547cd8670e19eb"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/chat.py#L292",
+            "sha256": "de93b52b174ee408f7bd509b4a100ae062ab0ce06ef6c65160642d4febd63528"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/router.py#L34",
+            "sha256": "7f9e53b7490a51107223bca46975fc4488300752456f0e686163f44d97917880"
+          }
+        ]
+      },
+      "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/files.py|download_file|74": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "df6450fb5236ab9e43815c908df0e355b8cf6f27fe6637218aab17183c9ee747",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The download route reads a flow's uploaded bytes without CurrentActiveUser or the ownership dependency enforced by upload/list/delete. Its UUID is an identifier for a user-owned flow, not a declared public-file capability; the code places those sibling operations behind ownership checks. The foreign-file disclosure is real without relying on the additional Windows traversal claim.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/files.py#L24",
+            "sha256": "53162b135545c39fd54628a0dcdde60bda2e4c843ee75a873a389762e957c8d4"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/files.py#L74",
+            "sha256": "53162b135545c39fd54628a0dcdde60bda2e4c843ee75a873a389762e957c8d4"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/storage/local.py#L58",
+            "sha256": "632700d90c7aee2bf1e96ea73d1038bfa4f4903621448e223d88433ad4ac1519"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/router.py#L43",
+            "sha256": "7f9e53b7490a51107223bca46975fc4488300752456f0e686163f44d97917880"
+          }
+        ]
+      },
+      "langflow-73c1f203|injection|src/backend/base/langflow/api/v1/chat.py|retrieve_vertices_order|103": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "6dd7d39301f035f39c8030ef2960589e8a5f24976aa97f2c3881c6c7d0d14346",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The unguarded vertices route stores caller-supplied executable graph data under a foreign flow cache key. build_vertex later loads that graph and builds the selected node, so the reported stored cross-user code injection has an actual producer/consumer path, unlike execution of a user's own authorized component.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/chat.py#L71",
+            "sha256": "de93b52b174ee408f7bd509b4a100ae062ab0ce06ef6c65160642d4febd63528"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/utils.py#L202",
+            "sha256": "638f87e8b45965b649e13a1619b9a82affe4adc10efa93b0d4547cd8670e19eb"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/chat.py#L292",
+            "sha256": "de93b52b174ee408f7bd509b4a100ae062ab0ce06ef6c65160642d4febd63528"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/utils/validate.py#L290",
+            "sha256": "949be0614324e84c042582e7096080f354d06456a7edb5485810c964bc281594"
+          }
+        ]
+      },
+      "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/api/v2/files.py|upload_user_file|131": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "369e985678582dd38b88165e0233b1f45c48b08bbdedc9b7c8ba7604718e74cf",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "A tiny authenticated upload can supply a LIKE wildcard. The unscoped global file query calls all() and iterates every matched tenant's row; it has neither per-user filtering nor pagination. This causes work/memory proportional to all stored files instead of the caller's file and also contaminates cross-user rename counts. Availability impact depends on deployment file volume; exact severity is not certified.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v2/files.py#L117",
+            "sha256": "b782ac00b1d85e20da3653f2d15bd2b8cfb1e7c7d794e88edc6e1697a09c3155"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v2/files.py#L131",
+            "sha256": "b782ac00b1d85e20da3653f2d15bd2b8cfb1e7c7d794e88edc6e1697a09c3155"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v2/files.py#L139",
+            "sha256": "b782ac00b1d85e20da3653f2d15bd2b8cfb1e7c7d794e88edc6e1697a09c3155"
+          }
+        ]
+      },
+      "langflow-73c1f203|injection|src/backend/base/langflow/api/v1/files.py|download_image|118": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "897cce183aaad2b0cb2485d233d6bd9dc8a02669f87e3d67cbf4a8d8db9fc176",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "An owner can upload arbitrary SVG content. The separate image route permits image/svg+xml and streams it inline on the application origin without a content-disposition or CSP restriction. Sending that reachable URL to another user creates a stored same-origin script path.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/files.py#L63",
+            "sha256": "53162b135545c39fd54628a0dcdde60bda2e4c843ee75a873a389762e957c8d4"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/files.py#L103",
+            "sha256": "53162b135545c39fd54628a0dcdde60bda2e4c843ee75a873a389762e957c8d4"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/storage/constants.py#L11",
+            "sha256": "b5cb958ecc636656dd810c5b24c3d9ede7ce6aefe18292020b26ceccb71d171e"
+          }
+        ]
+      },
+      "langflow-73c1f203|misconfiguration|src/backend/base/langflow/services/settings/auth.py||40": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "0681807efbdfe14af48191dce4e943ec943f05b44775a20facddeb3c1f1732ed",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The issued access cookie defaults to Secure=false and carries the bearer token accepted by WebSocket authentication. On a plain-HTTP request a passive network observer receives that credential, which is a concrete insecure-cookie default. The broader claim about any same-origin script assumes an additional script capability and is not independently proved here; refresh cookies themselves already use Secure/HttpOnly=true.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/settings/auth.py#L40",
+            "sha256": "8e955144e985b4da75aeaa0760520dcec76743f42b825c8b801fee5478693552"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/login.py#L51",
+            "sha256": "cf17c61176981de6c593ea583fdc5ca7f6946d5b7ca943a29375b83bfbbc2117"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/auth/utils.py#L225",
+            "sha256": "43f53ccd468c4920fda1c869679d03921ee25168dbddac6449c57d69ae18f1c7"
+          }
+        ]
+      },
+      "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/files.py|download_profile_picture|128": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "13afddf9b1d5d29df0bd9d9f4193e46c31cf0817f9d88a2c3fa272f51e9b1de4",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The profile-picture endpoint is public and unconditionally joins an unvalidated folder_name into the config path. On Windows, a URL-encoded drive-absolute folder segment resets that path, and local get_file also discards its data-dir prefix for an absolute argument. This supports the Windows arbitrary-read impact; public avatar access alone is not the defect.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/files.py#L128",
+            "sha256": "53162b135545c39fd54628a0dcdde60bda2e4c843ee75a873a389762e957c8d4"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/storage/local.py#L58",
+            "sha256": "632700d90c7aee2bf1e96ea73d1038bfa4f4903621448e223d88433ad4ac1519"
+          }
+        ]
+      },
+      "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/main.py|check_boundary|322": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "f4a1eb5ab5cd0c49486f9a5af5973a59ec36ca43620f64d1abaae1bf101e6fbe",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The outer check_boundary middleware reads the entire upload before the inner ContentSizeLimitMiddleware can wrap receive. The route guard runs later still. This bypasses an explicit shipped byte limit, rather than merely asking for a generic upload cap; an anonymous body can be buffered past that limit.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/main.py#L287",
+            "sha256": "db45202c4a5b1bfff16d3df3a9036f2ec3f6998b6365cbcdb06680bd4c560f77"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/main.py#L303",
+            "sha256": "db45202c4a5b1bfff16d3df3a9036f2ec3f6998b6365cbcdb06680bd4c560f77"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/main.py#L322",
+            "sha256": "db45202c4a5b1bfff16d3df3a9036f2ec3f6998b6365cbcdb06680bd4c560f77"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/middleware.py#L30",
+            "sha256": "41e8d424a4a659d6114f65725c7ca04a9f8428d3d079c5cecc210ffd794cefed"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/files.py#L54",
+            "sha256": "53162b135545c39fd54628a0dcdde60bda2e4c843ee75a873a389762e957c8d4"
+          }
+        ]
+      },
+      "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/chat.py|build_vertex|301": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "249d023384641b64e1aa908e61000621536d76373680c331c0dfdc4ebbdaae89",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The authenticated vertex builder takes a flow-id-only cached graph or an unscoped database graph, then builds the selected vertex with the current user. Neither path binds the requested flow to that user; owner checks on the files API and advanced run route show the intended private-flow boundary.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/chat.py#L264",
+            "sha256": "de93b52b174ee408f7bd509b4a100ae062ab0ce06ef6c65160642d4febd63528"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/chat.py#L292",
+            "sha256": "de93b52b174ee408f7bd509b4a100ae062ab0ce06ef6c65160642d4febd63528"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/utils.py#L185",
+            "sha256": "638f87e8b45965b649e13a1619b9a82affe4adc10efa93b0d4547cd8670e19eb"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/endpoints.py#L547",
+            "sha256": "50e27ee2eac663e2968ee427c5a2acd5d48b9b1394f092c6889fc2308ebecb51"
+          }
+        ]
+      },
+      "langflow-73c1f203|authz|src/backend/base/langflow/api/v2/files.py|save_file_routine|70": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "906e4f45ab70e85292757abbb4fee2e1d7b20979755d3eb130deab9eb88363f8",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The upload routine writes a multipart filename directly beneath a user-id folder; local storage joins it without containment. A filename with parent components can overwrite another user's stored files or server paths. This is an actual escape of the app's per-user storage boundary; the label/location is authz although the mechanism is path traversal.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v2/files.py#L66",
+            "sha256": "b782ac00b1d85e20da3653f2d15bd2b8cfb1e7c7d794e88edc6e1697a09c3155"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/storage/local.py#L33",
+            "sha256": "632700d90c7aee2bf1e96ea73d1038bfa4f4903621448e223d88433ad4ac1519"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v2/files.py#L60",
+            "sha256": "b782ac00b1d85e20da3653f2d15bd2b8cfb1e7c7d794e88edc6e1697a09c3155"
+          }
+        ]
+      },
+      "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/voice_mode.py|add_message_to_db|274": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "249a0f06ddac73be71c3ff1bc333bff7f93e1dae0cde4f06d2a5023dfa38f164",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "Voice WebSockets authenticate the user but accept an arbitrary flow id and session id. Their message helper writes those ids into MessageTable and persists it without checking the flow owner. This permits cross-user history corruption; the claimed later prompt-injection severity is not required to establish it.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L735",
+            "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L274",
+            "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L305",
+            "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L1081",
+            "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
+          }
+        ]
+      },
+      "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/base/prompts/api_utils.py|_fix_variable|69": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "6f80201f989458fc1160d97780798d74d23462da2c3e33cf120c567e84a81d6c",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The unauthenticated prompt route reaches _check_input_variables. Unique invalid variable names cause growing-list membership work inside the per-variable loop, and there is no variable-count cap before it. The extractor accepts/deduplicates distinct format fields, so a compact many-field template causes superlinear validation work. Exact minutes/hours in the report are not measured.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/validate.py#L26",
+            "sha256": "4ac256975a8f9ec98ff0e806665f154bdd41c1a0a8c5db2cf9d13b0d57fd3119"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/base/prompts/api_utils.py#L55",
+            "sha256": "55b8e750192b58821ce8a897519bd1dac256a03ceac2dc512b8c0d6189183336"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/base/prompts/api_utils.py#L101",
+            "sha256": "55b8e750192b58821ce8a897519bd1dac256a03ceac2dc512b8c0d6189183336"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/interface/utils.py#L62",
+            "sha256": "d687378f15e54eff6369b3dc61b5c1decee75dec7614c867242479e00913561b"
+          }
+        ]
+      },
+      "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/api/v1/voice_mode.py|get_voice_config|207": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "075dad09110a1b3b4c2d8d536d2cdae77486529c2d71ffe0781b6c3b125fc180",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The socket is accepted and a new VoiceConfig is inserted under a caller-selected session key before credentials are checked. The global cache is never evicted by the shown cleanup, so repeated unauthenticated failed connections retain entries permanently. This is a persistent pre-auth memory leak, not just a large request body.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L203",
+            "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L513",
+            "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L729",
+            "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/voice_mode.py#L1113",
+            "sha256": "bf80380f0619691b784c658d089957c5e7d30c5d05f9ad92ba3901696ef686e7"
+          }
+        ]
+      },
+      "langflow-73c1f203|misconfiguration|src/backend/base/langflow/main.py|create_app|292": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/langflow-73c1f203.json",
+        "sourceResultSha256": "6be8562250dc68ebeee131897bb91c580f4488307497b9e1523bdfb5bec2eaad",
+        "findingSha256": "7651fd4994d1f4b3891f1930251461df89b324ffd7726ed8b2e48f7c04335329",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The app hardcodes wildcard CORS with credentials, while the refresh cookie defaults to SameSite=None and Secure=true. The refresh endpoint consumes that cookie and returns new bearer tokens without an origin/CSRF check. A credentialed request from an attacker origin can therefore expose the token response under the reflected-origin credentialed CORS behavior. This assumes a browser context that permits the cookie; it is not a claim that every browser sends third-party cookies.",
+        "sources": [
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/main.py#L292",
+            "sha256": "db45202c4a5b1bfff16d3df3a9036f2ec3f6998b6365cbcdb06680bd4c560f77"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/services/settings/auth.py#L40",
+            "sha256": "8e955144e985b4da75aeaa0760520dcec76743f42b825c8b801fee5478693552"
+          },
+          {
+            "url": "https://github.com/langflow-ai/langflow/blob/73c1f203b0205d00928a0af7fa0e0fc93170f03e/src/backend/base/langflow/api/v1/login.py#L123",
+            "sha256": "cf17c61176981de6c593ea583fdc5ca7f6946d5b7ca943a29375b83bfbbc2117"
+          }
+        ]
+      },
+      "flowise-f0c12941|authz|packages/server/src/enterprise/services/organization.service.ts|OrganizationService.updateOrganization|94": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "066b6ccee53f9fe0db24c877f187d80bb84b10313e16e986b1407c744139c261",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "PUT organization passes the whole body to an unscoped primary-key lookup and merge. updatedBy need only be any existing user. No route permission or authenticated-organization comparison constrains changing a foreign tenant's name or billing columns.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/routes/organization.route.ts#L11",
+            "sha256": "62c0f3ef939a1916a13da09f91b1e16bc106e9469dd4534bdba7444748ebaa54"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/controllers/organization.controller.ts#L49",
+            "sha256": "bdbd7e55986951b69589141c95eeec92f2f92afaca8073fb02632f5821b392d3"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/organization.service.ts#L94",
+            "sha256": "f62ef9e0ec21740a2662911e837ef7a40a99eca88b94e05a141463994681a524"
+          }
+        ]
+      },
+      "flowise-f0c12941|authz|packages/server/src/enterprise/routes/user.route.ts||7": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "611122151ebb660f0bb22f6c2faf55fc8f4f6aab81a49c7e79119c2fa8c744dd",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The authenticated user-read endpoint looks up any supplied id/email without membership scoping and returns another user's status/name/email/creator metadata after stripping only credential/token fields. A format check on the UUID does not authorize the record.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/routes/user.route.ts#L7",
+            "sha256": "97878e311393c72acbfd6ef8527d2e596a8872ccbd52172495a66b0a0ae5102d"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/controllers/user.controller.ts#L20",
+            "sha256": "8ffef4a4d5f89727c14908e3cb0ae6240c6e1cfab801dee7e10024a90c2c78a9"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/user.service.ts#L44",
+            "sha256": "c993b1190fd866a0d25e0bc5810bbe2f30a496ef7495afb6058aad958448aa97"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/index.ts#L215",
+            "sha256": "2445448d9fcea502afcc4dd47d25bf02a6456279e27adf4ec0c362f0a5d8ab6b"
+          }
+        ]
+      },
+      "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.getPlanProration|110": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "8a95fbdc8d9fe339aebc5e5b05fc6ffe26d86b2f0174321a8751a1265caaca8c",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "Plan-proration accepts any subscription id and returns the customer's credit balance and upcoming pricing through the server-side Stripe client. The router and IdentityManager lack a tenant/role check; other organizations' billing identifiers are obtainable through the unscoped organization read.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/routes/organization.route.ts#L21",
+            "sha256": "62c0f3ef939a1916a13da09f91b1e16bc106e9469dd4534bdba7444748ebaa54"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/controllers/organization.controller.ts#L110",
+            "sha256": "bdbd7e55986951b69589141c95eeec92f2f92afaca8073fb02632f5821b392d3"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/IdentityManager.ts#L364",
+            "sha256": "11ce27baa85cff196ab9946f32c4d32af2dc475c3edc614c8ee137067533dc0c"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/StripeManager.ts#L429",
+            "sha256": "e4db16d4e6e3c52c1c6953826a89a9a9399299d61c6dd604586ae0b8eb2f4923"
+          }
+        ]
+      },
+      "flowise-f0c12941|authz|packages/server/src/enterprise/middleware/passport/index.ts|app.post(\"/api/v1/auth/refreshToken\")|237": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "8437bc9f524cea33005d82e33b9a0a4bb6e8064466a459d31a53f8ae1df7d681",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "Refresh signs new credentials from the serialized session object without reloading membership, status or role. The JWT verifier also trusts that stored object. Workspace-user removal/role update does not destroy sessions, so a removed or downgraded member retains old rights while the session/refresh credential lasts. The report's indefinite-renewal wording overstates the shown behavior: refresh reuses the existing token rather than extending its 90-day expiry.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/index.ts#L89",
+            "sha256": "bc4881d6aaab0f90f7c4d1413f5043ca73561beec97e4416126cb180a59cd038"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/index.ts#L230",
+            "sha256": "bc4881d6aaab0f90f7c4d1413f5043ca73561beec97e4416126cb180a59cd038"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/index.ts#L298",
+            "sha256": "bc4881d6aaab0f90f7c4d1413f5043ca73561beec97e4416126cb180a59cd038"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/AuthStrategy.ts#L25",
+            "sha256": "aab687c925c41f431f0f59a0af7812a8f11743ece0bac5c38ce39bdb126d8bc8"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/workspace-user.service.ts#L330",
+            "sha256": "b59c2fc81c6ae60ef69800321f0ddd130958c81f5e3b54e0233e2229a1405937"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/workspace-user.service.ts#L359",
+            "sha256": "b59c2fc81c6ae60ef69800321f0ddd130958c81f5e3b54e0233e2229a1405937"
+          }
+        ]
+      },
+      "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.getAdditionalSeatsProration|92": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "86dcfa912dca5422f7265317c96cefa859ba918647df7e6bf12a473ec9ed3402",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The seat-proration handler forwards an arbitrary query subscription id to Stripe and returns credit balance/invoice totals. No ownership or admin permission is checked in the route, controller or IdentityManager. The billed customer's data therefore crosses the tenant boundary.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/routes/organization.route.ts#L17",
+            "sha256": "62c0f3ef939a1916a13da09f91b1e16bc106e9469dd4534bdba7444748ebaa54"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/controllers/organization.controller.ts#L92",
+            "sha256": "bdbd7e55986951b69589141c95eeec92f2f92afaca8073fb02632f5821b392d3"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/IdentityManager.ts#L315",
+            "sha256": "11ce27baa85cff196ab9946f32c4d32af2dc475c3edc614c8ee137067533dc0c"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/StripeManager.ts#L273",
+            "sha256": "e4db16d4e6e3c52c1c6953826a89a9a9399299d61c6dd604586ae0b8eb2f4923"
+          }
+        ]
+      },
+      "flowise-f0c12941|resource_exhaustion|packages/server/src/enterprise/middleware/passport/index.ts|storeSSOUserPayload|460": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "55d865ae21a7e64389e7704820f006b60864cc301adb03fd02415b2d19428510",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "Every completed SSO login can leave a fresh-token entry in the default in-memory cache when redemption is skipped. Unlike Redis EX 120, the memory branch has no expiry, and cleanup only deletes redeemed entries. Persistent unbounded retention of full user payloads is a server-global memory leak, beyond a generic login-throttle request.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/index.ts#L313",
+            "sha256": "bc4881d6aaab0f90f7c4d1413f5043ca73561beec97e4416126cb180a59cd038"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/index.ts#L460",
+            "sha256": "bc4881d6aaab0f90f7c4d1413f5043ca73561beec97e4416126cb180a59cd038"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/CachePool.ts#L51",
+            "sha256": "99e7e2a494667ea2d9f0b9292dfc1cd8a62037589ed0ab738059c3b3b13c46c3"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/CachePool.ts#L76",
+            "sha256": "99e7e2a494667ea2d9f0b9292dfc1cd8a62037589ed0ab738059c3b3b13c46c3"
+          }
+        ]
+      },
+      "flowise-f0c12941|injection|packages/server/src/enterprise/middleware/passport/index.ts|_initializePassportMiddleware|55": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "a5c34bbc71dee6bf3ec7394484e618913a270369237aea3f95443172589338fc",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The published fallback session signing secret is real, but express-session stores only an opaque random session id in the cookie; the user payload is held server-side. Knowing the signing key does not create a victim's stored session or a matching JWT/session pair. The report requires an already obtained valid victim session id and assumes forging a signed cookie can forge the server-side user object.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/index.ts#L52",
+            "sha256": "bc4881d6aaab0f90f7c4d1413f5043ca73561beec97e4416126cb180a59cd038"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/index.ts#L89",
+            "sha256": "bc4881d6aaab0f90f7c4d1413f5043ca73561beec97e4416126cb180a59cd038"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/AuthStrategy.ts#L25",
+            "sha256": "aab687c925c41f431f0f59a0af7812a8f11743ece0bac5c38ce39bdb126d8bc8"
+          }
+        ]
+      },
+      "flowise-f0c12941|injection|packages/server/src/routes/oauth2/templates.ts|generateOAuth2ResponsePage|68": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "3b03493d06584f5582170aa93ddf66c02f78d68fc64943487a50e7956c3dc589",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The report's double-decode path relies on req.query being a reparsing getter. This repository declares Express 4, whose query middleware assigns a mutable parsed object once; the global sanitizer mutates that object before this route. Changing req.url does not reparse it for the callback, and the submitted encoded example remains encoded rather than becoming executable HTML. The separate unsanitized remote-provider-error path is real but is not this claim.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/utils/XSS.ts#L5",
+            "sha256": "731216573b0851b5834af30a6fac02f2de6413b893601d985e2a77b84c87a8e6"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/index.ts#L200",
+            "sha256": "2445448d9fcea502afcc4dd47d25bf02a6456279e27adf4ec0c362f0a5d8ab6b"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/routes/oauth2/index.ts#L157",
+            "sha256": "69103ce620cdd09f90e0bdd3070ef5546a4babcc86716591e7f6734a8d24c98f"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/package.json#L1",
+            "sha256": "64287f3fba052c3699ba520c1493aba7bfc76ce9e2302d2a9be19ebb88cfe4b8"
+          }
+        ]
+      },
+      "flowise-f0c12941|authz|packages/server/src/routes/executions/index.ts||11": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "eba2106be03f248650efc9cf0c1efa74298cd6578cf7955134dc72478530c49e",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "Only the PUT execution route omits the permission middleware used on sibling reads/deletes. It passes arbitrary body fields to a workspace-scoped entity merge/save, allowing a lower-privileged member to corrupt execution records in their workspace. This is an intra-workspace permission bypass; no foreign workspace read is needed.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/routes/executions/index.ts#L7",
+            "sha256": "0066166642d25528e5e54d8973dd226291e9640704b66ce21c42c26144e6d9c5"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/controllers/executions/index.ts#L26",
+            "sha256": "b6d697ce655a28a36bee58904a844226d57bbbbef7463722e59a2a157028534d"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/services/executions/index.ts#L108",
+            "sha256": "431530771ffc143651adda6a5bcd4eb9dc16cd7d0aad51ea654c1f7dbd613d4e"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/rbac/PermissionCheck.ts#L24",
+            "sha256": "c79f5767b782f8e8d77c3725d65fe1922bb816e15c6091db10c46b8c55f994f9"
+          }
+        ]
+      },
+      "flowise-f0c12941|data_exposure|packages/server/src/services/chatflows/index.ts|getChatflowByApiKey|225": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "0814303e02a62d5f2750a844c15e567d484a2dfcfd9bcec53fef6933ae73286c",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "A holder of one valid key reaches the whitelisted flow-list route. With keyonly omitted, the query includes every null/empty-key flow without workspace scoping and returns full flow entities. Those flows are not necessarily public definitions: the sibling public-flow controller separately requires isPublic or workspace membership.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/controllers/chatflows/index.ts#L89",
+            "sha256": "97dd66d919fc3a319e82433837481a82c0eefd3354ead01f285e8b852dc4d011"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/services/chatflows/index.ts#L221",
+            "sha256": "4160ef0f4eed91a0a8b1e812ff3051263374ac4addae40a1e7b140b31b1029a2"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/controllers/chatflows/index.ts#L209",
+            "sha256": "97dd66d919fc3a319e82433837481a82c0eefd3354ead01f285e8b852dc4d011"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/utils/constants.ts#L8",
+            "sha256": "6a73a561ec0a9bd3235fe82d0247619ef18a9a561bdd34aba05f781700aee06f"
+          }
+        ]
+      },
+      "flowise-f0c12941|data_exposure|packages/server/src/services/apikey/index.ts|getAllApiKeys|112": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "ffc60ba2b4f50c19268dad8bcf2aee0760e494276efa07ec1918dd1082a64b9d",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The intended apikeys:view capability includes displaying and copying workspace keys in the shipped UI. The backend restricts non-admin results to keys whose permissions are a subset of the caller's permissions, matching that UI contract. The report invents a metadata-only or creator-only boundary and establishes no additional authority gained from those lower/equal-permission shared keys. Returning the hash is unnecessary but is not itself the claimed cross-user credential takeover.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/services/apikey/index.ts#L105",
+            "sha256": "f873788031f2f5fc150234d516f39e78eb545e75eb7dd1bbba1d73627edb7081"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/rbac/PermissionCheck.ts#L5",
+            "sha256": "c79f5767b782f8e8d77c3725d65fe1922bb816e15c6091db10c46b8c55f994f9"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/ui/src/views/apikey/index.jsx#L85",
+            "sha256": "a46bb0a649ecbeb190601e5dce8ca47bacd893cf8c113c7bca9f5bb86d7615eb"
+          }
+        ]
+      },
+      "flowise-f0c12941|authz|packages/server/src/enterprise/services/account.service.ts|AccountService.createRegisterAccount|223": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "17ba0dc5d8559e71bd2f05b552a3bef01412a20bbae01f9c3151f6c7b2bc92f8",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The unauthenticated cloud-registration DTO preserves organization.id. Supplying an existing id skips creation, creates an OWNER organization-user row for the new user, and saves billing fields under that existing primary key without an invite/ownership check. Email verification of the new account does not establish permission to join the victim organization.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/controllers/account.controller.ts#L7",
+            "sha256": "8f59df4cf8b16eec80fd80e9679e5f06b6127626309fb98c5bcbdb1b6627104a"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/account.service.ts#L63",
+            "sha256": "f033db2f4613f07efd410f221a87900d90871cea1b19a13acd6d97d71cbd3cf7"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/account.service.ts#L132",
+            "sha256": "f033db2f4613f07efd410f221a87900d90871cea1b19a13acd6d97d71cbd3cf7"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/account.service.ts#L223",
+            "sha256": "f033db2f4613f07efd410f221a87900d90871cea1b19a13acd6d97d71cbd3cf7"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/account.service.ts#L243",
+            "sha256": "f033db2f4613f07efd410f221a87900d90871cea1b19a13acd6d97d71cbd3cf7"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/utils/constants.ts#L31",
+            "sha256": "6a73a561ec0a9bd3235fe82d0247619ef18a9a561bdd34aba05f781700aee06f"
+          }
+        ]
+      },
+      "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.updateAdditionalSeats|128": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "ce7c83f9718cd4069831213fe71a8de641a3c695c624c720be04b4e05115a855",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "A caller supplies the foreign subscription id and new seat quantity through an unguarded route. IdentityManager does not compare it to the caller's subscription, and StripeManager updates it and can immediately pay the resulting invoice. This is a concrete cross-customer billing mutation in cloud mode.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/routes/organization.route.ts#L19",
+            "sha256": "62c0f3ef939a1916a13da09f91b1e16bc106e9469dd4534bdba7444748ebaa54"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/controllers/organization.controller.ts#L128",
+            "sha256": "bdbd7e55986951b69589141c95eeec92f2f92afaca8073fb02632f5821b392d3"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/IdentityManager.ts#L323",
+            "sha256": "11ce27baa85cff196ab9946f32c4d32af2dc475c3edc614c8ee137067533dc0c"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/StripeManager.ts#L365",
+            "sha256": "e4db16d4e6e3c52c1c6953826a89a9a9399299d61c6dd604586ae0b8eb2f4923"
+          }
+        ]
+      },
+      "flowise-f0c12941|misconfiguration|packages/server/src/enterprise/middleware/passport/index.ts|app.post(\"/api/v1/auth/login\")|267": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "ec644d2feb08c7099ec1acc50622f2cc049414193ce697c6a54af9f0b6d6d272",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The public login route accepts URL-encoded credentials without an Origin/CSRF check and creates a new browser session for that submitted account. The internal-request header used by protected API routes is bypassed here. A cross-site top-level form can log the victim into the attacker's account, where later user-entered flows/credentials belong to the attacker; this is login CSRF, not a recommendation to protect ordinary public login with authorization.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/index.ts#L158",
+            "sha256": "2445448d9fcea502afcc4dd47d25bf02a6456279e27adf4ec0c362f0a5d8ab6b"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/index.ts#L221",
+            "sha256": "2445448d9fcea502afcc4dd47d25bf02a6456279e27adf4ec0c362f0a5d8ab6b"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/utils/constants.ts#L26",
+            "sha256": "6a73a561ec0a9bd3235fe82d0247619ef18a9a561bdd34aba05f781700aee06f"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/index.ts#L267",
+            "sha256": "bc4881d6aaab0f90f7c4d1413f5043ca73561beec97e4416126cb180a59cd038"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/index.ts#L298",
+            "sha256": "bc4881d6aaab0f90f7c4d1413f5043ca73561beec97e4416126cb180a59cd038"
+          }
+        ]
+      },
+      "flowise-f0c12941|authz|packages/server/src/enterprise/services/organization-user.service.ts|OrganizationUserService.createOrganization|245": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "015c28cbbdd100d8fd44fd3dcc2e81c19c3eaa4bd4fefe323db0a8be93e1eb3e",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "Creating and owning a new organization alone is not an escalation. The concrete defect is that this unguarded creation service also accepts arbitrary subscriptionId/customerId columns, then associates the chosen existing user as OWNER. Combined with the unscoped organization read, a lower-privileged caller can attach a foreign tenant's paid billing identity to their new organization.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/routes/organization.route.ts#L9",
+            "sha256": "62c0f3ef939a1916a13da09f91b1e16bc106e9469dd4534bdba7444748ebaa54"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/controllers/organization.controller.ts#L12",
+            "sha256": "bdbd7e55986951b69589141c95eeec92f2f92afaca8073fb02632f5821b392d3"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/organization-user.service.ts#L245",
+            "sha256": "1d49b75f76c86cd653e2609a7b31319dba930b700642ad78976f9b6d032bf283"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/organization.service.ts#L60",
+            "sha256": "f62ef9e0ec21740a2662911e837ef7a40a99eca88b94e05a141463994681a524"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/controllers/organization.controller.ts#L22",
+            "sha256": "bdbd7e55986951b69589141c95eeec92f2f92afaca8073fb02632f5821b392d3"
+          }
+        ]
+      },
+      "flowise-f0c12941|resource_exhaustion|packages/server/src/routes/oauth2/index.ts|router.post(\"/refresh/:credentialId\")|355": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "65ce1477aba7a21a70d6c4df26b1832ec14cd8e16eb6980794187780c58a0438",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The remote caller supplies only a credential UUID, not the outbound URL or response. Producing the asserted endless/bomb response requires an authorized credential editor to first configure their own hostile token server, a role already permitted to choose servers and run flow code. The report establishes neither a limit bypass nor attacker control over a normal provider's response, and ordinary work on an editor's own configured credential is outside the stated resource-exhaustion scope.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/routes/oauth2/index.ts#L307",
+            "sha256": "69103ce620cdd09f90e0bdd3070ef5546a4babcc86716591e7f6734a8d24c98f"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/routes/oauth2/index.ts#L327",
+            "sha256": "69103ce620cdd09f90e0bdd3070ef5546a4babcc86716591e7f6734a8d24c98f"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/routes/oauth2/index.ts#L355",
+            "sha256": "69103ce620cdd09f90e0bdd3070ef5546a4babcc86716591e7f6734a8d24c98f"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/utils/constants.ts#L40",
+            "sha256": "6a73a561ec0a9bd3235fe82d0247619ef18a9a561bdd34aba05f781700aee06f"
+          }
+        ]
+      },
+      "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.read|30": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "fb98246f3812a66384e0563512ec0c1b8c01399b635e72466c7a0e1301b69870",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The organization read returns a full entity by arbitrary id or name without membership/admin scoping. The entity includes customerId and subscriptionId, which the unguarded billing handlers consume. This is disclosure of another tenant's private billing identity, not just an intentionally public organization name.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/routes/organization.route.ts#L7",
+            "sha256": "62c0f3ef939a1916a13da09f91b1e16bc106e9469dd4534bdba7444748ebaa54"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/controllers/organization.controller.ts#L22",
+            "sha256": "bdbd7e55986951b69589141c95eeec92f2f92afaca8073fb02632f5821b392d3"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/services/organization.service.ts#L35",
+            "sha256": "f62ef9e0ec21740a2662911e837ef7a40a99eca88b94e05a141463994681a524"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/database/entities/organization.entity.ts#L16",
+            "sha256": "18db7edc793d6ce514378889f5e39378787a4774f40ecb6ce9e9cdce01d601c9"
+          }
+        ]
+      },
+      "flowise-f0c12941|injection|packages/server/src/routes/oauth2/index.ts|router.get(\"/callback\")|284": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "c7c5ab14d514bb8450ecaaf0fd4e770c1204b026931a554f42d00f2978bde4f1",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "A credential creator can set their token endpoint and send a victim the public callback link. A remote token-exchange error body reaches generateErrorPage and raw HTML/script interpolation without passing the request-query sanitizer. This produces same-origin script in another user's browser; it does not depend on the incorrect Express query-getter claim in the other XSS report.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/routes/oauth2/index.ts#L282",
+            "sha256": "69103ce620cdd09f90e0bdd3070ef5546a4babcc86716591e7f6734a8d24c98f"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/routes/oauth2/templates.ts#L69",
+            "sha256": "a0b1587715f0fd19df4c7a1274a66471489d78c35a5d9fbc0fdfc4a0a08f43fc"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/routes/oauth2/templates.ts#L76",
+            "sha256": "a0b1587715f0fd19df4c7a1274a66471489d78c35a5d9fbc0fdfc4a0a08f43fc"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/utils/constants.ts#L39",
+            "sha256": "6a73a561ec0a9bd3235fe82d0247619ef18a9a561bdd34aba05f781700aee06f"
+          }
+        ]
+      },
+      "flowise-f0c12941|authz|packages/server/src/enterprise/middleware/passport/index.ts|verifyTokenForBullMQDashboard|433": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/flowise-f0c12941.json",
+        "sourceResultSha256": "c778e01c8eda8c837c6da13a81e8a0d0beaa61469b93032914802aa81d6655a7",
+        "findingSha256": "25ae6bbcbf4bcaf8027faac97ee82ad425ee1116ddce528f287e8960068edb5e",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "When the operator enables the non-cloud queue dashboard, its guard authenticates a user and license but never checks admin rights. The exposed BullBoard adapter covers the shared prediction/upsert queues, so a low-role workspace user gains job administration outside their normal permissions. This is conditional on the dashboard being enabled; it is not enabled in cloud mode.",
+        "sources": [
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/index.ts#L324",
+            "sha256": "2445448d9fcea502afcc4dd47d25bf02a6456279e27adf4ec0c362f0a5d8ab6b"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/middleware/passport/index.ts#L432",
+            "sha256": "bc4881d6aaab0f90f7c4d1413f5043ca73561beec97e4416126cb180a59cd038"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/queue/QueueManager.ts#L157",
+            "sha256": "04da1cde409fbeef2283dbefd1d1619e65fba16c4c29cf227c583439f5feccd9"
+          },
+          {
+            "url": "https://github.com/FlowiseAI/Flowise/blob/f0c1294173a55f26e0b972c39c0c16917f5ca9e7/packages/server/src/enterprise/rbac/PermissionCheck.ts#L5",
+            "sha256": "c79f5767b782f8e8d77c3725d65fe1922bb816e15c6091db10c46b8c55f994f9"
+          }
+        ]
       }
     }
   },
@@ -1564,5 +2628,43 @@
   "itsdangerous-control|resource_exhaustion|src/itsdangerous/url_safe.py|URLSafeSerializerMixin.load_payload|44": "false",
   "is-control|resource_exhaustion|source/index.ts|getObjectType|184": "false",
   "uuid-control|misconfiguration|version1.go|NewUUID|36": "false",
-  "uuid-control|secret_identity|time.go|getTime|51": "real"
+  "uuid-control|secret_identity|time.go|getTime|51": "real",
+  "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/voice_mode.py|flow_as_tool_websocket|735": "real",
+  "langflow-73c1f203|injection|src/backend/base/langflow/utils/validate.py|validate_code|57": "false",
+  "langflow-73c1f203|misconfiguration|src/backend/base/langflow/api/v1/validate.py|post_validate_prompt|26": "false",
+  "langflow-73c1f203|injection|src/backend/base/langflow/utils/validate.py|prepare_global_scope|293": "false",
+  "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/endpoints.py|simplified_run_flow|269": "real",
+  "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/chat.py|retrieve_vertices_order|103": "real",
+  "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/files.py|download_file|74": "real",
+  "langflow-73c1f203|injection|src/backend/base/langflow/api/v1/chat.py|retrieve_vertices_order|103": "real",
+  "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/api/v2/files.py|upload_user_file|131": "real",
+  "langflow-73c1f203|injection|src/backend/base/langflow/api/v1/files.py|download_image|118": "real",
+  "langflow-73c1f203|misconfiguration|src/backend/base/langflow/services/settings/auth.py||40": "real",
+  "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/files.py|download_profile_picture|128": "real",
+  "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/main.py|check_boundary|322": "real",
+  "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/chat.py|build_vertex|301": "real",
+  "langflow-73c1f203|authz|src/backend/base/langflow/api/v2/files.py|save_file_routine|70": "real",
+  "langflow-73c1f203|authz|src/backend/base/langflow/api/v1/voice_mode.py|add_message_to_db|274": "real",
+  "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/base/prompts/api_utils.py|_fix_variable|69": "real",
+  "langflow-73c1f203|resource_exhaustion|src/backend/base/langflow/api/v1/voice_mode.py|get_voice_config|207": "real",
+  "langflow-73c1f203|misconfiguration|src/backend/base/langflow/main.py|create_app|292": "real",
+  "flowise-f0c12941|authz|packages/server/src/enterprise/services/organization.service.ts|OrganizationService.updateOrganization|94": "real",
+  "flowise-f0c12941|authz|packages/server/src/enterprise/routes/user.route.ts||7": "real",
+  "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.getPlanProration|110": "real",
+  "flowise-f0c12941|authz|packages/server/src/enterprise/middleware/passport/index.ts|app.post(\"/api/v1/auth/refreshToken\")|237": "real",
+  "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.getAdditionalSeatsProration|92": "real",
+  "flowise-f0c12941|resource_exhaustion|packages/server/src/enterprise/middleware/passport/index.ts|storeSSOUserPayload|460": "real",
+  "flowise-f0c12941|injection|packages/server/src/enterprise/middleware/passport/index.ts|_initializePassportMiddleware|55": "false",
+  "flowise-f0c12941|injection|packages/server/src/routes/oauth2/templates.ts|generateOAuth2ResponsePage|68": "false",
+  "flowise-f0c12941|authz|packages/server/src/routes/executions/index.ts||11": "real",
+  "flowise-f0c12941|data_exposure|packages/server/src/services/chatflows/index.ts|getChatflowByApiKey|225": "real",
+  "flowise-f0c12941|data_exposure|packages/server/src/services/apikey/index.ts|getAllApiKeys|112": "false",
+  "flowise-f0c12941|authz|packages/server/src/enterprise/services/account.service.ts|AccountService.createRegisterAccount|223": "real",
+  "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.updateAdditionalSeats|128": "real",
+  "flowise-f0c12941|misconfiguration|packages/server/src/enterprise/middleware/passport/index.ts|app.post(\"/api/v1/auth/login\")|267": "real",
+  "flowise-f0c12941|authz|packages/server/src/enterprise/services/organization-user.service.ts|OrganizationUserService.createOrganization|245": "real",
+  "flowise-f0c12941|resource_exhaustion|packages/server/src/routes/oauth2/index.ts|router.post(\"/refresh/:credentialId\")|355": "false",
+  "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.read|30": "real",
+  "flowise-f0c12941|injection|packages/server/src/routes/oauth2/index.ts|router.get(\"/callback\")|284": "real",
+  "flowise-f0c12941|authz|packages/server/src/enterprise/middleware/passport/index.ts|verifyTokenForBullMQDashboard|433": "real"
 }
