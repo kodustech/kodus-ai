@@ -1518,6 +1518,37 @@
               "sha256": "5bd1b914ee53d300abd18b3a9b7b0b81ff39d787c0ff8d8c8008500126a339e5"
             }
           ]
+        },
+        {
+          "sourceResult": "results/2026-11-16-review/revised-candidate.cases/itsdangerous-control.json",
+          "sourceResultSha256": "fc2c30a60497722eb1ae8b99c4e2cafd7333d710b7ad4299ea9b36b02f3ce541",
+          "findingSha256": "a38a81098895b3b958e969f22e2ffc7af98b61e1c71fe975579fe79527981bd3",
+          "verdict": "false",
+          "judge": "Codex",
+          "date": "2026-11-16",
+          "reason": "The decode/expansion behavior is real, but this exact finding invents a deployed untrusted web consumer of explicitly unsafe diagnostic interfaces. Serializer.loads verifies with signer.unsign before load_payload (serializer.py:339); loads_unsafe deliberately omits that authentication guarantee (349-361, 380-395). The documentation explains inspection/debugging and warns against trusting the result, rather than shipping the stated endpoint (docs/serializer.rst:36-74). No other supported-use guarantee, enforced size-limit bypass, superlinear decoder defect or memory corruption is demonstrated. An intentional codec transformation can expand heavily; this alone is not the reported unauthenticated server vulnerability in this repository. The run was subsequently interrupted; that does not change the exact claim judgment.",
+          "sources": [
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/serializer.py#L339",
+              "sha256": "6d6f1687897c7e3ac6eeff5bfd6794df90e299feedcc6aae3faa0e53ffe925e8"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/serializer.py#L349",
+              "sha256": "6d6f1687897c7e3ac6eeff5bfd6794df90e299feedcc6aae3faa0e53ffe925e8"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/serializer.py#L380",
+              "sha256": "6d6f1687897c7e3ac6eeff5bfd6794df90e299feedcc6aae3faa0e53ffe925e8"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/src/itsdangerous/url_safe.py#L44",
+              "sha256": "6b3e1ee5f5e2fefb3e61b5a3f186709f8c2254a7de0fef8610a453e547aee0fe"
+            },
+            {
+              "url": "https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/docs/serializer.rst#L36",
+              "sha256": "5bd1b914ee53d300abd18b3a9b7b0b81ff39d787c0ff8d8c8008500126a339e5"
+            }
+          ]
         }
       ],
       "is-control|resource_exhaustion|source/index.ts|getObjectType|184": [

@@ -12,8 +12,11 @@ local follow-up stopped on ENOSPC. A clean `e5223d6a0` checkout completed all
 six development/confirmation cases on the VM in one paid queue, retaining the
 final output without infrastructure errors. Three development samples are
 judged; confirmation scoring remains pending. The first library candidate
-completed its four cases and failed its control conditions. A revised prompt
-candidate passes contract checks; its control measurement is running on the VM.
+completed its four cases and failed its control conditions. The revised prompt
+measurement was stopped after already failing its controls; all completed and
+interrupted outputs remain retained. The bounded completion source passes
+123 contract tests but has no paid quality measurement. Further calibration
+is deferred while the PR checks and final Kody review are closed.
 No release pass is claimed.
 
 ## Development baseline
@@ -234,7 +237,7 @@ positive phase (maximum $18). The same hash samples, separate blind
 confirmation group, source judge and 60% per-language target remain in force.
 These validation checks and proposed runs do not establish a quality pass.
 
-The running revised candidate has already failed its advance conditions:
+The revised candidate failed its advance conditions:
 is finishes 4/4 units with one false report for $0.68219118; xxhash finishes
 8/8 with zero reports for $0.61964274. Both snapshots and selections are
 retained in `revised-candidate.cases/`, committed before inspection.
@@ -244,8 +247,22 @@ The pinned code returns primitive strings directly; ordinary JSON does not
 supply the required symbol key. The actual performance behavior remains
 acknowledged; no shipped remote/constrained caller is established.
 Itsdangerous also has completed lenses with no submitted result despite
-the explicit instruction. Its and UUID's final results are still pending.
-The revised candidate's positive phase will not run.
+the explicit instruction. The agent stopped this already failing calibration
+at 20:34:43 UTC to limit evaluation time and close the PR review. Itsdangerous
+returns 2/10 units done, three failed and four skipped at its cap, with one
+false unsafe-codec/imagined-consumer report. UUID returns only 1/16 units done
+and zero findings; preservation of its known defect is unmeasured here.
+
+`revised-candidate.raw.json`, `.scored.json`, `-integrity.json`,
+`-interruption.json` and `-assessment.json` retain the returned data, official
+no-model rescoring, snapshot equality and explicit stop. Both reports are
+source-judged false; no reports remain unjudged. The observed committed spend
+at cancellation is $5.69915082, not a complete bill: in-flight usage may be
+absent. Two runner errors explicitly identify interruption, not a clean
+provider-failure-free run. The diagnostics distinguish six completed but
+unsubmitted lenses from the fourteen missing submissions including stopped
+lenses; eight observed AbortError calls carry no HTTP status. No exhausted
+HTTP 429 is observed. No positive phase runs on this failed/interrupted source.
 
 ## Bounded completion candidate
 
@@ -278,7 +295,8 @@ The native adapter, other prompt exports and pinned catalogs are unchanged.
 
 `completion-candidate-measurement-plan.json` freezes another capped
 four-control measurement, only after retaining the previous full failed
-run. It has not started. A positive phase still requires the unchanged
+run. It has not started and is deferred (`completion-candidate-deferred.json`);
+the prepared launcher is disabled against automatic execution. A positive phase still requires the unchanged
 control conditions first, with the same blind confirmation group and
 per-language precision target. Neither tests nor this plan establish quality.
 

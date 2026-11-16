@@ -1,0 +1,702 @@
+{
+  "eval": "security-scan",
+  "provenance": {
+    "measuredAt": "2026-11-16T20:02:02.785Z",
+    "engineCommit": "5617eab0a603cb94cb13d6dabb5de8e51e588e5f",
+    "dirty": false,
+    "datasets": {
+      "clean-controls.json": "cea9ef1a799f44969e14a62e61e6501f3dec519dccf5224c4f8071234fd0c80f"
+    },
+    "scoringVersion": 4
+  },
+  "scoring": {
+    "version": 4,
+    "matcherSha256": "d6bc9cabca5ae11af8178baf6673e2aa41fbb4b1dd8c812f20c0a655061094c0",
+    "adjudicationsSha256": "182bd67c282b70748814a2b9c2b4267109079d4d8134f06f61e5db892bdc14d6"
+  },
+  "scoredAt": "2026-11-16T20:37:27.591Z",
+  "question": "Of the published vulnerabilities in a repository, how many does a security scan capped at a few dollars report, and of what it reports, how much is real?",
+  "model": "deepseek-v4-flash@fireworks",
+  "runs": 1,
+  "metric": {
+    "name": "recall",
+    "value": 0,
+    "floor": null,
+    "baseline": null
+  },
+  "precision": {
+    "listed": 0,
+    "real": 0,
+    "falseCount": 2,
+    "unjudged": 0,
+    "judged": 2,
+    "value": 0
+  },
+  "byLanguage": {
+    "typescript": {
+      "recall": null,
+      "hits": 0,
+      "total": 0,
+      "precision": {
+        "listed": 0,
+        "real": 0,
+        "falseCount": 1,
+        "unjudged": 0,
+        "judged": 1,
+        "value": 0
+      }
+    },
+    "python": {
+      "recall": null,
+      "hits": 0,
+      "total": 0,
+      "precision": {
+        "listed": 0,
+        "real": 0,
+        "falseCount": 1,
+        "unjudged": 0,
+        "judged": 1,
+        "value": 0
+      }
+    },
+    "go": {
+      "recall": null,
+      "hits": 0,
+      "total": 0,
+      "precision": {
+        "listed": 0,
+        "real": 0,
+        "falseCount": 0,
+        "unjudged": 0,
+        "judged": 0,
+        "value": null
+      }
+    }
+  },
+  "byClass": {
+    "resource_exhaustion": {
+      "hits": 0,
+      "total": 0,
+      "recall": null,
+      "precision": {
+        "listed": 0,
+        "real": 0,
+        "falseCount": 2,
+        "unjudged": 0,
+        "judged": 2,
+        "value": 0
+      }
+    }
+  },
+  "budgetUsd": 3,
+  "sandbox": "local",
+  "cases": [
+    {
+      "id": "is-control",
+      "language": "typescript",
+      "expectedFindings": 0,
+      "runtime": {
+        "provider": "openai_compatible",
+        "servedModel": "accounts/fireworks/models/deepseek-v4p1-flash"
+      },
+      "checks": "Does the scan of sindresorhus/is@e9c026c611c1160eaad50da00be4e676b626018f avoid reporting security findings on this negative control?",
+      "hits": 0,
+      "total": 0,
+      "detail": [],
+      "precision": {
+        "listed": 0,
+        "judgedReal": 0,
+        "judgedFalse": 1,
+        "unjudged": 0
+      },
+      "rawFindings": 1,
+      "findings": [
+        {
+          "key": "is-control|resource_exhaustion|source/index.ts|getObjectType|184",
+          "matched": false,
+          "verdict": "false",
+          "class": "resource_exhaustion",
+          "severity": "medium",
+          "file": "source/index.ts",
+          "lines": [
+            184,
+            184
+          ],
+          "symbol": "getObjectType",
+          "title": "Crafted Symbol.toStringTag string triggers ReDoS in getObjectType",
+          "description": "Entry: source/index.ts:245 (detect \u2192 getObjectType); the same path is reached by every getObjectType-based predicate, e.g. isHtmlElement at source/index.ts:666, isDate at source/index.ts:555, isMap at source/index.ts:717, isTypedArray at source/index.ts:914.\nAttacker: a caller of this public API who supplies an untrusted object \u2014 e.g. a Node service that type-checks user-controlled objects with is(value), is.date(), is.map(), is.htmlElement() \u2014 crossing the library boundary from untrusted data into the type check.\nPath: the object reaches getObjectType (source/index.ts:182), where Object.prototype.toString.call(value).slice(8, -1) evaluates to the object's Symbol.toStringTag, a string the caller controls, and line 184 runs /HTML\\w+Element/v.test(objectTypeName) on that string before anything else.\nWhy nothing on the path stops it: there is no length limit on objectTypeName and the regex is unanchored, so for a tag such as 'HTML'.repeat(n) each of the ~n/4 'HTML' occurrences starts an attempt in which \\w+ greedily consumes the entire remainder and then backtracks over it because 'Element' never follows; the total work is O(n\u00b2) (about 1.25e9 regex steps for a 100 KB tag, 1.25e11 for 1 MB). isHtmlElement(value) is only evaluated after the regex, so no structural check short-circuits it.\nImpact: a single small object whose Symbol.toStringTag is a crafted repeated string stalls the Node.js event loop (or freezes a browser tab) for seconds to minutes, a CPU-exhaustion denial of service for any service that type-checks untrusted values with this library.\nFix: bound the tag before matching and anchor the pattern, e.g. `if (objectTypeName.length <= 64 && /^HTML\\w+Element$/.test(objectTypeName) && isHtmlElement(value))`; the anchored form can only attempt a match at index 0, making the check linear."
+        }
+      ],
+      "surface": {
+        "errors": []
+      },
+      "coverage": {
+        "modelCalls": {
+          "security-scan-map": 1,
+          "security-scan-authz": 3,
+          "security-scan-secret_identity": 4,
+          "security-scan-misconfiguration": 4,
+          "security-scan-injection": 3,
+          "security-scan-authz-recovery": 2,
+          "security-scan-injection-recovery": 3,
+          "security-scan-ssrf": 3,
+          "security-scan-data_exposure": 3,
+          "security-scan-secret_identity-recovery": 2,
+          "security-scan-resource_exhaustion": 3,
+          "security-scan-misconfiguration-recovery": 1,
+          "security-scan-resource_exhaustion-recovery": 1,
+          "security-scan-resource_exhaustion-verify": 1,
+          "security-scan-finalize": 1
+        },
+        "units": 4,
+        "done": 4,
+        "failed": 0,
+        "skippedByBudget": 0,
+        "stoppedByBudget": false
+      },
+      "spend": {
+        "usd": 0.6821911799999995,
+        "inputTokens": 8710238,
+        "outputTokens": 268547,
+        "requests": 370
+      },
+      "requestFailures": {
+        "total": 0,
+        "rateLimited": 0
+      },
+      "ms": 738621
+    },
+    {
+      "id": "itsdangerous-control",
+      "language": "python",
+      "expectedFindings": 0,
+      "runtime": {
+        "provider": "openai_compatible",
+        "servedModel": "accounts/fireworks/models/deepseek-v4p1-flash"
+      },
+      "checks": "Does the scan of pallets/itsdangerous@672971d66a2ef9f85151e53283113f33d642dabd avoid reporting security findings on this negative control?",
+      "hits": 0,
+      "total": 0,
+      "detail": [],
+      "precision": {
+        "listed": 0,
+        "judgedReal": 0,
+        "judgedFalse": 1,
+        "unjudged": 0
+      },
+      "rawFindings": 1,
+      "findings": [
+        {
+          "key": "itsdangerous-control|resource_exhaustion|src/itsdangerous/url_safe.py|URLSafeSerializerMixin.load_payload|44",
+          "matched": false,
+          "verdict": "false",
+          "class": "resource_exhaustion",
+          "severity": "high",
+          "file": "src/itsdangerous/url_safe.py",
+          "lines": [
+            44,
+            51
+          ],
+          "symbol": "URLSafeSerializerMixin.load_payload",
+          "title": "Unauthenticated zlib decompression bomb in URLSafeSerializer.load_payload",
+          "description": "Entry: src/itsdangerous/serializer.py:392 (Serializer._loads_unsafe_impl feeds the attacker's unverified payload to load_payload; the same decode is shown in docs/serializer.rst:58 and exercised by tests/test_itsdangerous/test_serializer.py:78).\nAttacker: an unauthenticated caller who can submit a token string to an application that inspects tampered payloads with URLSafeSerializer or URLSafeTimedSerializer (loads_unsafe, load_unsafe, TimedSerializer.loads_unsafe, or the documented load_payload(e.payload) pattern), crossing the boundary where payload bytes are expanded without a valid signature and without any size bound.\nPath: the token is split by Signer.unsign (signer.py:244-256); when the signature check fails, the value before the last separator is attached to BadSignature.payload; serializer.py:392 passes it to URLSafeSerializerMixin.load_payload (url_safe.py:23); because it starts with b\".\" (url_safe.py:32-34) it is base64-decoded and url_safe.py:46 calls zlib.decompress(json) with the default max_length=0, materializing the entire decompressed output in memory before json.loads runs.\nWhy nothing stops it: no length cap exists on the token in loads/loads_unsafe and no cap exists on the decompressed size; the try/except Exception at url_safe.py:47-51 only converts failures (including MemoryError) into BadPayload after the allocation was attempted; the token needs no valid signature on this path, so the attacker fully controls the compressed bytes.\nImpact: deflate expands up to about 1000:1, so one compact unauthenticated request (a ~1 MB token) makes the server allocate roughly a gigabyte, and a handful of concurrent requests exhaust memory and can OOM-kill the worker, taking the whole application down.\nFix: bound the decompression output, e.g. use zlib.decompressobj() and decompress(data, max_length) with a configurable cap (rejecting anything larger as BadPayload), or pass max_length to zlib.decompress and treat the truncated result as an error; also bound the accepted payload/token length before decoding."
+        }
+      ],
+      "surface": {
+        "errors": []
+      },
+      "coverage": {
+        "modelCalls": {
+          "security-scan-map": 1,
+          "security-scan-secret_identity": 8,
+          "security-scan-authz": 8,
+          "security-scan-secret_identity-recovery": 4,
+          "security-scan-misconfiguration": 7,
+          "security-scan-authz-recovery": 7,
+          "security-scan-injection": 8,
+          "security-scan-misconfiguration-recovery": 6,
+          "security-scan-injection-recovery": 7,
+          "security-scan-ssrf": 8,
+          "security-scan-ssrf-recovery": 3,
+          "security-scan-data_exposure": 8,
+          "security-scan-data_exposure-recovery": 7,
+          "security-scan-resource_exhaustion": 5,
+          "security-scan-resource_exhaustion-verify": 4,
+          "security-scan-finalize": 2,
+          "security-scan-authz-verify": 1
+        },
+        "units": 10,
+        "done": 2,
+        "failed": 3,
+        "skippedByBudget": 4,
+        "stoppedByBudget": true
+      },
+      "spend": {
+        "usd": 2.994074543999995,
+        "inputTokens": 26914853,
+        "outputTokens": 1500396,
+        "requests": 966
+      },
+      "requestFailures": {
+        "total": 4,
+        "rateLimited": 0
+      },
+      "ms": 1957679
+    },
+    {
+      "id": "xxhash-control",
+      "language": "go",
+      "expectedFindings": 0,
+      "runtime": {
+        "provider": "openai_compatible",
+        "servedModel": "accounts/fireworks/models/deepseek-v4p1-flash"
+      },
+      "checks": "Does the scan of cespare/xxhash@998dce232f17418a7a5721ecf87ca714025a3243 avoid reporting security findings on this negative control?",
+      "hits": 0,
+      "total": 0,
+      "detail": [],
+      "precision": {
+        "listed": 0,
+        "judgedReal": 0,
+        "judgedFalse": 0,
+        "unjudged": 0
+      },
+      "rawFindings": 0,
+      "findings": [],
+      "surface": {
+        "errors": []
+      },
+      "coverage": {
+        "modelCalls": {
+          "security-scan-map": 1,
+          "security-scan-authz": 8,
+          "security-scan-injection": 8,
+          "security-scan-injection-recovery": 8,
+          "security-scan-ssrf": 7,
+          "security-scan-data_exposure": 7,
+          "security-scan-misconfiguration": 8,
+          "security-scan-ssrf-recovery": 2,
+          "security-scan-data_exposure-recovery": 7,
+          "security-scan-secret_identity": 7,
+          "security-scan-misconfiguration-recovery": 7,
+          "security-scan-resource_exhaustion": 8,
+          "security-scan-secret_identity-recovery": 4,
+          "security-scan-resource_exhaustion-recovery": 1,
+          "security-scan-authz-recovery": 1
+        },
+        "units": 8,
+        "done": 8,
+        "failed": 0,
+        "skippedByBudget": 0,
+        "stoppedByBudget": false
+      },
+      "spend": {
+        "usd": 0.6196427399999996,
+        "inputTokens": 4973160,
+        "outputTokens": 260059,
+        "requests": 453
+      },
+      "requestFailures": {
+        "total": 0,
+        "rateLimited": 0
+      },
+      "ms": 413255
+    },
+    {
+      "id": "uuid-control",
+      "language": "go",
+      "expectedFindings": 0,
+      "runtime": {
+        "provider": "openai_compatible",
+        "servedModel": "accounts/fireworks/models/deepseek-v4p1-flash"
+      },
+      "checks": "Does the scan of google/uuid@2d3c2a9cc518326daf99a383f07c4d3c44317e4d avoid reporting security findings on this negative control?",
+      "hits": 0,
+      "total": 0,
+      "detail": [],
+      "precision": {
+        "listed": 0,
+        "judgedReal": 0,
+        "judgedFalse": 0,
+        "unjudged": 0
+      },
+      "rawFindings": 0,
+      "findings": [],
+      "surface": {
+        "errors": []
+      },
+      "coverage": {
+        "modelCalls": {
+          "security-scan-map": 1,
+          "security-scan-authz": 5,
+          "security-scan-authz-recovery": 4,
+          "security-scan-injection": 4,
+          "security-scan-injection-recovery": 4,
+          "security-scan-ssrf": 4,
+          "security-scan-ssrf-recovery": 2,
+          "security-scan-data_exposure": 4,
+          "security-scan-data_exposure-recovery": 2,
+          "security-scan-secret_identity": 4,
+          "security-scan-secret_identity-recovery": 2,
+          "security-scan-misconfiguration": 4,
+          "security-scan-secret_identity-verify": 3,
+          "security-scan-misconfiguration-recovery": 2,
+          "security-scan-resource_exhaustion": 2,
+          "security-scan-resource_exhaustion-recovery": 1
+        },
+        "units": 16,
+        "done": 1,
+        "failed": 0,
+        "skippedByBudget": 0,
+        "stoppedByBudget": false
+      },
+      "spend": {
+        "usd": 1.4032423560000002,
+        "inputTokens": 10055850,
+        "outputTokens": 653951,
+        "requests": 418
+      },
+      "requestFailures": {
+        "total": 4,
+        "rateLimited": 0
+      },
+      "ms": 808420
+    }
+  ],
+  "tokens": {
+    "in": 47100359,
+    "out": 2449657,
+    "cacheRead": 41118356,
+    "cacheWrite": 0,
+    "calls": 253,
+    "ms": 13048367,
+    "callMs": [
+      10190,
+      27960,
+      21078,
+      23482,
+      38316,
+      455,
+      53521,
+      389,
+      44552,
+      566,
+      38072,
+      575,
+      69825,
+      583,
+      15126,
+      12507,
+      13024,
+      89925,
+      523,
+      110814,
+      53832,
+      65968,
+      15645,
+      406,
+      78989,
+      175178,
+      611,
+      22534,
+      30063,
+      391,
+      12903,
+      219911,
+      747,
+      233667,
+      532,
+      84000,
+      743,
+      59880,
+      158555,
+      607,
+      67427,
+      130024,
+      375,
+      152687,
+      611,
+      207412,
+      645,
+      205393,
+      379,
+      15784,
+      539,
+      19034,
+      565,
+      113887,
+      527,
+      12493,
+      342732,
+      15775,
+      782,
+      110649,
+      408,
+      363116,
+      142816,
+      758,
+      96800,
+      4109,
+      5977,
+      8155,
+      214413,
+      9295,
+      378,
+      13094,
+      15219,
+      13622,
+      398,
+      11173,
+      32119,
+      380,
+      200859,
+      650,
+      5758,
+      34963,
+      455,
+      39044,
+      537,
+      6553,
+      355,
+      317467,
+      524,
+      42657,
+      388,
+      33620,
+      526,
+      13508,
+      10513,
+      16929,
+      409,
+      18992,
+      411,
+      63137,
+      64017,
+      322,
+      760,
+      18343,
+      12141,
+      354,
+      9851,
+      10804,
+      607,
+      13898,
+      2627,
+      51084,
+      365,
+      8155,
+      10476,
+      131631,
+      608,
+      17474,
+      457,
+      8905,
+      417,
+      41786,
+      412,
+      88742,
+      8571,
+      15563,
+      483,
+      12239,
+      274676,
+      46558,
+      593,
+      35655,
+      345,
+      10321,
+      18405,
+      33451,
+      10450,
+      355,
+      13329,
+      383,
+      140509,
+      113689,
+      28341,
+      423,
+      245053,
+      43139,
+      7716,
+      57326,
+      377,
+      11951,
+      332,
+      23736,
+      565,
+      17847,
+      341318,
+      381,
+      15600,
+      362,
+      68538,
+      5280,
+      10206,
+      317,
+      29986,
+      148513,
+      705,
+      37935,
+      26335,
+      104058,
+      595,
+      48710,
+      1242,
+      184322,
+      412,
+      67559,
+      354,
+      87817,
+      444,
+      93479,
+      176332,
+      423,
+      683,
+      163922,
+      114326,
+      339,
+      10764,
+      101014,
+      735,
+      87349,
+      11944,
+      798,
+      451,
+      101303,
+      746,
+      12138,
+      77186,
+      4029,
+      15835,
+      420,
+      169847,
+      945,
+      8727,
+      194052,
+      239354,
+      116997,
+      378,
+      94036,
+      478,
+      66798,
+      175393,
+      210323,
+      386,
+      198196,
+      325,
+      120907,
+      648,
+      22650,
+      176134,
+      103562,
+      434,
+      279007,
+      133994,
+      472,
+      65558,
+      413,
+      224502,
+      32244,
+      509,
+      103143,
+      358,
+      8024,
+      217010,
+      43311,
+      44435,
+      125543,
+      911,
+      232821,
+      388,
+      79994,
+      121123,
+      398,
+      58648,
+      58955,
+      386,
+      101189,
+      410,
+      52857,
+      379,
+      63179,
+      510,
+      12777,
+      249974,
+      87329,
+      374
+    ],
+    "efforts": {
+      "security-scan-map": [
+        "high"
+      ],
+      "security-scan-authz": [
+        "max"
+      ],
+      "security-scan-secret_identity": [
+        "max"
+      ],
+      "security-scan-misconfiguration": [
+        "max"
+      ],
+      "security-scan-injection": [
+        "max"
+      ],
+      "security-scan-authz-recovery": [
+        "high"
+      ],
+      "security-scan-injection-recovery": [
+        "high"
+      ],
+      "security-scan-ssrf": [
+        "max"
+      ],
+      "security-scan-data_exposure": [
+        "max"
+      ],
+      "security-scan-secret_identity-recovery": [
+        "high"
+      ],
+      "security-scan-resource_exhaustion": [
+        "max"
+      ],
+      "security-scan-misconfiguration-recovery": [
+        "high"
+      ],
+      "security-scan-resource_exhaustion-recovery": [
+        "high"
+      ],
+      "security-scan-ssrf-recovery": [
+        "high"
+      ],
+      "security-scan-data_exposure-recovery": [
+        "high"
+      ],
+      "security-scan-resource_exhaustion-verify": [
+        "max"
+      ],
+      "security-scan-finalize": [
+        "high"
+      ],
+      "security-scan-secret_identity-verify": [
+        "max"
+      ],
+      "security-scan-authz-verify": [
+        "max"
+      ]
+    }
+  },
+  "infra": {
+    "errored": 2,
+    "total": 4,
+    "errors": [
+      {
+        "id": "uuid-control",
+        "error": "Measurement interrupted; partial findings are not release evidence."
+      },
+      {
+        "id": "itsdangerous-control",
+        "error": "Measurement interrupted; partial findings are not release evidence."
+      }
+    ]
+  }
+}

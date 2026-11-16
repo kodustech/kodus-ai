@@ -1,0 +1,6 @@
+{
+  "at": "2026-11-16T20:38:18.859Z",
+  "status": "deferred",
+  "paidBenchmarkStarted": false,
+  "reason": "Close the PR review without further paid calibration after time-priority feedback. The new source has contract evidence only; release quality remains unproven."
+}

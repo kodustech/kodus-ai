@@ -1,0 +1,10 @@
+{
+  "requestedAt": "2026-11-16T20:34:43.050Z",
+  "runnerPid": 1201508,
+  "nodePid": 1201593,
+  "signal": "SIGINT",
+  "reason": "Agent stopped an already failing calibration to limit evaluation time and close the PR review; no further paid calibration is launched.",
+  "releaseGatePassed": false,
+  "measurementComplete": false,
+  "note": "Final meter/tokens can omit in-flight work after cancellation; no complete provider invoice or quality pass is claimed."
+}
