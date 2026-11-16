@@ -4256,19 +4256,17 @@ export class GithubService
                 return null;
             }
 
-            const formatRepo = extractRepoNames(repositories);
-
             const octokit = await this.instanceOctokit(organizationAndTeamData);
 
             const { startDate, endDate } = filters || {};
 
-            const promises = formatRepo.map(async (repo) => {
+            // One request per repository record, under its own owner: two
+            // repositories can share a name across owners.
+            const promises = repositories.map(async (repository) => {
+                const [repo] = extractRepoNames([repository]);
                 return await this.getAllPrMessages(
                     octokit,
-                    this.ownerOf(
-                        repositories?.find((r) => r?.name === repo),
-                        githubAuthDetail,
-                    ),
+                    this.ownerOf(repository, githubAuthDetail),
                     repo,
                     startDate,
                     endDate,
@@ -4719,21 +4717,19 @@ export class GithubService
             return null;
         }
 
-        const formatRepo = extractRepoNames(repositories);
-
         const octokit = await this.instanceOctokit(
             params?.organizationAndTeamData,
         );
 
         const pullRequestCodeReviewTime: PullRequestCodeReviewTime[] = [];
 
-        for (const repo of formatRepo) {
+        // One request per repository record, under its own owner: two
+        // repositories can share a name across owners.
+        for (const repository of repositories) {
+            const [repo] = extractRepoNames([repository]);
             const pullRequests = await this.getAllPrMessages(
                 octokit,
-                this.ownerOf(
-                    repositories?.find((r) => r?.name === repo),
-                    githubAuthDetail,
-                ),
+                this.ownerOf(repository, githubAuthDetail),
                 repo,
                 startDate,
                 endDate,

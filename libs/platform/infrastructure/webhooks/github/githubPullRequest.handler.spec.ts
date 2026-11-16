@@ -397,7 +397,13 @@ describe('GitHubPullRequestHandler', () => {
                 codeManagementService.getReviewStatusByPullRequest,
             ).toHaveBeenCalledWith({
                 organizationAndTeamData,
-                repository: { id: '12345', name: 'test-repo' },
+                // The owner comes from the repository, not the integration
+                // account: a token integration can review other owners' repos.
+                repository: {
+                    id: '12345',
+                    name: 'test-repo',
+                    fullName: expect.stringMatching(/^[^/]+\/test-repo$/),
+                },
                 prNumber: 42,
             });
             // Saved as the event it is; only the review job is a command.

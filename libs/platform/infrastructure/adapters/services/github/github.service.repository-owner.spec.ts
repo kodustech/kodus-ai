@@ -201,4 +201,30 @@ describe('GithubService addresses a repository by its own owner', () => {
 
         expect(args).toEqual(expect.objectContaining({ owner: 'Novaorg01' }));
     });
+    it('lists pull requests of same-named repositories under each owner', async () => {
+        const service = makeService({});
+        jest.spyOn(
+            service as any,
+            'findOneByOrganizationAndTeamDataAndConfigKey',
+        ).mockResolvedValue([
+            {
+                name: 'api',
+                full_name: 'Novaorg01/api',
+                http_url: 'https://github.com/Novaorg01/api',
+            },
+            {
+                name: 'api',
+                full_name: 'OtherOrg/api',
+                http_url: 'https://github.com/OtherOrg/api',
+            },
+        ]);
+        const getAllPrMessages = jest
+            .spyOn(service as any, 'getAllPrMessages')
+            .mockResolvedValue([]);
+
+        await service.getListPullRequests(organizationAndTeamData, {});
+
+        const owners = getAllPrMessages.mock.calls.map((call) => call[1]);
+        expect(owners.sort()).toEqual(['Novaorg01', 'OtherOrg']);
+    });
 });
