@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 	"reflect"
 	"sync/atomic"
 	"testing"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
@@ -66,7 +67,7 @@ type countedRecipeUpload struct {
 	count atomic.Int32
 }
 
-func (t *countedRecipeUpload) Upload(context.Context, driver.MachineRef, string, string) error {
+func (t *countedRecipeUpload) Upload(context.Context, driver.MachineRef, string, string, func(string)) error {
 	t.count.Add(1)
 	return nil
 }

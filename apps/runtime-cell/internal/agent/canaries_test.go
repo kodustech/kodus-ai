@@ -14,17 +14,17 @@ import (
 )
 
 // canaryComposer keeps what each Up was handed: the compose file and the
-// decoys on its context.
+// decoys it asked.
 type canaryComposer struct {
 	mu       sync.Mutex
 	file     []byte
 	canaries []driver.Canary
 }
 
-func (c *canaryComposer) Up(ctx context.Context, _ driver.MachineRef, file []byte, _ string) ([]string, error) {
+func (c *canaryComposer) Up(_ context.Context, req driver.UpRequest) ([]string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.file, c.canaries = file, driver.CanariesFrom(ctx)
+	c.file, c.canaries = req.Compose, req.Canaries
 	return []string{"172.30.0.2"}, nil
 }
 
@@ -50,7 +50,7 @@ func canaryHarness(t *testing.T) (*harness, *canaryComposer) {
 	})
 	cp := &canaryComposer{}
 	h := newHarness(t, func(c *Config) {
-		c.Composer = cp
+		c.Parts.Composer = cp
 		c.Repo = func(protocol.ClaimAcquireBody) (string, error) { return srv + "/tarball", nil }
 	})
 	return h, cp

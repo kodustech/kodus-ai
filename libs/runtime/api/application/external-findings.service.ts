@@ -39,12 +39,12 @@ import {
     RUNTIME_PRODUCT_ENVIRONMENT_STORE,
     RUNTIME_RUN_PROJECTION_STORE,
     type Clock,
-    type ProductEnvironment,
     type ProductEnvironmentStore,
     type RunProjectionReader,
     type RuntimeEnvironmentReader,
     type RuntimeGitPort,
 } from '../domain/ports';
+import { membersOr, RuntimeEnvironmentMembers, type EnvironmentMembership } from './environment-members.service';
 import { RuntimeRunRequestBuilder } from './run-request-builder.service';
 import { ExternalVerificationReconciler } from './external-verification-reconciler';
 
@@ -94,6 +94,24 @@ function targetAllowed(
     );
 }
 
+/**
+ * A submission that names no environment, on a repository that several
+ * environments the key reaches hold, the primary of none. Carries their ids
+ * only (no names, no repositories): the caller sends one as environmentId.
+ */
+export class EnvironmentRequiredException extends ConflictException {
+    constructor(readonly environmentIds: string[]) {
+        super({
+            statusCode: 409,
+            error: 'Conflict',
+            code: 'environment_required',
+            message:
+                'The repository is part of several environments; send environmentId with one of environmentIds',
+            environmentIds,
+        });
+    }
+}
+
 /** Product-owned admission/task state only. Execution and verdicts remain in the durable Runtime Run. */
 @Injectable()
 export class ExternalFindingsService implements ExternalFindingsPort {
@@ -111,7 +129,38 @@ export class ExternalFindingsService implements ExternalFindingsPort {
         private readonly stops: ExternalStopReader,
         private readonly requests: RuntimeRunRequestBuilder,
         @Inject(RUNTIME_CLOCK) private readonly now: Clock,
+        // Required by Nest; made without it (the older tests), a repository's environment is the one it is the primary of.
+        @Inject(RuntimeEnvironmentMembers)
+        private readonly members?: RuntimeEnvironmentMembers,
     ) {}
+
+    /**
+     * The environment a finding on this repository's PR runs in, through
+     * membership: one of the key's team whose every repository the key
+     * reaches. A named one must be such an environment (else not found, as
+     * an unknown one: nothing tells another org's or key's apart). Unnamed:
+     * the one the repository is the primary of, else the only one; several
+     * the repository is only a member of are refused with their ids.
+     */
+    private async environmentFor(principal: EnvKeyPrincipal, repositoryId: string, environmentId?: string): Promise<EnvironmentMembership & { repositoryIds: string[] }> {
+        const members = membersOr(this.members, this.environments);
+        const reachable: Array<EnvironmentMembership & { repositoryIds: string[] }> = [];
+        for (const m of await members.environmentsOf(principal.organizationId, repositoryId)) {
+            if (m.env.organizationId !== principal.organizationId || m.env.teamId !== principal.teamId) continue;
+            const repositoryIds = await members.repositoryIds(m.env);
+            if (repositoryIds.every((id) => principal.repositoryIds.includes(id))) reachable.push({ ...m, repositoryIds });
+        }
+        if (environmentId !== undefined) {
+            const named = reachable.find((m) => m.env.environmentId === environmentId);
+            if (!named) throw new NotFoundException('Environment not found');
+            return named;
+        }
+        const primary = reachable.find((m) => m.member.role === 'primary');
+        if (primary) return primary;
+        if (reachable.length > 1) throw new EnvironmentRequiredException(reachable.map((m) => m.env.environmentId));
+        if (!reachable.length) throw new NotFoundException('Environment not found');
+        return reachable[0];
+    }
 
     async submit(
         principal: EnvKeyPrincipal,
@@ -140,16 +189,7 @@ export class ExternalFindingsService implements ExternalFindingsPort {
         const input = parsed.data;
         if (!principal.repositoryIds.includes(input.repositoryId))
             throw new NotFoundException('Repository not found');
-        const environment = await this.environments.findByRepository(
-            principal.organizationId,
-            input.repositoryId,
-        );
-        if (
-            !environment ||
-            environment.organizationId !== principal.organizationId ||
-            environment.teamId !== principal.teamId
-        )
-            throw new NotFoundException('Environment not found');
+        const environment = await this.environmentFor(principal, input.repositoryId, input.environmentId);
         const submitted = executionInput(input);
         const hasProbes = submitted.findings.some((f) => f.evidence?.probe);
         if (hasProbes) this.capability(principal, 'env:exec');
@@ -197,7 +237,7 @@ export class ExternalFindingsService implements ExternalFindingsPort {
         principal: EnvKeyPrincipal,
         submitted: SubmitFindings,
         fingerprint: string,
-        environment: ProductEnvironment,
+        { env: environment, member, repositoryIds }: EnvironmentMembership & { repositoryIds: string[] },
         findingIdsOverride?: string[],
         attempt = 1,
     ): Promise<Pick<ExternalSubmissionAdmission, 'record' | 'request'>> {
@@ -217,8 +257,8 @@ export class ExternalFindingsService implements ExternalFindingsPort {
         const head = await this.git.getPullRequestHead({
             organizationId: principal.organizationId,
             teamId: principal.teamId,
-            repositoryId: environment.repositoryId,
-            repositoryName: environment.repositoryName,
+            repositoryId: member.repositoryId,
+            repositoryName: member.repositoryName,
             prNumber: input.prNumber,
         });
         if (!head) throw new NotFoundException('Pull request not found');
@@ -249,6 +289,7 @@ export class ExternalFindingsService implements ExternalFindingsPort {
             fingerprint,
             findingIds,
             submission: submitted,
+            environmentId: environment.environmentId,
             createdAt: at.toISOString(),
             expiresAt: new Date(
                 at.getTime() + EXTERNAL_VERIFICATION_TTL_MS,
@@ -274,13 +315,17 @@ export class ExternalFindingsService implements ExternalFindingsPort {
         if (!hasProbes) record.refusal = 'execution_probe_required';
         else if (head.fork !== false) record.refusal = 'fork_approval_required';
         else if (stopped) record.refusal = 'runtime_stopped';
-        else if (live.some((r) => r.headSha === input.headSha))
+        else if (
+            // One live Run per commit and environment; a Run that names none holds every one back.
+            live.some((r) => r.headSha === input.headSha && (!r.environmentId || r.environmentId === environment.environmentId))
+        )
             record.refusal = 'run_in_progress';
         else if (
             environment.state !== 'active' ||
             !image?.imageId ||
             image.teamId !== principal.teamId ||
-            image.repositoryId !== input.repositoryId
+            // The image's latest Run may be of any repository of the environment.
+            !repositoryIds.includes(image.repositoryId)
         )
             record.refusal = 'environment_not_ready';
         if (record.refusal) return { record };
@@ -304,6 +349,7 @@ export class ExternalFindingsService implements ExternalFindingsPort {
             );
         const built = await this.requests.build({
             env: environment,
+            ...(member.role === 'member' ? { repository: { repositoryId: member.repositoryId, repositoryName: member.repositoryName, fullName: member.fullName } } : {}),
             head,
             prNumber: input.prNumber,
             trigger: 'external_finding',
@@ -379,16 +425,8 @@ export class ExternalFindingsService implements ExternalFindingsPort {
         const finding = record.submission.findings[index];
         if (!finding?.evidence?.probe)
             return this.boundCurrent(record, messageId, bodyHash);
-        const environment = await this.environments.findByRepository(
-            principal.organizationId,
-            record.repositoryId,
-        );
-        if (
-            !environment ||
-            environment.organizationId !== principal.organizationId ||
-            environment.teamId !== principal.teamId
-        )
-            throw new NotFoundException('Environment not found');
+        // The environment the finding was admitted to; a record from before it was kept, the one its submission names (or none).
+        const environment = await this.environmentFor(principal, record.repositoryId, record.environmentId ?? record.submission.environmentId);
         const submitted = { ...record.submission, findings: [finding] };
         const fingerprint = hash({
             retryOf: record.verificationTaskId,
@@ -446,6 +484,7 @@ export class ExternalFindingsService implements ExternalFindingsPort {
             typeof id !== 'string' ||
             id.length < 1 ||
             id.length > 128 ||
+            // eslint-disable-next-line no-control-regex -- matching a control character is the check itself
             /[\x00-\x1f]/.test(id)
         )
             throw new BadRequestException('Invalid message id');

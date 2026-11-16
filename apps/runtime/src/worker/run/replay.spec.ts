@@ -114,9 +114,11 @@ describe('stable stepId', () => {
         const { decision, steps } = await replayProbe({ run: RUN, index: 0, probe, claims, pinnedImageId: 'img-shop-1', env, step });
 
         expect(decision.verdict).toBe('finding');
-        // Every step ran twice (first try + retry) with the same id.
+        // Every step ran twice (first try + retry) with the same id; the two sides' rounds may interleave.
         expect(seen.length).toBe(steps.length * 2);
-        for (let i = 0; i < seen.length; i += 2) expect(seen[i + 1].stepId).toBe(seen[i].stepId);
+        const tries = new Map<string, number>();
+        for (const s of seen) tries.set(s.stepId, (tries.get(s.stepId) ?? 0) + 1);
+        expect([...tries.values()].every((n) => n === 2)).toBe(true);
         const ids = steps.map((s) => s.stepId);
         expect(new Set(ids).size).toBe(ids.length);
         expect(ids.every((id) => z.uuid().safeParse(id).success)).toBe(true);
@@ -176,6 +178,7 @@ describe('ready check after the reset', () => {
             },
         } as any;
         let clock = 0;
+        const slept: number[] = [];
         const step = (async <T>(_n: string, fn: () => Promise<T>) => fn()) as StepRunner;
         const out = await replayProbe({
             run: RUN,
@@ -188,15 +191,22 @@ describe('ready check after the reset', () => {
             ready: { service: 'web', port: 3000, path: '/health', waitSeconds: 60 },
             now: () => clock,
             sleep: async (ms) => {
+                slept.push(ms);
                 clock += ms;
             },
         });
         expect(out.steps.length).toBeGreaterThanOrEqual(3);
-        // Every round: reset, the ready check until it answers, then the probe; never the probe on a cold app.
-        for (const [i, c] of calls.entries()) {
-            if (c.startsWith(`${probe.id}:`)) expect(calls[i - 1]).toBe(`run-ready:${c.split(':')[1]}`);
+        // After a reset the round asks every second, not every five.
+        expect(new Set(slept)).toEqual(new Set([1_000]));
+        // Every round of a claim: reset, the ready check until it answers, then the probe; never the probe on a cold app.
+        // The two claims' rounds run side by side, so each claim's calls are read on their own.
+        for (const claim of ['b', 'p']) {
+            const own = calls.filter((c) => c.endsWith(`:${claim}`));
+            for (const [i, c] of own.entries()) {
+                if (c.startsWith(`${probe.id}:`)) expect(own[i - 1]).toBe(`run-ready:${claim}`);
+            }
+            expect(own.slice(0, 5)).toEqual([`reset:${claim}`, `run-ready:${claim}`, `run-ready:${claim}`, `run-ready:${claim}`, `${probe.id}:${claim}`]);
         }
-        expect(calls.slice(0, 5)).toEqual(['reset:b', 'run-ready:b', 'run-ready:b', 'run-ready:b', `${probe.id}:b`]);
     });
 });
 
@@ -270,6 +280,84 @@ describe('Replay canonical reset image (#2505)', () => {
         const reset = jest.spyOn(env, 'reset');
         const result = await replayProbe({ run: RUN, index: 0, probe, claims, pinnedImageId: 'img-shop-1', env, step: (_name, fn) => fn() });
         expect(reset.mock.calls).toHaveLength(result.steps.length);
-        expect(reset.mock.calls).toEqual(result.steps.map(s => [claims[s.side], 'img-shop-1']));
+        // One reset per round, each with the pin; the two sides' rounds run side by side, so in any order.
+        const sorted = (calls: unknown[][]) => calls.map((c) => c.join(' ')).sort();
+        expect(sorted(reset.mock.calls)).toEqual(sorted(result.steps.map((s) => [claims[s.side], 'img-shop-1'])));
+    });
+});
+
+describe('base and PR rounds side by side', () => {
+    /** A probe whose base answers 400 and PR 201: a finding after two base rounds and two PR rounds. */
+    const differing = () => ({
+        reset: jest.fn(async () => ({ ok: true })),
+        probe: async (claim: string, _p: unknown, stepId: string) => ({
+            stepId, executor: 'observer', imageId: 'img', transport: 'ok', vmHealth: 'ok', durationMs: 1,
+            http: { status: claim === 'base' ? 400 : 201, headers: {}, body: '{}' },
+            requests: [{ method: 'POST', route: '/orders', status: claim === 'base' ? 400 : 201 }],
+        }),
+    });
+
+    it("starts the PR side's round while the base side's round is still running", async () => {
+        const env = differing() as any;
+        let releaseBase!: () => void;
+        const baseHeld = new Promise<void>((r) => (releaseBase = r));
+        const started: string[] = [];
+        env.reset = jest.fn(async (claim: string) => {
+            started.push(claim);
+            if (claim === 'base' && started.length === 1) await baseHeld;
+            return { ok: true };
+        });
+        const out = replayProbe({ run: RUN, index: 0, probe, claims: { base: 'base', pr: 'pr' }, pinnedImageId: 'img', env, step: (_n, fn) => fn() });
+        await new Promise((r) => setImmediate(r));
+        // The base round is held in its reset, and the PR round has started anyway.
+        expect(started).toEqual(['base', 'pr']);
+        releaseBase();
+        const done = await out;
+        expect(done.decision).toMatchObject({ verdict: 'finding' });
+        // Kept as one round after the other kept them: the batch's base rounds, then its PR round.
+        expect(done.steps.map((s) => [s.side, s.round])).toEqual([['base', 1], ['base', 2], ['pr', 1], ['pr', 2]]);
+    });
+
+    it('starts the steps in the same order whichever side ends first, so a resumed workflow numbers them the same', async () => {
+        const order = async (slow: 'base' | 'pr') => {
+            const env = differing() as any;
+            env.reset = async (claim: string) => {
+                await new Promise((r) => setTimeout(r, claim === slow ? 20 : 0));
+                return { ok: true };
+            };
+            const names: string[] = [];
+            const step: StepRunner = (name, fn) => {
+                names.push(name);
+                return fn();
+            };
+            await replayProbe({ run: RUN, index: 0, probe, claims: { base: 'base', pr: 'pr' }, pinnedImageId: 'img', env, step });
+            return names;
+        };
+        const whenBaseIsSlow = await order('base');
+        expect(whenBaseIsSlow).toEqual(await order('pr'));
+        expect(whenBaseIsSlow).toEqual([
+            'probe:0:orders-empty-cart:base:1',
+            'probe:0:orders-empty-cart:pr:1',
+            'probe:0:orders-empty-cart:base:2',
+            'probe:0:orders-empty-cart:pr:2',
+        ]);
+    });
+
+    it('a security violation on the base round halts only once the PR round beside it has ended', async () => {
+        let prEnded = false;
+        const env = {
+            reset: async (claim: string) => {
+                if (claim === 'base') return { code: 'security_violation', signature: 'egress:exfil' };
+                await new Promise((r) => setTimeout(r, 20));
+                prEnded = true;
+                return { ok: true };
+            },
+            probe: async (_c: string, _p: unknown, stepId: string) => ({ stepId, executor: 'observer', imageId: 'img', transport: 'ok', vmHealth: 'ok', durationMs: 1, http: { status: 200, headers: {}, body: '{}' }, requests: [] }),
+        } as any;
+        await expect(
+            replayProbe({ run: RUN, index: 0, probe, claims: { base: 'base', pr: 'pr' }, pinnedImageId: 'img', env, step: (_n, fn) => fn() }),
+        ).rejects.toMatchObject({ side: 'base' });
+        // No step is left running when the halt is thrown.
+        expect(prEnded).toBe(true);
     });
 });

@@ -1,0 +1,235 @@
+import { posix } from 'path';
+
+// How a JS/TS import specifier names a file of the repository (docs §9.8):
+// relative paths, tsconfig/jsconfig `paths` and `baseUrl`, and the workspace
+// packages of a monorepo by their package.json name. Everything is read as
+// data from the commit; nothing of the repository is executed, and a
+// specifier that names no file of the tree resolves to nothing.
+
+/** Extensions tried for a specifier without one, in TypeScript's order. */
+export const CODE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'] as const;
+/** `./x.js` in TypeScript ESM names `./x.ts`. */
+const JS_TO_TS: Record<string, string[]> = { '.js': ['.ts', '.tsx'], '.jsx': ['.tsx'], '.mjs': ['.mts'], '.cjs': ['.cts'] };
+
+export interface PathAliases {
+    /** Directory of the tsconfig the aliases apply under ('' is the root). */
+    dir: string;
+    /** Directory non-relative specifiers resolve against (`baseUrl`), when set. */
+    baseUrl?: string;
+    /** `paths` patterns, each target already relative to the repository root. */
+    paths: { pattern: string; targets: string[] }[];
+}
+
+export interface WorkspacePackage {
+    name: string;
+    dir: string;
+    /** Entry files the manifest names (source, main, module, types, exports['.']), relative to the root. */
+    entries: string[];
+}
+
+export interface ResolveContext {
+    files: ReadonlySet<string>;
+    aliases: PathAliases[];
+    packages: WorkspacePackage[];
+}
+
+const LIMITS = { configBytes: 64 * 1024, extendsDepth: 3, patternsPerConfig: 200, targetsPerPattern: 8 } as const;
+
+/**
+ * JSON with comments and trailing commas (tsconfig, jsconfig) as a value, or
+ * undefined. One linear pass: comments outside strings are dropped, a comma
+ * whose next significant character closes the object or array is dropped.
+ */
+export function parseJsonc(text: string): unknown {
+    if (text.length > LIMITS.configBytes) return undefined;
+    let out = '';
+    let i = 0;
+    while (i < text.length) {
+        const ch = text[i];
+        if (ch === '"') {
+            let j = i + 1;
+            while (j < text.length && text[j] !== '"' && text[j] !== '\n') j += text[j] === '\\' ? 2 : 1;
+            out += text.slice(i, j + 1);
+            i = j + 1;
+        } else if (ch === '/' && text[i + 1] === '/') {
+            while (i < text.length && text[i] !== '\n') i++;
+        } else if (ch === '/' && text[i + 1] === '*') {
+            const end = text.indexOf('*/', i + 2);
+            i = end < 0 ? text.length : end + 2;
+        } else if (ch === ',') {
+            // The next significant character, past whitespace and comments.
+            let j = i + 1;
+            while (j < text.length) {
+                if (/\s/.test(text[j])) j++;
+                else if (text[j] === '/' && text[j + 1] === '/') {
+                    const nl = text.indexOf('\n', j);
+                    j = nl < 0 ? text.length : nl;
+                } else if (text[j] === '/' && text[j + 1] === '*') {
+                    const end = text.indexOf('*/', j + 2);
+                    j = end < 0 ? text.length : end + 2;
+                } else break;
+            }
+            if (text[j] !== '}' && text[j] !== ']') out += ch;
+            i++;
+        } else {
+            out += ch;
+            i++;
+        }
+    }
+    try {
+        return JSON.parse(out);
+    } catch {
+        return undefined;
+    }
+}
+
+const dirOf = (path: string) => {
+    const d = posix.dirname(path);
+    return d === '.' ? '' : d;
+};
+
+/** A path joined under the root, or undefined when it leaves the repository. */
+function inRepo(...parts: string[]): string | undefined {
+    const n = posix.normalize(posix.join(...parts.filter((p) => p !== ''), '.'));
+    if (n === '..' || n.startsWith('../') || n.startsWith('/')) return undefined;
+    return n === '.' ? '' : n.replace(/\/+$/, '');
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * The aliases of one tsconfig/jsconfig, following `extends` to configs of the
+ * same tree (a package name in `extends` is not followed). `read` returns a
+ * config's text, or null.
+ */
+export async function aliasesOf(configPath: string, read: (path: string) => Promise<string | null>): Promise<PathAliases | undefined> {
+    let baseUrl: string | undefined;
+    let paths: PathAliases['paths'] | undefined;
+    let current: string | undefined = configPath;
+    for (let depth = 0; current && depth <= LIMITS.extendsDepth; depth++) {
+        const text = await read(current);
+        const json = text === null ? undefined : parseJsonc(text);
+        if (!isRecord(json)) break;
+        const options = isRecord(json.compilerOptions) ? json.compilerOptions : {};
+        const here = dirOf(current);
+        if (baseUrl === undefined && typeof options.baseUrl === 'string') baseUrl = inRepo(here, options.baseUrl);
+        if (paths === undefined && isRecord(options.paths)) {
+            // Targets are relative to baseUrl when one is set, else to the config that declares them.
+            const pathsBase = typeof options.baseUrl === 'string' ? inRepo(here, options.baseUrl) : here;
+            paths = Object.entries(options.paths)
+                .slice(0, LIMITS.patternsPerConfig)
+                .map(([pattern, targets]) => ({
+                    pattern,
+                    targets: (Array.isArray(targets) ? targets : [])
+                        .filter((t): t is string => typeof t === 'string')
+                        .slice(0, LIMITS.targetsPerPattern)
+                        .map((t) => (pathsBase === undefined ? undefined : inRepo(pathsBase, t)))
+                        .filter((t): t is string => t !== undefined),
+                }));
+        }
+        const ext = typeof json.extends === 'string' ? json.extends : Array.isArray(json.extends) && typeof json.extends[0] === 'string' ? json.extends[0] : undefined;
+        current = ext && ext.startsWith('.') ? inRepo(here, ext.endsWith('.json') ? ext : `${ext}.json`) : undefined;
+    }
+    if (baseUrl === undefined && !paths?.length) return undefined;
+    return { dir: dirOf(configPath), ...(baseUrl !== undefined ? { baseUrl } : {}), paths: paths ?? [] };
+}
+
+/** A workspace package from its package.json text, or undefined when it has no name. */
+export function packageOf(manifestPath: string, text: string): WorkspacePackage | undefined {
+    const json = parseJsonc(text);
+    if (!isRecord(json) || typeof json.name !== 'string' || !json.name || json.name.length > 214) return undefined;
+    const dir = dirOf(manifestPath);
+    const exp = json.exports;
+    const dot = typeof exp === 'string' ? exp : isRecord(exp) ? exp['.'] : undefined;
+    const dotEntry = typeof dot === 'string' ? dot : isRecord(dot) ? (dot.source ?? dot.import ?? dot.default ?? dot.require ?? dot.types) : undefined;
+    const entries = [json.source, dotEntry, json.module, json.main, json.types, json.typings]
+        .filter((e): e is string => typeof e === 'string' && e.length < 512)
+        .map((e) => inRepo(dir, e))
+        .filter((e): e is string => e !== undefined);
+    return { name: json.name, dir, entries };
+}
+
+/** The file a candidate path names: itself, with an extension, its index, or the TS source of a .js path. */
+function fileFor(candidate: string, files: ReadonlySet<string>): string | undefined {
+    if (files.has(candidate) && CODE_EXTENSIONS.some((e) => candidate.endsWith(e))) return candidate;
+    const ext = posix.extname(candidate);
+    for (const ts of JS_TO_TS[ext] ?? []) {
+        const swapped = candidate.slice(0, -ext.length) + ts;
+        if (files.has(swapped)) return swapped;
+    }
+    for (const e of CODE_EXTENSIONS) if (files.has(candidate + e)) return candidate + e;
+    for (const e of CODE_EXTENSIONS) if (files.has(`${candidate}/index${e}`)) return `${candidate}/index${e}`;
+    return undefined;
+}
+
+/** A built entry (`dist/index.js`, `lib/x.d.ts`) mapped back to its source under `src/`. */
+function sourceOfBuilt(entry: string, dir: string): string[] {
+    const rel = dir ? entry.slice(dir.length + 1) : entry;
+    const stem = rel.replace(/\.d\.[cm]?ts$/, '').replace(/\.[cm]?[jt]sx?$/, '');
+    const unbuilt = stem.replace(/^(dist|lib|build|out|esm|cjs)\//, 'src/');
+    return [entry, inRepo(dir, unbuilt), inRepo(dir, stem)].filter((p): p is string => p !== undefined);
+}
+
+function matchPattern(pattern: string, spec: string): string | undefined {
+    const star = pattern.indexOf('*');
+    if (star < 0) return pattern === spec ? '' : undefined;
+    const prefix = pattern.slice(0, star);
+    const suffix = pattern.slice(star + 1);
+    if (spec.length < prefix.length + suffix.length || !spec.startsWith(prefix) || !spec.endsWith(suffix)) return undefined;
+    return spec.slice(prefix.length, spec.length - suffix.length);
+}
+
+/** The nearest aliases above a file: the tsconfig of the deepest directory that holds it. */
+function aliasesFor(from: string, aliases: PathAliases[]): PathAliases[] {
+    let best = -1;
+    let out: PathAliases[] = [];
+    for (const a of aliases) {
+        if (a.dir !== '' && from !== a.dir && !from.startsWith(`${a.dir}/`)) continue;
+        const depth = a.dir === '' ? 0 : a.dir.split('/').length;
+        if (depth > best) {
+            best = depth;
+            out = [a];
+        } else if (depth === best) out.push(a);
+    }
+    return out;
+}
+
+/** The repository file a specifier imported from `from` names, or undefined (an external package, a missing file). */
+export function resolveSpecifier(spec: string, from: string, ctx: ResolveContext): string | undefined {
+    if (!spec || spec.length > 512 || spec.includes('\0')) return undefined;
+    if (spec.startsWith('./') || spec.startsWith('../') || spec === '.' || spec === '..') {
+        const p = inRepo(dirOf(from), spec);
+        return p === undefined ? undefined : fileFor(p, ctx.files);
+    }
+    if (spec.startsWith('/') || /^[a-z][\w+.-]*:/i.test(spec)) return undefined;
+    for (const a of aliasesFor(from, ctx.aliases)) {
+        // The longest matching prefix wins, as in TypeScript.
+        const hits = a.paths
+            .map((p) => ({ p, rest: matchPattern(p.pattern, spec) }))
+            .filter((h): h is { p: PathAliases['paths'][number]; rest: string } => h.rest !== undefined)
+            .sort((x, y) => y.p.pattern.indexOf('*') - x.p.pattern.indexOf('*'));
+        for (const { p, rest } of hits) {
+            for (const t of p.targets) {
+                const target = inRepo(t.replace('*', rest));
+                const file = target === undefined ? undefined : fileFor(target, ctx.files);
+                if (file) return file;
+            }
+        }
+        if (a.baseUrl !== undefined) {
+            const p = inRepo(a.baseUrl, spec);
+            const file = p === undefined ? undefined : fileFor(p, ctx.files);
+            if (file) return file;
+        }
+    }
+    const pkg = ctx.packages.filter((p) => spec === p.name || spec.startsWith(`${p.name}/`)).sort((a, b) => b.name.length - a.name.length)[0];
+    if (!pkg) return undefined;
+    const sub = spec.slice(pkg.name.length + 1);
+    const candidates = sub
+        ? [inRepo(pkg.dir, 'src', sub), inRepo(pkg.dir, sub)]
+        : [...pkg.entries.flatMap((e) => sourceOfBuilt(e, pkg.dir)), inRepo(pkg.dir, 'src/index'), inRepo(pkg.dir, 'index')];
+    for (const c of candidates) {
+        const file = c === undefined ? undefined : fileFor(c, ctx.files);
+        if (file) return file;
+    }
+    return undefined;
+}

@@ -37,11 +37,11 @@ func main() {
 			return
 		}
 		if r.Method == http.MethodGet && r.URL.Path == "/health" {
-			w.WriteHeader(204)
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		if r.Method == http.MethodDelete && r.URL.Path == "/installation/token" {
-			w.WriteHeader(204)
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		m := re.FindStringSubmatch(r.URL.Path)
@@ -63,7 +63,7 @@ func main() {
 		defer f.Close()
 		st, err := f.Stat()
 		if err != nil || !st.Mode().IsRegular() || st.Size() > 1024*1024 {
-			http.Error(w, "invalid fixture", 500)
+			http.Error(w, "invalid fixture", http.StatusInternalServerError)
 			return
 		}
 		mu.Lock()
@@ -78,6 +78,7 @@ func main() {
 		panic(err)
 	}
 }
+
 func stringRepeat(b byte, n int) string {
 	v := make([]byte, n)
 	for i := range v {

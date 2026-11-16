@@ -1,9 +1,10 @@
-import { ServiceUnavailableException } from '@nestjs/common';
-import { Pool } from 'pg';
+import type { QueryResultRow } from 'pg';
 
-import type { RuntimeCell, RuntimeCellReader } from '../domain/ports';
+import type { SqlQuery } from '@libs/runtime/run/adapters/pg-sql';
 
-interface CellRow {
+import type { RuntimeCell, RuntimeCellReader, RuntimeCellTokenReader, RuntimeCellTokenRow } from '../domain/ports';
+
+interface CellRow extends QueryResultRow {
     cell_id: string;
     organization_id: string | null;
     owner: 'kodus' | 'customer';
@@ -33,37 +34,22 @@ const COLUMNS =
     'cell_id, organization_id, owner, topology, status, certificate_serial, certificate_expires_at, last_heartbeat_at, created_at';
 
 /**
- * Reads `runtime_cells` from the Runtime Postgres with a read-only user
- * (ADR-025: the API reads the Runtime database, never writes it).
+ * A reader of the Runtime Postgres through the shared read-only RuntimeReadDb
+ * (ADR-025: the API reads the Runtime database, never writes it). Without
+ * RUNTIME_DATABASE_READ_URL a read fails with 503, as every Runtime read does.
  */
-export class PgRuntimeCellReader implements RuntimeCellReader {
-    private pool?: Pool;
+abstract class PgRuntimeReadOnly {
+    constructor(private readonly db: SqlQuery) {}
 
-    constructor(private readonly url: string | undefined) {}
-
-    private db(): Pool {
-        if (!this.url) throw new ServiceUnavailableException('Runtime database is not configured (RUNTIME_DATABASE_READ_URL, a read-only user)');
-        this.pool ??= new Pool({ connectionString: this.url, max: 2, idleTimeoutMillis: 30_000 });
-        return this.pool;
+    protected async query<R extends QueryResultRow>(sql: string, params: unknown[]): Promise<R[]> {
+        return (await this.db.query(sql, params)).rows as R[];
     }
+}
 
-    private async query(sql: string, params: unknown[]): Promise<CellRow[]> {
-        const client = await this.db().connect();
-        try {
-            await client.query('BEGIN READ ONLY');
-            const res = await client.query<CellRow>(sql, params);
-            await client.query('COMMIT');
-            return res.rows;
-        } catch (e) {
-            await client.query('ROLLBACK').catch(() => undefined);
-            throw e;
-        } finally {
-            client.release();
-        }
-    }
-
+/** Reads `runtime_cells` from the Runtime Postgres with a read-only user. */
+export class PgRuntimeCellReader extends PgRuntimeReadOnly implements RuntimeCellReader {
     async listByOrganization(organizationId: string) {
-        const rows = await this.query(
+        const rows = await this.query<CellRow>(
             `SELECT ${COLUMNS} FROM runtime.runtime_cells WHERE organization_id = $1 ORDER BY created_at DESC LIMIT 200`,
             [organizationId],
         );
@@ -71,7 +57,7 @@ export class PgRuntimeCellReader implements RuntimeCellReader {
     }
 
     async listManaged() {
-        const rows = await this.query(
+        const rows = await this.query<CellRow>(
             `SELECT ${COLUMNS} FROM runtime.runtime_cells WHERE owner = 'kodus' AND status <> 'revoked' ORDER BY created_at DESC LIMIT 200`,
             [],
         );
@@ -79,11 +65,47 @@ export class PgRuntimeCellReader implements RuntimeCellReader {
     }
 
     async get(cellId: string) {
-        const rows = await this.query(`SELECT ${COLUMNS} FROM runtime.runtime_cells WHERE cell_id = $1`, [cellId]);
+        const rows = await this.query<CellRow>(`SELECT ${COLUMNS} FROM runtime.runtime_cells WHERE cell_id = $1`, [cellId]);
         return rows[0] ? toCell(rows[0]) : null;
     }
+}
 
-    async onModuleDestroy() {
-        await this.pool?.end();
+interface TokenRow extends QueryResultRow {
+    token_hash: string;
+    organization_id: string;
+    topology: RuntimeCellTokenRow['topology'];
+    issued_by: string;
+    created_at: Date;
+    expires_at: Date;
+    used_at: Date | null;
+    revoked_at: Date | null;
+}
+
+const toToken = (r: TokenRow): RuntimeCellTokenRow => ({
+    tokenHash: r.token_hash,
+    organizationId: r.organization_id,
+    topology: r.topology,
+    issuedBy: r.issued_by,
+    issuedAt: iso(r.created_at)!,
+    expiresAt: iso(r.expires_at)!,
+    ...(r.used_at ? { usedAt: iso(r.used_at) } : {}),
+    ...(r.revoked_at ? { revokedAt: iso(r.revoked_at) } : {}),
+});
+
+const TOKEN_COLUMNS = 'token_hash, organization_id, topology, issued_by, created_at, expires_at, used_at, revoked_at';
+
+/** Reads `runtime_cell_tokens` (hashes only; the token is never stored) with the same read-only user. */
+export class PgRuntimeCellTokenReader extends PgRuntimeReadOnly implements RuntimeCellTokenReader {
+    async listByOrganization(organizationId: string, since: Date) {
+        const rows = await this.query<TokenRow>(
+            `SELECT ${TOKEN_COLUMNS} FROM runtime.runtime_cell_tokens WHERE organization_id = $1 AND created_at >= $2 ORDER BY created_at DESC LIMIT 100`,
+            [organizationId, since],
+        );
+        return rows.map(toToken);
+    }
+
+    async get(tokenHash: string) {
+        const rows = await this.query<TokenRow>(`SELECT ${TOKEN_COLUMNS} FROM runtime.runtime_cell_tokens WHERE token_hash = $1`, [tokenHash]);
+        return rows[0] ? toToken(rows[0]) : null;
     }
 }

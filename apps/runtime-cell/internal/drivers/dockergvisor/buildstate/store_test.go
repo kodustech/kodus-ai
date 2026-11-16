@@ -76,6 +76,8 @@ func newStoreAt(t *testing.T, root string, m Mounter) *Store {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Before the temp dir goes: a released view may still be being removed.
+	t.Cleanup(st.WaitRemovals)
 	return st
 }
 
@@ -370,5 +372,87 @@ func TestParseOverlayMountsKeepsTheCellsOverlays(t *testing.T) {
 	want := OverlayMount{Target: "/var/kodus/work dir/buildkit/machine/m1/api/merged", Lower: "/var/kodus/work dir/buildkit/env/abc"}
 	if err != nil || len(got) != 1 || got[0] != want {
 		t.Fatalf("%+v %v", got, err)
+	}
+}
+
+// A released view leaves its place at once and is deleted after, off the
+// build's path: the build's release does not wait for the view's bytes.
+func TestReleasingAViewDoesNotWaitForItsFilesToBeDeleted(t *testing.T) {
+	st, _ := newStore(t)
+	mkdir(t, st.EnvDir(testOrg, testEnv))
+	view, ok := st.Acquire(context.Background(), pr("m-pr"))
+	if !ok {
+		t.Fatal("reader refused")
+	}
+	if err := os.WriteFile(filepath.Join(view.overlay, "upper", "layer"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	started, unblock := make(chan string, 1), make(chan struct{})
+	st.removeAll = func(p string) error {
+		started <- p
+		<-unblock
+		return os.RemoveAll(p)
+	}
+
+	released := make(chan struct{})
+	go func() {
+		st.Release(view)
+		close(released)
+	}()
+	var trash string
+	select {
+	case <-released:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Release waited for the view's files to be deleted")
+	}
+	trash = <-started
+	if _, err := os.Stat(view.overlay); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the view is still at its place: %v", err)
+	}
+	// The state is free at once: a seed takes it with the removal still running.
+	s, ok := st.Acquire(context.Background(), seed("m-setup"))
+	if !ok {
+		t.Fatal("a seed could not take the state while the old view was being deleted")
+	}
+	st.Release(s)
+	// The sweep leaves a removal under way to it.
+	if err := st.Evict(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(trash); err != nil {
+		t.Fatalf("Evict removed what a running removal holds: %v", err)
+	}
+
+	close(unblock)
+	st.WaitRemovals()
+	if _, err := os.Stat(trash); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the view's files were not deleted: %v", err)
+	}
+}
+
+// A removal the cell did not finish (it stopped, the delete failed) stays in
+// the trash, and the next sweep deletes it.
+func TestAViewWhoseRemovalFailedIsDeletedByTheNextSweep(t *testing.T) {
+	st, _ := newStore(t)
+	mkdir(t, st.EnvDir(testOrg, testEnv))
+	view, ok := st.Acquire(context.Background(), pr("m-pr"))
+	if !ok {
+		t.Fatal("reader refused")
+	}
+	var trash string
+	st.removeAll = func(p string) error {
+		trash = p
+		return errors.New("interrupted")
+	}
+	st.Release(view)
+	st.WaitRemovals()
+	if _, err := os.Stat(trash); err != nil {
+		t.Fatalf("the view should wait in the trash: %v", err)
+	}
+	if err := st.Evict(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(trash); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the sweep left the view: %v", err)
 	}
 }

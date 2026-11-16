@@ -88,7 +88,7 @@ func (g GitHub) Revoke(ctx context.Context, token string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusUnauthorized {
 		return fmt.Errorf("gitsource: revoke: status %d", resp.StatusCode)
 	}

@@ -32,8 +32,10 @@ func newRig(t *testing.T, answers int, configure func(*Server)) *rig {
 		_ = w.WriteMsg(m)
 	}))
 	store := policy.NewStore(nil)
-	_ = store.Put(policy.ClaimPolicy{ClaimID: "claim-1", OrgID: "o", Sources: []string{"127.0.0.1"}, Phase: policy.PhaseTest,
-		Allow: []string{"cdn.example", "evidence.s3.amazonaws.com"}, ExpiresAt: time.Now().Add(time.Hour)})
+	_ = store.Put(policy.ClaimPolicy{
+		ClaimID: "claim-1", OrgID: "o", Sources: []string{"127.0.0.1"}, Phase: policy.PhaseTest,
+		Allow: []string{"cdn.example", "evidence.s3.amazonaws.com"}, ExpiresAt: time.Now().Add(time.Hour),
+	})
 	srv := &Server{Policies: store, Upstream: ForwardTo(upstream), Log: NewQueryLog(10), Answers: netguard.NewAnswers(nil)}
 	if configure != nil {
 		configure(srv)
@@ -151,8 +153,10 @@ func TestOperatorDenyBeatsThePolicy(t *testing.T) {
 // address and nothing is looked up; denied and unknown names still fail.
 func TestSteeredClaimGetsTheProxyForEveryAllowedName(t *testing.T) {
 	r := newRig(t, 1, nil)
-	if err := r.srv.Policies.Put(policy.ClaimPolicy{ClaimID: "claim-1", OrgID: "o", Sources: []string{"127.0.0.1"}, Phase: policy.PhaseTest,
-		Allow: []string{"cdn.example", "pastebin.com"}, SteerTo: "172.30.0.2", ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now()}); err != nil {
+	if err := r.srv.Policies.Put(policy.ClaimPolicy{
+		ClaimID: "claim-1", OrgID: "o", Sources: []string{"127.0.0.1"}, Phase: policy.PhaseTest,
+		Allow: []string{"cdn.example", "pastebin.com"}, SteerTo: "172.30.0.2", ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now(),
+	}); err != nil {
 		t.Fatal(err)
 	}
 	resp := r.ask(t, "cdn.example")

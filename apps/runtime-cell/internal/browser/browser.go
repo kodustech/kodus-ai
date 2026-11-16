@@ -153,8 +153,9 @@ func Check(p protocol.BrowserProbe) error {
 		}
 		return nil
 	}
-	for i, s := range p.Steps {
-		switch kindOf(s) {
+	for i := range p.Steps {
+		s := &p.Steps[i]
+		switch kindOf(*s) {
 		case protocol.BrowserStepKindGoto:
 			path := *s.Goto
 			if !servicePath.MatchString(path) {
@@ -226,7 +227,7 @@ func jobFor(p protocol.BrowserProbe, port int, evidence protocol.EvidenceLevel) 
 		Evidence:  evidence,
 		Steps:     p.Steps,
 		Viewport:  p.Viewport,
-		Origin:    "http://" + AppHost + ":" + strconv.Itoa(port),
+		Origin:    appScheme + "://" + AppHost + ":" + strconv.Itoa(port),
 		TimeoutMs: Session(p).Milliseconds(),
 		Clock:     p.Clock,
 	})

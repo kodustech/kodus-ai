@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -41,6 +42,7 @@ func TestPlainHTTPCarriesOneCheckedRequestPerConnection(t *testing.T) {
 	if err != nil || !resp.Close {
 		t.Fatalf("the answer does not close the connection: %v %+v", err, resp)
 	}
+	_ = resp.Body.Close()
 }
 
 func TestPlainHTTPRequestBodyIsForwarded(t *testing.T) {
@@ -53,9 +55,10 @@ func TestPlainHTTPRequestBodyIsForwarded(t *testing.T) {
 	body := strings.Repeat("x", 200<<10) // longer than the head limit
 	fmt.Fprintf(c, "POST / HTTP/1.1\r\nHost: registry.example\r\nContent-Length: %d\r\n\r\n%s", len(body), body)
 	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
-	if err != nil || resp.StatusCode != 200 {
+	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("%v %+v", err, resp)
 	}
+	_ = resp.Body.Close()
 }
 
 // Encrypted Client Hello puts the real name in an encrypted inner hello;
@@ -82,7 +85,7 @@ func clientHelloWithECH(t *testing.T, sni string) []byte {
 	t.Helper()
 	a, b := net.Pipe()
 	go func() {
-		_ = tls.Client(a, &tls.Config{ServerName: sni, InsecureSkipVerify: true}).Handshake()
+		_ = tls.Client(a, &tls.Config{ServerName: sni, InsecureSkipVerify: true}).Handshake() //nolint:gosec // G402: only the ClientHello bytes are read, no server answers
 	}()
 	hdr := make([]byte, 5)
 	if _, err := io.ReadFull(b, hdr); err != nil {
@@ -103,18 +106,18 @@ func clientHelloWithECH(t *testing.T, sni string) []byte {
 	extLen := int(binary.BigEndian.Uint16(ch[off:]))
 	// outer ECH: type 0, kdf 1, aead 1, config id 0, enc (empty), payload (1 byte)
 	ech := []byte{0xfe, 0x0d, 0x00, 0x0a, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00}
-	ech[3] = byte(len(ech) - 4)
-	newCH := append(append([]byte{}, ch[:off]...), byte((extLen+len(ech))>>8), byte(extLen+len(ech)))
+	ech[3] = byte(len(ech) - 4)                                                                       //nolint:gosec // G115: big-endian byte of a length under 64KiB in a fixture
+	newCH := append(append([]byte{}, ch[:off]...), byte((extLen+len(ech))>>8), byte(extLen+len(ech))) //nolint:gosec // G115: big-endian bytes of a length under 64KiB in a fixture
 	newCH = append(newCH, ch[off+2:]...)
 	newCH = append(newCH, ech...)
-	hs := append([]byte{0x01, byte(len(newCH) >> 16), byte(len(newCH) >> 8), byte(len(newCH))}, newCH...)
-	return append([]byte{0x16, hdr[1], hdr[2], byte(len(hs) >> 8), byte(len(hs))}, hs...)
+	hs := append([]byte{0x01, byte(len(newCH) >> 16), byte(len(newCH) >> 8), byte(len(newCH))}, newCH...) //nolint:gosec // G115: big-endian bytes of a length under 64KiB in a fixture
+	return append([]byte{0x16, hdr[1], hdr[2], byte(len(hs) >> 8), byte(len(hs))}, hs...)                 //nolint:gosec // G115: big-endian bytes of a length under 64KiB in a fixture
 }
 
 // keptConn opens a TLS connection through the proxy and keeps it open.
 func (r *rig) keptConn(t *testing.T, sni string) *tls.Conn {
 	t.Helper()
-	c, err := tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp4", r.proxyTLS, &tls.Config{ServerName: sni, InsecureSkipVerify: true})
+	c, err := tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp4", r.proxyTLS, &tls.Config{ServerName: sni, InsecureSkipVerify: true}) //nolint:gosec // G402: the test upstream presents a self-signed cert
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +130,7 @@ func waitClosed(t *testing.T, c net.Conn) {
 	_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
 	buf := make([]byte, 1)
 	_, err := c.Read(buf)
-	if ne, ok := err.(net.Error); ok && ne.Timeout() {
+	if ne := net.Error(nil); errors.As(err, &ne) && ne.Timeout() {
 		t.Fatal("the connection is still open")
 	}
 }

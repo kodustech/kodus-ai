@@ -3,7 +3,7 @@ import type { Claim, EnvironmentRuntime } from '@libs/runtime/environment';
 
 import { testSetupService } from '../../testing/setup-service';
 import { capacityBlocked } from '../env/hub-environment-runtime';
-import { InMemoryEnvironmentSetupStore } from './environment-setup.service';
+import { InMemoryEnvironmentSetupStore } from './testing';
 
 // A setup keeps its boot's claim.ready.timing and adds the boot to the
 // environment's recent boots (Environment Health's setup numbers).

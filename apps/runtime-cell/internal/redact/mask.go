@@ -88,7 +88,9 @@ func (m *MaskingWriter) Close() error { return m.flush(true) }
 
 func (m *MaskingWriter) flush(final bool) error {
 	cut := len(m.pending)
-	if !final {
+	// With nothing to mask (longest == 0) nothing is kept back; otherwise
+	// keep back the most a spelling cut by a chunk boundary can have shown.
+	if !final && m.longest > 0 {
 		cut = len(m.pending) - (m.longest - 1)
 	}
 	if cut <= 0 {

@@ -4,4 +4,6 @@ export * from './evidence';
 export * from './cell-token';
 export * from './recipe-author';
 export * from './machine-size';
+export * from './isolation';
 export * from './authored-files';
+export * from './workspace';

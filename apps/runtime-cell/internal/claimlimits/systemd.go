@@ -25,8 +25,10 @@ type Lifecycle interface {
 	Close() error
 }
 
-var _ Lifecycle = (*FS)(nil)
-var systemdParentPattern = regexp.MustCompile(`^kodus[0-9a-f]{12}-[0-9a-f]{64}\.slice$`)
+var (
+	_                    Lifecycle = (*FS)(nil)
+	systemdParentPattern           = regexp.MustCompile(`^kodus[0-9a-f]{12}-[0-9a-f]{64}\.slice$`)
+)
 
 // ValidateDockerParent accepts either a trusted cgroupfs path or the generated
 // systemd slice name. ValidateParent remains the stricter filesystem validator.
@@ -36,6 +38,7 @@ func ValidateDockerParent(parent string) error {
 	}
 	return ValidateParent(parent)
 }
+
 func RootSliceName(cellID string) string {
 	h := sha256.Sum256([]byte(cellID))
 	return "kodus" + hex.EncodeToString(h[:6]) + ".slice"
@@ -98,6 +101,7 @@ func newSystemd(bus systemdBus, root directory, rootSlice, cellID string, verify
 	}
 	return m, nil
 }
+
 func (m *Systemd) guard(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -117,13 +121,16 @@ func (m *Systemd) guard(ctx context.Context) error {
 	}
 	return emptyProcesses(m.root)
 }
+
 func (m *Systemd) name(key string) string {
 	return strings.TrimSuffix(m.rootSlice, ".slice") + "-" + key + ".slice"
 }
+
 func (m *Systemd) description(key string, l Limits) string {
 	h := sha256.Sum256([]byte(fmt.Sprintf("%d:%d:%d:%d", l.MemoryBytes, l.CPUQuota, l.CPUPeriod, l.Pids)))
 	return RootSliceDescription(m.cellID) + " claim " + key + " budget " + hex.EncodeToString(h[:])
 }
+
 func (m *Systemd) expected(key string, l Limits) (systemdUnit, error) {
 	if err := validKey(key); err != nil {
 		return systemdUnit{}, err
@@ -135,7 +142,7 @@ func (m *Systemd) expected(key string, l Limits) (systemdUnit, error) {
 		return systemdUnit{}, fmt.Errorf("%w: CPU ceiling is not exactly representable", ErrUnavailable)
 	}
 	name := m.name(key)
-	return systemdUnit{Name: name, Description: m.description(key, l), Slice: m.rootSlice, ControlGroup: path.Join(m.parent, name), ActiveState: "active", Transient: true, CPUAccounting: true, MemoryAccounting: true, TasksAccounting: true, MemoryMax: uint64(l.MemoryBytes), TasksMax: uint64(l.Pids), CPUQuotaPerSecUSec: uint64(l.CPUQuota * 1000000 / l.CPUPeriod), CPUQuotaPeriodUSec: uint64(l.CPUPeriod)}, nil
+	return systemdUnit{Name: name, Description: m.description(key, l), Slice: m.rootSlice, ControlGroup: path.Join(m.parent, name), ActiveState: "active", Transient: true, CPUAccounting: true, MemoryAccounting: true, TasksAccounting: true, MemoryMax: uint64(l.MemoryBytes), TasksMax: uint64(l.Pids), CPUQuotaPerSecUSec: uint64(l.CPUQuota * 1000000 / l.CPUPeriod), CPUQuotaPeriodUSec: uint64(l.CPUPeriod)}, nil //nolint:gosec // G115: l.values() above rejects every ceiling below 1
 }
 func sameSystemdUnit(u, want systemdUnit) bool { return u == want }
 func limitsFromSystemd(u systemdUnit) (Limits, error) {
@@ -150,6 +157,7 @@ func limitsFromSystemd(u systemdUnit) (Limits, error) {
 	_, err := l.values()
 	return l, err
 }
+
 func (m *Systemd) validateUnit(key string, u systemdUnit) (Limits, error) {
 	l, err := limitsFromSystemd(u)
 	if err != nil {
@@ -164,12 +172,13 @@ func (m *Systemd) validateUnit(key string, u systemdUnit) (Limits, error) {
 	}
 	return l, nil
 }
+
 func (m *Systemd) readback(name string, l Limits) error {
 	g, err := m.root.Open(name)
 	if err != nil {
 		return fmt.Errorf("%w: kernel child: %w", ErrUnavailable, err)
 	}
-	defer g.Close()
+	defer func() { _ = g.Close() }()
 	if err = emptyProcesses(g); err != nil {
 		return fmt.Errorf("%w: slice contains direct processes: %w", ErrUnavailable, err)
 	}
@@ -182,6 +191,7 @@ func (m *Systemd) readback(name string, l Limits) error {
 	}
 	return nil
 }
+
 func (m *Systemd) Ensure(key string, l Limits) (string, error) {
 	want, err := m.expected(key, l)
 	if err != nil {
@@ -212,6 +222,7 @@ func (m *Systemd) Ensure(key string, l Limits) (string, error) {
 	}
 	return want.Name, nil
 }
+
 func (m *Systemd) Verify(key string, pid int) error {
 	if err := validKey(key); err != nil {
 		return err
@@ -243,6 +254,7 @@ func (m *Systemd) Verify(key string, pid int) error {
 	}
 	return verifyMembership(u.ControlGroup, raw)
 }
+
 func (m *Systemd) Remove(key string) error {
 	if err := validKey(key); err != nil {
 		return err
@@ -253,6 +265,7 @@ func (m *Systemd) Remove(key string) error {
 	defer cancel()
 	return m.removeLocked(ctx, key)
 }
+
 func (m *Systemd) removeLocked(ctx context.Context, key string) error {
 	if err := m.guard(ctx); err != nil {
 		return err
@@ -293,6 +306,7 @@ func (m *Systemd) removeLocked(ctx context.Context, key string) error {
 	}
 	return nil
 }
+
 func unpopulated(raw string) bool {
 	for _, line := range strings.Split(raw, "\n") {
 		p := strings.Fields(line)
@@ -302,6 +316,7 @@ func unpopulated(raw string) bool {
 	}
 	return false
 }
+
 func (m *Systemd) managedNames(ctx context.Context) ([]string, error) {
 	names, err := m.bus.List(ctx, strings.TrimSuffix(m.rootSlice, ".slice")+"-*.slice")
 	if err != nil {
@@ -319,6 +334,7 @@ func (m *Systemd) managedNames(ctx context.Context) ([]string, error) {
 	}
 	return out, nil
 }
+
 func (m *Systemd) PruneEmpty() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -345,6 +361,7 @@ func (m *Systemd) PruneEmpty() error {
 	}
 	return errors.Join(all...)
 }
+
 func (m *Systemd) RequireEmpty() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -366,6 +383,7 @@ func (m *Systemd) RequireEmpty() error {
 	}
 	return nil
 }
+
 func (m *Systemd) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

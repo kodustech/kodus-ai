@@ -101,7 +101,10 @@ func Decode(frame []byte) (*Message, error) {
 	if err := all["envelope"].validate(tree, ""); err != nil {
 		return nil, &DecodeError{CodeInvalidEnvelope, err.Error()}
 	}
-	obj := tree.(map[string]any)
+	obj, ok := tree.(map[string]any)
+	if !ok {
+		return nil, &DecodeError{CodeInvalidEnvelope, "envelope is not an object"}
+	}
 
 	var env Envelope
 	if err := json.Unmarshal(frame, &env); err != nil {
@@ -120,6 +123,9 @@ func Decode(frame []byte) (*Message, error) {
 	bodySchema, ok := all[string(env.Type)]
 	if !ok {
 		return nil, &DecodeError{CodeInvalidEnvelope, "unknown type " + string(env.Type)}
+	}
+	if env.Traceparent != nil && !ValidTraceparent(*env.Traceparent) {
+		return nil, &DecodeError{CodeInvalidEnvelope, "traceparent: an all-zero trace or parent id is invalid"}
 	}
 	if missing := missingEnvelopeField(env); missing != "" {
 		return nil, &DecodeError{CodeInvalidEnvelope, fmt.Sprintf("%s needs %s", env.Type, missing)}
@@ -145,6 +151,8 @@ var ClaimScopedTypes = map[MessageType]bool{
 	MessageTypeExec: true, MessageTypeUpload: true, MessageTypeExecCancel: true,
 	MessageTypeMachineReset: true, MessageTypeStepResult: true, MessageTypeStepStream: true,
 	MessageTypeEgressPolicy: true, MessageTypeClaimProgress: true, MessageTypeBrowserExplore: true,
+	MessageTypeSandboxAcquire: true, MessageTypeSandboxOp: true, MessageTypeClaimSnapshot: true,
+	MessageTypePreviewRoute: true, MessageTypePreviewUnroute: true,
 }
 
 // ReplyTypes answer another message: the envelope must name it (re).
@@ -172,7 +180,7 @@ var (
 	readOnlySQL  = regexp.MustCompile(`(?i)^\s*(select|with|explain|show)\b`)
 	multiStmtSQL = regexp.MustCompile(`;\s*\S`)
 	// SecurityViolationSignature mirrors SECURITY_VIOLATION_SIGNATURE (libs/runtime/contracts/enums.ts).
-	SecurityViolationSignature = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+	SecurityViolationSignature = regexp.MustCompile(SecurityViolationSignaturePattern)
 )
 
 func refine(body any) error {
@@ -190,9 +198,22 @@ func refine(body any) error {
 		if b.SeedsCache != nil && *b.SeedsCache && (b.Consumer != ConsumerSetup || b.Side == SidePr) {
 			return fmt.Errorf("seedsCache: only a setup claim that is not a PR may seed the build cache")
 		}
+		if err := refineRepos(b.Repos); err != nil {
+			return err
+		}
+		if err := refineSecrets(b.Secrets); err != nil {
+			return err
+		}
 		return refineRecipe(b.Recipe)
+	case *SandboxAcquireBody:
+		if err := refineSecrets(b.Secrets); err != nil {
+			return err
+		}
+		return refineSandboxSnapshot(b)
 	case *StepResultBody:
 		return checkStepResult(b)
+	case *SandboxOpBody:
+		return CheckSandboxOp(b.Op)
 	case *BlockedBody:
 		if b.Kind == BlockerKindSecurityViolation && !SecurityViolationSignature.MatchString(b.Signature) {
 			return fmt.Errorf("signature: a security_violation signature is the alert kind (lower snake case, at most 64 characters)")
@@ -201,9 +222,62 @@ func refine(body any) error {
 	return nil
 }
 
+// refineRepos: each repository of a claim has its own alias, the directory
+// it is fetched into (claimReposError).
+func refineRepos(repos []ClaimAcquireBodyReposItem) error {
+	seen := map[string]bool{}
+	for _, r := range repos {
+		if seen[r.Alias] {
+			return fmt.Errorf("repos: alias %s twice", r.Alias)
+		}
+		seen[r.Alias] = true
+	}
+	return nil
+}
+
+// refineSecrets: each secret once, its id the lower case of its name
+// (claimSecretsError).
+func refineSecrets(secrets []ClaimAcquireBodySecretsItem) error {
+	seen := map[string]bool{}
+	for _, s := range secrets {
+		// The schema keeps the id lower case and the name upper case, so
+		// this is "the id is the name in lower case".
+		if !strings.EqualFold(s.Name, s.ID) {
+			return fmt.Errorf("secrets: %s is not the lower case of %s", s.ID, s.Name)
+		}
+		if seen[s.ID] {
+			return fmt.Errorf("secrets: %s twice", s.ID)
+		}
+		seen[s.ID] = true
+	}
+	return nil
+}
+
+// refineSandboxSnapshot mirrors sandboxSnapshotError: a sandbox that
+// prepares a template names its key and is handed no secret; one that
+// resumes a session neither prepares nor names a template.
+func refineSandboxSnapshot(b *SandboxAcquireBody) error {
+	prepares := b.Prepares != nil && *b.Prepares
+	switch {
+	case prepares && b.TemplateKey == nil:
+		return fmt.Errorf("prepares: a sandbox that prepares a template names its templateKey")
+	case prepares && len(b.Secrets) > 0:
+		return fmt.Errorf("prepares: a sandbox that prepares a template is handed no secret")
+	case b.ResumeFrom != nil && (prepares || b.TemplateKey != nil):
+		return fmt.Errorf("prepares: a sandbox resumes a session or starts from a template, not both")
+	}
+	return nil
+}
+
 // checkStepResult: a probe result comes from the observer, an exec result
 // from the VM, never both.
 func checkStepResult(b *StepResultBody) error {
+	if b.Snapshot != nil && (b.Exec != nil || b.Probe != nil || b.BrowserExploration != nil || b.Sandbox != nil || b.Executor != ExecutorVM) {
+		return fmt.Errorf("snapshot: a snapshot result is an exclusive vm result")
+	}
+	if b.Sandbox != nil && (b.Exec != nil || b.Probe != nil || b.BrowserExploration != nil || b.Executor != ExecutorVM) {
+		return fmt.Errorf("sandbox: a sandbox result is an exclusive vm result")
+	}
 	if b.BrowserExploration != nil {
 		if b.Exec != nil || b.Probe != nil || b.Executor != ExecutorObserver {
 			return fmt.Errorf("browserExploration: exploration is an exclusive observer result")
@@ -228,8 +302,10 @@ func BrowserSelectorProblem(value string) bool {
 	return ephemeralBrowserRef.MatchString(value) || strings.Contains(value, ">>") || browserSelectorEngine.MatchString(value)
 }
 
-var ephemeralBrowserRef = regexp.MustCompile(`^@e[0-9]+$`)
-var browserSelectorEngine = regexp.MustCompile(`(?i)^(?:internal:|[A-Za-z_][A-Za-z0-9_-]*\s*=|//|\.//|\(\s*//)`)
+var (
+	ephemeralBrowserRef   = regexp.MustCompile(`^@e[0-9]+$`)
+	browserSelectorEngine = regexp.MustCompile(`(?i)^(?:internal:|[A-Za-z_][A-Za-z0-9_-]*\s*=|//|\.//|\(\s*//)`)
+)
 
 func refineBrowserExploreRequest(r BrowserExploreRequest) error {
 	if len(r.Steps) == 0 || r.Steps[0].Goto == nil {
@@ -315,6 +391,18 @@ type Header struct {
 	Re      string
 	CellID  string
 	ClaimID string
+	// Traceparent is W3C trace context; empty sends none.
+	Traceparent string
+}
+
+// traceparentShape mirrors TRACEPARENT_SHAPE (libs/runtime/contracts/trace-context.ts);
+// ValidTraceparent adds the all-zero rule the TS refinement keeps.
+var traceparentShape = regexp.MustCompile(TraceparentShapePattern)
+
+// ValidTraceparent reports whether s is a W3C traceparent of version 00 with
+// a non-zero trace id and parent id.
+func ValidTraceparent(s string) bool {
+	return traceparentShape.MatchString(s) && s[3:35] != strings.Repeat("0", 32) && s[36:52] != strings.Repeat("0", 16)
 }
 
 // Encode builds a frame and runs it back through Decode, so the cell never
@@ -334,6 +422,9 @@ func Encode(h Header, body any) ([]byte, error) {
 	}
 	if h.ClaimID != "" {
 		env.ClaimID = &h.ClaimID
+	}
+	if h.Traceparent != "" {
+		env.Traceparent = &h.Traceparent
 	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)

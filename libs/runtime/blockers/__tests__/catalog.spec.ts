@@ -1,5 +1,7 @@
 import type { FailureBundle } from '@libs/runtime/protocol';
 
+import { isolationUnavailable } from '@libs/runtime/environment/isolation-blocker';
+
 import { classifyBlocker, matchedBlockerLine, notReadyWaited } from '../catalog';
 
 const bundle = (over: Partial<FailureBundle> = {}): FailureBundle => ({
@@ -42,6 +44,25 @@ describe('classifyBlocker', () => {
     it('gives a URL var a fake URL, never something that looks like a secret', () => {
         const c = classifyBlocker(composeUp(logs('api', 'DATABASE_URL is not set')));
         expect(c.fixes[0].recipeChange?.value).toBe('http://kodus-fake.invalid');
+    });
+
+    it('never reads a reverse DNS lookup, or a host the log does not name next to an error that names another cause, as why a build stopped', () => {
+        // A Next.js example's build (kr-nextjs): the resolver was denied a PTR lookup while pnpm 11 stopped on its own error.
+        const pnpm = {
+            kind: 'toolchain',
+            signature: 'compose_up',
+            message: 'compose_up: dockergvisor: build app: step [dependencies 4/4] RUN pnpm install --frozen-lockfile failed\n  Error: ERR_PNPM_IGNORED_BUILDS\n  ERROR: process "/bin/sh -c pnpm install --frozen-lockfile" did not complete successfully: exit code: 1',
+            bundle: bundle({ deniedEgress: [{ host: '9.137.213.10.in-addr.arpa', port: 53, at: '2026-11-12T01:52:00.000Z' }, { host: 'telemetry.example.dev', port: 443, at: '2026-11-12T01:51:00.000Z' }] }),
+        };
+        const c = classifyBlocker(pnpm);
+        expect(c.signature).not.toMatch(/^external_service:egress:/);
+        expect(c.kind).not.toBe('external_service');
+        // A host the failing line names is still the cause.
+        const named = classifyBlocker({ ...pnpm, message: 'npm ERR! request to https://registry.example.dev/x failed, reason: getaddrinfo ENOTFOUND registry.example.dev', bundle: bundle({ deniedEgress: [{ host: 'registry.example.dev', port: 443, at: '2026-11-12T01:52:00.000Z' }] }) });
+        expect(named.signature).toBe('external_service:egress:registry.example.dev');
+        // Only a reverse lookup denied, and nothing else: no host to approve either.
+        const ptr = classifyBlocker(composeUp(bundle({ deniedEgress: [{ host: '1.0.0.10.in-addr.arpa', port: 53, at: '2026-11-12T01:52:00.000Z' }] })));
+        expect(ptr.signature).not.toMatch(/in-addr\.arpa/);
     });
 
     it('turns a blocked outbound host into a one-click approval, before reading the logs', () => {
@@ -223,9 +244,100 @@ describe('a denied package registry', () => {
         expect(r.signature).toBe('external_service:egress:proxy.golang.org');
         expect(r.fixes.map((f) => f.action)).toEqual(['approve_host']);
     });
+    // Seen on the dev cell with directus (11/2026): the build's apt-get could not resolve the Debian
+    // mirror, no request was ever made, and the card said "toolchain" without naming the host.
+    it('reads a registry the build could not resolve as blocked, and offers to allow it', () => {
+        const message = [
+            'compose_up: dockergvisor: build app: exit status 1: #6 [builder 2/10] RUN apt-get update && apt-get install -y python3 make g++',
+            "#6 0.412 Err:1 http://deb.debian.org/debian bookworm InRelease",
+            "#6 0.412   Temporary failure resolving 'deb.debian.org'",
+            "#6 0.901 W: Failed to fetch http://deb.debian.org/debian/dists/bookworm/InRelease  Temporary failure resolving 'deb.debian.org'",
+            '#6 0.955 E: Unable to locate package python3',
+        ].join('\n');
+        const r = classifyBlocker({ kind: 'toolchain', signature: 'compose_up', message, bundle: bundle() });
+        expect(r.kind).toBe('external_service');
+        expect(r.signature).toBe('external_service:egress:deb.debian.org');
+        expect(r.fixes.map((f) => f.action)).toEqual(['approve_host']);
+        expect(r.evidence.lines).toEqual(['the machine could not resolve deb.debian.org: it is not an allowed host']);
+    });
+    it('names the host Corepack downloads Yarn from (twenty on cell-dev-1)', () => {
+        const r = classifyBlocker({
+            kind: 'toolchain',
+            signature: 'compose_up',
+            message: 'Error: Error when performing the request to https://repo.yarnpkg.com/4.9.2/packages/yarnpkg-cli/bin/yarn.js\ngetaddrinfo EAI_AGAIN repo.yarnpkg.com',
+            bundle: bundle(),
+        });
+        expect(r.signature).toBe('external_service:egress:repo.yarnpkg.com');
+        expect(r.fixes.map((f) => f.action)).not.toContain('use_mock');
+    });
+    it('leaves a host that is not a package registry to the other rules', () => {
+        const r = classifyBlocker({ kind: 'toolchain', signature: 'compose_up', message: 'curl: (6) Could not resolve host: api.example.com', bundle: bundle() });
+        expect(r.signature).not.toContain('external_service:egress:');
+    });
+    it('names the host denied last, the one the build failed on, and never a host a tool only phones home to', () => {
+        // The calcom build on cell-dev-1: five denials the build did without, then the font it could not fetch.
+        const deniedEgress = [
+            { host: '_http._tcp.deb.debian.org', port: 53, at: '2026-11-11T10:45:32Z' },
+            { host: 'telemetry.vercel.com', port: 53, at: '2026-11-11T10:45:57Z' },
+            { host: 'opencollective.com', port: 53, at: '2026-11-11T10:51:43Z' },
+            { host: 'checkpoint.prisma.io', port: 53, at: '2026-11-11T10:52:48Z' },
+            { host: 'telemetry.nextjs.org', port: 53, at: '2026-11-11T10:57:13Z' },
+            { host: 'fonts.googleapis.com', port: 53, at: '2026-11-11T10:57:29Z' },
+        ];
+        const r = classifyBlocker({
+            kind: 'toolchain',
+            signature: 'compose_up',
+            message: 'next/font: error:\nFailed to fetch `Inter` from Google Fonts.\nerror: failed to solve: process "/bin/sh -c yarn build" did not complete successfully: exit code: 1',
+            bundle: bundle({ deniedEgress }),
+        });
+        expect(r.signature).toBe('external_service:egress:fonts.googleapis.com');
+        expect(r.fixes.filter((f) => f.action === 'approve_host').map((f) => f.host)).toEqual(['fonts.googleapis.com']);
+    });
+    it('reads a build that was only denied telemetry by its own error, not as a blocked host', () => {
+        const r = classifyBlocker({
+            kind: 'toolchain',
+            signature: 'compose_up',
+            message: "Cannot find module '/app/packages/next/node_modules/@next/polyfill-nomodule/dist/polyfill-nomodule.js'\nERR_PNPM_RECURSIVE_RUN_FIRST_FAIL",
+            bundle: bundle({ deniedEgress: [{ host: 'telemetry.nextjs.org', port: 53, at }, { host: 'telemetry.vercel.com', port: 53, at }] }),
+        });
+        expect(r.signature).not.toContain('external_service:egress:');
+    });
+    it('puts a denied host the log names before one denied later, and keeps a phone-home host the log names', () => {
+        const r = classifyBlocker({
+            kind: 'toolchain',
+            signature: 'compose_up',
+            message: 'request to https://checkpoint.prisma.io/check failed, reason: getaddrinfo EAI_AGAIN checkpoint.prisma.io',
+            bundle: bundle({
+                deniedEgress: [
+                    { host: 'checkpoint.prisma.io', port: 53, at: '2026-11-11T10:00:00Z' },
+                    { host: 'api.example.com', port: 443, at: '2026-11-11T10:05:00Z' },
+                ],
+            }),
+        });
+        expect(r.signature).toBe('external_service:egress:checkpoint.prisma.io');
+        expect(r.fixes.filter((f) => f.action === 'approve_host').map((f) => f.host)).toEqual(['checkpoint.prisma.io', 'api.example.com']);
+    });
     it('keeps the fake for an API the app calls', () => {
         const r = classifyBlocker(composeUp(bundle({ deniedEgress: [{ host: 'api.stripe.com', port: 443, at }] })));
         expect(r.fixes.map((f) => f.action)).toEqual(['approve_host', 'use_mock']);
+    });
+});
+
+describe('a cell with no prepared image of the environment', () => {
+    it('asks for the setup again and blames nothing in the repository', () => {
+        const r = classifyBlocker({ kind: 'platform', signature: 'environment_not_prepared', message: 'the cell that took this Run has no prepared image of the environment; the environment has to be set up again' });
+        expect(r).toMatchObject({ kind: 'platform', signature: 'environment_not_prepared', title: 'The cell that ran this has no prepared image of the environment' });
+        expect(r.fixes.map((f) => f.action)).toEqual(['retry_setup']);
+    });
+});
+
+describe("a PR not started because its cell evicted the environment's build cache", () => {
+    // Behavior: the Run page says the cache is gone and that a setup restores it, never that the repository failed.
+    it('asks for the setup again and blames nothing in the repository', () => {
+        const r = classifyBlocker({ kind: 'platform', signature: 'build_state_evicted', message: "the cell removed this environment's build cache to free disk at 2026-11-13T07:31:31.000Z" });
+        expect(r).toMatchObject({ kind: 'platform', signature: 'build_state_evicted', title: "The cell removed this environment's build cache to free disk" });
+        expect(r.fixes.map((f) => f.action)).toEqual(['retry_setup']);
+        expect(r.fixes[0].detail).toContain('Your repository is not the cause');
     });
 });
 
@@ -337,6 +449,28 @@ describe('an entry the cell refuses to unpack', () => {
         expect(routed.fixes.map((f) => f.action)).toEqual(['bump_machine', 'use_own_cell']);
     });
 
+    it("a Run side whose other side's backend no cell runs now is a capacity card that says to run it again, not to change the repository", () => {
+        const card = classifyBlocker({ kind: 'capacity', signature: 'backend_unavailable', message: "the Run's other side ran on firecracker (microvm)" });
+        expect(card).toMatchObject({ kind: 'capacity', signature: 'backend_unavailable', title: 'No cell runs the backend the other side of this Run ran on' });
+        expect(card.fixes[0].detail).toContain('one backend');
+    });
+
+    it('an isolation no connected cell gives is a capacity card that points at a cell that gives it, never at a retry on a lower one', () => {
+        const vm = classifyBlocker(isolationUnavailable('vm').blockers[0]);
+        expect(vm).toMatchObject({ kind: 'capacity', signature: 'isolation_unavailable', title: 'No cell gives the isolation this environment asks for' });
+        expect(vm.evidence?.lines?.join(' ')).toContain('virtual machine');
+        expect(vm.fixes.map((f) => f.action)).toEqual(['use_own_cell']);
+    });
+
+    it("the cell's own build failures: builder died and image refused are platform, a large image is resources, a refused compose is the recipe's", () => {
+        const died = classifyBlocker({ kind: 'platform', signature: 'builder_failed', message: 'step 7 stopped: builder exited 2 with no failed step' });
+        expect(died).toMatchObject({ kind: 'platform', title: 'The image builder stopped before the build finished' });
+        expect(died.fixes.map((f) => f.action)).toEqual(['retry_setup']);
+        expect(classifyBlocker({ kind: 'platform', signature: 'image_load', message: 'image names another tag' })).toMatchObject({ kind: 'platform' });
+        expect(classifyBlocker({ kind: 'resources', signature: 'image_too_large', message: 'image is 40 GB' })).toMatchObject({ kind: 'resources' });
+        expect(classifyBlocker({ kind: 'toolchain', signature: 'compose_refused', message: 'services.db.container_name refused' })).toMatchObject({ kind: 'toolchain', title: 'The cell refused the compose project before building it' });
+    });
+
     it('a boot no cell took is a platform card: nothing booted, check the cell, run it again', () => {
         const none = classifyBlocker({ kind: 'cell_unavailable', signature: 'cell_unavailable', message: 'no cell is connected for this organization' });
         expect(none).toMatchObject({ kind: 'platform', title: 'No cell was connected to boot this environment' });
@@ -360,6 +494,18 @@ describe('an entry the cell refuses to unpack', () => {
         expect(classifyBlocker({ kind: 'resources', signature: 'org_capacity', message: 'capped' }).title).toBe(
             'Your organization is using all the machines it may hold on shared Kodus cells',
         );
+    });
+
+    it("an org out of today's machine minutes is its own card that says to wait for the reset, never to change the repository", () => {
+        const out = classifyBlocker({
+            kind: 'resources',
+            signature: 'machine_minutes_exhausted',
+            message: 'the organization used 100 of its 100 machine minutes today (UTC) and this machine may run up to 60; nothing was started',
+        });
+        expect(out).toMatchObject({ kind: 'resources', signature: 'machine_minutes_exhausted' });
+        expect(out.title).toMatch(/machine minutes/);
+        expect(out.fixes.map((f) => [f.action, f.who])).toEqual([['retry_setup', 'one_click']]);
+        expect(out.fixes[0].detail).toMatch(/reset/);
     });
 
     it('every eligible cell full is its own card, not a full cell nor a Kodus step that failed', () => {

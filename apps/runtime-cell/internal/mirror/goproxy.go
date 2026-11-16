@@ -152,17 +152,17 @@ func (g *GoProxy) fetchFrom(w http.ResponseWriter, r *http.Request, base *url.UR
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
 	up := base.JoinPath(path)
-	req, err := http.NewRequestWithContext(ctx, r.Method, up.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, r.Method, up.String(), nil) //nolint:gosec // G704: base is the operator's Upstream or SumDB; only the path comes from the request
 	if err != nil {
 		http.Error(w, "bad upstream request", http.StatusBadGateway)
 		return
 	}
-	resp, err := g.client().Do(req)
+	resp, err := g.client().Do(req) //nolint:gosec // G704: base is the operator's Upstream or SumDB; only the path comes from the request
 	if err != nil {
 		http.Error(w, "upstream unreachable: "+base.Host, http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		// The upstream's own "not found" stays a not found for the go command.
 		code := http.StatusBadGateway
@@ -172,11 +172,11 @@ func (g *GoProxy) fetchFrom(w http.ResponseWriter, r *http.Request, base *url.UR
 		http.Error(w, fmt.Sprintf("upstream answered %d", resp.StatusCode), code)
 		return
 	}
-	max := g.MaxBytes
-	if max <= 0 {
-		max = 500 << 20
+	limit := g.MaxBytes
+	if limit <= 0 {
+		limit = 500 << 20
 	}
-	if resp.ContentLength > max {
+	if resp.ContentLength > limit {
 		http.Error(w, "file larger than the mirror serves", http.StatusBadGateway)
 		return
 	}
@@ -187,7 +187,7 @@ func (g *GoProxy) fetchFrom(w http.ResponseWriter, r *http.Request, base *url.UR
 	if r.Method == http.MethodHead {
 		return
 	}
-	_, _ = io.Copy(w, io.LimitReader(resp.Body, max))
+	_, _ = io.Copy(w, io.LimitReader(resp.Body, limit))
 }
 
 // unescapeGo undoes the module path escaping of the proxy protocol: "!x"

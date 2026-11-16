@@ -38,6 +38,3 @@ export class WorkerAuthGuard implements CanActivate {
         throw new UnauthorizedException();
     }
 }
-
-/** @deprecated the old name; WorkerAuthGuard says who it lets in. */
-export const InternalAuthGuard = WorkerAuthGuard;

@@ -1,4 +1,6 @@
-import { NOT_A_SETUP_BOOT, SETUP_BOOTS_KEPT, SETUP_BOOTS_WINDOW_MS, withSetupBoot } from './environment-setup';
+import { isolationUnavailable } from '../environment/isolation-blocker';
+
+import { isRecipeFailureBlocker, NOT_A_SETUP_BOOT, SETUP_BOOTS_KEPT, SETUP_BOOTS_WINDOW_MS, withSetupBoot } from './environment-setup';
 
 const at = (ms: number) => new Date(Date.parse('2026-11-06T12:00:00.000Z') + ms).toISOString();
 
@@ -24,5 +26,15 @@ describe('withSetupBoot', () => {
         for (const signature of NOT_A_SETUP_BOOT) expect(withSetupBoot(prior, { finishedAt: at(0), durationMs: 1 }, 'failed', signature)).toEqual(prior);
         expect(withSetupBoot(prior, { durationMs: 1 }, 'ready')).toEqual(prior);
         expect(withSetupBoot(prior, { finishedAt: at(0) }, 'ready')).toEqual(prior);
+    });
+});
+
+describe('a setup no connected cell can isolate', () => {
+    // It used to read as a failed boot of the recipe: Kody's author got it back as the recipe's failure.
+    it('is no verdict on its recipe and counts no boot', () => {
+        const [blocker] = isolationUnavailable('vm').blockers;
+        const prior = [{ at: at(-1), outcome: 'ready' as const, ms: 2 }];
+        expect(isRecipeFailureBlocker(blocker)).toBe(false);
+        expect(withSetupBoot(prior, { finishedAt: at(0), durationMs: 1 }, 'failed', blocker.signature)).toEqual(prior);
     });
 });

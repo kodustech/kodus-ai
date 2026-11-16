@@ -15,9 +15,10 @@ import type {
     VerdictState,
 } from './run-state';
 
-// The Run projection in Mongo (`runtime_runs`, docs §8). The runtime-worker
-// writes it from the same DBOS step as each transition; the API and the
-// product worker only read it. The DBOS workflow is the source of truth.
+// The Run projection in the Runtime Postgres (`runtime.runtime_runs`, docs §8,
+// adapters/pg-run-projection.store.ts). The runtime-worker writes it from the
+// same DBOS step as each transition; the API and the product worker only read
+// it, with the read-only role. The DBOS workflow is the source of truth.
 
 export interface RuntimeRunProjection {
     runId: string;
@@ -77,6 +78,17 @@ export interface RuntimeRunProjection {
      * the base's recipe is used instead.
      */
     recipeChangedInPr?: RecipeChangedPath[];
+    /**
+     * The PR is in this member repository of a multi-repository environment:
+     * its recipeChangedInPr were not applied at all (only the primary's recipe boots).
+     */
+    recipeChangedInMember?: string;
+    /**
+     * nothing_to_test: each changed file and why a parser judged that it
+     * changes nothing that runs (entry-points/no-effect.ts). The comment and
+     * the Run page name them.
+     */
+    noRuntimeEffect?: { file: string; why: string }[];
     publishStartedAt?: string;
     published?: string[];
     requestedAt: string;
@@ -135,12 +147,20 @@ export interface RuntimeRunProjection {
      */
     exploration?: ExploredCommand[];
     /**
+     * A plan the agent made while the PR side booted, never used because the
+     * PR side did not boot (or the Run ended first): what it spent, so the
+     * overlap's cost shows on the Run (run-orchestrator.ts, early-plan.ts).
+     */
+    unusedPlan?: { inputTokens: number; outputTokens: number; probes: number };
+    /**
      * Why the side that decided the Run did not boot (could_not_boot, a PR that
      * does not boot, or a PR boot the cell could not finish): the catalog's
      * cause, the line it read it from and the tail of the build or compose
      * output, redacted (boot-failure.ts). Shown only: no verdict reads it.
      */
     bootFailure?: RunBootFailure;
+    /** A side whose builds ran with no cache: the cell had evicted the environment's build state (when). The comment and the page say so. */
+    coldBuild?: { side: 'base' | 'pr'; cause: 'build_state_evicted'; evictedAt: string };
     finishedAt?: string;
     updatedAt: string;
 }
@@ -174,8 +194,6 @@ export interface ExploredCommand {
     failed: boolean;
 }
 
-export const RUNTIME_RUNS_COLLECTION = 'runtime_runs';
-
 export interface RunKey {
     organizationId: string;
     repositoryId: string;
@@ -191,6 +209,8 @@ export interface RunListFilter {
     environmentId?: string;
     /** Runs requested at or after this ISO time. */
     requestedSince?: string;
+    /** Only Runs started this way. */
+    trigger?: RunTrigger;
     limit?: number;
 }
 

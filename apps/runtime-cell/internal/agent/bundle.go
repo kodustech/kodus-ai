@@ -33,7 +33,7 @@ const bootOutputService = "boot output"
 // since the cause is there and the services may not exist yet.
 func (a *Agent) collectBundle(ctx context.Context, c *claims.Claim, cause error) *protocol.ClaimFailedBodyBundle {
 	w := newBundleWriter(c.Redactor(), a.clock.Now())
-	if d := a.cfg.Diagnoser; d != nil {
+	if d := a.cfg.Parts.Diagnoser; d != nil {
 		expose := make([]driver.ExposePort, 0, len(c.Acquire.Expose))
 		for _, e := range c.Acquire.Expose {
 			expose = append(expose, driver.ExposePort{Service: e.Service, Port: int(e.Port), Kind: string(e.Kind)})
@@ -77,10 +77,10 @@ func newBundleWriter(r *redact.Redactor, now time.Time) *bundleWriter {
 	}}
 }
 
-func (w *bundleWriter) red(s string, max int) string {
+func (w *bundleWriter) red(s string, limit int) string {
 	out, n := w.r.String(s)
 	w.b.Redactions += int64(n)
-	out, cut := redact.Clip(out, max)
+	out, cut := redact.Clip(out, limit)
 	if cut {
 		w.b.Truncated = true
 	}

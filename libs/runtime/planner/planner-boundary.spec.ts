@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import ts from 'typescript';
 
-const coreFiles = ['index.ts', 'test-planner.agent.ts', 'code-search.ts', 'file-window.ts', 'plan-without-model.ts', 'repo-reader.ts'];
+const coreFiles = ['index.ts', 'test-planner.agent.ts', 'code-search.ts', 'file-window.ts', 'plan-without-model.ts', 'repo-reader.ts', 'import-graph/reach.ts', 'import-graph/resolve.ts', 'import-graph/routes.ts'];
 
 describe('planner core dependency boundary', () => {
     it('is available independently of the product API and model credentials', () => {

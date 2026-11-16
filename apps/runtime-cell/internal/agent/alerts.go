@@ -9,13 +9,14 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 )
 
-// Alert is one injector alert: a claim's test credential, or a bait the
-// cell planted, left for a host it was not issued for.
+// Alert is one injector or proxy alert: a claim's test credential, or a
+// bait the cell planted, left for a host it was not issued for; or a secret
+// placeholder sent over plain HTTP (the proxy's placeholder_leak).
 type Alert struct {
 	Seq     int64
 	ClaimID string
 	Host    string
-	// Kind is credential_exfiltration or bait_exfiltration.
+	// Kind is credential_exfiltration, bait_exfiltration or placeholder_leak.
 	Kind string
 	At   time.Time
 }
@@ -28,15 +29,16 @@ type AlertSource interface {
 // alertRetry is the wait after a failed poll.
 const alertRetry = 5 * time.Second
 
-// watchAlerts turns every exfiltration alert into a blocker on its claim
+// watchAlerts turns every alert of feed i into a blocker on its claim
 // until ctx ends.
-func (a *Agent) watchAlerts(ctx context.Context) {
+func (a *Agent) watchAlerts(ctx context.Context, i int) {
+	src := a.alertSources[i]
 	var after int64
 	for ctx.Err() == nil {
-		got, err := a.cfg.Alerts.Alerts(ctx, after)
+		got, err := src.Alerts(ctx, after)
 		if err != nil {
 			if ctx.Err() == nil {
-				a.alertSourceFailed(ctx, err)
+				a.alertSourceFailedAt(i, err)
 				if eventlog.HistoryLost(err) {
 					return
 				}
@@ -51,7 +53,7 @@ func (a *Agent) watchAlerts(ctx context.Context) {
 			after = max(after, al.Seq)
 			a.onExfiltration(ctx, al)
 		}
-		a.alertSourceReady()
+		a.alertSourceReadyAt(i)
 	}
 }
 
@@ -85,8 +87,11 @@ func (a *Agent) onExfiltration(ctx context.Context, al Alert) {
 }
 
 func describe(kind string) string {
-	if kind == "bait_exfiltration" {
+	switch kind {
+	case "bait_exfiltration":
 		return "a planted bait"
+	case "placeholder_leak":
+		return "a secret's placeholder over plain HTTP"
 	}
 	return "its test credential"
 }

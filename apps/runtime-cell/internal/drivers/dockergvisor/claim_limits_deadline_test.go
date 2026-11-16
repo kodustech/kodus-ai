@@ -12,7 +12,7 @@ type deadlineCopyDocker struct {
 }
 
 func (d *deadlineCopyDocker) CopyVolumeGeneration(ctx context.Context, runtime, helper, from, to string, labels map[string]string, parent, expected, write string) error {
-	return d.memDocker.copyGeneration(from, to, expected, write, func() error { return d.CopyVolumeBound(ctx, runtime, helper, from, to, labels, parent) })
+	return d.copyGeneration(from, to, expected, write, func() error { return d.CopyVolumeBound(ctx, runtime, helper, from, to, labels, parent) })
 }
 
 func (d *deadlineCopyDocker) CopyVolumeBound(ctx context.Context, runtime, helper, from, to string, labels map[string]string, parent string) error {
@@ -24,6 +24,7 @@ func (d *deadlineCopyDocker) CopyVolumeBound(ctx context.Context, runtime, helpe
 	}
 	return d.memDocker.CopyVolumeBound(ctx, runtime, helper, from, to, labels, parent)
 }
+
 func TestClaimLimitsBakeCopyCannotOutliveSourceHardCeiling(t *testing.T) {
 	docker := &deadlineCopyDocker{memDocker: newMemDocker()}
 	d, err := New(context.Background(), docker, Config{CellID: "cell-1", HolderImage: "holder", WorkDir: t.TempDir(), ClaimLimits: &fakeClaimLimits{}})
@@ -33,7 +34,7 @@ func TestClaimLimitsBakeCopyCannotOutliveSourceHardCeiling(t *testing.T) {
 	_, ref := makeLimitedClaim(t, d, "claim-deadline")
 	d.machineOutput(ref.MachineID).volumes = []string{"pgdata"}
 	docker.plantVolume(ref.MachineID, "pgdata", "seed")
-	if err = d.PinBakeSource(ref); err != nil {
+	if err = d.PinBakeSource(t.Context(), ref); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = d.Bake(context.Background(), bakeSpec(ref)); err != nil {

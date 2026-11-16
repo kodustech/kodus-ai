@@ -8,10 +8,16 @@
 // What it cannot see: inside TLS, a client may send another Host or reuse
 // the connection for another name the certificate covers (HTTP/2
 // coalescing). On a multi-tenant CDN address that reaches other tenants of
-// the same CDN; an allowlist entry on a shared CDN carries that risk, and a
-// credentialed host goes through the injector, which checks Host itself.
+// the same CDN; an allowlist entry on a shared CDN carries that risk. A
+// credentialed host goes through the injector, which checks Host itself, and
+// so does a host of the inspected tier (policy.InspectRule) from a machine
+// that trusts the cell CA: the injector lets only a GET or HEAD under the
+// rule's paths out, so a registry reached that way cannot take a publish
+// (S-53, S-56). Over plain HTTP the proxy checks the rule itself, from every
+// source.
 // Encrypted Client Hello hides the real SNI, so a ClientHello carrying it
-// is refused. Plain HTTP carries exactly one request per connection.
+// is refused unless the connection goes to the injector, which ends TLS for
+// the outer name. Plain HTTP carries exactly one request per connection.
 //
 // Every refusal is an egress.blocked event on the control port; every
 // connection let through is logged when it closes (egress.allowed, with its
@@ -32,6 +38,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -78,6 +85,8 @@ type Proxy struct {
 	// InjectorAddr is where credentialed hosts go (Inc. 5). The proxy writes
 	// a PROXY v1 line with the VM's address and the destination it
 	// validated, and replays the ClientHello; it never sees the credential.
+	// Empty: a policy that names a credentialed host is refused
+	// (Enforceable).
 	InjectorAddr string
 	// InternalCIDRs are the cell's own networks (its mirror, its evidence
 	// endpoint): the only private addresses a name may lead to. Link-local
@@ -92,8 +101,17 @@ type Proxy struct {
 	Metrics           *Metrics
 	Log               *slog.Logger
 	Now               func() time.Time
+	// OnPlaceholderLeak is called when a plain HTTP request carries one of
+	// the claim's secret placeholders (placeholders.go); the request is
+	// refused either way. nil: only the egress.blocked event.
+	OnPlaceholderLeak func(claimID, host string)
+	// UploadBudget is the bytes a claim may send out over all its
+	// connections before egress.upload_budget.exceeded (D8, observe only:
+	// logged and counted, never cut). Zero: not measured.
+	UploadBudget int64
 
 	once   sync.Once
+	upload *uploadBudget
 	conns  *registry
 	logMu  sync.Mutex
 	logged map[string]denialLog
@@ -133,6 +151,8 @@ func (p *Proxy) defaults() {
 		}
 		p.conns = newRegistry()
 		p.logged = map[string]denialLog{}
+		p.upload = newUploadBudget(p.UploadBudget, p.Log)
+		p.Metrics.uploadOver = p.upload.crossed.Load
 	})
 }
 
@@ -142,13 +162,13 @@ func (p *Proxy) defaults() {
 // every other claim.
 func (p *Proxy) Serve(ctx context.Context, l net.Listener, port int, tlsMode bool) error {
 	p.defaults()
-	go func() { <-ctx.Done(); l.Close() }()
+	go func() { <-ctx.Done(); _ = l.Close() }()
 	var backoff time.Duration
 	for {
 		c, err := l.Accept()
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil
+				return nil //nolint:nilerr // Accept fails because shutdown closed the listener: a clean stop
 			}
 			if temporaryAccept(err) {
 				backoff = min(max(2*backoff, 5*time.Millisecond), time.Second)
@@ -175,6 +195,23 @@ func temporaryAccept(err error) bool {
 	return errors.As(err, &ne) && ne.Timeout()
 }
 
+// ErrNoInjector is a policy that names credentialed hosts on a proxy that
+// has no injector to send them to.
+var ErrNoInjector = errors.New("egress: this proxy has no injector (-injector-addr), so it cannot reach a credentialed host")
+
+// Enforceable refuses a policy the proxy could only enforce by refusing
+// each of its credentialed hosts: with no injector, a claim's secret or
+// credential would never reach its host, and nothing but each request's
+// egress.blocked would say so. It raises the alarm and names the hosts.
+func (p *Proxy) Enforceable(pol policy.ClaimPolicy) error {
+	if p.InjectorAddr != "" || len(pol.CredentialHosts) == 0 {
+		return nil
+	}
+	p.defaults()
+	p.Log.Error("egress.policy.refused", "alarm", true, "claim", pol.ClaimID, "reason", "no_injector", "credentialHosts", pol.CredentialHosts)
+	return fmt.Errorf("%w: claim %s names %s", ErrNoInjector, pol.ClaimID, strings.Join(pol.CredentialHosts, ","))
+}
+
 // Revalidate re-checks the claim's live connections against its current
 // policy: a host no longer allowed (a new phase, a narrower allowlist) is
 // cut, and the others live until the new policy expires.
@@ -187,12 +224,25 @@ func (p *Proxy) Revalidate(claimID string) {
 			c.close("policy_removed")
 			continue
 		}
-		if !pol.Allows(c.host) || pol.Injects(c.host) != c.injects || p.Deny.Denies(c.host) {
+		if !pol.Allows(c.host) || p.Deny.Denies(c.host) || !routesAsBefore(pol, c) || pol.BuildRefuses(c.source, c.host, c.tls) != "" {
 			c.close("policy_changed")
 			continue
 		}
 		c.setDeadline(now, p.until(pol, c.started))
 	}
+}
+
+// routesAsBefore: the new policy sends the connection where it went (the
+// injector for a credential, for inspection, or straight out); a host that
+// gains or loses either is cut, so its next connection takes the new route.
+func routesAsBefore(pol policy.ClaimPolicy, c *liveConn) bool {
+	if c.inspects {
+		return pol.InspectsFrom(c.host, c.source) && !pol.Injects(c.host)
+	}
+	if pol.Injects(c.host) != c.injects {
+		return false
+	}
+	return c.injects || !c.tls || !pol.InspectsFrom(c.host, c.source)
 }
 
 // CloseClaim cuts every live connection of the claim (its policy is gone).
@@ -201,6 +251,14 @@ func (p *Proxy) CloseClaim(claimID string) {
 	for _, c := range p.conns.of(claimID) {
 		c.close("policy_removed")
 	}
+	p.upload.forget(claimID)
+}
+
+// UploadSent is how many bytes the claim sent out so far, with the upload
+// budget on (D8).
+func (p *Proxy) UploadSent(claimID string) int64 {
+	p.defaults()
+	return p.upload.Sent(claimID)
 }
 
 // LiveConnections is how many connections the claim has open.
@@ -265,7 +323,7 @@ type request struct {
 }
 
 func (p *Proxy) serveConn(ctx context.Context, c net.Conn, port int, tlsMode bool) {
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	src := sourceIP(c)
 	if !p.conns.admit(src.String(), p.MaxConnsPerSource) {
 		p.deny(policy.ClaimPolicy{}, src.String(), "", port, "too_many_connections")
@@ -283,7 +341,7 @@ func (p *Proxy) serveConn(ctx context.Context, c net.Conn, port int, tlsMode boo
 	var err error
 	head := &headLimit{r: c, left: maxHead}
 	if tlsMode {
-		req, err = readClientHello(c)
+		req, err = readClientHello(c) //nolint:contextcheck // the read deadline serveConn set bounds the hello, not the proxy's lifetime
 	} else {
 		req, err = readHTTPRequest(bufio.NewReader(head))
 		head.done = true
@@ -315,13 +373,58 @@ func (p *Proxy) serveConn(ctx context.Context, c net.Conn, port int, tlsMode boo
 		p.deny(pol, shown, req.sni, dstPort, reason)
 		return
 	}
+	if why := pol.BuildRefuses(src.String(), norm, tlsMode); why != "" {
+		p.deny(pol, norm, req.sni, dstPort, why)
+		return
+	}
+	if rule, ok := pol.Inspects(norm); ok && !tlsMode {
+		// Plain HTTP is read here, from every source: the inspected rule
+		// decides the one request this connection carries.
+		if why := rule.Permits(req.http.Method, req.http.URL, req.http.ContentLength); why != "" {
+			p.deny(pol, norm, req.sni, dstPort, why)
+			return
+		}
+	}
+	if !tlsMode && carriesPlaceholder(pol, req.http) {
+		p.deny(pol, norm, req.sni, dstPort, ReasonPlaceholderLeak)
+		if p.OnPlaceholderLeak != nil {
+			p.OnPlaceholderLeak(pol.ClaimID, norm)
+		}
+		return
+	}
 	target, reason := p.chooseTarget(ctx, pol.ClaimID, norm, dstIP)
 	if reason != "" {
 		p.deny(pol, norm, req.sni, dstPort, reason)
 		return
 	}
 
-	live := &liveConn{claim: pol.ClaimID, host: norm, source: src.String(), port: dstPort, injects: pol.Injects(norm), started: p.Now(), client: c}
+	live := &liveConn{claim: pol.ClaimID, host: norm, source: src.String(), port: dstPort, injects: pol.Injects(norm), tls: tlsMode, started: p.Now(), client: c}
+	if tlsMode && !live.injects {
+		if pol.InspectsFrom(norm, live.source) {
+			if p.InjectorAddr == "" {
+				p.deny(pol, norm, req.sni, dstPort, "inspected_host_needs_injector")
+				return
+			}
+			live.injects, live.inspects = true, true
+		} else if rule, ok := pol.Inspects(norm); ok && !pol.FromBuild(live.source) {
+			// The builder reaches only its passthrough hosts (BuildRefuses
+			// above): a deliberate tier, not a gap in inspection.
+			if rule.RefuseUntrusted {
+				p.deny(pol, norm, req.sni, dstPort, "inspected_needs_trust")
+				return
+			}
+			p.Metrics.inspectBypassed.Add(1)
+		}
+	}
+	// ECH hides the real name behind the outer SNI the proxy checked, so a
+	// hello carrying it is refused when the proxy would splice the bytes
+	// out. Through the injector the cell ends TLS itself, answers for the
+	// outer name and dials that name on its own: a hidden inner name reaches
+	// nothing there. bun (BoringSSL) sends a GREASE ECH on every connection.
+	if req.ech && !live.injects {
+		p.deny(pol, norm, req.sni, dstPort, "ech")
+		return
+	}
 	addr := net.JoinHostPort(target.String(), strconv.Itoa(dstPort))
 	if live.injects {
 		addr = p.InjectorAddr
@@ -336,7 +439,7 @@ func (p *Proxy) serveConn(ctx context.Context, c net.Conn, port int, tlsMode boo
 		return
 	}
 	live.upstream = up
-	defer up.Close()
+	defer func() { _ = up.Close() }()
 	if p.Connections != nil {
 		p.Connections.Add(Event{ClaimID: pol.ClaimID, Host: norm, SNI: req.sni, Port: dstPort, Phase: string(pol.Phase), Reason: "allowed", At: live.started.UTC()})
 	}
@@ -344,7 +447,7 @@ func (p *Proxy) serveConn(ctx context.Context, c net.Conn, port int, tlsMode boo
 	p.track(live, pol)
 	defer p.untrack(live)
 
-	client := countingConn{Conn: c, n: &live.up, live: live, now: p.Now}
+	client := countingConn{Conn: c, n: &live.up, live: live, now: p.Now, budget: p.upload, claimUp: p.upload.of(live.claim)}
 	upstream := countingConn{Conn: up, n: &live.down, live: live, now: p.Now}
 	if live.injects {
 		if _, err := fmt.Fprintf(up, "PROXY TCP4 %s %s %d %d\r\n", src, target, addrPort(c.RemoteAddr()), dstPort); err != nil {
@@ -366,9 +469,6 @@ func (p *Proxy) serveConn(ctx context.Context, c net.Conn, port int, tlsMode boo
 // not on the deny list, on the claim's allowlist, and, for a credentialed
 // host, reached over TLS so the injector can take it.
 func (p *Proxy) checkName(pol policy.ClaimPolicy, req request, readErr error, tlsMode bool) (string, string) {
-	if req.ech {
-		return "", "ech"
-	}
 	if readErr != nil || req.host == "" {
 		return "", "no_host"
 	}
@@ -454,7 +554,7 @@ func (p *Proxy) untrack(c *liveConn) {
 	p.Metrics.live.Add(-1)
 	p.Metrics.up.Add(c.up.Load())
 	p.Metrics.down.Add(c.down.Load())
-	p.Log.Info("egress.allowed", "claim", c.claim, "host", c.host, "port", c.port, "injected", c.injects,
+	p.Log.Info("egress.allowed", "claim", c.claim, "host", c.host, "port", c.port, "injected", c.injects && !c.inspects, "inspected", c.inspects,
 		"bytesUp", c.up.Load(), "bytesDown", c.down.Load(), "durationMs", p.Now().Sub(c.started).Milliseconds(), "closed", c.reason())
 }
 
@@ -549,7 +649,9 @@ func readClientHello(c net.Conn) (request, error) {
 		}
 		return nil, errGotHello
 	}}
-	err := tls.Server(tee, cfg).Handshake()
+	// Handshake is HandshakeContext(context.Background()); the read deadline
+	// serveConn sets bounds it, not the proxy's lifetime.
+	err := tls.Server(tee, cfg).HandshakeContext(context.Background())
 	req.host, req.hello = req.sni, tee.buf.Bytes()
 	if !errors.Is(err, errGotHello) && req.sni == "" {
 		return req, errors.New("no ClientHello")

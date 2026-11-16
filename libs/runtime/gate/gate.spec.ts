@@ -1,4 +1,4 @@
-import { checkClaims, decideProbe, GateStep, markUnbackedClaims } from './gate';
+import { checkClaims, decideNewEndpoint, decideProbe, GateStep, markUnbackedClaims } from './gate';
 
 const IMAGE = 'ami-0abc';
 
@@ -106,6 +106,30 @@ describe('decideProbe (ADR-050)', () => {
             ...[1, 2, 3, 4].map((r) => step('pr', r, { status: r % 2 ? '200' : '500' })),
         ];
         expect(decide(steps)).toMatchObject({ verdict: 'inconclusive' });
+    });
+
+    // Run fb8e4e71 (kr-kodus-ai#1): signup with an invalid email, main 400 on
+    // every round, the PR 201 on every round. Each PR round created a user, so
+    // its id and dates differed; the base never had those fields, so nothing
+    // masked them and four PR rounds "kept disagreeing" into inconclusive.
+    it('a stable status change is a finding although the PR answer carries fields of a new resource that vary per round', () => {
+        const base = { status: '400', 'json.message': 'email must be an email' };
+        const created = (r: number) => ({ status: '201', 'json.data.uuid': `u${r}`, 'json.data.createdAt': `2026-11-14T20:3${r}:00Z`, 'json.data.email': 'not-an-email' });
+        const d = decide([step('base', 1, base), step('base', 2, base), step('pr', 1, created(1)), step('pr', 2, created(2))]);
+        expect(d).toMatchObject({ kind: 'verdict', verdict: 'finding', findingKind: 'behavior_change' });
+        expect((d as { differingFields: string[] }).differingFields).toEqual(expect.arrayContaining(['status', 'json.data.email']));
+        expect((d as { maskedFields: string[] }).maskedFields).toEqual(expect.arrayContaining(['json.data.uuid', 'json.data.createdAt']));
+    });
+
+    it('fields only the PR carries that vary per round never turn an equal status into not_reproduced', () => {
+        const d = decide([
+            step('base', 1, { status: '200' }),
+            step('base', 2, { status: '200' }),
+            ...[1, 2, 3, 4].map((r) => step('pr', r, { status: '200', 'json.token': `t${r}` })),
+            step('base', 3, { status: '200' }),
+            step('base', 4, { status: '200' }),
+        ]);
+        expect(d).toMatchObject({ verdict: 'inconclusive' });
     });
 
     it('a difference only in a version surface is not a finding', () => {
@@ -305,5 +329,78 @@ describe('injection in app output', () => {
             step('pr', 2, { status: '200', body }),
         ]);
         expect(d).toMatchObject({ verdict: 'finding', differingFields: ['body'] });
+    });
+});
+
+describe('decideNewEndpoint', () => {
+    // Shapes of Run 371c8255 (Wellington01/kr-shop#4, our test repo): POST /orders/preview
+    // does not exist on main, so Express answers its HTML 404; the PR answers JSON.
+    const ready = { readyStatus: 200 };
+    const mainAbsent = (round: number, over: Partial<GateStep> = ready) =>
+        step('base', round, { status: '404', json: '"not_json"', 'body.sha256': 'c0ffee' }, { expectedHolds: false, ...over });
+    const prAnswers = (round: number, fields: Record<string, string>) => step('pr', round, fields, ready);
+    const gate = (steps: GateStep[], addedByDiff = true) => decideNewEndpoint(decide(steps), steps, { addedByDiff });
+
+    it('a route the PR adds is reported as a new endpoint, not a regression', () => {
+        const steps = [mainAbsent(1), mainAbsent(2), prAnswers(1, { status: '200', 'json.total': '20' }), prAnswers(2, { status: '200', 'json.total': '20' })];
+        expect(decide(steps)).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
+        const d = gate(steps);
+        expect(d).toMatchObject({ kind: 'verdict', verdict: 'new_endpoint', reason: expect.stringContaining('main has no such route (404)') });
+        expect(d).not.toHaveProperty('findingKind');
+    });
+
+    it('Run 371c8255: base 404 and PR 200 or 400 on POST /orders/preview are two new-endpoint outcomes, no regression', () => {
+        const total = { status: '200', 'json.total': '20' };
+        const missingItems = { status: '400', 'json.error': '"items are required"' };
+        for (const fields of [total, missingItems]) {
+            const d = gate([mainAbsent(1), mainAbsent(2), prAnswers(1, fields), prAnswers(2, fields)]);
+            expect(d).toMatchObject({ verdict: 'new_endpoint', reason: expect.stringContaining(`this PR answers it (${fields.status})`) });
+        }
+    });
+
+    it('a new route that errors in the PR is reported as a finding on the new code', () => {
+        const fields = { status: '502', 'json.error': '"billing unavailable"' };
+        const d = gate([mainAbsent(1), mainAbsent(2), prAnswers(1, fields), prAnswers(2, fields)]);
+        expect(d).toMatchObject({ verdict: 'finding', findingKind: 'new_endpoint_error', reason: expect.stringContaining('a route this PR adds answers 502') });
+    });
+
+    it('a route the PR removes still fails as a regression', () => {
+        // Main answers the route; the PR 404s. The diff removed its declaration, so it is not added.
+        const steps = [
+            step('base', 1, { status: '200', 'json.total': '20' }, ready),
+            step('base', 2, { status: '200', 'json.total': '20' }, ready),
+            step('pr', 1, { status: '404', json: '"not_json"' }, ready),
+            step('pr', 2, { status: '404', json: '"not_json"' }, ready),
+        ];
+        for (const addedByDiff of [false, true]) expect(gate(steps, addedByDiff)).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
+    });
+
+    it('a 404 on a route the diff does not add stays a regression', () => {
+        const steps = [mainAbsent(1), mainAbsent(2), prAnswers(1, { status: '200' }), prAnswers(2, { status: '200' })];
+        expect(gate(steps, false)).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
+    });
+
+    it.each([
+        ['no ready check answer', {}],
+        ['a ready check that answered 404 (a base that routes nothing)', { readyStatus: 404 }],
+        ['a ready check that answered 503', { readyStatus: 503 }],
+    ])('a 404 on main with %s is not read as an absent route', (_, over) => {
+        const steps = [mainAbsent(1, over), mainAbsent(2, over), prAnswers(1, { status: '200' }), prAnswers(2, { status: '200' })];
+        expect(gate(steps)).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
+    });
+
+    it('only one base round with a ready answer is not enough', () => {
+        const steps = [mainAbsent(1), mainAbsent(2, {}), prAnswers(1, { status: '200' }), prAnswers(2, { status: '200' })];
+        expect(gate(steps)).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
+    });
+
+    it('leaves every decision that is not a behavior_change finding as it is', () => {
+        const same = [mainAbsent(1), mainAbsent(2), step('pr', 1, { status: '404', json: '"not_json"', 'body.sha256': 'c0ffee' }, { expectedHolds: false, ...ready })];
+        expect(gate(same)).toEqual(decide(same));
+        const oneRound = [mainAbsent(1), mainAbsent(2), prAnswers(1, { status: '200' })];
+        expect(gate(oneRound)).toMatchObject({ kind: 'more_rounds' });
+        // The body differs but the status does not: not an absent route.
+        const sameStatus = [mainAbsent(1), mainAbsent(2), prAnswers(1, { status: '404', json: '"other"' }), prAnswers(2, { status: '404', json: '"other"' })];
+        expect(gate(sameStatus)).toMatchObject({ verdict: 'finding', findingKind: 'behavior_change' });
     });
 });

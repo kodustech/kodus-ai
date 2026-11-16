@@ -23,7 +23,7 @@ describe('Runtime exception telemetry (#2487)', () => {
         [
             'hub',
             (fn: () => Promise<unknown>) =>
-                inSpan('fixture.hub', { 'runtime.run.id': 'run-a' }, fn),
+                inSpan('fixture.hub', { 'kodus.runtime.run.id': 'run-a' }, fn),
         ],
         [
             'worker',
@@ -31,7 +31,7 @@ describe('Runtime exception telemetry (#2487)', () => {
                 withRunSpan(
                     'fixture.worker',
                     'fixture-correlation',
-                    { 'runtime.run.id': 'run-a' },
+                    { 'kodus.runtime.run.id': 'run-a' },
                     fn,
                 ),
         ],
@@ -52,8 +52,8 @@ describe('Runtime exception telemetry (#2487)', () => {
             expect(spans[0].status.code).toBe(SpanStatusCode.ERROR);
             expect(spans[0].attributes).toMatchObject({
                 'error.type': 'network',
-                'runtime.error.code': 'ECONNRESET',
-                'runtime.run.id': 'run-a',
+                'kodus.runtime.error.code': 'ECONNRESET',
+                'kodus.runtime.run.id': 'run-a',
             });
             expect(
                 JSON.stringify({

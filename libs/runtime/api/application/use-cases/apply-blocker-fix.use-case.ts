@@ -3,12 +3,15 @@ import { BadRequestException, ConflictException, HttpException, Inject, Injectab
 import { Action, ResourceType } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import type { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
-import { isRecipePrAction, KODY_FIX_PREFIX, type RecipeChange, type RecipePrAction } from '@libs/runtime/blockers/catalog';
+import { FULL_ACCESS_FIX_PREFIX, isRecipePrAction, KODY_FIX_PREFIX, type RecipeChange, type RecipePrAction } from '@libs/runtime/blockers/catalog';
 import { applyRecipeChange } from '@libs/runtime/blockers/recipe-edit';
 
 import { type ProductEnvironmentStore, RUNTIME_GIT_PORT, RUNTIME_PRODUCT_ENVIRONMENT_STORE, type RuntimeGitPort } from '../../domain/ports';
+import { environmentRepositoryIds, RuntimeEnvironmentMembers } from '../environment-members.service';
 import type { RuntimeAuthorization } from '../run-access.service';
 import { RuntimeSetupRequester } from '../runtime-setup-requester.service';
+import type { EgressApprovalMode } from '@libs/runtime/contracts/egress';
+
 import { ApproveEgressUseCase } from './approve-egress.use-case';
 import { blockerGroups, GetRuntimeEnvironmentUseCase } from './environments.use-cases';
 
@@ -67,32 +70,44 @@ export class ApplyBlockerFixUseCase {
         private readonly approveEgress: ApproveEgressUseCase,
         @Inject(RUNTIME_GIT_PORT)
         private readonly git: RuntimeGitPort,
+        // Required by Nest; made without it (the older tests), only the environment's own repository is checked.
+        @Inject(RuntimeEnvironmentMembers)
+        private readonly members?: RuntimeEnvironmentMembers,
     ) {}
 
-    async execute(input: { user: Partial<IUser>; environmentId: string; signature: string; fixId: string }): Promise<AppliedFix> {
+    async execute(input: { user: Partial<IUser>; environmentId: string; signature: string; fixId: string; mode?: EgressApprovalMode }): Promise<AppliedFix> {
         if (typeof input.signature !== 'string' || input.signature.length > 512 || typeof input.fixId !== 'string' || input.fixId.length > 300) {
             throw new NotFoundException('Fix not found');
         }
         const { env, runs } = await this.environment.load(input.user, input.environmentId);
         const product = await this.products.get(env.organizationId, env.environmentId);
         if (!product || product.organizationId !== env.organizationId) throw new NotFoundException('Environment not found');
-        await this.authorization.ensure({
-            user: input.user,
-            action: Action.Update,
-            resource: ResourceType.RuntimeEnvironment,
-            repoIds: [product.repositoryId],
-        });
 
         const setup = await this.environment.setup(env);
         const group = blockerGroups(setup, runs).find((g) => g.signature === input.signature);
         const fix = group?.fixes.find((f) => f.id === input.fixId);
+        // An allow-host fix is authorized by the approval itself (D3: owners, or repo admins when the org says so);
+        // every other fix stays the owner's. The check runs before a missing fix answers, so nothing is probed.
+        if (!(fix?.action === 'approve_host' && fix.host)) {
+            await this.authorization.ensure({
+                user: input.user,
+                action: Action.Update,
+                resource: ResourceType.RuntimeEnvironment,
+                repoIds: await environmentRepositoryIds(this.members, product),
+            });
+        }
         if (!group || !fix) throw new NotFoundException('Fix not found');
 
         if (fix.action === 'approve_host' && fix.host) {
+            // One click allows reads only (inspected, every path); full access is the card's second step.
             await this.approveEgress.execute({
                 user: input.user,
                 environmentId: env.environmentId,
                 host: fix.host,
+                // The build's full-access fix is passthrough by what it is; any other allow is reads only unless asked.
+                mode: input.mode === 'passthrough' || fix.id.startsWith(FULL_ACCESS_FIX_PREFIX) ? 'passthrough' : 'inspected',
+                source: 'blocker',
+                sourceRef: `${input.signature}${setup?.key ? `@${setup.key}` : ''}`.slice(0, 256),
             });
             await this.setups.request(product, input.user);
             return {

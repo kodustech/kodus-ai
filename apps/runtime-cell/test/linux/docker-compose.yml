@@ -3,7 +3,7 @@
 #   GOMODCACHE=$(go env GOMODCACHE) docker compose -f test/linux/docker-compose.yml run --rm go-test
 services:
   go-test:
-    image: golang:1.25
+    image: golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea # match go.mod toolchain
     working_dir: /src
     environment:
       GOFLAGS: -mod=mod -p=2

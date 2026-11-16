@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import type { SqlQuery } from '@libs/runtime/run/adapters/pg-sql';
 
 import type { RuntimeClaimUsageReader } from '../domain/ports';
 import type { RunClaimUsage } from '../domain/run-cost';
@@ -13,6 +13,7 @@ interface ClaimUsageRow {
     memory_mb_boot: number | null;
     memory_mb_ready: number | null;
     memory_allocatable_mb: number | null;
+    cpus: number | null;
     admitted_at: Date | null;
     ready_at: Date | null;
     released_at: Date | null;
@@ -24,42 +25,28 @@ const iso = (d: Date | null) => (d ? new Date(d).toISOString() : null);
 
 /**
  * The claim rounds of Runs (runtime.runtime_claims, migration 11) from the
- * Runtime Postgres, with the read-only URL (RUNTIME_DATABASE_READ_URL, role
- * kodus_runtime_reader) inside BEGIN READ ONLY (ADR-025): one query for the
- * whole page, org-scoped, on runtime_claims_run_idx. Without the URL every
- * Run reads as having no recorded claim (its machine time is not priced).
+ * Runtime Postgres, through the shared read-only RuntimeReadDb (ADR-025): one
+ * query for the whole page, org-scoped, on runtime_claims_run_idx. Without
+ * RUNTIME_DATABASE_READ_URL it fails with 503, as every Runtime read does (the
+ * Run cost then leaves the machine time unpriced).
  */
 export class PgRuntimeClaimUsageReader implements RuntimeClaimUsageReader {
-    private pool?: Pool;
-
-    constructor(private readonly url: string | undefined) {}
+    constructor(private readonly db: SqlQuery) {}
 
     async claimsOfRuns(organizationId: string, runIds: string[]): Promise<Map<string, RunClaimUsage[]>> {
         const out = new Map<string, RunClaimUsage[]>();
-        if (!this.url || !runIds.length) return out;
-        this.pool ??= new Pool({ connectionString: this.url, max: 2, idleTimeoutMillis: 30_000 });
-        const client = await this.pool.connect();
-        let rows: ClaimUsageRow[];
-        try {
-            await client.query('BEGIN READ ONLY');
-            rows = (
-                await client.query<ClaimUsageRow>(
-                    `SELECT claim_id, cell_id, run_id, side, state, driver, memory_mb_boot, memory_mb_ready, memory_allocatable_mb,
-                            admitted_at, ready_at, released_at, state_changed_at, hard_expires_at
-                       FROM runtime.runtime_claims
-                      WHERE run_id = ANY($2) AND org_id = $1
-                      ORDER BY created_at
-                      LIMIT 1000`,
-                    [organizationId, runIds],
-                )
-            ).rows;
-            await client.query('COMMIT');
-        } catch (e) {
-            await client.query('ROLLBACK').catch(() => undefined);
-            throw e;
-        } finally {
-            client.release();
-        }
+        if (!runIds.length) return out;
+        const rows = (
+            await this.db.query(
+                `SELECT claim_id, cell_id, run_id, side, state, driver, memory_mb_boot, memory_mb_ready, memory_allocatable_mb, cpus,
+                        admitted_at, ready_at, released_at, state_changed_at, hard_expires_at
+                   FROM runtime.runtime_claims
+                  WHERE run_id = ANY($2) AND org_id = $1
+                  ORDER BY created_at
+                  LIMIT 1000`,
+                [organizationId, runIds],
+            )
+        ).rows as ClaimUsageRow[];
         for (const r of rows) {
             const list = out.get(r.run_id) ?? [];
             list.push({
@@ -71,6 +58,7 @@ export class PgRuntimeClaimUsageReader implements RuntimeClaimUsageReader {
                 bootMb: r.memory_mb_boot,
                 readyMb: r.memory_mb_ready,
                 allocatableMb: r.memory_allocatable_mb,
+                cpus: r.cpus,
                 admittedAt: iso(r.admitted_at),
                 readyAt: iso(r.ready_at),
                 releasedAt: iso(r.released_at),
@@ -80,9 +68,5 @@ export class PgRuntimeClaimUsageReader implements RuntimeClaimUsageReader {
             out.set(r.run_id, list);
         }
         return out;
-    }
-
-    async onModuleDestroy() {
-        await this.pool?.end();
     }
 }

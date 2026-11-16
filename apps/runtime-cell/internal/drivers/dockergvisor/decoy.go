@@ -9,7 +9,7 @@ import (
 )
 
 // A Run's decoy credentials file (ADR-043): the npmrc canary the agent
-// hands Up (driver.WithCanaries), written where the cell owns it and bound
+// hands Up (driver.UpRequest.Canaries), written where the cell owns it and bound
 // read-only into every service at sandbox.DecoyTarget. One per machine,
 // rewritten at each Up and removed with the machine; never a label, never
 // logged.
@@ -26,7 +26,7 @@ func (d *Driver) writeDecoy(machine string, canaries []driver.Canary) (string, e
 	if content == "" {
 		return "", removeDecoyFile(p)
 	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil { //nolint:gosec // G301: the services' users read the decoy through it, like resolv.conf; only the cell writes it
 		return "", err
 	}
 	// Read by the services' users, as the claim's resolv.conf: a decoy is
@@ -35,13 +35,13 @@ func (d *Driver) writeDecoy(machine string, canaries []driver.Canary) (string, e
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(tmp.Name())
+	defer func() { _ = os.Remove(tmp.Name()) }() // gone once renamed in
 	if _, err := tmp.WriteString(content); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return "", err
 	}
 	if err := tmp.Chmod(0o644); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return "", err
 	}
 	if err := tmp.Close(); err != nil {

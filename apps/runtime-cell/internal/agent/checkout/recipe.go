@@ -49,7 +49,7 @@ func ApplyRecipe(repo string, r *protocol.ClaimAcquireBodyRecipe) error {
 	if err != nil {
 		return fmt.Errorf("open the checkout: %w", err)
 	}
-	defer unix.Close(root)
+	defer func() { _ = unix.Close(root) }()
 	dir, err := openAuthoredDir(root, !remove)
 	if remove && errors.Is(err, errNoAuthoredDir) {
 		return nil
@@ -57,7 +57,7 @@ func ApplyRecipe(repo string, r *protocol.ClaimAcquireBodyRecipe) error {
 	if err != nil {
 		return err
 	}
-	defer unix.Close(dir)
+	defer func() { _ = unix.Close(dir) }()
 	if remove {
 		return removeRecipe(dir)
 	}

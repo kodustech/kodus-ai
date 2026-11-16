@@ -1,10 +1,11 @@
 import { type BlockerFixView, classifyBlocker, KODY_FIX_PREFIX } from '@libs/runtime/blockers/catalog';
 import { type Lesson, lessonsFor } from '@libs/runtime/blockers/lessons';
 import { applyRecipeChange } from '@libs/runtime/blockers/recipe-edit';
+import { parseRecipe } from '@libs/runtime/protocol/recipe';
 import type { EnvironmentSetupRecord, RuntimeRunProjection } from '@libs/runtime/run';
 
-import { type RuntimeLessonReader } from '../../domain/ports';
-import { RuntimeBlockerFixView, RuntimeBlockerGroupView } from './environment-view';
+import { type EnvironmentRepository, type RuntimeLessonReader } from '../../domain/ports';
+import { RuntimeBlockerFixView, RuntimeBlockerGroupView, type RuntimeMembershipBlockerGroupView } from './environment-view';
 
 /** The recipe text the setup read, when the worker kept it (never shown as is; only the diff of a fix). */
 // An inferred or authored recipe is not on the default branch yet: a one-field fix PR waits for the recipe PR.
@@ -91,4 +92,75 @@ export function blockerGroups(setup: EnvironmentSetupRecord | null, runs: Runtim
 export async function memoryFor(reader: RuntimeLessonReader | undefined, env: { organizationId: string; repositoryId: string }) {
     const lessons = reader ? await reader.listByOrganization(env.organizationId).catch(() => []) : [];
     return { lessons, organizationId: env.organizationId, repositoryId: env.repositoryId };
+}
+
+/**
+ * What the committed recipe's services.needs asks for that the environment
+ * does not hold: a connected repository that is not one of its repositories
+ * ("Add <repo> to this environment"), or one Kodus is not connected to
+ * ("Connect <repo>"). Read from the recipe the latest setup read on the
+ * default branch, against the repositories as they are now, so adding the
+ * repository clears the card at once. A recipe Kodus inferred or Kody wrote
+ * is not committed, and says nothing here.
+ */
+export function membershipBlockerGroups(
+    setup: EnvironmentSetupRecord | null,
+    members: ReadonlyArray<Pick<EnvironmentRepository, 'repositoryId' | 'repositoryName' | 'fullName'>>,
+    connected: ReadonlyArray<{ repositoryId: string; repositoryName: string }>,
+): RuntimeMembershipBlockerGroupView[] {
+    const text = recipeText(setup);
+    if (!text) return [];
+    const parsed = parseRecipe(text);
+    if (!parsed.ok || !parsed.recipe.needs?.length) return [];
+    const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+    const groups: RuntimeMembershipBlockerGroupView[] = [];
+    for (const need of parsed.recipe.needs) {
+        if (members.some((m) => same(m.fullName, need.repo) || same(m.repositoryName, need.repo))) continue;
+        const repo = connected.find((r) => same(r.repositoryName, need.repo));
+        const evidence = { lines: [`services.needs: - repo: ${need.repo} (alias ${need.alias})`] };
+        groups.push(
+            repo
+                ? {
+                      signature: `needs_member:${need.repo.toLowerCase()}`,
+                      kind: 'other_repo',
+                      title: `The recipe needs ${need.repo}, which is not part of this environment`,
+                      count: 1,
+                      ...(setup?.updatedAt ? { lastAt: setup.updatedAt } : {}),
+                      state: 'open',
+                      evidence,
+                      fixes: [
+                          {
+                              id: `add_repository:${repo.repositoryId}`,
+                              action: 'add_repository',
+                              who: 'one_click',
+                              label: `Add ${need.repo} to this environment`,
+                              detail: `Boots it beside this repository at ws/${need.alias}, at its default branch, and asks for a setup.`,
+                              repositoryId: repo.repositoryId,
+                              repository: need.repo,
+                              alias: need.alias,
+                          },
+                      ],
+                  }
+                : {
+                      signature: `needs_connection:${need.repo.toLowerCase()}`,
+                      kind: 'other_repo',
+                      title: `The recipe needs ${need.repo}, which is not connected to Kodus`,
+                      count: 1,
+                      ...(setup?.updatedAt ? { lastAt: setup.updatedAt } : {}),
+                      state: 'open',
+                      evidence,
+                      fixes: [
+                          {
+                              id: `connect_repository:${need.repo.toLowerCase()}`,
+                              action: 'connect_repository',
+                              who: 'settings',
+                              label: `Connect ${need.repo} to Kodus`,
+                              detail: `Add ${need.repo} to the repositories of the Git integration, then add it to this environment.`,
+                              repository: need.repo,
+                          },
+                      ],
+                  },
+        );
+    }
+    return groups;
 }

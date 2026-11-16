@@ -1,10 +1,10 @@
 import { randomUUID } from 'crypto';
 
 import { Envelope, MAX_FRAME_BYTES, MessageBody, MessageType, PROTOCOL_VERSION } from '@libs/runtime/protocol';
-import type { RuntimeMetrics } from '@libs/runtime/telemetry';
+import { activeTraceparent, type RuntimeMetrics } from '@libs/runtime/telemetry';
 
 import type { CellSessionRepository } from '../hub-store';
-import { CellCredential, CellUnavailableError, HubLog, HubMetrics, ReadyOutcome, SocketLike, StepOutcome } from '../hub-types';
+import { CellCapacityView, CellCredential, CellUnavailableError, HubLog, HubMetrics, ReadyOutcome, SocketLike, StepOutcome } from '../hub-types';
 
 // The live WebSocket connections of this replica, one per cell, and the
 // request/answer plumbing on them. A connection that closes resolves every
@@ -23,6 +23,8 @@ export class CellConnection {
     readonly sessionEpoch = randomUUID();
     helloDone = false;
     closed = false;
+    /** When the cell's last frame arrived (epoch ms; set at accept): a cell sends a heartbeat every 10 s. */
+    lastFrameAt = 0;
     readonly pending = new Map<string, PendingAck>();
     readonly steps = new Map<string, PendingStep>();
     /**
@@ -33,6 +35,14 @@ export class CellConnection {
     readonly stepFrames = new Map<string, string>();
     /** claim.acquire rounds waiting for claim.ready / claim.failed, by claimId. */
     readonly readies = new Map<string, PendingReady>();
+    /** What the hello said (set when it is accepted): the capacity gauges' labels and the features frames may use. */
+    isolation?: string;
+    driver?: string;
+    features: readonly string[] = [];
+    /** Free slots from the last heartbeat; absent before the first one. */
+    freeSlots?: number;
+    /** The evictedBuildStates last written for this session (its rows as one key): a heartbeat that says the same writes nothing. */
+    evictedBuildStates?: string;
     constructor(
         readonly socket: SocketLike,
         readonly cred: CellCredential,
@@ -57,6 +67,11 @@ export class CellConnectionRegistry {
     /** An overloaded connection becomes lost; frames are never silently dropped or resent. */
     send(conn: CellConnection, env: Envelope): boolean {
         if (conn.closed) return false;
+        // A claim's frame carries the span that sends it (feature traceContext): the cell's spans join the Run's trace.
+        if (env.claimId && !env.traceparent && conn.features.includes('traceContext')) {
+            const traceparent = activeTraceparent();
+            if (traceparent) env = { ...env, traceparent };
+        }
         try {
             const payload = JSON.stringify(env);
             const bytes = Buffer.byteLength(payload);
@@ -106,6 +121,13 @@ export class CellConnectionRegistry {
         return conn;
     }
 
+    /** The connected cells of this replica as the capacity gauges read them (HubMetrics.observeCells). */
+    views(): CellCapacityView[] {
+        return [...this.connections.values()]
+            .filter((c) => !c.closed && c.helloDone)
+            .map((c) => ({ owner: c.cred.owner, isolation: c.isolation, driver: c.driver, freeSlots: c.freeSlots, lastFrameAt: c.lastFrameAt }));
+    }
+
     get(cellId: string): CellConnection | undefined {
         const c = this.connections.get(cellId);
         return c && !c.closed && c.helloDone ? c : undefined;
@@ -120,6 +142,11 @@ export class CellConnectionRegistry {
 
     isCurrent(conn: CellConnection) {
         return this.connections.get(conn.cred.cellId) === conn;
+    }
+
+    /** The live connections whose cell sent no frame since `before` (epoch ms). */
+    silentSince(before: number): CellConnection[] {
+        return [...this.connections.values()].filter((c) => !c.closed && c.lastFrameAt < before);
     }
 
     heldCellIds(): string[] {

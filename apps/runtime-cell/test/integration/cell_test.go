@@ -123,8 +123,10 @@ func cellTLS(t *testing.T, ca *testpki.CA, cn string) *tls.Config {
 
 func newWorld(t *testing.T, setup ...func(*hubstub.Hub)) *world {
 	t.Helper()
-	w := &world{hub: hubstub.New(), drv: fake.New(), machines: t.TempDir(), done: make(chan struct{}),
-		egress: &recEgress{applied: make(chan agent.ClaimInfo, 64), removed: make(chan string, 64)}, logs: &syncBuf{}}
+	w := &world{
+		hub: hubstub.New(), drv: fake.New(), machines: t.TempDir(), done: make(chan struct{}),
+		egress: &recEgress{applied: make(chan agent.ClaimInfo, 64), removed: make(chan string, 64)}, logs: &syncBuf{},
+	}
 	// The world stands for a production cell: VM isolation.
 	w.drv.Isolation = driver.IsolationVM
 	for _, f := range setup {
@@ -143,8 +145,8 @@ func newWorld(t *testing.T, setup ...func(*hubstub.Hub)) *world {
 	w.hubURL = "wss://" + strings.TrimPrefix(hub.URL, "https://") + "/v1/cell"
 
 	app := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/users":
+		switch r.URL.Path {
+		case "/users":
 			rw.Header().Set("Content-Type", "application/json")
 			_, _ = io.WriteString(rw, `[{"id":1,"name":"ana"}]`)
 		default:
@@ -188,7 +190,7 @@ func newWorld(t *testing.T, setup ...func(*hubstub.Hub)) *world {
 		OrgKey:       func(org string) (string, error) { return "kms-" + org, nil },
 		Egress:       w.egress,
 		DeniedEgress: w.egress,
-		Diagnoser:    w.drv,
+		Parts:        w.drv.Parts(),
 		WorkDir:      t.TempDir(),
 		Log:          slog.New(slog.NewTextHandler(w.logs, nil)),
 		// Resends of claim.ready / claim.failed, fast for the tests.
@@ -216,7 +218,8 @@ func newWorld(t *testing.T, setup ...func(*hubstub.Hub)) *world {
 }
 
 func (w *world) acquireBody(org string) *protocol.ClaimAcquireBody {
-	return &protocol.ClaimAcquireBody{Repo: protocol.RepoRef{Provider: protocol.GitProviderGithub, FullName: "o/r", APIBase: "https://api.github.com"},
+	return &protocol.ClaimAcquireBody{
+		Repo:  protocol.RepoRef{Provider: protocol.GitProviderGithub, FullName: "o/r", APIBase: "https://api.github.com"},
 		OrgID: org, EnvironmentID: "env-1", ImageID: "img-1", Side: protocol.SideBase, Sha: sha,
 		Consumer: protocol.ConsumerRuntime, RepoToken: "ghs_download",
 		Expose:        []protocol.Expose{{Service: "api", Port: int64(w.appPort), Kind: protocol.ExposeKindHTTP}},
@@ -224,7 +227,7 @@ func (w *world) acquireBody(org string) *protocol.ClaimAcquireBody {
 	}
 }
 
-func (w *world) acquire(t *testing.T, ctx context.Context, claim, org string, edit ...func(*protocol.ClaimAcquireBody)) *protocol.ClaimReadyBody {
+func (w *world) acquire(ctx context.Context, t *testing.T, claim, org string, edit ...func(*protocol.ClaimAcquireBody)) *protocol.ClaimReadyBody {
 	t.Helper()
 	body := w.acquireBody(org)
 	for _, f := range edit {
@@ -267,7 +270,7 @@ func TestClaimAcquireProbeRunStepResult(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	ready := w.acquire(t, ctx, "claim-1", "org-a")
+	ready := w.acquire(ctx, t, "claim-1", "org-a")
 	if w.agent.Version() != protocol.ProtocolVersion {
 		t.Fatalf("negotiated version %d", w.agent.Version())
 	}
@@ -310,7 +313,7 @@ func TestClaimAcquireProbeRunStepResult(t *testing.T) {
 	if res.Probe == nil || res.Probe.HTTP.Status != 200 || !strings.Contains(res.Probe.HTTP.Body, "ana") {
 		t.Fatalf("probe %+v", res.Probe)
 	}
-	if len(res.Probe.Requests) != 1 || res.Probe.Requests[0].Route != "/users" || res.Probe.Requests[0].Method != "GET" {
+	if len(res.Probe.Requests) != 1 || res.Probe.Requests[0].Route != "/users" || res.Probe.Requests[0].Method != http.MethodGet {
 		t.Fatalf("request log %+v", res.Probe.Requests)
 	}
 
@@ -348,7 +351,7 @@ func TestS30ProtocolFuzzOnTheWire(t *testing.T) {
 	w := newWorld(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	w.acquire(t, ctx, "claim-1", "org-a")
+	w.acquire(ctx, t, "claim-1", "org-a")
 
 	expectNack := func(name string, err error, code string) {
 		t.Helper()
@@ -416,7 +419,7 @@ func TestS15CellIdentity(t *testing.T) {
 	w := newWorld(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	w.acquire(t, ctx, "claim-1", "org-a")
+	w.acquire(ctx, t, "claim-1", "org-a")
 	step := hubclient.NewID()
 	if err := w.hub.Send(ctx, "cell-1", "claim-1", probeRun(step, w.appPort, "/users")); err != nil {
 		t.Fatal(err)
@@ -495,8 +498,8 @@ func TestS11PoolMachineNeverChangesOrg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w.acquire(t, ctx, "claim-b", "org-b")
-	w.acquire(t, ctx, "claim-a", "org-a")
+	w.acquire(ctx, t, "claim-b", "org-b")
+	w.acquire(ctx, t, "claim-a", "org-a")
 	for _, m := range w.drv.Machines() {
 		if m.Ref.MachineID == poolA.MachineID {
 			if m.State != "running" || m.Ref.Tags[driver.TagExpires] != driver.FormatTime(now.Add(24*time.Hour)) {
@@ -524,8 +527,8 @@ func TestS09CellSurvivesExhaustion(t *testing.T) {
 	w := newWorld(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	w.acquire(t, ctx, "claim-pr", "org-a")
-	w.acquire(t, ctx, "claim-base", "org-a")
+	w.acquire(ctx, t, "claim-pr", "org-a")
+	w.acquire(ctx, t, "claim-base", "org-a")
 
 	hog := hubclient.NewID()
 	if err := w.hub.Send(ctx, "cell-1", "claim-pr", &protocol.ExecBody{StepID: hog, Command: "while :; do :; done & yes | head -c 40000000", TimeoutMs: 1500}); err != nil {
@@ -555,7 +558,8 @@ func TestS09CellSurvivesExhaustion(t *testing.T) {
 	}
 
 	w.drv.SetFailCreate(errors.New("InsufficientInstanceCapacity"))
-	if err := w.hub.Send(ctx, "cell-1", "claim-3", &protocol.ClaimAcquireBody{Repo: protocol.RepoRef{Provider: protocol.GitProviderGithub, FullName: "o/r", APIBase: "https://api.github.com"},
+	if err := w.hub.Send(ctx, "cell-1", "claim-3", &protocol.ClaimAcquireBody{
+		Repo:  protocol.RepoRef{Provider: protocol.GitProviderGithub, FullName: "o/r", APIBase: "https://api.github.com"},
 		OrgID: "org-a", EnvironmentID: "env-1", ImageID: "img-1", Side: protocol.SidePr, Sha: sha,
 		Consumer: protocol.ConsumerRuntime, RepoToken: "ghs_download", Expose: []protocol.Expose{},
 		HardExpiresAt: time.Now().Add(30 * time.Minute).UTC().Format(time.RFC3339),
@@ -586,7 +590,8 @@ func TestS09CellSurvivesExhaustion(t *testing.T) {
 	}
 	expectNack(w.hub.Send(ctx, "cell-1", "claim-3", &protocol.ExecBody{StepID: hubclient.NewID(), Command: "id", TimeoutMs: 1000}), "unknown_claim")
 	// ceiling past the consumer's limit is refused up front.
-	err = w.hub.Send(ctx, "cell-1", "claim-4", &protocol.ClaimAcquireBody{Repo: protocol.RepoRef{Provider: protocol.GitProviderGithub, FullName: "o/r", APIBase: "https://api.github.com"},
+	err = w.hub.Send(ctx, "cell-1", "claim-4", &protocol.ClaimAcquireBody{
+		Repo:  protocol.RepoRef{Provider: protocol.GitProviderGithub, FullName: "o/r", APIBase: "https://api.github.com"},
 		OrgID: "org-a", EnvironmentID: "env-1", ImageID: "img-1", Side: protocol.SidePr, Sha: sha,
 		Consumer: protocol.ConsumerRuntime, RepoToken: "ghs_download", Expose: []protocol.Expose{},
 		HardExpiresAt: time.Now().Add(5 * time.Hour).UTC().Format(time.RFC3339),
@@ -606,7 +611,8 @@ func TestEgressPolicyReplacesExtraAllow(t *testing.T) {
 		t.Fatalf("egress.policy for an unknown claim: %v", err)
 	}
 
-	err := w.hub.Send(ctx, "cell-1", "claim-1", &protocol.ClaimAcquireBody{Repo: protocol.RepoRef{Provider: protocol.GitProviderGithub, FullName: "o/r", APIBase: "https://api.github.com"},
+	err := w.hub.Send(ctx, "cell-1", "claim-1", &protocol.ClaimAcquireBody{
+		Repo:  protocol.RepoRef{Provider: protocol.GitProviderGithub, FullName: "o/r", APIBase: "https://api.github.com"},
 		OrgID: "org-a", EnvironmentID: "env-1", ImageID: "img-1", Side: protocol.SideBase, Sha: sha,
 		Consumer: protocol.ConsumerRuntime, RepoToken: "ghs_download", Expose: []protocol.Expose{},
 		HardExpiresAt: time.Now().Add(55 * time.Minute).UTC().Format(time.RFC3339),
@@ -669,7 +675,7 @@ func TestHelloAckWithoutSupportedVersionEndsSession(t *testing.T) {
 			if v := w.agent.Version(); v != 0 {
 				t.Fatalf("version %d", v)
 			}
-			if !strings.Contains(w.logs.String(), "hub.version") || strings.Contains(w.logs.String(), "hub.connected") {
+			if !strings.Contains(w.logs.String(), "hub.disconnected") || !strings.Contains(w.logs.String(), "protocol") || strings.Contains(w.logs.String(), "hub.connected") {
 				t.Fatalf("logs: %s", w.logs.String())
 			}
 		})
@@ -705,7 +711,7 @@ func TestClaimReadyResentUntilAcked(t *testing.T) {
 	defer cancel()
 
 	w.hub.DropSettle.Store(2)
-	w.acquire(t, ctx, "claim-lost", "org-a")
+	w.acquire(ctx, t, "claim-lost", "org-a")
 	if n := w.hub.DropSettle.Load(); n != 0 {
 		t.Fatalf("%d drops left: the cell did not resend", n)
 	}
@@ -713,7 +719,7 @@ func TestClaimReadyResentUntilAcked(t *testing.T) {
 	// The ack is lost: the resend of a ready claim is acked, not refused.
 	w.hub.DropSettleAck.Store(1)
 	before := w.hub.Violations.Load()
-	w.acquire(t, ctx, "claim-ack-lost", "org-a")
+	w.acquire(ctx, t, "claim-ack-lost", "org-a")
 	waitLog(t, w, "claim.ready.acked", "claim-ack-lost", "attempt=2")
 	if v := w.hub.Violations.Load(); v != before {
 		t.Fatalf("resend counted as %d violation(s)", v-before)
@@ -739,7 +745,8 @@ func TestClaimFailedResentAndNackEndsRetries(t *testing.T) {
 	defer cancel()
 	w.drv.SetFailCreate(errors.New("InsufficientInstanceCapacity"))
 	w.hub.DropSettle.Store(1)
-	if err := w.hub.Send(ctx, "cell-1", "claim-f", &protocol.ClaimAcquireBody{Repo: protocol.RepoRef{Provider: protocol.GitProviderGithub, FullName: "o/r", APIBase: "https://api.github.com"},
+	if err := w.hub.Send(ctx, "cell-1", "claim-f", &protocol.ClaimAcquireBody{
+		Repo:  protocol.RepoRef{Provider: protocol.GitProviderGithub, FullName: "o/r", APIBase: "https://api.github.com"},
 		OrgID: "org-a", EnvironmentID: "env-1", ImageID: "img-1", Side: protocol.SidePr, Sha: sha,
 		Consumer: protocol.ConsumerRuntime, RepoToken: "ghs_download", Expose: []protocol.Expose{},
 		HardExpiresAt: time.Now().Add(30 * time.Minute).UTC().Format(time.RFC3339),
@@ -768,7 +775,8 @@ func TestClaimFailedResentAndNackEndsRetries(t *testing.T) {
 	// A claim the hub never asked for: nacked once, never retried.
 	w.drv.SetFailCreate(nil)
 	w.hub.Forget("claim-gone")
-	if err := w.hub.SendUntracked(ctx, "cell-1", "claim-gone", &protocol.ClaimAcquireBody{Repo: protocol.RepoRef{Provider: protocol.GitProviderGithub, FullName: "o/r", APIBase: "https://api.github.com"},
+	if err := w.hub.SendUntracked(ctx, "cell-1", "claim-gone", &protocol.ClaimAcquireBody{
+		Repo:  protocol.RepoRef{Provider: protocol.GitProviderGithub, FullName: "o/r", APIBase: "https://api.github.com"},
 		OrgID: "org-a", EnvironmentID: "env-1", ImageID: "img-1", Side: protocol.SideBase, Sha: sha,
 		Consumer: protocol.ConsumerRuntime, RepoToken: "ghs_download", Expose: []protocol.Expose{},
 		HardExpiresAt: time.Now().Add(30 * time.Minute).UTC().Format(time.RFC3339),

@@ -8,6 +8,7 @@ import (
 	"hash/crc32"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 )
@@ -61,8 +62,10 @@ func TestCaptureRejectsMissingConsoleOrStepIdentity(t *testing.T) {
 func TestCaptureBaselineDimensionsAreBoundedBeforeDiff(t *testing.T) {
 	srv := baselineServer(t, pngOf(t, 1281, 1, white))
 	r := &fakeRunner{stream: tarOf(t, entry{"result.json", resultWithNetwork(t, "x", true)}, entry{"screenshot-0.png", pngOf(t, 10, 10, white)})}
-	_, err := newCapture(r, srv.Client()).Run(context.Background(), Request{Probe: ordersProbe(), Spec: RunSpec{Port: 3000}, T0: t0,
-		Baseline: []protocol.BaselineScreenshot{{Step: 2, Screenshot: 0, URL: srv.URL + "/org/run/base/step/screenshot-0"}}})
+	_, err := newCapture(r, srv.Client()).Run(context.Background(), Request{
+		Probe: ordersProbe(), Spec: RunSpec{Port: 3000}, T0: t0,
+		Baseline: []protocol.BaselineScreenshot{{Step: 2, Screenshot: 0, URL: srv.URL + "/org/run/base/step/screenshot-0"}},
+	})
 	if err == nil {
 		t.Fatal("oversized baseline silently omitted a required pixel comparison")
 	}
@@ -274,5 +277,87 @@ func TestCaptureRejectsIncompleteNetworkMeasurements(t *testing.T) {
 				t.Fatal("missing required network measurement accepted")
 			}
 		})
+	}
+}
+
+// A HAR entry the cell refuses says which check it failed, never its URL or
+// values: Playwright writes status -1 and time -1 for a request that never got
+// an answer, and the cell log must tell that apart from a malformed entry.
+func TestARefusedHAREntryNamesTheCheckItFailed(t *testing.T) {
+	var doc map[string]any
+	_ = json.Unmarshal(harJSON(), &doc)
+	row := doc["log"].(map[string]any)["entries"].([]any)[1].(map[string]any)
+	row["response"].(map[string]any)["status"], row["time"] = -1, -1
+	raw, _ := json.Marshal(doc)
+	r := &fakeRunner{stream: tarOf(t, entry{"result.json", resultJSON(t, "x")}, entry{"har.json", raw}, entry{"screenshot-0.png", pngOf(t, 10, 10, white)})}
+	_, err := newCapture(r, nil).Run(context.Background(), Request{Probe: ordersProbe(), Spec: RunSpec{Port: 3000}, T0: t0})
+	if err == nil || !strings.Contains(err.Error(), "invalid HAR entry (status -1)") || strings.Contains(err.Error(), "cdn.example.com") {
+		t.Fatalf("err %v", err)
+	}
+}
+
+// harWithSocket is the fixture HAR plus one WebSocket handshake to url.
+func harWithSocket(url string, status, ms any) []byte {
+	var doc map[string]any
+	_ = json.Unmarshal(harJSON(), &doc)
+	log := doc["log"].(map[string]any)
+	log["entries"] = append(log["entries"].([]any), map[string]any{"startedDateTime": t0.Format(time.RFC3339Nano), "time": ms, "request": map[string]any{"method": "GET", "url": url}, "response": map[string]any{"status": status}, "_webSocketMessages": []any{map[string]any{"type": "receive", "data": "frame-" + secret}}})
+	har, _ := json.Marshal(doc)
+	return har
+}
+
+// A HAR entry of another scheme is refused, and the cell log names the
+// scheme, never the URL: a WebSocket to another origin, or wss to an outside
+// host, still loses the round.
+func TestARefusedHAREntryNamesItsURLScheme(t *testing.T) {
+	for url, scheme := range map[string]string{
+		"ws://app.kody.internal:9999/_next/webpack-hmr":     "scheme ws",
+		"ws://other.kody.internal:3000/_next/webpack-hmr":   "scheme ws",
+		"wss://app.kody.internal:3000/_next/webpack-hmr":    "scheme wss",
+		"wss://cdn.example.com/_next/webpack-hmr":           "scheme wss",
+		"ws://u:p@app.kody.internal:3000/_next/webpack-hmr": "scheme ws",
+	} {
+		r := &fakeRunner{stream: tarOf(t, entry{"result.json", resultJSON(t, "x")}, entry{"har.json", harWithSocket(url, 101, 1)}, entry{"screenshot-0.png", pngOf(t, 10, 10, white)})}
+		_, err := newCapture(r, nil).Run(context.Background(), Request{Probe: ordersProbe(), Spec: RunSpec{Port: 3000}, T0: t0})
+		if err == nil || !strings.Contains(err.Error(), "url not http(s): "+scheme) || strings.Contains(err.Error(), "webpack-hmr") {
+			t.Fatalf("%s: err %v", url, err)
+		}
+	}
+}
+
+// kr-nextjs#2: the Kody-written recipe ran `pnpm dev`, whose page opened the
+// Next dev server's WebSocket, and every browser round of Runs 97c3963d,
+// c301e03d, c3133e37, a82244e6 and 828e0dab was lost on its HAR entry. A
+// WebSocket to the app's own origin is allowed: the round's network is the
+// page's requests without it, the HAR keeps its handshake without query or
+// frames, and an unanswered handshake (status and time -1) is no failure.
+func TestAWebSocketToTheAppsOwnOriginIsAllowedAndNotMeasured(t *testing.T) {
+	for _, answered := range []bool{true, false} {
+		status, ms := any(101), any(4)
+		if !answered {
+			status, ms = -1, -1
+		}
+		r := &fakeRunner{stream: tarOf(t, entry{"result.json", resultJSON(t, "x")}, entry{"har.json", harWithSocket("ws://app.kody.internal:3000/_next/webpack-hmr?id="+secret, status, ms)}, entry{"screenshot-0.png", pngOf(t, 10, 10, white)})}
+		out, err := newCapture(r, nil).Run(context.Background(), Request{Probe: ordersProbe(), Spec: RunSpec{Port: 3000}, T0: t0})
+		if err != nil {
+			t.Fatalf("answered=%v: %v", answered, err)
+		}
+		if len(out.Browser.Network) != 2 || len(out.Requests) != 1 {
+			t.Fatalf("answered=%v: network %+v requests %+v", answered, out.Browser.Network, out.Requests)
+		}
+		for _, n := range out.Browser.Network {
+			if strings.HasPrefix(n.URL, "ws") {
+				t.Fatalf("answered=%v: the socket was measured: %+v", answered, n)
+			}
+		}
+		var har []byte
+		for _, a := range out.Artifacts {
+			if a.Type == protocol.EvidenceUploadTypeHar {
+				har = a.Body
+			}
+		}
+		if !bytes.Contains(har, []byte(`"url":"ws://app.kody.internal:3000/_next/webpack-hmr"`)) || bytes.Contains(har, []byte(secret)) || bytes.Contains(har, []byte("frame-")) {
+			t.Fatalf("answered=%v: har %s", answered, har)
+		}
 	}
 }

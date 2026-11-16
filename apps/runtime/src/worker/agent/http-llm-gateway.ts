@@ -2,6 +2,7 @@ import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
 import type { SecretOpener } from '../secrets/sealed-tokens';
 import { LlmBudgetExceededError, LlmGateway, LlmRequest, LlmResponse, LlmUnavailableError } from './llm-gateway';
+import { failureName, postToProduct, unwrapProductBody } from './product-call';
 
 export type FetchLike = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal }) => Promise<{
     status: number;
@@ -22,7 +23,15 @@ export class HttpLlmGateway implements LlmGateway {
 
     constructor(
         baseUrl: string,
-        private readonly opts: { secrets: SecretOpener; fetch?: FetchLike; metrics?: RuntimeMetrics; maxOutputTokens?: number; timeoutMs?: number },
+        private readonly opts: {
+            secrets: SecretOpener;
+            fetch?: FetchLike;
+            metrics?: RuntimeMetrics;
+            maxOutputTokens?: number;
+            timeoutMs?: number;
+            connectRetryDelaysMs?: readonly number[];
+            sleep?: (ms: number) => Promise<void>;
+        },
     ) {
         this.url = `${baseUrl.replace(/\/+$/, '')}/internal/runtime/llm`;
     }
@@ -36,34 +45,37 @@ export class HttpLlmGateway implements LlmGateway {
             throw new LlmUnavailableError('the run token does not open for this Run');
         }
         const doFetch = this.opts.fetch ?? (globalThis.fetch as unknown as FetchLike);
-        let res: Awaited<ReturnType<FetchLike>>;
+        // A turn the product never received (it was restarting) is sent again after a pause; one that may
+        // have reached it is not: the product does not deduplicate turns, and may have run and billed it.
+        let answer: Awaited<ReturnType<typeof postToProduct>>;
         try {
-            res = await doFetch(this.url, {
-                method: 'POST',
-                headers: { 'content-type': 'application/json', authorization: `Bearer ${runToken}` },
-                body: JSON.stringify({
+            answer = await postToProduct(
+                doFetch,
+                this.url,
+                runToken,
+                {
                     runId: req.runId,
                     task: req.task,
                     messages: req.messages,
                     ...(this.opts.maxOutputTokens ? { maxOutputTokens: this.opts.maxOutputTokens } : {}),
-                }),
-                signal: AbortSignal.timeout(this.opts.timeoutMs ?? 300_000),
-            });
+                },
+                { timeoutMs: this.opts.timeoutMs ?? 300_000, connectRetryDelaysMs: this.opts.connectRetryDelaysMs, sleep: this.opts.sleep },
+            );
         } catch (e) {
-            throw new LlmUnavailableError(`LLM gateway unreachable (${e instanceof Error ? e.name : 'error'})`);
+            throw new LlmUnavailableError(`LLM gateway unreachable (${failureName(e)})`);
         }
 
-        const body = await res.json().catch(() => undefined);
+        const { res, body } = answer;
         if (res.status === 429 && body?.code === 'llm_budget_exceeded') {
             this.opts.metrics?.recordLlmBudget(1, { orgId: req.organizationId, state: 'exhausted' });
             throw new LlmBudgetExceededError(`run ${req.runId} exhausted the ${body?.scope ?? 'run'} LLM budget`);
         }
         if (!res.ok) throw new LlmUnavailableError(`LLM gateway answered ${res.status}`);
-        // apps/api's TransformInterceptor wraps every success as { statusCode, type, data }.
-        const out = body && typeof body === 'object' && 'data' in body && typeof body.data === 'object' ? body.data : body;
+        const out = unwrapProductBody(body) as any;
         if (typeof out?.text !== 'string') throw new LlmUnavailableError('LLM gateway answered without text');
 
         const usage = { inputTokens: Number(out.usage?.inputTokens ?? 0), outputTokens: Number(out.usage?.outputTokens ?? 0) };
+        this.opts.metrics?.recordLlmTokens(usage, { orgId: req.organizationId, task: req.task });
         const remaining = out.budget?.remaining;
         if (typeof remaining === 'number') {
             const spent = usage.inputTokens + usage.outputTokens;

@@ -7,19 +7,15 @@ import { Action, ResourceType } from '@libs/identity/domain/permissions/enums/pe
 import type { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import type { Lesson } from '@libs/runtime/blockers/lessons';
+import type { RuntimeLessonView } from '@libs/runtime/contracts/views/lessons';
 
 import { type Clock, RUNTIME_CLOCK, RUNTIME_LESSON_READER, type RuntimeLessonReader } from '../../domain/ports';
-import { RuntimeCommandName, runtimeCommandOutboxMessage } from '../../domain/runtime-commands';
+import { RuntimeCommandName, runtimeCommandOutboxMessage } from '@libs/runtime/contracts/runtime-commands';
 import type { RuntimeAuthorization } from '../run-access.service';
 import { GetRuntimeEnvironmentUseCase } from './environments.use-cases';
 
-/** A lesson as the product shows it: problem, cause, the fix that worked and where it was proven. */
-export type RuntimeLessonView = Pick<
-    Lesson,
-    'lessonId' | 'scope' | 'signature' | 'kind' | 'problem' | 'cause' | 'fix' | 'helped' | 'firstAt' | 'lastAt' | 'promotedAt'
-> & {
-    origin: { sha: string; branch?: string; at: string; repositoryId: string };
-};
+// The view lives in contracts/views/lessons.ts (the web imports it too); re-exported for the callers that imported it from here.
+export type { RuntimeLessonView };
 
 const view = (l: Lesson): RuntimeLessonView => ({
     lessonId: l.lessonId,

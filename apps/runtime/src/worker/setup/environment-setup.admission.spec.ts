@@ -2,7 +2,10 @@ import type { RuntimeEnvironmentSetupRequested } from '@libs/runtime/contracts/r
 import type { EnvironmentRuntime } from '@libs/runtime/environment';
 
 import { capacityBlocked } from '../env/hub-environment-runtime';
-import { EnvironmentSetupService, InMemoryEnvironmentSetupStore } from './environment-setup.service';
+import type { LlmGateway } from '../agent/llm-gateway';
+import { EnvironmentSetupService } from './environment-setup.service';
+import { SetupLearnLoop } from './learn-loop';
+import { InMemoryEnvironmentSetupStore } from './testing';
 
 const request: RuntimeEnvironmentSetupRequested = {
     environmentId: 'environment', organizationId: 'organization', teamId: 'team', repositoryId: 'repo', repositoryName: 'shop',
@@ -11,6 +14,8 @@ const request: RuntimeEnvironmentSetupRequested = {
 const env = (): EnvironmentRuntime => ({ acquire: jest.fn(async () => capacityBlocked({ refused: 'no_capacity' })), probe: jest.fn(), exec: jest.fn(), reset: jest.fn(), release: jest.fn() });
 
 describe('admitted setup execution', () => {
+    afterEach(() => jest.restoreAllMocks());
+
     it('records a prestart admission blocker before dev ref overrides, recipe work or acquiring a claim', async () => {
         const environment = env();
         const envForSetup = jest.fn(() => environment);
@@ -27,12 +32,13 @@ describe('admitted setup execution', () => {
         let now = Date.parse(request.requestedAt);
         const environment = env();
         const sleep = jest.fn(async (ms: number) => { now += ms; });
-        const service = new EnvironmentSetupService({ envForSetup: () => environment }, new InMemoryEnvironmentSetupStore(), { now: () => new Date(now), sleep, capacityWaitMs: 1000 });
-        const fixes = jest.spyOn(service as any, 'tryFixes');
+        const llm: LlmGateway = { complete: jest.fn() };
+        const service = new EnvironmentSetupService({ envForSetup: () => environment }, new InMemoryEnvironmentSetupStore(), { now: () => new Date(now), sleep, capacityWaitMs: 1000, learn: { llm } });
+        const learnLoop = jest.spyOn(SetupLearnLoop.prototype, 'run');
         const result = await (service.run as any)(request, undefined, undefined, { noCapacityWait: true });
         expect(result.state).toBe('blocked');
         expect(environment.acquire).toHaveBeenCalledTimes(1);
         expect(sleep).not.toHaveBeenCalled();
-        expect(fixes).not.toHaveBeenCalled();
+        expect(learnLoop).not.toHaveBeenCalled();
     });
 });

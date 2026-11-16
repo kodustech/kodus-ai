@@ -53,7 +53,7 @@ func fakeHub(t *testing.T, blob []byte, storageBody []byte) (*OCIProxy, *[]strin
 	t.Cleanup(auth.Close)
 	ru, _ := url.Parse(reg.URL)
 	au, _ := url.Parse(auth.URL + "/token")
-	client := &http.Client{CheckRedirect: ociRedirect, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+	client := &http.Client{CheckRedirect: ociRedirect, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}} //nolint:gosec // G402: the httptest TLS registry presents a self-signed cert
 	pins := []string{"library/golang:1.24.5-alpine"}
 	return &OCIProxy{Registry: ru, Auth: au, Client: client, Pins: func(_ *http.Request, repo, ref string) bool {
 		if IsDigest(ref) {
@@ -63,14 +63,20 @@ func fakeHub(t *testing.T, blob []byte, storageBody []byte) (*OCIProxy, *[]strin
 	}}, &seen
 }
 
-func get(t *testing.T, h http.Handler, method, path string) (*http.Response, string, bool) {
+// reply is what a test reads of a recorded answer; get has read and closed the body.
+type reply struct {
+	StatusCode int
+	Header     http.Header
+}
+
+func get(t *testing.T, h http.Handler, method, path string) (reply, string, bool) {
 	t.Helper()
 	rec := httptest.NewRecorder()
 	aborted := false
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				if r != http.ErrAbortHandler {
+				if r != http.ErrAbortHandler { //nolint:errorlint // r is a recovered panic value, compared by identity like net/http does
 					panic(r)
 				}
 				aborted = true
@@ -80,7 +86,8 @@ func get(t *testing.T, h http.Handler, method, path string) (*http.Response, str
 	}()
 	res := rec.Result()
 	b, _ := io.ReadAll(res.Body)
-	return res, string(b), aborted
+	_ = res.Body.Close()
+	return reply{StatusCode: res.StatusCode, Header: res.Header}, string(b), aborted
 }
 
 func TestOCIProxyServesWhatTheDockerfilesName(t *testing.T) {

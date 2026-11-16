@@ -187,7 +187,7 @@ func (s *SSH) client(ctx context.Context, ref driver.MachineRef) (*ssh.Client, e
 	}
 	c, chans, reqs, err := ssh.NewClientConn(conn, addr, cfg)
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, err
 	}
 	return ssh.NewClient(c, chans, reqs), nil
@@ -198,12 +198,12 @@ func (s *SSH) Exec(ctx context.Context, ref driver.MachineRef, req kodyexec.Requ
 	if err != nil {
 		return kodyexec.Result{}, err
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	sess, err := c.NewSession()
 	if err != nil {
 		return kodyexec.Result{}, err
 	}
-	defer sess.Close()
+	defer func() { _ = sess.Close() }()
 	in, _ := json.Marshal(req)
 	sess.Stdin = bytes.NewReader(in)
 	var out bytes.Buffer
@@ -237,7 +237,7 @@ var uploadDst = regexp.MustCompile(`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`)
 
 // Upload streams a tar of srcDir to "tar -x" in dst on the VM. It ends when
 // ctx does: the session is closed under it.
-func (s *SSH) Upload(ctx context.Context, ref driver.MachineRef, srcDir, dst string) error {
+func (s *SSH) Upload(ctx context.Context, ref driver.MachineRef, srcDir, dst string, _ func(string)) error {
 	if !uploadDst.MatchString(dst) || strings.Contains("/"+dst+"/", "/../") || strings.Contains("/"+dst+"/", "/./") {
 		return errors.New("transport: bad upload destination")
 	}
@@ -245,12 +245,12 @@ func (s *SSH) Upload(ctx context.Context, ref driver.MachineRef, srcDir, dst str
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	sess, err := c.NewSession()
 	if err != nil {
 		return err
 	}
-	defer sess.Close()
+	defer func() { _ = sess.Close() }()
 	stop := context.AfterFunc(ctx, func() { _ = sess.Close(); _ = c.Close() })
 	defer stop()
 	pr, pw := io.Pipe()
@@ -309,12 +309,12 @@ func writeTar(w io.Writer, dir string) error {
 			return err
 		}
 		if info.Mode().IsRegular() {
-			f, err := os.Open(p)
+			f, err := os.Open(p) //nolint:gosec // G304: p is a regular file WalkDir found under the cell's own srcDir
 			if err != nil {
 				return err
 			}
 			_, err = io.Copy(tw, f)
-			f.Close()
+			_ = f.Close() // read-only; the copy's error is the one that matters
 			return err
 		}
 		return nil

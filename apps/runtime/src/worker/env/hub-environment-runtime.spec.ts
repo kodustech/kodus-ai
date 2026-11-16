@@ -4,7 +4,9 @@ import { claimIdFor } from '../../shared/claim-id';
 import { devSealKey } from '../../testing/dev-seal-key';
 import { hubEnvironments, poolCellOf } from '../dbos/run-deps.factory';
 import { SealedSecretOpener } from '../secrets/sealed-tokens';
-import { CellUnavailable, HubClaimReleaser, HubClient, HubEnvironmentClient, HubPoolTargetSender, HubRunEventSink, isNetworkError } from './hub-environment-runtime';
+import { HubClaimReleaser, HubClient, HubEnvironmentClient, HubPoolTargetSender, HubRequestTimeoutError, HubRunEventSink, isNetworkError, mtlsPost } from './hub-environment-runtime';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 
 const secrets = new SealedSecretOpener(devSealKey());
 const directory = (replica: string | null = 'https://hub-1') => ({
@@ -47,14 +49,49 @@ describe('HubClient when the hub drops or is restarting', () => {
 
     it('tells a dropped connection from an answer', () => {
         expect(isNetworkError(Object.assign(new Error('x'), { code: 'ECONNREFUSED' }))).toBe(true);
-        expect(isNetworkError(new Error('socket hang up'))).toBe(true);
+        expect(isNetworkError(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))).toBe(true);
+        expect(isNetworkError(new HubRequestTimeoutError())).toBe(true);
         expect(isNetworkError(new Error('hub /x answered 500'))).toBe(false);
     });
 
-    it('a reset connection or a 502 from the load balancer is CellUnavailable', async () => {
-        await expect(client(reset).post('https://hub-1', '/x', {})).rejects.toBeInstanceOf(CellUnavailable);
-        await expect(client(async () => ({ status: 502, text: 'bad gateway' })).post('https://hub-1', '/x', {})).rejects.toBeInstanceOf(CellUnavailable);
-        await expect(client(async () => ({ status: 500, text: 'boom' })).post('https://hub-1', '/x', {})).rejects.not.toBeInstanceOf(CellUnavailable);
+    it('does not read a network failure from the words of a message without a code', () => {
+        expect(isNetworkError(new Error('socket hang up'))).toBe(false);
+        expect(isNetworkError(new Error('hub request timed out'))).toBe(false);
+    });
+
+    it('reports a hub that never answers as a request timeout', async () => {
+        const server = createServer(() => undefined);
+        await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+        const { port } = server.address() as AddressInfo;
+        const error = await mtlsPost(undefined)(`http://127.0.0.1:${port}/x`, {}, '{}', 50).catch((e) => e);
+        server.closeAllConnections();
+        await new Promise((r) => server.close(r));
+        expect(error).toBeInstanceOf(HubRequestTimeoutError);
+        expect(isNetworkError(error)).toBe(true);
+    });
+
+    it('sends again a call the hub refused at connect (a replica restarting), and only that', async () => {
+        const refused = () => Promise.reject(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }));
+        const slept: number[] = [];
+        const sleep = async (ms: number) => void slept.push(ms);
+        let calls = 0;
+        const flaky = async () => (++calls < 3 ? refused() : { status: 200, text: '{"ok":true}' });
+        const hub = new HubClient({ cellDirectory: directory(), hubBaseUrl: 'https://hub', postImpl: flaky, refusedRetryDelaysMs: [1, 2, 3], sleep });
+        await expect(hub.post('https://hub-1', '/x', {})).resolves.toEqual({ ok: true });
+        expect(slept).toEqual([1, 2]);
+        const down = new HubClient({ cellDirectory: directory(), hubBaseUrl: 'https://hub', postImpl: refused, refusedRetryDelaysMs: [1], sleep });
+        await expect(down.post('https://hub-1', '/x', {})).rejects.toBeInstanceOf(CellUnavailableError);
+        // A reset may have reached the hub: never sent twice.
+        let resets = 0;
+        const once = new HubClient({ cellDirectory: directory(), hubBaseUrl: 'https://hub', postImpl: () => (resets++, reset()), refusedRetryDelaysMs: [1, 2], sleep });
+        await expect(once.post('https://hub-1', '/x', {})).rejects.toBeInstanceOf(CellUnavailableError);
+        expect(resets).toBe(1);
+    });
+
+    it('a reset connection or a 502 from the load balancer is CellUnavailableError', async () => {
+        await expect(client(reset).post('https://hub-1', '/x', {})).rejects.toBeInstanceOf(CellUnavailableError);
+        await expect(client(async () => ({ status: 502, text: 'bad gateway' })).post('https://hub-1', '/x', {})).rejects.toBeInstanceOf(CellUnavailableError);
+        await expect(client(async () => ({ status: 500, text: 'boom' })).post('https://hub-1', '/x', {})).rejects.not.toBeInstanceOf(CellUnavailableError);
     });
 
     it('an answer that is not a JSON object is an error, not a value', async () => {
@@ -75,6 +112,27 @@ describe('HubEnvironmentClient', () => {
         const calls: Call[] = [];
         await runtime(client(recording(calls, 200, '{"ok":true}'))).reset('c1');
         expect(calls[0].body).toMatchObject({ organizationId: 'org-a', runId: 'run-1', imageId: 'img' });
+    });
+
+    it("gives a reset the Run's reset deadline and waits the hub's answer past it; without one, the default", async () => {
+        const waits: number[] = [];
+        const calls: Call[] = [];
+        const post = async (url: string, headers: Record<string, string>, body: string, timeoutMs: number) => {
+            waits.push(timeoutMs);
+            return recording(calls, 200, '{"ok":true}')(url, headers, body);
+        };
+        const sized = new HubEnvironmentClient(client(post), secrets, {
+            correlationId: 'corr', organizationId: 'org-a', runId: 'run-1',
+            repo: { provider: 'github', fullName: 'acme/shop', apiBase: 'https://api.github.com' } as any,
+            sealedRepoToken: secrets.seal('ghs_plain', 'run-1'), tokenBinding: 'run-1', imageId: 'img', expose: [],
+            resetTimeoutMs: 900_000,
+        });
+        await sized.reset('c1');
+        await runtime(client(post)).reset('c1');
+        expect(calls[0].body).toMatchObject({ imageId: 'img', timeoutMs: 900_000 });
+        expect(waits[0]).toBeGreaterThan(900_000);
+        expect(calls[1].body).not.toHaveProperty('timeoutMs');
+        expect(waits[1]).toBeGreaterThan(120_000);
     });
 
     // A reconstructed workflow client has no acquire-time cache; its durable claim pin must travel explicitly.
@@ -256,7 +314,7 @@ describe('acquire prefers the pool cell', () => {
     it('asks the directory for the pool cell first, and for none when finding it fails', async () => {
         const { asked, hub } = directoryAsked();
         await expect(client(hub, async (o, e) => (o === 'org-a' && e === 'env-1' ? 'cell-pool' : undefined)).acquire(acquireReq)).rejects.toThrow();
-        await expect(client(hub, async () => Promise.reject(new Error('mongo down'))).acquire(acquireReq)).rejects.toThrow();
+        await expect(client(hub, async () => Promise.reject(new Error('database down'))).acquire(acquireReq)).rejects.toThrow();
         await expect(client(hub).acquire(acquireReq)).rejects.toThrow();
         expect(asked).toEqual(['cell-pool', undefined, undefined]);
     });
@@ -306,11 +364,11 @@ describe('acquire when no cell may take the claim', () => {
         expect(asked).toEqual([claimIdFor('org-a', 'run-1:pr:1')]);
     });
 
-    it('every eligible cell full is blocked no_capacity; no cell connected is still CellUnavailable', async () => {
+    it('every eligible cell full is blocked no_capacity; no cell connected is still CellUnavailableError', async () => {
         const full = blockedBy({ refused: 'no_capacity' });
         expect(await full.env.acquire(acquireReq)).toMatchObject({ status: 'blocked', blockers: [{ kind: 'resources', signature: 'no_capacity' }] });
         expect(full.posted).toEqual([]);
-        await expect(blockedBy(null).env.acquire(acquireReq)).rejects.toBeInstanceOf(CellUnavailable);
+        await expect(blockedBy(null).env.acquire(acquireReq)).rejects.toBeInstanceOf(CellUnavailableError);
     });
 
     it('asks the directory for a cell that grants the size the claim will ask, and none for an unsized claim', async () => {
@@ -334,6 +392,39 @@ describe('acquire when no cell may take the claim', () => {
         const none = (await blockedBy({ refused: 'size_unavailable', size, largest: null }).env.acquire({ ...acquireReq, size })) as any;
         expect(none.blockers[0].message).toContain('none of them grants a machine size');
     });
+
+    it('a vm claim asks the directory for a cell that satisfies it, and no cell that does is blocked capacity, sent to no cell', async () => {
+        const vm = blockedBy({ refused: 'isolation_unavailable', isolation: 'vm' });
+        const r = (await vm.env.acquire({ ...acquireReq, isolation: 'vm' })) as any;
+        expect(vm.wanted[0]).toMatchObject({ isolation: 'vm' });
+        expect(r).toMatchObject({ status: 'blocked', blockers: [{ kind: 'capacity', signature: 'isolation_unavailable' }] });
+        expect(r.blockers[0].message).toContain('virtual machine');
+        expect(vm.posted).toEqual([]);
+        // 'any', as when the claim names none, asks the directory for no isolation.
+        const any = blockedBy({ refused: 'no_capacity' });
+        await any.env.acquire({ ...acquireReq, isolation: 'any' });
+        expect(any.wanted[0]).not.toHaveProperty('isolation');
+    });
+
+    it("a Run side asks for the backend of the Run's other side (same attempt, first and renewed claim); a setup claim asks none", async () => {
+        const pr = blockedBy({ refused: 'no_capacity' });
+        await pr.env.acquire({ ...acquireReq, runId: 'run-1', consumer: 'runtime', ref: { side: 'pr', sha: 'p' } });
+        expect(pr.wanted[0]?.sameBackendAs).toEqual([claimIdFor('org-a', 'run-1:base:1'), claimIdFor('org-a', 'run-1:base:1:renewed')]);
+        const base = blockedBy({ refused: 'no_capacity' });
+        await base.env.acquire({ ...acquireReq, idempotencyKey: 'run-1:base:2:renewed', runId: 'run-1', consumer: 'runtime', ref: { side: 'base', sha: 'b' } });
+        expect(base.wanted[0]?.sameBackendAs).toEqual([claimIdFor('org-a', 'run-1:pr:2'), claimIdFor('org-a', 'run-1:pr:2:renewed')]);
+        const setup = blockedBy({ refused: 'no_capacity' });
+        await setup.env.acquire({ ...acquireReq, idempotencyKey: 'setup:env-1:1', consumer: 'setup', ref: { side: 'setup', sha: 's' } });
+        expect(setup.wanted[0]).not.toHaveProperty('sameBackendAs');
+    });
+
+    it("no connected cell running the other side's backend is blocked backend_unavailable, naming it, sent to no cell", async () => {
+        const gone = blockedBy({ refused: 'backend_unavailable', driver: 'gvisor', isolation: 'sandboxed-container' });
+        const r = (await gone.env.acquire({ ...acquireReq, runId: 'run-1', consumer: 'runtime', ref: { side: 'pr', sha: 'p' } })) as any;
+        expect(r).toMatchObject({ status: 'blocked', blockers: [{ kind: 'capacity', signature: 'backend_unavailable' }] });
+        expect(r.blockers[0].message).toContain('gvisor (sandboxed-container)');
+        expect(gone.posted).toEqual([]);
+    });
 });
 
 describe('HubEnvironmentClient local browser exploration', () => {
@@ -350,5 +441,28 @@ describe('HubEnvironmentClient local browser exploration', () => {
         expect(calls[0]).toMatchObject({ url: 'https://hub-1/internal/claims/c1/browser-explore', body: { organizationId: 'org-a', runId: 'run-1', stepId: 's1', request } });
         expect(await runtime(client(recording([], 200, '{}'))).exploreBrowser('c1', request, 's2')).toMatchObject({ status: 'unavailable' });
         expect(await runtime(client(reset)).exploreBrowser('c1', request, 's3')).toMatchObject({ code: 'cell_unavailable' });
+    });
+});
+
+describe("a Run side's round snapshot through the hub", () => {
+    it("asks the claim's replica for a round and names it on the side's resets; without one the reset names none", async () => {
+        const calls: Call[] = [];
+        const env = runtime(client(async (url, headers, body) => {
+            await recording(calls)(url, headers, body);
+            return { status: 200, text: url.endsWith('/snapshot') ? JSON.stringify({ id: 'ksn-0123456789abcdef0123456789abcdef', purpose: 'round', ms: 4 }) : '{"ok":true}' };
+        }));
+        const stepId = '6f1c2d3e-4b5a-5c6d-8e7f-001122334455';
+        expect(await env.snapshotRound('claim-1', stepId)).toEqual({ id: 'ksn-0123456789abcdef0123456789abcdef', ms: 4 });
+        expect(calls[0]).toMatchObject({ url: 'https://hub-1/internal/claims/claim-1/snapshot', body: { organizationId: 'org-a', runId: 'run-1', stepId, purpose: 'round' } });
+        await env.reset('claim-1', 'img-1', 'ksn-0123456789abcdef0123456789abcdef');
+        await env.reset('claim-1', 'img-1');
+        expect(calls[1]).toMatchObject({ url: 'https://hub-1/internal/claims/claim-1/reset', body: { imageId: 'img-1', roundSnapshotId: 'ksn-0123456789abcdef0123456789abcdef' } });
+        expect(calls[2].body).not.toHaveProperty('roundSnapshotId');
+    });
+
+    it('answers a round the hub refused as an error, never a snapshot', async () => {
+        const env = runtime(client(async () => ({ status: 409, text: JSON.stringify({ code: 'refused', message: 'the cell keeps no snapshots' }) })));
+        const stepId = '6f1c2d3e-4b5a-5c6d-8e7f-001122334455';
+        expect(await env.snapshotRound('claim-1', stepId)).toEqual({ code: 'transport_lost', stepId });
     });
 });

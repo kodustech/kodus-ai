@@ -7,8 +7,8 @@ import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
 import { createCa } from '../ca/x509';
 import { CellHub, CellUnavailableError, ClaimScopeError, HubLogLine } from '../cell-hub';
-import { InMemoryHubStore } from '../hub-store';
 import { claimIdFor } from './claim.service';
+import { InMemoryHubStore } from '../testing';
 
 // claim.renew on the hub, and the boot timing a claim.ready carries into the
 // hub's metrics. Driven through the real CellHub with a socket double.

@@ -30,23 +30,24 @@ Shared vocabulary and product↔Runtime contracts, defined once:
 - `cell-token.ts`: single-use 15-minute cell registration tokens, stored as a hash only.
 - `run-plan.ts` and `probe-assertions.ts`: a planned HTTP probe keeps its descriptive `probe.expected` separate from optional closed `assertions` (`kind: http`, integer `status` 100–599, optional literal `bodyIncludes`, at most 2000 characters). The worker evaluates these together; assertions never enter the cell's wire Probe. A nonempty HTTP request body requires one explicit nonempty Content-Type header; the plan checks preserve the declared request unchanged.
 
+- `views/*.ts`: the response shapes of the product's /runtime routes (environment and its blockers, Run detail, lessons, cells, settings), types only. The use cases re-export them from their old paths, and apps/web imports them with `import type`, so a field the API renames or drops breaks the web typecheck. A new response view goes here, never next to its use case.
 - `browser-exploration.ts`: bounded local UI exploration requests/results, separate from probes. Only a base claim with the negotiated `browserExplore` capability offers `browser_explore`; final probes require stable CSS selectors rather than native session refs.
 
-`api/domain/{runtime-commands,evidence,cell-token}.ts` re-export these for older callers.
+`api/domain/{runtime-commands,cell-token}.ts` re-export these for older callers; evidence is imported from `contracts/evidence` only.
 
 ### protocol — `@libs/runtime/protocol`
-The hub↔cell WebSocket protocol (ADR-051).
+The hub↔cell WebSocket protocol.
 - `strict-json.ts` decodes before any schema runs. It refuses duplicate keys, nesting deeper than 32, trailing data and the `__proto__` key, and reads numbers whole. A frame two parsers could read differently never reaches a schema.
 - `envelope.ts` `decodeFrame`: 1 MiB frame limit, envelope schema, supported versions, then the body schema of its type. Claim-scoped types must carry `claimId`; `ack` and `nack` must carry `re`; `blocked` carries `re` (an answer) or `claimId` (unsolicited, a security violation on that claim). Each refusal has a code, which the hub sends back as a nack.
 - `messages.ts`: strict zod body per message type. Repo refs refuse `.`/`..` segments and allow plain http only to local names. Upload paths cannot climb out. `step.result` must match its executor. A diagnostic hold is accepted only on a setup claim. A `security_violation` blocked names the alert kind as its signature.
-- Evidence capture (`experiments/kody-runtime/EVIDENCE-CAPTURE-DESIGN.md`): `probe.run`/`exec` `evidence` (what to capture, the upload grants) and the result's `requests[].at`, `probe.evidence` (logs, db, outbound, refs) and `exec.refs`. Each block is a hello feature (`timedRequests`, `serviceLogs`, `dbEffects`, `outboundCalls`, `execCast`) both ways: `evidenceRequestFor` trims what the hub sends to what the cell named, and the cell sends a field only when the hub's ack accepts it. The gate reads none of it.
+- Evidence capture: `probe.run`/`exec` `evidence` (what to capture, the upload grants) and the result's `requests[].at`, `probe.evidence` (logs, db, outbound, refs) and `exec.refs`. Each block is a hello feature (`timedRequests`, `serviceLogs`, `dbEffects`, `outboundCalls`, `execCast`) both ways: `evidenceRequestFor` trims what the hub sends to what the cell named, and the cell sends a field only when the hub's ack accepts it. The gate reads none of it.
 - `fixtures/*.json`: one frame and its expected outcome (`ok` + type, or the refusal code). Jest runs them in `fixtures.spec.ts`, and Go runs the same files in `apps/runtime-cell/internal/protocol/fixtures_test.go`.
 - JSON Schema and Go types:
   ```
   node -r ts-node/register/transpile-only -r tsconfig-paths/register libs/runtime/protocol/scripts/dump-json-schema.ts
   cd apps/runtime-cell && go generate ./internal/protocol/ && go test ./internal/protocol/
   ```
-  `fixtures.spec.ts` fails when the checked-in `protocol.schema.json` is stale. zod refinements do not reach the JSON Schema, so Go keeps its own copy of each one. A shared fixture holds both sides to it.
+  The same script writes `apps/runtime-cell/internal/protocol/constants_gen.go` from `scripts/go-constants.ts`: the hello features, patterns, bounds and name lists the cell compiles in, each read from its TypeScript export. `generated-go.spec.ts` fails when either checked-in file is stale (`--check` does the same from the command line). zod refinements do not reach the JSON Schema, so Go keeps its own copy of each one. A shared fixture holds both sides to it.
 
 ### probe — `@libs/runtime/probe`
 `probe.schema.ts`: the typed probes the agent writes.
@@ -75,17 +76,24 @@ The hub↔cell WebSocket protocol (ADR-051).
    - it varies within a side, or differs between sides: `inconclusive`;
    - it fails on both: `pre_existing`;
    - it holds on both: `not_reproduced`.
-9. **Fields differ.** The PR must repeat (2 rounds). Pixel-only differences return `inconclusive` with a fixed visual question and retained evidence (ADR-017). A stable behavioral difference returns `finding` / `behavior_change`, with `differingFields`.
+9. **Fields differ.** The PR must repeat (2 rounds). Pixel-only differences return `inconclusive` with a fixed visual question and retained evidence. A stable behavioral difference returns `finding` / `behavior_change`, with `differingFields`.
+
+**Routes the PR adds.** `decideNewEndpoint(decision, steps, { addedByDiff })` runs after coverage is known (the runtime-worker's replay loop). A `behavior_change` finding on an entry point the extractor marks `added`, with `status` among the differing fields, where every base round answered 404 or 405 after a ready check that answered 2xx or 3xx (`GateStep.readyStatus`), becomes `new_endpoint` when the PR answers under 500 and `finding` / `new_endpoint_error` when it answers 5xx. Anything else is returned unchanged: a route the PR removes, a 404 on a route the diff does not add, or a base whose health path did not answer, stay `behavior_change`.
+
+**Changes the diff spells out.** `decideIntendedChange(decision, steps, { diff, browserStepKinds })` (`gate/intended-change.ts`) runs after `decideNewEndpoint`. A `behavior_change` finding whose every differing field is a literal one changed block of the diff removes, with its counterpart added in the same block, keeps its verdict and gains `intendedChange` (main's and the PR's literal, the added line); the worker marks it `intent: 'intended'`. Explained: `step.N.value` and an HTML page's `html.text` (by line, then by the words that differ), `json.*` (a value, or a key renamed with its values unchanged), `status`; `steps` and pixels when they follow from an explained value. Anything else (a literal the diff does not change, a PR value it does not add, a digest such as `html.markup.sha256`, a count) is returned unchanged. A change that made one side skip an asserting step after it is `inconclusive`.
+
+`gate/probe-fields.ts` turns an observer result into those fields: `effectiveCompare` (what the probe asked plus the floor of its kind), `normalizeFields` and `expectedHolds`. A body that is not JSON is `json: not_json` plus, for an HTML page, `html.text` (visible text) and `html.markup.sha256` (the tag skeleton with per-build and per-request parts set aside, `gate/html-fields.ts`, parsed with `htmlparser2`), and for any other body `body.sha256`.
 
 Anything the gate cannot decide is `inconclusive`. Nothing unknown becomes `not_reproduced`. `markUnbackedClaims` marks what the agent says it proved as `unverified` unless a healthy observer step of that probe, on the pinned image, backs it.
 
 ### entry-points — `@libs/runtime/entry-points`
-- `extract.ts` `extractEntryPoints`: the entry points of a diff, without an LLM (ADR-044).
+- `extract.ts` `extractEntryPoints`: the entry points of a diff, without an LLM.
   - Next.js routes come from `app/**/route.ts` and `pages/api/**`; a route that exports no method uses method `ALL`.
   - Nest controllers and Express/Fastify calls: a changed line inside one handler maps to that route. Any other line (imports, constructor, a helper) maps to every route in the file.
   - Lockfiles, Dockerfiles, compose files, CI and vendored code are `dependency_surface`. Other code is `unmapped`.
   - The marker path `.kodus-runtime/diff-truncated` becomes `unmapped:diff-truncated`, which no probe can settle.
-- `coverage.ts`: coverage comes from the observer's request log on both sides, never from the agent's label (S-32). `routeShapeOf` normalizes ids. `requestMatchesEntryPoint` matches segment by segment, with params and a trailing catch-all. `coveredEntryPoint` returns the backed entry point or `unmapped`. A probe left `unmapped` still carries `exercised` (`probe/exercised.ts`: `METHOD path`, `browser /first-goto` or `SQL on service`, from the typed spec, query dropped, redacted, at most 256 characters), which the comment and the Run page show with "outside this PR's paths". It names what was sent and covers nothing.
+  - `added: true` on an `http_route` whose declaration is an added line of the diff (a new Next.js route file, or an added export of it) and that no removed line of the diff declares (a moved or rewritten route is not added).
+- `coverage.ts`: coverage comes from the observer's request log on both sides, never from the agent's label. `routeShapeOf` normalizes ids. `requestMatchesEntryPoint` matches segment by segment, with params and a trailing catch-all. `coveredEntryPoint` returns the backed entry point or `unmapped`. A probe left `unmapped` still carries `exercised` (`probe/exercised.ts`: `METHOD path`, `browser /first-goto` or `SQL on service`, from the typed spec, query dropped, redacted, at most 256 characters), which the comment and the Run page show with "outside this PR's paths". It names what was sent and covers nothing.
 - `diff-ref.ts` `diffRefOf`: the diff file a probe's entry point comes from (its `via`, else the extractor's match) and the first added line of its patch; only a file of the diff is ever named. `ProbeVerdict.diffRef` on the Run detail.
 
 ### run — `@libs/runtime/run`
@@ -95,14 +103,14 @@ Anything the gate cannot decide is `inconclusive`. Nothing unknown becomes `not_
   - `runtimeOutboxMessage(event, payload, id)` validates the payload against that event's schema and picks the routing key.
 - `sealed-secret.ts`: AES-256-GCM, `sealed:v1:` prefix, bound by AAD to the Run id (a setup command's token is bound to the command `key`). `sealSecret`, `openSecret`, `isSealedSecret`, `sealingKeyFrom` (32 bytes, as hex or base64). The product seals with `RUNTIME_SECRET_SEAL_KEY`, and the runtime-worker opens inside the step that uses the token.
 - `run-state.ts`: the Run state machine (`canTransition`, `assertTransition`).
-  - `decideRunVerdict`: regression > partly_tested > no_regressions. Success needs `not_reproduced` on every entry point, with no inconclusive, blocker or unverified probe on it, and a diff that was not truncated. A `pre_existing` result alone leaves that path partly tested; it does not invalidate another `not_reproduced` result on the same path. Reports preserve `pre_existing` as the cause instead of claiming no probe reached it.
-  - `checkConclusionFor` maps state and verdict to the check. A halted Run is never `success`; with `securityViolation` (the cell saw the code exfiltrate) it is a `failure` titled `Security violation · …`.
+  - `decideRunVerdict`: regression > partly_tested > no_regressions. Success needs `not_reproduced` (or `new_endpoint`, listed in `newEndpoints`, never a finding) on every entry point, with no inconclusive, blocker or unverified probe on it, and a diff that was not truncated. A `pre_existing` result alone leaves that path partly tested; it does not invalidate another `not_reproduced` result on the same path. Reports preserve `pre_existing` as the cause instead of claiming no probe reached it.
+  - `checkConclusionFor` maps state and verdict to the check. Its title counts a `new_endpoint_error` finding as an error on a new endpoint, not a regression, and appends `· N new endpoints`. A halted Run is never `success`; with `securityViolation` (the cell saw the code exfiltrate) it is a `failure` titled `Security violation · …`.
 - `replay-lanes.ts`: per probe, main and the PR on one clock (request → logs → database → outbound → response) from one healthy round each, with the first difference; `ProbeVerdict.lanes` on the Run detail. A block a cell did not capture is `captured: false` ("not captured") and is never compared.
 - `response-diff.ts`: per probe, the two answers field by field from the same rounds as the lanes (JSON fields as the gate names them, or the first differing line of a text body); values redacted and cut, header and secret-looking keys always `[redacted]`. `ProbeVerdict.responseDiff` on the Run detail, never in the report.
 - `boot-failure.ts`: why the side that decided the Run did not boot (catalog kind, signature, title, the matched error line, the last 40 output lines), redacted; `RuntimeRunProjection.bootFailure` on the Run detail, its error line only as the report's `bootError`. The hub keeps the same tail on the claim's `runtime_claim_blockers` row.
 - `run-report.ts`: the structured report and progress the product renders. No agent or app prose reaches the PR through it.
-- `run-projection.ts`: `runtime_runs` in Mongo. `RunProjectionReader` (org-scoped `get`, `findLive`, `list` filtered by repository ids, environment and date, `listLive`) and `RunProjectionStore` (adds `upsert`, the runtime-worker only). `adapters/mongo-run-projection.store.ts` holds the store and its indexes.
-- `run-stream.ts` + `adapters/pg-run-stream.store.ts`: the Run's Postgres event log, read from an opaque global-sequence offset. A transaction advisory lock per org and Run is acquired before sequence allocation, so a later append cannot commit ahead of an earlier same-stream event (#2460). Other streams stay independent; keyed retries remain idempotent. The file adapter preserves its own opaque event-boundary offsets. No schema or cursor migration is needed; every hub writer must run the ordered append before the guarantee holds, and previously skipped events require rereading from an earlier offset.
+- `run-projection.ts`: `runtime.runtime_runs` in the Runtime Postgres. `RunProjectionReader` (org-scoped `get`, `findLive`, `list` filtered by repository ids, environment and date, `listLive`) and `RunProjectionStore` (adds `upsert`, the runtime-worker only). `adapters/pg-run-projection.store.ts` holds the store; the table, its live-Run unique index and the read indexes are `runtime-schema.ts` v21. `adapters/pg-environment-setup.store.ts` and `blockers/pg-lesson.store.ts` hold the setups and the lessons the same way. `adapters/pg-document.ts` maps a document to typed columns (what reads filter and sort on) plus one jsonb column with the rest; `adapters/pg-sql.ts` runs a query read-only and with a server-side timeout.
+- `run-stream.ts` + `adapters/pg-run-stream.store.ts`: the Run's Postgres event log, read from an opaque global-sequence offset. A transaction advisory lock per org and Run is acquired before sequence allocation, so a later append cannot commit ahead of an earlier same-stream event. Other streams stay independent; keyed retries remain idempotent. The file adapter preserves its own opaque event-boundary offsets. No schema or cursor migration is needed; every hub writer must run the ordered append before the guarantee holds, and previously skipped events require rereading from an earlier offset.
 - `environment-setup.ts`, `recipe.ts`: the setup record and the part of `.kodus/workspace.yaml` the control plane reads.
 - `testing/`: in-memory projection and stream (`@libs/runtime/run/testing`).
 
@@ -112,17 +120,17 @@ Anything the gate cannot decide is `inconclusive`. Nothing unknown becomes `not_
 ### Reproduction data — `@libs/runtime/run/reproduction`
 `reproductionFor` retains redacted finding inputs in the Run. `reproductionManifest` selects versioned public JSON data for the existing authorized finding endpoint: recorded identities, one external probe and observations. It exports no boot commands or shell script, refuses residual credential patterns anywhere in the response, and omits unresolved image aliases. The browser renders/copies/downloads JSON only and rejects legacy scripts or mismatched cached identities.
 
-This data is for inspection, not execution authority or an exact replay package. The isolated reproduction executor and `runo repro` remain unimplemented; a manifest without recorded image/seed/assertion metadata cannot claim to recreate that state.
+This data is for inspection, not execution authority or an exact replay package. An isolated reproduction executor remains unimplemented; a manifest without recorded image/seed/assertion metadata cannot claim to recreate that state.
 
 ### redaction — `@libs/runtime/redaction`
-`redactPatterns`: the token-pattern pass of S-51, a curated subset of the gitleaks rules in `gitleaks-rules.json`. That file must stay byte-identical to `apps/runtime-cell/internal/redact/rules/gitleaks-rules.json`, and the spec checks it. The LLM gateway runs it on every prompt.
+`redactPatterns`: the token-pattern pass of redaction (after exact known values), a curated subset of the gitleaks rules in `gitleaks-rules.json`. That file must stay byte-identical to `apps/runtime-cell/internal/redact/rules/gitleaks-rules.json`, and the spec checks it. The LLM gateway runs it on every prompt.
 
 ### telemetry — `@libs/runtime/telemetry`
 - Each Run's trace id is derived from its correlationId (`runContext`, `withRunSpan`, `traceHeaders`).
-- `RuntimeMetrics` records the §11 metrics. The blocked egress host stays out of metric attributes, because the app under test chooses it.
+- `RuntimeMetrics` records the shared Runtime metrics. The blocked egress host stays out of metric attributes, because the app under test chooses it.
 
 ### planner — `@libs/runtime/planner`
-The shared test-planning core: bounded repository reads/search/windows, the planner specification/tools and no-model decisions. It depends on the `RepoReader` and `AgentRunner` contracts; it does not resolve Git credentials, model slots or BYOK keys and imports no API adapters. Existing API entry points re-export the moved modules for compatibility.
+The shared test-planning core: bounded repository reads/search/windows, the planner specification/tools and no-model decisions. It depends on the `RepoReader` and `AgentRunner` contracts; it does not resolve Git credentials, model slots or BYOK keys and imports no API adapters. Callers import it from `@libs/runtime/planner/*`; the recipe author's `repo-reader` re-export is the one API entry point left.
 
 This extraction preserves the planner behavior and limits. The active production planner still runs through the API wrapper; moving its loop to `runtime-worker` also requires a gateway contract that carries model tool-call/result turns. The extraction alone does not complete that migration.
 
@@ -144,13 +152,13 @@ The Nest side the product runs. `RuntimeApiModule` (`runtime-api.module.ts`) is 
   - `secret-sealer.ts`: `sealForRuntime`; returns 503 without a key.
 - `infrastructure/`
   - `code-management-git.adapter.ts`: Git API facts, a diff bounded with `truncated`, post-change contents for route extraction, org membership.
-  - Mongo and Postgres readers of Runtime state: read-only, read-only transactions, `RUNTIME_DATABASE_READ_URL` only.
+  - Postgres readers of Runtime state (`pg-runtime-*.reader.ts`, `pg-runtime-readers.ts`, `pg-pull-request-runs.reader.ts`): one read-only pool (`runtime-read-db.ts`) that every reader, `pg-external-stop.reader.ts` included, takes as its `SqlQuery`, read-only transactions, `RUNTIME_DATABASE_READ_URL` only (role `kodus_runtime_reader`, `scripts/runtime/runtime-reader-grants.sql`). Without that URL every read answers 503.
   - TypeORM stores of product tables.
-  - `mongo-llm-budget.store.ts`: the gateway's budget in the product Mongo (`runtime_llm_budget` counters, `runtime_llm_reservations` in flight).
+  - Product-side state in the product Postgres (`typeorm-sql.ts`, schema in the migration `MoveRuntimeProductStoresToPostgres2026111200000000`, entities in `runtime-product-state.models.ts`): `typeorm-llm-budget.store.ts`, the gateway's budget (`runtime_llm_budget` counters, `runtime_llm_reservations` in flight); `typeorm-setup-calls.store.ts` and `typeorm-model-turn-receipts.store.ts`, the calls a resumed setup or a restarted API asks again; `typeorm-env-audit.store.ts`, the env tools' audit. `runtime-product-retention.cron.ts` deletes what expired (what Mongo's TTL indexes did), every 10 minutes on one replica.
   - The BYOK LLM provider.
   - `runtime-reader.guard.ts`: JWT or team key.
 
-**How the PR trigger decides.** The webhook event only says that something happened. The trigger reads every fact from the Git API (ADR-057).
+**How the PR trigger decides.** The webhook event only says that something happened. The trigger reads every fact from the Git API.
 1. A PR the API reports closed cancels its live Runs. A late `closed` on a PR the API reports open cancels nothing. Live Runs on a head other than the API's head are cancelled as superseded.
 2. It then requires, in order: the mode is not off; an environment exists; its setup is `active`; the PR exists; it is not a fork (the approval flow does not exist yet).
 3. For `@kody runtime` comments, the commenter must be allowed. `writers` needs write access per the Git API. `anyone_in_org` needs org membership per the Git API. An unknown answer denies.
@@ -166,7 +174,7 @@ The Nest side the product runs. `RuntimeApiModule` (`runtime-api.module.ts`) is 
 **LLM gateway** (`llm-gateway.use-case.ts`, `POST /internal/runtime/llm`):
 - Checks the Run token and that the Run is the same org and attempt and still live.
 - Redacts the prompt.
-- Reserves the budget: a compare-and-swap on the per-day, per-PR and per-Run counters, so concurrent calls of one org never pass a limit together. A call that keeps losing the swap gets 503 `llm_budget_busy`.
+- Reserves the budget: one transaction under a lock per org reads the per-day, per-PR and per-Run counters, decides and adds, so concurrent calls of one org never pass a limit together. A call that waits more than 5 s for that lock gets 503 `llm_budget_busy`.
 - Settles with the reported usage. A provider that reports none keeps the reservation counted.
 - The record of each call is its usage span in `observability_telemetry` (route `runtime`, with `runId`, `teamId`, `repositoryId`, `prNumber`, `task`), so Token Usage shows the Runtime's consumption. There is no separate usage table.
 
@@ -181,7 +189,7 @@ Callers outside this folder import these paths; they must keep resolving:
 | `@libs/runtime/run/run-messages` | apps/runtime, the GitHub webhook handler (libs/platform) |
 | `@libs/runtime/environment`, `probe`, `protocol`, `gate`, `entry-points` (+ `/extract`, `/coverage`), `telemetry`, `redaction` | apps/runtime |
 | `@libs/runtime/contracts` (+ `/enums`, `/runtime-commands`, `/evidence`, `/cell-token`) | apps/runtime |
-| `@libs/runtime/api/domain/{runtime-commands,evidence,cell-token,run-token,ports}` | apps/runtime, apps/api (re-exports kept) |
+| `@libs/runtime/api/domain/{runtime-commands,cell-token,run-token,ports}` | apps/runtime, apps/api (re-exports kept) |
 | `@libs/runtime/api/application/**`, `api/infrastructure/runtime-reader.guard`, `api/__tests__/fixtures` | apps/api controllers and their spec, apps/runtime evidence spec |
 
 ## Testing
@@ -189,10 +197,10 @@ Callers outside this folder import these paths; they must keep resolving:
 ```
 API_NODE_ENV=test npx jest libs/runtime                              # every spec here
 API_NODE_ENV=test npx jest libs/runtime/gate libs/runtime/protocol   # one area
-RUNTIME_IT_MONGO_URL=mongodb://… API_NODE_ENV=test npx jest libs/runtime/api/infrastructure/mongo-llm-budget.store.integration.spec.ts
+RUNTIME_IT_DATABASE_URL=postgres://runtime:runtime@localhost:5442/kodus_runtime_it API_NODE_ENV=test npx jest libs/runtime libs/runtime-publish   # with the Postgres integration specs
 cd apps/runtime-cell && go test ./internal/protocol/                 # the shared fixtures on the Go side
 ```
-- The budget integration spec skips unless `RUNTIME_IT_MONGO_URL` is set; `SKIP_INTEGRATION=true` skips it as well.
+- The Postgres integration specs (`*.integration.spec.ts`: the projection, setups and lessons, the API's read-only role, the product-side state, the publications) skip unless `RUNTIME_IT_DATABASE_URL` names a disposable server (`kr-it-pg` locally); each leases a database of its own (`apps/runtime/src/testing/isolated-database.ts`). `SKIP_INTEGRATION=true` skips them as well.
 - `api/__tests__/fixtures.ts` holds the shared test doubles, the real RBAC (`realAuthorization`), the test seal key and `openSealed`.
 - Type check: `npx tsc --noEmit -p tsconfig.json 2>&1 | grep libs/runtime/`.
 

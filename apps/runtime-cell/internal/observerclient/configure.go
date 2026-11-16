@@ -80,6 +80,7 @@ func Configure(ctx context.Context, hc *http.Client, base string, cc observer.Cl
 		}
 	}
 }
+
 func singleHeader(h http.Header, key, want string) bool {
 	values := h.Values(key)
 	return len(values) == 1 && values[0] == want

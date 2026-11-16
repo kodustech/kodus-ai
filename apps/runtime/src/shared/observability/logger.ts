@@ -1,5 +1,7 @@
 import type { LoggerService } from '@nestjs/common';
 import { trace } from '@opentelemetry/api';
+import { scrubText } from '@libs/runtime/telemetry/telemetry-guard';
+
 import { diagnosticFields } from './diagnostic-fields';
 
 // The one log format of the Runtime processes: one JSON object per line, with
@@ -7,6 +9,9 @@ import { diagnosticFields } from './diagnostic-fields';
 // Nest's own Logger instances write through it (the app is created with it),
 // so the hub's per-claim lines and the framework lines look the same.
 // Fields carry ids only: never a token, a certificate, a key or a canary.
+// Field names are the taxonomy's (libs/runtime/telemetry/taxonomy.json): an
+// older name (claimId, runId, organizationId) is written under its canonical
+// key, and every string is scrubbed of secret-shaped text.
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 export type LogFields = Record<string, unknown>;
@@ -38,7 +43,7 @@ export class RuntimeLogger implements LoggerService {
                 level,
                 service: this.service.slice(0, 512),
                 ...(context ? { context: context.slice(0, 512) } : {}),
-                msg: msg.slice(0, 512),
+                msg: scrubText(msg).text.slice(0, 512),
                 ...(span ? { traceId: span.traceId, spanId: span.spanId } : {}),
             };
             const line = JSON.stringify({

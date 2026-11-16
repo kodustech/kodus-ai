@@ -9,8 +9,11 @@ import type {
 } from './admission-contract';
 import { PgPhysicalAdmissionDirectory } from './physical-admission-directory';
 import { ensureRuntimeSchema } from '../persistence/runtime-schema';
+import { isolatedDatabase } from '../../testing/isolated-database';
 
-const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
+// A database of its own: suites in parallel never read each other's rows (isolated-database.ts).
+const database = isolatedDatabase(process.env.RUNTIME_IT_DATABASE_URL ?? '', 'physical_admission');
+const url = database.url;
 (!url || process.env.SKIP_INTEGRATION === 'true' ? describe.skip : describe)(
     'paired physical reservations (real Postgres)',
     () => {
@@ -19,24 +22,14 @@ const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
         const cells: string[] = [];
         const orgs: string[] = [];
         beforeAll(async () => {
+            await database.create();
             pool = new Pool({ connectionString: url, max: 4 });
             await ensureRuntimeSchema(pool);
             store = new PgHubStore(pool);
         });
         afterAll(async () => {
-            await pool.query(
-                'DELETE FROM runtime.runtime_cell_reservations WHERE org_id=ANY($1::text[])',
-                [orgs],
-            );
-            await pool.query(
-                'DELETE FROM runtime.runtime_claims WHERE org_id=ANY($1::text[])',
-                [orgs],
-            );
-            await pool.query(
-                'DELETE FROM runtime.runtime_cell_sessions WHERE cell_id=ANY($1::text[])',
-                [cells],
-            );
-            await pool.end();
+            await pool?.end();
+            await database.drop();
         });
         const request = (
             kind: 'run' | 'setup' = 'run',
@@ -220,7 +213,7 @@ const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
         });
         it('keeps a setup idle org debit after release and transfers only the owned live reservation', async () => {
             const req = request('setup');
-            const id = await cell(req.organizationId, 4, 'kodus');
+            await cell(req.organizationId, 4, 'kodus');
             const d = directory(1);
             const found = await d.reserve(req);
             expect(found.status).toBe('located');

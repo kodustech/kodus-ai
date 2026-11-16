@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver/drivertest"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/policy"
 )
@@ -36,8 +36,10 @@ func TestDriverBootsAComposeThatReachesItsServicesAndOnlyAllowedHosts(t *testing
 	dir := t.TempDir()
 	e := startEgress(t, dir, "kodus-egress-drv")
 	ctx := context.Background()
-	d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{CellID: "cell-e2e", HolderImage: "alpine:3.20",
-		WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name})
+	d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{
+		CellID: "cell-e2e", HolderImage: "alpine:3.20",
+		WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +60,7 @@ func TestDriverBootsAComposeThatReachesItsServicesAndOnlyAllowedHosts(t *testing
 	if err := os.MkdirAll(project, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sources, err := d.Up(ctx, ref, []byte(twoServices), project)
+	sources, err := d.Up(ctx, driver.UpRequest{Ref: ref, Compose: []byte(twoServices), ProjectDir: project})
 	if err != nil {
 		t.Fatalf("up: %v", err)
 	}

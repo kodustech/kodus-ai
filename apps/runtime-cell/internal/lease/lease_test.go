@@ -45,10 +45,10 @@ func TestRenewIsCappedAtTheCeiling(t *testing.T) {
 		t.Fatal("tag not moved")
 	}
 	c.t = c.t.Add(61 * time.Minute)
-	if _, err := m.Renew(context.Background(), "claim-1", c.t.Add(time.Minute)); err != ErrExpired {
+	if _, err := m.Renew(context.Background(), "claim-1", c.t.Add(time.Minute)); !errors.Is(err, ErrExpired) {
 		t.Fatalf("renewed past the ceiling: %v", err)
 	}
-	if _, err := m.Renew(context.Background(), "nope", c.t); err != ErrUnknownClaim {
+	if _, err := m.Renew(context.Background(), "nope", c.t); !errors.Is(err, ErrUnknownClaim) {
 		t.Fatal(err)
 	}
 }

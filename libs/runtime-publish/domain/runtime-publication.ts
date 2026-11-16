@@ -1,10 +1,8 @@
 import type { PublishKind, RuntimePublishRequested } from '@libs/runtime/run';
 
 // What the product worker published for a Run (ADR-052). One row per
-// idempotency key `runId:attempt:kind`, in the product's Mongo
+// idempotency key `runId:attempt:kind`, in the product's Postgres
 // (`runtime_publications`). The Runtime never reads or writes it.
-
-export const RUNTIME_PUBLICATIONS_COLLECTION = 'runtime_publications';
 
 /** How long a claim holds before another delivery may take it over. */
 export const PUBLICATION_LEASE_MS = 5 * 60 * 1000;
@@ -18,8 +16,12 @@ export const CHECK_STATUS_RANK: Record<CheckWireStatus, number> = {
     completed: 3,
 };
 
-/** `reply` = the answer on a review suggestion, under `runId:attempt:reply:<suggestionId>`. */
-export type PublicationKind = PublishKind | 'reply';
+/**
+ * `reply` = the answer on a review suggestion, under `runId:attempt:reply:<suggestionId>`.
+ * `skip_reply` = the line on a PR whose `@kody runtime` started no Run, under
+ * `trigger-skip:<org>:<repo>:<pr>:<head>:<reason>` (no Run: `runId` is the key, `attempt` 0).
+ */
+export type PublicationKind = PublishKind | 'reply' | 'skip_reply';
 
 export type PublicationStatus =
     'publishing' | 'published' | 'skipped' | 'failed';
@@ -201,115 +203,6 @@ export function refusalState(
     return existing.status === 'publishing' && !isLeaseExpired(existing, now)
         ? 'busy'
         : 'duplicate';
-}
-
-export class InMemoryPublicationStore
-    implements PublicationStore, PublicationReader, PublicationRedriveStore
-{
-    readonly rows = new Map<string, RuntimePublication>();
-
-    async claim(request: ClaimRequest, now = new Date()): Promise<ClaimResult> {
-        const existing = this.rows.get(request.key);
-        const leaseUntil = new Date(
-            now.getTime() + PUBLICATION_LEASE_MS,
-        ).toISOString();
-        if (!existing) {
-            const publication: RuntimePublication = {
-                ...request,
-                checkRank: undefined,
-                status: 'publishing',
-                leaseUntil,
-                createdAt: now.toISOString(),
-                updatedAt: now.toISOString(),
-            };
-            this.rows.set(request.key, publication);
-            return { state: 'claimed', publication: { ...publication } };
-        }
-        if (!canClaim(existing, request, now)) {
-            return {
-                state: refusalState(existing, now),
-                publication: { ...existing },
-            };
-        }
-        const publication: RuntimePublication = {
-            ...existing,
-            ...(request.request ? { request: request.request } : {}),
-            status: 'publishing',
-            leaseUntil,
-            updatedAt: now.toISOString(),
-        };
-        this.rows.set(request.key, publication);
-        return { state: 'claimed', publication: { ...publication } };
-    }
-
-    async complete(key: string, result: PublicationResult) {
-        const row = this.rows.get(key);
-        if (!row) return;
-        this.rows.set(key, {
-            ...row,
-            ...result,
-            leaseUntil: undefined,
-            updatedAt: new Date().toISOString(),
-        });
-    }
-
-    async release(key: string, reason: string, keep?: PublicationRetryState) {
-        const row = this.rows.get(key);
-        if (!row) return;
-        this.rows.set(key, {
-            ...row,
-            ...keep,
-            status: 'failed',
-            reason,
-            leaseUntil: undefined,
-            updatedAt: new Date().toISOString(),
-        });
-    }
-
-    async findCheckRunId(key: string) {
-        return this.rows.get(key)?.checkRunId ?? null;
-    }
-
-    async listForRun(organizationId: string, runId: string) {
-        return [...this.rows.values()]
-            .filter((r) => r.organizationId === organizationId && r.runId === runId)
-            .map(({ request: _request, ...row }) => ({ ...row }));
-    }
-
-    async findStale(staleBefore: string, now: string, limit: number) {
-        return [...this.rows.values()]
-            .filter((r) => isStaleForRedrive(r, staleBefore, now))
-            .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))
-            .slice(0, limit)
-            .map((r) => ({ ...r }));
-    }
-
-    async reserveRedrive(key: string, seenUpdatedAt: string, now: string) {
-        const row = this.rows.get(key);
-        if (!row || row.updatedAt !== seenUpdatedAt || row.redrive?.gaveUpAt) {
-            return null;
-        }
-        if (row.status !== 'failed' && row.status !== 'publishing') return null;
-        const next: RuntimePublication = {
-            ...row,
-            redrive: { ...row.redrive, attempts: (row.redrive?.attempts ?? 0) + 1, lastAt: now },
-            updatedAt: now,
-        };
-        this.rows.set(key, next);
-        return { ...next };
-    }
-
-    async giveUp(key: string, reason: string, now: string) {
-        const row = this.rows.get(key);
-        if (!row) return;
-        this.rows.set(key, {
-            ...row,
-            status: 'failed',
-            leaseUntil: undefined,
-            redrive: { attempts: row.redrive?.attempts ?? 0, ...row.redrive, gaveUpAt: now, gaveUpReason: reason },
-            updatedAt: now,
-        });
-    }
 }
 
 /** The rule of PublicationRedriveStore.findStale, for the in-memory store and the tests. */

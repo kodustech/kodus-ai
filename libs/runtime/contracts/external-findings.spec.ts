@@ -43,6 +43,13 @@ const verification = {
 };
 
 describe('external finding contracts', () => {
+    it('lets a submission name the environment it runs in, and keeps one that names none as it was', () => {
+        const environmentId = randomUUID();
+        expect(SubmitFindingsSchema.parse({ ...input, environmentId })).toEqual({ ...input, environmentId });
+        expect(SubmitFindingsSchema.parse(input)).not.toHaveProperty('environmentId');
+        for (const bad of ['', 1, null, 'x'.repeat(129)])
+            expect(SubmitFindingsSchema.safeParse({ ...input, environmentId: bad }).success).toBe(false);
+    });
     it('accepts bounded structured observations as data and optional executable evidence', () => {
         expect(SubmitFindingsSchema.parse(input)).toEqual(input);
         expect(

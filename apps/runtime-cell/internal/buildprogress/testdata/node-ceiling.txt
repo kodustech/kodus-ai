@@ -1,0 +1,11 @@
+#4 [base 1/7] FROM docker.io/library/node:20-bookworm@sha256:0f3e2b1a9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f
+#4 DONE 31.2s
+
+#8 [base 4/7] RUN yarn install --immutable
+#8 DONE 1005.3s
+
+#9 [base 5/7] COPY . .
+#9 DONE 88.2s
+
+#12 exporting to docker image format
+#12 exporting layers

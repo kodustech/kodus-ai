@@ -76,7 +76,7 @@ func Diff(base, pr image.Image, tolerance uint8) PixelDiff {
 				continue
 			}
 			// Unchanged: the PR's pixel in grey, three quarters toward white.
-			grey := uint8((uint16(pb[0]) + uint16(pb[1]) + uint16(pb[2])) / 3)
+			grey := uint8((uint16(pb[0]) + uint16(pb[1]) + uint16(pb[2])) / 3) //nolint:gosec // G115: the mean of three bytes is at most 255
 			faded := 255 - (255-grey)/4
 			copy(out.Pix[o:o+4], []uint8{faded, faded, faded, 255})
 		}

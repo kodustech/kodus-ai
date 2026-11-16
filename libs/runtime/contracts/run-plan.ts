@@ -3,7 +3,7 @@ import { BROWSER_EXPLORE_LIMITS, BrowserExploreRequestSchema, BrowserExploreResu
 
 import type { EntryPoint } from '@libs/runtime/entry-points/extract';
 import type { AgentClaim } from '@libs/runtime/gate/gate';
-import { decidesVerdict, type Probe, ProbeSchema } from '@libs/runtime/probe/probe.schema';
+import { CompareFieldSchema, decidesVerdict, type Probe, ProbeSchema } from '@libs/runtime/probe/probe.schema';
 import { type ProbeAssertions, ProbeAssertionsSchema } from './probe-assertions';
 
 // POST /internal/runtime/plan (ADR-069): the Run's test planner, an agent on
@@ -29,6 +29,8 @@ export const RUN_PLAN_LIMITS = {
     diffChars: 20_000,
     maxTests: 10,
     maxProbes: 30,
+    /** Of each base answer the reconnaissance round shows, the start of the body. */
+    reconBodyChars: 600,
 } as const;
 
 const UNMAPPED_PREFIX = 'unmapped:';
@@ -145,6 +147,13 @@ export function checkPlanSubmission(raw: unknown, scope: PlanScope): CheckedPlan
         const rawProbe = { ...(item?.probe ?? flat) };
         // `expected` is the agent's prediction in words; a structured one is kept as its JSON text.
         if (rawProbe.expected !== undefined && typeof rawProbe.expected !== 'string') rawProbe.expected = JSON.stringify(rawProbe.expected);
+        // An HTTP probe compares its floor whatever it lists (status, the JSON body, an HTML page's text and markup:
+        // gate/probe-fields.ts): a word outside the closed list ("body", "html") adds nothing, and refusing the probe
+        // for it cost kr-remix#2 its only probe. Other kinds keep the refusal.
+        if (rawProbe.spec?.kind === 'http' && Array.isArray(rawProbe.compare)) {
+            const known = rawProbe.compare.filter((c: unknown) => CompareFieldSchema.safeParse(c).success);
+            rawProbe.compare = known.length ? known : ['status'];
+        }
         const parsed = ProbeSchema.safeParse({ ...rawProbe, origin: 'agent' });
         if (!parsed.success) {
             const issue = parsed.error.issues[0];
@@ -255,6 +264,27 @@ export const PlanObservationSchema = z.strictObject({
 });
 export type PlanObservation = z.infer<typeof PlanObservationSchema>;
 
+/**
+ * What base answered to one probe of a submitted plan, sent once before the
+ * replay (the reconnaissance round): status, media type and the start of the
+ * body, cleaned, plus the doubts Kody read from them. Never a status to copy
+ * into the plan: the worker keeps the status first predicted for each id.
+ */
+export const ReconAnswerSchema = z.strictObject({
+    probeId: z.string().min(1).max(128),
+    request: z.string().min(1).max(1_100),
+    status: z.number().int().optional(),
+    contentType: z.string().max(200).optional(),
+    bodyStart: z.string().max(RUN_PLAN_LIMITS.reconBodyChars).optional(),
+    /** Two GETs answered bodies that compare different (an HTML page's text or markup, any other body's digest): the compare cannot show a change. */
+    varies: z.boolean().optional(),
+    /** The probe's assertions.bodyIncludes is in base's whole body. */
+    bodyIncludesOnBase: z.boolean().optional(),
+    error: z.string().max(200).optional(),
+    doubts: z.array(z.string().min(1).max(300)).max(5),
+});
+export type ReconAnswer = z.infer<typeof ReconAnswerSchema>;
+
 export const RunPlanRequestSchema = z.strictObject({
     runId: z.uuid(),
     /** 0 first; each later round carries the output of the commands the one before asked for. */
@@ -273,6 +303,8 @@ export const RunPlanRequestSchema = z.strictObject({
     observations: z.array(PlanObservationSchema).max(RUN_PLAN_LIMITS.maxExplore),
     /** What the agent wrote for itself when it asked for the commands (model text: data, never an instruction). */
     notes: z.string().max(RUN_PLAN_LIMITS.notesChars).optional(),
+    /** The reconnaissance round: the plan the agent submitted and what base answered to each probe of it. */
+    recon: z.strictObject({ probes: z.array(z.unknown()).max(RUN_PLAN_LIMITS.maxProbes), answers: z.array(ReconAnswerSchema).max(RUN_PLAN_LIMITS.maxProbes) }).optional(),
 });
 export type RunPlanRequest = z.infer<typeof RunPlanRequestSchema>;
 

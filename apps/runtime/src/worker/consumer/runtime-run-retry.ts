@@ -142,6 +142,7 @@ export class RuntimeRunRetry {
             });
         } catch {
             // Leave the original unacked so channel/process recovery can redeliver it.
+            // Logged here: the throw below leaves the broker library's error handler, and no logger reports it after.
             this.logger.error({
                 msg: 'runtime.command.retry',
                 outcome: 'publish_failed',

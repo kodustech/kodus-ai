@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 )
 
 // A newer bake used to replace the data behind a machine's older image pin.
@@ -117,7 +117,7 @@ func TestUpStopsBeforeComposeWhenPinnedSeedIsUnavailable(t *testing.T) {
 	ref.ImageID = bakeImageID("cell-1", bakeOrg, bakeEnv, strings.Repeat("a", 40))
 	counter := &countingComposeDocker{limitsPathDocker: docker}
 	d.d = counter
-	if _, err := d.Up(ctx, ref, []byte(dataCompose), recipeDir(t, "snapshot")); !errors.Is(err, ErrBakeDataUnavailable) {
+	if _, err := d.Up(ctx, driver.UpRequest{Ref: ref, Compose: []byte(dataCompose), ProjectDir: recipeDir(t, "snapshot")}); !errors.Is(err, ErrBakeDataUnavailable) {
 		t.Fatalf("boot did not retain seed refusal: %v", err)
 	}
 	if counter.ups != 0 {

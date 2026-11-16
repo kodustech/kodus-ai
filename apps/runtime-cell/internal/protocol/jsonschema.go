@@ -229,7 +229,7 @@ func (n *node) validate(v any, path string) error {
 		return &schemaError{path, "no variant matched (" + first.Error() + ")"}
 	}
 	t := typeOf(v)
-	if n.Type != "" && n.Type != t && !(n.Type == "number" && t == "integer") {
+	if n.Type != "" && n.Type != t && (n.Type != "number" || t != "integer") {
 		return &schemaError{path, fmt.Sprintf("expected %s, got %s", n.Type, t)}
 	}
 	if n.HasConst && !equalJSON(v, n.Const) {

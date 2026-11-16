@@ -34,6 +34,11 @@ type Request struct {
 	Env       []string `json:"env,omitempty"`
 	Secrets   []string `json:"secrets,omitempty"`
 	Limits    Limits   `json:"limits,omitempty"`
+	// Repository is the alias of another repository of a claim of several
+	// repositories whose code the command runs on (exec.repository): a
+	// driver that lays workspaces out runs it where that code was built.
+	// Empty: the claim's own repository.
+	Repository string `json:"repository,omitempty"`
 }
 
 // Limits are per-command rlimits, a second lock under the VM's own pids,
@@ -98,7 +103,7 @@ func Run(ctx context.Context, req Request) Result {
 	if req.TimeoutMs <= 0 {
 		req.TimeoutMs = 60_000
 	}
-	cmd := exec.Command("/bin/sh", "-c", req.Limits.prefix()+req.Command)
+	cmd := exec.Command("/bin/sh", "-c", req.Limits.prefix()+req.Command) //nolint:gosec,noctx // G204: running the claim's command inside the sandbox is this package's job; run, not CommandContext, kills the whole tree on ctx or timeout
 	cmd.Dir = req.Cwd
 	cmd.Env = append([]string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + os.TempDir(), "LANG=C.UTF-8"}, req.Env...)
 	return run(ctx, req, cmd)
@@ -116,7 +121,7 @@ func RunArgv(ctx context.Context, req Request, env []string, argv ...string) Res
 	if req.TimeoutMs <= 0 {
 		req.TimeoutMs = 60_000
 	}
-	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd := exec.Command(argv[0], argv[1:]...) //nolint:gosec,noctx // G204: the caller's fixed argv, run without a shell; run, not CommandContext, kills the whole tree on ctx or timeout
 	cmd.Env = env
 	return run(ctx, req, cmd)
 }

@@ -4,8 +4,17 @@ import { STATUS } from '@libs/core/infrastructure/config/types/database/status.t
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { PermissionsAbilityFactory } from '@libs/identity/infrastructure/adapters/services/permissions/permissionsAbility.factory';
-import { InMemoryRunProjectionStore, openSecret, sealingKeyFrom, type RuntimeRunProjection } from '@libs/runtime/run';
+import { openSecret, sealingKeyFrom, type RuntimeRunProjection } from '@libs/runtime/run';
 
+import { MAX_WORKSPACE_REPOSITORIES, REPOSITORY_ALIAS_PATTERN } from '@libs/runtime/contracts/workspace';
+
+import {
+    EnvironmentRepositoryConflictError,
+    type EnvironmentRepository,
+    type EnvironmentRepositoryPatch,
+    type EnvironmentRepositoryStore,
+} from '../domain/ports';
+import type { RuntimeLlmSpendRow } from '../domain/llm-spend';
 import type {
     FindingFeedbackRecord,
     FindingFeedbackStore,
@@ -14,9 +23,10 @@ import type {
     RuntimeApiConfig,
     RuntimeLlmUsageRecord,
     RuntimeLlmUsageStore,
-    RuntimeLlmRunUsage,
     RuntimeLlmSettledUsage,
+    RuntimeLlmSpendReader,
 } from '../domain/ports';
+import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 
 export const ORG = 'org-a';
 export const OTHER_ORG = 'org-b';
@@ -103,6 +113,39 @@ export class FakeOutbox {
     }
 }
 
+/** One priced bucket of usage spans, as TelemetryRuntimeLlmSpendReader returns it. */
+export const spendRow = (patch: Partial<RuntimeLlmSpendRow> = {}): RuntimeLlmSpendRow => ({
+    runId: 'run-1',
+    agent: 'run_agent',
+    repositoryId: REPO,
+    environmentId: null,
+    model: 'claude-sonnet-4-5',
+    paidBy: 'kodus',
+    inputTokens: 1_000,
+    outputTokens: 100,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    totalTokens: 1_100,
+    aboveBaseTierTokens: 0,
+    usd: 0.0045,
+    ...patch,
+});
+
+/** The usage spans of an org (observability_telemetry), already priced; the reads it served are kept. */
+export class InMemoryLlmSpend implements RuntimeLlmSpendReader {
+    reads: Array<Parameters<RuntimeLlmSpendReader['spendOf']>[0]> = [];
+    constructor(public rows: Array<RuntimeLlmSpendRow & { organizationId?: string; at?: Date }> = []) {}
+    async spendOf(query: Parameters<RuntimeLlmSpendReader['spendOf']>[0]) {
+        this.reads.push(query);
+        return this.rows.filter(
+            (r) =>
+                (r.organizationId ?? ORG) === query.organizationId &&
+                (!query.runIds || (r.runId !== null && query.runIds.includes(r.runId))) &&
+                (!r.at || (r.at >= query.start && r.at < query.end)),
+        );
+    }
+}
+
 export class InMemoryLlmUsage implements RuntimeLlmUsageStore {
     readonly rows: Array<RuntimeLlmUsageRecord & { id?: string; pending?: boolean } & Partial<Pick<RuntimeLlmSettledUsage, 'model' | 'cacheReadTokens' | 'cacheWriteTokens'>>> = [];
     private seq = 0;
@@ -126,24 +169,6 @@ export class InMemoryLlmUsage implements RuntimeLlmUsageStore {
     async settle(id: string, actual: RuntimeLlmSettledUsage) {
         const row = this.rows.find((r) => r.id === id);
         if (row) Object.assign(row, actual, { pending: false });
-    }
-    async usageForRuns(runIds: string[]) {
-        const out = new Map<string, RuntimeLlmRunUsage>();
-        for (const runId of new Set(runIds)) {
-            const rows = this.rows.filter((r) => r.runId === runId);
-            if (!rows.length) continue;
-            const byModel = new Map<string | undefined, RuntimeLlmRunUsage['byModel'][number]>();
-            for (const r of rows.filter((x) => !x.pending)) {
-                const m = byModel.get(r.model) ?? { model: r.model, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
-                m.inputTokens += r.inputTokens;
-                m.outputTokens += r.outputTokens;
-                m.cacheReadTokens += r.cacheReadTokens ?? 0;
-                m.cacheWriteTokens += r.cacheWriteTokens ?? 0;
-                byModel.set(r.model, m);
-            }
-            out.set(runId, { tokens: this.sum(rows), byModel: [...byModel.values()] });
-        }
-        return out;
     }
     async cancel(id: string) {
         const i = this.rows.findIndex((r) => r.id === id);
@@ -189,5 +214,70 @@ export class InMemoryFindingFeedback implements FindingFeedbackStore {
         const same = (r: FindingFeedbackRecord) => r.runId === input.runId && r.probeId === input.probeId && r.userId === input.userId;
         this.rows = this.rows.filter((r) => !same(r));
         if (input.value) this.rows.push({ ...input, value: input.value, updatedAt: NOW.toISOString() });
+    }
+}
+
+/**
+ * runtime_environment_repositories in memory, with the semantics of
+ * TypeOrmEnvironmentRepositoryStore (environment-repositories.contract.ts
+ * holds both to them). `environments` are the environments that exist, by org.
+ */
+export class InMemoryEnvironmentRepositories implements EnvironmentRepositoryStore {
+    rows: EnvironmentRepository[] = [];
+    private tick = 0;
+
+    constructor(readonly environments: Array<{ environmentId: string; organizationId: string }> = []) {}
+
+    async listByEnvironment(organizationId: string, environmentId: string) {
+        return this.rows
+            .filter((r) => r.organizationId === organizationId && r.environmentId === environmentId)
+            .sort((a, b) => (a.role === b.role ? (a.alias < b.alias ? -1 : a.alias > b.alias ? 1 : 0) : a.role === 'primary' ? -1 : 1))
+            .map((r) => ({ ...r }));
+    }
+
+    async listByRepository(organizationId: string, repositoryId: string) {
+        return this.rows.filter((r) => r.organizationId === organizationId && r.repositoryId === repositoryId).map((r) => ({ ...r }));
+    }
+
+    async add(input: Omit<EnvironmentRepository, 'createdAt' | 'updatedAt'>) {
+        if (!REPOSITORY_ALIAS_PATTERN.test(input.alias)) throw new Error('invalid repository alias');
+        if (!this.environments.some((e) => e.environmentId === input.environmentId && e.organizationId === input.organizationId)) return null;
+        const existing = this.find(input.organizationId, input.environmentId, input.repositoryId);
+        if (existing) return { ...existing };
+        const siblings = this.rows.filter((r) => r.environmentId === input.environmentId);
+        if (input.role === 'primary' && siblings.some((r) => r.role === 'primary')) throw new EnvironmentRepositoryConflictError('primary');
+        if (siblings.some((r) => r.alias === input.alias)) throw new EnvironmentRepositoryConflictError('alias');
+        if (input.role === 'member' && siblings.filter((r) => r.role === 'member').length >= MAX_WORKSPACE_REPOSITORIES - 1) throw new EnvironmentRepositoryConflictError('limit');
+        const at = this.now();
+        const row = { ...input, createdAt: at, updatedAt: at };
+        this.rows.push(row);
+        return { ...row };
+    }
+
+    async remove(organizationId: string, environmentId: string, repositoryId: string) {
+        const row = this.find(organizationId, environmentId, repositoryId);
+        if (!row || row.role !== 'member') return false;
+        this.rows = this.rows.filter((r) => r !== row);
+        return true;
+    }
+
+    async update(organizationId: string, environmentId: string, repositoryId: string, patch: EnvironmentRepositoryPatch) {
+        if (patch.alias !== undefined && !REPOSITORY_ALIAS_PATTERN.test(patch.alias)) throw new Error('invalid repository alias');
+        const row = this.find(organizationId, environmentId, repositoryId);
+        if (!row) return null;
+        if (patch.alias !== undefined && this.rows.some((r) => r !== row && r.environmentId === environmentId && r.alias === patch.alias)) {
+            throw new EnvironmentRepositoryConflictError('alias');
+        }
+        const set = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+        if (Object.keys(set).length) Object.assign(row, set, { updatedAt: this.now() });
+        return { ...row };
+    }
+
+    private find(organizationId: string, environmentId: string, repositoryId: string) {
+        return this.rows.find((r) => r.organizationId === organizationId && r.environmentId === environmentId && r.repositoryId === repositoryId);
+    }
+
+    private now() {
+        return new Date(NOW.getTime() + this.tick++).toISOString();
     }
 }

@@ -5,10 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/checkoutfs"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
 
@@ -44,11 +43,14 @@ func (d *Driver) seed(ctx context.Context, project, checkout string, rec *recipe
 	return nil
 }
 
+// maxSeedBytes is the largest data.seed.sql file the driver pipes to psql.
+const maxSeedBytes = 64 << 20
+
 // seedFromSQLFile pipes the file to psql in a postgres service, once the
 // server answers over TCP: during initdb the image's temporary server
 // answers on the socket only, and restarts afterwards.
 func (d *Driver) seedFromSQLFile(ctx context.Context, project, checkout string, s recipe.Seed, timeout time.Duration) error {
-	sql, err := os.ReadFile(filepath.Join(checkout, s.SQL))
+	sql, err := checkoutfs.Read(checkout, s.SQL, maxSeedBytes)
 	if err != nil {
 		return err
 	}
@@ -76,7 +78,7 @@ func seedFingerprint(checkout string, rec *recipe.Recipe) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "migrate\x00%s\x00seed\x00%s\x00%s\x00", rec.Data.Migrate, rec.Data.Seed.Service, rec.Data.Seed.Command)
 	if rec.Data.Seed.SQL != "" {
-		b, _ := os.ReadFile(filepath.Join(checkout, rec.Data.Seed.SQL))
+		b, _ := checkoutfs.Read(checkout, rec.Data.Seed.SQL, maxSeedBytes)
 		h.Write(b)
 	}
 	return hex.EncodeToString(h.Sum(nil))

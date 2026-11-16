@@ -1,5 +1,7 @@
 import { randomUUID } from 'crypto';
 
+import { type ClaimWorkspace, claimShaOf, runClaimWorkspace, setupClaimWorkspace } from '@libs/runtime/run/run-workspace';
+
 import type {
     AdmissionStore,
     PhysicalAdmissionRequest,
@@ -201,6 +203,7 @@ export class TicketService {
             ref: { side: string; sha: string };
             idempotencyKey: string;
             size?: { memoryMb: number; cpus: number };
+            repos?: Array<{ alias: string; sha: string; repo: { fullName: string } }>;
         },
     ): Promise<boolean> {
         const id = claimIdFor(input.organizationId, input.idempotencyKey);
@@ -225,9 +228,11 @@ export class TicketService {
         if (!payload || payload.kind !== ticket.kind) return false;
         if (payload.kind === 'run') {
             const expected = payload.request;
-            const sha = input.ref.side === 'base' ? expected.pullRequest.baseSha : expected.pullRequest.headSha;
+            const sha = claimShaOf(expected, input.ref.side === 'base' ? 'base' : 'pr');
             if (input.consumer !== 'runtime' || input.environmentId !== expected.environment.environmentId || input.imageId !== expected.environment.imageId || input.ref.sha !== sha) return false;
+            if (!sameRepos(input.repos, runClaimWorkspace(expected), input.ref.side)) return false;
         } else if (input.consumer !== 'setup' || input.environmentId !== payload.request.environmentId || input.runId !== undefined) return false;
+        else if (!sameRepos(input.repos, setupClaimWorkspace(payload.request), input.ref.side)) return false;
         const expectedSize =
             row?.payload?.kind === 'run'
                 ? row.payload.request.environment.size
@@ -329,4 +334,17 @@ export class TicketService {
         if (this.current(ticket) && this.book.cleanupPending(ticket)) throw new MemberCleanupPendingError();
         await this.opts.directory.release(ticket);
     }
+}
+
+/**
+ * Whether a claim's other repositories are the ones its admitted request
+ * pinned for that side: each alias, repository and commit, none more, none
+ * fewer. A request of one repository has none.
+ */
+function sameRepos(repos: Array<{ alias: string; sha: string; repo: { fullName: string } }> | undefined, workspace: ClaimWorkspace | undefined, side: string): boolean {
+    const s = side === 'pr' ? 'pr' : 'base';
+    const key = (alias: string, fullName: string, sha: string) => `${alias}\n${fullName}\n${sha}`;
+    const want = (workspace?.members ?? []).map((m) => key(m.alias, m.fullName, m[s].sha)).sort();
+    const got = (repos ?? []).map((r) => key(r.alias, r.repo.fullName, r.sha)).sort();
+    return want.length === got.length && want.every((k, i) => k === got[i]);
 }

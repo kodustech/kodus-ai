@@ -1,9 +1,10 @@
 package sandbox
 
 import (
-	"go.yaml.in/yaml/v3"
 	"strings"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 )
 
 // A trusted parent must be forced on every service without granting the

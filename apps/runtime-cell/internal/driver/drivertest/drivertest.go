@@ -8,11 +8,16 @@
 // in-memory cluster, a state file), so it can create, list, renew and
 // destroy; a driver whose test backend only records calls sets
 // Subject.Lifecycle false and runs the contract tier alone.
+//
+// RunRequests is the request tier: every field of driver.UpRequest and
+// driver.SandboxRequest, checked by what the driver's backend shows, so a
+// driver cannot drop one and still pass.
 package drivertest
 
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -20,6 +25,7 @@ import (
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/reaper"
 )
 
 // Subject is one driver under the suite, on a backend its test controls.
@@ -39,6 +45,14 @@ type Subject struct {
 	// ForeignNetwork plants a claim network of another cell. Lifecycle
 	// only; nil when the driver has no network of its own to release.
 	ForeignNetwork func(t *testing.T) driver.ClaimNetwork
+	// UndatedMachine plants, in the backend, a machine of this cell whose
+	// kodus:hard-expires is ceiling ("" for none) and returns its id.
+	// Lifecycle only.
+	UndatedMachine func(t *testing.T, ceiling string) string
+	// Parts are the driver's optional parts, as it gives them to cmd/cell
+	// (its Parts method). With no Sweeper the reaper alone takes what passed
+	// a ceiling, and the suite runs it.
+	Parts driver.Parts
 }
 
 // Now is the suite's clock: every spec expires relative to it.
@@ -61,17 +75,18 @@ func Run(t *testing.T, newSubject func(t *testing.T) Subject) {
 		"declares its capabilities":        declaresCapabilities,
 		"refuses claim ids it cannot name": refusesBadClaimIDs,
 		"refuses specs nobody could reap":  refusesBadSpecs,
-		"says when it cannot suspend":      saysWhenItCannotSuspend,
-		"says when it cannot bake":         saysWhenItCannotBake,
 	}
 	lifecycle := map[string]func(*testing.T, Subject){
-		"stamps the reserved tags":                  stampsReservedTags,
-		"never lists another cell's machine":        listsOnlyItsCell,
-		"renews without moving the ceiling":         renewsUnderTheCeiling,
-		"destroys idempotently":                     destroysIdempotently,
-		"refuses to destroy another cell's machine": refusesForeignDestroy,
-		"refuses to renew another cell's machine":   refusesForeignRenew,
-		"refuses to release another cell's network": refusesForeignRelease,
+		"stamps the reserved tags":                          stampsReservedTags,
+		"never lists another cell's machine":                listsOnlyItsCell,
+		"renews without moving the ceiling":                 renewsUnderTheCeiling,
+		"renews under the backend's ceiling, not the ref's": renewsUnderTheBackendsCeiling,
+		"sweeps a machine nobody can date":                  sweepsUndatedMachines,
+		"sweeps at the ceiling, not at the lease's end":     sweepsAtTheCeiling,
+		"destroys idempotently":                             destroysIdempotently,
+		"refuses to destroy another cell's machine":         refusesForeignDestroy,
+		"refuses to renew another cell's machine":           refusesForeignRenew,
+		"refuses to release another cell's network":         refusesForeignRelease,
 	}
 	for _, name := range sortedKeys(contract) {
 		t.Run(name, func(t *testing.T) { contract[name](t, newSubject(t)) })
@@ -141,11 +156,6 @@ func declaresCapabilities(t *testing.T, s Subject) {
 	default:
 		t.Errorf("isolation %q is not one the agent knows", c.Isolation)
 	}
-	switch c.Suspend {
-	case "hibernate", "stop", "none":
-	default:
-		t.Errorf("suspend %q is not hibernate, stop or none", c.Suspend)
-	}
 	if len(c.Arch) == 0 {
 		t.Error("no architecture declared")
 	}
@@ -189,28 +199,6 @@ func refusesBadSpecs(t *testing.T, s Subject) {
 		if _, err := s.Driver.Create(context.Background(), spec); err == nil {
 			t.Errorf("Create accepted a spec with %s", name)
 		}
-	}
-}
-
-func saysWhenItCannotSuspend(t *testing.T, s Subject) {
-	if s.Driver.Capabilities().Suspend != "none" {
-		t.Skip("the driver suspends")
-	}
-	for _, mode := range []driver.SuspendMode{driver.SuspendStop, driver.SuspendHibernate} {
-		err := s.Driver.Suspend(context.Background(), driver.MachineRef{MachineID: "m", DriverRef: "m"}, mode)
-		if !errors.Is(err, driver.ErrUnsupported) {
-			t.Errorf("Suspend(%s) = %v, want ErrUnsupported", mode, err)
-		}
-	}
-}
-
-func saysWhenItCannotBake(t *testing.T, s Subject) {
-	if s.Driver.Capabilities().Bake {
-		t.Skip("the driver bakes")
-	}
-	_, err := s.Driver.Bake(context.Background(), driver.BakeSpec{CellID: s.CellID, OrgID: "org-a", EnvironmentID: "env-1", KMSKeyRef: "kms-org-a"})
-	if !errors.Is(err, driver.ErrUnsupported) {
-		t.Errorf("Bake = %v, want ErrUnsupported", err)
 	}
 }
 
@@ -262,6 +250,91 @@ func renewsUnderTheCeiling(t *testing.T, s Subject) {
 	}
 	if tags[driver.TagHardExpires] != driver.FormatTime(spec.HardExpiresAt) {
 		t.Errorf("hard-expires moved to %s", tags[driver.TagHardExpires])
+	}
+}
+
+// A ref is the caller's: whatever ceiling it says (a later one, none), a
+// renewal stops at the one the backend holds. local-docker used to clamp to
+// the ref's ceiling, and not at all when the ref carried none.
+func renewsUnderTheBackendsCeiling(t *testing.T, s Subject) {
+	spec, _ := s.create(t, "claim-1")
+	ctx := context.Background()
+	forged := map[string]func(tags map[string]string){
+		"a later ceiling": func(tags map[string]string) {
+			tags[driver.TagHardExpires] = driver.FormatTime(spec.HardExpiresAt.Add(24 * time.Hour))
+		},
+		"no ceiling": func(tags map[string]string) { delete(tags, driver.TagHardExpires) },
+	}
+	for _, name := range sortedKeys(forged) {
+		ref := s.only(t, "claim-1")
+		ref.Tags = maps.Clone(ref.Tags)
+		forged[name](ref.Tags)
+		if err := s.Driver.SetExpiry(ctx, ref, spec.HardExpiresAt.Add(2*time.Hour)); err != nil {
+			t.Fatalf("SetExpiry with %s on the ref: %v", name, err)
+		}
+		tags := s.only(t, "claim-1").Tags
+		if tags[driver.TagExpires] != driver.FormatTime(spec.HardExpiresAt) {
+			t.Errorf("with %s on the ref, expires = %s, want it held at the backend's ceiling %s", name, tags[driver.TagExpires], driver.FormatTime(spec.HardExpiresAt))
+		}
+		if tags[driver.TagHardExpires] != driver.FormatTime(spec.HardExpiresAt) {
+			t.Errorf("with %s on the ref, hard-expires moved to %s", name, tags[driver.TagHardExpires])
+		}
+		if err := s.Driver.SetExpiry(ctx, s.only(t, "claim-1"), spec.ExpiresAt); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// A machine of this cell with no ceiling, or one that does not parse, is
+// past it (driver.Expired): the sweep destroys it and keeps the dated one.
+// The k8s sweep used to skip a pod whose ceiling did not parse.
+func sweepsUndatedMachines(t *testing.T, s Subject) {
+	if s.UndatedMachine == nil {
+		t.Fatal("Subject.UndatedMachine is required on a backend that keeps state")
+	}
+	s.create(t, "claim-1")
+	for _, ceiling := range []string{"", "not-a-time"} {
+		id := s.UndatedMachine(t, ceiling)
+		s.sweep(t, Now)
+		for _, ref := range s.list(t, nil) {
+			if ref.MachineID == id {
+				t.Errorf("a machine with ceiling %q survived the sweep", ceiling)
+			}
+		}
+	}
+	if refs := s.list(t, map[string]string{driver.TagCell: s.CellID, driver.TagClaim: "claim-1"}); len(refs) != 1 {
+		t.Errorf("the sweep took a machine under its ceiling: %d left, want 1", len(refs))
+	}
+}
+
+// A sweep honors the ceiling alone: a machine past kodus:expires but under
+// its ceiling is the lease manager's to end, since only it knows a claim
+// the hub still renews. The microvm and local-docker sweeps used to take
+// it at kodus:expires.
+func sweepsAtTheCeiling(t *testing.T, s Subject) {
+	spec, _ := s.create(t, "claim-1")
+	s.sweep(t, spec.ExpiresAt.Add(time.Minute))
+	if refs := s.list(t, map[string]string{driver.TagCell: s.CellID, driver.TagClaim: "claim-1"}); len(refs) != 1 {
+		t.Fatalf("the sweep took a machine past its lease but under its ceiling")
+	}
+	s.sweep(t, spec.HardExpiresAt)
+	if refs := s.list(t, map[string]string{driver.TagCell: s.CellID, driver.TagClaim: "claim-1"}); len(refs) != 0 {
+		t.Errorf("a machine at its ceiling survived the sweep")
+	}
+}
+
+// sweep runs the driver's own sweep at now, or the reaper when it has none.
+func (s Subject) sweep(t *testing.T, now time.Time) {
+	t.Helper()
+	if s.Parts.Sweeper != nil {
+		if _, err := s.Parts.Sweeper.Sweep(context.Background(), now); err != nil {
+			t.Fatalf("Sweep: %v", err)
+		}
+		return
+	}
+	r := reaper.Reaper{CellID: s.CellID, Driver: s.Driver, Now: func() time.Time { return now }, Log: slog.New(slog.DiscardHandler)}
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatalf("reaper: %v", err)
 	}
 }
 

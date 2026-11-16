@@ -4,8 +4,18 @@ import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enu
 
 import { ExternalVerificationSchema } from '@libs/runtime/contracts/external-findings';
 import { AuthoredFilesSchema } from '@libs/runtime/contracts/authored-files';
-import { CHECK_CONCLUSIONS, ExposeSchema, MAX_RECIPE_CHANGED_PATHS, RECIPE_CHANGED_PATH, RUN_TRIGGERS } from '@libs/runtime/contracts/enums';
+import {
+    CHECK_CONCLUSIONS,
+    ENVIRONMENT_REPOSITORY_ROLES,
+    ExposeSchema,
+    MAX_RECIPE_CHANGED_PATHS,
+    RECIPE_CHANGED_PATH,
+    RUN_TRIGGERS,
+    WORKSPACE_REF_SOURCES,
+} from '@libs/runtime/contracts/enums';
 import { MachineSizeSchema } from '@libs/runtime/contracts/machine-size';
+import { TraceparentSchema } from '@libs/runtime/contracts/trace-context';
+import { MAX_WORKSPACE_REPOSITORIES, RepositoryAliasSchema, RepositoryFullNameSchema, workspaceShapeError } from '@libs/runtime/contracts/workspace';
 import { DIFF_TRUNCATED_MARKER_PATH } from '@libs/runtime/entry-points/extract';
 
 import { type CommentPhase, RuntimeRunProgressSchema, RuntimeRunReportSchema } from './run-report';
@@ -79,6 +89,58 @@ export const RunBaseBranchSchema = z
         },
     );
 
+/**
+ * One repository of a multi-repository Run and the commits each side boots
+ * it at, pinned once when the Run is requested so both sides, the report and
+ * Run again use the same ones:
+ *   - pull_request: the PR's own repository, baseSha on the base side and
+ *     headSha on the PR side (the request's pullRequest shas);
+ *   - default_branch: its default-branch head, the same commit on both sides;
+ *   - paired: an open PR of the same branch name in that repository
+ *     (pairedPrNumber), its base and head on the two sides.
+ * Each token is for that repository only, sealed for this Run; the PR's own
+ * repository uses the request's repoToken and prRepoToken.
+ */
+export const RunWorkspaceRepositorySchema = z
+    .strictObject({
+        repositoryId: id,
+        fullName: RepositoryFullNameSchema,
+        alias: RepositoryAliasSchema,
+        role: z.enum(ENVIRONMENT_REPOSITORY_ROLES),
+        baseSha: sha,
+        headSha: sha,
+        source: z.enum(WORKSPACE_REF_SOURCES),
+        pairedPrNumber: z.number().int().min(1).optional(),
+        /** The branch its commits are of: the default branch, or the paired pull request's head branch. What the report names. */
+        branch: z.string().min(1).max(256).optional(),
+        sealedRepoToken: sealedToken.optional(),
+        sealedPrRepoToken: sealedToken.optional(),
+    })
+    .refine((r) => (r.source === 'paired') === (r.pairedPrNumber !== undefined), {
+        message: 'a paired repository names its pull request, and only a paired one does',
+        path: ['pairedPrNumber'],
+    })
+    .refine((r) => r.source !== 'default_branch' || r.baseSha === r.headSha, {
+        message: 'a default-branch repository runs the same commit on both sides',
+        path: ['headSha'],
+    });
+export type RunWorkspaceRepository = z.infer<typeof RunWorkspaceRepositorySchema>;
+
+/**
+ * Why a Run's workspace disagrees with the rest of the request, or
+ * undefined: the PR's own repository is in it once, as the pull_request
+ * entry, at the request's shas.
+ */
+function runWorkspaceError(req: { repository: { id: string }; pullRequest: { baseSha: string; headSha: string }; workspace?: RunWorkspaceRepository[] }): string | undefined {
+    if (!req.workspace) return undefined;
+    const shape = workspaceShapeError(req.workspace);
+    if (shape) return shape;
+    const own = req.workspace.filter((r) => r.source === 'pull_request');
+    if (own.length !== 1 || own[0].repositoryId !== req.repository.id) return "the workspace's one pull_request repository is the Run's repository";
+    if (own[0].baseSha !== req.pullRequest.baseSha || own[0].headSha !== req.pullRequest.headSha) return "the Run's repository boots the pull request's shas";
+    return undefined;
+}
+
 export const RuntimeRunRequestedSchema = z.strictObject({
     runId: z.uuid(),
     attempt: z.number().int().min(1),
@@ -151,6 +213,8 @@ export const RuntimeRunRequestedSchema = z.strictObject({
                 patch: z.string().max(1_000_000),
                 /** Content after the change; the entry-point extractor reads routes from it. */
                 content: z.string().max(1_000_000).optional(),
+                /** The file's path before the PR renamed it: a moved file can change what serves it (a Next page's URL), so it is never judged free of effect. */
+                previousPath: z.string().min(1).max(1_024).optional(),
             }),
         )
         .max(501)
@@ -184,8 +248,26 @@ export const RuntimeRunRequestedSchema = z.strictObject({
     runToken: sealedToken,
     budget: z.strictObject({ maxTokens: z.number().int().min(1).max(100_000_000) }).optional(),
     trigger: z.enum(RUN_TRIGGERS),
+    /**
+     * The W3C trace the product asked in (the webhook's, the API call's): the
+     * Run's spans are its children. Absent (an older product): the trace is
+     * derived from correlationId. Deploy the runtime-worker before the product
+     * sends it: an older worker's strict schema refuses the field.
+     */
+    traceparent: TraceparentSchema.optional(),
     externalVerification: ExternalVerificationSchema.optional(),
-}).refine((req) => (req.trigger === 'external_finding') === !!req.externalVerification, { message: 'external verification metadata and trigger must be supplied together' });
+    /**
+     * Every repository of a multi-repository environment, the PR's own
+     * included. Absent for an environment of one repository, which boots
+     * `repository` at the pull request's shas as before.
+     */
+    workspace: z.array(RunWorkspaceRepositorySchema).min(1).max(MAX_WORKSPACE_REPOSITORIES).optional(),
+})
+    .refine((req) => (req.trigger === 'external_finding') === !!req.externalVerification, { message: 'external verification metadata and trigger must be supplied together' })
+    .superRefine((req, ctx) => {
+        const error = runWorkspaceError(req);
+        if (error) ctx.addIssue({ code: 'custom', message: error, path: ['workspace'] });
+    });
 export type RuntimeRunRequested = z.infer<typeof RuntimeRunRequestedSchema>;
 
 /**
@@ -229,6 +311,8 @@ export const RuntimePullRequestObservedSchema = z.strictObject({
     /** For `comment`: the platform's id of the `@kody runtime` comment, so the comment and its author can be read again from the Git API. */
     commentId: z.string().min(1).max(128).optional(),
     observedAt: z.iso.datetime(),
+    /** The webhook's trace (W3C): the trigger and the Run it starts continue it. */
+    traceparent: TraceparentSchema.optional(),
 });
 export type RuntimePullRequestObserved = z.infer<typeof RuntimePullRequestObservedSchema>;
 

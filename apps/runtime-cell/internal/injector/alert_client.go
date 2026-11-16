@@ -64,7 +64,7 @@ func (c *AlertClient) After(ctx context.Context, after int64) ([]Alert, error) {
 	if err != nil {
 		return nil, &eventlog.FeedError{Reason: eventlog.ReasonUnavailable}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	version, valid := oneHeader(resp.Header, eventlog.HeaderVersion)
 	if !valid || version != eventlog.Version {
 		return nil, &eventlog.FeedError{Reason: eventlog.ReasonUnsupported}
@@ -134,7 +134,7 @@ func validEpoch(v string) bool {
 		return false
 	}
 	for _, c := range v {
-		if !(c >= 'A' && c <= 'Z' || c >= '2' && c <= '7') {
+		if (c < 'A' || c > 'Z') && (c < '2' || c > '7') {
 			return false
 		}
 	}

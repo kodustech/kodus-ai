@@ -45,8 +45,8 @@ type hostDirs struct {
 // builderUser is the user of the rootless BuildKit image (moby/buildkit:*-rootless).
 const builderUser = 1000
 
-// ErrBuilderIDsUnknown: Docker remaps user namespaces, and the cell was not
-// told who the builder is on the host.
+// ErrBuilderIDsUnknown means Docker remaps user namespaces, and the cell was
+// not told who the builder is on the host.
 var ErrBuilderIDsUnknown = errors.New("dockergvisor: Docker remaps user namespaces (userns-remap or rootless): set the builder's host uid and gid (-gvisor-builder-uid, -gvisor-builder-gid)")
 
 // usernsRemapped reports whether Docker gives containers a user namespace
@@ -64,7 +64,7 @@ func usernsRemapped(opts []string) bool {
 
 // builderIDs are the builder's host uid and gid: what the cell was told,
 // or the image's user when Docker maps no user namespace.
-func builderIDs(ctx context.Context, d Docker, cfg Config) (uid, gid int, err error) {
+func builderIDs(ctx context.Context, d daemonPort, cfg Config) (uid, gid int, err error) {
 	if cfg.BuilderUID < 0 || cfg.BuilderGID < 0 {
 		return 0, 0, fmt.Errorf("dockergvisor: builder uid %d gid %d", cfg.BuilderUID, cfg.BuilderGID)
 	}
@@ -97,7 +97,7 @@ func (h hostDirs) builderDir(p string) error {
 	if err := h.chown(p, h.uid, h.gid); err != nil {
 		return err
 	}
-	return os.Chmod(p, 0o700)
+	return os.Chmod(p, 0o700) //nolint:gosec // G302: p is a directory, which needs its search bit
 }
 
 // privateRoot makes p one of the cell's private directories (1).
@@ -115,7 +115,7 @@ func (h hostDirs) privateRoot(p string) error {
 	if uid, ok := h.owner(info); ok && uid != h.self {
 		return fmt.Errorf("dockergvisor: %s is owned by uid %d, not the cell's (%d)", p, uid, h.self)
 	}
-	return os.Chmod(p, 0o700)
+	return os.Chmod(p, 0o700) //nolint:gosec // G302: p is a directory, which needs its search bit
 }
 
 func (h hostDirs) realDir(p string) error {

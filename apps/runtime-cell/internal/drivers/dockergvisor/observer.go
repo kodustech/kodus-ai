@@ -2,13 +2,10 @@ package dockergvisor
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
 
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
 )
 
@@ -23,32 +20,7 @@ func (d *Driver) observerNetwork() string { return "kodus-observers-" + d.cfg.Ce
 
 // ensureObserverNetwork creates the cell's observer network once.
 func (d *Driver) ensureObserverNetwork(ctx context.Context) (string, error) {
-	name := d.observerNetwork()
-	owned := func() (bool, error) {
-		labels, err := d.d.NetworkLabels(ctx, name)
-		if err != nil || labels == nil {
-			return false, err
-		}
-		if labels[dockercli.LabelFromTag(driver.TagCell)] != d.cfg.CellID {
-			return false, fmt.Errorf("%w: network %s", driver.ErrNotOwned, name)
-		}
-		return true, nil
-	}
-	if ok, err := owned(); ok || err != nil {
-		return name, err
-	}
-	err := d.d.NetworkCreate(ctx, dockercli.NetworkSpec{Name: name, HostOnly: true,
-		Labels: toLabels(map[string]string{driver.TagCell: d.cfg.CellID})})
-	if err != nil {
-		// Another claim's observer made it first.
-		if ok, oerr := owned(); ok {
-			return name, nil
-		} else if oerr != nil {
-			return "", errors.Join(err, oerr)
-		}
-		return "", err
-	}
-	return name, nil
+	return d.ensureHostOnlyNetwork(ctx, d.observerNetwork())
 }
 
 // Targets points each exposed port at its compose service's fixed address

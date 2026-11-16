@@ -1,12 +1,20 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 
 import { Action, ResourceType } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import type { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import { DEFAULT_MACHINE_MINUTES_PER_ORG_DAY } from '@libs/runtime/environment/machine-minutes';
 
+import { machineMinutesToday, type RuntimeMachineMinutesToday } from '../../domain/machine-minutes-today';
 import {
+    type Clock,
+    RUNTIME_API_CONFIG,
+    RUNTIME_CLOCK,
+    RUNTIME_MACHINE_USAGE_READER,
     RUNTIME_ORG_REPOSITORIES,
     RUNTIME_SETTINGS_STORE,
+    type RuntimeApiConfig,
+    type RuntimeMachineUsageReader,
     RUNTIME_WHO_CAN_ASK,
     type RuntimeOrgRepositories,
     type RuntimeSettingsStore,
@@ -16,17 +24,10 @@ import {
 import { parseTriggerRules, RUNTIME_MODES, type RuntimeMode, type TriggerRule } from '../../domain/trigger-rules';
 import type { RuntimeAuthorization } from '../run-access.service';
 import { CreateRuntimeEnvironmentUseCase } from './environments.use-cases';
+import type { RuntimeRepositorySettingsView, RuntimeSettingsView } from '@libs/runtime/contracts/views/settings';
 
-export interface RuntimeRepositorySettingsView {
-    repositoryId: string;
-    repositoryName?: string;
-    pilot: boolean;
-    whoCanAsk: RuntimeWhoCanAsk;
-    mode: RuntimeMode;
-    rules: TriggerRule[];
-    runOnAgentPullRequests: boolean;
-    runOnNewPushes: boolean;
-}
+// The views live in contracts/views/settings.ts (the web imports them too); re-exported for the callers that imported them from here.
+export type { RuntimeRepositorySettingsView, RuntimeSettingsView };
 
 /** A row written before the mode existed: in the pilot = on request (doubt: the doc's pilot ran every PR). */
 const modeOf = (s: RuntimeRepositorySettingsRecord | undefined): RuntimeMode => s?.mode ?? (s?.pilot ? 'on_request' : 'off');
@@ -46,11 +47,6 @@ export function repositorySettingsView(
         runOnAgentPullRequests: stored?.runOnAgentPullRequests ?? false,
         runOnNewPushes: stored?.runOnNewPushes ?? false,
     };
-}
-
-export interface RuntimeSettingsView {
-    tokenBudgetPerDay: number | null;
-    repositories: RuntimeRepositorySettingsView[];
 }
 
 export const DEFAULT_WHO_CAN_ASK: RuntimeWhoCanAsk = 'writers';
@@ -85,6 +81,30 @@ export class GetRuntimeSettingsUseCase {
             // A repo that left the integration keeps its row but is not listed.
             repositories: connected.repositories.map((r) => repositorySettingsView(r, byId.get(r.repositoryId))),
         };
+    }
+}
+
+/**
+ * GET /runtime/settings/machine-minutes — the caller's org machine minutes of
+ * the current UTC day, as the hub counts them (runtime_machine_usage). 503
+ * without the Runtime's read-only URL: zero would read as "nothing used".
+ */
+@Injectable()
+export class GetRuntimeMachineMinutesUseCase {
+    constructor(
+        @Inject(RUNTIME_MACHINE_USAGE_READER)
+        private readonly usage: RuntimeMachineUsageReader,
+        @Inject(RUNTIME_API_CONFIG)
+        private readonly config: RuntimeApiConfig,
+        @Inject(RUNTIME_CLOCK)
+        private readonly clock: Clock,
+    ) {}
+
+    async execute(input: { user: Partial<IUser> }): Promise<RuntimeMachineMinutesToday> {
+        const organizationId = orgOf(input.user);
+        const today = await this.usage.today(organizationId);
+        if (!today) throw new ServiceUnavailableException('Runtime machine minutes are not readable on this deployment');
+        return machineMinutesToday(today, this.config.machineMinutesPerOrgDay ?? DEFAULT_MACHINE_MINUTES_PER_ORG_DAY, this.clock());
     }
 }
 

@@ -14,8 +14,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const cgroupMount = "/sys/fs/cgroup"
-const maxControlBytes = 64 << 10
+const (
+	cgroupMount     = "/sys/fs/cgroup"
+	maxControlBytes = 64 << 10
+)
 
 type localDirectory struct{ file *os.File }
 
@@ -38,7 +40,7 @@ func New(root string) (*FS, error) {
 	}
 	for _, part := range strings.Split(strings.TrimPrefix(root, "/"), "/") {
 		next, e := unix.Openat(fd, part, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
-		unix.Close(fd)
+		_ = unix.Close(fd) // read-only directory fd; the open error below is what matters
 		if e != nil {
 			return nil, fmt.Errorf("%w: open dedicated root: %w", ErrUnavailable, e)
 		}
@@ -48,18 +50,18 @@ func New(root string) (*FS, error) {
 	closeOnError := true
 	defer func() {
 		if closeOnError {
-			d.Close()
+			_ = d.Close()
 		}
 	}()
 	var stat unix.Statfs_t
-	if err = unix.Fstatfs(fd, &stat); err != nil || uint64(stat.Type) != uint64(unix.CGROUP2_SUPER_MAGIC) {
+	if err = unix.Fstatfs(fd, &stat); err != nil || stat.Type != unix.CGROUP2_SUPER_MAGIC {
 		return nil, fmt.Errorf("%w: cgroup v2 filesystem required", ErrUnavailable)
 	}
 	var owner unix.Stat_t
 	if err = unix.Fstat(fd, &owner); err != nil {
 		return nil, fmt.Errorf("%w: stat root: %w", ErrUnavailable, err)
 	}
-	if owner.Mode&0022 != 0 || (owner.Uid != 0 && owner.Uid != uint32(os.Geteuid())) {
+	if owner.Mode&0o022 != 0 || (owner.Uid != 0 && owner.Uid != uint32(os.Geteuid())) { //nolint:gosec // G115: an effective uid is never negative and fits uint32
 		return nil, fmt.Errorf("%w: dedicated root must not be writable by other users", ErrUnavailable)
 	}
 	if err = lockRoot(d); err != nil {
@@ -72,6 +74,7 @@ func New(root string) (*FS, error) {
 	closeOnError = false
 	return f, nil
 }
+
 func (d *localDirectory) openFile(name string, flags int) (*os.File, error) {
 	fd, err := unix.Openat(int(d.file.Fd()), name, flags|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
@@ -79,12 +82,13 @@ func (d *localDirectory) openFile(name string, flags int) (*os.File, error) {
 	}
 	return os.NewFile(uintptr(fd), name), nil
 }
+
 func (d *localDirectory) Read(name string) (string, error) {
 	file, err := d.openFile(name, unix.O_RDONLY)
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	value, err := io.ReadAll(io.LimitReader(file, maxControlBytes+1))
 	if err != nil {
 		return "", err
@@ -94,6 +98,7 @@ func (d *localDirectory) Read(name string) (string, error) {
 	}
 	return string(value), nil
 }
+
 func (d *localDirectory) Write(name, value string) error {
 	file, err := d.openFile(name, unix.O_WRONLY)
 	if err != nil {
@@ -102,7 +107,9 @@ func (d *localDirectory) Write(name, value string) error {
 	_, err = file.WriteString(value)
 	return errors.Join(err, file.Close())
 }
-func (d *localDirectory) Mkdir(name string) error { return unix.Mkdirat(int(d.file.Fd()), name, 0700) }
+
+func (d *localDirectory) Mkdir(name string) error { return unix.Mkdirat(int(d.file.Fd()), name, 0o700) }
+
 func (d *localDirectory) Open(name string) (directory, error) {
 	file, err := d.openFile(name, unix.O_RDONLY|unix.O_DIRECTORY)
 	if err != nil {
@@ -110,16 +117,17 @@ func (d *localDirectory) Open(name string) (directory, error) {
 	}
 	return &localDirectory{file}, nil
 }
+
 func (d *localDirectory) Remove(name string) error {
 	return unix.Unlinkat(int(d.file.Fd()), name, unix.AT_REMOVEDIR)
 }
 func (d *localDirectory) Close() error { return d.file.Close() }
 func readProcessCgroup(pid int) (string, error) {
-	file, err := os.Open("/proc/" + strconv.Itoa(pid) + "/cgroup")
+	file, err := os.Open("/proc/" + strconv.Itoa(pid) + "/cgroup") //nolint:gosec // G703: pid is an int; the path cannot leave /proc/<n>/
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	value, err := io.ReadAll(io.LimitReader(file, maxControlBytes+1))
 	if err != nil {
 		return "", err
@@ -135,7 +143,7 @@ func (d *localDirectory) List() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	entries, err := file.ReadDir(maxDirectoryEntries + 1)
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, err

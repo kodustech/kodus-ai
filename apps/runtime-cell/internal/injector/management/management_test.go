@@ -26,6 +26,7 @@ func (a claimAuthority) AuthorizeBinding(_ context.Context, b injector.Binding) 
 	}
 	return injector.ClaimAuthority{Scope: b.Scope, ExpiresAt: a.hardExpiry, CredentialHosts: []string{"api.example.test"}}, nil
 }
+
 func privateDir(t *testing.T) string {
 	t.Helper()
 	p, e := os.MkdirTemp("/private/tmp", "kv-mgmt-")
@@ -42,14 +43,15 @@ func privateDir(t *testing.T) string {
 	t.Cleanup(func() { _ = os.RemoveAll(p) })
 	return p
 }
+
 func newVault(t *testing.T, base string) injector.ManagedVault {
 	t.Helper()
 	dir := filepath.Join(base, "vault")
-	if e := os.Mkdir(dir, 0700); e != nil {
+	if e := os.Mkdir(dir, 0o700); e != nil {
 		t.Fatal(e)
 	}
 	key := filepath.Join(base, "owner.key")
-	if e := os.WriteFile(key, bytes.Repeat([]byte{7}, 32), 0600); e != nil {
+	if e := os.WriteFile(key, bytes.Repeat([]byte{7}, 32), 0o600); e != nil {
 		t.Fatal(e)
 	}
 	v, e := injector.OpenConfiguredVault(injector.VaultConfig{Directory: dir, KeyFile: key, CellID: "cell-a", Claims: claimAuthority{hardExpiry: time.Now().Add(time.Hour)}})
@@ -59,6 +61,7 @@ func newVault(t *testing.T, base string) injector.ManagedVault {
 	t.Cleanup(func() { _ = v.Close() })
 	return v
 }
+
 func startServer(t *testing.T, v injector.ManagedVault, base string) (string, context.CancelFunc, <-chan error) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -83,6 +86,7 @@ func startServer(t *testing.T, v injector.ManagedVault, base string) (string, co
 	})
 	return socket, cancel, done
 }
+
 func rawCall(t *testing.T, socket, path, body string) (int, string, http.Header) {
 	t.Helper()
 	tr := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -101,6 +105,7 @@ func rawCall(t *testing.T, socket, path, body string) (int, string, http.Header)
 	}
 	return r.StatusCode, string(b), r.Header
 }
+
 func TestUnixManagementEncryptedVaultLifecycle(t *testing.T) {
 	base := privateDir(t)
 	v := newVault(t, base)
@@ -162,6 +167,7 @@ func TestUnixManagementEncryptedVaultLifecycle(t *testing.T) {
 		t.Fatal("ciphertext persistence failed")
 	}
 }
+
 func TestManagementRejectsAmbiguousJSONAndNeverEchoes(t *testing.T) {
 	base := privateDir(t)
 	socket, _, _ := startServer(t, newVault(t, base), base)
@@ -181,11 +187,12 @@ func TestManagementRejectsAmbiguousJSONAndNeverEchoes(t *testing.T) {
 		t.Fatalf("credential endpoint exposed: %d", status)
 	}
 }
+
 func TestPrivateSocketRefusesExistingAndWrongPermissions(t *testing.T) {
 	base := privateDir(t)
 	v := newVault(t, base)
 	socket := filepath.Join(base, "admin.sock")
-	if e := os.WriteFile(socket, []byte("foreign"), 0600); e != nil {
+	if e := os.WriteFile(socket, []byte("foreign"), 0o600); e != nil {
 		t.Fatal(e)
 	}
 	if e := Serve(context.Background(), socket, v, nil); e == nil {
@@ -197,7 +204,7 @@ func TestPrivateSocketRefusesExistingAndWrongPermissions(t *testing.T) {
 	}
 	_ = os.Remove(socket)
 	target := filepath.Join(base, "target")
-	_ = os.WriteFile(target, []byte("foreign"), 0600)
+	_ = os.WriteFile(target, []byte("foreign"), 0o600)
 	if e := os.Symlink(target, socket); e != nil {
 		t.Fatal(e)
 	}
@@ -205,19 +212,20 @@ func TestPrivateSocketRefusesExistingAndWrongPermissions(t *testing.T) {
 		t.Fatal("symlink accepted")
 	}
 	_ = os.Remove(socket)
-	if e := os.Chmod(base, 0755); e != nil {
+	if e := os.Chmod(base, 0o755); e != nil {
 		t.Fatal(e)
 	}
 	if e := Serve(context.Background(), socket, v, nil); e == nil {
 		t.Fatal("non-private parent accepted")
 	}
-	_ = os.Chmod(base, 0700)
+	_ = os.Chmod(base, 0o700)
 	socket, _, _ = startServer(t, v, base)
-	_ = os.Chmod(socket, 0666)
+	_ = os.Chmod(socket, 0o666)
 	if _, e := Call(context.Background(), socket, "list", []byte(`{"organizationId":"org-a","environmentId":"env-a"}`)); e == nil {
 		t.Fatal("unsafe socket mode accepted")
 	}
 }
+
 func TestCallRejectsCancelledContextWithoutSecretEcho(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

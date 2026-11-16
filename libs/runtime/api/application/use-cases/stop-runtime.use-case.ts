@@ -8,11 +8,8 @@ import {
 } from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
 import type { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 
-import { RuntimeCommandName, runtimeCommandOutboxMessage } from '../../domain/runtime-commands';
+import { RuntimeCommandName, runtimeCommandOutboxMessage } from '@libs/runtime/contracts/runtime-commands';
 import { isKodusOncall, RUNTIME_API_CONFIG, RUNTIME_CLOCK, type Clock, type RuntimeApiConfig } from '../../domain/ports';
-
-/** @deprecated use isKodusOncall from domain/ports. */
-export const isOncall = isKodusOncall;
 
 /**
  * POST /runtime/stop — the stop button: the Runtime cancels the Runs, denies

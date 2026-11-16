@@ -22,7 +22,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/hubclient"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observerauth"

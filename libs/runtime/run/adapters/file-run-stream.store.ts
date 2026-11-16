@@ -30,6 +30,7 @@ export class FileRunStreamStore implements RunStreamStore {
             await fs.mkdir(dir, { recursive: true });
             await fs.appendFile(file, line, 'utf8');
         });
+        // The caller gets `next` and its error; the chain only needs to settle so the next append runs.
         const settled = next.catch(() => undefined);
         this.chains.set(file, settled);
         // Drop the chain once it is the last one queued: the map holds only streams being written.

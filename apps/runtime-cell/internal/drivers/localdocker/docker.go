@@ -3,7 +3,8 @@ package localdocker
 import (
 	"context"
 
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/composecmd"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 )
 
 // Docker is what the driver needs from the local Docker. CLI implements it
@@ -29,10 +30,12 @@ type Docker interface {
 	ComposePort(ctx context.Context, project, service string, port int) (string, error)
 	// List is the containers carrying every one of labels.
 	List(ctx context.Context, labels map[string]string) ([]Container, error)
+	SnapshotDocker
+	DiagnosticDocker
 }
 
 // SnapshotDocker is the part of Docker a data snapshot needs (data.reset:
-// snapshot). CLI implements it; without it, a snapshot reset recreates.
+// snapshot).
 type SnapshotDocker interface {
 	// ComposeStopServices stops those services of the project (all of them
 	// when none is named).
@@ -46,8 +49,7 @@ type SnapshotDocker interface {
 	VolumeRemove(ctx context.Context, names ...string) error
 }
 
-// DiagnosticDocker is the part of Docker the failure bundle reads. CLI
-// implements it; a Docker without it gives a bundle with ports and disk only.
+// DiagnosticDocker is the part of Docker the failure bundle reads.
 type DiagnosticDocker interface {
 	ComposePs(ctx context.Context, project string) ([]ServiceState, error)
 	ComposeLogs(ctx context.Context, project, service string, lines int) ([]string, error)
@@ -75,6 +77,6 @@ type DownOptions struct {
 }
 
 // ServiceState is one service of a compose project as `compose ps` sees it.
-type ServiceState = dockercli.ServiceState
+type ServiceState = composecmd.ServiceState
 
 type Container = dockercli.Container

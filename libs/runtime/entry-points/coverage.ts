@@ -24,9 +24,6 @@ export function routeShapeOf(path: string): string {
         .join('/');
 }
 
-/** @deprecated use routeShapeOf. */
-export const observedRoute = routeShapeOf;
-
 /** `*`, `*slug`, `[...slug]`, `[[...slug]]`, `{*path}`: a segment that takes one or more of the remaining segments. */
 const isCatchAll = (seg: string) => /^\*[\w-]*$/.test(seg) || /^\[{1,2}\.\.\.[^/[\]]+\]{1,2}$/.test(seg) || /^\{\*[^/{}]+\}$/.test(seg);
 /** `:id`, `{id}`, `[id]`: a segment of a route declaration that takes any one value. */
@@ -34,7 +31,29 @@ const isParam = (seg: string) => /^:[\w-]+\??$/.test(seg) || /^\{[^/{}*]+\}$/.te
 
 const segments = (route: string) => route.replace(/\/+$/, '').split('/').filter((s, i) => i === 0 || s !== '');
 
-/** Whether one observed request hits the declared route `METHOD /path`. Segment by segment; a param takes any one segment. */
+/**
+ * A route declared below a mount the extractor cannot see (Express `app.use('/server', router)`, Nest
+ * `setGlobalPrefix('api')`) is served with up to this many leading segments it does not declare.
+ */
+const MAX_MOUNT_SEGMENTS = 2;
+
+/** want against got from got's `offset`: segment by segment, a param takes any one, a last catch-all one or more. */
+function matchesFrom(want: string[], got: string[], offset: number): boolean {
+    for (let i = 1; i < want.length; i++) {
+        const w = want[i];
+        const j = i + offset;
+        if (isCatchAll(w) && i === want.length - 1) return got.length > j;
+        if (j >= got.length) return false;
+        if (!(isParam(w) || w === got[j])) return false;
+    }
+    return want.length + offset === got.length;
+}
+
+/**
+ * Whether one observed request hits the declared route `METHOD /path`. Segment by segment; a param takes any one
+ * segment. The request may carry up to MAX_MOUNT_SEGMENTS leading segments the declaration does not (its mount),
+ * when the declaration names at least one literal segment: `GET /` or `GET /:id` never match by their tail.
+ */
 export function requestMatchesEntryPoint(entryPointId: string, req: ObservedRequest): boolean {
     const m = /^([A-Z]+)\s+(\/\S*)$/.exec(entryPointId);
     if (!m) return false;
@@ -42,14 +61,10 @@ export function requestMatchesEntryPoint(entryPointId: string, req: ObservedRequ
     if (method !== ANY_METHOD && method !== req.method.toUpperCase()) return false;
     const want = segments(route);
     const got = segments(req.route);
-    for (let i = 0; i < want.length; i++) {
-        const w = want[i];
-        // A catch-all as the last segment takes one or more of what is left.
-        if (isCatchAll(w) && i === want.length - 1) return got.length > i;
-        if (i >= got.length) return false;
-        if (!(isParam(w) || w === got[i])) return false;
-    }
-    return want.length === got.length;
+    if (matchesFrom(want, got, 0)) return true;
+    if (!want.slice(1).some((w) => w !== '' && !isParam(w) && !isCatchAll(w))) return false;
+    for (let offset = 1; offset <= MAX_MOUNT_SEGMENTS; offset++) if (matchesFrom(want, got, offset)) return true;
+    return false;
 }
 
 /**

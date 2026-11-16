@@ -45,7 +45,7 @@ describe('hello features', () => {
     // The Go cell advertises protocol.Features(), checked against the same
     // fixture (features_test.go): a feature added on one side only fails a suite.
     it('are the ones the shared fixture names', () => {
-        const f = fixtures.find((x) => x.name === 'hello-features-recipe-execution')!;
+        const f = fixtures.find((x) => x.name === 'hello-features-workspace')!;
         expect((f.message!.body as { features: string[] }).features).toEqual([...CELL_FEATURES]);
     });
 
@@ -55,7 +55,7 @@ describe('hello features', () => {
     });
 
     it('a hub accepts only the cell-sent fields the cell named, and names nothing for an older cell', () => {
-        expect(hubAccepts([...CELL_FEATURES])).toEqual(['readyBuildSteps', 'cellMemory', 'timedRequests', 'serviceLogs', 'dbEffects', 'outboundCalls', 'execCast', 'browser', 'browserExplore']);
+        expect(hubAccepts([...CELL_FEATURES])).toEqual(['readyBuildSteps', 'bootPhases', 'cellMemory', 'timedRequests', 'serviceLogs', 'dbEffects', 'outboundCalls', 'execCast', 'browser', 'browserExplore', 'readyStart', 'buildStateEvicted', 'snapshots', 'hostHardening', 'buildStateRebuildCost']);
         expect(hubAccepts(['serviceLogs', 'seedsCache'])).toEqual(['serviceLogs']);
         expect(hubAccepts(['seedsCache', 'claimSize'])).toEqual([]);
         expect(hubAccepts(undefined)).toEqual([]);

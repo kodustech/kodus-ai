@@ -92,33 +92,53 @@ type rule struct {
 var rules = []rule{
 	{
 		name: "an adapter never imports the application: a driver knows nothing of the agent",
-		from: []string{"internal/drivers", "internal/driver"},
+		from: []string{"internal/drivers", "internal/dockercli", "internal/driver"},
 		to:   []string{"internal/agent"},
 	},
 	{
 		name: "only the composition root picks a concrete driver",
 		from: []string{"internal"},
-		to:   []string{"internal/drivers/awsec2", "internal/drivers/dockergvisor", "internal/drivers/k8ssandbox", "internal/drivers/localdocker"},
+		to:   []string{"internal/drivers/awsec2", "internal/drivers/dockergvisor", "internal/drivers/k8ssandbox", "internal/drivers/localdocker", "internal/drivers/microvm"},
+	},
+	{
+		name: "an isolation backend or a placement knows nothing of the agent, the hub or a driver: a driver composes them",
+		from: []string{"internal/isolation", "internal/placement"},
+		to:   []string{"internal/agent", "internal/hubclient", "internal/lease", "internal/transport", "internal/drivers/awsec2", "internal/drivers/dockergvisor", "internal/drivers/k8ssandbox", "internal/drivers/localdocker", "internal/drivers/microvm", "internal/driver/fake"},
+	},
+	{
+		name: "what runs inside a machine (the guest agent, its init, vsock, the rootfs and the kit) knows nothing of the cell's control side",
+		from: []string{"internal/guest", "internal/guestinit", "internal/vsock", "internal/rootfs", "internal/kit"},
+		to:   []string{"internal/agent", "internal/hubclient", "internal/lease", "internal/transport", "internal/driver", "internal/drivers", "internal/dockercli", "internal/isolation", "internal/placement", "internal/egress", "internal/injector"},
 	},
 	{
 		name: "the data plane never imports the control side",
 		from: []string{"internal/egress", "internal/resolver", "internal/injector", "internal/observer"},
-		to:   []string{"internal/agent", "internal/hubclient", "internal/lease", "internal/transport", "internal/driver", "internal/drivers"},
+		to:   []string{"internal/agent", "internal/hubclient", "internal/lease", "internal/transport", "internal/driver", "internal/drivers", "internal/dockercli", "internal/preview"},
+	},
+	{
+		name: "the preview tunnel is a port the agent is given: it holds routes, never a claim's state, a driver or the hub session",
+		from: []string{"internal/preview"},
+		to:   []string{"internal/agent", "internal/hubclient", "internal/lease", "internal/transport", "internal/driver", "internal/drivers", "internal/dockercli", "internal/isolation", "internal/placement", "internal/egress", "internal/injector"},
 	},
 	{
 		name: "the leaves import no other package of the cell but a leaf",
-		from: []string{"internal/protocol", "internal/redact", "internal/clock", "internal/metrics"},
+		from: []string{"internal/protocol", "internal/redact", "internal/clock", "internal/metrics", "internal/telemetry", "internal/lifecycle"},
 		to:   []string{"internal", "cmd"}, // a leaf may use another leaf: see leaves
 	},
 	{
 		name: "a pure rule package holds no claim state and reaches no backend",
-		from: []string{"internal/buildfingerprint", "internal/bakecatalog", "internal/agent/checkout", "internal/agent/admission", "internal/agent/provenance", "internal/recipe", "internal/netguard"},
-		to:   []string{"internal/agent/claims", "internal/agent/outbox", "internal/driver", "internal/drivers", "internal/hubclient", "internal/transport", "internal/lease"},
+		from: []string{"internal/buildfingerprint", "internal/bakecatalog", "internal/agent/checkout", "internal/agent/admission", "internal/agent/provenance", "internal/recipe", "internal/netguard", "internal/machinetrust"},
+		to:   []string{"internal/agent/claims", "internal/agent/outbox", "internal/driver", "internal/drivers", "internal/dockercli", "internal/hubclient", "internal/transport", "internal/lease"},
 	},
 	{
 		name: "a part of the agent never reads a claim's state: the agent hands it what it needs",
 		from: []string{"internal/agent/admission", "internal/agent/provenance", "internal/agent/pool", "internal/agent/checkout", "internal/agent/outbox", "internal/agent/evidence"},
 		to:   []string{"internal/agent/claims"},
+	},
+	{
+		name: "the compose command line is shared by the drivers: it imports the driver port and no driver, backend or control side",
+		from: []string{"internal/composecmd"},
+		to:   []string{"internal/drivers", "internal/dockercli", "internal/isolation", "internal/placement", "internal/agent", "internal/hubclient", "internal/transport", "internal/lease"},
 	},
 	{
 		name: "nothing below cmd imports a main package",
@@ -127,7 +147,7 @@ var rules = []rule{
 	},
 }
 
-var leaves = []string{"internal/protocol", "internal/redact", "internal/clock", "internal/metrics"}
+var leaves = []string{"internal/protocol", "internal/redact", "internal/clock", "internal/metrics", "internal/telemetry", "internal/lifecycle"}
 
 func TestPackageBoundaries(t *testing.T) {
 	graph := imports(t)
@@ -147,6 +167,31 @@ func TestPackageBoundaries(t *testing.T) {
 					continue
 				}
 				t.Errorf("%s\n\t%s imports %s", r.name, pkg, imp)
+			}
+		}
+	}
+}
+
+// A driver is one backend: code two drivers share (the docker binary, the
+// compose command line) lives outside internal/drivers, never in a driver
+// another one imports. Subpackages of the same driver are one unit.
+func TestADriverNeverImportsAnotherDriver(t *testing.T) {
+	driverOf := func(pkg string) string {
+		rest, ok := strings.CutPrefix(pkg, "internal/drivers/")
+		if !ok {
+			return ""
+		}
+		name, _, _ := strings.Cut(rest, "/")
+		return name
+	}
+	for pkg, imps := range imports(t) {
+		own := driverOf(pkg)
+		if own == "" {
+			continue
+		}
+		for _, imp := range imps {
+			if other := driverOf(imp); other != "" && other != own {
+				t.Errorf("driver %s imports driver %s (%s imports %s)", own, other, pkg, imp)
 			}
 		}
 	}

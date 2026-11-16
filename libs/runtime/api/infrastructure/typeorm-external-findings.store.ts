@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { lockKey, lockStatement } from '@libs/runtime/run/adapters/advisory-lock';
 import type { DataSource, EntityManager } from 'typeorm';
 import type { IOutboxMessageRepository } from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
 import {
@@ -188,10 +189,8 @@ export class TypeOrmExternalFindingsStore implements ExternalFindingsStore {
                 "SET LOCAL statement_timeout='750ms'; SET LOCAL lock_timeout='200ms'",
             );
             // Same key as admission, but maintenance must not wait behind a hot org.
-            const lock = await manager.query(
-                'SELECT pg_try_advisory_xact_lock(hashtextextended($1,0)) AS acquired',
-                [org],
-            );
+            const attempt = lockStatement('pg_try_advisory_xact_lock', lockKey('external_findings_org', org));
+            const lock = await manager.query(attempt.text, attempt.values);
             if (!lock[0]?.acquired) return 0;
             const rows = await manager.query(
                 `WITH eligible AS (
@@ -228,10 +227,8 @@ export class TypeOrmExternalFindingsStore implements ExternalFindingsStore {
         return this.source.transaction(async (manager) => {
             const r = input.record;
             // A per-org lock serializes both key and PR quota scopes; never a global lock.
-            await manager.query(
-                `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,
-                [r.organizationId],
-            );
+            const lock = lockStatement('pg_advisory_xact_lock', lockKey('external_findings_org', r.organizationId));
+            await manager.query(lock.text, lock.values);
             const byMessage = (
                 await manager.query(messageQuery, [
                     r.organizationId,

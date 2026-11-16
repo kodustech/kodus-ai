@@ -3,6 +3,7 @@ import { createServer as createHttpsServer } from 'https';
 
 import type { INestApplication, LoggerService } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { json, urlencoded } from 'express';
 
 import type { RuntimeConfig } from '../shared/config';
 import { RuntimeLogger } from '../shared/observability/logger';
@@ -22,7 +23,15 @@ export async function createRuntimeHubApp(config: RuntimeConfig, logger: LoggerS
     const tls = config.tls;
     if (!config.testOnlyPlaintext && !(tls?.cert && tls.key)) throw new Error('runtime-hub: RUNTIME_TLS_CERT/KEY/CA are required (mTLS, ADR-054)');
     const httpsOptions = tls?.cert && tls.key ? { cert: tls.cert, key: tls.key, ca: tls.ca, requestCert: true, rejectUnauthorized: false, minVersion: 'TLSv1.3' as const } : undefined;
-    const app = await NestFactory.create(RuntimeHubModule, { logger, httpsOptions });
+    // Bodies are parsed here, not by Nest's defaults: a sandbox write (half a MiB of
+    // base64, docs/runtime/sandbox.md) is the one route that takes more than 100 kB.
+    const app = await NestFactory.create(RuntimeHubModule, { logger, httpsOptions, bodyParser: false });
+    const small = [json({ limit: '100kb' }), urlencoded({ extended: true, limit: '100kb' })];
+    const sandboxOp = json({ limit: '1mb' });
+    app.use((req: IncomingMessage, res: ServerResponse, next: (e?: unknown) => void) => {
+        if (/^\/internal\/claims\/[^/?]+\/sandbox-op(\?|$)/.test(req.url ?? '')) return sandboxOp(req as never, res as never, next);
+        small[0](req as never, res as never, (e?: unknown) => (e ? next(e) : small[1](req as never, res as never, next)));
+    });
     app.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
         const internalRoute = (req.url ?? '/').startsWith('/internal');
         const onInternal = req.socket.localPort === config.internalPort;

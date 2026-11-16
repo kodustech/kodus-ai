@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 )
 
@@ -81,6 +82,7 @@ func plantResetMachine(m *mockEC2, id string) driver.MachineRef {
 	m.plant(types.Instance{InstanceId: aws.String(id), ImageId: aws.String("ami-workload"), PrivateIpAddress: aws.String("10.0.3.10"), State: &types.InstanceState{Name: types.InstanceStateNameRunning}, Tags: ec2Tags(tags), RootDeviceName: aws.String("/dev/xvda"), BlockDeviceMappings: []types.InstanceBlockDeviceMapping{{DeviceName: aws.String("/dev/xvda"), Ebs: &types.EbsInstanceBlockDevice{VolumeId: aws.String("vol-original")}}}})
 	return driver.MachineRef{MachineID: id, DriverRef: id, ImageID: "ami-workload", Tags: tags}
 }
+
 func resetSnapshot(id, volume, cell, org string) types.Snapshot {
 	return types.Snapshot{SnapshotId: aws.String(id), VolumeId: aws.String(volume), State: types.SnapshotStateCompleted, Tags: ec2Tags(map[string]string{driver.TagCell: cell, driver.TagOrg: org})}
 }
@@ -133,6 +135,7 @@ func (m *observedEC2) DescribeInstances(ctx context.Context, in *ec2.DescribeIns
 	}
 	return m.describeHook(ctx, in, out, m.describes)
 }
+
 func (m *observedEC2) DescribeReplaceRootVolumeTasks(ctx context.Context, in *ec2.DescribeReplaceRootVolumeTasksInput, opts ...func(*ec2.Options)) (*ec2.DescribeReplaceRootVolumeTasksOutput, error) {
 	out, err := m.mockEC2.DescribeReplaceRootVolumeTasks(ctx, in, opts...)
 	m.taskDescribes++
@@ -141,6 +144,7 @@ func (m *observedEC2) DescribeReplaceRootVolumeTasks(ctx context.Context, in *ec
 	}
 	return m.taskHook(in, out, m.taskDescribes)
 }
+
 func eachInstance(out *ec2.DescribeInstancesOutput, change func(*types.Instance)) {
 	for r := range out.Reservations {
 		for i := range out.Reservations[r].Instances {
@@ -399,6 +403,7 @@ func (m lostLaunch) RunInstances(ctx context.Context, in *ec2.RunInstancesInput,
 	m.cancel()
 	return nil, context.Canceled
 }
+
 func TestCreateLostLaunchResponseFindsAndCleansByClientToken(t *testing.T) {
 	m := &mockEC2{}
 	d := newDriver(t, m)
@@ -413,6 +418,7 @@ func TestCreateLostLaunchResponseFindsAndCleansByClientToken(t *testing.T) {
 		t.Fatalf("allocated launch forgotten: terminated=%d err=%v", len(m.terminate), err)
 	}
 }
+
 func TestCancelledCreateNeverLaunches(t *testing.T) {
 	m := &mockEC2{}
 	d := newDriver(t, m)
@@ -447,6 +453,7 @@ func (m provenanceRace) CreateTags(_ context.Context, in *ec2.CreateTagsInput, _
 	}
 	return nil, errors.New("unexpected tag write")
 }
+
 func TestCreateConcurrentProvenanceWriteMustReadBackSameRoot(t *testing.T) {
 	for _, different := range []bool{false, true} {
 		t.Run(fmt.Sprint(different), func(t *testing.T) {

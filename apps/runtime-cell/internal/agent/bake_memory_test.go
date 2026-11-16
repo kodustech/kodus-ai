@@ -25,6 +25,7 @@ type asyncBakeMemoryDriver struct {
 func (d *asyncBakeMemoryDriver) ClaimMemory(driver.ClaimSize) driver.ClaimMemory {
 	return driver.ClaimMemory{BootMB: d.bootMB, ReadyMB: d.readyMB}
 }
+
 func (d *asyncBakeMemoryDriver) Bake(ctx context.Context, s driver.BakeSpec) (driver.ImageRef, error) {
 	close(d.started)
 	select {
@@ -37,6 +38,7 @@ func (d *asyncBakeMemoryDriver) Bake(ctx context.Context, s driver.BakeSpec) (dr
 	}
 	return d.Driver.Bake(ctx, s)
 }
+
 func bakeMemoryHarness(t *testing.T, allocatable, boot, ready int, fail error) (*harness, *asyncBakeMemoryDriver, *recPinner, func()) {
 	t.Helper()
 	proceed := make(chan struct{})
@@ -45,15 +47,16 @@ func bakeMemoryHarness(t *testing.T, allocatable, boot, ready int, fail error) (
 	pin := &recPinner{}
 	h := newHarness(t, func(c *Config) {
 		drv = &asyncBakeMemoryDriver{Driver: c.Driver.(*fake.Driver), started: make(chan struct{}), proceed: proceed, fail: fail, bootMB: boot, readyMB: ready}
-		c.Driver = drv
+		c.Driver, c.Parts.Baker, c.Parts.Memory = drv, drv, drv
 		c.MemoryAllocatableMB = allocatable
-		c.BakePinner = pin
+		c.Parts.BakePinner = pin
 	})
 	t.Cleanup(allow)
 	h.a.accepts = protocol.Accepted(&protocol.AckBody{Accepts: []string{protocol.FeatureCellMemory}})
 	readySetupClaim(t, h)
 	return h, drv, pin, allow
 }
+
 func startMemoryBake(t *testing.T, h *harness) error {
 	t.Helper()
 	return h.handle("claim-1", protocol.MessageTypeImageBake, &protocol.ImageBakeBody{OrgID: "org-a", EnvironmentID: "env-1", Sha: testSHA, RecipeSha: "r"})
@@ -187,11 +190,11 @@ func TestRequiredMemoryAdmissionRefusesMissingOrUnusableBudget(t *testing.T) {
 			cfg.RequireMemoryAdmission = true
 			switch kind {
 			case "no-budget-port":
-				cfg.Driver = h.drv
+				cfg.Parts.Memory = nil
 			case "zero-allocatable":
 				cfg.MemoryAllocatableMB = 0
 			case "zero-budget":
-				cfg.Driver = zeroMemoryDriver{h.drv}
+				cfg.Parts.Memory = zeroMemoryDriver{h.drv}
 			}
 			if _, err := New(cfg); !errors.Is(err, driver.ErrResourceEnforcement) {
 				t.Fatalf("required admission accepted %s: %v", kind, err)

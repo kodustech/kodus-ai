@@ -10,7 +10,7 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 )
 
-func (a *Agent) browserExploreFrame(claimID string, b *protocol.BrowserExploreBody) error {
+func (a *Agent) browserExploreFrame(trace context.Context, claimID string, b *protocol.BrowserExploreBody) error {
 	if a.cfg.BrowserExplore == nil || !a.hubAccepts(protocol.FeatureBrowserExplore) {
 		return nack("browser_explore_unavailable", "browser exploration was not negotiated")
 	}
@@ -25,8 +25,9 @@ func (a *Agent) browserExploreFrame(claimID string, b *protocol.BrowserExploreBo
 		return nack("exploration_scope", "browser exploration requires the base runtime claim")
 	}
 	canon, _ := json.Marshal(b.Request)
-	return a.admitStep(stepAdmission{kind: protocol.MessageTypeBrowserExplore, claimID: claimID, stepID: b.StepID, canon: append([]byte("browser.explore\x00"), canon...)}, func(ctx context.Context, c *claims.Claim) { a.runBrowserExplore(ctx, c, b) })
+	return a.admitStep(stepAdmission{trace: trace, kind: protocol.MessageTypeBrowserExplore, claimID: claimID, stepID: b.StepID, canon: append([]byte("browser.explore\x00"), canon...)}, func(ctx context.Context, c *claims.Claim) { a.runBrowserExplore(ctx, c, b) })
 }
+
 func (a *Agent) runBrowserExplore(ctx context.Context, c *claims.Claim, b *protocol.BrowserExploreBody) {
 	started := a.clock.Now()
 	diagnostic := browserExploreDiagnostic{reason: browserExploreNoTarget}
@@ -39,15 +40,16 @@ func (a *Agent) runBrowserExplore(ctx context.Context, c *claims.Claim, b *proto
 		if a.stepCancelled(ctx, c, "browser.explore", b.StepID, ctx.Err()) {
 			return
 		}
-		if err == nil {
+		switch {
+		case err == nil:
 			result = value
-		} else if errors.Is(err, context.DeadlineExceeded) {
+		case errors.Is(err, context.DeadlineExceeded):
 			result.Status = protocol.BrowserExploreStatusTimeout
 			diagnostic.reason = browserExploreDeadline
-		} else if errors.Is(err, browser.ErrJobRefused) {
+		case errors.Is(err, browser.ErrJobRefused):
 			result.Status = protocol.BrowserExploreStatusBlocked
 			diagnostic.reason = browserExploreRefused
-		} else {
+		default:
 			diagnostic.reason = browserExploreRunnerError
 		}
 	}

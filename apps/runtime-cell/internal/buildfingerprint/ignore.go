@@ -96,7 +96,7 @@ func readDefinition(root, rel string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	data, err := io.ReadAll(io.LimitReader(f, maxDefinitionBytes+1))
 	if err != nil {
 		return nil, err
@@ -142,7 +142,7 @@ func standardFrontend(dockerfile []byte, args map[string]string) bool {
 		case !strings.HasPrefix(line, "#") && !strings.HasPrefix(line, "//"):
 			return true // the first instruction: no directive after it
 		}
-		if m := syntaxDirective.FindStringSubmatch(line); m != nil && !floatingFrontend.MatchString(m[1]) {
+		if m := syntaxDirective.FindStringSubmatch(line); len(m) > 1 && !floatingFrontend.MatchString(m[1]) {
 			return false
 		}
 	}

@@ -1,0 +1,34 @@
+{
+  "name": "claim-failed-phases",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-1",
+    "type": "claim.failed",
+    "body": {
+      "kind": "toolchain",
+      "signature": "compose_up",
+      "reason": "the claim reached its ceiling while it booted",
+      "phases": [
+        {
+          "name": "export layers",
+          "ms": 1200000,
+          "running": true
+        },
+        {
+          "name": "yarn install",
+          "ms": 1005300
+        },
+        {
+          "name": "COPY . .",
+          "ms": 88200
+        }
+      ]
+    }
+  },
+  "expect": {
+    "ok": true,
+    "type": "claim.failed"
+  }
+}

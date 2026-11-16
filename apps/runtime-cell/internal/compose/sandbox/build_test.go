@@ -2,8 +2,11 @@ package sandbox
 
 import (
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"go.yaml.in/yaml/v3"
@@ -42,7 +45,10 @@ func TestBuildsRefusesWhatReachesOutside(t *testing.T) {
 		"dockerfile outside":  "build: {context: ./src, dockerfile: ../../etc/passwd}",
 		"no dockerfile":       "build: {context: ./src, dockerfile: Missing}",
 		"ssh":                 "build: {context: ./src, ssh: [default]}",
-		"secrets":             "build: {context: ./src, secrets: [npmrc]}",
+		"secret from a file":  "build: {context: ./src, secrets: [npmrc]}\nsecrets:\n  npmrc: {file: /etc/shadow}",
+		"secret not a name":   "build: {context: ./src, secrets: [\"a,b\"]}",
+		"secret bad id":       "build: {context: ./src, secrets: [{source: NPM_TOKEN, target: \"id=x\"}]}",
+		"secret with a mode":  "build: {context: ./src, secrets: [{source: NPM_TOKEN, mode: 0444}]}",
 		"cache from":          "build: {context: ./src, cache_from: [\"type=local,src=/var/lib\"]}",
 		"additional contexts": "build: {context: ./src, additional_contexts: {x: /etc}}",
 		"network":             "build: {context: ./src, network: host}",
@@ -75,5 +81,98 @@ func TestABuiltServiceRunsTheCellsImageAndNothingElse(t *testing.T) {
 	api := doc["services"].(map[string]any)["api"].(map[string]any)
 	if api["build"] != nil || api["image"] != "kodus-build/claim-1-api:1" || api["pull_policy"] != "never" {
 		t.Fatalf("api %v", api)
+	}
+}
+
+// G6: a build asks for the org secrets it reads, in its compose build
+// section (a name, a source and target, a top-level entry that names the
+// org secret by environment) or in its Dockerfile (RUN
+// --mount=type=secret); a build that asks for none has none.
+func TestBuildsReadTheSecretsEachBuildAsksFor(t *testing.T) {
+	dir := withDockerfile(t)
+	df := "FROM node:22-alpine\n" +
+		"RUN --mount=type=secret,id=SENTRY_AUTH,env=SENTRY_AUTH \\\n  --mount=type=cache,target=/root/.npm npm ci\n" +
+		"RUN --mount=type=secret,target=/run/secrets/GH_TOKEN true\n" +
+		"RUN --mount=type=secret,id=NPM_AUTH cat /run/secrets/NPM_AUTH\n"
+	if err := os.MkdirAll(filepath.Join(dir, "web"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "web", "Dockerfile"), []byte(df), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	compose := `
+services:
+  api:
+    build: {context: ./src, secrets: [NPM_TOKEN, {source: npm, target: NPM_AUTH}]}
+  web:
+    build: {context: ./web, secrets: [{source: npm, target: NPM_AUTH}]}
+  worker:
+    build: ./src
+secrets:
+  npm: {environment: NPM_TOKEN}
+`
+	bs, err := Builds([]byte(compose), opts(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]map[string]string{}
+	for _, b := range bs {
+		got[b.Service] = b.Secrets
+	}
+	want := map[string]map[string]string{
+		"api":    {"NPM_TOKEN": "NPM_TOKEN", "NPM_AUTH": "NPM_TOKEN"},
+		"web":    {"NPM_AUTH": "NPM_TOKEN", "SENTRY_AUTH": "SENTRY_AUTH", "GH_TOKEN": "GH_TOKEN"},
+		"worker": {},
+	}
+	for svc, w := range want {
+		if !maps.Equal(got[svc], w) {
+			t.Errorf("%s asked for %v, want %v", svc, got[svc], w)
+		}
+	}
+}
+
+func TestDockerfileSecretIDs(t *testing.T) {
+	df := `# syntax=docker/dockerfile:1
+FROM alpine
+RUN --mount=type=secret,id=A true
+RUN --mount="type=secret,id=B,required=true" true
+RUN --mount=type=secret,dst=/x/C true
+RUN --mount=type=secret,env=D true
+RUN --mount=type=secret,id=$ARG true
+RUN --mount=type=bind,source=E,target=/e true
+RUN --mount=type=secret,id=A true
+`
+	if got := DockerfileSecretIDs(df); !slices.Equal(got, []string{"A", "B", "C", "D"}) {
+		t.Fatalf("ids %v", got)
+	}
+}
+
+// The top-level secrets a build reads leave the file the cell runs; a
+// service still never mounts one.
+func TestTopLevelSecretsLeaveTheFileAndServicesNeverMountThem(t *testing.T) {
+	dir := withDockerfile(t)
+	o := opts(dir)
+	o.Built = map[string]string{"api": "kodus-build/claim-1-api:1"}
+	compose := "services:\n  api:\n    build: {context: ./src, secrets: [npm]}\nsecrets:\n  npm: {environment: NPM_TOKEN}\n"
+	out, err := Apply([]byte(compose), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(out, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := doc["secrets"]; ok {
+		t.Fatalf("top-level secrets kept:\n%s", out)
+	}
+	mounted := compose + "  other: {environment: X}\n"
+	mounted = strings.Replace(mounted, "services:\n", "services:\n  db:\n    image: postgres:16\n    secrets: [npm]\n", 1)
+	var re *RefusedError
+	if _, err := Apply([]byte(mounted), o); !errors.As(err, &re) {
+		t.Fatalf("a service's secrets accepted: %v", err)
+	}
+	err = VerifyCanonical([]byte(`{"services":{},"secrets":{"npm":{"environment":"NPM_TOKEN"}}}`), o)
+	if !errors.As(err, &re) || !slices.ContainsFunc(re.Violations, func(v Violation) bool { return v.Path == "secrets" }) {
+		t.Fatalf("canonical file with secrets: %v", err)
 	}
 }

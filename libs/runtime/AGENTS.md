@@ -5,7 +5,8 @@ Read [README.md](./README.md) first for what each sub-library owns. The root `AG
 ## Dependency direction
 
 - `contracts`, `gate`, `probe`, `entry-points`, `redaction`, `api/domain` and the schemas and state of `run`/`protocol` are pure. They may import zod, `crypto` and each other. They may not import Nest, Mongo, TypeORM, `pg`, `fs` or anything under `infrastructure/` or `adapters/`.
-- Infrastructure goes in `run/adapters/` and `api/infrastructure/`. Test doubles go in `run/testing/`, `environment/testing.ts` and `api/__tests__/fixtures.ts`, never in a domain file.
+- Infrastructure goes in `run/adapters/` and `api/infrastructure/`. Test doubles go in `run/testing/`, `environment/testing.ts`, `contracts/testing.ts`, `api/testing.ts`, `api/__tests__/fixtures.ts` and `libs/runtime-publish/testing.ts`, never in a domain or adapter file. No barrel re-exports them, and no production file imports a testing path (`testing-boundary.spec.ts` in `apps/runtime/src/shared` checks both).
+- The process environment is read only in a config loader (`apps/runtime/src/shared/config.ts`, `api/infrastructure/runtime-api.config.ts`, `api/infrastructure/runtime-cron-schedules.ts`) or a boot entry point; domain, adapter and cron code takes typed values. Integers go through `contracts/env-int.ts`, and a limit both sides share has one default in `contracts/limits.ts`. `apps/runtime/src/shared/config-boundary.spec.ts` lists the allowed readers.
 - Ports live in `api/domain/ports.ts` and errors that cross layers live there too. An adapter never imports from `application/`.
 - `apps/runtime` must not need `@libs/runtime/api/application` or `api/infrastructure` in production code. A rule both sides share goes to `contracts/`.
 - Inside the folder, import by file path (`@libs/runtime/contracts/enums`, `@libs/runtime/run/sealed-secret`), not through a barrel, to avoid cycles.
@@ -19,11 +20,11 @@ Read [README.md](./README.md) first for what each sub-library owns. The root `AG
 
 ## Facts and state
 
-- **Facts come from the Git API, never the webhook payload (ADR-057).** Read the head, PR state, draft, labels, author, diff, permission and membership through `RuntimeGitPort`. Fields of `RuntimePullRequestObserved` other than the event's identity (org, repo, PR, event, commenter, commentId) feed logs only. An unknown answer from the platform denies.
-- **The API never writes Runtime state (ADR-025).** Inject a `RunProjectionReader`, never a store with `upsert`. Runtime Postgres is read only with `RUNTIME_DATABASE_READ_URL` inside `BEGIN READ ONLY`. A decision that changes Runtime state is a command in `contracts/runtime-commands.ts` on the outbox.
+- **Facts come from the Git API, never the webhook payload.** Read the head, PR state, draft, labels, author, diff, permission and membership through `RuntimeGitPort`. Fields of `RuntimePullRequestObserved` other than the event's identity (org, repo, PR, event, commenter, commentId) feed logs only. An unknown answer from the platform denies.
+- **The API never writes Runtime state.** Inject a `RunProjectionReader`, never a store with `upsert`. Runtime Postgres is read only with `RUNTIME_DATABASE_READ_URL` inside `BEGIN READ ONLY`. A decision that changes Runtime state is a command in `contracts/runtime-commands.ts` on the outbox.
 - **Every port and query is org-scoped.** New `get`/`list`/write methods take `organizationId` and filter on it in the query, not only in the caller. Another org's object answers 404.
 - Push filters such as repository scope, environment and time window into the query. Never cut "the latest N" and filter afterwards.
-- A query on a new field needs an index (see `MongoRunProjectionStore.ensureIndexes`) and a limit.
+- A query on a new field needs a typed column, an index (a new version in `apps/runtime/src/shared/persistence/runtime-schema.ts`, see v21) and a limit.
 
 ## Tokens and secrets
 
@@ -35,7 +36,7 @@ Read [README.md](./README.md) first for what each sub-library owns. The root `AG
 ## Protocol changes
 
 1. Change the zod schema in `protocol/` (or `probe/`) first.
-2. Regenerate: `node -r ts-node/register/transpile-only -r tsconfig-paths/register libs/runtime/protocol/scripts/dump-json-schema.ts`, then `cd apps/runtime-cell && go generate ./internal/protocol/`.
+2. Regenerate: `node -r ts-node/register/transpile-only -r tsconfig-paths/register libs/runtime/protocol/scripts/dump-json-schema.ts`, then `cd apps/runtime-cell && go generate ./internal/protocol/`. A constant, pattern or name list the cell also needs goes in `protocol/scripts/go-constants.ts`, read from its TypeScript export, so the cell uses the generated `constants_gen.go` instead of a hand copy.
 3. Add a shared fixture in `protocol/fixtures/` for each new acceptance and each new refusal. Run `npx jest libs/runtime/protocol` and `go test ./internal/protocol/`; both must pass.
 4. Patterns must compile in RE2: no lookahead or lookbehind. A rule written as `.refine`/`.superRefine` does not reach the JSON Schema. Mirror it in the Go decoder and cover it with a shared fixture.
 5. Keep `redaction/gitleaks-rules.json` byte-identical to the Go copy. Change both in the same PR.

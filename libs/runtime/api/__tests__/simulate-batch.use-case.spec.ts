@@ -2,12 +2,12 @@ import { BadRequestException, ConflictException, ForbiddenException, NotFoundExc
 import { randomUUID } from 'crypto';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
-import { InMemoryRunTargetStore } from '@libs/runtime-publish/domain/run-target';
 import { RuntimeRunRequestBuilder } from '@libs/runtime/api/application/run-request-builder.service';
 import { RuntimeRunEnqueuer } from '@libs/runtime/api/application/runtime-run-enqueuer.service';
 import { SimulateRuntimeRunUseCase } from '@libs/runtime/api/application/use-cases/simulate.use-case';
 import type { ProductEnvironment, PullRequestHead, RuntimeGitPort } from '@libs/runtime/api/domain/ports';
 import { BASE_SHA, clock, config, FakeOutbox, NOW, ORG, REPO, realAuthorization, run, SECRET, SHA, storeWith, TEAM, user } from '@libs/runtime/api/__tests__/fixtures';
+import { InMemoryRunTargetStore } from '@libs/runtime-publish/testing';
 
 const env: ProductEnvironment = { environmentId: 'env-1', organizationId: ORG, teamId: TEAM, repositoryId: REPO, repositoryName: 'acme/shop', state: 'active', createdAt: NOW.toISOString(), updatedAt: NOW.toISOString() };
 const defaultHead: PullRequestHead = { headSha: SHA, baseSha: BASE_SHA, fork: false, state: 'merged' };

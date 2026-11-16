@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/hubclient"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observerauth"

@@ -41,7 +41,7 @@ func TestOpenBaoRealKVVersionRevocationAndRestart(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
 	dir := t.TempDir()
-	if err := os.Chmod(dir, 0700); err != nil {
+	if err := os.Chmod(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	ca, err := testpki.NewCA("openbao-reader-integration-only")
@@ -65,7 +65,7 @@ func TestOpenBaoRealKVVersionRevocationAndRestart(t *testing.T) {
 	}
 	raw, _ := json.Marshal(config)
 	configPath := filepath.Join(dir, "server.json")
-	if err = os.WriteFile(configPath, raw, 0600); err != nil {
+	if err = os.WriteFile(configPath, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	transport := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: ca.Pool()}}
@@ -273,12 +273,12 @@ func baoWaitReady(t *testing.T, ctx context.Context, client *http.Client, addres
 	ticker := time.NewTicker(25 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		req, _ := http.NewRequestWithContext(ctx, "GET", address+path, nil)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, address+path, nil)
 		response, err := client.Do(req)
 		if err == nil {
 			_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 			_ = response.Body.Close()
-			if response.StatusCode == 200 {
+			if response.StatusCode == http.StatusOK {
 				return
 			}
 		}

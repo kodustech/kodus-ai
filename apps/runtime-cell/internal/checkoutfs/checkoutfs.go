@@ -25,7 +25,7 @@ func Replace(checkout, name string, data []byte, perm fs.FileMode) error {
 	if err != nil {
 		return err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	if err := root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("checkoutfs: clear %s: %w", name, err)
 	}
@@ -34,7 +34,7 @@ func Replace(checkout, name string, data []byte, perm fs.FileMode) error {
 		return fmt.Errorf("checkoutfs: create %s: %w", name, err)
 	}
 	if _, err := f.Write(data); err != nil {
-		f.Close()
+		_ = f.Close()
 		return fmt.Errorf("checkoutfs: write %s: %w", name, err)
 	}
 	return f.Close()
@@ -47,20 +47,20 @@ func Remove(checkout, name string) error {
 	if err != nil {
 		return err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	if err := root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	return nil
 }
 
-// ErrTooLarge: the file is longer than the reader takes.
+// ErrTooLarge means the file is longer than the reader takes.
 var ErrTooLarge = errors.New("checkoutfs: file too large")
 
-// Read reads name inside checkout, at most max bytes: every path step is
+// Read reads name inside checkout, at most limit bytes: every path step is
 // resolved inside the checkout (os.Root), so a symlink the PR planted to a
 // file of the cell's is refused, never read.
-func Read(checkout, name string, max int64) ([]byte, error) {
+func Read(checkout, name string, limit int64) ([]byte, error) {
 	if name == "" || filepath.IsAbs(name) || !filepath.IsLocal(name) {
 		return nil, fmt.Errorf("checkoutfs: %q is not a path inside the checkout", name)
 	}
@@ -68,18 +68,18 @@ func Read(checkout, name string, max int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	f, err := root.Open(name)
 	if err != nil {
 		return nil, fmt.Errorf("checkoutfs: open %s: %w", name, err)
 	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, max+1))
+	defer func() { _ = f.Close() }()
+	b, err := io.ReadAll(io.LimitReader(f, limit+1))
 	if err != nil {
 		return nil, fmt.Errorf("checkoutfs: read %s: %w", name, err)
 	}
-	if int64(len(b)) > max {
-		return nil, fmt.Errorf("%w: %s is over %d bytes", ErrTooLarge, name, max)
+	if int64(len(b)) > limit {
+		return nil, fmt.Errorf("%w: %s is over %d bytes", ErrTooLarge, name, limit)
 	}
 	return b, nil
 }

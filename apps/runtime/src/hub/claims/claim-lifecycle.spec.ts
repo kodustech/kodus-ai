@@ -1,13 +1,17 @@
 import { randomUUID } from 'crypto';
 
+import { InvalidClaimTransitionError } from '@libs/runtime/contracts/enums';
 import { decodeFrame, PROTOCOL_VERSION } from '@libs/runtime/protocol';
 import { InMemoryRunStreamStore } from '@libs/runtime/run/testing';
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
 import { createCa } from '../ca/x509';
-import { CellHub, ClaimScopeError, HubLogLine } from '../cell-hub';
-import { InMemoryHubStore } from '../hub-store';
+import { decideMachineMinutes } from '@libs/runtime/environment';
+
+import { CellHub, type CellHubOptions, ClaimScopeError, HubLogLine } from '../cell-hub';
 import { claimIdFor } from './claim.service';
+import type { MachineMinuteStore } from './machine-minutes';
+import { InMemoryHubStore } from '../testing';
 
 // The claim lifecycle under the races the review found: a release during a
 // boot, a duplicate acquire after a worker crash, a claim named by another
@@ -43,14 +47,14 @@ const probe = {
     spec: { kind: 'http' as const, target: { service: 'web', port: 3000 }, method: 'POST' as const, path: '/orders', timeoutMs: 1_000 },
 };
 
-async function harness() {
+async function harness(extra: Partial<CellHubOptions> = {}) {
     const store = new InMemoryHubStore();
     const logs: HubLogLine[] = [];
     const violations: string[] = [];
     const metrics = new RuntimeMetrics();
     jest.spyOn(metrics, 'recordProtocolViolation').mockImplementation((a) => void violations.push(a.code));
     const streams = new InMemoryRunStreamStore();
-    const hub = new CellHub(store, streams, metrics, { replicaId: 'r1', replicaUrl: 'http://hub', ca: CA, log: (l) => void logs.push(l) });
+    const hub = new CellHub(store, streams, metrics, { replicaId: 'r1', replicaUrl: 'http://hub', ca: CA, log: (l) => void logs.push(l), ...extra });
     const sock = new Sock();
     const h = hub.attach(sock, { cellId: 'cell-a', owner: 'kodus' });
     await h.onMessage(frame('cell-a', 'hello', { versions: [1], driver: 'fake', isolation: 'vm', regions: [], owner: 'kodus' }));
@@ -115,6 +119,22 @@ describe('claim lifecycle', () => {
         expect(await t.store.rebindClaim('c1', { cellId: 'cell-b', leaseExpiresAt: '', hardExpiresAt: '' })).toBe(false);
         // The refused moves left the cause of the one that happened.
         expect((await t.store.claim('c1'))!).toMatchObject({ state: 'released', cellId: 'cell-a', reason: 'released', reasonDetail: null });
+    });
+
+    it('a compromised claim is never rebound: it keeps its cell and its violation until it is released', async () => {
+        const t = await harness();
+        await t.store.insertClaim({ claimId: 'c1', cellId: 'cell-a', orgId: 'o', side: 'base', state: 'pending', leaseExpiresAt: '', hardExpiresAt: new Date(Date.now() + 60_000).toISOString() });
+        expect(await t.store.transitionClaim('c1', ['pending'], 'compromised', { reason: 'security_violation', detail: 'bait_exfiltration' })).toBe(true);
+        expect(await t.store.rebindClaim('c1', { cellId: 'cell-b', leaseExpiresAt: '', hardExpiresAt: '' })).toBe(false);
+        expect((await t.store.claim('c1'))!).toMatchObject({ state: 'compromised', cellId: 'cell-a', reason: 'security_violation', reasonDetail: 'bait_exfiltration' });
+    });
+
+    it('a move the claim transition table does not allow is refused before the row is touched', async () => {
+        const t = await harness();
+        await t.store.insertClaim({ claimId: 'c1', cellId: 'cell-a', orgId: 'o', side: 'base', state: 'pending', leaseExpiresAt: '', hardExpiresAt: new Date(Date.now() + 60_000).toISOString() });
+        expect(await t.store.transitionClaim('c1', ['pending'], 'compromised', { reason: 'security_violation', detail: 'bait_exfiltration' })).toBe(true);
+        await expect(t.store.transitionClaim('c1', ['compromised'], 'bound', { reason: 'ready' })).rejects.toThrow(InvalidClaimTransitionError);
+        expect((await t.store.claim('c1'))!).toMatchObject({ state: 'compromised', reason: 'security_violation' });
     });
 
     it('a claim named with another org or another Run is refused and never touched', async () => {
@@ -315,6 +335,18 @@ describe('a security violation the cell reports unsolicited', () => {
         expect((await t.store.claim(req.claimId))!.state).toBe('compromised');
     });
 
+    it('a retry of a compromised claim answers its violation, sends no claim.acquire, and leaves the evidence compromised', async () => {
+        const t = await harness();
+        const claimId = await bound(t);
+        await t.h.onMessage(violation(claimId));
+        const sent = t.sock.all('claim.acquire').length;
+        // The worker asks again with the same key (a redelivered step after the Run saw the violation).
+        const retry = await t.acquire();
+        expect(retry).toMatchObject({ status: 'blocked', blockers: [{ kind: 'security_violation', signature: 'credential_exfiltration' }] });
+        expect(t.sock.all('claim.acquire')).toHaveLength(sent);
+        expect((await t.store.claim(claimId))!).toMatchObject({ state: 'compromised', cellId: 'cell-a', reason: 'security_violation', reasonDetail: 'credential_exfiltration' });
+    });
+
     it('is refused for a claim of another cell, a finished claim, or another blocker kind', async () => {
         const t = await harness();
         await t.store.insertClaim({ claimId: 'theirs', cellId: 'cell-b', orgId: 'org-a', side: 'base', state: 'bound', leaseExpiresAt: '', hardExpiresAt: new Date(Date.now() + 60_000).toISOString() });
@@ -443,3 +475,49 @@ describe('a security violation the cell reports unsolicited', () => {
     });
 });
 
+
+/** The org's minutes in memory: what each claim's round reserved, by claim. */
+class MinutesBook implements MachineMinuteStore {
+    readonly reserved = new Map<string, number>();
+    constructor(private readonly spentElsewhere = 0) {}
+    async reserve(input: { claimId: string; needSeconds: number; limitMinutes: number }) {
+        const spent = this.spentElsewhere + [...this.reserved.values()].reduce((a, b) => a + b, 0);
+        const decision = decideMachineMinutes({ spentSeconds: spent, needSeconds: input.needSeconds, limitMinutes: input.limitMinutes });
+        if (decision.allowed) this.reserved.set(input.claimId, input.needSeconds);
+        return decision;
+    }
+    async cancel(claimId: string) {
+        if (this.reserved.has(claimId)) this.reserved.set(claimId, 0);
+    }
+}
+
+describe('org machine-minute budget on acquire', () => {
+    it('refuses a claim the org day cannot hold with machine_minutes_exhausted, sending and recording nothing', async () => {
+        // 100 minutes a day, 50 already spent: a Run side may hold 60.
+        const t = await harness({ machineMinutes: { store: new MinutesBook(50 * 60), limitMinutes: 100 } });
+        const out = await t.acquire();
+        expect(out).toMatchObject({ status: 'blocked', blockers: [{ kind: 'resources', signature: 'machine_minutes_exhausted' }] });
+        expect(t.sock.all('claim.acquire')).toHaveLength(0);
+        expect(await t.store.claim(claimIdFor('org-a', 'run-1:base:1'))).toBeNull();
+    });
+
+    it("reserves a Run side's whole ceiling when the day still holds it, and the claim boots", async () => {
+        const book = new MinutesBook();
+        const t = await harness({ machineMinutes: { store: book, limitMinutes: 100 } });
+        const pending = t.acquire();
+        const req = await t.ackAcquire();
+        await t.ready(req.claimId);
+        expect(await pending).toMatchObject({ claimId: req.claimId });
+        expect(book.reserved.get(req.claimId)).toBe(60 * 60);
+    });
+
+    it('gives back the minutes of a round of a claim that already ended, which never reaches a cell', async () => {
+        const book = new MinutesBook();
+        const t = await harness({ machineMinutes: { store: book, limitMinutes: 0 } });
+        const claimId = claimIdFor('org-a', 'run-1:base:1');
+        await t.store.insertClaim({ claimId, cellId: 'cell-a', orgId: 'org-a', side: 'base', state: 'released', leaseExpiresAt: '', hardExpiresAt: new Date(Date.now() + 60_000).toISOString() });
+        expect(await t.acquire()).toMatchObject({ status: 'blocked', blockers: [{ signature: 'claim_released' }] });
+        expect(book.reserved.get(claimId)).toBe(0);
+        expect(t.sock.all('claim.acquire')).toHaveLength(0);
+    });
+});

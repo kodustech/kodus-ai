@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/clock"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 )
@@ -25,12 +26,14 @@ func launchToken(spec driver.MachineSpec) string {
 	sum := sha256.Sum256([]byte("kodus-launch\x00" + spec.CellID + "\x00" + spec.OrgID + "\x00" + spec.ClaimID + "\x00" + string(spec.Role)))
 	return hex.EncodeToString(sum[:])
 }
+
 func (d *Driver) operationTimeout() time.Duration {
 	if d.cfg.OperationTimeout > 0 {
 		return d.cfg.OperationTimeout
 	}
 	return 15 * time.Minute
 }
+
 func (d *Driver) cleanupTimeout() time.Duration {
 	if d.cfg.CleanupTimeout > 0 {
 		return d.cfg.CleanupTimeout
@@ -229,6 +232,7 @@ func (d *Driver) Suspend(ctx context.Context, ref driver.MachineRef, mode driver
 		}
 	})
 }
+
 func (d *Driver) Resume(ctx context.Context, ref driver.MachineRef) error {
 	ctx, cancel := context.WithTimeout(ctx, d.operationTimeout())
 	defer cancel()
@@ -241,6 +245,7 @@ func (d *Driver) Resume(ctx context.Context, ref driver.MachineRef) error {
 	_, err := d.waitRunning(ctx, ref, types.InstanceStateNameStopped)
 	return err
 }
+
 func (d *Driver) terminate(ctx context.Context, ref driver.MachineRef, limit time.Duration) error {
 	if _, err := d.api.TerminateInstances(ctx, &ec2.TerminateInstancesInput{InstanceIds: []string{ref.DriverRef}}); err != nil {
 		return fmt.Errorf("awsec2: terminate %s: %w", ref.DriverRef, err)

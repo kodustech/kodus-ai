@@ -74,6 +74,9 @@ func handlerFor(r *Prober, cellID, claim string, newID func() string) http.Handl
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(out)
 	})
+	// A preview's requests (docs/runtime/preview-urls.md): proxied to the
+	// claim's http targets, never logged as a probe's.
+	mux.Handle(PreviewPath+"/", PreviewHandler(r.cfg.Targets))
 	mux.HandleFunc("GET /v1/requests", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(r.Log())
@@ -128,7 +131,7 @@ func (c HTTPClient) Run(ctx context.Context, frame []byte) (*protocol.StepResult
 	if err != nil {
 		return nil, "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, protocol.MaxFrameBytes+1))
 	if err != nil {
 		return nil, "", err

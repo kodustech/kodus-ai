@@ -2,7 +2,8 @@ import type { BrowserExploreRequest, BrowserExploreResult } from '@libs/runtime/
 import type { CellOwner, ClaimConsumer, ClaimSide, Expose as SharedExpose, VmHealth as SharedVmHealth } from '@libs/runtime/contracts/enums';
 import type { EvidenceRef, Probe, ProbeResult } from '@libs/runtime/probe';
 import type { MachineSize } from '@libs/runtime/contracts/machine-size';
-import type { BuildSteps, ClaimCanary, EvidenceRequest, FailureBundle } from '@libs/runtime/protocol';
+import type { IsolationMinimum } from '@libs/runtime/contracts/isolation';
+import type { BootPhases, BuildSteps, ClaimCanary, EvidenceRequest, FailureBundle } from '@libs/runtime/protocol';
 
 // The one door every consumer uses to get "this app up at this SHA"
 // (docs §5, ADR-002). The control plane never talks to a cloud or a machine:
@@ -31,10 +32,29 @@ export interface AcquireRequest {
     /** The environment's machine size for the workload's builds and services; absent: the cell's default. */
     size?: MachineSize;
     /**
+     * The least isolation the claim's machines may run under
+     * (docs/runtime/isolation-architecture.md C1): 'any' (the default when
+     * absent), 'kernel' (gVisor or better), 'vm' (a microVM or a VM). The
+     * claim goes only to a cell that satisfies it; with none connected it is
+     * blocked (kind capacity), never placed lower.
+     */
+    isolation?: IsolationMinimum;
+    /**
      * The Run's canaries (ADR-043) for the cell to plant in the workload; only a Run's claims carry
      * them. Decoys, never a real secret, but never logged, stored or returned either.
      */
     canaries?: ClaimCanary[];
+    /**
+     * The PR side of a pull request from a fork: code nobody in the org wrote.
+     * The environment's approved egress hosts never reach its claim.
+     */
+    forkPullRequest?: boolean;
+    /**
+     * A preview claim of an environment an owner set to "same as the Run"
+     * (docs/runtime/preview-urls.md §7): the org's secrets reach it as
+     * placeholders, as a Run's do. Never on a fork's PR side.
+     */
+    previewSecrets?: boolean;
 }
 
 export interface RecipeForClaim {
@@ -61,8 +81,14 @@ export interface Claim {
         imageId: string;
         seedSha: string;
     };
+    /**
+     * The cell had removed this environment's build state to free disk (its
+     * heartbeat evictedBuildStates) and no setup made it again: the claim's
+     * builds ran with no state, so the boot was cold. ISO time of the eviction.
+     */
+    buildStateEvictedAt?: string;
     /** How long the claim took on the cell (claim.ready.timing), in ms; absent from a cell that does not send it. */
-    timing?: { prepareMs: number; bootMs?: number; buildMs?: number; upMs?: number; seedMs?: number; readyMs?: number; snapshotMs?: number; buildSteps?: BuildSteps };
+    timing?: { prepareMs: number; bootMs?: number; buildMs?: number; upMs?: number; seedMs?: number; readyMs?: number; snapshotMs?: number; buildSteps?: BuildSteps; phases?: BootPhases };
 }
 
 /** A claim's claim.ready.timing: the cell agent's prepare time and the driver's boot phases, in ms. */
@@ -80,8 +106,12 @@ export interface Blocker {
     kind: string;
     signature: string;
     message: string;
+    /** The repository of a multi-repository environment the blocker is about (its alias); absent: the claim's own, or not known. */
+    alias?: string;
     /** The cell's redacted failure bundle of a setup claim. */
     bundle?: FailureBundle;
+    /** Where the failed boot spent its time until it stopped (claim.failed phases). */
+    phases?: BootPhases;
 }
 
 export interface Blocked {
@@ -91,6 +121,8 @@ export interface Blocked {
     held?: { claimId: string; cellId: string; hardExpiresAt: string };
     /** The cell the claim was booting on when it failed or timed out: it may hold what the build left (its state, its cache). */
     cellId?: string;
+    /** As Claim.buildStateEvictedAt: the boot that failed or timed out built with no state, because the cell had evicted it. */
+    buildStateEvictedAt?: string;
     /**
      * Nothing was started because no cell had room for the claim now
      * (ADR-070): the worker waits and asks again (isCapacityWait). The
@@ -130,6 +162,11 @@ export interface BakeRequest {
     sha: string;
     /** The setup claim that booted this commit, when the bake follows a setup. */
     claimId?: string;
+    /**
+     * A multi-repository environment's bake key (contracts/workspace refsDigest):
+     * only for a setup claim that carried other repositories, never for one of one.
+     */
+    refsDigest?: string;
 }
 
 export type BakeOutcome = { status: 'accepted' } | { status: 'refused'; code: string; message: string };
@@ -183,6 +220,12 @@ export interface ExecRequest {
     timeoutMs: number;
     /** What the cell captures around the command (execCast) and the grants it uploads with; a cell without the feature captures nothing. */
     evidence?: EvidenceRequest;
+    /**
+     * The alias of another repository of a multi-repository claim whose code
+     * the command runs on (the PR's, when the PR is in a member): the cell runs
+     * it where that repository was built. Absent: the claim's own repository.
+     */
+    repository?: string;
 }
 
 export interface StepResult {
@@ -199,16 +242,36 @@ export interface StepResult {
     refs?: EvidenceRef[];
 }
 
+/** What the caller of an acquire knows that the request does not carry; never sent to a cell. */
+export interface AcquireOptions {
+    /**
+     * When the claim's boot must be ready (epoch ms). Set when the claim's boot
+     * began on an earlier call (a worker that restarted mid-boot): the call waits
+     * only what is left of the ready wait, and answers boot_timeout once it has
+     * passed. Absent: the hub's whole ready wait, as on a first call.
+     */
+    readyBy?: number;
+}
+
 export interface EnvironmentRuntime {
     /** Local UI exploration only: never returned to the replay gate. */
     exploreBrowser?(claimId: string, request: BrowserExploreRequest, stepId: string): Promise<BrowserExploreResult | EnvError>;
-    acquire(req: AcquireRequest): Promise<Claim | Blocked>;
+    acquire(req: AcquireRequest, opts?: AcquireOptions): Promise<Claim | Blocked>;
     /** Runs on the claim's observer, outside the VM (ADR-053). */
     probe(claimId: string, probe: Probe, stepId: string, evidence?: EvidenceRequest): Promise<ProbeOutcome | EnvError>;
     /** Runs inside the VM: setup and internal evidence only. */
     exec(claimId: string, req: ExecRequest): Promise<StepResult | EnvError>;
-    /** machine.reset from outside the guest; imageId pins the acquired image for this Run (ADR-050). */
-    reset(claimId: string, imageId?: string): Promise<void | EnvError>;
+    /**
+     * machine.reset from outside the guest; imageId pins the acquired image for this Run (ADR-050).
+     * With roundSnapshotId the claim's machine comes back from that round snapshot (kind memory)
+     * instead of its compose volumes.
+     */
+    reset(claimId: string, imageId?: string, roundSnapshotId?: string): Promise<void | EnvError>;
+    /**
+     * claim.snapshot round: the claim's workload kept as a memory snapshot at its first ready, which
+     * later resets name. Absent where the environment keeps none; a cell without snapshots answers an EnvError.
+     */
+    snapshotRound?(claimId: string, stepId: string): Promise<{ id: string; ms: number } | EnvError>;
     release(claimId: string): Promise<void>;
     /** claim.renew: more lease for a claim its owner still uses, never past its hard ceiling; absent where leases are not renewed. */
     renew?(claimId: string, consumer: Consumer): Promise<LeaseRenewal | EnvError>;
@@ -224,30 +287,64 @@ export type ClaimProgress = {
     phases: Array<{ phase: string; state: 'started' | 'done'; at: string; ms?: number }>;
     lines: string[];
     updatedAt: string;
+    /** Where the boot spent its time so far (claim.progress phases), when the cell sent it. */
+    bootPhases?: BootPhases;
 };
 
 /** How long a claim's lease lasts before it must be renewed, by consumer. */
 // A setup's lease is its whole ceiling: nothing sends claim.renew while it boots, and a
 // large build (Grafana's backend: ~35 min) outlives a shorter lease and is swept mid-build.
-export const LEASE_TTL_MINUTES: Record<Consumer, number> = { runtime: 45, setup: 45, mcp: 120, custom_agent: 30 };
+// A sandbox's lease matches the review's sandbox lease (30 min); its ceiling the E2B sandbox's order of magnitude.
+// A preview's lease is its idle stop (15 min, renewed by the edge's traffic) and its ceiling one start (2 h): docs/runtime/preview-urls.md §5.2.
+export const LEASE_TTL_MINUTES: Record<Consumer, number> = { runtime: 45, setup: 45, mcp: 120, custom_agent: 30, sandbox: 30, preview: 15 };
 /** When a claim's machines are destroyed whatever the lease says, by consumer. */
-export const HARD_EXPIRY_MINUTES: Record<Consumer, number> = { runtime: 60, setup: 45, mcp: 240, custom_agent: 45 };
+export const HARD_EXPIRY_MINUTES: Record<Consumer, number> = { runtime: 60, setup: 45, mcp: 240, custom_agent: 45, sandbox: 45, preview: 120 };
 /**
  * How long the hub waits from claim.acquire to claim.ready, by consumer. A
  * Run boots on a baked image; a setup builds from zero, so it waits until a
  * minute before its own ceiling, never past it (the cell destroys the
  * machines at hardExpiresAt). The worker's call waits a minute more.
  */
+const PR_BUILD_READY_TIMEOUT_MINUTES_VALUE = 30;
 export const READY_TIMEOUT_MINUTES: Record<Consumer, number> = {
     runtime: 15,
     setup: HARD_EXPIRY_MINUTES.setup - 1,
     mcp: 15,
     custom_agent: 15,
+    // One tool container and no build: a sandbox is ready in seconds, or never.
+    sandbox: 2,
+    // A preview's PR side builds the pull request's commit, as the Run's did.
+    preview: PR_BUILD_READY_TIMEOUT_MINUTES_VALUE,
 };
-/** @deprecated use LEASE_TTL_MINUTES. */
-export const TTL_MINUTES = LEASE_TTL_MINUTES;
-/** @deprecated use HARD_EXPIRY_MINUTES. */
-export const HARD_TTL_MINUTES = HARD_EXPIRY_MINUTES;
+/**
+ * A Run's PR side does not boot on the baked image: the cell builds the pull
+ * request's commit. On a heavy repository that build is the boot (kr-directus:
+ * 13 min 37 s, and the Run gave up at 15 min in the second the build ended).
+ * It waits twice as long as the base side, and still ends half an hour before
+ * the claim's hard ceiling, which is left for the probes.
+ */
+export const PR_BUILD_READY_TIMEOUT_MINUTES = PR_BUILD_READY_TIMEOUT_MINUTES_VALUE;
+
+/** READY_TIMEOUT_MINUTES for one claim: the PR side of a Run waits for its build. */
+export function readyTimeoutMinutes(consumer: Consumer, side?: string): number {
+    return consumer === 'runtime' && side === 'pr' ? PR_BUILD_READY_TIMEOUT_MINUTES : READY_TIMEOUT_MINUTES[consumer];
+}
+
+/**
+ * When a claim's boot must be ready, from the hard ceiling its boot round was
+ * given (the hub sets hardExpiresAt to the round's start plus
+ * HARD_EXPIRY_MINUTES and keeps it for a retried round on the same cell):
+ * the round's start plus the claim's ready wait.
+ */
+export function readyDeadlineOf(hardExpiresAt: string, consumer: Consumer, side?: string): number {
+    return Date.parse(hardExpiresAt) - HARD_EXPIRY_MINUTES[consumer] * 60_000 + readyTimeoutMinutes(consumer, side) * 60_000;
+}
+
+/** A boot that outlived its ready wait, as the hub answers it (kind resources, boot_timeout). */
+export function bootTimedOut(consumer: Consumer, side?: string): Blocked {
+    const minutes = readyTimeoutMinutes(consumer, side);
+    return { status: 'blocked', blockers: [{ kind: 'resources', signature: 'boot_timeout', message: `the boot did not finish in ${minutes} min, the most a boot of this claim waits` }] };
+}
 
 export const isBlocked = (r: Claim | Blocked): r is Blocked => (r as Blocked).status === 'blocked';
 export const isEnvError = (r: unknown): r is EnvError =>

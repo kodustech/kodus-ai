@@ -179,28 +179,28 @@ func (r *Redactor) StepStream(b *protocol.StepStreamBody) int {
 	return n
 }
 
-// Clip cuts s to at most max bytes on a rune boundary.
-// ClipMiddle keeps the start and the end of s within max bytes, never
+// ClipMiddle keeps the start and the end of s within limit bytes, never
 // cutting a UTF-8 sequence: a failure's reason names the step first and
 // says what failed last (a build's error is its final lines).
-func ClipMiddle(s string, max int) (string, bool) {
-	if len(s) <= max {
+func ClipMiddle(s string, limit int) (string, bool) {
+	if len(s) <= limit {
 		return s, false
 	}
 	const sep = " … "
-	head, _ := Clip(s, max/4)
-	start := len(s) - (max - len(head) - len(sep))
+	head, _ := Clip(s, limit/4)
+	start := len(s) - (limit - len(head) - len(sep))
 	for start < len(s) && !utf8.RuneStart(s[start]) {
 		start++
 	}
 	return head + sep + s[start:], true
 }
 
-func Clip(s string, max int) (string, bool) {
-	if len(s) <= max {
+// Clip cuts s to at most limit bytes on a rune boundary.
+func Clip(s string, limit int) (string, bool) {
+	if len(s) <= limit {
 		return s, false
 	}
-	cut := max
+	cut := limit
 	for cut > 0 && !utf8.RuneStart(s[cut]) {
 		cut--
 	}

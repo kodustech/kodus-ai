@@ -24,6 +24,10 @@ func (a *Agent) bringUp(ctx context.Context, c *claims.Claim, hard time.Time) {
 	}
 	err := a.prepare(pctx, c, hard)
 	c.FinishPrepare()
+	if halted := c.Halted(); halted != nil {
+		// The cell stopped it (disk_watch.go): its reason, not the canceled step's.
+		err = halted
+	}
 	// Before cleanup forgets the claim's keys (S-51).
 	r := a.claimRedactor(c)
 	if err == nil {
@@ -54,11 +58,20 @@ func (a *Agent) bringUp(ctx context.Context, c *claims.Claim, hard time.Time) {
 	}
 	c.Log.Error("claim.failed", "err", err, "prepareMs", a.clock.Now().Sub(c.AcquiredAt).Milliseconds())
 	body := failedBody(err)
+	// Before cleanup forgets the machines: where the boot spent its time
+	// until it stopped (a setup that reached its ceiling says it was exporting).
+	body.Phases = a.bootPhases(c)
 	c.SetRedactor(r)
 	if a.isCleanSetupClaim(c) && c.Machines().Workload.MachineID != "" {
 		body.Bundle = a.collectBundle(ctx, c, err)
 	}
-	if until, ok := a.startHold(ctx, c, hard); ok {
+	// A claim the cell stopped is not held: its machines are what it stopped.
+	var until time.Time
+	held := false
+	if c.Halted() == nil {
+		until, held = a.startHold(ctx, c, hard)
+	}
+	if held {
 		if !c.MarkFailed(err, r, until) {
 			a.cleanupReleased(ctx, c)
 			return
@@ -66,7 +79,6 @@ func (a *Agent) bringUp(ctx context.Context, c *claims.Claim, hard time.Time) {
 		a.observeClaims()
 		// Its builds are over: the held machines are counted as a ready claim's.
 		a.countReady(c)
-		held := true
 		body.Held = &held
 		_ = a.deliver(ctx, c, "claim.failed", body)
 		return
@@ -101,6 +113,18 @@ func (a *Agent) deliver(ctx context.Context, c *claims.Claim, kind string, body 
 		wanted = nil // sent after the cleanup by design
 	}
 	return a.outbox.Deliver(ctx, outbox.Frame{ClaimID: c.ID, Kind: kind, Body: body, Log: c.Log, Wanted: wanted})
+}
+
+// deliverOnce redacts a claim frame as deliver does and sends it once, with
+// no retry, within timeout, on a goroutine Wait waits for: a frame a newer
+// one replaces (claim.progress) never holds its caller. The Run's end drops it.
+func (a *Agent) deliverOnce(c *claims.Claim, kind string, body any, timeout time.Duration) {
+	a.redactOutbound(c, body)
+	a.goTracked(func(ctx context.Context) {
+		ctx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		_ = a.outbox.Deliver(ctx, outbox.Frame{ClaimID: c.ID, Kind: kind, Body: body, Log: c.Log, Once: true})
+	})
 }
 
 func timingAttrs(t *protocol.ReadyTiming) []any {

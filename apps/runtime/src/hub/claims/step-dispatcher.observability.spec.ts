@@ -4,9 +4,9 @@ import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '
 import type { MessageBody } from '@libs/runtime/protocol';
 
 import { CellConnection, type CellConnectionRegistry } from '../gateway/cell-connections';
-import { InMemoryHubStore } from '../hub-store';
 import type { ClaimService } from './claim.service';
 import { StepDispatcher } from './step-dispatcher';
+import { InMemoryHubStore } from '../testing';
 
 // A real dispatcher and in-memory exporter; only the cell's transport is a
 // fixture. No service, model, database, broker or wall-clock sleep is needed.
@@ -27,7 +27,6 @@ describe('step dispatch diagnostics', () => {
         conn.helloDone = true;
         const events: Array<{ type: string; data: Record<string, unknown> }> = [];
         const logs: Array<Record<string, unknown>> = [];
-        let dispatcher: StepDispatcher;
         const connections = {
             get: () => conn,
             envelope: (cellId, type, body, extra) => ({ v: 1, id: randomUUID(), cellId, type, body, ...extra }),
@@ -54,7 +53,7 @@ describe('step dispatch diagnostics', () => {
                 return true;
             },
         } as unknown as CellConnectionRegistry;
-        dispatcher = new StepDispatcher(
+        const dispatcher: StepDispatcher = new StepDispatcher(
             { findActiveClaim: async () => claim, scoped: async () => claim } as unknown as ClaimService,
             new InMemoryHubStore(), connections,
             async (_org, _run, event) => { events.push(event); if (event.type === 'step.started') jest.setSystemTime(Date.now() + streamDelayMs); },

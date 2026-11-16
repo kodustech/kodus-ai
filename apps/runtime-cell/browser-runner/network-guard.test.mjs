@@ -19,8 +19,25 @@ for(const [name,response]of[['redirect',{status:()=>302}],['large headers',{head
 test('foreign port/page and oversized post are denied before any upstream',async()=>{
  for(const request of[{url:'http://app.kody.internal:9999/'},{owner:{}},{post:Buffer.alloc(1024*1024+1)}]){const f=await fixture();await f.handle(request);assert.throws(()=>f.guard.check());assert.ok(!f.calls.some(c=>Array.isArray(c)&&c[0]==='fetch'));}
 });
+const socket=(f,url)=>({url:()=>url,connectToServer:()=>{f.calls.push(['ws.connect',url]);return {}},close:async()=>f.calls.push('ws.close')});
+// kr-nextjs#2: the dev server's reload channel is a WebSocket to the app itself; refusing it lost every round.
+test('a WebSocket to the app\'s own origin reaches the app and is not a denial',async()=>{
+ const f=await fixture();await f.ws(socket(f,'ws://app.kody.internal:3000/_next/webpack-hmr?id=1'));f.guard.check();
+ assert.equal(f.denials(),0);assert.deepEqual(f.calls.filter(c=>Array.isArray(c)),[['ws.connect','ws://app.kody.internal:3000/_next/webpack-hmr?id=1']]);assert.ok(!f.calls.includes('ws.close'));
+});
+for(const url of['ws://app.kody.internal:9999/','ws://other.kody.internal:3000/','wss://app.kody.internal:3000/','wss://cdn.example.com/socket','ws://user:pw@app.kody.internal:3000/','not a url'])test(`a WebSocket to ${url} is terminal and never reaches a server`,async()=>{
+ const f=await fixture();await f.ws(socket(f,url));assert.throws(()=>f.guard.check(),/^Error: browser network policy refused$/);
+ assert.equal(f.denials(),1);assert.ok(f.calls.includes('ws.close'));assert.ok(!f.calls.some(c=>Array.isArray(c)&&c[0]==='ws.connect'));
+});
+test('a same-origin WebSocket before the page is bound, or after a denial, is refused',async()=>{
+ assert.equal(typeof impl.installNetworkGuard,'function');
+ const context=new EventEmitter();let ws;context.routeWebSocket=async(_,fn)=>{ws=fn};context.route=async()=>{};
+ const calls=[];const guard=await impl.installNetworkGuard(context,{origin,remaining:()=>5000});
+ await ws({url:()=>origin.replace('http','ws')+'/',connectToServer:()=>calls.push('connect'),close:async()=>calls.push('close')});
+ assert.throws(()=>guard.check());assert.deepEqual(calls,['close']);
+});
 test('WebSocket and popup are terminal and cannot disclose URL in an error',async()=>{
- const f=await fixture();f.ws({close:()=>f.calls.push('ws.close')});assert.throws(()=>f.guard.check(),/^Error: browser network policy refused$/);assert.equal(f.denials(),1);
+ const f=await fixture();f.ws({url:()=>'ws://app.kody.internal:9999/',close:()=>f.calls.push('ws.close')});assert.throws(()=>f.guard.check(),/^Error: browser network policy refused$/);assert.equal(f.denials(),1);
  const popup={close:async()=>f.calls.push('popup.close')};f.context.emit('page',popup);await Promise.resolve();assert.ok(f.calls.includes('popup.close'));assert.equal(f.denials(),1);
 });
 

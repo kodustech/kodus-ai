@@ -5,9 +5,9 @@ import type { RuntimeRunRequested } from '@libs/runtime/run';
 
 import { shopRunRequest } from '../../e2e/fixtures';
 import { SCENARIOS } from '../../fake-cell/scenarios';
-import { ensureDatabase } from '../../shared/persistence/runtime-schema';
-import { inMemoryRunDeps } from '../run/in-memory-deps';
+import { inMemoryRunDeps } from '../run/testing';
 import { finalizeStoppedRun, runRuntimeRun } from '../run/run-orchestrator';
+import { isolatedDatabase } from '../../testing/isolated-database';
 
 // The DBOS PoC of ADR-046 / T6 against a real Postgres (the Runtime one of
 // docker-compose.runtime.yml): fair queue per org, cancel in the middle of a
@@ -16,7 +16,9 @@ import { finalizeStoppedRun, runRuntimeRun } from '../run/run-orchestrator';
 // Opt-in: runs against the Postgres RUNTIME_IT_DATABASE_URL names (locally
 // postgres://runtime:runtime@localhost:5442/kodus_runtime_it), and skips when
 // none is named, as in the backend CI suite, which starts no such database.
-const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
+// A database of its own: suites in parallel never read each other's rows (isolated-database.ts).
+const database = isolatedDatabase(process.env.RUNTIME_IT_DATABASE_URL ?? '', 'run_engine');
+const url = database.url;
 const skip = !url || process.env.SKIP_INTEGRATION === 'true';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -54,7 +56,7 @@ const runWorkflow = DBOS.registerWorkflow(async (req: RuntimeRunRequested) => ru
 
 (skip ? describe.skip : describe)('DBOS run engine (integration, real Postgres)', () => {
     beforeAll(async () => {
-        await ensureDatabase(url);
+        await database.create();
         // A version per run: workflows left PENDING by an earlier run are never recovered into this one.
         DBOS.setConfig({ name: 'kody-runtime-it', systemDatabaseUrl: url, logLevel: 'error', applicationVersion: `it-${Date.now()}` });
         await DBOS.launch();
@@ -64,6 +66,7 @@ const runWorkflow = DBOS.registerWorkflow(async (req: RuntimeRunRequested) => ru
 
     afterAll(async () => {
         await DBOS.shutdown();
+        await database.drop();
     });
 
     it('a busy org does not hold the queue of another org (partition by org)', async () => {

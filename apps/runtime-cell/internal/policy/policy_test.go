@@ -3,6 +3,7 @@ package policy
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"errors"
 	"net"
 	"strings"
 	"testing"
@@ -22,7 +23,7 @@ func TestSignVerify(t *testing.T) {
 	}
 	tampered := s
 	tampered.Policy = []byte(string(s.Policy[:len(s.Policy)-1]) + ` `)
-	if _, err := Verify(pub, tampered, now); err != ErrBadSignature {
+	if _, err := Verify(pub, tampered, now); !errors.Is(err, ErrBadSignature) {
 		t.Fatal("tampered policy verified")
 	}
 	if _, err := Verify(pub, s, now.Add(2*time.Minute)); err == nil {
@@ -72,7 +73,7 @@ func TestStoreRepushReplacesAndRefusesStale(t *testing.T) {
 	if p, _ := s.ForSource(net.ParseIP("10.0.0.1")); !p.Allows("y.example") {
 		t.Fatal("re-push did not replace the allowlist")
 	}
-	if err := s.Put(first); err != ErrStale {
+	if err := s.Put(first); !errors.Is(err, ErrStale) {
 		t.Fatalf("stale policy: %v", err)
 	}
 	if p, _ := s.ForSource(net.ParseIP("10.0.0.1")); !p.Allows("y.example") {
@@ -135,7 +136,7 @@ func TestStoreSweepAndTombstone(t *testing.T) {
 	}
 	s.Delete("a")
 	// Replaying the policy signed before the delete does not revive it.
-	if err := s.Put(signed); err != ErrStale {
+	if err := s.Put(signed); !errors.Is(err, ErrStale) {
 		t.Fatalf("replayed policy after delete: %v", err)
 	}
 	newer := signed
@@ -183,7 +184,7 @@ func TestEnvironmentIdentityIsSignedAndLegacyOptional(t *testing.T) {
 	}
 	changed := signed
 	changed.Policy = []byte(strings.Replace(string(signed.Policy), "env-a", "env-b", 1))
-	if _, err = Verify(pub, changed, now); err != ErrBadSignature {
+	if _, err = Verify(pub, changed, now); !errors.Is(err, ErrBadSignature) {
 		t.Fatal("unsigned environment substitution accepted")
 	}
 	p.EnvironmentID = ""

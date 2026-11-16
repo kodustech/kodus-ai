@@ -7,10 +7,11 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/composecmd"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 )
 
-// CLI is Docker through the docker binary (internal/drivers/dockercli).
+// CLI is Docker through the docker binary (internal/dockercli).
 // Unlike the gVisor driver, local-docker gives docker the developer's whole
 // environment and lets compose read the checkout's .env: it runs the
 // developer's own code with no isolation, and their compose files may use
@@ -51,14 +52,14 @@ func (c CLI) ComposeExec(ctx context.Context, project, service string, stdin []b
 }
 
 func (c CLI) Shell(ctx context.Context, dir string, env map[string]string, command string) error {
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd := exec.CommandContext(ctx, "sh", "-c", command) //nolint:gosec // G204: local-docker runs the developer's own recipe command, unisolated by design (Gate)
 	cmd.Dir = dir
 	cmd.Env = os.Environ()
 	for k, v := range env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("%q: %v: %s", command, err, lastBytes(out, 2000))
+		return fmt.Errorf("%q: %w: %s", command, err, lastBytes(out, 2000))
 	}
 	return nil
 }
@@ -123,8 +124,8 @@ func (c CLI) ComposePs(ctx context.Context, project string) ([]ServiceState, err
 	return parsePs(raw)
 }
 
-// parsePs reads `compose ps --format json` (dockercli.ParseComposePs).
-func parsePs(raw []byte) ([]ServiceState, error) { return dockercli.ParseComposePs(raw) }
+// parsePs reads `compose ps --format json` (composecmd.ParseComposePs).
+func parsePs(raw []byte) ([]ServiceState, error) { return composecmd.ParseComposePs(raw) }
 
 // ComposeLogs is the last lines a service logged, oldest first.
 func (c CLI) ComposeLogs(ctx context.Context, project, service string, lines int) ([]string, error) {

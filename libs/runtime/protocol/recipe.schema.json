@@ -134,7 +134,28 @@
             "additionalProperties": false
           }
         },
-        "needs": {}
+        "needs": {
+          "description": "Other repositories booted beside this one, each in its own directory next to it.",
+          "maxItems": 9,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "repo": {
+                "type": "string",
+                "description": "The repository, as owner/name (or group/subgroup/name) on the same Git provider."
+              },
+              "alias": {
+                "description": "Its directory beside this one (../<alias> in a compose file): lower case letters, digits, '.', '_' and '-'. Default: the repository's short name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "repo"
+            ],
+            "additionalProperties": false
+          }
+        }
       },
       "additionalProperties": false
     },

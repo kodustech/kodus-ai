@@ -22,12 +22,17 @@ func setSubreaper() error {
 // killTree kills the command's process group, then every live descendant
 // of the command (or, as a subreaper, of this process), in rounds until none
 // is left: a process that called setsid is no longer in the group but is
-// still a descendant.
+// still a descendant. The tree is read once before the group dies: a setsid
+// child of the shell is reparented away from it the moment the shell exits.
 func killTree(pid int) {
-	_ = syscall.Kill(-pid, syscall.SIGKILL)
 	root := pid
 	if subreaper.Load() {
 		root = os.Getpid()
+	}
+	before := descendants(root)
+	_ = syscall.Kill(-pid, syscall.SIGKILL)
+	for _, k := range before {
+		_ = syscall.Kill(k, syscall.SIGKILL)
 	}
 	for round := 0; round < 5; round++ {
 		kids := descendants(root)

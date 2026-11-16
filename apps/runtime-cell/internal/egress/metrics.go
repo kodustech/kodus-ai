@@ -17,7 +17,17 @@ type Metrics struct {
 	live    atomic.Int64
 	up      atomic.Int64
 	down    atomic.Int64
+	// inspectBypassed counts TLS connections to an inspected host from a
+	// source that does not trust the cell CA (the image builder): they stay
+	// SNI passthrough, the gap the inspected tier leaves.
+	inspectBypassed atomic.Int64
+	// uploadOver is the proxy's upload budget (D8): how many claims passed it.
+	uploadOver func() int64
 }
+
+// InspectBypassed is how many TLS connections to an inspected host went
+// out as SNI passthrough (tests, logs).
+func (m *Metrics) InspectBypassed() int64 { return m.inspectBypassed.Load() }
 
 func NewMetrics() *Metrics { return &Metrics{denied: map[string]*atomic.Int64{}} }
 
@@ -57,5 +67,9 @@ func (m *Metrics) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	m.mu.Unlock()
 	fmt.Fprintf(w, "# TYPE kodus_egress_allowed_total counter\nkodus_egress_allowed_total %d\n", m.allowed.Load())
 	fmt.Fprintf(w, "# TYPE kodus_egress_live_connections gauge\nkodus_egress_live_connections %d\n", m.live.Load())
+	if m.uploadOver != nil {
+		fmt.Fprintf(w, "# TYPE kodus_egress_upload_budget_exceeded_total counter\nkodus_egress_upload_budget_exceeded_total %d\n", m.uploadOver())
+	}
+	fmt.Fprintf(w, "# TYPE kodus_egress_inspect_bypassed_total counter\nkodus_egress_inspect_bypassed_total %d\n", m.inspectBypassed.Load())
 	fmt.Fprintf(w, "# TYPE kodus_egress_bytes_total counter\nkodus_egress_bytes_total{direction=\"up\"} %d\nkodus_egress_bytes_total{direction=\"down\"} %d\n", m.up.Load(), m.down.Load())
 }

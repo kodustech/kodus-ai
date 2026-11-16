@@ -6,6 +6,8 @@ import (
 	"crypto/ecdsa"
 	"crypto/tls"
 	"encoding/pem"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -89,5 +91,31 @@ func TestRenewKeepsTheHubCAAndRefusesAnotherIssuer(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(p.Issuer); !bytes.Equal(b, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: pinned.Cert.Raw})) {
 		t.Fatal("the pinned issuer changed")
+	}
+}
+
+// A renewal used to accept whatever CA the hub's answer carried when
+// issuer.pem was missing: whoever answered the renewal picked the issuer.
+// It now fails, and writes nothing.
+func TestRenewWithoutThePinnedIssuerFails(t *testing.T) {
+	ca, _ := testpki.NewCA("issuer")
+	h := &renewHub{ca: ca, ttl: 24 * time.Hour}
+	_, url := startHub(t, h)
+	cur, _ := ca.Issue("cell-1", time.Hour)
+	tlsCfg := &tls.Config{Certificates: []tls.Certificate{cur}, RootCAs: ca.Pool()}
+	for name, issuer := range map[string]string{"missing file": "issuer.pem", "no path": ""} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			p := Paths{Key: filepath.Join(dir, "key.pem"), Cert: filepath.Join(dir, "cert.pem"), CA: filepath.Join(dir, "ca.pem")}
+			if issuer != "" {
+				p.Issuer = filepath.Join(dir, issuer)
+			}
+			if _, _, err := Renew(context.Background(), url, tlsCfg, "cell-1", p); !errors.Is(err, ErrNoIssuer) {
+				t.Fatalf("renewal without a pinned issuer: %v", err)
+			}
+			if _, err := os.Stat(p.Cert); !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("a refused renewal wrote the certificate: %v", err)
+			}
+		})
 	}
 }

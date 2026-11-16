@@ -33,13 +33,17 @@ func app(t *testing.T) (*httptest.Server, Target) {
 }
 
 func httpProbe(method protocol.HTTPMethod, path string) protocol.Probe {
-	return protocol.Probe{ID: "p", Origin: "agent", Purpose: "x", Expected: "y", Compare: []protocol.CompareField{"status"},
-		Spec: protocol.ProbeSpec{HTTP: &protocol.HTTPProbe{Target: protocol.ProbeTarget{Service: "api", Port: 3000}, Method: method, Path: path, TimeoutMs: 2000}}}
+	return protocol.Probe{
+		ID: "p", Origin: "agent", Purpose: "x", Expected: "y", Compare: []protocol.CompareField{"status"},
+		Spec: protocol.ProbeSpec{HTTP: &protocol.HTTPProbe{Target: protocol.ProbeTarget{Service: "api", Port: 3000}, Method: method, Path: path, TimeoutMs: 2000}},
+	}
 }
 
 func sqlProbe(q string) protocol.Probe {
-	return protocol.Probe{ID: "p", Origin: "agent", Purpose: "x", Expected: "y", Compare: []protocol.CompareField{"db_count"},
-		Spec: protocol.ProbeSpec{SQL: &protocol.SQLProbe{Target: protocol.ProbeTarget{Service: "db", Port: 5432}, Query: q, TimeoutMs: 2000}}}
+	return protocol.Probe{
+		ID: "p", Origin: "agent", Purpose: "x", Expected: "y", Compare: []protocol.CompareField{"db_count"},
+		Spec: protocol.ProbeSpec{SQL: &protocol.SQLProbe{Target: protocol.ProbeTarget{Service: "db", Port: 5432}, Query: q, TimeoutMs: 2000}},
+	}
 }
 
 func TestHTTPProbeAndRequestLog(t *testing.T) {
@@ -106,8 +110,10 @@ func TestUnreachableApp(t *testing.T) {
 func TestSideDetectingProbesAreRefused(t *testing.T) {
 	_, target := app(t)
 	r := New(Config{Targets: []Target{target, {Service: "db", Port: 5432, Kind: "postgres"}}, OpenSQL: openFake})
-	shell := protocol.Probe{ID: "p", Origin: "agent", Purpose: "x", Expected: "y", Compare: []protocol.CompareField{"exit"},
-		Spec: protocol.ProbeSpec{Shell: &protocol.ShellProbe{Command: "git rev-parse HEAD", TimeoutMs: 100}}}
+	shell := protocol.Probe{
+		ID: "p", Origin: "agent", Purpose: "x", Expected: "y", Compare: []protocol.CompareField{"exit"},
+		Spec: protocol.ProbeSpec{Shell: &protocol.ShellProbe{Command: "git rev-parse HEAD", TimeoutMs: 100}},
+	}
 	probes := map[string]protocol.Probe{
 		"git rev-parse":     shell,
 		"/proc cmdline":     httpProbe("GET", "/proc/1/cmdline"),

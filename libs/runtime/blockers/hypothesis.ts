@@ -8,6 +8,7 @@ import { CONTROL_ENV, SECRET_NAME } from '@libs/runtime/run/recipe-inference';
 import { type ClassifiedBlocker, classifyBlocker, type FixAction, type RecipeChange, testValueFor } from './catalog';
 import type { Lesson } from './lessons';
 import { applyRecipeChange } from './recipe-edit';
+import { UNTRUSTED_YAML } from '@libs/runtime/protocol/yaml-limits';
 
 // The LLM step of the learn loop (docs "Ciclo de aprender", Inc. 1): when the
 // deterministic catalog cannot fix a blocker by itself, an LLM picks ONE typed
@@ -123,7 +124,7 @@ export function recipeFacts(text: string): LearnRecipeFacts | null {
     // parseRecipeSummary accepted it, so the YAML loads; compose is a mapping or absent.
     let compose: Record<string, unknown> = {};
     try {
-        const doc = yaml.load(text, { schema: yaml.CORE_SCHEMA });
+        const doc = yaml.load(text, { ...UNTRUSTED_YAML, schema: yaml.CORE_SCHEMA });
         const c = isMap(doc) && isMap(doc.services) ? doc.services.compose : undefined;
         if (isMap(c)) compose = c;
     } catch {

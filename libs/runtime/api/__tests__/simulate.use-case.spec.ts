@@ -2,7 +2,6 @@ import { ConflictException, ForbiddenException, NotFoundException } from '@nestj
 
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
-import { InMemoryRunTargetStore } from '@libs/runtime-publish/domain/run-target';
 import { RuntimeRunRequestedSchema } from '@libs/runtime/run';
 
 import { RuntimeRunRequestBuilder } from '../application/run-request-builder.service';
@@ -10,6 +9,7 @@ import { RuntimeRunEnqueuer } from '../application/runtime-run-enqueuer.service'
 import { SimulateRuntimeRunUseCase } from '../application/use-cases/simulate.use-case';
 import type { ProductEnvironment, PullRequestHead, RuntimeGitPort } from '../domain/ports';
 import { BASE_SHA, clock, config, FakeOutbox, NOW, ORG, OTHER_ORG, OTHER_REPO, REPO, realAuthorization, run, SECRET, SHA, storeWith, TEAM, user } from './fixtures';
+import { InMemoryRunTargetStore } from '@libs/runtime-publish/testing';
 
 const env = (patch: Partial<ProductEnvironment> = {}): ProductEnvironment => ({
     environmentId: 'env-1',

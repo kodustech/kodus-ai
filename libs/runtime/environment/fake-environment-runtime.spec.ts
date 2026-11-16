@@ -66,6 +66,13 @@ describe('FakeEnvironmentRuntime', () => {
         expect(r).toMatchObject({ status: 'blocked', blockers: [{ kind: 'missing_env' }] });
     });
 
+    it('blocks a claim that asks more isolation than its cell gives (kind capacity), and takes one that asks none', async () => {
+        const env = make();
+        expect(await env.acquire({ ...req('base'), isolation: 'vm' })).toMatchObject({ status: 'blocked', blockers: [{ kind: 'capacity', signature: 'isolation_unavailable' }] });
+        expect(isBlocked(await env.acquire({ ...req('pr'), isolation: 'kernel' }))).toBe(false);
+        expect(isBlocked(await env.acquire(req('pr', 'pr-none')))).toBe(false);
+    });
+
     it('answers probes per side from the observer', async () => {
         const env = make();
         const base = await env.acquire(req('base'));

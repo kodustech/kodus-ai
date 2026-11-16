@@ -1,4 +1,4 @@
-import { MAX_HEALTH_TIMEOUT_SECONDS, parseRecipe, recipeDurationSeconds } from './recipe';
+import { MAX_HEALTH_TIMEOUT_SECONDS, parseRecipe, RECIPE_NEEDS_SHAPE, recipeDurationSeconds, recipeNeedsConflict } from './recipe';
 
 // The duration rules the cell holds too (apps/runtime-cell/internal/recipe,
 // TestParseRefuses and TestHealthTimeoutIsCappedAtTheMostASetupWaits).
@@ -53,5 +53,37 @@ describe('parseRecipe health_timeout', () => {
 
     it('refuses a negative wait', () => {
         for (const t of ['-30', '"-5m"']) expect(recipe(t)).toMatchObject({ ok: false, error: expect.stringContaining('bad duration') });
+    });
+});
+
+describe('services.needs', () => {
+    const recipe = 'version: 1\nservices:\n  compose: { public: api }\n  needs:\n    - { repo: acme/billing }\n    - { repo: acme/web, alias: front }\n';
+
+    it('resolves each alias, the short name when none is given', () => {
+        const r = parseRecipe(recipe);
+        expect(r.ok && r.recipe.needs).toEqual([
+            { repo: 'acme/billing', alias: 'billing' },
+            { repo: 'acme/web', alias: 'front' },
+        ]);
+        for (const none of ['version: 1\n', 'version: 1\nservices:\n  needs: []\n']) {
+            const p = parseRecipe(none);
+            expect(p.ok && p.recipe).not.toHaveProperty('needs');
+        }
+    });
+
+    it('takes strings only, as the cell does', () => {
+        expect(parseRecipe('version: 1\nservices:\n  needs: [{ repo: acme/billing, alias: 123 }]\n')).toMatchObject({ ok: false, error: expect.stringContaining('services.needs[0].alias') });
+        expect(parseRecipe('version: 1\nservices:\n  needs: [{ alias: billing }]\n')).toMatchObject({ ok: false, error: expect.stringContaining('services.needs[0].repo') });
+        expect(parseRecipe('version: 1\nservices:\n  needs: [acme/billing]\n')).toMatchObject({ ok: false, error: expect.stringContaining('services.needs[0]') });
+        expect(parseRecipe('version: 1\nservices:\n  needs: acme/billing\n')).toMatchObject({ ok: false, error: `recipe: ${RECIPE_NEEDS_SHAPE}` });
+    });
+
+    it('never names the environment\'s own repository, nor takes its alias', () => {
+        const r = parseRecipe(recipe);
+        const needs = r.ok ? r.recipe.needs : undefined;
+        expect(recipeNeedsConflict(needs, { fullName: 'acme/shop', alias: 'shop' })).toBeUndefined();
+        expect(recipeNeedsConflict(needs, { fullName: 'ACME/Billing', alias: 'shop' })).toContain("environment's own repository");
+        expect(recipeNeedsConflict(needs, { fullName: 'acme/shop', alias: 'front' })).toContain('alias front');
+        expect(recipeNeedsConflict(undefined, { fullName: 'acme/shop', alias: 'shop' })).toBeUndefined();
     });
 });

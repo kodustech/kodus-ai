@@ -3,7 +3,10 @@ import type { Claim, EnvironmentRuntime } from '@libs/runtime/environment';
 import { DBOSWorkflowConflictError } from '@dbos-inc/dbos-sdk';
 
 import { testSetupService } from '../../testing/setup-service';
-import { InMemoryEnvironmentSetupStore, type SetupStepRunner } from './environment-setup.service';
+import type { LlmGateway } from '../agent/llm-gateway';
+import { type SetupStepRunner } from './environment-setup.service';
+import { SetupLearnLoop } from './learn-loop';
+import { InMemoryEnvironmentSetupStore } from './testing';
 
 const cmd: RuntimeEnvironmentSetupRequested = {
     environmentId: 'env-1', organizationId: 'org-1', teamId: 'team-1', repositoryId: 'repo-1', repositoryName: 'shop',
@@ -24,16 +27,19 @@ function build() {
         bake: jest.fn(async () => ({ status: 'accepted' as const })),
     };
     const store = new InMemoryEnvironmentSetupStore();
-    const service = testSetupService({ envForSetup: () => env }, store, { now: () => new Date(cmd.requestedAt) });
+    // With Kody's learn loop on: a setup that ends on a lost claim or a lost workflow never starts it.
+    const llm: LlmGateway = { complete: jest.fn() };
+    const service = testSetupService({ envForSetup: () => env }, store, { now: () => new Date(cmd.requestedAt), learn: { llm } });
     return { env, store, service };
 }
 
 describe('setup claim recovery', () => {
+    afterEach(() => jest.restoreAllMocks());
+
     it('propagates lost SDK ownership at a health step without release, close, or paid repair', async () => {
         const { env, store, service } = build();
         const conflict = new DBOSWorkflowConflictError(`setup:${cmd.key}`);
-        const learn = jest.spyOn(service as any, 'learn');
-        const fixes = jest.spyOn(service as any, 'tryFixes');
+        const learnLoop = jest.spyOn(SetupLearnLoop.prototype, 'run');
         const step: SetupStepRunner = async (name, callback) => {
             if (name === 'health') return (async () => { throw conflict; })();
             return callback();
@@ -42,8 +48,7 @@ describe('setup claim recovery', () => {
         await expect(service.run(cmd, step)).rejects.toBe(conflict);
 
         expect(env.release).not.toHaveBeenCalled();
-        expect(learn).not.toHaveBeenCalled();
-        expect(fixes).not.toHaveBeenCalled();
+        expect(learnLoop).not.toHaveBeenCalled();
         expect((await store.get(cmd.environmentId))?.state).toBe('setting_up');
         expect((await store.get(cmd.environmentId))?.blockers).toEqual([]);
     });
@@ -80,8 +85,7 @@ describe('setup claim recovery', () => {
 
     it('does not probe or bake when a journaled claim is gone before the ready check', async () => {
         const { env, service } = build();
-        const learn = jest.spyOn(service as any, 'learn');
-        const fixes = jest.spyOn(service as any, 'tryFixes');
+        const learnLoop = jest.spyOn(SetupLearnLoop.prototype, 'run');
 
         const result = await service.run(cmd);
 
@@ -89,8 +93,7 @@ describe('setup claim recovery', () => {
         expect(env.probe).not.toHaveBeenCalled();
         expect(env.bake).not.toHaveBeenCalled();
         expect(result.state).toBe('blocked');
-        expect(learn).not.toHaveBeenCalled();
-        expect(fixes).not.toHaveBeenCalled();
+        expect(learnLoop).not.toHaveBeenCalled();
     });
 
     it('checks again before bake and cannot record a stale setup as active', async () => {
@@ -105,5 +108,30 @@ describe('setup claim recovery', () => {
         expect(env.renew).toHaveBeenCalledTimes(2);
         expect(env.bake).not.toHaveBeenCalled();
         expect(result.state).toBe('blocked');
+    });
+});
+
+describe('a hub restart during the setup', () => {
+    const renewed = { status: 'renewed' as const, leaseExpiresAt: claim.leaseExpiresAt, hardExpiresAt: claim.hardExpiresAt, atCeiling: false };
+    const lost = { code: 'cell_unavailable' as const, cellId: 'unknown' };
+
+    it('asks the claim renewal again until the hub answers, and the setup comes up', async () => {
+        const { env, service } = build();
+        env.renew = jest.fn().mockResolvedValueOnce(lost).mockResolvedValueOnce(lost).mockResolvedValue(renewed);
+
+        const rec = await service.run(cmd);
+
+        expect(rec.state).toBe('active');
+        expect(rec.blockers).toEqual([]);
+    });
+
+    it('still ends on the lost claim when the hub stays away', async () => {
+        const { env, service } = build();
+        env.renew = jest.fn(async () => lost);
+
+        const rec = await service.run(cmd);
+
+        expect(rec.state).toBe('blocked');
+        expect(rec.blockers[0].message).toContain('claim_lease_unavailable');
     });
 });

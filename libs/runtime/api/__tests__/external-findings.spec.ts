@@ -133,7 +133,7 @@ describe('durable external finding admission and exact verification proof', () =
     });
     it('accepts only its exact probe/head/image and both replay sides as execution verification', async () => {
         const h = externalFindingsFixture();
-        const receipt = await h.service.submit(h.principal, h.input, 'm');
+        await h.service.submit(h.principal, h.input, 'm');
         const request = h.store.requests[0]!;
         const findingId = request.externalVerification!.findings[0].findingId;
         const proof = {
@@ -654,5 +654,100 @@ describe('durable external finding admission and exact verification proof', () =
         ).rejects.toMatchObject({ status: 409 });
         expect(h.store.requests).toHaveLength(0);
         expect(h.tokens).toHaveLength(0);
+    });
+});
+
+describe('a finding on a repository that is part of several environments', () => {
+    // repo-m is a member of billing (primary repo-b) and of ledger (primary repo-c), the primary of none.
+    const billing = randomUUID();
+    const ledger = randomUUID();
+    const vault = randomUUID(); // holds repo-m and repo-x, which the key cannot reach
+    const unrelated = randomUUID(); // reachable, without repo-m
+    const foreign = randomUUID(); // another organization's, with repo-m
+    const several = (memberOf: string[] = [billing, ledger]) => {
+        const h = externalFindingsFixture({
+            environments: [
+                { environmentId: billing, repositoryId: 'repo-b' },
+                { environmentId: ledger, repositoryId: 'repo-c' },
+                { environmentId: vault, repositoryId: 'repo-x' },
+                { environmentId: unrelated, repositoryId: 'repo-u' },
+                { environmentId: foreign, repositoryId: 'repo-f', organizationId: 'org-b' },
+            ],
+            members: [...memberOf, foreign].map((environmentId) => ({ environmentId, repositoryId: 'repo-m' })),
+        });
+        const principal = { ...h.principal, repositoryIds: ['repo-a', 'repo-b', 'repo-c', 'repo-m', 'repo-u'] };
+        const input = { ...h.input, repositoryId: 'repo-m' };
+        return { ...h, principal, input };
+    };
+
+    it('runs a finding in the environment it names', async () => {
+        const h = several();
+        const receipt = await h.service.submit(h.principal, { ...h.input, environmentId: ledger }, 'm');
+        expect(receipt.result).toMatchObject({ accepted: 1, deduplicated: false });
+        expect(h.store.requests).toHaveLength(1);
+        expect(h.store.requests[0]!.environment.environmentId).toBe(ledger);
+        expect(h.store.requests[0]!.repository.id).toBe('repo-m');
+    });
+
+    it.each([
+        ['an environment of another organization', foreign],
+        ['an environment that does not hold the repository', unrelated],
+        ['an environment with a repository the key cannot reach', vault],
+        ['an environment that does not exist', randomUUID()],
+    ])('refuses a finding naming %s as not found and records nothing', async (_, environmentId) => {
+        const h = several([billing, ledger, vault]);
+        await expect(h.service.submit(h.principal, { ...h.input, environmentId }, 'm')).rejects.toMatchObject({
+            status: 404,
+        });
+        expect(h.store.records).toHaveLength(0);
+        expect(h.tokens).toHaveLength(0);
+    });
+
+    it('asks a finding that names no environment to choose one, listing only the environments the key reaches', async () => {
+        const h = several([billing, ledger, vault]);
+        const refused = await h.service.submit(h.principal, h.input, 'm').catch((e: unknown) => e);
+        expect(refused).toMatchObject({ status: 409 });
+        const body = (refused as { getResponse(): { environmentIds: string[]; message: string } }).getResponse();
+        expect([...body.environmentIds].sort()).toEqual([billing, ledger].sort());
+        expect(body.message).toMatch(/environmentId/);
+        expect(JSON.stringify(body)).not.toMatch(/fixture\/|repo-/);
+        expect(h.store.records).toHaveLength(0);
+        expect(h.tokens).toHaveLength(0);
+    });
+
+    it('runs a finding that names no environment in the only one the key reaches', async () => {
+        const h = several([billing, vault]);
+        await h.service.submit(h.principal, h.input, 'm');
+        expect(h.store.requests[0]!.environment.environmentId).toBe(billing);
+    });
+
+    it('still runs a finding that names no environment in the one its repository is the primary of', async () => {
+        const h = several();
+        await h.service.submit(h.principal, { ...h.input, repositoryId: 'repo-b' }, 'm');
+        expect(h.store.requests[0]!.environment.environmentId).toBe(billing);
+    });
+
+    it('is not held back by a live Run of the same commit in another environment, only in its own', async () => {
+        const h = several();
+        const live = { organizationId: 'org-a', repositoryId: 'repo-m', prNumber: 2, headSha: h.input.headSha, state: 'testing' as const };
+        await h.runs.upsert(randomUUID(), { ...live, environmentId: billing });
+        await h.service.submit(h.principal, { ...h.input, environmentId: ledger }, 'ledger');
+        expect(h.store.requests).toHaveLength(1);
+        const held = await h.service.submit(h.principal, { ...h.input, environmentId: billing }, 'billing');
+        const task = await h.service.getTask(h.principal, String(held.result.verificationTaskId));
+        expect(task.state).toBe('rejected');
+        expect(task.result).toMatchObject({ reason: 'run_in_progress' });
+        expect(h.store.requests).toHaveLength(1);
+    });
+
+    it('retries a refused finding in the environment it was submitted to', async () => {
+        const h = several();
+        h.setStopped(true);
+        const receipt = await h.service.submit(h.principal, { ...h.input, environmentId: ledger }, 'submit');
+        expect(h.store.requests).toHaveLength(0);
+        h.setStopped(false);
+        const findingId = (receipt.result.findingIds as string[])[0];
+        expect((await h.service.verify(h.principal, { findingId }, 'retry')).state).toBe('working');
+        expect(h.store.requests[0]!.environment.environmentId).toBe(ledger);
     });
 });

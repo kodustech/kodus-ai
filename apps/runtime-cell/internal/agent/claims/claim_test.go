@@ -20,7 +20,7 @@ func TestNewStartsWithTheAcquireAllowlist(t *testing.T) {
 	if !ok || !slices.Equal(allow, []string{"dl-cdn.alpinelinux.org"}) {
 		t.Fatalf("pending %v %v", allow, ok)
 	}
-	if stale, ok := c.SetAllow([]string{"registry.npmjs.org"}, time.Unix(1, 0)); stale || !ok {
+	if stale, ok := c.SetAllow([]string{"registry.npmjs.org"}, nil, time.Unix(1, 0)); stale || !ok {
 		t.Fatalf("an egress.policy is never stale against the acquire's list: %v %v", stale, ok)
 	}
 	if allow, _, _ := c.PendingAllow(); !slices.Equal(allow, []string{"registry.npmjs.org"}) {

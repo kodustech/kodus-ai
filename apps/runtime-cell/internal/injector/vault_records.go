@@ -23,6 +23,7 @@ func validVersion(s SecretVersion) bool {
 	}
 	return true
 }
+
 func normalizeBinding(b Binding) (Binding, error) {
 	host, err := policy.NormalizeHost(b.Host)
 	if err != nil || net.ParseIP(host) != nil || !validClaimScope(b.Scope) || !vaultID.MatchString(b.SecretID) || b.Version == 0 || b.Version > 1<<53 || !validHeader(b.Header) || b.ExpiresAt.IsZero() || len(b.Baits) > 3 {
@@ -39,6 +40,7 @@ func normalizeBinding(b Binding) (Binding, error) {
 	b.ExpiresAt = b.ExpiresAt.UTC()
 	return b, nil
 }
+
 func (v *EncryptedVault) validState() bool {
 	s := v.state
 	if s.Version != v.format || s.CellID != v.cellID || s.ExternalSourceID != v.externalSourceID || s.Versions == nil || s.Bindings == nil || s.Claims == nil || len(s.Versions) > maxVaultVersions || len(s.Bindings) > maxVaultBindings || len(s.Claims) > maxVaultClaims {
@@ -54,7 +56,7 @@ func (v *EncryptedVault) validState() bool {
 			return false
 		}
 	}
-	for key, b := range s.Bindings {
+	for key, b := range s.Bindings { //nolint:gocritic // rangeValCopy: a map value has no address; indexing would copy it too, after a second lookup
 		normalized, err := normalizeBinding(b)
 		if err != nil || normalized.Host != b.Host || normalized.Header != b.Header || key != bindingKey(b.Scope.ClaimID, b.Host) {
 			return false
@@ -70,6 +72,7 @@ func (v *EncryptedVault) validState() bool {
 	}
 	return true
 }
+
 func (v *EncryptedVault) PutVersion(ctx context.Context, s SecretVersion) error {
 	if v.externalValues != nil || !validVersion(s) {
 		return ErrVaultDenied
@@ -108,6 +111,7 @@ func (v *EncryptedVault) putVersionRecord(ctx context.Context, record versionRec
 	next.Versions[key] = record
 	return v.save(ctx, next)
 }
+
 func (v *EncryptedVault) Bind(ctx context.Context, b Binding) error {
 	var err error
 	b, err = normalizeBinding(b)
@@ -175,6 +179,7 @@ func (v *EncryptedVault) Bind(ctx context.Context, b Binding) error {
 	next.Claims[b.Scope.ClaimID] = claimRecord{Scope: b.Scope, ExpiresAt: authority.ExpiresAt.UTC()}
 	return v.save(ctx, next)
 }
+
 func equalBinding(a, b Binding) bool {
 	return a.Scope == b.Scope && a.SecretID == b.SecretID && a.Version == b.Version && a.Host == b.Host && a.Header == b.Header && a.ExpiresAt.Equal(b.ExpiresAt) && slices.Equal(a.Baits, b.Baits)
 }
@@ -199,6 +204,7 @@ func (v *EncryptedVault) beginBinding(ctx context.Context, claimID string) (*bin
 	v.activeBinds++
 	return fence, nil
 }
+
 func (v *EncryptedVault) endBinding(claimID string, fence *bindingFence) {
 	// Cleanup must also work after cancellation, an uncertain write or Close.
 	v.gate <- struct{}{}
@@ -212,6 +218,7 @@ func (v *EncryptedVault) endBinding(claimID string, fence *bindingFence) {
 		delete(v.binds, claimID)
 	}
 }
+
 func (v *EncryptedVault) Credential(ctx context.Context, orgID, claimID, host string) (Credential, error) {
 	normalized, err := policy.NormalizeHost(host)
 	if err != nil || !vaultID.MatchString(orgID) || !vaultID.MatchString(claimID) {
@@ -286,6 +293,7 @@ func minExpiry(a, b time.Time) time.Time {
 	}
 	return b
 }
+
 func (v *EncryptedVault) RevokeVersion(ctx context.Context, scope SecretScope, id string, version uint64) error {
 	if !validSecretScope(scope) || !vaultID.MatchString(id) || version == 0 {
 		return ErrVaultDenied
@@ -307,6 +315,7 @@ func (v *EncryptedVault) RevokeVersion(ctx context.Context, scope SecretScope, i
 	next.Versions[key] = record
 	return v.save(ctx, next)
 }
+
 func (v *EncryptedVault) RevokeClaim(ctx context.Context, scope ClaimScope) error {
 	if !validClaimScope(scope) {
 		return ErrVaultDenied
@@ -327,6 +336,7 @@ func (v *EncryptedVault) RevokeClaim(ctx context.Context, scope ClaimScope) erro
 	next.Claims[scope.ClaimID] = record
 	return v.save(ctx, next)
 }
+
 func (v *EncryptedVault) RevokeKnownClaim(ctx context.Context, claimID string) error {
 	if !vaultID.MatchString(claimID) {
 		return ErrVaultDenied
@@ -347,6 +357,7 @@ func (v *EncryptedVault) RevokeKnownClaim(ctx context.Context, claimID string) e
 	next.Claims[claimID] = record
 	return v.save(ctx, next)
 }
+
 func (v *EncryptedVault) ListVersions(ctx context.Context, scope SecretScope) ([]SecretVersionInfo, error) {
 	if !validSecretScope(scope) {
 		return nil, ErrVaultDenied

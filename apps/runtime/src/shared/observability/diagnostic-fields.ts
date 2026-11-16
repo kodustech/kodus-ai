@@ -1,4 +1,6 @@
 import { safeFailure } from '@libs/runtime/telemetry/failure';
+import { canonicalKey } from '@libs/runtime/telemetry/catalog';
+import { scrubText } from '@libs/runtime/telemetry/telemetry-guard';
 
 const RESERVED = new Set([
     'at',
@@ -10,7 +12,7 @@ const RESERVED = new Set([
     'spanId',
 ]);
 const SENSITIVE =
-    /token|secret|password|authorization|cookie|certificate|private.?key|api.?key|prompt|stdout|stderr|stack|command|body|payload|headers/i;
+    /token|secret(?!Id$|s$)|password|authorization|cookie|certificate|private.?key|api.?key|prompt|stdout|stderr|stack|command|body|payload|headers|placeholder|canar(y|ies)|env.?value|^value$/i;
 const ERROR = /^(error|err|exception)$/i;
 const MAX_STRING = 512;
 
@@ -25,7 +27,8 @@ export function diagnosticFields(fields: unknown): Record<string, unknown> {
         if (typeof value === 'number')
             return Number.isFinite(value) ? value : undefined;
         if (typeof value === 'string') {
-            const text = value.slice(
+            // Secret-shaped parts (tokens, placeholders, canaries) never reach a line (telemetry-guard.ts).
+            const text = scrubText(value).text.slice(
                 0,
                 Math.min(MAX_STRING, Math.floor(remaining / 4)),
             );
@@ -53,11 +56,14 @@ export function diagnosticFields(fields: unknown): Record<string, unknown> {
                 const child = ERROR.test(key)
                     ? safeFailure(descriptor.value)
                     : visit(descriptor.value, depth + 1);
-                if (child !== undefined) out[key] = child;
+                // A top-level field is written under its taxonomy key (claimId → kodus.runtime.claim.id).
+                const name = depth === 0 ? canonicalKey(key) : key;
+                if (child !== undefined && !(depth === 0 && RESERVED.has(name))) out[name] = child;
                 if (remaining <= 0 || nodes <= 0) break;
             }
             return out;
         } catch {
+            // An object whose getter or proxy trap throws is dropped: a log field never throws into its caller.
             return undefined;
         }
     };

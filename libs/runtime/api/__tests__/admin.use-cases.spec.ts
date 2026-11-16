@@ -1,17 +1,20 @@
-import { BadRequestException, ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 
 import { ApproveEgressUseCase } from '../application/use-cases/approve-egress.use-case';
 import {
     CreateCellRegistrationTokenUseCase,
+    ListCellRegistrationTokensUseCase,
     ListRuntimeCellsUseCase,
+    RevokeCellRegistrationTokenUseCase,
     RevokeRuntimeCellUseCase,
 } from '../application/use-cases/cells.use-cases';
 import { SetTeamKeyRepositoriesUseCase } from '../application/use-cases/set-team-key-repositories.use-case';
 import { StopRuntimeUseCase } from '../application/use-cases/stop-runtime.use-case';
-import { CELL_TOKEN_TTL_MS, CellTokenLedger, InMemoryCellTokenStore } from '../domain/cell-token';
-import type { RuntimeCell, RuntimeCellReader, RuntimeEnvironmentRef } from '../domain/ports';
+import { CELL_TOKEN_TTL_MS, CellTokenLedger } from '@libs/runtime/contracts/cell-token';
+import { InMemoryCellTokenStore } from '@libs/runtime/contracts/testing';
+import type { RuntimeCell, RuntimeCellReader, RuntimeCellTokenReader, RuntimeEnvironmentRef } from '../domain/ports';
 import { clock, config, FakeOutbox, NOW, ORG, OTHER_ORG, OTHER_REPO, realAuthorization, REPO, TEAM, user } from './fixtures';
 
 const owner = user(Role.OWNER);
@@ -196,5 +199,62 @@ describe('Team key repositories', () => {
         await expect(uc.execute({ user: owner, keyId: 'key-a', repositoryIds: ['repo-9'] })).rejects.toThrow('repo-9');
         await expect(uc.execute({ user: owner, keyId: 'key-a', repositoryIds: 'repo-1' })).rejects.toBeInstanceOf(BadRequestException);
         expect(updates).toHaveLength(0);
+    });
+});
+
+describe('Cell registration tokens: list and revoke', () => {
+    // The Runtime's table, as the API reads it (kodus_runtime_reader): rows the ledger wrote.
+    const runtime = () => {
+        const store = new InMemoryCellTokenStore();
+        let now = NOW;
+        const ledger = new CellTokenLedger(store, () => now);
+        const reader: RuntimeCellTokenReader = {
+            listByOrganization: async (org) =>
+                [...store.records.values()].filter((r) => r.organizationId === org).map((r) => ({ ...r, issuedAt: NOW.toISOString() })),
+            get: async (h) => {
+                const r = store.records.get(h);
+                return r ? { ...r, issuedAt: NOW.toISOString() } : null;
+            },
+        };
+        return { store, ledger, reader, at: (d: Date) => (now = d) };
+    };
+    const issueThrough = async (outbox: FakeOutbox, ledger: CellTokenLedger) => {
+        const res = await new CreateCellRegistrationTokenUseCase(outbox as any, clock).execute({ user: owner, topology: 'self_hosted' });
+        const p = outbox.rows[outbox.rows.length - 1].payload.payload;
+        await ledger.record({ tokenHash: p.tokenHash, organizationId: p.organizationId, topology: p.topology, expiresAt: p.expiresAt, issuedBy: p.issuedBy.userId });
+        return res;
+    };
+
+    it("lists the org's tokens with their state and never the token", async () => {
+        const { ledger, reader } = runtime();
+        const outbox = new FakeOutbox();
+        const pending = await issueThrough(outbox, ledger);
+        const used = await issueThrough(outbox, ledger);
+        await ledger.redeem(used.token);
+        const listed = await new ListCellRegistrationTokensUseCase(reader, clock).execute({ user: owner });
+        expect(listed.map((t) => [t.id, t.state]).sort()).toEqual([[pending.id, 'pending'], [used.id, 'used']].sort());
+        expect(JSON.stringify(listed)).not.toContain('kcr_');
+        expect(await new ListCellRegistrationTokensUseCase(reader, clock).execute({ user: user(Role.OWNER, { org: OTHER_ORG, uuid: 'o2' }) })).toEqual([]);
+    });
+
+    it('a revoked token registers no cell; another org cannot revoke it; a used one is a conflict', async () => {
+        const { ledger, reader } = runtime();
+        const outbox = new FakeOutbox();
+        const issued = await issueThrough(outbox, ledger);
+        const revoke = new RevokeCellRegistrationTokenUseCase(reader, outbox as any, clock);
+
+        await expect(revoke.execute({ user: user(Role.OWNER, { org: OTHER_ORG, uuid: 'o2' }), id: issued.id })).rejects.toBeInstanceOf(NotFoundException);
+        await expect(revoke.execute({ user: owner, id: 'not-a-hash' })).rejects.toBeInstanceOf(NotFoundException);
+        expect(await revoke.execute({ user: owner, id: issued.id })).toMatchObject({ id: issued.id, state: 'revoke_requested' });
+
+        // The Runtime applies the command the way its handler does, then the cell tries to register.
+        const cmd = outbox.rows[outbox.rows.length - 1].payload;
+        expect(outbox.events[outbox.events.length - 1]).toBe('runtime.cell.registration_token_revoked');
+        expect(await ledger.revoke(cmd.payload.tokenHash, cmd.payload.organizationId, cmd.payload.revokedBy.userId)).toBe(true);
+        expect(await ledger.redeem(issued.token)).toEqual({ ok: false, reason: 'unknown_or_used' });
+
+        const used = await issueThrough(outbox, ledger);
+        expect((await ledger.redeem(used.token)).ok).toBe(true);
+        await expect(revoke.execute({ user: owner, id: used.id })).rejects.toBeInstanceOf(ConflictException);
     });
 });

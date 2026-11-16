@@ -54,8 +54,8 @@ func (s *evidenceStore) get(path string) (stored, bool) {
 	return v, ok
 }
 
-func (s *evidenceStore) grant(typ protocol.EvidenceUploadType, ct protocol.EvidenceContentType, max int64, exp time.Time) protocol.UploadGrant {
-	return protocol.UploadGrant{Type: typ, URL: s.srv.URL + "/" + string(typ) + "?sig=x", ContentType: ct, MaxBytes: max, ExpiresAt: protocol.FormatTime(exp)}
+func (s *evidenceStore) grant(typ protocol.EvidenceUploadType, ct protocol.EvidenceContentType, maxBytes int64, exp time.Time) protocol.UploadGrant {
+	return protocol.UploadGrant{Type: typ, URL: s.srv.URL + "/" + string(typ) + "?sig=x", ContentType: ct, MaxBytes: maxBytes, ExpiresAt: protocol.FormatTime(exp)}
 }
 
 // recordingObserver answers with what the app did and keeps the frame it got.
@@ -73,9 +73,11 @@ func (o *recordingObserver) Run(_ context.Context, frame []byte) (*protocol.Step
 		StepID: step1, Executor: "observer", ImageID: "img-1", Transport: protocol.ProbeResultTransportOk, DurationMs: 9,
 		HTTP:     &protocol.ProbeResultHTTP{Status: 500, Headers: map[string]string{}, Body: "{}"},
 		Requests: []protocol.RequestLogEntry{{Method: "POST", Route: "/orders", Status: 500, At: &at}},
-		Evidence: &protocol.ProbeEvidence{T0: "2026-11-06T12:00:00Z", Db: &protocol.DBEffects{Engine: protocol.DBEnginePostgres, Service: "db",
+		Evidence: &protocol.ProbeEvidence{T0: "2026-11-06T12:00:00Z", Db: &protocol.DBEffects{
+			Engine: protocol.DBEnginePostgres, Service: "db",
 			Tables: []protocol.DBTableEffect{{Table: "public.orders", Inserted: 1, Rows: 1}},
-			Sample: []protocol.DBSample{{Table: "public.orders", Columns: []string{"id", "note"}, Rows: [][]json.RawMessage{{json.RawMessage(`7`), json.RawMessage(`"token ghs_download"`)}}}}}},
+			Sample: []protocol.DBSample{{Table: "public.orders", Columns: []string{"id", "note"}, Rows: [][]json.RawMessage{{json.RawMessage(`7`), json.RawMessage(`"token ghs_download"`)}}}},
+		}},
 	}}, "", nil
 }
 
@@ -105,7 +107,7 @@ func evidenceHarness(t *testing.T, accepts ...string) (*harness, *recordingObser
 	now := time.Now()
 	h := newHarness(t, func(c *Config) {
 		c.Observers = func(context.Context, ClaimInfo, []observer.Target) (observer.Client, error) { return obs, nil }
-		c.ServiceLogs = logsStub{
+		c.Parts.ServiceLogs = logsStub{
 			{Service: "api", At: now.Add(-time.Hour), Text: "before the round"},
 			{Service: "api", At: now, Text: "POST /orders failed for ghs_download"},
 		}

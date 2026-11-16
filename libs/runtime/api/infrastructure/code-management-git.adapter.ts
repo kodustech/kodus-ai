@@ -16,6 +16,7 @@ import { RunBaseBranchSchema } from '@libs/runtime/run/run-messages';
 import type {
     DefaultBranchHead,
     GitIdentity,
+    OpenPullRequestSummary,
     OrgTeam,
     PullRequestDiff,
     PullRequestHead,
@@ -40,6 +41,8 @@ const splitFullName = (name: string) => {
     return i > 0 ? { owner: name.slice(0, i), name: name.slice(i + 1) } : { name };
 };
 const MAX_PATCH = 1_000_000;
+/** A full commit SHA (SHA-1 or SHA-256). */
+const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
 
 /** The Git API through the product's CodeManagementService (the Runtime never has a Git credential, ADR-052). */
 @Injectable()
@@ -91,6 +94,7 @@ export class CodeManagementRuntimeGitAdapter implements RuntimeGitPort {
             headSha: pr.head.sha,
             baseSha: pr.base.sha,
             ...(baseBranch.success ? { baseBranch: baseBranch.data } : {}),
+            ...(typeof pr.head.ref === 'string' && pr.head.ref.length > 0 && pr.head.ref.length <= 256 ? { headBranch: pr.head.ref } : {}),
             // Unknown repos count as a fork: approval is the safe side.
             fork: !headRepo || !baseRepo || String(headRepo) !== String(baseRepo),
             authorId: pr.user?.id !== undefined ? String(pr.user.id) : undefined,
@@ -140,7 +144,8 @@ export class CodeManagementRuntimeGitAdapter implements RuntimeGitPort {
                 break;
             }
             bytes += patch.length;
-            files.push({ path, patch, removed: f.status === 'removed' });
+            const previousPath = f.status === 'renamed' && typeof f.previous_filename === 'string' && f.previous_filename && f.previous_filename.length <= 1_024 ? f.previous_filename : undefined;
+            files.push({ path, patch, removed: f.status === 'removed', ...(previousPath ? { previousPath } : {}) });
         }
         await this.fillContents(input, files, bytes);
         return { files: files.map(({ removed: _removed, ...file }) => file), truncated, ...(recipeFiles.length ? { recipeFiles } : {}) };
@@ -156,6 +161,7 @@ export class CodeManagementRuntimeGitAdapter implements RuntimeGitPort {
         let budget = MAX_DIFF_BYTES - usedBytes;
         for (let i = 0; i < wanted.length; i += CONTENT_CONCURRENCY) {
             const batch = wanted.slice(i, i + CONTENT_CONCURRENCY);
+            // A failed read is no content: the extractor then maps the file as unmapped, never success.
             const texts = await Promise.all(
                 batch.map((f) =>
                     this.readFileAtCommit({ ...input, path: f.path, sha: input.headSha, maxBytes: MAX_CONTENT_BYTES }).catch(() => null),
@@ -181,6 +187,7 @@ export class CodeManagementRuntimeGitAdapter implements RuntimeGitPort {
         if (!id && !login) return undefined;
         const members: Array<{ id?: unknown; name?: unknown }> | undefined = await this.codeManagement
             .getListMembers({ organizationAndTeamData: { organizationId: input.organizationId, teamId: input.teamId } })
+            // A failed list is unknown membership, which the caller denies (fail closed).
             .catch(() => undefined);
         if (!Array.isArray(members) || members.length === 0) return undefined;
         return members.some(
@@ -197,6 +204,62 @@ export class CodeManagementRuntimeGitAdapter implements RuntimeGitPort {
         return null;
     }
 
+    /**
+     * The newest open PR of the repository from `branch`, read again by number
+     * for its shas; a PR from a fork never pairs (its branch name is not this
+     * repository's). Null when there is none.
+     */
+    async findOpenPullRequestByBranch(
+        input: OrgTeam & { repositoryId: string; repositoryName: string; branch: string },
+    ): Promise<{ number: number; headSha: string; baseSha: string } | null> {
+        const prs =
+            (await this.codeManagement.getPullRequests({
+                organizationAndTeamData: { organizationId: input.organizationId, teamId: input.teamId },
+                repository: { id: input.repositoryId, name: splitFullName(input.repositoryName).name },
+                filters: { state: PullRequestState.OPENED },
+            })) ?? [];
+        const candidates = prs
+            .filter((pr) => pr?.head?.ref === input.branch && Number.isSafeInteger(Number(pr.number)) && Number(pr.number) > 0)
+            .sort((a, b) => Number(b.number) - Number(a.number))
+            // Bounded: one Git call per candidate.
+            .slice(0, 3);
+        for (const pr of candidates) {
+            const head = await this.getPullRequestHead({ ...input, prNumber: Number(pr.number) });
+            if (head && !head.fork && head.state === 'open' && head.headBranch === input.branch) {
+                return { number: Number(pr.number), headSha: head.headSha, baseSha: head.baseSha };
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The repository's open PRs from the platform's own listing (one call,
+     * paginated by the platform service). A PR whose listing gives no full
+     * head SHA is left out: Bitbucket Cloud's listing abbreviates it, and an
+     * abbreviated SHA never matches the head a Run recorded. A listing that
+     * failed reads as empty (the platform services log and return []), so the
+     * reconciler then hands nothing.
+     */
+    async listOpenPullRequests(input: OrgTeam & { repositoryId: string; repositoryName: string }): Promise<OpenPullRequestSummary[]> {
+        const prs =
+            (await this.codeManagement.getPullRequests({
+                organizationAndTeamData: { organizationId: input.organizationId, teamId: input.teamId },
+                // Every platform service finds the repository by id; Forgejo reads owner/repo from the name.
+                repository: { id: input.repositoryId, name: input.repositoryName },
+                filters: { state: PullRequestState.OPENED },
+            })) ?? [];
+        const out: OpenPullRequestSummary[] = [];
+        for (const pr of prs) {
+            const number = Number(pr?.number);
+            const headSha = pr?.head?.sha;
+            if (!Number.isSafeInteger(number) || number < 1 || typeof headSha !== 'string' || !FULL_SHA.test(headSha)) continue;
+            if (pr.state !== undefined && pr.state !== PullRequestState.OPENED) continue;
+            const updated = typeof pr.updated_at === 'string' && Number.isFinite(Date.parse(pr.updated_at)) ? new Date(pr.updated_at).toISOString() : undefined;
+            out.push({ number, headSha: headSha.toLowerCase(), ...(typeof pr.isDraft === 'boolean' ? { draft: pr.isDraft } : {}), ...(updated ? { updatedAt: updated } : {}) });
+        }
+        return out;
+    }
+
     async getDefaultBranchHead(input: OrgTeam & { repositoryId: string; repositoryName: string }): Promise<DefaultBranchHead> {
         const organizationAndTeamData = { organizationId: input.organizationId, teamId: input.teamId };
         const head = await this.codeManagement.getDefaultBranchHead({
@@ -204,6 +267,7 @@ export class CodeManagementRuntimeGitAdapter implements RuntimeGitPort {
             repository: { id: input.repositoryId, ...splitFullName(input.repositoryName) } as { id: string; name: string; owner?: string },
         });
         if (head === undefined) {
+            // Only labels the unsupported answer: the status is already decided by the head read.
             const platform = await this.codeManagement.getTypeIntegration(organizationAndTeamData).catch(() => null);
             return { status: 'unsupported_platform', platform: platform ?? null };
         }

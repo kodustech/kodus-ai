@@ -1,3 +1,4 @@
+import { inTransaction, lockKey, lockStatement } from '@libs/runtime/run/adapters/advisory-lock';
 import type { Pool } from 'pg';
 
 // Tables of the Runtime database next to the DBOS system tables (docs §8).
@@ -364,35 +365,412 @@ CREATE INDEX runtime_admission_budget_idx ON runtime.runtime_admission_requests 
             created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (organization_id, command_id));
         CREATE INDEX IF NOT EXISTS runtime_pr_cancels_scope_idx ON runtime.runtime_pr_cancel_generations (organization_id, repository_id, pr_number, ceiling);`,
     },
+    {
+        version: 19,
+        name: 'claim fork pull request',
+        // The PR side of a fork: the environment's approved egress hosts never reach the claim.
+        sql: `ALTER TABLE IF EXISTS runtime.runtime_claims ADD COLUMN IF NOT EXISTS fork_pull_request boolean NOT NULL DEFAULT false;`,
+    },
+    {
+        version: 20,
+        name: 'org machine-minute budget',
+        // One row per claim, on the UTC day of its first round (hub/claims/pg-machine-minutes.store.ts):
+        // the rounds that ended (settled_seconds) and the round in flight, reserved at its whole ceiling
+        // until the claim row says it ended. runtime_machine_usage is what each claim counts; the
+        // API reads it (kodus_runtime_reader) for the org's minutes left today.
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_machine_reservations (
+            claim_id text PRIMARY KEY,
+            org_id text NOT NULL,
+            day date NOT NULL,
+            settled_seconds bigint NOT NULL DEFAULT 0 CHECK (settled_seconds >= 0),
+            round_started_at timestamptz NOT NULL,
+            round_reserved_seconds bigint NOT NULL CHECK (round_reserved_seconds >= 0),
+            created_at timestamptz NOT NULL DEFAULT now());
+        CREATE INDEX IF NOT EXISTS runtime_machine_reservations_org_day_idx ON runtime.runtime_machine_reservations (org_id, day);
+        CREATE OR REPLACE VIEW runtime.runtime_machine_usage AS
+        SELECT r.claim_id, r.org_id, r.day,
+               r.settled_seconds + CASE WHEN e.ended_at >= r.round_started_at
+                    THEN LEAST(r.round_reserved_seconds, CEIL(EXTRACT(EPOCH FROM (e.ended_at - r.round_started_at)))::bigint)
+                    ELSE r.round_reserved_seconds END AS seconds,
+               r.settled_seconds + LEAST(r.round_reserved_seconds,
+                    GREATEST(0, CEIL(EXTRACT(EPOCH FROM (CASE WHEN e.ended_at >= r.round_started_at THEN e.ended_at ELSE now() END - r.round_started_at))))::bigint) AS held_seconds,
+               (r.round_reserved_seconds > 0 AND (e.ended_at IS NULL OR e.ended_at < r.round_started_at)) AS open
+          FROM runtime.runtime_machine_reservations r
+          LEFT JOIN runtime.runtime_claims c ON c.claim_id = r.claim_id
+          CROSS JOIN LATERAL (SELECT COALESCE(c.released_at, CASE WHEN c.state IN ('blocked', 'failed') THEN c.state_changed_at END) AS ended_at) e;`,
+    },
+    {
+        version: 21,
+        name: 'Run projection, environment setups and lessons (moved from Mongo)',
+        // The runtime-worker writes these three; the API reads them with kodus_runtime_reader
+        // (scripts/runtime/runtime-reader-grants.sql). Typed columns are what the reads filter and sort
+        // on; the jsonb column holds the rest of the document, read whole (libs/runtime/run/adapters/pg-document.ts).
+        // No retention: Mongo kept them for good too. scripts/runtime/backfill-runtime-mongo.ts copies the old documents.
+        sql: `
+CREATE TABLE IF NOT EXISTS runtime.runtime_runs (
+    run_id          text PRIMARY KEY,
+    organization_id text,
+    team_id         text,
+    repository_id   text,
+    repository_name text,
+    pr_number       integer,
+    head_sha        text,
+    base_sha        text,
+    base_branch     text,
+    environment_id  text,
+    image_id        text,
+    attempt         integer,
+    correlation_id  text,
+    state           text,
+    verdict_state   text,
+    phase           text,
+    trigger         text,
+    requested_at    timestamptz,
+    started_at      timestamptz,
+    finished_at     timestamptz,
+    updated_at      timestamptz NOT NULL,
+    report          jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+-- One live Run per org, repository, PR, head and environment (a repository in two environments runs the same head
+-- in each). NULLS NOT DISTINCT: a Run recorded without an environment still dedupes against another one without.
+CREATE UNIQUE INDEX IF NOT EXISTS runtime_runs_one_live_per_environment_sha
+    ON runtime.runtime_runs (organization_id, repository_id, pr_number, head_sha, environment_id) NULLS NOT DISTINCT
+    WHERE state IN ('queued', 'awaiting_approval', 'booting', 'testing');
+-- The live Runs of one org, or of every org (the global stop, the sweeper).
+CREATE INDEX IF NOT EXISTS runtime_runs_live_idx ON runtime.runtime_runs (organization_id)
+    WHERE state IN ('queued', 'awaiting_approval', 'booting', 'testing');
+-- The runs page, a repository's Runs, a PR's Runs (the pull requests screens), an environment's Runs.
+CREATE INDEX IF NOT EXISTS runtime_runs_org_requested_idx ON runtime.runtime_runs (organization_id, requested_at DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS runtime_runs_repo_requested_idx ON runtime.runtime_runs (organization_id, repository_id, requested_at DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS runtime_runs_pr_requested_idx ON runtime.runtime_runs (organization_id, repository_id, pr_number, requested_at DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS runtime_runs_env_requested_idx ON runtime.runtime_runs (environment_id, requested_at DESC NULLS LAST);
+
+CREATE TABLE IF NOT EXISTS runtime.runtime_environment_setups (
+    environment_id  text PRIMARY KEY,
+    organization_id text NOT NULL,
+    repository_id   text NOT NULL,
+    setup_key       text NOT NULL,
+    state           text NOT NULL,
+    image_id        text,
+    requested_at    timestamptz NOT NULL,
+    updated_at      timestamptz NOT NULL,
+    finished_at     timestamptz,
+    record          jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS runtime_environment_setups_org_idx ON runtime.runtime_environment_setups (organization_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS runtime.runtime_lessons (
+    lesson_id       text PRIMARY KEY,
+    organization_id text NOT NULL,
+    repository_id   text NOT NULL,
+    environment_id  text,
+    scope           text NOT NULL,
+    signature       text NOT NULL,
+    state           text NOT NULL,
+    helped          integer NOT NULL,
+    first_at        timestamptz,
+    last_at         timestamptz NOT NULL,
+    lesson          jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS runtime_lessons_org_signature_idx ON runtime.runtime_lessons (organization_id, signature);
+CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_lessons (organization_id, last_at DESC) WHERE state = 'active';
+`,
+    },
+    {
+        version: 22,
+        name: 'code sandbox audit',
+        // Every sandbox operation (docs/runtime/sandbox.md), per org, written by the hub: the op, the
+        // exec's command redacted or the file op's path, and how it ended. Never output or file content.
+        // Kept 30 days (applyRetention).
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_sandbox_audit (
+            id          bigserial PRIMARY KEY,
+            org_id      text NOT NULL,
+            claim_id    text NOT NULL,
+            cell_id     text NOT NULL,
+            step_id     uuid NOT NULL,
+            op          text NOT NULL,
+            command     text,
+            path        text,
+            outcome     text NOT NULL CHECK (outcome IN ('ok', 'refused', 'failed')),
+            detail      text,
+            exit_code   integer,
+            bytes       bigint,
+            duration_ms integer NOT NULL,
+            at          timestamptz NOT NULL);
+        CREATE INDEX IF NOT EXISTS runtime_sandbox_audit_org_at_idx ON runtime.runtime_sandbox_audit (org_id, at DESC);
+        CREATE INDEX IF NOT EXISTS runtime_sandbox_audit_claim_idx ON runtime.runtime_sandbox_audit (claim_id);`,
+    },
+    {
+        version: 23,
+        name: 'claim vCPUs and the claims of an org by month, for the usage report',
+        // cpus: the vCPUs of the claim's machine size, written with its metering by the hub (null at the cell's
+        // default size, and on rows from before). The API's usage report (docs/runtime/usage-report.md) reads an
+        // org's claims of one month with kodus_runtime_reader, on runtime_claims_org_created_idx.
+        sql: `ALTER TABLE runtime.runtime_claims ADD COLUMN IF NOT EXISTS cpus integer;
+        CREATE INDEX IF NOT EXISTS runtime_claims_org_created_idx ON runtime.runtime_claims (org_id, created_at);`,
+    },
+    {
+        version: 24,
+        name: 'claim start source and the cell default size, for the usage report',
+        // start_source: how the claim's workload came to be, as the cell's claim.ready said (readyStart):
+        // cold, pool or bake; null before the cell said, or for a cell that does not say.
+        // default_claim_*: the size a claim that asks none runs at (hello capabilities.defaultSize), so
+        // the hub records the vCPUs of such a claim in runtime_claims.cpus.
+        sql: `ALTER TABLE runtime.runtime_claims ADD COLUMN IF NOT EXISTS start_source text CHECK (start_source IN ('cold', 'pool', 'bake'));
+        ALTER TABLE runtime.runtime_cell_sessions ADD COLUMN IF NOT EXISTS default_claim_memory_mb integer;
+        ALTER TABLE runtime.runtime_cell_sessions ADD COLUMN IF NOT EXISTS default_claim_cpus integer;`,
+    },
+    {
+        version: 25,
+        name: 'the cell sandbox size, for sandbox admission',
+        // sandbox_claim_*: the size a code sandbox that asks none runs at (hello capabilities.sandboxSize),
+        // so the hub admits it at that size and not at the cell's default Run size; null for a cell that
+        // does not say (the hub's RUNTIME_SANDBOX_MEMORY_MB then).
+        sql: `ALTER TABLE runtime.runtime_cell_sessions ADD COLUMN IF NOT EXISTS sandbox_claim_memory_mb integer;
+        ALTER TABLE runtime.runtime_cell_sessions ADD COLUMN IF NOT EXISTS sandbox_claim_cpus integer;`,
+    },
+    {
+        version: 26,
+        name: 'cell registration tokens: issued time and revocation',
+        // An org owner lists the org's recent tokens (never the token: only its hash is stored) and revokes an
+        // unused one (docs/runtime/self-hosted.md). Redemption skips a revoked row in the UPDATE that burns it.
+        // The API reads them with kodus_runtime_reader on runtime_cell_tokens_org_idx.
+        sql: `ALTER TABLE runtime.runtime_cell_tokens ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+        ALTER TABLE runtime.runtime_cell_tokens ADD COLUMN IF NOT EXISTS revoked_at timestamptz;
+        ALTER TABLE runtime.runtime_cell_tokens ADD COLUMN IF NOT EXISTS revoked_by text;
+        CREATE INDEX IF NOT EXISTS runtime_cell_tokens_org_idx ON runtime.runtime_cell_tokens (organization_id, created_at);`,
+    },
+    {
+        version: 27,
+        name: 'preview URLs: previews, sessions, used grants, tunnel tickets and holders, audit',
+        // docs/runtime/preview-urls.md. runtime_previews: one row per side of a Run a person opened; the worker
+        // writes its state, the edge only last_activity_at and wake_requested_at. sealed_repo_token: the download
+        // token the API minted for its last open, sealed to the preview (a wake after it expires asks to open again).
+        // runtime_preview_sessions: the edge's cookie sessions, by the cookie's hash. runtime_preview_grants_used:
+        // each grant's jti until it expires (single use). runtime_preview_tunnel_tickets: the hub's one-time tickets
+        // for a cell's tunnel, by hash. runtime_preview_tunnels: which edge replica holds a cell's tunnel.
+        // runtime_preview_audit: every session, refusal, start, wake, sleep, stop and expiry (§6.7); no IP, no path.
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_previews (
+            preview_id text PRIMARY KEY,
+            org_id text NOT NULL,
+            environment_id text NOT NULL,
+            repository_id text NOT NULL,
+            repository_full_name text NOT NULL,
+            run_id text NOT NULL,
+            side text NOT NULL CHECK (side IN ('base', 'pr')),
+            sha text NOT NULL,
+            host text NOT NULL UNIQUE,
+            state text NOT NULL CHECK (state IN ('starting', 'ready', 'sleeping', 'blocked', 'stopped', 'expired')),
+            reason text,
+            opened_by text NOT NULL,
+            without_secrets boolean NOT NULL DEFAULT true,
+            starts integer NOT NULL DEFAULT 0,
+            claim_id text,
+            cell_id text,
+            target_service text,
+            target_port integer,
+            lease_expires_at timestamptz,
+            claim_hard_expires_at timestamptz,
+            sealed_repo_token text,
+            token_sealed_at timestamptz,
+            wake_requested_at timestamptz,
+            last_activity_at timestamptz,
+            ready_at timestamptz,
+            routed_at timestamptz,
+            created_at timestamptz NOT NULL,
+            updated_at timestamptz NOT NULL,
+            expires_at timestamptz NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS runtime_previews_org_run_idx ON runtime.runtime_previews (org_id, run_id);
+        CREATE INDEX IF NOT EXISTS runtime_previews_open_idx ON runtime.runtime_previews (updated_at) WHERE state IN ('starting', 'ready', 'sleeping', 'blocked');
+        CREATE TABLE IF NOT EXISTS runtime.runtime_preview_sessions (
+            session_hash text PRIMARY KEY,
+            preview_id text NOT NULL,
+            org_id text NOT NULL,
+            user_id text NOT NULL,
+            created_at timestamptz NOT NULL,
+            expires_at timestamptz NOT NULL,
+            closed_at timestamptz,
+            requests bigint NOT NULL DEFAULT 0,
+            bytes_in bigint NOT NULL DEFAULT 0,
+            bytes_out bigint NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS runtime_preview_sessions_preview_idx ON runtime.runtime_preview_sessions (preview_id) WHERE closed_at IS NULL;
+        CREATE TABLE IF NOT EXISTS runtime.runtime_preview_grants_used (jti text PRIMARY KEY, expires_at timestamptz NOT NULL);
+        CREATE TABLE IF NOT EXISTS runtime.runtime_preview_tunnel_tickets (ticket_hash text PRIMARY KEY, cell_id text NOT NULL, expires_at timestamptz NOT NULL);
+        CREATE TABLE IF NOT EXISTS runtime.runtime_preview_tunnels (
+            cell_id text PRIMARY KEY,
+            edge_replica text NOT NULL,
+            connected_at timestamptz NOT NULL,
+            seen_at timestamptz NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS runtime.runtime_preview_audit (
+            id bigserial PRIMARY KEY,
+            at timestamptz NOT NULL DEFAULT now(),
+            org_id text NOT NULL,
+            preview_id text NOT NULL,
+            run_id text,
+            side text,
+            actor text,
+            action text NOT NULL CHECK (action IN ('session_opened', 'session_refused', 'session_closed', 'started', 'woken', 'slept', 'stopped', 'expired')),
+            reason text,
+            requests bigint,
+            bytes_in bigint,
+            bytes_out bigint
+        );
+        CREATE INDEX IF NOT EXISTS runtime_preview_audit_org_at_idx ON runtime.runtime_preview_audit (org_id, at);
+        CREATE INDEX IF NOT EXISTS runtime_preview_audit_preview_idx ON runtime.runtime_preview_audit (preview_id);`,
+    },
+    {
+        version: 28,
+        name: 'preview URLs phase 2: per-preview policy, pull request, environment previews, edge holder URL',
+        // docs/runtime/preview-urls.md §15. The policy an open asked for (idle stop, one start's ceiling, the
+        // org's monthly cap, a fork's PR side) lives on the preview so a wake applies it without the API.
+        // pr_number: a newer Run of the PR or its closing ends the preview (runtime_previews_org_pr_idx).
+        // run_id null: an environment's own preview. edge_url: where another edge replica forwards a request
+        // for a cell whose tunnel this replica holds.
+        sql: `ALTER TABLE runtime.runtime_previews ALTER COLUMN run_id DROP NOT NULL;
+        ALTER TABLE runtime.runtime_previews ADD COLUMN IF NOT EXISTS pr_number integer;
+        ALTER TABLE runtime.runtime_previews ADD COLUMN IF NOT EXISTS idle_minutes integer;
+        ALTER TABLE runtime.runtime_previews ADD COLUMN IF NOT EXISTS ceiling_minutes integer;
+        ALTER TABLE runtime.runtime_previews ADD COLUMN IF NOT EXISTS monthly_machine_minutes integer;
+        ALTER TABLE runtime.runtime_previews ADD COLUMN IF NOT EXISTS fork_pull_request boolean NOT NULL DEFAULT false;
+        CREATE INDEX IF NOT EXISTS runtime_previews_org_pr_idx ON runtime.runtime_previews (org_id, repository_id, pr_number) WHERE state IN ('starting', 'ready', 'sleeping', 'blocked');
+        CREATE INDEX IF NOT EXISTS runtime_previews_org_env_idx ON runtime.runtime_previews (org_id, environment_id) WHERE run_id IS NULL AND state IN ('starting', 'ready', 'sleeping', 'blocked');
+        ALTER TABLE runtime.runtime_preview_tunnels ADD COLUMN IF NOT EXISTS edge_url text;`,
+    },
+    {
+        version: 29,
+        name: 'cell registration tokens issued before 26: issued time from their expiry',
+        // 26 added created_at with DEFAULT now(), so every token issued before it got the upgrade's time and showed
+        // as just made in the owner's list of the last 24 hours (dev VM, 2026-11-13: eight tokens of up to two weeks
+        // as "7 minutes ago"). A token is issued CELL_TOKEN_TTL_MS (15 min) before it expires; a created_at later
+        // than that can only be the backfill's.
+        sql: `UPDATE runtime.runtime_cell_tokens SET created_at = expires_at - interval '15 minutes'
+            WHERE created_at > expires_at - interval '15 minutes';`,
+    },
+    {
+        // 30, not 26: kody-runtime/next holds 26-29; versions apply by number, so a gap is fine.
+        version: 30,
+        name: 'memory snapshot placement: the cell that holds a template or a session',
+        // A memory snapshot never leaves the cell that took it (docs/runtime/isolation-p3-snapshots.md). The
+        // worker records the cell of each sandbox template (template:<key>) and session (session:<id>) and
+        // reserves that cell first for a sandbox that starts from it; any other cell boots the sandbox cold.
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_snapshot_cells (
+            org_id text NOT NULL,
+            snapshot_ref text NOT NULL,
+            cell_id text NOT NULL,
+            created_at timestamptz NOT NULL DEFAULT now(),
+            PRIMARY KEY (org_id, snapshot_ref)
+        );`,
+    },
+    {
+        // 31 after p3's 30 (next holds 26-29).
+        version: 31,
+        name: 'memory snapshot placement: the pull request a session holds the code of',
+        // A session of a review's sandbox names its PR (SandboxSnapshotRequest.pullRequest): it is removed when
+        // the PR closes or merges (the worker's pr_closed cancel), and the API's sweep finds the ones whose
+        // close was lost (runtime_snapshot_cells_pr_idx, with kodus_runtime_reader).
+        sql: `ALTER TABLE runtime.runtime_snapshot_cells ADD COLUMN IF NOT EXISTS repository_id text;
+        ALTER TABLE runtime.runtime_snapshot_cells ADD COLUMN IF NOT EXISTS pr_number integer;
+        CREATE INDEX IF NOT EXISTS runtime_snapshot_cells_pr_idx ON runtime.runtime_snapshot_cells (org_id, repository_id, pr_number) WHERE pr_number IS NOT NULL;`,
+    },
+    {
+        // 32 after next-p3's 30-31 (next holds 26-29).
+        version: 32,
+        name: 'egress tiers: approval mode and revocation, the egress audit, the org egress settings',
+        // docs/runtime/egress-allowlist.md §9. An approval is inspected (GET/HEAD under path_prefixes) or passthrough
+        // (every approval before this one); a revoked row stays for the record and no claim gets it. environment_id '*'
+        // is the org list (ORG_EGRESS_SCOPE). last_sent_at is when a claim last got the host (D5: approvals never
+        // expire, the screen shows their last use). The runtime-worker writes all three tables from the outbox
+        // commands; the API reads them with kodus_runtime_reader.
+        sql: `ALTER TABLE runtime.runtime_egress_approvals ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'passthrough';
+        ALTER TABLE runtime.runtime_egress_approvals ADD COLUMN IF NOT EXISTS path_prefixes text[] NOT NULL DEFAULT '{}';
+        ALTER TABLE runtime.runtime_egress_approvals ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'blocker';
+        ALTER TABLE runtime.runtime_egress_approvals ADD COLUMN IF NOT EXISTS revoked_at timestamptz;
+        ALTER TABLE runtime.runtime_egress_approvals ADD COLUMN IF NOT EXISTS revoked_by text;
+        ALTER TABLE runtime.runtime_egress_approvals ADD COLUMN IF NOT EXISTS last_sent_at timestamptz;
+        CREATE TABLE IF NOT EXISTS runtime.runtime_egress_audit (
+            id                  bigserial PRIMARY KEY,
+            organization_id     text NOT NULL,
+            environment_id      text,
+            host                text,
+            action              text NOT NULL,
+            mode                text,
+            path_prefixes       text[],
+            actor               text NOT NULL,
+            source              text NOT NULL,
+            source_ref          text,
+            recommended_version integer,
+            reason              text,
+            detail              jsonb,
+            at                  timestamptz NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS runtime_egress_audit_org_idx ON runtime.runtime_egress_audit (organization_id, environment_id, at DESC);
+        CREATE TABLE IF NOT EXISTS runtime.runtime_egress_settings (
+            organization_id     text PRIMARY KEY,
+            recommended_enabled boolean NOT NULL DEFAULT true,
+            who_may_add         text NOT NULL DEFAULT 'owners',
+            updated_by          text NOT NULL,
+            updated_at          timestamptz NOT NULL
+        );`,
+    },
+    {
+        // 30 and 31 are next-p3's, 32 the egress branch's: this one takes 33, applied in version order either way.
+        version: 33,
+        name: 'build states a cell evicted: needs setup again',
+        // docs/runtime/build-cache.md. The cell's disk floor removed every environment's build state on the dev cell
+        // (2026-11-13) and nothing said so: the environments stayed "active" while their PRs built cold, calcom's past
+        // its boot's ceiling. The hub keeps each cell's last heartbeat list (evictedBuildStates); the API shows the
+        // environment as needing a setup again, and a Run whose build ran cold because of it says so.
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_build_state_evictions (
+            cell_id text NOT NULL,
+            org_id text NOT NULL,
+            environment_id text NOT NULL,
+            evicted_at timestamptz NOT NULL,
+            PRIMARY KEY (cell_id, org_id, environment_id)
+        );
+        CREATE INDEX IF NOT EXISTS runtime_build_state_evictions_env_idx ON runtime.runtime_build_state_evictions (org_id, environment_id);`,
+    },
+    {
+        version: 34,
+        name: 'what an evicted build state cost to make',
+        // Heartbeat evictedBuildStates[].rebuildSeconds (cell feature buildStateRebuildCost): the hub refuses at admission
+        // a Run's PR side whose cold build would pass its ready wait (claim.service.ts, architecture review P3).
+        sql: `ALTER TABLE runtime.runtime_build_state_evictions ADD COLUMN IF NOT EXISTS rebuild_seconds integer;`,
+    },
 ];
 
-const MIGRATION_LOCK = 727001;
+/** The migration lock: the only constant advisory key (advisory-lock.ts). */
+const MIGRATION_LOCK = lockKey('migration');
 
 export async function ensureRuntimeSchema(pool: Pool, migrations = RUNTIME_MIGRATIONS): Promise<number[]> {
     const client = await pool.connect();
     const applied: number[] = [];
     try {
-        await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK]);
+        const lock = lockStatement('pg_advisory_lock', MIGRATION_LOCK);
+        await client.query(lock.text, lock.values);
         await client.query(`CREATE SCHEMA IF NOT EXISTS runtime;
             CREATE TABLE IF NOT EXISTS runtime.schema_migrations (version integer PRIMARY KEY, name text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())`);
         const done = new Set((await client.query('SELECT version FROM runtime.schema_migrations')).rows.map((r) => Number(r.version)));
         for (const m of [...migrations].sort((a, b) => a.version - b.version)) {
             if (done.has(m.version)) continue;
-            await client.query('BEGIN');
             try {
-                await client.query(m.sql);
-                await client.query('INSERT INTO runtime.schema_migrations (version, name) VALUES ($1, $2)', [m.version, m.name]);
-                await client.query('COMMIT');
+                await inTransaction(client, async () => {
+                    await client.query(m.sql);
+                    await client.query('INSERT INTO runtime.schema_migrations (version, name) VALUES ($1, $2)', [m.version, m.name]);
+                });
                 applied.push(m.version);
             } catch (e) {
-                await client.query('ROLLBACK').catch(() => undefined);
                 throw new Error(`runtime migration ${m.version} (${m.name}) failed: ${(e as Error).message}`, { cause: e });
             }
         }
         return applied;
     } finally {
-        await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK]).catch(() => undefined);
-        client.release();
+        const unlock = lockStatement('pg_advisory_unlock', MIGRATION_LOCK);
+        // A session lock that could not be released ends with its session: the connection is destroyed, not pooled.
+        const unlocked = await client.query(unlock.text, unlock.values).then(() => true, () => false);
+        client.release(unlocked ? undefined : true);
     }
 }
 
@@ -406,6 +784,12 @@ export async function applyRetention(pool: Pick<Pool, 'query'>, days = 30, batch
         `DELETE FROM runtime.runtime_steps_index WHERE created_at < now() - make_interval(days => $1)`,
         `DELETE FROM runtime.runtime_egress_events WHERE at < now() - make_interval(days => $1)`,
         `DELETE FROM runtime.runtime_claim_blockers WHERE at < now() - make_interval(days => $1)`,
+        `DELETE FROM runtime.runtime_sandbox_audit WHERE at < now() - make_interval(days => $1)`,
+        `DELETE FROM runtime.runtime_preview_audit WHERE at < now() - make_interval(days => $1)`,
+        // Short-lived by design: gone once expired, whatever the retention.
+        `DELETE FROM runtime.runtime_preview_grants_used WHERE expires_at < now() - make_interval(days => 0 * $1)`,
+        `DELETE FROM runtime.runtime_preview_tunnel_tickets WHERE expires_at < now() - make_interval(days => 0 * $1)`,
+        `DELETE FROM runtime.runtime_preview_sessions WHERE expires_at < now() - make_interval(days => $1)`,
     ]) {
         removed += (await pool.query(sql, [days])).rowCount ?? 0;
     }
@@ -449,6 +833,7 @@ export async function ensureDatabase(url: string): Promise<void> {
     } catch (e) {
         if ((e as { code?: string })?.code !== '3D000') throw e;
     } finally {
+        // The probe client is done either way; ending one that never connected may fail and changes nothing.
         await own.end().catch(() => undefined);
     }
     u.pathname = '/postgres';

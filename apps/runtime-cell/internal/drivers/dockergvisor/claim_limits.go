@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/claimlimits"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 )
 
 var ErrResourceEnforcement = driver.ErrResourceEnforcement
@@ -148,7 +148,8 @@ func (d *Driver) groupFromHolder(ctx context.Context, ref driver.MachineRef) (li
 	if err != nil {
 		return limitGroup{}, errors.Join(ErrResourceEnforcement, err)
 	}
-	for _, c := range cs {
+	for i := range cs {
+		c := &cs[i]
 		if c.Name != ref.MachineID {
 			continue
 		}
@@ -201,6 +202,7 @@ func (d *Driver) groupFromHolder(ctx context.Context, ref driver.MachineRef) (li
 	}
 	return limitGroup{}, ErrResourceEnforcement
 }
+
 func (d *Driver) parentFor(ctx context.Context, ref driver.MachineRef) (string, error) {
 	g, err := d.groupFromHolder(ctx, ref)
 	return g.parent, err
@@ -234,6 +236,7 @@ func (d *Driver) removeLimitGroup(ctx context.Context, g limitGroup) error {
 	d.mu.Unlock()
 	return nil
 }
+
 func (d *Driver) sweepLimitGroups(ctx context.Context) error {
 	if d.cfg.ClaimLimits == nil {
 		return nil

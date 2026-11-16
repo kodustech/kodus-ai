@@ -59,6 +59,11 @@ export class GitRepoReader implements RepoReader {
         return this.tree;
     }
 
+    /** Every file path at the commit, from the same listing as list(). */
+    async paths(): Promise<string[]> {
+        return [...(await this.files())];
+    }
+
     async list(dir: string): Promise<string[]> {
         return entriesOf(await this.files(), repoPath(dir, { dir: true }));
     }

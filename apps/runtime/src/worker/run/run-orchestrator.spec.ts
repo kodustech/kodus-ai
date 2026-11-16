@@ -4,7 +4,7 @@ import { SCENARIOS } from '../../fake-cell/scenarios';
 import { shopRunRequest } from '../../e2e/fixtures';
 import { awaitForkApproval, finalizeStoppedRun, runRuntimeRun } from './run-orchestrator';
 import { HmacCanaryVault } from '../canary/canary';
-import { inMemoryRunDeps } from './in-memory-deps';
+import { inMemoryRunDeps } from './testing';
 import shopTurns from '../agent/fixtures/shop-orders.json';
 import { RuntimeAgent } from '../agent/runtime-agent';
 
@@ -98,17 +98,52 @@ describe('Run image pin from acquired manifests (#2505)', () => {
         expect(h.resets.mock.calls.every(([, image]) => image === concrete)).toBe(true);
     });
 
-    it.each([
-        ['different side bake', 'latest', 'other-bake'],
-        ['missing side image', 'latest', ''],
-        ['unresolved side alias', 'latest', 'latest'],
-        ['explicit requested image mismatch', 'explicit-bake', concrete],
-    ])('refuses %s before planning or probing and releases both claims', async (_case, requested, prImage) => {
-        const h = fixture(requested, prImage);
+    // kr-shop #2 on cell-dev-1: the cell had been reinstalled, both sides came up from source, and the Run said "could not finish, run again".
+    it('says the environment has to be set up again when the cell holds no bake of it, and tests nothing', async () => {
+        const h = fixture();
+        const acquire = h.acquired.getMockImplementation()!;
+        h.acquired.mockImplementation(async (request) => {
+            const result = await acquire(request);
+            return 'status' in result ? result : { ...result, manifest: { ...result.manifest, imageId: 'latest' } };
+        });
+        await seed(h.projection, h.req);
+        const result = await runRuntimeRun(h.req, h.deps);
+        expect(result).toMatchObject({ state: 'could_not_boot', conclusion: 'neutral', title: 'Could not boot' });
+        expect(h.plan).not.toHaveBeenCalled();
+        expect(h.probe).not.toHaveBeenCalled();
+        const run = (await h.projection.get(h.req.runId))!;
+        expect(run.reason).toBe('platform:environment_not_prepared');
+        expect(run.bootFailure).toMatchObject({ side: 'base' });
+        expect(JSON.stringify(run.bootFailure)).toContain('environment_not_prepared');
+    });
+
+    // The base's own image decides before any plan: a base off the requested image is never planned on.
+    it('refuses an explicit requested image mismatch before planning or probing and releases both claims', async () => {
+        const h = fixture('explicit-bake', concrete);
         await seed(h.projection, h.req);
         const result = await runRuntimeRun(h.req, h.deps);
         expect(result).toMatchObject({ state: 'errored', conclusion: 'neutral' });
         expect(h.plan).not.toHaveBeenCalled();
+        expect(h.probe).not.toHaveBeenCalled();
+        expect(h.resets).not.toHaveBeenCalled();
+        expect([...h.claims.claims.values()].every(claim => claim.released)).toBe(true);
+    });
+
+    // The PR's image is known only once it is ready, and the agent may plan while it boots (early-plan.ts):
+    // that plan is never used, and what it spent is on the Run.
+    it.each([
+        ['different side bake', 'latest', 'other-bake'],
+        ['missing side image', 'latest', ''],
+        ['unresolved side alias', 'latest', 'latest'],
+    ])('refuses %s before probing, never uses a plan made meanwhile, and releases both claims', async (_case, requested, prImage) => {
+        const h = fixture(requested, prImage);
+        await seed(h.projection, h.req);
+        const result = await runRuntimeRun(h.req, h.deps);
+        expect(result).toMatchObject({ state: 'errored', conclusion: 'neutral' });
+        expect(h.plan.mock.calls.length).toBeLessThanOrEqual(1);
+        const run = (await h.projection.get(h.req.runId))!;
+        if (h.plan.mock.calls.length && run.unusedPlan) expect(run.unusedPlan.inputTokens + run.unusedPlan.outputTokens).toBeGreaterThan(0);
+        expect(run.probes ?? []).toEqual([]);
         expect(h.probe).not.toHaveBeenCalled();
         expect(h.resets).not.toHaveBeenCalled();
         expect(h.claims.claims.size).toBe(2);
@@ -249,6 +284,69 @@ describe('runRuntimeRun', () => {
             expect(cut.acquire).toHaveBeenCalled();
             const noRecipe = await run(shopRunRequest({ diff: [{ path: '.kodus/workspace.yaml', patch: '+x' }] }));
             expect(noRecipe.acquire).toHaveBeenCalled();
+        });
+    });
+
+    it('a Run of a head already planned takes the plan its earlier Run accepted, with no model call (planner-eval.md P1)', async () => {
+        const first = inMemoryRunDeps();
+        const asked: any[] = [];
+        first.deps.pastPlans = { find: async (q) => void asked.push(q) };
+        const made = jest.spyOn(first.deps.agent, 'plan');
+        const a = shopRunRequest();
+        await seed(first.projection, a);
+        const before = await runRuntimeRun(a, first.deps);
+        const plan = (await made.mock.results[0].value) as any;
+        expect(asked[0]).toMatchObject({ runId: a.runId, headSha: a.pullRequest.headSha, baseSha: a.pullRequest.baseSha, key: expect.stringMatching(/^[0-9a-f]{64}$/) });
+
+        const again = inMemoryRunDeps();
+        again.deps.pastPlans = { find: async () => ({ runId: a.runId, plan: { ...plan, reuseKey: asked[0].key } }) };
+        const planned = jest.spyOn(again.deps.agent, 'plan');
+        const b = shopRunRequest({ runId: '22222222-2222-4222-8222-222222222222' });
+        await seed(again.projection, b);
+        const after = await runRuntimeRun(b, again.deps);
+        expect(planned).not.toHaveBeenCalled();
+        expect(after.state).toBe(before.state);
+        expect(again.logged.some((l: any) => l.msg === 'run.plan.reused' && l.from === a.runId)).toBe(true);
+    });
+
+    describe('nothing to test at runtime: every change a comment, layout or documentation (planner-eval.md fix 1)', () => {
+        const CONTROLLER = "@Controller('server')\nexport class S {\n    @Get('ping')\n    ping() {\n        return 1;\n    }\n}";
+        const commentOnly = { path: 'src/server.controller.ts', patch: '@@ -6,2 +6,4 @@\n     }\n }\n+\n+// no behavior change', content: `${CONTROLLER}\n\n// no behavior change` };
+        const run = async (req: ReturnType<typeof shopRunRequest>) => {
+            const h = inMemoryRunDeps();
+            const acquire = jest.spyOn(h.deps.env, 'acquire');
+            const plan = jest.spyOn(h.deps.agent, 'plan');
+            await seed(h.projection, req);
+            const result = await runRuntimeRun(req, h.deps);
+            return { ...h, acquire, plan, result };
+        };
+
+        it('boots nothing, calls no model and ends neutral "Nothing to test at runtime", naming the files', async () => {
+            const req = shopRunRequest({ diff: [commentOnly, { path: 'README.md', patch: '@@ -1,1 +1,1 @@\n-a\n+b' }] });
+            const { acquire, plan, result, published, projection } = await run(req);
+            expect(acquire).not.toHaveBeenCalled();
+            expect(plan).not.toHaveBeenCalled();
+            expect(result).toMatchObject({ state: 'nothing_to_test', verdictState: 'nothing_to_test', conclusion: 'neutral', title: 'Nothing to test at runtime' });
+            expect((await projection.get(req.runId))!.noRuntimeEffect).toEqual([
+                { file: 'src/server.controller.ts', why: 'only comments, blank lines or layout change' },
+                { file: 'README.md', why: 'documentation only' },
+            ]);
+            const out = finalOnly(published);
+            expect(out.map((p) => p.kind)).toEqual(['check', 'comment']);
+            expect(out[1].report).toMatchObject({ state: 'nothing_to_test', verdictState: 'nothing_to_test', paths: [], uncovered: [], noRuntimeEffect: ['src/server.controller.ts', 'README.md'] });
+        });
+
+        it('the same comment next to a code change boots and tests as before', async () => {
+            const { acquire, result } = await run(shopRunRequest({ diff: [commentOnly, ...shopRunRequest().diff] }));
+            expect(acquire.mock.calls.map(([r]) => r.ref.side).sort()).toEqual(['base', 'pr']);
+            expect(result.state).not.toBe('nothing_to_test');
+        });
+
+        it('a cut diff, or a file renamed with its comment, is never judged: it boots', async () => {
+            const cut = await run(shopRunRequest({ diff: [commentOnly], diffTruncated: true }));
+            expect(cut.acquire).toHaveBeenCalled();
+            const renamed = await run(shopRunRequest({ diff: [{ ...commentOnly, previousPath: 'src/old.controller.ts' }] }));
+            expect(renamed.acquire).toHaveBeenCalled();
         });
     });
 
@@ -607,8 +705,9 @@ describe('a security violation the cell reports (halted)', () => {
             const planner = jest.fn(async () => ({ status: 'explore_browser' as const, request: { steps: [{ goto: '/' }], viewport: { width: 800, height: 600 }, timeoutMs: 1000 }, usage: { inputTokens: 1, outputTokens: 1 }, steps: 1 }));
             h.deps.agent = new RuntimeAgent({ complete: async () => { throw new Error('legacy LLM must not run'); } }, h.deps.env, { plan: planner });
             const probe = jest.spyOn(h.deps.env, 'probe');
+            // The plan's step: made while the PR boots (agent:plan:early), recorded as DBOS would.
             h.deps.step = async (name, fn) => {
-                if (name !== 'agent:plan') return fn();
+                if (name !== 'agent:plan:early') return fn();
                 if (recover) return JSON.parse(JSON.stringify(checkpoint));
                 checkpoint = JSON.parse(JSON.stringify(await fn()));
                 return checkpoint;
@@ -622,7 +721,7 @@ describe('a security violation the cell reports (halted)', () => {
             expect([...h.claims.claims.values()].every(c => c.released)).toBe(true);
         };
         await make();
-        expect(checkpoint.securityViolation).toEqual({ side: 'base', signature: 'credential_exfiltration' });
+        expect(checkpoint.plan.securityViolation).toEqual({ side: 'base', signature: 'credential_exfiltration' });
         await make(true);
     });
 
@@ -965,5 +1064,169 @@ it('passes the active durable-step cancellation signal to the planner', async ()
     h.deps.cancellationSignal = () => controller.signal;
     const plan = jest.spyOn(h.deps.agent, 'plan');
     await runRuntimeRun(req, h.deps);
-    expect(plan).toHaveBeenCalledWith(expect.objectContaining({ signal: controller.signal }));
+    // The planner's signal follows the step's cancellation.
+    const signal = plan.mock.calls[0][0].signal!;
+    expect(signal.aborted).toBe(false);
+    controller.abort();
+    expect(signal.aborted).toBe(true);
+});
+
+describe('a route the PR adds (Run 371c8255, kr-shop#4)', () => {
+    // kr-shop is our own test repository. PR #4 adds POST /orders/preview to server.js: main has no
+    // such route (Express answers its HTML 404), the PR answers 200 with a total or 400 without items.
+    const SERVER = [
+        "app.get('/orders', list);",
+        '',
+        'const BILLING_URL = process.env.BILLING_URL;',
+        '',
+        "app.post('/orders/preview', async (req, res) => {",
+        "    res.json({ total: 20 });",
+        '});',
+    ].join('\n');
+    const PATCH = [
+        '@@ -1,1 +1,7 @@',
+        " app.get('/orders', list);",
+        '+',
+        '+const BILLING_URL = process.env.BILLING_URL;',
+        '+',
+        "+app.post('/orders/preview', async (req, res) => {",
+        "+    res.json({ total: 20 });",
+        '+});',
+    ].join('\n');
+    const http = (status: number, body: string) => ({ http: { status, headers: {}, body } });
+    const notOnMain = () => http(404, '<pre>Cannot POST /orders/preview</pre>');
+    const probe = (id: string, body: string) => ({
+        entryPoint: 'POST /orders/preview',
+        probe: {
+            id,
+            origin: 'external' as const,
+            purpose: 'preview an order total',
+            expected: 'an HTTP response',
+            compare: ['status' as const, 'json' as const],
+            spec: { kind: 'http' as const, target: { service: 'web', port: 3000 }, method: 'POST' as const, path: '/orders/preview', body, timeoutMs: 5_000 },
+        },
+    });
+    const run = async (preview: { pr: () => ReturnType<typeof http> }, health = () => http(200, 'ok')) => {
+        const fake = new FakeEnvironmentRuntime({
+            shop: {
+                ...SCENARIOS.shop,
+                probes: {
+                    'run-ready': { base: health, pr: () => http(200, 'ok') },
+                    'preview-total': { base: notOnMain, pr: preview.pr },
+                    'preview-empty': { base: notOnMain, pr: () => http(400, '{"error":"items are required"}') },
+                    'orders-list': SCENARIOS.shop.probes!['orders-list'],
+                },
+            },
+        });
+        const h = inMemoryRunDeps({ env: fake });
+        const req = shopRunRequest({ diff: [{ path: 'server.js', patch: PATCH, content: SERVER }] });
+        req.environment.ready = { service: 'web', port: 3000, path: '/health', waitSeconds: 0 };
+        jest.spyOn(h.deps.agent, 'plan').mockResolvedValue({
+            probes: [
+                probe('preview-total', '{"items":[{"price":10,"quantity":2}]}'),
+                probe('preview-empty', '{}'),
+                // A probe of a route the diff does not reach (the constant no handler reads reaches none): it covers nothing.
+                { entryPoint: 'GET /orders', probe: { ...probe('orders-list', '').probe, expected: '200', spec: { kind: 'http' as const, target: { service: 'web', port: 3000 }, method: 'GET' as const, path: '/orders', timeoutMs: 5_000 } } },
+            ],
+            tests: [],
+            claims: [],
+            rejected: [],
+            cannotProve: [],
+            explored: 0,
+        });
+        await seed(h.projection, req);
+        const result = await runRuntimeRun(req, h.deps);
+        return { ...h, req, result };
+    };
+
+    it('a route the PR adds is reported as a new endpoint, not a regression', async () => {
+        const { result, projection, published, req } = await run({ pr: () => http(200, '{"total":20}') });
+        expect(result).toMatchObject({ state: 'no_regressions', conclusion: 'success', title: 'No regressions in what was tested · 2 new endpoints' });
+        const record = await projection.get(req.runId);
+        expect(record!.probes!.map((p) => [p.probeId, p.entryPoint, p.verdict])).toEqual([
+            ['preview-total', 'POST /orders/preview', 'new_endpoint'],
+            ['preview-empty', 'POST /orders/preview', 'new_endpoint'],
+            ['orders-list', 'unmapped', 'not_reproduced'],
+        ]);
+        expect(record!.findings).toEqual([]);
+        const report = finalOnly(published).find((p) => p.report)!.report!;
+        expect(report.paths.map((p) => [p.verdict, p.base, p.pr])).toEqual([
+            ['new_endpoint', { status: 404 }, { status: 200 }],
+            ['new_endpoint', { status: 404 }, { status: 400 }],
+            ['not_reproduced', { status: 200 }, { status: 200 }],
+        ]);
+    });
+
+    it('a new route that errors in the PR is reported as a finding on the new code', async () => {
+        const { result, projection, req } = await run({ pr: () => http(502, '{"error":"billing unavailable"}') });
+        expect(result).toMatchObject({ state: 'regression', conclusion: 'failure', title: '1 error on a new endpoint · 1 new endpoint' });
+        const record = await projection.get(req.runId);
+        expect(record!.findings!.map((p) => [p.probeId, p.verdict, p.findingKind])).toEqual([['preview-total', 'finding', 'new_endpoint_error']]);
+    });
+
+    it('a 404 on main whose health check does not answer is not read as an absent route', async () => {
+        const { result } = await run({ pr: () => http(200, '{"total":20}') }, () => http(404, 'not found'));
+        expect(result).toMatchObject({ state: 'regression', conclusion: 'failure', title: '2 regressions' });
+    });
+});
+
+describe("a difference the PR's diff spells out (Run 04b98118, kr-nextjs#2)", () => {
+    // The PR rewords the empty-cart message on purpose: main answers "cart is empty", the PR "your
+    // cart is empty", and the diff's changed line says exactly that. A finding, intended, never a regression.
+    const CONTROLLER = [
+        "@Controller('orders')",
+        'export class OrdersController {',
+        '    @Get()',
+        '    list() {',
+        '        return this.orders.list();',
+        '    }',
+        '    @Post()',
+        '    create(@Body() body: CreateOrder) {',
+        '        if (!body.items.length) throw new BadRequestException("your cart is empty");',
+        '        return this.orders.create(body);',
+        '    }',
+        '}',
+    ].join('\n');
+    const PATCH = [
+        '@@ -8,3 +8,3 @@',
+        '     create(@Body() body: CreateOrder) {',
+        '-        if (!body.items.length) throw new BadRequestException("cart is empty");',
+        '+        if (!body.items.length) throw new BadRequestException("your cart is empty");',
+        '         return this.orders.create(body);',
+    ].join('\n');
+    const http = (status: number, body: string) => ({ http: { status, headers: {}, body } });
+    const run = async (pr: () => ReturnType<typeof http>) => {
+        const fake = new FakeEnvironmentRuntime({
+            shop: { ...SCENARIOS.shop, probes: { 'orders-empty-cart': { base: () => http(400, '{"error":"cart is empty"}'), pr } } },
+        });
+        const h = inMemoryRunDeps({ env: fake });
+        const req = shopRunRequest({ diff: [{ path: 'src/orders/orders.controller.ts', patch: PATCH, content: CONTROLLER }] });
+        const plan = JSON.parse(shopTurns[1].text);
+        jest.spyOn(h.deps.agent, 'plan').mockResolvedValue({ probes: [plan.probes[0]], tests: [], claims: [], rejected: [], cannotProve: [], explored: 0 });
+        const classify = jest.spyOn(h.deps.intent, 'classify');
+        await seed(h.projection, req);
+        const result = await runRuntimeRun(req, h.deps);
+        return { ...h, req, result, classify };
+    };
+
+    it('is reported as the intended change with both values, the check neutral, and no classifier turn', async () => {
+        const { result, projection, published, req, classify } = await run(() => http(400, '{"error":"your cart is empty"}'));
+        expect(result).toMatchObject({ state: 'partly_tested', conclusion: 'neutral', title: 'Partly tested · 1 intended change' });
+        const probe = (await projection.get(req.runId))!.probes!.find((p) => p.probeId === 'orders-empty-cart')!;
+        expect(probe).toMatchObject({
+            verdict: 'finding',
+            intent: 'intended',
+            differingFields: ['json.error'],
+            intendedChange: [{ field: 'json.error', base: 'cart is empty', pr: 'your cart is empty', file: 'src/orders/orders.controller.ts', line: 9 }],
+        });
+        expect(probe.reason).toContain('changed as the PR intended');
+        expect(classify).not.toHaveBeenCalled();
+        const comment = finalOnly(published).find((p) => p.kind === 'comment')!;
+        expect(comment.report!.paths[0]).toMatchObject({ intent: 'intended', intendedBy: 'diff' });
+    });
+
+    it('a PR answer the diff does not add stays a regression', async () => {
+        const { result } = await run(() => http(500, '{"error":"internal"}'));
+        expect(result).toMatchObject({ state: 'regression', conclusion: 'failure', title: '1 regression' });
+    });
 });

@@ -29,8 +29,8 @@ func TestUpPlantsTheDecoyFileAndDestroyRemovesIt(t *testing.T) {
 	r.answers["compose config"] = strings.Replace(canonicalFor(dir), `"extra_hosts"`, strings.TrimPrefix(mount, ",")+`,"extra_hosts"`, 1)
 	r.answers["ps"] = "s1\n"
 	r.answers["inspect"] = `[{"Id":"s1","Name":"/kodus-claim-1-workload-a-1","Config":{"Labels":{"kodus.cell":"cell-1"}},"NetworkSettings":{"Networks":{"kodus-claim-1":{"IPAddress":"172.30.0.9"}}}}]`
-	ctx := driver.WithCanaries(context.Background(), []driver.Canary{{Slot: driver.CanarySlotNpmrc, Value: value}, {Slot: driver.CanarySlotConfig, Value: "kdx_live_0123456789abcdef0123456789abcdef"}})
-	if _, err := d.Up(ctx, ref, []byte("services:\n  a:\n    image: x\n"), dir); err != nil {
+	canaries := []driver.Canary{{Slot: driver.CanarySlotNpmrc, Value: value}, {Slot: driver.CanarySlotConfig, Value: "kdx_live_0123456789abcdef0123456789abcdef"}}
+	if _, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte("services:\n  a:\n    image: x\n"), ProjectDir: dir, Canaries: canaries}); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(decoy)
@@ -73,7 +73,7 @@ func TestUpWithoutCanariesPlantsNoDecoy(t *testing.T) {
 	r.answers["compose config"] = canonicalFor(dir)
 	r.answers["ps"] = "s1\n"
 	r.answers["inspect"] = `[{"Id":"s1","Name":"/kodus-claim-1-workload-a-1","Config":{"Labels":{"kodus.cell":"cell-1"}},"NetworkSettings":{"Networks":{"kodus-claim-1":{"IPAddress":"172.30.0.9"}}}}]`
-	if _, err := d.Up(context.Background(), ref, []byte("services:\n  a:\n    image: x\n"), dir); err != nil {
+	if _, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte("services:\n  a:\n    image: x\n"), ProjectDir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(decoy); !errors.Is(err, os.ErrNotExist) {

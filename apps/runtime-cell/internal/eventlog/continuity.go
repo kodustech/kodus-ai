@@ -41,6 +41,8 @@ func FailureReason(err error) Reason {
 		switch e.Reason {
 		case ReasonProducerRestart, ReasonRetentionGap, ReasonCursorInvalid, ReasonUnsupported, ReasonInvalid, ReasonUnavailable:
 			return e.Reason
+		case ReasonOK:
+			// Not a failure reason: reported as unavailable, like an unknown one.
 		}
 	}
 	return ReasonUnavailable

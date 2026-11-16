@@ -147,11 +147,12 @@ func TestBindingFencesReleaseAfterCancellationAndClose(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatal("authority did not start")
 			}
-			if kind == "close" {
+			switch kind {
+			case "close":
 				if err = v.Close(); err != nil {
 					t.Fatal(err)
 				}
-			} else if kind == "cancel" {
+			case "cancel":
 				cancel()
 			}
 			unblock()

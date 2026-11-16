@@ -1,14 +1,14 @@
-import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
+import { consumerWith } from './testing';
 import { Nack } from '@golevelup/nestjs-rabbitmq';
 
 import { RuntimeEventName, runtimeEnvelope } from '@libs/runtime/run';
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
-import { InMemoryEnvironmentSetupStore } from '../setup/environment-setup.service';
-import { RunRequestConsumer } from './run-request.consumer';
-import { RuntimeCommandName } from '@libs/runtime/api/domain/runtime-commands';
+import { RuntimeCommandName } from '@libs/runtime/contracts/runtime-commands';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/testing';
+import { InMemoryCommandStore } from '../../shared/persistence/testing';
+import { InMemoryEnvironmentSetupStore } from '../setup/testing';
 
 function setup() {
     const projection = new InMemoryRunProjectionStore();
@@ -19,14 +19,14 @@ function setup() {
         startSetup: jest.fn(async (c: { key: string }) => `setup:${c.key}`),
     };
     const commands = new InMemoryCommandStore();
-    const consumer = new RunRequestConsumer(engine as any, projection, commands, new InMemoryPrAdmissionStore());
+    const consumer = consumerWith({ engine: engine as any, projection, commands, admissions: new InMemoryPrAdmissionStore() });
     return { projection, engine, consumer, commands };
 }
 
 const asMessage = (payload: unknown, event: string = RuntimeEventName.RunRequested) =>
     runtimeEnvelope(event, { ...(payload as object), workflowType: 'RUNTIME_RUN' }, 'm1') as any;
 
-describe('RunRequestConsumer', () => {
+describe('RuntimeCommandConsumer', () => {
     it('writes the queued projection and starts the workflow with workflowID = runId', async () => {
         const { projection, engine, consumer } = setup();
         const req = shopRunRequest();
@@ -180,7 +180,7 @@ describe('RunRequestConsumer', () => {
             requestedAt: req.requestedAt,
             updatedAt: req.requestedAt,
         });
-        const consumer = new RunRequestConsumer(engine as any, projection, commands, new InMemoryPrAdmissionStore(), undefined, store);
+        const consumer = consumerWith({ engine: engine as any, projection, commands, admissions: new InMemoryPrAdmissionStore(), setups: store });
         const prEditsRecipe = { ...req, diff: [...req.diff, { path: '.kodus/workspace.yaml', patch: '+  expose: [{ service: evil, port: 1, kind: http }]' }] };
         await consumer.handle(asMessage(prEditsRecipe));
         expect(engine.start).toHaveBeenCalledWith(expect.objectContaining({ environment: expect.objectContaining({ expose: recorded }) }));
@@ -214,7 +214,7 @@ describe('RunRequestConsumer', () => {
             state: 'active',
             recipe: { path: '.kodus/workspace.yaml', sha: req.pullRequest.baseSha, state: 'found', origin: 'authored', content: 'version: 1\n', digest: 'sha256:both', files },
         });
-        const consumer = new RunRequestConsumer(engine as any, projection, commands, new InMemoryPrAdmissionStore(), undefined, store);
+        const consumer = consumerWith({ engine: engine as any, projection, commands, admissions: new InMemoryPrAdmissionStore(), setups: store });
         const planted = [{ path: '.kodus/Dockerfile', content: 'FROM evil.example/backdoor:latest\n' }];
         const withPlanted = { ...req, environment: { ...req.environment, recipe: { path: '.kodus/workspace.yaml', content: 'version: 1\n', files: planted } } };
         await consumer.handle(asMessage(withPlanted));
@@ -273,7 +273,7 @@ describe('RunRequestConsumer', () => {
             requestedAt: req.requestedAt,
             updatedAt: req.requestedAt,
         });
-        const consumer = new RunRequestConsumer(engine as any, projection, commands, new InMemoryPrAdmissionStore(), undefined, store);
+        const consumer = consumerWith({ engine: engine as any, projection, commands, admissions: new InMemoryPrAdmissionStore(), setups: store });
         await consumer.handle(asMessage({ ...req, diff: [...req.diff, { path: '.kodus/Dockerfile', patch: '+x' }, { path: '.kodus/compose.yaml', patch: '+x' }] }));
         expect((await projection.get(req.runId))?.recipeChangedInPr).toEqual(['.kodus/Dockerfile']);
         expect((await projection.get(req.runId))?.recipe).toMatchObject({ prChangesRecipe: true });
@@ -289,7 +289,7 @@ describe('RunRequestConsumer', () => {
     it('an approved egress host pushes the environment allowlist to the hub', async () => {
         const { projection, engine, commands } = setup();
         const push = jest.fn(async () => undefined);
-        const consumer = new RunRequestConsumer(engine as any, projection, commands, new InMemoryPrAdmissionStore(), { push });
+        const consumer = consumerWith({ engine: engine as any, projection, commands, admissions: new InMemoryPrAdmissionStore(), egress: { push } });
         const approve = (host: string) =>
             consumer.handle(
                 asMessage(

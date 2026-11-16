@@ -1,4 +1,4 @@
-import { evidenceKey, verifyEvidenceSignature } from '@libs/runtime/api/domain/evidence';
+import { evidenceKey, verifyEvidenceSignature } from '@libs/runtime/contracts/evidence';
 import { FakeEnvironmentRuntime, type ProbeOutcome } from '@libs/runtime/environment';
 import { type Probe, ProbeSchema } from '@libs/runtime/probe';
 import type { EvidenceRequest } from '@libs/runtime/protocol';
@@ -7,12 +7,12 @@ import { checkOf, renderReportComment } from '@libs/runtime-publish/domain/rende
 import { VISUAL_CHANGE_ONLY_REASON } from '@libs/runtime/contracts/enums';
 
 import { SCENARIOS } from '../../fake-cell/scenarios';
-import { InMemoryEvidenceStore } from '../../shared/evidence/file-evidence-store';
 import { HmacCanaryVault } from '../canary/canary';
 import type { StepRunner } from './ports';
 import { BROWSER_DEFAULT_CLOCK, replayProbe } from './replay';
 import { buildReport } from './report';
 import { checkUploadedRefs } from './run-evidence';
+import { InMemoryEvidenceStore } from '../../shared/evidence/testing';
 
 // Browser probes in replay (ADR-071): the same rounds as an HTTP probe, the
 // browser capture with a grant per runner artifact, main's first round as

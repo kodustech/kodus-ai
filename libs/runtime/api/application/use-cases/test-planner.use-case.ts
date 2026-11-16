@@ -1,13 +1,9 @@
 import {
     BadGatewayException,
     BadRequestException,
-    ConflictException,
     ForbiddenException,
-    HttpException,
-    HttpStatus,
     Inject,
     Injectable,
-    NotFoundException,
     Optional,
     ServiceUnavailableException,
     UnauthorizedException,
@@ -15,11 +11,9 @@ import {
 
 import { createLogger } from '@libs/core/log/logger';
 import { type RunPlanResponse, RunPlanRequestSchema } from '@libs/runtime/contracts/run-plan';
-import { isTerminal } from '@libs/runtime/run';
 
-import { decideBudget, startOfUtcDay, tightestBudgetScope, withOrgBudget } from '../../domain/budget';
+import { decideBudget, tightestBudgetScope } from '../../domain/budget';
 import {
-    LlmBudgetBusyError,
     RUNTIME_AGENT_RUNNER_FACTORY,
     RUNTIME_API_CONFIG,
     RUNTIME_CLOCK,
@@ -36,9 +30,11 @@ import {
     type RuntimeSettingsStore,
 } from '../../domain/ports';
 import { InvalidRunTokenError, isSetupToken, verifyRunToken } from '../../domain/run-token';
+import { withFailureContext } from '../failure-context';
 import { GitRepoReader } from '../recipe-author/git-repo-reader';
-import { planWithoutModel } from '../test-planner/plan-without-model';
-import { planTests, TEST_PLANNER_LIMITS } from '../test-planner/test-planner.agent';
+import { type BudgetRefusal, liveRunFor, llmBudgetExceeded, orgLlmBudget, reservationFor, type ReservationRequest, withReservation } from '../llm-run-budget';
+import { planWithoutModel } from '@libs/runtime/planner/plan-without-model';
+import { planTests, TEST_PLANNER_LIMITS } from '@libs/runtime/planner/test-planner.agent';
 
 /** The task the Run's budget counts the planner's tokens under (the worker's 2-turn plan used the same). */
 export const TEST_PLANNER_TASK = 'runtime.plan';
@@ -52,15 +48,15 @@ const MAX_BODY_CHARS = 200_000;
 const counted = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? Math.max(0, Math.floor(n)) : undefined);
 
 /**
- * POST /internal/runtime/plan (ADR-069). The worker's `agent:plan` step asks
+ * POST /internal/runtime/plan. The worker's `agent:plan` step asks
  * the product to plan the Run's probes, with the Run token. The agent runs
  * here, on the org's LLM_TASK.runtime slot, and the key never reaches the
- * worker or the cell (ADR-057). It reads the base commit the Run projection
+ * worker or the cell. It reads the base commit the Run projection
  * records, through the Git integration, and the changed files at the head;
  * the commands it wants on the base machine go back to the worker, which runs
  * them as exec steps and calls again. Each round's tokens are reserved under
  * the Run's budget scopes before it starts and settled with what the model
- * reported (S-47).
+ * reported.
  */
 @Injectable()
 export class RuntimeTestPlannerUseCase {
@@ -103,11 +99,7 @@ export class RuntimeTestPlannerUseCase {
         if (!parsed.success) throw new BadRequestException(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
         const req = parsed.data;
 
-        if (req.runId !== claims.runId) throw new ForbiddenException('The run token is for another Run');
-        const run = await this.runs.get(req.runId, { organizationId: claims.organizationId });
-        if (!run || run.organizationId !== claims.organizationId) throw new NotFoundException('Run not found');
-        if (run.attempt !== claims.attempt) throw new ForbiddenException('The run token is for another attempt');
-        if (isTerminal(run.state)) throw new ConflictException('The Run has finished');
+        const run = await liveRunFor(this.runs, claims, req.runId);
         if (run.repositoryId !== claims.repositoryId) throw new ForbiddenException('The run token is for another repository');
 
         // Nothing the diff changed has behavior to probe (only the recipe, lockfiles or docs): no
@@ -120,81 +112,61 @@ export class RuntimeTestPlannerUseCase {
         const planned = planWithoutModel(req);
         if (planned) return { status: 'planned', plan: planned, rejected: [], usage: { inputTokens: 0, outputTokens: 0 }, steps: 0 };
 
-        // The team the product signed into the token, never the Runtime's projection (ADR-052).
+        // The team the product signed into the token, never the Runtime's projection.
         const orgTeam = { organizationId: claims.organizationId, teamId: claims.teamId };
-        const agent = await this.runners.forOrganization(orgTeam);
+        const agent = await this.runners.forOrganization(orgTeam, { runId: run.runId, task: TEST_PLANNER_TASK, repositoryId: run.repositoryId, environmentId: run.environmentId, prNumber: run.prNumber });
         if (!agent) throw new ServiceUnavailableException('No LLM is configured for the Kody Runtime of this organization');
 
-        // S-47: reserve the round's tokens up front under the Run's scopes; the round never spends past it.
-        const now = this.now();
-        const org = await this.settings?.getOrganization(claims.organizationId);
-        const limits = withOrgBudget(this.config.llmBudget, org?.tokenBudgetPerDay);
-        let refused: { exhausted: string; spent: number; limit: number } | undefined;
-        const reservation = await this.usage
-            .reserve({
-                usage: { runId: run.runId, organizationId: run.organizationId, repositoryId: run.repositoryId, prNumber: run.prNumber, task: TEST_PLANNER_TASK, at: now },
-                orgDayStart: startOfUtcDay(now),
-                decide: (spend) => {
-                    const d = decideBudget(spend, limits, claims.maxTokens);
-                    if (d.allowed === false) {
-                        refused = d;
-                        return null;
-                    }
-                    const tokens = Math.min(TEST_PLANNER_LIMITS.maxTokens, d.remaining);
-                    if (tokens < TEST_PLANNER_MIN_TOKENS) {
-                        refused = tightestBudgetScope(spend, limits, claims.maxTokens);
-                        return null;
-                    }
-                    return tokens;
-                },
-            })
-            .catch((e) => {
-                if (e instanceof LlmBudgetBusyError) throw new ServiceUnavailableException({ code: 'llm_budget_busy', message: e.message });
-                throw e;
-            });
-        if (!reservation) {
-            const r = refused ?? { exhausted: 'run', spent: 0, limit: 0 };
-            this.logger.warn({
-                message: 'Runtime test planner: LLM budget exhausted',
-                context: RuntimeTestPlannerUseCase.name,
-                metadata: { runId: run.runId, organizationId: run.organizationId, scope: r.exhausted, spent: r.spent, limit: r.limit },
-            });
-            throw new HttpException(
-                { statusCode: HttpStatus.TOO_MANY_REQUESTS, code: 'llm_budget_exceeded', scope: r.exhausted, spent: r.spent, limit: r.limit },
-                HttpStatus.TOO_MANY_REQUESTS,
-            );
-        }
-
+        // Reserve the round's tokens up front under the Run's scopes; the round never spends past it.
+        const limits = await orgLlmBudget(this.config, this.settings, claims.organizationId);
+        let refused: BudgetRefusal | undefined;
+        const decide = (spend: Parameters<ReservationRequest['decide']>[0]) => {
+            const d = decideBudget(spend, limits, claims.maxTokens);
+            if (d.allowed === false) {
+                refused = d;
+                return null;
+            }
+            const tokens = Math.min(TEST_PLANNER_LIMITS.maxTokens, d.remaining);
+            if (tokens < TEST_PLANNER_MIN_TOKENS) {
+                refused = tightestBudgetScope(spend, limits, claims.maxTokens);
+                return null;
+            }
+            return tokens;
+        };
         const target = { ...orgTeam, repositoryId: run.repositoryId, repositoryName: run.repositoryName };
-        const base = new GitRepoReader(this.git, { ...target, sha: run.baseSha });
-        const head = new GitRepoReader(this.git, { ...target, sha: run.headSha });
-        const timeout = AbortSignal.timeout(TEST_PLANNER_TIMEOUT_MS);
-        let result: Awaited<ReturnType<typeof planTests>>;
-        try {
-            result = await planTests(
-                { runner: agent.runner, base, head },
-                {
-                    runId: run.runId,
-                    repositoryName: run.repositoryName,
-                    baseSha: run.baseSha,
-                    request: req,
-                    maxTokens: reservation.tokens,
-                    signal: input.signal ? AbortSignal.any([input.signal, timeout]) : timeout,
-                },
-            );
-        } catch (e) {
-            // What the round spent before it failed is unknown: the reservation stays counted (S-47).
-            await this.usage
-                .settle(reservation.reservationId, { inputTokens: reservation.tokens, outputTokens: 0, ...(agent.model ? { model: agent.model } : {}) })
-                .catch(() => undefined);
-            this.logger.error({
-                message: 'Runtime test planner round failed',
-                context: RuntimeTestPlannerUseCase.name,
-                error: e instanceof Error ? e : undefined,
-                metadata: { runId: run.runId, organizationId: run.organizationId, round: req.round },
-            });
-            throw new BadGatewayException(TEST_PLANNER_UNAVAILABLE);
+        const round = await withReservation(
+            this.usage,
+            reservationFor({ ...run, task: TEST_PLANNER_TASK }, this.now(), decide),
+            async (reservation) => {
+                const base = new GitRepoReader(this.git, { ...target, sha: run.baseSha });
+                const head = new GitRepoReader(this.git, { ...target, sha: run.headSha });
+                const timeout = AbortSignal.timeout(TEST_PLANNER_TIMEOUT_MS);
+                try {
+                    return await planTests(
+                        { runner: agent.runner, base, head },
+                        {
+                            runId: run.runId,
+                            repositoryName: run.repositoryName,
+                            baseSha: run.baseSha,
+                            request: req,
+                            maxTokens: reservation.tokens,
+                            signal: input.signal ? AbortSignal.any([input.signal, timeout]) : timeout,
+                        },
+                    );
+                } catch (e) {
+                    // Logged once, by the API's exception filter: the 502 carries the ids and the round's error as its cause.
+                    throw withFailureContext(new BadGatewayException(TEST_PLANNER_UNAVAILABLE), { runId: run.runId, organizationId: run.organizationId, round: req.round }, e);
+                }
+            },
+            // What a failed round spent before it failed is unknown: the reservation stays counted.
+            { onFailure: 'count_reserved', busyAsUnavailable: true, model: agent.model },
+        );
+        if (!round.reserved) {
+            const r = refused ?? { exhausted: 'run', spent: 0, limit: 0 };
+            // The scope, spent and limit ride in the 429's body; the API's exception filter logs it with the ids.
+            throw withFailureContext(llmBudgetExceeded(r), { runId: run.runId, organizationId: run.organizationId });
         }
+        const { reservation, value: result } = round;
 
         const inputTokens = counted(result.usage.inputTokens);
         const outputTokens = counted(result.usage.outputTokens);

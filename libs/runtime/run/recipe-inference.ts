@@ -5,6 +5,7 @@ import type { ExposeKind } from '@libs/runtime/contracts/enums';
 import type { RecipeInferenceGap } from '@libs/runtime/contracts/runtime-commands';
 
 import { parseRecipeSummary } from './recipe';
+import { UNTRUSTED_YAML } from '@libs/runtime/protocol/yaml-limits';
 
 // The first, deterministic step of the learning loop (docs "Ciclo de aprender":
 // infer, try, prove, reproduce). With no recipe on the default branch, the
@@ -269,7 +270,7 @@ function mountsRepository(volumes: unknown): boolean {
 function fromCompose(file: InferenceComposeFile, text: string, dockerfile: DockerfileFacts | undefined): RecipeInference {
     let doc: unknown;
     try {
-        doc = yaml.load(text, { schema: COMPOSE_SCHEMA });
+        doc = yaml.load(text, { ...UNTRUSTED_YAML, schema: COMPOSE_SCHEMA });
     } catch {
         return notInferred('compose_unreadable', `${file} is not YAML Kodus can read, so no recipe was inferred from it.`);
     }

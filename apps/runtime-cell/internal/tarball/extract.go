@@ -65,7 +65,7 @@ func Extract(r io.Reader, dest string, lim Limits) (st Stats, err error) {
 	if err != nil {
 		return st, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	defer func() {
 		if err != nil {
 			emptyDir(dest)
@@ -80,7 +80,7 @@ func Extract(r io.Reader, dest string, lim Limits) (st Stats, err error) {
 	var links []string
 	for {
 		h, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -219,7 +219,8 @@ func confinedSymlink(root *os.Root, rel string) string {
 			}
 			cur = cur[:len(cur)-1]
 			continue
-		case ".git":
+		}
+		if strings.EqualFold(c, ".git") {
 			return "symlink into .git"
 		}
 		next := append(append([]string{}, cur...), c)
@@ -268,7 +269,9 @@ func relativeName(name string, prefix *string) (string, error) {
 		if p == ".." {
 			return "", &RefusedError{name, "path outside the root"}
 		}
-		if p == ".git" {
+		// Case-insensitive: on a case-insensitive filesystem (macOS, a
+		// mounted volume) .GIT is the same directory as .git.
+		if strings.EqualFold(p, ".git") {
 			return "", &RefusedError{name, ".git entry (hooks, config)"}
 		}
 	}

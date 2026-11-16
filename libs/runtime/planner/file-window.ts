@@ -1,6 +1,4 @@
-import { redactPatterns } from '@libs/runtime/redaction';
-
-import { isSecretFile, modelView } from './repo-reader';
+import { isSecretFile, modelView, redactForModel } from './repo-reader';
 
 // read_file of the test planner (ADR-069) answers with a window of numbered
 // lines, not the whole file: every step re-sends the conversation, so a 64 KB
@@ -78,7 +76,7 @@ export function windowedView(
     seen: Range[],
 ): WindowedRead {
     if (isSecretFile(path)) return { output: modelView(path, text), shown: [] };
-    const lines = redactPatterns(text).text.split('\n');
+    const lines = redactForModel(path, text).split('\n');
     if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
     const total = lines.length;
     const windows = windowsOf(total, ask, focus);

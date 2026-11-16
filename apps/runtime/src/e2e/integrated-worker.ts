@@ -7,6 +7,7 @@ import { createServer as createTlsServer } from 'https';
 import { readFileSync } from 'fs';
 import { loadWorkerConfig } from '../shared/config';
 import { RuntimeWorkerModule } from '../worker/runtime-worker.module';
+import { requestListener } from '../shared/request-listener';
 
 async function main() {
     const m = JSON.parse(
@@ -23,7 +24,7 @@ async function main() {
     );
     app.enableShutdownHooks();
     await app.init();
-    const listener = createServer(async (req, res) => {
+    const listener = createServer(requestListener(async (req, res) => {
         if (req.headers.authorization !== `Bearer ${m.gatewayToken}`) {
             res.writeHead(403).end();
             return;
@@ -61,7 +62,7 @@ async function main() {
         } catch {
             res.writeHead(500).end();
         }
-    });
+    }));
     await new Promise<void>((r, j) => {
         listener.once('error', j);
         listener.listen(m.ports.workerControl, '127.0.0.1', r);

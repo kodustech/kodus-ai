@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver/drivertest"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/policy"
 )
@@ -57,7 +57,7 @@ func TestABakedImageBootsALaterClaimWithoutBuilding(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = d.ReleaseClaim(context.Background(), n) })
+		t.Cleanup(func() { _ = d.ReleaseClaim(context.WithoutCancel(ctx), n) })
 		spec := drivertest.BaseSpec(cell, id, n)
 		spec.OrgID, spec.EnvironmentID, spec.ExpiresAt, spec.HardExpiresAt = org, env, time.Now().Add(10*time.Minute), time.Now().Add(time.Hour)
 		if len(image) > 0 {
@@ -67,7 +67,7 @@ func TestABakedImageBootsALaterClaimWithoutBuilding(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = d.Destroy(context.Background(), ref) })
+		t.Cleanup(func() { _ = d.Destroy(context.WithoutCancel(ctx), ref) })
 		return ref, n
 	}
 
@@ -80,9 +80,11 @@ func TestABakedImageBootsALaterClaimWithoutBuilding(t *testing.T) {
 	}
 	allowBuild := func(t *testing.T, id string, ref driver.MachineRef, n driver.ClaimNetwork) {
 		t.Helper()
-		if err := e.push.Push(ctx, policy.ClaimPolicy{ClaimID: id, OrgID: org, Phase: policy.PhaseBuild,
+		if err := e.push.Push(ctx, policy.ClaimPolicy{
+			ClaimID: id, OrgID: org, Phase: policy.PhaseBuild,
 			Sources: append([]string{ref.PrivateAddress}, n.Sources...), Allow: buildHosts,
-			SteerTo: n.EgressAddress, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now()}); err != nil {
+			SteerTo: n.EgressAddress, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now(),
+		}); err != nil {
 			t.Fatalf("push policy: %v", err)
 		}
 	}
@@ -95,8 +97,10 @@ func TestABakedImageBootsALaterClaimWithoutBuilding(t *testing.T) {
 		return string(out)
 	}
 
-	d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{CellID: cell, HolderImage: "alpine:3.20",
-		WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name, BuilderImage: builderImage})
+	d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{
+		CellID: cell, HolderImage: "alpine:3.20",
+		WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name, BuilderImage: builderImage,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +109,7 @@ func TestABakedImageBootsALaterClaimWithoutBuilding(t *testing.T) {
 	setup, n := claim(t, d, "claim-setup")
 	allowBuild(t, "claim-setup", setup, n)
 	start := time.Now()
-	if _, err := d.Up(ctx, setup, compose, project); err != nil {
+	if _, err := d.Up(ctx, driver.UpRequest{Ref: setup, Compose: compose, ProjectDir: project}); err != nil {
 		t.Fatalf("setup up: %v\negress: %s", err, docker(t, "logs", e.name))
 	}
 	builtIn := time.Since(start)
@@ -113,7 +117,7 @@ func TestABakedImageBootsALaterClaimWithoutBuilding(t *testing.T) {
 		t.Fatalf("setup started %d builders, want 1", got)
 	}
 	// image.bake: the pin, the worker's release, then the bake.
-	if err := d.PinBakeSource(setup); err != nil {
+	if err := d.PinBakeSource(t.Context(), setup); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.Destroy(ctx, setup); err != nil {
@@ -130,7 +134,7 @@ func TestABakedImageBootsALaterClaimWithoutBuilding(t *testing.T) {
 	// A base-side claim at the same input: no policy, no builder, the bake.
 	base, _ := claim(t, d, "claim-base", img.ImageID)
 	start = time.Now()
-	if _, err := d.Up(ctx, base, compose, project); err != nil {
+	if _, err := d.Up(ctx, driver.UpRequest{Ref: base, Compose: compose, ProjectDir: project}); err != nil {
 		t.Fatalf("a claim at the baked input did not boot from the bake: %v", err)
 	}
 	fromBake := time.Since(start)
@@ -149,7 +153,7 @@ func TestABakedImageBootsALaterClaimWithoutBuilding(t *testing.T) {
 	pr, prNet := claim(t, d, "claim-pr")
 	allowBuild(t, "claim-pr", pr, prNet)
 	start = time.Now()
-	if _, err := d.Up(ctx, pr, compose, project); err != nil {
+	if _, err := d.Up(ctx, driver.UpRequest{Ref: pr, Compose: compose, ProjectDir: project}); err != nil {
 		t.Fatalf("pr up: %v", err)
 	}
 	if got := builders(t, start, time.Now()); got != 1 {

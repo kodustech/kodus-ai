@@ -3,7 +3,8 @@ import { LEASE_TTL_MINUTES } from '@libs/runtime/environment';
 import type { MessageBody } from '@libs/runtime/protocol';
 
 import type { CellConnectionRegistry } from '../gateway/cell-connections';
-import type { ClaimRow, ClaimState, HubStore } from '../hub-store';
+import type { ClaimState } from '@libs/runtime/contracts/enums';
+import type { ClaimRow, HubStore } from '../hub-store';
 import { CellUnavailableError, ClaimRef, HubLog, HubMetrics } from '../hub-types';
 
 // claim.renew on the hub (§1b): the owner of a live claim (a Run still

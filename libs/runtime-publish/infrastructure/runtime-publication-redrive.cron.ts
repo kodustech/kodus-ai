@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { RUNTIME_CRON_SCHEDULES } from '@libs/runtime/api/infrastructure/runtime-cron-schedules';
 
 import { createLogger } from '@libs/core/log/logger';
 
@@ -8,8 +9,6 @@ import { RedriveRuntimePublicationsUseCase } from '../application/redrive-runtim
 // Every minute: a lost final publication is re-driven within about
 // REDRIVE_AFTER_MS plus a minute. Each replica sweeps; rows are reserved one
 // by one, so two replicas never drive the same row.
-const RUNTIME_CRON_PUBLICATION_REDRIVE =
-    process.env.RUNTIME_CRON_PUBLICATION_REDRIVE || '* * * * *';
 
 /** Runs the redrive sweep of the Runtime publications in the code-review worker. */
 @Injectable()
@@ -19,7 +18,7 @@ export class RuntimePublicationRedriveCron {
 
     constructor(private readonly redrive: RedriveRuntimePublicationsUseCase) {}
 
-    @Cron(RUNTIME_CRON_PUBLICATION_REDRIVE, { name: 'Runtime publication redrive' })
+    @Cron(RUNTIME_CRON_SCHEDULES.publicationRedrive, { name: 'Runtime publication redrive' })
     async handleCron(): Promise<void> {
         // A slow sweep (a platform answering slowly) never overlaps the next tick.
         if (this.running) return;

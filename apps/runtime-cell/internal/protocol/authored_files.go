@@ -10,21 +10,18 @@ import (
 // an authored recipe (AUTHORED_FILES_LIMITS and authoredFilesProblem in
 // libs/runtime/contracts/authored-files.ts). The JSON Schema carries the
 // path pattern and the per-file length; the byte sums, the duplicates and
-// the recipe paths are zod refinements, mirrored here.
-const (
-	MaxAuthoredFiles        = 4
-	MaxAuthoredFileBytes    = 16 * 1024
-	MaxAuthoredFilesBytes   = 48 * 1024
-	authoredFilesNeedRecipe = "files: authored files come only with a recipe"
-)
+// the recipe paths are zod refinements, mirrored here. The bounds
+// (MaxAuthoredFiles, MaxAuthoredFileBytes, MaxAuthoredFilesBytes) and the
+// path pattern are generated (constants_gen.go).
+const authoredFilesNeedRecipe = "files: authored files come only with a recipe"
 
 // AuthoredFilePath is a file directly under .kodus/ whose name starts with a
 // letter or a digit: never "." or "..", never a nested path.
-var AuthoredFilePath = regexp.MustCompile(`^\.kodus/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+var AuthoredFilePath = regexp.MustCompile(AuthoredFilePathPattern)
 
 // recipeFilePaths are RECIPE_FILE_PATHS: the cell boots its recipe from the
 // claim, so no authored file may stand in one of these paths.
-var recipeFilePaths = map[string]bool{".kodus/workspace.runtime.yaml": true, ".kodus/workspace.yaml": true}
+var recipeFilePaths = setOf(RecipeFilePaths)
 
 // ErrAuthoredFiles is every refusal of CheckAuthoredFiles.
 var ErrAuthoredFiles = errors.New("authored files refused")

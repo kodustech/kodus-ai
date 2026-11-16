@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -11,8 +12,10 @@ import (
 )
 
 func opts(dir string) Options {
-	return Options{ProjectDir: dir, Project: "kodus-claim-1-workload", Runtime: "runsc", Network: "kodus-claim-1", MemLimit: "4g", CPUs: "2",
-		Labels: map[string]string{"kodus.claim": "claim-1", "kodus.hard-expires": "2026-10-29T13:00:00Z"}}
+	return Options{
+		ProjectDir: dir, Project: "kodus-claim-1-workload", Runtime: "runsc", Network: "kodus-claim-1", MemLimit: "4g", CPUs: "2",
+		Labels: map[string]string{"kodus.claim": "claim-1", "kodus.hard-expires": "2026-10-29T13:00:00Z"},
+	}
 }
 
 const good = `
@@ -78,8 +81,8 @@ func TestApplyGoodCompose(t *testing.T) {
 	}
 	api := doc["services"].(map[string]any)["api"].(map[string]any)
 	bind := api["volumes"].([]any)[0].(map[string]any)
-	real, _ := filepath.EvalSymlinks(filepath.Join(dir, "src"))
-	if bind["type"] != "bind" || bind["read_only"] != true || bind["source"] != real {
+	realDir, _ := filepath.EvalSymlinks(filepath.Join(dir, "src"))
+	if bind["type"] != "bind" || bind["read_only"] != true || bind["source"] != realDir {
 		t.Fatalf("bind not read-only and resolved: %v", bind)
 	}
 	if _, ok := doc["x-common"]; ok {
@@ -188,6 +191,86 @@ func TestS10RefusesHostAccess(t *testing.T) {
 	refused(t, "services:\n  app:\n    image: alpine\n    environment: !override {A: b}\n", dir)
 }
 
+// compose interpolates a single '$' in environment, command, entrypoint and
+// healthcheck from its own environment: $DOCKER_HOST there used to hand the
+// container the cell's daemon address. A name that environment holds is
+// refused; one it does not resolves to its default, as compose says.
+func TestShellKeysRefuseTheCellsEnvironment(t *testing.T) {
+	dir := checkout(t)
+	o := opts(dir)
+	o.HostEnv = []string{"DOCKER_HOST", "OPERATOR_TOKEN"}
+	for name, line := range map[string]string{
+		"environment":     `environment: {URL: "${DOCKER_HOST}"}`,
+		"environment key": `environment: ["A_${OPERATOR_TOKEN}=1"]`,
+		"command":         `command: echo $PATH`,
+		"entrypoint":      `entrypoint: ["sh", "-c", "cat $HOME/x"]`,
+		"healthcheck":     `healthcheck: {test: ["CMD-SHELL", "curl ${XDG_RUNTIME_DIR}"]}`,
+		"nested default":  `environment: {A: "${UNSET:-${OPERATOR_TOKEN}}"}`,
+		"after escape":    `command: echo $$$PATH`,
+		"compose's own":   `environment: {P: "${COMPOSE_PROJECT_NAME}"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			var re *RefusedError
+			if _, err := Apply([]byte("services:\n  app:\n    image: alpine\n    "+line+"\n"), o); !errors.As(err, &re) {
+				t.Fatalf("taken: %v", err)
+			}
+		})
+	}
+	ok := "services:\n  app:\n    image: alpine\n    environment: {PORT: \"${PORT:-3000}\", H: \"$${HOME}\"}\n    command: sh -c 'echo $$PATH'\n"
+	if _, err := Apply([]byte(ok), o); err != nil {
+		t.Fatalf("a default and the container's own variables: %v", err)
+	}
+}
+
+// Every service drops ALL and gets back only ServiceCaps, less what its own
+// cap_drop dropped; it used to keep Docker's whole default set.
+func TestServicesGetOnlyTheServiceCaps(t *testing.T) {
+	dir := checkout(t)
+	out, err := Apply([]byte("services:\n  a:\n    image: x\n  b:\n    image: x\n    cap_drop: [cap_chown, SETUID]\n  c:\n    image: x\n    cap_drop: [all]\n"), opts(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Services map[string]struct {
+			CapDrop []string `yaml:"cap_drop"`
+			CapAdd  []string `yaml:"cap_add"`
+		}
+	}
+	if err := yaml.Unmarshal(out, &doc); err != nil {
+		t.Fatal(err)
+	}
+	a, b, c := doc.Services["a"], doc.Services["b"], doc.Services["c"]
+	if len(a.CapDrop) != 1 || a.CapDrop[0] != "ALL" || strings.Join(a.CapAdd, ",") != strings.Join(ServiceCaps, ",") {
+		t.Fatalf("a: %+v", a)
+	}
+	if slices.Contains(b.CapAdd, "CHOWN") || slices.Contains(b.CapAdd, "SETUID") || len(b.CapAdd) != len(ServiceCaps)-2 {
+		t.Fatalf("b kept what it dropped: %+v", b)
+	}
+	if len(c.CapAdd) != 0 {
+		t.Fatalf("c dropped all and got %v", c.CapAdd)
+	}
+	if slices.Contains(ServiceCaps, "NET_RAW") || slices.Contains(ServiceCaps, "SYS_ADMIN") {
+		t.Fatal("ServiceCaps grew")
+	}
+	refused(t, "services:\n  app:\n    image: alpine\n    cap_drop: [{x: 1}]\n", dir)
+}
+
+// Builds used to read the file with its own YAML reader, skipping the tag
+// check Apply makes: it now refuses what Apply refuses, before any build.
+func TestBuildsRefusesTheTagsApplyRefuses(t *testing.T) {
+	dir := checkout(t)
+	if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte("FROM scratch\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var re *RefusedError
+	if _, err := Builds([]byte("services:\n  app:\n    build: !override {context: .}\n"), opts(dir)); !errors.As(err, &re) {
+		t.Fatalf("a custom tag in a build section: %v", err)
+	}
+	if b, err := Builds([]byte("services:\n  app:\n    build: .\n"), opts(dir)); err != nil || len(b) != 1 {
+		t.Fatalf("a plain build: %v %v", b, err)
+	}
+}
+
 // Escaped dollars and shell variables meant for the container stay.
 func TestInterpolationAllowedOnlyWhereTheContainerReadsIt(t *testing.T) {
 	dir := checkout(t)
@@ -206,7 +289,10 @@ func TestRefusalListsEverything(t *testing.T) {
 }
 
 func canonical(binds string) string {
+	// As compose prints them: mem_limit in bytes, cpus a number.
 	return `{"name":"kodus-claim-1-workload","services":{"api":{"image":"x","runtime":"runsc","security_opt":["no-new-privileges:true"],
+"cap_drop":["ALL"],"cap_add":["CHOWN","SETUID","SETGID"],"pids_limit":2048,"mem_limit":"4294967296","cpus":2,
+"logging":{"driver":"local","options":{"max-size":"10m","max-file":"3"}},
 "labels":{"kodus.claim":"claim-1","kodus.hard-expires":"2026-10-29T13:00:00Z"},"networks":{"kodus-claim":null},"volumes":[` + binds + `]}},
 "networks":{"kodus-claim":{"name":"kodus-claim-1","external":true}},"volumes":{"data":{"name":"kodus-claim-1-workload_data"}}}`
 }
@@ -229,6 +315,17 @@ func TestVerifyCanonical(t *testing.T) {
 		"build":          strings.Replace(ok, `"image":"x"`, `"image":"x","build":{"context":"."}`, 1),
 		"extra network":  strings.Replace(ok, `"kodus-claim":null`, `"kodus-claim":null,"default":null`, 1),
 		"no label":       strings.Replace(ok, `"kodus.claim":"claim-1",`, ``, 1),
+		// The limits Apply forces used to go unchecked here: whatever
+		// compose made of them ran.
+		"no pids limit":     strings.Replace(ok, `"pids_limit":2048,`, ``, 1),
+		"higher pids limit": strings.Replace(ok, `"pids_limit":2048`, `"pids_limit":-1`, 1),
+		"no mem limit":      strings.Replace(ok, `"mem_limit":"4294967296",`, ``, 1),
+		"more memory":       strings.Replace(ok, `"mem_limit":"4294967296"`, `"mem_limit":"536870912000"`, 1),
+		"no cpus":           strings.Replace(ok, `"cpus":2,`, ``, 1),
+		"more cpus":         strings.Replace(ok, `"cpus":2`, `"cpus":64`, 1),
+		"deploy limits":     strings.Replace(ok, `"image":"x"`, `"image":"x","deploy":{"resources":{"limits":{"memory":"536870912000"}}}`, 1),
+		"caps kept":         strings.Replace(ok, `"cap_drop":["ALL"],`, ``, 1),
+		"cap added":         strings.Replace(ok, `"CHOWN","SETUID"`, `"CHOWN","SYS_ADMIN"`, 1),
 	}
 	for name, cfg := range bad {
 		var re *RefusedError

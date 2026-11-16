@@ -5,8 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observerauth"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +13,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observerauth"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 )
 
 func putConfig(h http.Handler, body string) *httptest.ResponseRecorder {
@@ -160,7 +161,7 @@ func TestReconfigurationWaitsForActiveProbeBeforeClosingPool(t *testing.T) {
 		case <-r.Context().Done():
 			return nil, r.Context().Err()
 		}
-		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader("ready"))}, nil
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader("ready"))}, nil
 	})}}, OpenManagedSQL: func(tg Target, _ observerauth.Credential) (*sql.DB, error) {
 		db, err := openFake(tg)
 		pool = db

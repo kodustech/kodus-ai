@@ -48,7 +48,7 @@ func TestAlertSourceHealthMetricsAndClosedErrors(t *testing.T) {
 	if !strings.Contains(before.String(), "cell_alert_source_available 0\n") {
 		t.Fatal("unverified source has no explicit zero health")
 	}
-	h.a.alertSourceFailed(context.Background(), errors.New("PRIVATE_CONTROL_ERROR"))
+	h.a.alertSourceFailed(errors.New("PRIVATE_CONTROL_ERROR"))
 	if strings.Contains(h.logs.String(), "PRIVATE_CONTROL_ERROR") {
 		t.Fatal("upstream error leaked to source log")
 	}
@@ -60,7 +60,7 @@ func TestAlertSourceHealthMetricsAndClosedErrors(t *testing.T) {
 	if !ok {
 		t.Fatal("healthy snapshot unavailable")
 	}
-	h.a.alertSourceFailed(context.Background(), &eventlog.FeedError{Reason: eventlog.ReasonRetentionGap})
+	h.a.alertSourceFailed(&eventlog.FeedError{Reason: eventlog.ReasonRetentionGap})
 	h.a.alertSourceReady()
 	if h.a.alertSourceAvailable() || h.a.alertAdmissionCurrent(stale) {
 		t.Fatal("a lost history reopened or admitted an old generation")
@@ -104,7 +104,7 @@ func TestAlertBacklogIsAppliedBeforeAdmissionOpens(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.a.conn = checkingSourceSender{h.a, t, h.conn}
-	h.a.watchAlerts(ctx)
+	h.a.watchAlerts(ctx, 0)
 	if c.Compromised() != "bait_exfiltration" || !h.a.alertSourceAvailable() {
 		t.Fatal("backlog proof not applied before healthy admission")
 	}
@@ -132,7 +132,7 @@ func TestAlertSourceLossRacesAcquireWithoutLeavingNewWork(t *testing.T) {
 	go func() {
 		defer callers.Done()
 		<-start
-		h.a.alertSourceFailed(context.Background(), &eventlog.FeedError{Reason: eventlog.ReasonProducerRestart})
+		h.a.alertSourceFailed(&eventlog.FeedError{Reason: eventlog.ReasonProducerRestart})
 	}()
 	close(start)
 	callers.Wait()
@@ -187,7 +187,7 @@ func TestAlertHistoryLossCancelsClaimsWithoutSecurityIncident(t *testing.T) {
 				}
 				h.a.Wait()
 			}()
-			h.a.watchAlerts(ctx)
+			h.a.watchAlerts(ctx, 0)
 			if c, ok := h.a.claims.Get("claim-1"); ok && (c.State() != claims.Released || c.Compromised() != "") {
 				t.Fatalf("loss left claim active or invented compromise: %s %s", c.State(), c.Compromised())
 			}

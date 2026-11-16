@@ -13,6 +13,7 @@ export const RecipeValidationNameSchema = z
     .refine(
         (v) =>
             v.trim() !== '' &&
+            // eslint-disable-next-line no-control-regex -- matching a control character is the check itself
             !/[\u0000-\u001f\u007f]/.test(v) &&
             new TextEncoder().encode(v).byteLength <=
                 RECIPE_VALIDATION_LIMITS.name,

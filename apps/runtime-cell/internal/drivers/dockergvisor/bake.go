@@ -52,13 +52,13 @@ func bakeImageID(cell, org, env, sha string) string {
 	return "kodus-bake/" + hex.EncodeToString(sum[:12]) + "@" + sha
 }
 
-// ErrBakeSource: the bake names no machine whose output this driver holds.
+// ErrBakeSource means the bake names no machine whose output this driver holds.
 var ErrBakeSource = errors.New("dockergvisor: no build output of that machine to bake")
 
 // PinBakeSource takes the machine's images, and its volumes when the
 // recipe keeps data in them, out of what its Destroy removes, for the bake
 // that follows (driver.BakeSourcePinner).
-func (d *Driver) PinBakeSource(ref driver.MachineRef) error {
+func (d *Driver) PinBakeSource(_ context.Context, ref driver.MachineRef) error {
 	network := d.claimNetwork(ref.Tags[driver.TagClaim])
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -173,7 +173,7 @@ func (d *Driver) newGeneration(spec driver.BakeSpec, pin *pinnedOutput) (bakecat
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return bakecatalog.Generation{}, err
 	}
-	g := bakecatalog.Generation{Cell: spec.CellID, Org: spec.OrgID, Environment: spec.EnvironmentID, SHA: spec.SHA, RecipeSHA: spec.RecipeSHA, Nonce: hex.EncodeToString(nonce[:]), Images: map[string]string{}, Volumes: map[string]string{}}
+	g := bakecatalog.Generation{Cell: spec.CellID, Org: spec.OrgID, Environment: spec.EnvironmentID, SHA: spec.SHA, RecipeSHA: spec.RecipeSHA, RefsDigest: spec.RefsDigest, Nonce: hex.EncodeToString(nonce[:]), Images: map[string]string{}, Volumes: map[string]string{}}
 	g.ID = generationID(g.Cell, g.Org, g.Environment, g.SHA, g.Nonce)
 	for _, image := range pin.images {
 		if image.fp != "" {

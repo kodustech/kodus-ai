@@ -1,14 +1,15 @@
 package dockergvisor
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 )
 
 // The build cache goes one way: a setup machine's builds write theirs, the
@@ -27,7 +28,7 @@ func TestTheBuildCacheGoesFromTheSetupToLaterBuildsOnly(t *testing.T) {
 	if first.CacheTo == "" || first.CacheFrom != "" {
 		t.Fatalf("the first setup build: cache from %q to %q, want only a cache of its own", first.CacheFrom, first.CacheTo)
 	}
-	if err := d.PinBakeSource(setup); err != nil {
+	if err := d.PinBakeSource(t.Context(), setup); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.Bake(ctx, bakeSpec(setup)); err != nil {
@@ -54,11 +55,11 @@ func TestTheBuildCacheGoesFromTheSetupToLaterBuildsOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	after, _ := os.ReadFile(filepath.Join(envCache, "index.json"))
-	if string(before) != string(after) {
+	if !bytes.Equal(before, after) {
 		t.Fatal("a PR claim changed the environment's cache")
 	}
 	// Even baked (the agent never lets it), a machine that was no setup's has no cache to give.
-	if err := d.PinBakeSource(machine("claim-pr2", bakeEnv)); err == nil {
+	if err := d.PinBakeSource(t.Context(), machine("claim-pr2", bakeEnv)); err == nil {
 		t.Fatal("pinned a machine that never booted")
 	}
 

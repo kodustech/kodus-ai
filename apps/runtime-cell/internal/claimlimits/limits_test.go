@@ -29,12 +29,14 @@ type fakeDirectory struct {
 func fakeRoot() *fakeDirectory {
 	return &fakeDirectory{files: map[string]string{"cgroup.controllers": "cpu memory pids io", "cgroup.subtree_control": "cpu memory pids", "cgroup.procs": ""}, dirs: map[string]*fakeDirectory{}}
 }
+
 func (d *fakeDirectory) Read(name string) (string, error) {
 	if v, ok := d.files[name]; ok {
 		return v, nil
 	}
 	return "", fs.ErrNotExist
 }
+
 func (d *fakeDirectory) Write(name, value string) error {
 	d.writes = append(d.writes, name+"="+value)
 	if d.writeErr == name {
@@ -49,6 +51,7 @@ func (d *fakeDirectory) Write(name, value string) error {
 	d.files[name] = value
 	return nil
 }
+
 func (d *fakeDirectory) Mkdir(name string) error {
 	if _, ok := d.dirs[name]; ok {
 		return fs.ErrExist
@@ -62,6 +65,7 @@ func (d *fakeDirectory) Mkdir(name string) error {
 	d.dirs[name] = n
 	return nil
 }
+
 func (d *fakeDirectory) Open(name string) (directory, error) {
 	if d.openErr != nil {
 		return nil, d.openErr
@@ -71,6 +75,7 @@ func (d *fakeDirectory) Open(name string) (directory, error) {
 	}
 	return nil, fs.ErrNotExist
 }
+
 func (d *fakeDirectory) Remove(name string) error {
 	if d.removeErr != nil {
 		return d.removeErr
@@ -95,6 +100,7 @@ func (d *fakeDirectory) List() ([]string, error) {
 	}
 	return names, nil
 }
+
 func testManager(t *testing.T) (*FS, *fakeDirectory) {
 	t.Helper()
 	r := fakeRoot()
@@ -129,6 +135,7 @@ func TestEnsureWritesAndVerifiesWholeParentBeforeReturning(t *testing.T) {
 		t.Fatal("idempotent ensure rewrote live parent")
 	}
 }
+
 func TestEnsureNeverChangesExistingBudget(t *testing.T) {
 	f, r := testManager(t)
 	if _, err := f.Ensure(testKey, testLimits); err != nil {
@@ -145,6 +152,7 @@ func TestEnsureNeverChangesExistingBudget(t *testing.T) {
 		t.Fatal("existing ceiling was mutated")
 	}
 }
+
 func TestRefusesInvalidKeyAndLimitsWithoutCreatingDirectory(t *testing.T) {
 	for _, key := range []string{"", "../escape", strings.Repeat("A", 64), strings.Repeat("a", 63), testKey + "/x"} {
 		t.Run(key, func(t *testing.T) {
@@ -167,6 +175,7 @@ func TestRefusesInvalidKeyAndLimitsWithoutCreatingDirectory(t *testing.T) {
 		t.Fatal("created invalid budget")
 	}
 }
+
 func TestPreflightRequiresDelegatedControllersAndNoProcesses(t *testing.T) {
 	for _, name := range []string{"cgroup.controllers", "cgroup.subtree_control", "cgroup.procs"} {
 		t.Run(name, func(t *testing.T) {
@@ -184,6 +193,7 @@ func TestPreflightRequiresDelegatedControllersAndNoProcesses(t *testing.T) {
 		})
 	}
 }
+
 func TestRemoveOnlyEmptyOwnedGroups(t *testing.T) {
 	f, r := testManager(t)
 	if _, err := f.Ensure(testKey, testLimits); err != nil {
@@ -209,6 +219,7 @@ func TestRemoveOnlyEmptyOwnedGroups(t *testing.T) {
 		t.Fatal("accepted invalid removal")
 	}
 }
+
 func TestReadbackMismatchRefusesParent(t *testing.T) {
 	f, r := testManager(t)
 	if err := r.Mkdir(testKey); err != nil {
@@ -237,6 +248,7 @@ func TestValidateParentOptionalAndStrict(t *testing.T) {
 		t.Fatal("accepted empty delegated root")
 	}
 }
+
 func TestProcessMembershipMustBeStrictDescendant(t *testing.T) {
 	p := "/delegated/cell/" + testKey
 	if err := verifyMembership(p, "0::"+p+"/docker/abcdef\n"); err != nil {
@@ -248,6 +260,7 @@ func TestProcessMembershipMustBeStrictDescendant(t *testing.T) {
 		}
 	}
 }
+
 func TestVerifyRefusesInvalidPIDBeforeReadingHost(t *testing.T) {
 	f, _ := testManager(t)
 	for _, pid := range []int{0, -1} {
@@ -293,6 +306,7 @@ func TestPruneEmptyOnlyBeforeLaunchPreservesBusyAndForeignNames(t *testing.T) {
 		t.Fatal("deleted unmanaged group")
 	}
 }
+
 func TestPruneEmptyPropagatesPermissionError(t *testing.T) {
 	f, r := testManager(t)
 	if _, err := f.Ensure(testKey, testLimits); err != nil {
@@ -325,6 +339,7 @@ func TestNewParentFailureNeverReturnsLaunchAuthority(t *testing.T) {
 		})
 	}
 }
+
 func TestConcurrentEnsureKeepsOneImmutableParent(t *testing.T) {
 	f, r := testManager(t)
 	var wg sync.WaitGroup
@@ -345,6 +360,7 @@ func TestConcurrentEnsureKeepsOneImmutableParent(t *testing.T) {
 		t.Fatalf("rewrote active ceiling %d times", len(r.dirs[testKey].writes))
 	}
 }
+
 func TestPruneEmptyKeepsEmptyParentWithDockerChildren(t *testing.T) {
 	f, r := testManager(t)
 	if _, err := f.Ensure(testKey, testLimits); err != nil {
@@ -358,6 +374,7 @@ func TestPruneEmptyKeepsEmptyParentWithDockerChildren(t *testing.T) {
 		t.Fatal("recursively deleted child tree")
 	}
 }
+
 func TestClosedManagerRefusesMutation(t *testing.T) {
 	f, r := testManager(t)
 	if err := f.Close(); err != nil {

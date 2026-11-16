@@ -54,15 +54,37 @@ var (
 // be reaped before recovery, never resurrected with an empty lease or memory
 // ledger.
 type Generation struct {
-	ID          string            `json:"id"`
-	Cell        string            `json:"cell"`
-	Org         string            `json:"org"`
-	Environment string            `json:"environment"`
-	SHA         string            `json:"sha"`
-	RecipeSHA   string            `json:"recipeSha"`
-	Nonce       string            `json:"nonce"`
-	Images      map[string]string `json:"images"`
-	Volumes     map[string]string `json:"volumes"`
+	ID          string `json:"id"`
+	Cell        string `json:"cell"`
+	Org         string `json:"org"`
+	Environment string `json:"environment"`
+	SHA         string `json:"sha"`
+	RecipeSHA   string `json:"recipeSha"`
+	// RefsDigest is the bake key of an environment of several
+	// repositories (image.bake refsDigest, RefsDigest): every repository's
+	// commit and the recipe. Empty for one repository, whose key is SHA;
+	// left out of the file then, so a catalog of one-repository bakes reads
+	// and writes as it always did.
+	RefsDigest string            `json:"refsDigest,omitempty"`
+	Nonce      string            `json:"nonce"`
+	Images     map[string]string `json:"images"`
+	Volumes    map[string]string `json:"volumes"`
+}
+
+// Key is what the generation was baked from: RefsDigest for an environment
+// of several repositories (the default-branch commit of one says nothing of
+// the others'), SHA for one.
+func (g Generation) Key() string {
+	if g.RefsDigest != "" {
+		return g.RefsDigest
+	}
+	return g.SHA
+}
+
+// IsRefsDigest reports whether s is a bake key RefsDigest writes.
+func IsRefsDigest(s string) bool {
+	hex, ok := strings.CutPrefix(s, "sha256:")
+	return ok && IsHex(hex, 64)
 }
 
 // scope names the environment a generation is current for.
@@ -115,7 +137,7 @@ func IsHex(s string, size int) bool {
 		return false
 	}
 	for _, c := range s {
-		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			return false
 		}
 	}
@@ -135,10 +157,10 @@ func Open(ctx context.Context, cfg Config) (*Catalog, error) {
 	}
 	lock, err := r.OpenFile("lock", os.O_CREATE|os.O_RDWR|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0o600)
 	if err != nil {
-		r.Close()
+		_ = r.Close()
 		return nil, err
 	}
-	fail := func(err error) (*Catalog, error) { lock.Close(); r.Close(); return nil, err }
+	fail := func(err error) (*Catalog, error) { _ = lock.Close(); _ = r.Close(); return nil, err }
 	info, err := lock.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
 		return fail(errors.New("bakecatalog: unsafe lock"))
@@ -152,7 +174,7 @@ func Open(ctx context.Context, cfg Config) (*Catalog, error) {
 	if err != nil {
 		return fail(err)
 	}
-	defer dir.Close()
+	defer func() { _ = dir.Close() }()
 	for {
 		if err := ctx.Err(); err != nil {
 			return fail(err)
@@ -184,17 +206,19 @@ func Open(ctx context.Context, cfg Config) (*Catalog, error) {
 	if syncDir == nil {
 		syncDir = func(f *os.File) error { return f.Sync() }
 	}
-	c := &Catalog{cfg: cfg, root: r, lock: lock, holds: map[string]int{}, unconfirmed: map[string]bool{}, syncDir: syncDir,
-		state: state{Version: 1, Cell: cfg.Cell, Driver: cfg.Driver, Generations: map[string]Generation{}, Current: map[string]string{}, Retired: map[string]Generation{}}}
+	c := &Catalog{
+		cfg: cfg, root: r, lock: lock, holds: map[string]int{}, unconfirmed: map[string]bool{}, syncDir: syncDir,
+		state: state{Version: 1, Cell: cfg.Cell, Driver: cfg.Driver, Generations: map[string]Generation{}, Current: map[string]string{}, Retired: map[string]Generation{}},
+	}
 	f, err := r.OpenFile(FileName, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 	if err == nil {
 		info, statErr := f.Stat()
 		if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() > maxBytes {
-			f.Close()
+			_ = f.Close()
 			return fail(errors.New("bakecatalog: unsafe catalog file"))
 		}
 		raw, readErr := io.ReadAll(io.LimitReader(f, maxBytes+1))
-		f.Close()
+		_ = f.Close()
 		if readErr != nil || len(raw) > maxBytes || json.Unmarshal(raw, &c.state) != nil {
 			return fail(errors.New("bakecatalog: invalid catalog"))
 		}
@@ -215,13 +239,13 @@ func (c *Catalog) valid() bool {
 	if s.Version != 1 || s.Driver != c.cfg.Driver || s.Cell != c.cfg.Cell || s.Generations == nil || s.Current == nil || s.Retired == nil || len(s.Generations)+len(s.Retired) > MaxGenerations || len(s.Current) > MaxGenerations {
 		return false
 	}
-	for id, g := range s.Generations {
-		if id != g.ID || !c.cfg.Valid(g) {
+	for id := range s.Generations {
+		if g := s.Generations[id]; id != g.ID || !c.cfg.Valid(g) {
 			return false
 		}
 	}
-	for id, g := range s.Retired {
-		if id != g.ID || !c.cfg.Valid(g) {
+	for id := range s.Retired {
+		if g := s.Retired[id]; id != g.ID || !c.cfg.Valid(g) {
 			return false
 		}
 		if _, eligible := s.Generations[id]; eligible {
@@ -256,7 +280,7 @@ func (c *Catalog) saveLocked() error {
 	if err != nil {
 		return err
 	}
-	defer c.root.Remove(tmp)
+	defer func() { _ = c.root.Remove(tmp) }() // gone after the rename: nothing to report
 	_, err = f.Write(raw)
 	if err == nil {
 		err = f.Sync()
@@ -387,7 +411,8 @@ func (c *Catalog) Acknowledge(id string) bool {
 func (c *Catalog) Each(fn func(g Generation, current bool) error) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for id, g := range c.state.Generations {
+	for id := range c.state.Generations {
+		g := c.state.Generations[id]
 		if err := fn(g, c.state.Current[scope(g.Org, g.Environment)] == id); err != nil {
 			return err
 		}
@@ -406,8 +431,8 @@ func (c *Catalog) Prune(remove func(g Generation) error) error {
 	next := maps.Clone(old.Generations)
 	retired := maps.Clone(old.Retired)
 	changed := false
-	for id, g := range next {
-		if old.Current[scope(g.Org, g.Environment)] != id && c.holds[id] == 0 && !c.unconfirmed[id] {
+	for id := range next {
+		if g := next[id]; old.Current[scope(g.Org, g.Environment)] != id && c.holds[id] == 0 && !c.unconfirmed[id] {
 			retired[id] = g
 			delete(next, id)
 			changed = true
@@ -424,15 +449,16 @@ func (c *Catalog) Prune(remove func(g Generation) error) error {
 		}
 	}
 	var drop []Generation
-	for id, g := range retired {
+	for id := range retired {
 		if c.holds[id] == 0 {
-			drop = append(drop, g)
+			drop = append(drop, retired[id])
 		}
 	}
 	c.mu.Unlock()
 	var errs []error
-	for _, g := range drop {
-		if err := remove(g); err != nil {
+	for i := range drop {
+		g := &drop[i]
+		if err := remove(*g); err != nil {
 			errs = append(errs, err)
 			continue
 		}

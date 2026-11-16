@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -20,28 +21,36 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "kody-exec:", err)
+		os.Exit(2)
+	}
+}
+
+// run reads the request, runs it until it ends, times out or SIGTERM, and
+// prints the result. Its error is a request it could not run (exit 2).
+func run() error {
 	raw, err := io.ReadAll(io.LimitReader(os.Stdin, 64<<10))
 	if err != nil {
-		fail(err)
+		return err
 	}
 	var req kodyexec.Request
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil || req.Command == "" {
-		fail(fmt.Errorf("bad request: %v", err))
+	if err := dec.Decode(&req); err != nil {
+		return fmt.Errorf("bad request: %w", err)
+	}
+	if req.Command == "" {
+		return errors.New("bad request: empty command")
 	}
 	if runtime.GOOS == "linux" {
 		if err := kodyexec.BecomeSubreaper(); err != nil {
-			fail(fmt.Errorf("subreaper: %w", err))
+			return fmt.Errorf("subreaper: %w", err)
 		}
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
 	res := kodyexec.Run(ctx, req)
 	_ = json.NewEncoder(os.Stdout).Encode(res)
-}
-
-func fail(err error) {
-	fmt.Fprintln(os.Stderr, "kody-exec:", err)
-	os.Exit(2)
+	return nil
 }

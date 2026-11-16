@@ -10,10 +10,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 )
 
-// ErrComposeResetInCell: compose volumes are reset by the cell agent over the
+// ErrComposeResetInCell means compose volumes are reset by the cell agent over the
 // transport; only a disk snapshot is a driver operation.
 var ErrComposeResetInCell = errors.New("awsec2: compose_volumes reset runs in the cell agent")
 

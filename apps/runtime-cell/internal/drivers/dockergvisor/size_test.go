@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 )
 
 func TestParseMemMB(t *testing.T) {
@@ -26,8 +26,8 @@ func TestParseMemMB(t *testing.T) {
 	}
 }
 
-// The largest size is the flags', else the default; it is never below the
-// default, which a claim that asks nothing gets.
+// The largest size is the flags', else the host's, else the default; it is
+// never below the default, which a claim that asks nothing gets.
 func TestMaxClaimSize(t *testing.T) {
 	cases := []struct {
 		cfg  Config
@@ -40,6 +40,12 @@ func TestMaxClaimSize(t *testing.T) {
 		{cfg: Config{MemLimit: "8g", CPUs: "2", MemMax: "4g"}, err: true},
 		{cfg: Config{MemLimit: "4g", CPUs: "4", CPUsMax: 2}, err: true},
 		{cfg: Config{MemLimit: "4g", CPUs: "2", MemMax: "lots"}, err: true},
+		// A fresh cell with no ceiling flags: the host's allocatable memory and CPUs.
+		{cfg: Config{MemLimit: "4g", CPUs: "2", HostMemoryMB: 30720, HostCPUs: 16}, want: driver.ClaimSize{MemoryMB: 30720, CPUs: 16}},
+		// A small host never lowers the ceiling below the default.
+		{cfg: Config{MemLimit: "4g", CPUs: "2", HostMemoryMB: 3000, HostCPUs: 1}, want: driver.ClaimSize{MemoryMB: 4096, CPUs: 2}},
+		// The operator's flags win over the host.
+		{cfg: Config{MemLimit: "4g", CPUs: "2", MemMax: "8g", CPUsMax: 4, HostMemoryMB: 30720, HostCPUs: 16}, want: driver.ClaimSize{MemoryMB: 8192, CPUs: 4}},
 	}
 	for _, c := range cases {
 		got, err := maxClaimSize(c.cfg)
@@ -54,6 +60,22 @@ func TestMaxClaimSize(t *testing.T) {
 
 // A claim never gets more than the cell grants: Create refuses the size
 // before any container exists.
+// The cell says the size a claim that asks none gets (hello
+// capabilities.defaultSize), so the hub records that claim's vCPUs: the
+// memory limit, and the CPUs by their whole part, as the maximum counts them.
+func TestTheDefaultSizeIsTheLimitsAClaimThatAsksNoneGets(t *testing.T) {
+	for cpus, want := range map[string]driver.ClaimSize{"2": {MemoryMB: 4096, CPUs: 2}, "1.5": {MemoryMB: 4096, CPUs: 1}} {
+		r := &recorder{answers: map[string]string{"info": `{"runsc":{}}`}}
+		d, err := New(context.Background(), dockercli.CLI{Run: r.run}, Config{CellID: "cell-1", HolderImage: "kodus/holder@sha256:abc", WorkDir: t.TempDir(), MemLimit: "4g", CPUs: cpus, CPUsMax: 4})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := d.Capabilities().DefaultClaimSize; got != want {
+			t.Fatalf("cpus %q: default %v, want %v", cpus, got, want)
+		}
+	}
+}
+
 func TestCreateRefusesASizeAboveTheCellsMax(t *testing.T) {
 	r := &recorder{answers: map[string]string{"info": `{"runsc":{}}`, "run": "c0ffee\n", "inspect": holderJSON}}
 	d, err := New(context.Background(), dockercli.CLI{Run: r.run}, Config{CellID: "cell-1", HolderImage: "kodus/holder@sha256:abc", WorkDir: t.TempDir(), MemMax: "8g", CPUsMax: 4})
@@ -85,8 +107,10 @@ func TestCreateRefusesASizeAboveTheCellsMax(t *testing.T) {
 func TestAClaimsSizeReachesItsBuilds(t *testing.T) {
 	docker := newMemDocker()
 	docker.plant(dockercli.Container{ID: "cegress", Name: "kodus-egress", Networks: map[string]string{"kodus-cell": "10.9.0.2"}})
-	d, err := New(context.Background(), docker, Config{CellID: "cell-1", HolderImage: "kodus/holder@sha256:abc", WorkDir: t.TempDir(),
-		EgressContainer: "kodus-egress", BuilderImage: "moby/buildkit@sha256:abc", MemMax: "16g", CPUsMax: 8})
+	d, err := New(context.Background(), docker, Config{
+		CellID: "cell-1", HolderImage: "kodus/holder@sha256:abc", WorkDir: t.TempDir(),
+		EgressContainer: "kodus-egress", BuilderImage: "moby/buildkit@sha256:abc", MemMax: "16g", CPUsMax: 8,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +129,7 @@ func TestAClaimsSizeReachesItsBuilds(t *testing.T) {
 			t.Fatal(err)
 		}
 		subnet := netip.MustParsePrefix(docker.subnets[n.WorkloadGroupID])
-		if _, _, err := d.build(ctx, ref, []sandbox.Build{{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}}, n.WorkloadGroupID, d.resolvPath(n.WorkloadGroupID), subnet); err != nil {
+		if _, _, err := d.build(ctx, ref, []sandbox.Build{{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}}, n.WorkloadGroupID, d.resolvPath(n.WorkloadGroupID), subnet, nil); err != nil {
 			t.Fatal(err)
 		}
 		return ref, docker.builds[len(docker.builds)-1]
@@ -136,7 +160,7 @@ func TestAClaimsSizeReachesItsBuilds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = d.build(ctx, ref, []sandbox.Build{{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}}, n.WorkloadGroupID, d.resolvPath(n.WorkloadGroupID), netip.MustParsePrefix(docker.subnets[n.WorkloadGroupID]))
+	_, _, err = d.build(ctx, ref, []sandbox.Build{{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}}, n.WorkloadGroupID, d.resolvPath(n.WorkloadGroupID), netip.MustParsePrefix(docker.subnets[n.WorkloadGroupID]), nil)
 	if !errors.Is(err, driver.ErrOutOfMemory) || !strings.Contains(err.Error(), "16384m") {
 		t.Fatalf("err %v, want out of memory naming 16384m", err)
 	}
@@ -173,10 +197,11 @@ func TestAClaimsSizeReachesItsServices(t *testing.T) {
 	}
 	ref.Tags[driver.TagOrg], ref.Tags[driver.TagRole] = "", ""
 	dir := t.TempDir()
-	r.answers["compose config"] = canonicalFor(dir)
+	// What compose makes of the claim's size: 12288m in bytes, 6 CPUs.
+	r.answers["compose config"] = strings.NewReplacer(`"mem_limit":"4294967296"`, `"mem_limit":"12884901888"`, `"cpus":2`, `"cpus":6`).Replace(canonicalFor(dir))
 	r.answers["ps"] = "s1\n"
 	r.answers["inspect"] = `[{"Id":"s1","Name":"/kodus-claim-1-workload-a-1","Config":{"Labels":{"kodus.cell":"cell-1"}},"NetworkSettings":{"Networks":{"kodus-claim-1":{"IPAddress":"172.30.0.9"}}}}]`
-	if _, err := d.Up(context.Background(), ref, []byte("services:\n  a:\n    image: x\n    mem_limit: 64g\n"), dir); err != nil {
+	if _, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte("services:\n  a:\n    image: x\n    mem_limit: 64g\n"), ProjectDir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if len(rewritten) != 1 {
@@ -194,15 +219,19 @@ func TestAClaimsSizeReachesItsServices(t *testing.T) {
 func TestPoolMachinesAreMadeAtTheEnvironmentsSize(t *testing.T) {
 	docker := newMemDocker()
 	docker.plant(dockercli.Container{ID: "cegress", Name: "kodus-egress", Networks: map[string]string{"kodus-cell": "10.9.0.2"}})
-	d, err := New(context.Background(), docker, Config{CellID: "cell-1", HolderImage: "kodus/holder@sha256:abc", WorkDir: t.TempDir(),
-		EgressContainer: "kodus-egress", MemMax: "16g", CPUsMax: 8})
+	d, err := New(context.Background(), docker, Config{
+		CellID: "cell-1", HolderImage: "kodus/holder@sha256:abc", WorkDir: t.TempDir(),
+		EgressContainer: "kodus-egress", MemMax: "16g", CPUsMax: 8,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := spec()
 	size := driver.ClaimSize{MemoryMB: 12288, CPUs: 6}
-	pool := driver.PoolSpec{CellID: "cell-1", OrgID: "org-a", EnvironmentID: "env-1", ImageID: s.ImageID, ClaimSize: size, KMSKeyRef: s.KMSKeyRef, Size: s.Size,
-		ExpiresAt: s.ExpiresAt, HardExpiresAt: s.HardExpiresAt}
+	pool := driver.PoolSpec{
+		CellID: "cell-1", OrgID: "org-a", EnvironmentID: "env-1", ImageID: s.ImageID, ClaimSize: size, KMSKeyRef: s.KMSKeyRef, Size: s.Size,
+		ExpiresAt: s.ExpiresAt, HardExpiresAt: s.HardExpiresAt,
+	}
 	pm, err := d.PoolCreate(context.Background(), pool)
 	if err != nil {
 		t.Fatal(err)

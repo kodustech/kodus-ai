@@ -40,11 +40,11 @@ type rigOption func(*Proxy)
 func newRig(t *testing.T, origDst func(net.Conn) (net.IP, int, error), opts ...rigOption) *rig {
 	t.Helper()
 	r := &rig{events: NewEvents(100), answers: netguard.NewAnswers(nil)}
-	up := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) { _, _ = io.WriteString(w, "upstream "+req.Host) }))
+	up := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) { _, _ = io.WriteString(w, "upstream "+req.Host) })) //nolint:gosec // G705: a test upstream echoing the Host into a plain-text body
 	t.Cleanup(up.Close)
 	upHTTP := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		r.plainRequests.Add(1)
-		_, _ = io.WriteString(w, "plain "+req.Host)
+		_, _ = io.WriteString(w, "plain "+req.Host) //nolint:gosec // G705: a test upstream echoing the Host into a plain-text body
 	}))
 	t.Cleanup(upHTTP.Close)
 	upAddr := strings.TrimPrefix(up.URL, "https://")
@@ -97,7 +97,7 @@ func newRig(t *testing.T, origDst func(net.Conn) (net.IP, int, error), opts ...r
 }
 
 func (r *rig) tlsGet(sni string) (string, error) {
-	c, err := tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp4", r.proxyTLS, &tls.Config{ServerName: sni, InsecureSkipVerify: true})
+	c, err := tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp4", r.proxyTLS, &tls.Config{ServerName: sni, InsecureSkipVerify: true}) //nolint:gosec // G402: the test upstream presents a self-signed cert
 	if err != nil {
 		return "", err
 	}
@@ -107,6 +107,7 @@ func (r *rig) tlsGet(sni string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
 	return string(b), nil
 }
@@ -233,6 +234,7 @@ func TestPlainHTTPByHost(t *testing.T) {
 		if err != nil {
 			return "", err
 		}
+		defer resp.Body.Close()
 		b, _ := io.ReadAll(resp.Body)
 		return string(b), nil
 	}
@@ -308,14 +310,17 @@ func TestControlPortNeedsMTLSAndSignature(t *testing.T) {
 	sig, at := control.SignRemoval(priv, "claim-1", time.Now())
 	req.Header.Set(control.SignatureHeader, sig)
 	req.Header.Set(control.SignedAtHeader, at)
-	if resp, err := client(&agentCert).Do(req); err != nil || resp.StatusCode != http.StatusNoContent {
+	del, err := client(&agentCert).Do(req)
+	if err != nil || del.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete: %v", err)
 	}
+	_ = del.Body.Close()
 	ctl.Events.Add(Event{Host: "x", Reason: "denied"})
 	resp, err := client(&agentCert).Get(srv.URL + "/v1/events?after=0")
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer resp.Body.Close()
 	var evs []Event
 	_ = json.NewDecoder(resp.Body).Decode(&evs)
 	if len(evs) != 1 || evs[0].Seq != 1 {

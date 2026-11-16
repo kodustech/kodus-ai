@@ -2,11 +2,12 @@ package dockergvisor
 
 import (
 	"context"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/claimlimits"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"strings"
 	"testing"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/claimlimits"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 )
 
 type incompatibleCgroupDocker struct {
@@ -17,6 +18,7 @@ type incompatibleCgroupDocker struct {
 func (d incompatibleCgroupDocker) CgroupInfo(context.Context) (dockercli.CgroupDaemonInfo, error) {
 	return d.info, nil
 }
+
 func TestClaimLimitsRefuseUnsupportedDockerBeforeLaunch(t *testing.T) {
 	for _, info := range []dockercli.CgroupDaemonInfo{{Version: "1", Driver: "cgroupfs"}, {Version: "2", Driver: "systemd"}, {Version: "2", Driver: "cgroupfs", Rootless: true}} {
 		docker := incompatibleCgroupDocker{memDocker: newMemDocker(), info: info}
@@ -68,6 +70,7 @@ func (f *sliceClaimLimits) Ensure(key string, l claimlimits.Limits) (string, err
 	}
 	return strings.TrimSuffix(claimlimits.RootSliceName(f.cell), ".slice") + "-" + key + ".slice", nil
 }
+
 func TestSystemdParentFlowsThroughDriverIntoHolder(t *testing.T) {
 	m := newMemDocker()
 	docker := incompatibleCgroupDocker{memDocker: m, info: dockercli.CgroupDaemonInfo{Version: "2", Driver: "systemd", Runtimes: map[string]dockercli.RuntimeInfo{"runsc": {Path: "/runsc", RuntimeArgs: []string{"--systemd-cgroup"}}}}}

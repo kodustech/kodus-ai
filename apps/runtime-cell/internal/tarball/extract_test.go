@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -76,24 +77,35 @@ func TestExtractGood(t *testing.T) {
 // S-05: every hostile shape refuses the whole archive and leaves dest empty.
 func TestExtractRefusesHostileRepos(t *testing.T) {
 	cases := map[string][]entry{
-		"symlink out":        {{name: "p/", typ: tar.TypeDir}, {name: "p/etc", typ: tar.TypeSymlink, linkname: "/etc"}},
-		"relative symlink":   {{name: "p/a", typ: tar.TypeSymlink, linkname: "../../.."}},
-		"hard link":          {{name: "p/a", typ: tar.TypeReg, body: "x"}, {name: "p/b", typ: tar.TypeLink, linkname: "/etc/passwd"}},
-		"dot dot":            {{name: "p/../../evil", typ: tar.TypeReg, body: "x"}},
-		"absolute":           {{name: "/tmp/evil", typ: tar.TypeReg, body: "x"}},
-		"git hook":           {{name: "p/.git/hooks/post-checkout", typ: tar.TypeReg, body: "#!/bin/sh\ncurl x", mode: 0o755}},
-		"nested git dir":     {{name: "p/vendor/x/.git/config", typ: tar.TypeReg, body: "[core]"}},
-		"device":             {{name: "p/dev", typ: tar.TypeChar}},
-		"fifo":               {{name: "p/fifo", typ: tar.TypeFifo}},
-		"two roots":          {{name: "p/a", typ: tar.TypeReg, body: "x"}, {name: "q/b", typ: tar.TypeReg, body: "x"}},
-		"non canonical":      {{name: "p/./a", typ: tar.TypeReg, body: "x"}},
-		"backslash":          {{name: `p\..\a`, typ: tar.TypeReg, body: "x"}},
-		"file then same dir": {{name: "p/a", typ: tar.TypeReg, body: "x"}, {name: "p/a/b", typ: tar.TypeReg, body: "y"}},
+		"symlink out":      {{name: "p/", typ: tar.TypeDir}, {name: "p/etc", typ: tar.TypeSymlink, linkname: "/etc"}},
+		"relative symlink": {{name: "p/a", typ: tar.TypeSymlink, linkname: "../../.."}},
+		"hard link":        {{name: "p/a", typ: tar.TypeReg, body: "x"}, {name: "p/b", typ: tar.TypeLink, linkname: "/etc/passwd"}},
+		"dot dot":          {{name: "p/../../evil", typ: tar.TypeReg, body: "x"}},
+		"absolute":         {{name: "/tmp/evil", typ: tar.TypeReg, body: "x"}},
+		"git hook":         {{name: "p/.git/hooks/post-checkout", typ: tar.TypeReg, body: "#!/bin/sh\ncurl x", mode: 0o755}},
+		"nested git dir":   {{name: "p/vendor/x/.git/config", typ: tar.TypeReg, body: "[core]"}},
+		// Used to be extracted: on a case-insensitive filesystem .GIT is .git.
+		"git hook in another case": {{name: "p/.GIT/hooks/post-checkout", typ: tar.TypeReg, body: "#!/bin/sh\ncurl x", mode: 0o755}},
+		"link into .Git":           {{name: "p/l", typ: tar.TypeSymlink, linkname: ".Git/config"}},
+		"device":                   {{name: "p/dev", typ: tar.TypeChar}},
+		"fifo":                     {{name: "p/fifo", typ: tar.TypeFifo}},
+		"two roots":                {{name: "p/a", typ: tar.TypeReg, body: "x"}, {name: "q/b", typ: tar.TypeReg, body: "x"}},
+		"non canonical":            {{name: "p/./a", typ: tar.TypeReg, body: "x"}},
+		"backslash":                {{name: `p\..\a`, typ: tar.TypeReg, body: "x"}},
+		"file then same dir":       {{name: "p/a", typ: tar.TypeReg, body: "x"}, {name: "p/a/b", typ: tar.TypeReg, body: "y"}},
 		// Links that read as inside but land outside through another link.
-		"chain out": {{name: "p/a/", typ: tar.TypeDir}, {name: "p/a/b/", typ: tar.TypeDir}, {name: "p/k/", typ: tar.TypeDir},
-			{name: "p/a/b/z", typ: tar.TypeSymlink, linkname: "../../k"}, {name: "p/a/b/q", typ: tar.TypeSymlink, linkname: "z/../../../x"}},
-		"chain out, link after": {{name: "p/a/b/q", typ: tar.TypeSymlink, linkname: "z/../../../etc/passwd"},
-			{name: "p/a/b/z", typ: tar.TypeSymlink, linkname: "../../k"}, {name: "p/k/", typ: tar.TypeDir}},
+		"chain out": {
+			{name: "p/a/", typ: tar.TypeDir},
+			{name: "p/a/b/", typ: tar.TypeDir},
+			{name: "p/k/", typ: tar.TypeDir},
+			{name: "p/a/b/z", typ: tar.TypeSymlink, linkname: "../../k"},
+			{name: "p/a/b/q", typ: tar.TypeSymlink, linkname: "z/../../../x"},
+		},
+		"chain out, link after": {
+			{name: "p/a/b/q", typ: tar.TypeSymlink, linkname: "z/../../../etc/passwd"},
+			{name: "p/a/b/z", typ: tar.TypeSymlink, linkname: "../../k"},
+			{name: "p/k/", typ: tar.TypeDir},
+		},
 		"through a link out":  {{name: "p/up", typ: tar.TypeSymlink, linkname: ".."}, {name: "p/b", typ: tar.TypeSymlink, linkname: "up/etc"}},
 		"link to the root":    {{name: "p/sub/l", typ: tar.TypeSymlink, linkname: ".."}},
 		"link to its parent":  {{name: "p/a/b/l", typ: tar.TypeSymlink, linkname: ".."}},
@@ -141,7 +153,7 @@ func TestExtractKeepsLinksInsideTheRepo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := os.Readlink(filepath.Join(dest, "packages/prisma/.env")); err != nil || got != "../../.env" {
+	if got, err := os.Readlink(filepath.Join(dest, "packages", "prisma", ".env")); err != nil || got != "../../.env" {
 		t.Fatalf("dangling link %q %v", got, err)
 	}
 	for _, p := range []string{"docs/c.txt", "docs/shared/b.txt"} {
@@ -241,7 +253,7 @@ func TestFetchRetriesTheRevocationAndFailsWhenItNeverWorks(t *testing.T) {
 		t.Fatalf("one blip: %v after %d tries", err, once.n.Load())
 	}
 	never := &flakyRevoker{fails: 100}
-	if err := fetch(never); err == nil || never.n.Load() != int32(revokeAttempts) {
+	if err := fetch(never); err == nil || int(never.n.Load()) != revokeAttempts {
 		t.Fatalf("never revoked: %v after %d tries", err, never.n.Load())
 	}
 }
@@ -260,7 +272,7 @@ func TestMain(m *testing.M) {
 				n++
 			}
 		}
-		fmt.Printf(`{"files":%d}`, n)
+		fmt.Printf(`{"files":%d}`, n) //nolint:forbidigo // the re-executed test binary answers its parent on stdout
 		os.Exit(0)
 	}
 	os.Exit(m.Run())
@@ -302,4 +314,26 @@ func TestIsolatedChildHasNoNetwork(t *testing.T) {
 	}
 	ifs, _ := net.Interfaces()
 	t.Logf("parent interfaces: %d", len(ifs))
+}
+
+// An entry the isolated child refuses reaches the agent as a *RefusedError
+// naming it, as the in-process extraction does, never as text alone.
+func TestIsolatedExtractorReportsARefusalAsARefusedError(t *testing.T) {
+	src := filepath.Join(t.TempDir(), "r.tar.gz")
+	_ = os.WriteFile(src, archive(t, entry{name: "p/.git/config", typ: tar.TypeReg, body: "x"}), 0o600)
+	exe, _ := os.Executable()
+	_, err := NetNSExtractor{Command: []string{"/usr/bin/env", "TARBALL_CHILD=1", exe}, AllowWithoutNetNS: true}.Extract(context.Background(), src, t.TempDir())
+	if err == nil {
+		t.Fatal("a .git entry was extracted")
+	}
+	var refused *RefusedError
+	if !errors.As(err, &refused) {
+		if strings.Contains(err.Error(), "tarball: refused") {
+			t.Fatalf("a refusal as text only: %v", err)
+		}
+		t.Skipf("isolation unavailable here: %v", err)
+	}
+	if refused.Entry != "p/.git/config" || refused.Reason == "" {
+		t.Fatalf("refused %+v", refused)
+	}
 }

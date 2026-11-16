@@ -34,118 +34,33 @@ export interface PrAdmissionStore {
     ): Promise<string>;
     canCancel(scope: PrScope, runId: string, ceiling: string): Promise<boolean>;
 }
-interface Fence {
+export interface Fence {
     generation: bigint;
     head: string | null;
 }
-interface Registration extends PrScope {
+export interface Registration extends PrScope {
     generation: bigint;
     head: string;
 }
-function conflict(): never {
+export function conflict(): never {
     throw Object.assign(new Error('pr_admission_conflict'), {
         code: 'admission_conflict',
     });
 }
-function same(a: PrScope, b: PrScope) {
+export function same(a: PrScope, b: PrScope) {
     return (
         a.organizationId === b.organizationId &&
         a.repositoryId === b.repositoryId &&
         a.prNumber === b.prNumber
     );
 }
-function decision(fence: Fence, generation: bigint): PrAdmissionDecision {
+export function decision(fence: Fence, generation: bigint): PrAdmissionDecision {
     return fence.generation === generation && fence.head !== null
         ? { accepted: true }
         : {
               accepted: false,
               reason: fence.head === null ? 'cancelled' : 'superseded',
           };
-}
-const scopeKey = (s: PrScope) =>
-    JSON.stringify([s.organizationId, s.repositoryId, s.prNumber]);
-const identityKey = (s: PrScope, id: string) =>
-    JSON.stringify([s.organizationId, id]);
-
-/** Explicit test/local adapter; never the production DI default. */
-export class InMemoryPrAdmissionStore implements PrAdmissionStore {
-    private readonly fences = new Map<string, Fence>();
-    private readonly runs = new Map<string, Registration>();
-    private readonly cancellations = new Map<
-        string,
-        PrScope & { ceiling: string; keepHead?: string }
-    >();
-    async register(
-        scope: PrScope,
-        runId: string,
-        head: string,
-        redelivered: boolean,
-    ): Promise<PrAdmissionDecision> {
-        const key = scopeKey(scope);
-        const fence = this.fences.get(key);
-        const known = this.runs.get(identityKey(scope, runId));
-        if (known) {
-            if (!same(scope, known) || known.head !== head) conflict();
-            return decision(fence!, known.generation);
-        }
-        if (redelivered && fence)
-            return { accepted: false, reason: 'unknown_redelivery' };
-        const next =
-            !fence || fence.head !== head
-                ? { generation: (fence?.generation ?? 0n) + 1n, head }
-                : fence;
-        this.fences.set(key, next);
-        this.runs.set(identityKey(scope, runId), {
-            ...scope,
-            generation: next.generation,
-            head,
-        });
-        return { accepted: true };
-    }
-    async current(scope: PrScope, runId: string): Promise<PrAdmissionDecision> {
-        const known = this.runs.get(identityKey(scope, runId));
-        if (!known || !same(scope, known)) conflict();
-        return decision(this.fences.get(scopeKey(scope))!, known.generation);
-    }
-    async cancel(
-        scope: PrScope,
-        commandId: string,
-        keepHead?: string,
-        redelivered?: boolean,
-    ): Promise<string> {
-        const id = identityKey(scope, commandId);
-        const known = this.cancellations.get(id);
-        if (known) {
-            if (!same(scope, known) || known.keepHead !== keepHead) conflict();
-            return known.ceiling;
-        }
-        const key = scopeKey(scope),
-            fence = this.fences.get(key);
-        if (redelivered && fence) conflict();
-        const retainsCurrent =
-            keepHead !== undefined && fence?.head === keepHead;
-        const ceiling = (
-            retainsCurrent ? fence!.generation - 1n : (fence?.generation ?? 0n)
-        ).toString();
-        if (!retainsCurrent)
-            this.fences.set(key, {
-                generation: (fence?.generation ?? 0n) + 1n,
-                head: keepHead ?? null,
-            });
-        this.cancellations.set(id, { ...scope, ceiling, keepHead });
-        return ceiling;
-    }
-    async canCancel(
-        scope: PrScope,
-        runId: string,
-        ceiling: string,
-    ): Promise<boolean> {
-        const known = this.runs.get(identityKey(scope, runId));
-        return (
-            !known ||
-            (same(scope, known) && known.generation <= BigInt(ceiling))
-        );
-    }
 }
 
 export class PgPrAdmissionStore implements PrAdmissionStore {

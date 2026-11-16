@@ -9,14 +9,18 @@ import {
     envSessionKeyFrom,
     signEnvSessionRequest,
 } from '@libs/runtime/contracts/env-session';
+import { PREVIEW_ROUTES, type PreviewOpen, type PreviewRef, type PreviewView } from '@libs/runtime/contracts/preview';
 import { sealingKeyFrom } from '@libs/runtime/run/sealed-secret';
 
 import { EnvSessionPortError, type RuntimeEnvSessionPort } from '../domain/env-tools';
+import type { RuntimePreviewPort } from '../domain/previews';
 
 // The API → runtime-worker env-session listener (RUNTIME_ENV_SESSION_URL).
 // Each request is signed with a key derived from RUNTIME_SECRET_SEAL_KEY, which
 // the API and the worker already share; nothing else authenticates it. The
-// listener belongs on the private network only.
+// listener belongs on the private network only. The preview routes
+// (PREVIEW_ROUTES, docs/runtime/preview-urls.md §9.2) live on the same
+// listener and are signed the same way.
 
 type Fetch = (
     url: string,
@@ -34,7 +38,7 @@ export function loadEnvSessionClientConfig(env: NodeJS.ProcessEnv = process.env)
     return { baseUrl: env.RUNTIME_ENV_SESSION_URL || undefined, secretSealKey: env.RUNTIME_SECRET_SEAL_KEY || undefined };
 }
 
-export class HttpEnvSessionClient implements RuntimeEnvSessionPort {
+export class HttpEnvSessionClient implements RuntimeEnvSessionPort, RuntimePreviewPort {
     private readonly key?: Buffer;
 
     constructor(
@@ -45,9 +49,14 @@ export class HttpEnvSessionClient implements RuntimeEnvSessionPort {
         this.key = config.secretSealKey ? envSessionKeyFrom(sealingKeyFrom(config.secretSealKey)) : undefined;
     }
 
-    private async post<T>(path: string, body: unknown, timeoutMs = TIMEOUT_MS): Promise<T> {
+    private async post<T>(
+        path: string,
+        body: unknown,
+        timeoutMs = TIMEOUT_MS,
+        off: { code: string; message: string } = { code: 'env_sessions_off', message: 'Interactive environments are not configured on this deployment.' },
+    ): Promise<T> {
         if (!this.config.baseUrl || !this.key) {
-            throw new EnvSessionPortError(503, 'env_sessions_off', 'Interactive environments are not configured on this deployment.');
+            throw new EnvSessionPortError(503, off.code, off.message);
         }
         const raw = JSON.stringify(body);
         let res: { status: number; text(): Promise<string> };
@@ -64,7 +73,7 @@ export class HttpEnvSessionClient implements RuntimeEnvSessionPort {
         } catch {
             throw new EnvSessionPortError(503, 'runtime_unreachable', 'The Kody Runtime did not answer. Try again in a minute.');
         }
-        let parsed: any = {};
+        let parsed: any;
         try {
             parsed = JSON.parse(await res.text());
         } catch {
@@ -101,4 +110,19 @@ export class HttpEnvSessionClient implements RuntimeEnvSessionPort {
     release(owner: EnvSessionOwner, sessionId: string) {
         return this.post<EnvSessionView>(`/env/sessions/${encodeURIComponent(sessionId)}/release`, owner);
     }
+
+    openPreview(req: PreviewOpen) {
+        return this.post<PreviewView>(PREVIEW_ROUTES.open, req, TIMEOUT_MS, PREVIEW_UNREACHABLE);
+    }
+
+    previewStatus(ref: PreviewRef) {
+        return this.post<PreviewView>(PREVIEW_ROUTES.status, ref, TIMEOUT_MS, PREVIEW_UNREACHABLE);
+    }
+
+    stopPreview(ref: PreviewRef) {
+        return this.post<PreviewView>(PREVIEW_ROUTES.stop, ref, TIMEOUT_MS, PREVIEW_UNREACHABLE);
+    }
 }
+
+/** No worker listener configured: previews cannot open on this deployment (the same code as no preview domain). */
+const PREVIEW_UNREACHABLE = { code: 'preview_off', message: 'Previews are off on this deployment: the Kody Runtime worker is not configured (RUNTIME_ENV_SESSION_URL).' };

@@ -74,11 +74,11 @@ func (a *Agent) checkRecipeRequirements(c *claims.Claim, repo string) error {
 		if !a.cfg.FakeSupport {
 			return blockerErr(protocol.BlockerKindPlatform, "recipe_fakes_unsupported", errors.New("this driver does not execute declared fake services"))
 		}
-		if _, err := loadClaimCompose(c, repo, rec); err != nil {
+		if _, err := a.loadClaimCompose(c, repo, rec); err != nil {
 			return err
 		}
 	}
-	if requiresObserverSQL(rec) && a.cfg.SQLObservers == nil {
+	if requiresObserverSQL(rec) && a.cfg.Parts.SQLObservers == nil {
 		return blockerErr(protocol.BlockerKindPlatform, "sql_observer_unsupported", errors.New("this driver cannot provision a seeded SQL observer account; use HTTP probes or a supported cell"))
 	}
 	if size := rec.SizeRequirement(); size != nil {

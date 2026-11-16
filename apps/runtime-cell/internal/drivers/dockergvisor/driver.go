@@ -8,6 +8,12 @@
 //
 // The agent boots the project through Up (driver.ComposeBooter) and must add
 // the sources Up returns to the claim's egress policy.
+//
+// The driver runs its machines under gVisor (isolation/gvisor) on the
+// docker placement (placement/docker: where machines live and how a claim's
+// network attaches). Claims, egress wiring, the build path, the registry,
+// data and golden copies and the sandbox pool stay here. Firecracker
+// machines run on the microvm driver, which shares packages with this one.
 package dockergvisor
 
 import (
@@ -15,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -27,56 +34,27 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/claimlimits"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/clock"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/buildcache"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/buildstate"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/registry"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/remotecache"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation/gvisor"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/lifecycle"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/machinetrust"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/placement"
+	dockerplacement "github.com/kodustech/kodus-ai/apps/runtime-cell/internal/placement/docker"
 )
 
-// Docker is the part of the host's Docker the driver uses; dockercli.CLI
-// implements it.
-type Docker interface {
-	Runtimes(ctx context.Context) ([]string, error)
-	DaemonEndpoint(ctx context.Context) (string, error)
-	CgroupInfo(ctx context.Context) (dockercli.CgroupDaemonInfo, error)
-	APIVersion(ctx context.Context) (string, error)
-	SecurityOptions(ctx context.Context) ([]string, error)
-	RunHolder(ctx context.Context, h dockercli.HolderSpec) (dockercli.Container, error)
-	Remove(ctx context.Context, name string) error
-	IDs(ctx context.Context, f dockercli.Filters) ([]string, error)
-	Inspect(ctx context.Context, ids ...string) ([]dockercli.Container, error)
-	List(ctx context.Context, labels map[string]string) ([]dockercli.Container, error)
-	ComposeConfig(ctx context.Context, p dockercli.ComposeProject) ([]byte, error)
-	ComposeUp(ctx context.Context, p dockercli.ComposeProject) error
-	ComposeDown(ctx context.Context, project string, volumes bool) error
-	ComposeStop(ctx context.Context, project string) error
-	ComposeStopServices(ctx context.Context, project string, services ...string) error
-	ComposeStart(ctx context.Context, project string) error
-	NetworkCreate(ctx context.Context, n dockercli.NetworkSpec) error
-	NetworkSubnet(ctx context.Context, name string) (string, error)
-	NetworkLabels(ctx context.Context, name string) (map[string]string, error)
-	NetworkRemove(ctx context.Context, name string) error
-	NetworkConnect(ctx context.Context, network, container string) (string, error)
-	NetworkDisconnect(ctx context.Context, network, container string) error
-	RunBuild(ctx context.Context, b dockercli.BuildRun) error
-	LoadImage(ctx context.Context, tarball string) error
-	RemoveImage(ctx context.Context, ref string) error
-	TagImage(ctx context.Context, src, dst string) error
-	ImageRefs(ctx context.Context, repo string) ([]string, error)
-	ImageLabels(ctx context.Context, ref string) (map[string]string, error)
-	Volumes(ctx context.Context, labels map[string]string) ([]dockercli.Volume, error)
-	VolumeRemove(ctx context.Context, names ...string) error
-	CopyVolumeIn(ctx context.Context, runtime, helperImage, from, to string, labels map[string]string) error
-	CopyVolumeBound(ctx context.Context, runtime, helperImage, from, to string, labels map[string]string, parent string) error
-	CopyVolumeGeneration(ctx context.Context, runtime, helperImage, from, to string, labels map[string]string, parent, expected, write string) error
-	Exec(ctx context.Context, e dockercli.ExecSpec, req, host kodyexec.Request) kodyexec.Result
-	ExecInput(ctx context.Context, container string, stdin []byte, argv ...string) ([]byte, error)
-}
-
-var _ Docker = dockercli.CLI{}
-
 type Config struct {
+	// IOLimits are the per-sandbox disk and network rates (the shared
+	// policy, driver.IOLimits): each workload container's writes to the disk
+	// Docker's data root is on get Docker's blkio limits, and its host-side
+	// veths a token bucket each way (tc). A sandbox's /workspace and /tmp
+	// are in its memory, which its memory limit bounds. nil: none.
+	IOLimits *driver.IOLimits
 	// ClaimLimits enforces the whole container tree; nil leaves legacy per-container limits.
 	ClaimLimits claimlimits.Manager
 	// ClaimLimitBackend is explicit: cgroupfs (default) or systemd.
@@ -85,6 +63,13 @@ type Config struct {
 	// (the cell's registry mirror, "…/go,off"); a Dockerfile that declares
 	// ARG GOPROXY fetches its modules there. Empty: none.
 	MirrorGoProxy string
+	// MirrorNPM and MirrorPyPI are the cell mirror's npm registry
+	// (http://mirror.cell.internal:8080/npm/) and PyPI simple index
+	// (…/pypi/simple/), given to every build as npm_config_registry and
+	// PIP_INDEX_URL (with PIP_TRUSTED_HOST, the mirror being plain HTTP on
+	// the claim network): a Dockerfile that declares the ARG installs
+	// through the read-only mirror. Empty: none.
+	MirrorNPM, MirrorPyPI string
 	// MirrorRegistry is the cell's registry mirror (host:port) every build's
 	// BuildKit pulls docker.io images through; empty: straight to Docker Hub.
 	MirrorRegistry string
@@ -94,24 +79,64 @@ type Config struct {
 	// cache alone.
 	PersistBuildState bool
 	// BuildStateMinFreeBytes: below this free space on the cell's disk, the
-	// least recently used environment states nobody holds are removed.
+	// environment states nobody holds that are cheapest to keep are removed
+	// (buildstate/cost.go), then exported caches no build reads.
 	BuildStateMinFreeBytes int64
 	// BuildStateKeep bounds what BuildKit keeps in one state ("20GB"; its GC).
 	BuildStateKeep string
-	CellID         string
-	Runtime        string // runsc
-	HolderImage    string
-	PidsLimit      int
+	// BuildCacheRemote is the build cache's store off the cell
+	// (cache_remote.go, docs/runtime/build-cache.md): an OCI registry,
+	// http(s)://host[:port]/<prefix>, plain HTTP only on loopback. Empty: the
+	// cache lives on the cell only, as before. BuildCacheRemoteAuth is
+	// "user:password" for it, or empty.
+	BuildCacheRemote     string
+	BuildCacheRemoteAuth string
+	// ImageTransfer is how a build's image reaches this Docker (registry.go):
+	// TransferTarball (also when empty) or TransferRegistry (cmd/cell's
+	// default), which needs RegistryImage, the distribution registry by
+	// digest, and sends a tarball for a build the registry was never seeded for.
+	// RegistryKeepBytes bounds an environment's seed storage (zero:
+	// DefaultRegistryKeepBytes).
+	ImageTransfer     string
+	RegistryImage     string
+	RegistryKeepBytes int64
+	// MaxImageBytes bounds what one build may leave for the cell to load: its
+	// output directory, the image tarball in it included. Zero:
+	// dockercli.DefaultMaxImageBytes.
+	MaxImageBytes int64
+	// ContainerDiskSize caps the writable layer of every holder, builder and
+	// compose service ("50G", docker --storage-opt size=, compose
+	// storage_opt). Off when empty: only some storage drivers apply it
+	// (dockercli.ValidDiskSize), and the daemon refuses the container on the
+	// others.
+	ContainerDiskSize string
+	// ServiceLogMaxSize and ServiceLogMaxFile bound every compose service's
+	// logs (the local log driver's max-size and max-file, forced whatever the
+	// file says; sandbox.DefaultLogMaxSize and DefaultLogMaxFile when unset).
+	ServiceLogMaxSize string
+	ServiceLogMaxFile int
+	CellID            string
+	// Runtime is the gVisor backend's OCI runtime ("runsc" when empty): its
+	// machines' and the cell's helper containers on a claim.
+	Runtime string
+	// Host is what the host gives the backends (KVM, arch); probed when nil.
+	Host        *isolation.Host
+	HolderImage string
+	PidsLimit   int
 	// MemLimit and CPUs are forced on every compose service and build ("4g",
 	// "2") of a claim that asks no size of its own.
 	MemLimit string
 	CPUs     string
 	// MemMax and CPUsMax are the largest size one claim may ask
-	// (claim.acquire size); empty or zero: MemLimit and CPUs, so a claim may
-	// ask less than the default but never more. Neither may be below the
+	// (claim.acquire size); empty or zero: the host's (HostMemoryMB,
+	// HostCPUs) when known, else MemLimit and CPUs. Neither may be below the
 	// default.
 	MemMax  string
 	CPUsMax int
+	// HostMemoryMB and HostCPUs are what the host gives claims: the memory
+	// the cell may commit (MemTotal less the reserve) and its CPU count.
+	// Zero: unknown, and the ceiling stays at the default.
+	HostMemoryMB, HostCPUs int
 	// MemReady is what a ready claim is counted for in the cell's memory
 	// admission (ADR-070), as docker takes it ("2g" when empty, never above
 	// the claim's own memory). A count, not a limit: services keep MemLimit.
@@ -135,6 +160,14 @@ type Config struct {
 	// build sections under Runtime on the claim network. Empty: a project
 	// that builds is refused (ErrNoBuilder).
 	BuilderImage string
+	// BuilderTrustsCellCA: BuilderImage is the cell's own builder
+	// (builder-image/, with exec-ca-bundle.patch). With the trust files, every
+	// build's RUN steps then trust the cell CA: the claim's policy inspects
+	// the builder's TLS like a machine's (G1) and its builds get the claim's
+	// secrets (G6). False: a stock BuildKit, whose RUN steps keep their
+	// image's trust store, so the builder reaches only its passthrough hosts
+	// over TLS.
+	BuilderTrustsCellCA bool
 	// BuilderUID and BuilderGID are the builder's ids as the host sees them,
 	// the owner of the directories it writes (hostdirs.go). Zero: the
 	// image's user (1000), which is right only when Docker maps no user
@@ -168,14 +201,30 @@ type Config struct {
 	// time from (last use, generation and trash names); the wall clock when
 	// nil.
 	Clock clock.Clock
+
+	// SandboxImage is the code sandbox's tool image, by digest, with the
+	// guest agent at /usr/local/bin/kody-guest (sandbox.go). Empty: no sandboxes.
+	SandboxImage string
+	// Trust are the cell's trust files (internal/machinetrust), mounted
+	// read-only into the machines of a claim whose request asks them
+	// (UpRequest.CellTrust, SandboxRequest.CellTrust): every compose service
+	// with the trust variables, and a code sandbox, where the guest agent
+	// sets them. Zero: no machine gets them.
+	Trust machinetrust.Files
 }
 
-// Docker labels cannot change after creation. That suits kodus:hard-expires
-// (immutable by construction); kodus:expires lives in the driver's memory.
+// Driver is the docker-gvisor machine driver. Docker labels cannot change
+// after creation. That suits kodus:hard-expires (immutable by construction);
+// kodus:expires lives in the driver's memory.
 type Driver struct {
 	d   Docker
 	cfg Config
-	mu  sync.Mutex
+	// place is where machines live and how a claim's network attaches;
+	// backend (gVisor) makes and ends them.
+	place   placement.Placement
+	backend *gvisor.Backend
+	host    isolation.Host
+	mu      sync.Mutex
 	// machines is what the driver knows of each machine, from Create to
 	// Destroy (machineState).
 	machines map[string]*machineState
@@ -195,22 +244,60 @@ type Driver struct {
 	// their exported build caches (cache.go).
 	states stateStore
 	caches *buildcache.Generations
+	// remote is the build cache's store off the cell; nil: none.
+	remote    remoteCache
+	transfers remoteTransfers
 	// reclaim runs ReclaimDisk off the sweep's goroutine (sweep.go).
 	reclaim diskReclaim
+	// bg owns the work that outlives the call that started it (the disk
+	// reclaim, the remote cache pushes) until Shutdown (lifetime.go).
+	bg *lifecycle.Group
 	// maxSize is the largest size Create accepts.
 	maxSize driver.ClaimSize
+	// defaultSize is what a claim that asks no size gets: MemLimit, and CPUs
+	// by its whole part (as maxClaimSize counts it).
+	defaultSize driver.ClaimSize
 	// defaultMemMB is MemLimit in MB, readyMB MemReady (ClaimMemory).
 	defaultMemMB, readyMB int
 	// healthEvery is HealthStartInterval once the daemon is known to take
 	// it; zero: off.
 	healthEvery time.Duration
 	// clock times boots and resets (BootTiming).
-	clock     clock.Clock
-	catalogMu sync.Mutex
-	catalog   *bakecatalog.Catalog
-	// syncCatalogDir replaces the catalog's directory sync; nil in production.
-	syncCatalogDir  func(*os.File) error
+	clock           clock.Clock
+	catalogMu       sync.Mutex
+	catalog         *bakecatalog.Catalog
 	generationHolds map[string]func()
+	// registries is the registry image transfer (package registry); nil
+	// on the tarball transfer.
+	registries *registry.Registries
+	// hooks are the seams only tests set (export_test.go); nil in production.
+	hooks *testHooks
+}
+
+// testHooks replace or interleave with the driver's work in tests. A zero
+// field keeps the production behavior.
+type testHooks struct {
+	// syncCatalogDir replaces the catalog's directory sync.
+	syncCatalogDir func(*os.File) error
+	// dialRegistry dials a build's registry.
+	dialRegistry func(ctx context.Context, network, addr string) (net.Conn, error)
+	// buildDiskEvery is how often a running build's host directories are
+	// measured (watchBuildDisk); zero: defaultBuildDiskEvery.
+	buildDiskEvery time.Duration
+	// freeBytes measures the free space evictCaches keeps above the floor;
+	// nil: buildstate.FreeBytes.
+	freeBytes func(path string) (int64, error)
+}
+
+// registryDialer dials a build's registry in production.
+var registryDialer = &net.Dialer{Timeout: 5 * time.Second}
+
+// dialRegistry dials a build's registry, through the test hook when set.
+func (d *Driver) dialRegistry(ctx context.Context, network, addr string) (net.Conn, error) {
+	if d.hooks != nil && d.hooks.dialRegistry != nil {
+		return d.hooks.dialRegistry(ctx, network, addr)
+	}
+	return registryDialer.DialContext(ctx, network, addr)
 }
 
 func (d *Driver) log() *slog.Logger {
@@ -220,8 +307,20 @@ func (d *Driver) log() *slog.Logger {
 	return d.cfg.Log
 }
 
-// ErrNoIsolatedRuntime: the cell does not start without gVisor (S-10).
-var ErrNoIsolatedRuntime = errors.New("dockergvisor: the runsc runtime is not installed in this Docker")
+// ErrNoIsolatedRuntime means the cell does not start without gVisor (S-10).
+var ErrNoIsolatedRuntime = gvisor.ErrNoRuntime
+
+// newBackend is the gVisor backend on this host's Docker.
+func newBackend(ctx context.Context, d backendPort, cfg Config) (*gvisor.Backend, error) {
+	b, err := gvisor.New(ctx, d, cfg.Runtime)
+	if err != nil || cfg.IOLimits == nil {
+		return b, err
+	}
+	if root, err := d.DataRoot(ctx); err == nil {
+		b.BoundIOOn(dockercli.DataRootDisk(root))
+	}
+	return b, nil
+}
 
 func New(ctx context.Context, d Docker, cfg Config) (*Driver, error) {
 	if cfg.CellID == "" || cfg.HolderImage == "" {
@@ -229,6 +328,9 @@ func New(ctx context.Context, d Docker, cfg Config) (*Driver, error) {
 	}
 	if cfg.ObserverImage != "" && cfg.ObserverTLSDir == "" {
 		return nil, errors.New("dockergvisor: an observer image needs its TLS directory")
+	}
+	if p := cfg.ClaimSubnets; p.IsValid() && (!p.Addr().Is4() || p.Bits() > 24) {
+		return nil, fmt.Errorf("dockergvisor: claim subnets %s is not an IPv4 pool of a /24 or wider", p)
 	}
 	if cfg.Runtime == "" {
 		cfg.Runtime = "runsc"
@@ -264,27 +366,45 @@ func New(ctx context.Context, d Docker, cfg Config) (*Driver, error) {
 	if cfg.CPUs == "" {
 		cfg.CPUs = "2"
 	}
-	if cfg.HelperImage == "" {
-		cfg.HelperImage = defaultHelperImage
+	helper, err := helperImage(cfg.HelperImage)
+	if err != nil {
+		return nil, err
+	}
+	cfg.HelperImage = helper
+	if err := dockercli.ValidDiskSize(cfg.ContainerDiskSize); err != nil {
+		return nil, err
+	}
+	if cfg.MaxImageBytes <= 0 {
+		cfg.MaxImageBytes = dockercli.DefaultMaxImageBytes
+	}
+	switch cfg.ImageTransfer {
+	case "":
+		cfg.ImageTransfer = TransferTarball
+	case TransferTarball:
+	case TransferRegistry:
+		if cfg.RegistryImage == "" || cfg.BuilderImage == "" {
+			return nil, errors.New("dockergvisor: the registry image transfer needs a builder image and a registry image")
+		}
+	default:
+		return nil, fmt.Errorf("dockergvisor: image transfer %q is not tarball or registry", cfg.ImageTransfer)
 	}
 	maxSize, err := maxClaimSize(cfg)
 	if err != nil {
 		return nil, err
 	}
-	rts, err := d.Runtimes(ctx)
+	host := isolation.ProbeHost()
+	if cfg.Host != nil {
+		host = *cfg.Host
+	}
+	backend, err := newBackend(ctx, d, cfg)
 	if err != nil {
 		return nil, err
 	}
-	found := false
-	for _, r := range rts {
-		if r == cfg.Runtime {
-			found = true
-		}
-	}
-	if !found {
-		return nil, ErrNoIsolatedRuntime
-	}
 	defMem, err := parseMemMB(cfg.MemLimit)
+	if err != nil {
+		return nil, err
+	}
+	defCPUs, err := parseCPUs(cfg.CPUs)
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +414,7 @@ func New(ctx context.Context, d Docker, cfg Config) (*Driver, error) {
 			return nil, err
 		}
 	}
-	dr := &Driver{d: d, cfg: cfg, machines: map[string]*machineState{}, pinned: map[string]*pinnedOutput{}, adopted: map[string]string{}, maxSize: maxSize, states: noStates{}, dirs: defaultHostDirs(), defaultMemMB: defMem, readyMB: readyMB}
+	dr := &Driver{d: d, cfg: cfg, place: dockerplacement.Placement{N: d}, backend: backend, host: host, machines: map[string]*machineState{}, pinned: map[string]*pinnedOutput{}, adopted: map[string]string{}, maxSize: maxSize, defaultSize: driver.ClaimSize{MemoryMB: defMem, CPUs: defCPUs}, states: noStates{}, dirs: defaultHostDirs(), defaultMemMB: defMem, readyMB: readyMB, bg: lifecycle.New(context.WithoutCancel(ctx))}
 	if cfg.BuilderImage != "" {
 		if dr.dirs.uid, dr.dirs.gid, err = builderIDs(ctx, d, cfg); err != nil {
 			return nil, err
@@ -305,14 +425,48 @@ func New(ctx context.Context, d Docker, cfg Config) (*Driver, error) {
 			}
 		}
 	}
+	if dr.registryMode() {
+		// The seed is sealed by making its blobs the cell's and read-only
+		// (sealSeed): a cell that is the builder's uid owns what the builder
+		// writes, and a pull request's registry could rewrite a blob it was
+		// linked.
+		if dr.dirs.self == dr.dirs.uid {
+			return nil, fmt.Errorf("dockergvisor: the registry image transfer needs the cell to run as another uid than the builder's (%d); run it as another uid, or choose -gvisor-image-transfer tarball", dr.dirs.uid)
+		}
+		if err := dr.dirs.privateRoot(dr.registryRoot()); err != nil {
+			return nil, err
+		}
+		// No build runs yet.
+		dr.registries = dr.newRegistries()
+		if err := dr.registries.Clear(); err != nil {
+			return nil, err
+		}
+	}
 	clk := clock.Or(cfg.Clock)
 	dr.clock = clk
 	dr.healthEvery = dr.healthStartInterval(ctx)
 	dr.caches = buildcache.New(filepath.Join(dr.workDir(), "cache", "env"), filepath.Join(dr.workDir(), "cache", "trash"), clk)
+	if cfg.BuildCacheRemote != "" {
+		reg, err := remotecache.New(remotecache.Config{URL: cfg.BuildCacheRemote, Auth: cfg.BuildCacheRemoteAuth})
+		if err != nil {
+			return nil, err
+		}
+		dr.remote = reg
+		dr.log().Info("build.cache.remote", "store", reg.Where())
+	}
 	if cfg.PersistBuildState {
+		root := filepath.Join(dr.workDir(), "buildkit")
+		// A clone where the state's filesystem reflinks, the kernel's overlay
+		// elsewhere: on the overlay a build that replaces a file of an earlier
+		// layer fails and runs again cold (buildstate.cloneMounter).
+		mounter, view := buildstate.MounterFor(root)
+		dr.log().Info("build.state.store", "root", root, "view", view)
 		if dr.states, err = buildstate.New(buildstate.Config{
-			Root: filepath.Join(dr.workDir(), "buildkit"), CellID: cfg.CellID, MinFree: cfg.BuildStateMinFreeBytes,
-			BuilderDir: dr.dirs.builderDir, Mounter: buildstate.DefaultMounter(), FreeBytes: buildstate.FreeBytes, Clock: clk, Log: dr.log(),
+			Root: root, CellID: cfg.CellID, MinFree: cfg.BuildStateMinFreeBytes,
+			BuilderDir: dr.dirs.builderDir, Mounter: mounter, FreeBytes: buildstate.FreeBytes, Clock: clk, Log: dr.log(),
+			// A clone is a plain directory: the next build's view can be made
+			// ahead of it (buildstate/spare.go). A kernel overlay is made at once.
+			SpareViews: view == "clone",
 		}); err != nil {
 			return nil, err
 		}
@@ -365,8 +519,33 @@ const Kind = "docker-gvisor"
 
 func (d *Driver) Kind() string { return Kind }
 
+// Capabilities is the backend's, on the docker placement, with what the
+// shared layer adds (the largest size).
 func (d *Driver) Capabilities() driver.Capabilities {
-	return driver.Capabilities{Isolation: driver.IsolationSandboxedContainer, NestedContainers: true, Suspend: "stop", Arch: []string{"x86_64", "arm64"}, Bake: true, MaxClaimSize: d.maxSize}
+	b := d.backend.Capabilities()
+	return driver.Capabilities{
+		Isolation: b.Isolation, NestedContainers: b.NestedDocker, Arch: b.Arch, MaxClaimSize: d.maxSize, DefaultClaimSize: d.defaultSize,
+		Backends: []string{b.Backend}, KVM: d.host.KVM, HostArch: d.host.Arch,
+		SandboxCellTrust: d.cfg.Trust.Set(),
+	}
+}
+
+// Parts is everything the shared layer does beyond the core: bakes and their
+// catalog, the compose boot and the recipe, the pool, code sandboxes (when
+// the backend runs them), the memory budget, the readers of a claim's boot,
+// logs and failure, observer SQL and the sweep. No memory snapshot: the
+// gVisor backend keeps none.
+func (d *Driver) Parts() driver.Parts {
+	p := driver.Parts{
+		Baker: d, BakePinner: d, BakeCatalog: d, Resetter: d,
+		Composer: d, Recipes: d, Pooler: d, Memory: d,
+		Diagnoser: d, ServiceLogs: d, BootTimes: d, BootPhases: d, BuildStates: d,
+		SQLObservers: d, Sweeper: d,
+	}
+	if d.SandboxesEnabled() {
+		p.Sandboxes = d
+	}
+	return p
 }
 
 // labelMachine names the machine on its holder container only, so List
@@ -390,8 +569,10 @@ const observerTLSMount = "/etc/kodus/observer"
 const ObserverPort = 7443
 
 func observerCmd(cell string) []string {
-	return []string{"/observer", "-listen", fmt.Sprintf(":%d", ObserverPort), "-cell-id", cell,
-		"-cert", observerTLSMount + "/cert.pem", "-key", observerTLSMount + "/key.pem", "-ca", observerTLSMount + "/ca.pem"}
+	return []string{
+		"/observer", "-listen", fmt.Sprintf(":%d", ObserverPort), "-cell-id", cell,
+		"-cert", observerTLSMount + "/cert.pem", "-key", observerTLSMount + "/key.pem", "-ca", observerTLSMount + "/ca.pem",
+	}
 }
 
 var (
@@ -399,6 +580,19 @@ var (
 	_ driver.ComposeBooter = (*Driver)(nil)
 	_ driver.RecipeRunner  = (*Driver)(nil)
 )
+
+// BootPhases is the claim's last boot in words, slowest first, whether it
+// came up or not (driver.BootPhaser).
+func (d *Driver) BootPhases(claimID string) ([]driver.BootPhase, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, m := range d.machines {
+		if m.phases != nil && m.phases.claim == claimID {
+			return append([]driver.BootPhase(nil), m.phases.phases...), true
+		}
+	}
+	return nil, false
+}
 
 // BootTiming is the claim's last boot, per phase: its builds (each a
 // BuildKit run and the image's load) and compose up.

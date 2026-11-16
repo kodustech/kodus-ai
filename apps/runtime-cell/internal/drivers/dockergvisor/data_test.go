@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
 
@@ -52,7 +52,7 @@ func bakeWithData(t *testing.T, d *Driver, docker *memDocker, claim, data string
 	boot(t, d, ref)
 	d.machineOutput(ref.MachineID).volumes = []string{"pgdata"}
 	docker.plantVolume(ref.MachineID, "pgdata", data)
-	if err := d.PinBakeSource(ref); err != nil {
+	if err := d.PinBakeSource(t.Context(), ref); err != nil {
 		t.Fatal(err)
 	}
 	return ref
@@ -198,7 +198,7 @@ type failSecond struct {
 }
 
 func (f *failSecond) CopyVolumeGeneration(ctx context.Context, runtime, helper, from, to string, labels map[string]string, parent, expected, write string) error {
-	return f.memDocker.copyGeneration(from, to, expected, write, func() error { return f.CopyVolumeIn(ctx, runtime, helper, from, to, labels) })
+	return f.copyGeneration(from, to, expected, write, func() error { return f.CopyVolumeIn(ctx, runtime, helper, from, to, labels) })
 }
 
 func (f *failSecond) CopyVolumeIn(ctx context.Context, runtime, helper, from, to string, labels map[string]string) error {
@@ -228,6 +228,35 @@ func TestBakeAndReleaseRacingNeverLoseOrLeakTheData(t *testing.T) {
 		}
 		if _, ok := docker.volume(projectVolume(setup.MachineID, "pgdata")); ok {
 			t.Fatalf("run %d: the setup's volume leaked", i)
+		}
+	}
+}
+
+// Finding 13: the helper runs over an org's data (every bake and restore
+// copy). A floating tag would run whatever the registry serves under it, so
+// the default is pinned by digest and a configured helper that is not is
+// refused when the driver starts.
+func TestTheHelperImageIsPinnedByDigest(t *testing.T) {
+	if !digestRef.MatchString(defaultHelperImage) {
+		t.Fatalf("the default helper image %q is not pinned by digest", defaultHelperImage)
+	}
+	start := func(helper string) (*Driver, error) {
+		r := &recorder{answers: map[string]string{"info": `{"runc":{},"runsc":{}}`, "network subnet": "10.213.5.0/24 \n"}}
+		return New(context.Background(), dockercli.CLI{Run: r.run}, Config{CellID: "cell-1", HolderImage: "kodus/holder@sha256:abc", WorkDir: t.TempDir(), HelperImage: helper})
+	}
+	for _, helper := range []string{"busybox:1.36", "busybox", "busybox@sha256:abc", "registry.example/busybox:latest"} {
+		if _, err := start(helper); err == nil || !strings.Contains(err.Error(), "helper image") {
+			t.Fatalf("helper %q: got %v, want a refusal naming the helper image", helper, err)
+		}
+	}
+	pinned := "registry.example/busybox:1.36@sha256:" + strings.Repeat("ab", 32)
+	for helper, want := range map[string]string{"": defaultHelperImage, pinned: pinned} {
+		d, err := start(helper)
+		if err != nil {
+			t.Fatalf("helper %q: %v", helper, err)
+		}
+		if d.cfg.HelperImage != want {
+			t.Fatalf("helper %q: runs %q, want %q", helper, d.cfg.HelperImage, want)
 		}
 	}
 }

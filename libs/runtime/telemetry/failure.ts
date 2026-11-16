@@ -71,7 +71,7 @@ export function safeFailure(error: unknown): {
 export function recordSafeFailure(span: Span, error: unknown): void {
     const failure = safeFailure(error);
     span.setAttribute('error.type', failure.kind);
-    if (failure.code) span.setAttribute('runtime.error.code', failure.code);
+    if (failure.code) span.setAttribute('kodus.runtime.error.code', failure.code);
     span.addEvent('exception', { 'exception.type': failure.kind });
     span.setStatus({ code: SpanStatusCode.ERROR });
 }

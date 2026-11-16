@@ -1,14 +1,15 @@
 import { classifyBlocker, type BlockerInput } from '@libs/runtime/blockers/catalog';
 import { BLOCKER_KINDS, type BlockerKind } from '@libs/runtime/contracts/enums';
+import { REPOSITORY_ALIAS_PATTERN } from '@libs/runtime/contracts/workspace';
 import type { GateStep } from '@libs/runtime/gate';
+import { PIXEL_CHANGE_THRESHOLD } from '@libs/runtime/gate/probe-fields';
 import { BROWSER_STEP_KINDS } from '@libs/runtime/probe/probe.schema';
 import type { Observed, ProbeVerdict, ReportBrowserStep, ReportPath, RunState, RuntimeRunReport, RuntimeRunRequested, Uncovered, VerdictState } from '@libs/runtime/run';
 import type { RunBootFailure } from '@libs/runtime/run/boot-failure';
-
-import { PIXEL_CHANGE_THRESHOLD } from './probe-fields';
+import { BOOT_BLOCKER_CAUSES, type BootBlockerCause } from '@libs/runtime/run/run-report';
 
 // The structured result the product renders into the comment, the replies and
-// the check (ADR-052). Only fields the gate and the replay produced: verdicts,
+// the check. Only fields the gate and the replay produced: verdicts,
 // entry points, probe ids, HTTP status or exit code per side. Never the body
 // of a response, the agent's prose or a test's output.
 
@@ -28,7 +29,7 @@ export function observedOf(steps: GateStep[], stepIds: string[] | undefined): Ob
     return undefined;
 }
 
-/** The `steps` field of a browser round (probe-fields.ts: `ok` or `fail:<why>` per step, comma-joined) as steps passed of total. */
+/** The `steps` field of a browser round (gate/probe-fields.ts: `ok` or `fail:<why>` per step, comma-joined) as steps passed of total. */
 function browserStepsOf(field: string | undefined): Observed['browser'] {
     if (!field) return undefined;
     const tokens = field.split(',');
@@ -37,7 +38,7 @@ function browserStepsOf(field: string | undefined): Observed['browser'] {
 }
 
 /**
- * A browser probe's finding in the report's own terms (ADR-071), from the
+ * A browser probe's finding in the report's own terms, from the
  * verdict's lanes: the first step the gate's difference rests on (its
  * outcome when the gate differs in `steps`, its value when it differs in
  * `step.N.value`), named by the probe's step, never by what the page held;
@@ -91,12 +92,18 @@ export function buildReport(args: {
     securityViolation?: { side: 'base' | 'pr'; signature: string };
     /** The Run stopped early (halted): what has no verdict was not reached. */
     stoppedEarly?: boolean;
-    /** Recipe files the PR changes (S-19); the comment says the base's recipe ran. */
+    /** Recipe files the PR changes; the comment says the base's recipe ran. */
     recipeChangedInPr?: RuntimeRunReport['recipeChangedInPr'];
+    /** The member repository the PR is in, when its `.kodus/` changes were not applied. */
+    recipeChangedInMember?: string;
     /** The projection's `uncovered`, when the Run wrote it: used as is instead of recomputing from the probes. */
     uncoveredDetail?: Uncovered[];
     /** The projection's boot failure: only its error line reaches the report. */
     bootFailure?: RunBootFailure;
+    /** nothing_to_test: the files judged to change nothing that runs. */
+    noRuntimeEffect?: { file: string }[];
+    /** The projection's coldBuild: a side that built with no cache because the cell had evicted the environment's state. */
+    coldBuild?: RuntimeRunReport['coldBuild'];
 }): RuntimeRunReport {
     const paths = args.probes.slice(0, 100).map((p) => ({
         entryPoint: clip(p.entryPoint || 'unknown', 512),
@@ -106,6 +113,7 @@ export function buildReport(args: {
         verdict: p.verdict,
         ...(p.findingKind ? { findingKind: p.findingKind } : {}),
         ...(p.intent ? { intent: p.intent } : {}),
+        ...(p.verdict === 'finding' && p.intent === 'intended' ? { intendedBy: p.intendedChange?.length ? ('diff' as const) : ('test' as const) } : {}),
         ...withSide('base', observedOf(args.steps, p.baseStepIds)),
         ...withSide('pr', observedOf(args.steps, p.prStepIds)),
         ...(p.differingFields?.length ? { differingFields: p.differingFields.slice(0, 5).map((f) => clip(f, 128)) } : {}),
@@ -130,8 +138,13 @@ export function buildReport(args: {
         ...(args.securityEvent ? { securityEvent: true } : {}),
         ...(args.securityViolation ? { securityViolation: args.securityViolation } : {}),
         ...(args.recipeChangedInPr?.length ? { recipeChangedInPr: args.recipeChangedInPr } : {}),
-        ...bootFailureOf(args.state, uncovered),
+        ...(args.recipeChangedInPr?.length && args.recipeChangedInMember && REPOSITORY_ALIAS_PATTERN.test(args.recipeChangedInMember) ? { recipeChangedInMember: args.recipeChangedInMember } : {}),
+        ...bootFailureOf(args.state, uncovered, args.bootFailure),
         ...bootErrorOf(args.bootFailure),
+        ...(args.coldBuild && !Number.isNaN(Date.parse(args.coldBuild.evictedAt))
+            ? { coldBuild: { side: args.coldBuild.side, cause: 'build_state_evicted' as const, evictedAt: new Date(args.coldBuild.evictedAt).toISOString() } }
+            : {}),
+        ...(args.state === 'nothing_to_test' && args.noRuntimeEffect?.length ? { noRuntimeEffect: args.noRuntimeEffect.slice(0, 20).map((f) => clip(f.file, 512)) } : {}),
     };
 }
 
@@ -144,7 +157,7 @@ function bootErrorOf(f: RunBootFailure | undefined): Pick<RuntimeRunReport, 'boo
 /**
  * The entry points a Run decides on: the diff's, with each `unmapped:<file>`
  * the agent reached through a route (`via`) replaced by that route. The route
- * is then covered, or not, by the observer's log like any other (S-32); a file
+ * is then covered, or not, by the observer's log like any other; a file
  * the agent found no route for stays unmapped and uncovered.
  */
 export function entryPointsWithRoutes(entryPoints: string[], planned: { entryPoint: string; via?: string }[]): string[] {
@@ -180,24 +193,29 @@ export function uncoveredOf(probes: ProbeVerdict[], entryPoints: string[], stopp
 const ENV_NAME = /^[A-Z][A-Z0-9_]{0,63}$/;
 const SUGGESTION_ID = /^[A-Za-z0-9_-]{1,128}$/;
 
-function validBlocker(b: ProbeVerdict['blocker']): Uncovered['blocker'] {
+function validBlocker(b: (ProbeVerdict['blocker'] & { cause?: string }) | undefined): Uncovered['blocker'] {
     if (!b || !(BLOCKER_KINDS as readonly string[]).includes(b.kind)) return undefined;
-    return { kind: b.kind, ...(b.kind === 'missing_env' && b.name && ENV_NAME.test(b.name) ? { name: b.name } : {}) };
+    const cause = (BOOT_BLOCKER_CAUSES as readonly string[]).includes(b.cause ?? '') ? (b.cause as BootBlockerCause) : undefined;
+    return { kind: b.kind, ...(b.kind === 'missing_env' && b.name && ENV_NAME.test(b.name) ? { name: b.name } : {}), ...(cause ? { cause } : {}) };
 }
 
 /**
  * The structured cause of a boot the cell reported blocked: the first blocker
- * the catalog classifies (docs §4, deterministic rules), as a report kind and,
+ * the catalog classifies (deterministic rules), as a report kind and,
  * for missing_env, the variable it names. The catalog's own kinds that the
  * report does not know (not_ready) read as unknown.
  */
-export function bootBlockerOf(blockers: BlockerInput[]): { kind: BlockerKind; name?: string } | undefined {
+export function bootBlockerOf(blockers: BlockerInput[], buildStateEvictedAt?: string): { kind: BlockerKind; name?: string; cause?: BootBlockerCause } | undefined {
     const first = blockers[0];
     if (!first) return undefined;
     const c = classifyBlocker({ kind: first.kind, signature: first.signature, message: first.message, ...(first.bundle ? { bundle: first.bundle } : {}) });
     const kind: BlockerKind = (BLOCKER_KINDS as readonly string[]).includes(c.kind) ? (c.kind as BlockerKind) : 'unknown';
     const name = kind === 'missing_env' ? c.signature.replace(/^missing_env:/, '') : undefined;
-    return { kind, ...(name && ENV_NAME.test(name) ? { name } : {}) };
+    // A boot that outlived its wait is no machine out of resources (kr-calcom#2 Run b8efd73b said so); one whose build
+    // ran cold because the cell had evicted the environment's build state says that instead.
+    const timedOut = first.signature === 'boot_timeout';
+    const cause: BootBlockerCause | undefined = timedOut ? (buildStateEvictedAt ? 'build_state_evicted' : 'boot_timeout') : undefined;
+    return { kind, ...(name && ENV_NAME.test(name) ? { name } : {}), ...(cause ? { cause } : {}) };
 }
 
 /**
@@ -214,13 +232,21 @@ export function infraBootBlocker(blockers: BlockerInput[]): boolean {
 }
 
 /** could_not_boot is written only when the base's boot is blocked (run-orchestrator.ts): its cause is the uncovered paths' blocker. */
-function bootFailureOf(state: RunState, uncovered: Uncovered[]): Pick<RuntimeRunReport, 'bootFailure'> {
+function bootFailureOf(state: RunState, uncovered: Uncovered[], boot?: RunBootFailure): Pick<RuntimeRunReport, 'bootFailure'> {
     const kind = uncovered.find((u) => u.reason === 'blocker' && u.blocker)?.blocker?.kind;
-    return state === 'could_not_boot' && kind ? { bootFailure: { failsOnBase: true, kind } } : {};
+    if (state !== 'could_not_boot' || !kind) return {};
+    // Both sides came up; the cell had no prepared image of the environment (run-orchestrator.ts).
+    if (boot?.signature === 'environment_not_prepared') return { bootFailure: { failsOnBase: false, kind, needsSetup: true } };
+    return { bootFailure: { failsOnBase: true, kind, ...(boot?.alias ? { alias: boot.alias } : {}) } };
+}
+
+/** Every entry point of a member's PR the recipe does not boot: not tested, and never matched against another service. */
+export function uncoveredByMemberNotBooted(entryPoints: string[], alias: string): Uncovered[] {
+    return entryPoints.slice(0, 100).map((entryPoint) => ({ entryPoint: clip(entryPoint, 512), reason: 'blocker' as const, blocker: { kind: 'other_repo' as const, alias } }));
 }
 
 /** Every entry point of a Run whose base could not boot: not tested, because of that blocker. */
-export function uncoveredByBoot(entryPoints: string[], blocker: { kind: BlockerKind; name?: string } | undefined): Uncovered[] {
+export function uncoveredByBoot(entryPoints: string[], blocker: { kind: BlockerKind; name?: string; cause?: BootBlockerCause } | undefined): Uncovered[] {
     return entryPoints.slice(0, 100).map((entryPoint) => ({ entryPoint: clip(entryPoint, 512), reason: 'blocker' as const, ...(validBlocker(blocker) ? { blocker: validBlocker(blocker)! } : {}) }));
 }
 

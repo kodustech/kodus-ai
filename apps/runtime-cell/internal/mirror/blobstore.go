@@ -89,8 +89,10 @@ func OpenDiskStore(dir string, maxBytes int64, c clock.Clock, m *CacheMetrics) (
 	if maxBytes <= 0 {
 		return nil, errors.New("mirror: the cache needs a positive size")
 	}
-	s := &DiskStore{dir: filepath.Join(dir, "sha256"), tmp: filepath.Join(dir, "tmp"), max: maxBytes,
-		clock: clock.Or(c), metrics: m, lru: list.New(), index: map[string]*list.Element{}}
+	s := &DiskStore{
+		dir: filepath.Join(dir, "sha256"), tmp: filepath.Join(dir, "tmp"), max: maxBytes,
+		clock: clock.Or(c), metrics: m, lru: list.New(), index: map[string]*list.Element{},
+	}
 	if err := os.RemoveAll(s.tmp); err != nil {
 		return nil, fmt.Errorf("mirror: clean the cache's temp files: %w", err)
 	}
@@ -145,7 +147,7 @@ func (s *DiskStore) Open(digest string) (Blob, error) {
 	if !ok {
 		return nil, ErrNotCached
 	}
-	f, err := os.Open(filepath.Join(s.dir, h))
+	f, err := os.Open(filepath.Join(s.dir, h)) //nolint:gosec // G304: h passed digestHex (sha256 hex only), s.dir is the operator's cache dir
 	if err != nil {
 		// Removed behind our back: forget it, the next request refetches.
 		s.removeLocked(el)
@@ -154,7 +156,7 @@ func (s *DiskStore) Open(digest string) (Blob, error) {
 	s.lru.MoveToFront(el)
 	now := s.clock.Now()
 	_ = os.Chtimes(f.Name(), now, now) // best effort: only the order after a restart depends on it
-	return &diskBlob{File: f, size: el.Value.(*diskEntry).size}, nil
+	return &diskBlob{File: f, size: entryOf(el).size}, nil
 }
 
 func (s *DiskStore) Create(digest string) (BlobWriter, error) {
@@ -202,15 +204,24 @@ func (s *DiskStore) evictLocked(keep *list.Element) {
 		if el == nil || el == keep {
 			break
 		}
-		_ = os.Remove(filepath.Join(s.dir, el.Value.(*diskEntry).hex))
+		_ = os.Remove(filepath.Join(s.dir, entryOf(el).hex))
 		s.removeLocked(el)
 		s.metrics.evicted()
 	}
 	s.metrics.setBytes(s.size)
 }
 
+// entryOf is the entry el holds: the LRU list only ever holds *diskEntry.
+func entryOf(el *list.Element) *diskEntry {
+	e, ok := el.Value.(*diskEntry)
+	if !ok {
+		panic("mirror: blob index holds a foreign value")
+	}
+	return e
+}
+
 func (s *DiskStore) removeLocked(el *list.Element) {
-	e := el.Value.(*diskEntry)
+	e := entryOf(el)
 	s.lru.Remove(el)
 	delete(s.index, e.hex)
 	s.size -= e.size

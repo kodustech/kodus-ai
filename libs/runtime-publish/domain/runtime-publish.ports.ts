@@ -1,4 +1,5 @@
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import type { PreviewOffer } from './render-runtime-comment';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import type { IChecksAdapter } from '@libs/core/infrastructure/pipeline/interfaces/checks-adapter.interface';
 
@@ -16,6 +17,9 @@ export const RUNTIME_PUBLISH_CODE_MANAGEMENT_TOKEN = Symbol.for(
     'RuntimePublishCodeManagement',
 );
 export const RUNTIME_PUBLISH_CHECKS_TOKEN = Symbol.for('RuntimePublishChecks');
+export const RUNTIME_PUBLISH_COMMENT_AUTHOR_TOKEN = Symbol.for(
+    'RuntimePublishCommentAuthor',
+);
 export const RUNTIME_PUBLISH_SUGGESTION_RESOLVER_TOKEN = Symbol.for(
     'RuntimePublishSuggestionResolver',
 );
@@ -68,6 +72,19 @@ interface CommentTarget {
     body: string;
 }
 
+/**
+ * The fields the publisher reads from a platform's comment answer. Each
+ * platform returns its own shape, so every field is optional and checked.
+ */
+export interface PlatformComment {
+    id?: string | number | null;
+    body?: unknown;
+    /** GitLab: the discussion; Azure Repos: the thread. */
+    threadId?: string | number | null;
+    /** GitLab: the notes of a created discussion. */
+    notes?: Array<{ id?: string | number | null }> | null;
+}
+
 /** The slice of CodeManagementService the publisher uses. */
 export interface CodeManagementPort {
     getTypeIntegration(
@@ -76,7 +93,7 @@ export interface CodeManagementPort {
     createIssueComment(
         params: CommentTarget,
         type?: PlatformType,
-    ): Promise<any>;
+    ): Promise<PlatformComment | null | undefined>;
     /** A reply in the thread of a review comment (GitHub). */
     createResponseToComment(
         params: {
@@ -87,7 +104,7 @@ export interface CodeManagementPort {
             body: string;
         },
         type?: PlatformType,
-    ): Promise<any>;
+    ): Promise<PlatformComment | null | undefined>;
     /** Every comment of the PR; `failOnError` so a platform error is not read as "no comment". */
     getAllCommentsInPullRequest(
         params: {
@@ -97,7 +114,7 @@ export interface CodeManagementPort {
             failOnError: true;
         },
         type?: PlatformType,
-    ): Promise<any[]>;
+    ): Promise<PlatformComment[] | null | undefined>;
     /** Throws the platform error (with its HTTP `status`) when the edit fails. */
     updateIssueComment(
         params: CommentTarget & {
@@ -106,7 +123,27 @@ export interface CodeManagementPort {
             threadId?: number;
         },
         type?: PlatformType,
-    ): Promise<any>;
+    ): Promise<PlatformComment | null | undefined>;
+}
+
+/**
+ * Who the integration posts as. A create whose answer was lost is found
+ * again by its marker, and anyone can type the marker in a PR comment: only
+ * a comment this author wrote is adopted (review 2026-11-14, #11).
+ */
+export interface OwnCommentAuthor {
+    /** The ids of the account the integration's token belongs to, as listed comments name their author. */
+    userIds: string[];
+    /** The GitHub App this deployment posts as: its comments carry performed_via_github_app.id. */
+    githubAppId?: number;
+}
+
+export interface CommentAuthorPort {
+    /** Null when the platform cannot tell: then no comment is adopted and a new one is posted. */
+    ownAuthor(
+        organizationAndTeamData: OrganizationAndTeamData,
+        platformType: PlatformType,
+    ): Promise<OwnCommentAuthor | null>;
 }
 
 /** The slice of ChecksAdapterFactory the publisher uses. */
@@ -161,3 +198,13 @@ export const CHECKS_PLATFORMS: ReadonlySet<PlatformType> = new Set([
     PlatformType.GITHUB,
     PlatformType.FORGEJO,
 ]);
+
+/**
+ * Whether a Run's comment and check offer its preview (docs/runtime/preview-urls.md
+ * §8.1): the deployment has RUNTIME_PREVIEW_DOMAIN and the org has previews on.
+ * null: no preview line. Read from the product's own settings, never the Runtime.
+ */
+export const RUNTIME_PUBLISH_PREVIEW_OFFER_TOKEN = Symbol.for('RuntimePublishPreviewOffer');
+export interface PreviewOfferReader {
+    offerFor(target: { organizationId: string; fork?: boolean }): Promise<PreviewOffer | null>;
+}

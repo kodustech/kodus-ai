@@ -1,238 +1,361 @@
+import { randomUUID } from 'crypto';
+
+import type { RuntimeEnvironmentSetupRequested } from '@libs/runtime/contracts/runtime-commands';
+import { sealSecret } from '@libs/runtime/run/sealed-secret';
+
 import { CellUnavailableError, HubRefused, MemberCleanupPendingError } from '../../shared/errors';
-import type { AdmissionLease, AdmissionRecord, AdmissionStore, PhysicalAdmissionClient, PhysicalAdmissionTicket } from '../../shared/admission/admission-contract';
+import type {
+    AdmissionLimits,
+    AdmissionPayload,
+    AdmissionRecord,
+    AdmissionRef,
+    AdmissionStore,
+    PhysicalAdmissionClient,
+    PhysicalAdmissionRequest,
+    PhysicalAdmissionResult,
+    PhysicalAdmissionTicket,
+} from '../../shared/admission/admission-contract';
+import { InMemoryAdmissionStore } from '../../shared/admission/testing';
 import { shopRunRequest } from '../../e2e/fixtures';
 import { AdmissionCoordinator, type AdmissionScheduling } from './admission-coordinator';
 
-const now = new Date('2026-11-07T12:00:00Z');
-const req = shopRunRequest({ requestedAt: now.toISOString() });
-const ref = { organizationId: req.organizationId, kind: 'run' as const, key: req.runId };
-const identity = { ...ref, generation: 0, ticketOwnerToken: 'physical-owner' };
-const lease: AdmissionLease = { ...identity, leaseToken: 'short-lease', ownerEpoch: 1, ownerUntil: '2026-11-07T12:00:30Z' };
-const ticket: PhysicalAdmissionTicket = { ...identity, ticketId: 'ticket-1', cellId: 'cell-1', sessionEpoch: 'session-1', expiresAt: '2026-11-07T12:02:00Z', members: [] };
-const record: AdmissionRecord = {
-    ...identity, executionId: req.runId, payload: { kind: 'run', request: req }, payloadBytes: 100,
-    state: 'owned', deadlineAt: '2026-11-07T12:30:00Z', approvalDeadlineAt: null, nextAt: null,
-    maxAttempts: 360, leaseToken: lease.leaseToken, ownerEpoch: 1, ownerUntil: lease.ownerUntil,
-    permitHeld: false, ticket: null, lastReason: null, createdAt: now.toISOString(), updatedAt: now.toISOString(),
+// The coordinator against the real admission transitions (InMemoryAdmissionStore,
+// the same base the Postgres store runs) and a cell that keeps the tickets it
+// granted: every test asserts what is held afterwards (the permit, the ticket,
+// the record's state and reason, what was scheduled or woken), not which
+// method was called. Review T5.
+
+const START = Date.parse('2026-11-07T12:00:00Z');
+const LIMITS: AdmissionLimits & { leaseMs: number; retryMs: number } = {
+    globalWaiting: 100,
+    perOrgWaiting: 10,
+    globalExecuting: 4,
+    perOrgExecuting: 2,
+    maxAttempts: 360,
+    leaseMs: 30_000,
+    retryMs: 5_000,
 };
-function harness() {
-    const reserved = { ...record, state: 'reserved' as const, permitHeld: true };
-    const attached = { ...reserved, ticket };
-    const dispatched = { ...attached, state: 'dispatched' as const };
-    const deferred = { ...record, generation: 1, state: 'waiting' as const, nextAt: '2026-11-07T12:00:05.000Z' };
-    const store = {
-        take: jest.fn(async () => ({ status: 'taken', lease, record })),
-        reserveExecution: jest.fn(async () => ({ status: 'reserved', record: reserved })),
-        defer: jest.fn(async () => ({ changed: true, record: deferred })),
-        reject: jest.fn(async () => ({ changed: true, record: { ...reserved, state: 'rejected', lastReason: 'pair_too_large' } })),
-        attachTicket: jest.fn(async () => ({ changed: true, record: attached })),
-        markDispatched: jest.fn(async () => ({ changed: true, record: dispatched })),
-        get: jest.fn(async () => record),
-        startExecution: jest.fn(async () => ({ changed: true, record: { ...dispatched, state: 'running' } })),
-        finishExecution: jest.fn(async () => ({ changed: true, record: { ...dispatched, state: 'completed', permitHeld: false }, releasedTicket: ticket })),
-        acknowledgeTicketCleanup: jest.fn(async () => ({ changed: true, record: null })),
-    };
-    const physical = { reserve: jest.fn(async () => ({ status: 'reserved', ticket })), redeem: jest.fn(async () => true), cancel: jest.fn(async () => undefined) };
-    const checkpoints: unknown[] = [];
-    const ports: AdmissionScheduling = {
-        step: async (_name, fn) => { const out = await fn(); checkpoints.push(structuredClone(out)); return out; },
-        schedule: jest.fn(async () => undefined), wake: jest.fn(async () => undefined),
-    };
-    const coordinator = new AdmissionCoordinator(store as unknown as AdmissionStore, physical as unknown as PhysicalAdmissionClient,
-        { globalWaiting: 100, perOrgWaiting: 10, globalExecuting: 4, perOrgExecuting: 2, maxAttempts: 360, leaseMs: 30_000, retryMs: 5_000 }, () => now);
-    return { coordinator, store, physical, ports, checkpoints };
+
+/** The cell's side of physical admission: the tickets it holds, which were redeemed, how the next cancel answers. */
+class FakeCell implements PhysicalAdmissionClient {
+    readonly held = new Map<string, { ticket: PhysicalAdmissionTicket; request: PhysicalAdmissionRequest }>();
+    readonly redeemed = new Set<string>();
+    reservations = 0;
+    refusal?: { reason: 'no_capacity' | 'pair_too_large'; retryable: boolean };
+    /** Errors the next cancels throw, in order; an empty list cancels. */
+    cancelErrors: Error[] = [];
+    /** Runs while the cell grants a ticket (a slow hub). */
+    whileReserving?: () => void;
+
+    constructor(private readonly now: () => number) {}
+
+    async reserve(request: PhysicalAdmissionRequest): Promise<PhysicalAdmissionResult> {
+        this.reservations++;
+        this.whileReserving?.();
+        if (this.refusal) return { status: 'refused', ...this.refusal };
+        const ticket: PhysicalAdmissionTicket = {
+            organizationId: request.organizationId,
+            kind: request.kind,
+            key: request.key,
+            generation: request.generation,
+            ticketOwnerToken: request.ticketOwnerToken,
+            ticketId: `ticket-${this.reservations}`,
+            cellId: 'cell-1',
+            sessionEpoch: 'session-1',
+            expiresAt: new Date(this.now() + 2 * 60_000).toISOString(),
+            members: request.members.map((m) => ({ ...m, claimId: `claim-${m.idempotencyKey}` })),
+        };
+        this.held.set(ticket.ticketId, { ticket, request });
+        return { status: 'reserved', ticket };
+    }
+
+    async redeem(ticket: PhysicalAdmissionTicket): Promise<boolean> {
+        if (!this.held.has(ticket.ticketId)) return false;
+        this.redeemed.add(ticket.ticketId);
+        return true;
+    }
+
+    async cancel(ticket: PhysicalAdmissionTicket): Promise<void> {
+        const error = this.cancelErrors.shift();
+        if (error) throw error;
+        this.held.delete(ticket.ticketId);
+    }
 }
 
-describe('short durable admission attempts', () => {
-    it('does not reserve a logical permit or physical ticket for an already blocked setup', async () => {
+function harness() {
+    let now = START;
+    const clock = () => now;
+    const store = new InMemoryAdmissionStore({ now: () => new Date(now) });
+    const cell = new FakeCell(clock);
+    const coordinator = new AdmissionCoordinator(store, cell, LIMITS, () => new Date(now));
+    const scheduled: Array<{ ref: AdmissionRef; generation: number; nextAt: string }> = [];
+    const woken: string[] = [];
+    const checkpoints: unknown[] = [];
+    let crashAt: string | undefined;
+    const ports: AdmissionScheduling = {
+        step: async (name, fn) => {
+            // A worker that dies before this durable step: nothing after it ran.
+            if (name === crashAt) throw new Error(`worker died before ${name}`);
+            const out = await fn();
+            checkpoints.push(structuredClone(out));
+            return out;
+        },
+        schedule: async (ref, generation, nextAt) => void scheduled.push({ ref, generation, nextAt }),
+        wake: async (executionId) => void woken.push(executionId),
+    };
+    const accept = async (payload: AdmissionPayload): Promise<AdmissionRecord> => {
+        const accepted = await store.accept(payload, LIMITS);
+        if (accepted.status !== 'accepted') throw new Error(`fixture not accepted: ${accepted.status}`);
+        return accepted.record;
+    };
+    const refOf = (r: AdmissionRecord): AdmissionRef => ({ organizationId: r.organizationId, kind: r.kind, key: r.key });
+    const record = async (r: AdmissionRecord) => (await store.get(refOf(r)))!;
+    /** A Run admitted up to its dispatch: permit and ticket held, the execution woken. */
+    const dispatchedRun = async () => {
+        const r = await accept(runPayload());
+        await coordinator.attempt(refOf(r), 0, ports);
+        return r;
+    };
+    return {
+        store,
+        cell,
+        coordinator,
+        ports,
+        scheduled,
+        woken,
+        checkpoints,
+        accept,
+        refOf,
+        record,
+        dispatchedRun,
+        advance: (ms: number) => void (now += ms),
+        crashBefore: (step: string | undefined) => void (crashAt = step),
+    };
+}
+
+const runPayload = (org = 'org-a'): AdmissionPayload => ({
+    kind: 'run',
+    request: shopRunRequest({ organizationId: org, requestedAt: new Date(START).toISOString() }),
+});
+
+const setupPayload = (over: Partial<RuntimeEnvironmentSetupRequested> = {}): AdmissionPayload => {
+    const key = randomUUID();
+    return {
+        kind: 'setup',
+        request: {
+            key,
+            organizationId: 'org-a',
+            environmentId: 'env-a',
+            teamId: 't',
+            repositoryId: 'r',
+            repositoryName: 'acme/shop',
+            requestedAt: new Date(START).toISOString(),
+            requestedBy: { userId: 'u' },
+            repoToken: sealSecret('synthetic', Buffer.alloc(32, 1), key),
+            ...over,
+        },
+    };
+};
+
+describe('admission attempts (durable, short)', () => {
+    // Behavior: a setup the product already blocked has nothing to reserve: no permit, no ticket, rejected, and its execution woken to record why.
+    it('rejects an already blocked setup without holding a permit or a ticket', async () => {
         const h = harness();
-        h.store.take.mockResolvedValue({
-            status: 'taken',
-            lease,
-            record: {
-                ...record,
-                payload: {
-                    kind: 'setup',
-                    request: {
-                        key: 'setup-1',
-                        blocker: {
-                            kind: 'resources',
-                            message: 'disk unsupported',
-                        },
-                    },
-                },
-            },
-        } as any);
-        await h.coordinator.attempt(ref, 0, h.ports);
-        expect(h.store.reserveExecution).not.toHaveBeenCalled();
-        expect(h.physical.reserve).not.toHaveBeenCalled();
-        expect(h.store.reject).toHaveBeenCalledWith(lease, 'unavailable');
+        const setup = await h.accept(setupPayload({ blocker: { kind: 'no_ref', message: 'no default branch' } }));
+
+        await h.coordinator.attempt(h.refOf(setup), 0, h.ports);
+
+        expect(await h.record(setup)).toMatchObject({ state: 'rejected', lastReason: 'unavailable', permitHeld: false, ticket: null });
+        expect(h.cell.held.size).toBe(0);
+        expect(h.woken).toEqual([setup.executionId]);
     });
-    it('reserves the already resolved recipe CPU/RAM carried by the product command', async () => {
+
+    // Behavior: the ticket the cell holds is sized by the machine size the product command resolved.
+    it("holds the setup's ticket at the resolved recipe CPU/RAM", async () => {
         const h = harness();
         const size = { cpus: 4, memoryMb: 8192 };
-        h.store.take.mockResolvedValue({
-            status: 'taken',
-            lease,
-            record: {
-                ...record,
-                payload: {
-                    kind: 'setup',
-                    request: { key: 'setup-1', machineSize: size },
-                },
-            },
-        } as any);
-        await h.coordinator.attempt(ref, 0, h.ports);
-        expect(h.physical.reserve).toHaveBeenCalledWith(
-            expect.objectContaining({
-                size,
-                members: [{ side: 'setup', idempotencyKey: 'setup:setup-1' }],
-            }),
-        );
-    });
-    it('retains the logical permit until physical cleanup succeeds and acknowledges it durably', async () => {
-        const h = harness();
-        h.store.get.mockResolvedValue({ ...record, state: 'running', permitHeld: true, ticket });
-        h.physical.cancel.mockRejectedValueOnce(new MemberCleanupPendingError());
+        const setup = await h.accept(setupPayload({ machineSize: size }));
 
-        expect(await h.coordinator.finish(ref, req.runId)).toEqual({ finished: false, cleanupFailed: false, cleanupPending: true });
-        expect(h.store.finishExecution).not.toHaveBeenCalled();
-        expect(h.store.acknowledgeTicketCleanup).not.toHaveBeenCalled();
+        await h.coordinator.attempt(h.refOf(setup), 0, h.ports);
 
-        expect(await h.coordinator.finish(ref, req.runId)).toEqual({ finished: true, cleanupFailed: false });
-        expect(h.store.finishExecution).toHaveBeenCalledTimes(1);
-        expect(h.store.acknowledgeTicketCleanup).toHaveBeenCalledWith(identity, ticket.ticketId);
+        const [held] = [...h.cell.held.values()];
+        expect(held.request).toMatchObject({ size, members: [{ side: 'setup', idempotencyKey: `setup:${setup.key}` }] });
+        expect((await h.record(setup)).ticket?.ticketId).toBe(held.ticket.ticketId);
     });
 
-    it.each([
-        [new CellUnavailableError('secret-body'), 'cell_unavailable'],
-        [new Error('member_cleanup_pending'), 'unexpected'],
-        [new HubRefused({ code: 'forbidden', message: 'secret-body' }), 'hub_refused'],
-    ])('keeps genuine cleanup failures distinct and sanitized: %s', async (error, reason) => {
+    // Behavior: the execution is woken only once the permit, the ticket and the dispatch are durable.
+    it('dispatches with the permit and the ticket held, then wakes the execution', async () => {
         const h = harness();
-        h.store.get.mockResolvedValue({ ...record, state: 'running', permitHeld: true, ticket });
-        h.physical.cancel.mockRejectedValue(error);
-        expect(await h.coordinator.cleanupTicket(ticket)).toEqual({ status: 'failed', reason });
-        expect(await h.coordinator.finish(ref, req.runId)).toEqual({ finished: false, cleanupFailed: true, reason });
-        expect(h.store.finishExecution).not.toHaveBeenCalled();
-        expect(h.store.acknowledgeTicketCleanup).not.toHaveBeenCalled();
+
+        const run = await h.dispatchedRun();
+
+        expect(await h.record(run)).toMatchObject({ state: 'dispatched', permitHeld: true, ticket: { ticketId: 'ticket-1' } });
+        expect(h.cell.held.has('ticket-1')).toBe(true);
+        expect(h.woken).toEqual([run.executionId]);
+        expect(h.scheduled).toEqual([]);
     });
 
-    it('reports only a closed category when durable cleanup acknowledgement fails', async () => {
+    // Behavior: a cell with no room now defers the attempt (no permit, no ticket), schedules the next, and checkpoints no sealed payload.
+    it('defers a cell refusal for later without waking the execution or checkpointing the sealed payload', async () => {
         const h = harness();
-        h.store.get.mockResolvedValue({ ...record, state: 'running', permitHeld: true, ticket });
-        h.store.acknowledgeTicketCleanup.mockRejectedValue(new Error('database secret-body'));
-        expect(await h.coordinator.finish(ref, req.runId)).toEqual({ finished: true, cleanupFailed: true, reason: 'store_unavailable' });
-    });
+        h.cell.refusal = { reason: 'no_capacity', retryable: true };
+        const run = await h.accept(runPayload());
 
-    it('does not turn DBOS cancellation or stale ownership into a cleanup result', async () => {
-        const h = harness();
-        const cancelled = Object.assign(new Error('control'), { name: 'DBOSWorkflowCancelledError' });
-        h.physical.cancel.mockRejectedValue(cancelled);
-        await expect(h.coordinator.cleanupTicket(ticket)).rejects.toBe(cancelled);
-        h.store.get.mockResolvedValue({ ...record, executionId: 'replacement', ticket });
-        expect(await h.coordinator.finish(ref, req.runId)).toEqual({ finished: false, cleanupFailed: false });
-        expect(h.store.finishExecution).not.toHaveBeenCalled();
-        expect(h.store.acknowledgeTicketCleanup).not.toHaveBeenCalled();
-    });
+        await h.coordinator.attempt(h.refOf(run), 0, h.ports);
 
-    it.each(['defer', 'reject'])('does not advance %s while a transition ticket awaits cleanup', async (operation) => {
-        const h = harness();
-        h.physical.reserve.mockResolvedValue({ status: 'refused', reason: 'no_capacity', retryable: operation === 'defer' } as any);
-        h.store[operation].mockResolvedValue({ changed: true, record: { ...record, state: operation === 'defer' ? 'waiting' : 'rejected', nextAt: now.toISOString() }, releasedTicket: ticket } as any);
-        h.physical.cancel.mockRejectedValue(new MemberCleanupPendingError());
-        await expect(h.coordinator.attempt(ref, 0, h.ports)).rejects.toBeInstanceOf(MemberCleanupPendingError);
-        expect(h.ports.wake).not.toHaveBeenCalled();
-        expect(h.ports.schedule).not.toHaveBeenCalled();
-    });
-
-    it('redeems an attached ticket before allowing the original execution to do work', async () => {
-        const h = harness();
-        h.store.get.mockResolvedValue({ ...record, state: 'dispatched', permitHeld: true, ticket });
-
-        const result = await h.coordinator.begin(ref, req.runId);
-
-        expect(result).toEqual({ status: 'ready', identity, ticket });
-        expect(h.physical.redeem).toHaveBeenCalledWith(ticket);
-        expect(h.store.startExecution).toHaveBeenCalledWith(identity, req.runId);
-    });
-
-    it('fails closed for a ticket that expired before native execution starts', async () => {
-        const h = harness();
-        h.store.get.mockResolvedValue({ ...record, state: 'dispatched', permitHeld: true, ticket: { ...ticket, expiresAt: '2026-11-07T11:59:59Z' } });
-
-        expect(await h.coordinator.begin(ref, req.runId)).toMatchObject({ status: 'refused', reason: 'ticket_expired' });
-        expect(h.physical.redeem).not.toHaveBeenCalled();
-        expect(h.store.startExecution).not.toHaveBeenCalled();
-    });
-
-    it('returns after scheduling a delayed retry without waking execution or checkpointing the sealed payload', async () => {
-        const h = harness();
-        h.physical.reserve.mockResolvedValue({ status: 'refused', reason: 'no_capacity', retryable: true } as any);
-
-        await h.coordinator.attempt(ref, 0, h.ports);
-
-        expect(h.store.defer).toHaveBeenCalledWith(lease, 'no_capacity', '2026-11-07T12:00:05.000Z');
-        expect(h.ports.schedule).toHaveBeenCalledWith(ref, 1, '2026-11-07T12:00:05.000Z');
-        expect(h.ports.wake).not.toHaveBeenCalled();
+        expect(await h.record(run)).toMatchObject({ state: 'waiting', generation: 1, lastReason: 'no_capacity', permitHeld: false, ticket: null, nextAt: '2026-11-07T12:00:05.000Z' });
+        expect(h.scheduled).toEqual([{ ref: h.refOf(run), generation: 1, nextAt: '2026-11-07T12:00:05.000Z' }]);
+        expect(h.woken).toEqual([]);
         expect(JSON.stringify(h.checkpoints)).not.toContain('repoToken');
         expect(JSON.stringify(h.checkpoints)).not.toContain('diff');
     });
 
-    it('does not reserve physical resources when the combined execution budget is full', async () => {
+    // Behavior: with the execution budget full, the cell is never asked for a ticket; the attempt waits its turn.
+    it('asks the cell for nothing while the combined execution budget is full', async () => {
         const h = harness();
-        h.store.reserveExecution.mockResolvedValue({ status: 'global_limit' } as any);
+        const coordinator = new AdmissionCoordinator(h.store, h.cell, { ...LIMITS, globalExecuting: 1 }, () => new Date(START));
+        await coordinator.attempt(h.refOf(await h.accept(runPayload('org-b'))), 0, h.ports);
+        expect(h.cell.reservations).toBe(1);
+        const run = await h.accept(runPayload());
 
-        await h.coordinator.attempt(ref, 0, h.ports);
+        await coordinator.attempt(h.refOf(run), 0, h.ports);
 
-        expect(h.physical.reserve).not.toHaveBeenCalled();
-        expect(h.store.defer).toHaveBeenCalledWith(lease, 'global_limit', '2026-11-07T12:00:05.000Z');
-        expect(h.ports.schedule).toHaveBeenCalledTimes(1);
+        expect(h.cell.reservations).toBe(1);
+        expect(await h.record(run)).toMatchObject({ state: 'waiting', lastReason: 'global_limit', permitHeld: false, ticket: null });
+        expect(h.scheduled).toHaveLength(1);
     });
 
-    it('wakes the original execution only after the ticket and dispatch intent are durable', async () => {
+    // Behavior: a permanent refusal is recorded as the Run's end and its execution is woken to report it; nothing is scheduled.
+    it('records a permanent refusal and wakes the execution to report it', async () => {
         const h = harness();
+        h.cell.refusal = { reason: 'pair_too_large', retryable: false };
+        const run = await h.accept(runPayload());
 
-        await h.coordinator.attempt(ref, 0, h.ports);
+        await h.coordinator.attempt(h.refOf(run), 0, h.ports);
 
-        expect(h.store.attachTicket).toHaveBeenCalledWith(lease, ticket);
-        expect(h.store.markDispatched).toHaveBeenCalledWith(lease);
-        expect(h.ports.wake).toHaveBeenCalledWith(req.runId);
-        expect(h.ports.schedule).not.toHaveBeenCalled();
-        expect(h.physical.cancel).not.toHaveBeenCalled();
+        expect(await h.record(run)).toMatchObject({ state: 'rejected', lastReason: 'pair_too_large', ticket: null });
+        expect(h.woken).toEqual([run.executionId]);
+        expect(h.scheduled).toEqual([]);
     });
 
-    it('a lost lease owner never cancels the generation-stable physical ticket', async () => {
+    // Behavior: an owner that lost its lease while the cell granted the ticket never cancels it: the generation-stable ticket stays for the new owner.
+    it('a lost lease owner leaves the granted ticket on the cell and dispatches nothing', async () => {
         const h = harness();
-        h.store.attachTicket.mockResolvedValue({ changed: false, record: null } as any);
+        const run = await h.accept(runPayload());
+        h.cell.whileReserving = () => h.advance(LIMITS.leaseMs + 1);
 
-        await h.coordinator.attempt(ref, 0, h.ports);
+        await h.coordinator.attempt(h.refOf(run), 0, h.ports);
 
-        expect(h.physical.cancel).not.toHaveBeenCalled();
-        expect(h.ports.wake).not.toHaveBeenCalled();
-        expect(h.store.markDispatched).not.toHaveBeenCalled();
+        expect(h.cell.held.size).toBe(1);
+        expect(await h.record(run)).toMatchObject({ state: 'reserved', ticket: null });
+        expect(h.woken).toEqual([]);
     });
 
-    it('repairs a checkpoint gap after ticket attachment without reserving or renewing the ticket again', async () => {
+    // Behavior: a worker that died after the ticket was attached resumes with the same ticket: no second reservation, then dispatch.
+    it('repairs a death between attach and dispatch without reserving a second ticket', async () => {
         const h = harness();
-        h.store.take.mockResolvedValue({ status: 'taken', lease, record: { ...record, state: 'reserved', permitHeld: true, ticket } });
-        h.store.attachTicket.mockResolvedValue({ changed: false, record: { ...record, state: 'reserved', permitHeld: true, ticket } } as any);
+        const run = await h.accept(runPayload());
+        h.crashBefore('admission:dispatch');
+        await expect(h.coordinator.attempt(h.refOf(run), 0, h.ports)).rejects.toThrow('worker died');
+        expect(await h.record(run)).toMatchObject({ state: 'reserved', ticket: { ticketId: 'ticket-1' } });
 
-        await h.coordinator.attempt(ref, 0, h.ports);
+        h.crashBefore(undefined);
+        h.advance(LIMITS.leaseMs + 1);
+        await h.coordinator.attempt(h.refOf(run), 0, h.ports);
 
-        expect(h.physical.reserve).not.toHaveBeenCalled();
-        expect(h.store.markDispatched).toHaveBeenCalledWith(lease);
-        expect(h.ports.wake).toHaveBeenCalledWith(req.runId);
+        expect(h.cell.reservations).toBe(1);
+        expect(await h.record(run)).toMatchObject({ state: 'dispatched', permitHeld: true, ticket: { ticketId: 'ticket-1' } });
+        expect(h.woken).toEqual([run.executionId]);
+    });
+});
+
+describe('admission execution start', () => {
+    // Behavior: the execution does work only after the cell redeemed its ticket; the record is then running.
+    it('redeems the attached ticket before the execution runs', async () => {
+        const h = harness();
+        const run = await h.dispatchedRun();
+
+        const result = await h.coordinator.begin(h.refOf(run), run.executionId!);
+
+        expect(result).toMatchObject({ status: 'ready', ticket: { ticketId: 'ticket-1' } });
+        expect(h.cell.redeemed.has('ticket-1')).toBe(true);
+        expect((await h.record(run)).state).toBe('running');
     });
 
-    it('records a permanent refusal then wakes native execution to produce its terminal result', async () => {
+    // Behavior: a ticket that expired before the execution started is refused; the cell redeems nothing and the record does not run.
+    it('fails closed for a ticket that expired before the execution starts', async () => {
         const h = harness();
-        h.physical.reserve.mockResolvedValue({ status: 'refused', reason: 'pair_too_large', retryable: false } as any);
+        const run = await h.dispatchedRun();
+        h.advance(2 * 60_000 + 1);
 
-        await h.coordinator.attempt(ref, 0, h.ports);
+        expect(await h.coordinator.begin(h.refOf(run), run.executionId!)).toMatchObject({ status: 'refused', reason: 'ticket_expired' });
+        expect(h.cell.redeemed.size).toBe(0);
+        expect((await h.record(run)).state).toBe('dispatched');
+    });
+});
 
-        expect(h.store.reject).toHaveBeenCalledWith(lease, 'pair_too_large');
-        expect(h.ports.wake).toHaveBeenCalledWith(req.runId);
-        expect(h.ports.schedule).not.toHaveBeenCalled();
+describe('admission finish', () => {
+    const running = async (h: ReturnType<typeof harness>) => {
+        const run = await h.dispatchedRun();
+        await h.coordinator.begin(h.refOf(run), run.executionId!);
+        return run;
+    };
+
+    // Behavior: the permit stays held until the cell confirms the claims are gone; then it is freed and the ticket cleanup acknowledged.
+    it('keeps the permit while the cell still cleans up, and frees it once the cleanup is done', async () => {
+        const h = harness();
+        const run = await running(h);
+        h.cell.cancelErrors = [new MemberCleanupPendingError()];
+
+        expect(await h.coordinator.finish(h.refOf(run), run.executionId!)).toEqual({ finished: false, cleanupFailed: false, cleanupPending: true });
+        expect(await h.record(run)).toMatchObject({ state: 'running', permitHeld: true, ticket: { ticketId: 'ticket-1' } });
+        expect(h.cell.held.has('ticket-1')).toBe(true);
+
+        expect(await h.coordinator.finish(h.refOf(run), run.executionId!)).toEqual({ finished: true, cleanupFailed: false });
+        expect(await h.record(run)).toMatchObject({ state: 'completed', permitHeld: false, ticket: null });
+        expect(h.cell.held.size).toBe(0);
+    });
+
+    // Behavior: a cleanup that failed keeps the permit, and reports only a closed category, never the remote text.
+    it.each([
+        [new CellUnavailableError('secret-body'), 'cell_unavailable'],
+        [new Error('member_cleanup_pending'), 'unexpected'],
+        [new HubRefused({ code: 'forbidden', message: 'secret-body' }), 'hub_refused'],
+    ])('keeps the permit on a failed cleanup and names it by category: %s', async (error, reason) => {
+        const h = harness();
+        const run = await running(h);
+        h.cell.cancelErrors = [error, error];
+
+        expect(await h.coordinator.cleanupTicket((await h.record(run)).ticket!)).toEqual({ status: 'failed', reason });
+        expect(await h.coordinator.finish(h.refOf(run), run.executionId!)).toEqual({ finished: false, cleanupFailed: true, reason });
+        expect(await h.record(run)).toMatchObject({ state: 'running', permitHeld: true });
+    });
+
+    // Behavior: when the store cannot acknowledge the cleanup, the permit is freed but the ticket stays on the record, discoverable for a retry.
+    it('reports only a closed category when the durable cleanup acknowledgement fails', async () => {
+        const h = harness();
+        const run = await running(h);
+        const failing: AdmissionStore = Object.assign(Object.create(h.store) as AdmissionStore, {
+            acknowledgeTicketCleanup: async () => {
+                throw new Error('database secret-body');
+            },
+        });
+        const coordinator = new AdmissionCoordinator(failing, h.cell, LIMITS, () => new Date(START));
+
+        expect(await coordinator.finish(h.refOf(run), run.executionId!)).toEqual({ finished: true, cleanupFailed: true, reason: 'store_unavailable' });
+        expect(await h.record(run)).toMatchObject({ permitHeld: false, ticket: { ticketId: 'ticket-1' } });
+    });
+
+    // Behavior: a DBOS cancellation is not a cleanup result, and an execution that no longer owns the record frees nothing.
+    it('does not turn a DBOS cancellation or a stale execution into a cleanup result', async () => {
+        const h = harness();
+        const run = await running(h);
+        const cancelled = Object.assign(new Error('control'), { name: 'DBOSWorkflowCancelledError' });
+        h.cell.cancelErrors = [cancelled];
+
+        await expect(h.coordinator.cleanupTicket((await h.record(run)).ticket!)).rejects.toBe(cancelled);
+        expect(await h.coordinator.finish(h.refOf(run), 'replacement-execution')).toEqual({ finished: false, cleanupFailed: false });
+        expect(await h.record(run)).toMatchObject({ state: 'running', permitHeld: true, ticket: { ticketId: 'ticket-1' } });
+        expect(h.cell.held.has('ticket-1')).toBe(true);
     });
 });

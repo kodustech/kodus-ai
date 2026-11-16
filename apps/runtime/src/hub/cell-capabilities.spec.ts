@@ -11,8 +11,21 @@ describe('cell capabilities', () => {
         expect(capabilitiesOfHello(hello({ features: ['claimSize', 'newerThing'], maxClaimSize: { memoryMb: 8_192, cpus: 4 } }))).toEqual({
             features: ['claimSize'],
             maxClaimSize: { memoryMb: 8_192, cpus: 4 },
+            defaultClaimSize: null,
+            sandboxClaimSize: null,
         });
-        expect(capabilitiesOfHello(hello({ features: ['seedsCache'], maxClaimSize: { memoryMb: 8_192, cpus: 4 } }))).toEqual({ features: ['seedsCache'], maxClaimSize: null });
+        expect(capabilitiesOfHello(hello({ features: ['seedsCache'], maxClaimSize: { memoryMb: 8_192, cpus: 4 } }))).toEqual({ features: ['seedsCache'], maxClaimSize: null, defaultClaimSize: null, sandboxClaimSize: null });
+    });
+
+    it("keeps the default size the cell's hello capabilities say, whatever features it names", () => {
+        const capabilities = { backends: ['gvisor'], snapshotMemory: false, nestedDocker: true, kvm: false, arch: 'arm64' as const, defaultSize: { memoryMb: 4_096, cpus: 2 } };
+        expect(capabilitiesOfHello(hello({ capabilities })).defaultClaimSize).toEqual({ memoryMb: 4_096, cpus: 2 });
+    });
+
+    it('keeps the sandbox size only from a cell that names sandbox', () => {
+        const capabilities = { backends: ['gvisor'], snapshotMemory: false, nestedDocker: true, kvm: false, arch: 'arm64' as const, sandboxSize: { memoryMb: 2_048, cpus: 2 } };
+        expect(capabilitiesOfHello(hello({ features: ['sandbox'], capabilities })).sandboxClaimSize).toEqual({ memoryMb: 2_048, cpus: 2 });
+        expect(capabilitiesOfHello(hello({ capabilities })).sandboxClaimSize).toBeNull();
     });
 
     it('grants a size within the max in memory and CPUs, and only with claimSize', () => {

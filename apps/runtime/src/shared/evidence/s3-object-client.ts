@@ -73,7 +73,13 @@ export class S3ObjectClient {
         };
     }
 
+    /** Frees the connection of an answer whose status already decided the result: a body that fails to cancel changes nothing. */
+    private static async discard(res: Response): Promise<void> {
+        await res.body?.cancel().catch(() => undefined);
+    }
+
     private static async fail(op: string, res: Response): Promise<never> {
+        // The status is the error: an unreadable body only loses the S3 error code.
         const text = await res.text().catch(() => '');
         throw new S3RequestError(op, res.status, codeOf(text));
     }
@@ -89,13 +95,13 @@ export class S3ObjectClient {
     async get(objectKey: string, opts: { ifMatch?: string; maxBytes?: number } = {}): Promise<S3Object | null> {
         const res = await this.call('get', 'GET', objectKey, opts.ifMatch ? { headers: { 'if-match': opts.ifMatch } } : {});
         if (res.status === 404 || res.status === 412) {
-            await res.body?.cancel().catch(() => undefined);
+            await S3ObjectClient.discard(res);
             return null;
         }
         if (!res.ok) return S3ObjectClient.fail('get', res);
         const head = S3ObjectClient.head(res);
         if (opts.maxBytes !== undefined && head.contentLength > opts.maxBytes) {
-            await res.body?.cancel().catch(() => undefined);
+            await S3ObjectClient.discard(res);
             throw new S3RequestError('get', 413, 'TooLarge');
         }
         const body = Buffer.from(await res.arrayBuffer());
@@ -107,7 +113,7 @@ export class S3ObjectClient {
         const headers = { 'content-type': contentType, ...Object.fromEntries(Object.entries(meta).map(([k, v]) => [`x-amz-meta-${k}`, v])) };
         const res = await this.call('put', 'PUT', objectKey, { headers, body });
         if (!res.ok) return S3ObjectClient.fail('put', res);
-        await res.body?.cancel().catch(() => undefined);
+        await S3ObjectClient.discard(res);
     }
 
     /**
@@ -124,7 +130,7 @@ export class S3ObjectClient {
         };
         const res = await this.call('copy', 'PUT', destKey, { headers });
         if (res.status === 404 || res.status === 412) {
-            await res.body?.cancel().catch(() => undefined);
+            await S3ObjectClient.discard(res);
             return false;
         }
         if (!res.ok) return S3ObjectClient.fail('copy', res);
@@ -145,6 +151,7 @@ export class S3ObjectClient {
                 ? undefined
                 : Buffer.from(`<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><LocationConstraint>${this.cfg.region}</LocationConstraint></CreateBucketConfiguration>`);
         const res = await this.call('create_bucket', 'PUT', '', body ? { body } : {});
+        // An unreadable body cannot prove BucketAlreadyOwnedByYou: a 409 then throws.
         const text = await res.text().catch(() => '');
         if (res.ok) return true;
         if (res.status === 409 && /BucketAlreadyOwnedByYou/.test(text)) return false;
@@ -171,12 +178,12 @@ export class S3ObjectClient {
             body: xml,
         });
         if (!res.ok) return S3ObjectClient.fail('put_lifecycle', res);
-        await res.body?.cancel().catch(() => undefined);
+        await S3ObjectClient.discard(res);
     }
 
     async delete(objectKey: string): Promise<void> {
         const res = await this.call('delete', 'DELETE', objectKey);
         if (!res.ok && res.status !== 404) return S3ObjectClient.fail('delete', res);
-        await res.body?.cancel().catch(() => undefined);
+        await S3ObjectClient.discard(res);
     }
 }

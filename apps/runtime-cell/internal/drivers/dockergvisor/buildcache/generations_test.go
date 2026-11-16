@@ -113,3 +113,38 @@ func TestCacheGenerationsAreNamedFromTheClock(t *testing.T) {
 		t.Fatalf("current names %q (%v), want %q", name, err, want)
 	}
 }
+
+// Dropping a cache for the disk floor takes its bytes at once and no later
+// build finds it; a cache a build reads is not dropped.
+func TestADroppedCacheIsGoneUnlessABuildReadsIt(t *testing.T) {
+	c := New(t.TempDir(), filepath.Join(t.TempDir(), "trash"), nil)
+	free, read := filepath.Join(c.root, "env-a", "api"), filepath.Join(c.root, "env-b", "api")
+	for _, dir := range []string{free, read} {
+		if err := c.Promote(cacheFrom(t, dir), dir); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := c.Current(); len(got) != 2 {
+		t.Fatalf("current = %+v, want both caches", got)
+	}
+	gen, releaseFree := c.Acquire(free)
+	releaseFree()
+	held, release := c.Acquire(read)
+	defer release()
+
+	if dropped, err := c.Drop(free); err != nil || !dropped {
+		t.Fatalf("drop of a cache nobody reads: %v %v", dropped, err)
+	}
+	if g, _ := c.Acquire(free); g != "" {
+		t.Fatalf("a build found the dropped cache at %s", g)
+	}
+	if _, err := os.Stat(gen); !os.IsNotExist(err) {
+		t.Fatal("the dropped generation's bytes stayed")
+	}
+	if dropped, err := c.Drop(read); err != nil || dropped {
+		t.Fatalf("drop of a cache a build reads: %v %v", dropped, err)
+	}
+	if _, err := os.Stat(filepath.Join(held, "index.json")); err != nil {
+		t.Fatalf("the cache a build reads lost its files: %v", err)
+	}
+}

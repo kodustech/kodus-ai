@@ -44,7 +44,7 @@ type state struct {
 
 func loadState(path string) (*state, error) {
 	s := &state{Machines: map[string]*machineState{}, Claims: map[string]*claimState{}}
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) //nolint:gosec // G304: path is the operator's state dir joined with a fixed file name
 	if errors.Is(err, os.ErrNotExist) {
 		return s, nil
 	}

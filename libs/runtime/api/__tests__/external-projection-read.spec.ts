@@ -1,75 +1,61 @@
-import { MongoRunProjectionStore } from '@libs/runtime/run/adapters/mongo-run-projection.store';
-import { ReadOnlyRunProjectionStore } from '../infrastructure/mongo-runtime-readers';
+import { PgSql } from '@libs/runtime/run/adapters/pg-sql';
+import { PgRunProjectionStore } from '@libs/runtime/run/adapters/pg-run-projection.store';
 
-it('propagates bounded client/server timeouts and cancellation to the Mongo driver', async () => {
-    const findOne = jest.fn(async (..._args: any[]) => null);
-    const store = new MongoRunProjectionStore({ findOne } as never);
-    const controller = new AbortController();
-    await store.get(
-        'run',
-        { organizationId: 'org' },
-        { timeoutMs: 1250, signal: controller.signal },
-    );
-    expect(findOne).toHaveBeenCalledWith(
-        { runId: 'run', organizationId: 'org' },
-        expect.objectContaining({
-            timeoutMS: 1250,
-            maxTimeMS: 1250,
-            signal: controller.signal,
-        }),
-    );
+import { ReadOnlyRunProjectionStore } from '../infrastructure/pg-runtime-readers';
+
+/** A runtime_runs row of a finished Run whose probes carry their lanes and step logs. */
+const row = {
+    run_id: 'run',
+    organization_id: 'org',
+    team_id: 'team',
+    repository_id: 'repo',
+    pr_number: 7,
+    head_sha: 'a'.repeat(40),
+    image_id: 'img',
+    state: 'regressions_found',
+    finished_at: new Date('2026-11-12T10:00:00.000Z'),
+    updated_at: new Date('2026-11-12T10:00:00.000Z'),
+    correlation_id: 'corr',
+    report: {
+        probes: [{ probeId: 'p1', verdict: 'regression', baseStepIds: ['b1'], prStepIds: ['p1'], lanes: { base: { stdout: 'log' } }, steps: ['s'] }],
+        exploration: [{ index: 0, stepId: 'e', command: 'cat .env', failed: false }],
+    },
+};
+
+it('an external verification reads only the proof metadata of a Run, never its logs, steps or exploration', async () => {
+    const store = new PgRunProjectionStore({ query: async () => ({ rows: [row] }) });
+    const run = await store.get('run', { organizationId: 'org' }, { timeoutMs: 1000, view: 'external_verification' });
+    expect(run).toEqual({
+        runId: 'run',
+        organizationId: 'org',
+        teamId: 'team',
+        repositoryId: 'repo',
+        prNumber: 7,
+        headSha: 'a'.repeat(40),
+        imageId: 'img',
+        state: 'regressions_found',
+        finishedAt: '2026-11-12T10:00:00.000Z',
+        probes: [{ probeId: 'p1', verdict: 'regression', baseStepIds: ['b1'], prStepIds: ['p1'] }],
+    });
 });
 
-it('bounds lazy database initialization and never issues a query after cancellation', async () => {
+it('a read whose deadline passes while it waits for a connection fails, and never runs its query afterwards', async () => {
     jest.useFakeTimers();
-    let ready!: (db: never) => void;
-    const db = new Promise<never>((resolve) => {
-        ready = resolve;
-    });
-    const findOne = jest.fn(async (..._args: any[]) => null);
-    const reader = new ReadOnlyRunProjectionStore(() => db);
+    let connected!: (client: unknown) => void;
+    const sent: string[] = [];
+    const client = { query: jest.fn(async (text: string) => sent.push(text)), release: jest.fn() };
+    const pool = { connect: () => new Promise((resolve) => (connected = resolve)), query: jest.fn() };
+    const reader = new ReadOnlyRunProjectionStore(new PgSql(() => pool as never, { readOnly: true }));
     try {
-        const reading = reader.get(
-            'run',
-            { organizationId: 'org' },
-            { timeoutMs: 100 },
-        );
-        const result = expect(reading).rejects.toThrow();
+        const reading = reader.get('run', { organizationId: 'org' }, { timeoutMs: 100 });
+        const failed = expect(reading).rejects.toThrow('aborted');
         await jest.advanceTimersByTimeAsync(100);
-        await result;
-        ready({ collection: () => ({ findOne }) } as never);
-        await Promise.resolve();
-        await Promise.resolve();
-        expect(findOne).not.toHaveBeenCalled();
+        await failed;
+        connected(client);
+        await jest.advanceTimersByTimeAsync(0);
+        expect(sent).toEqual([]);
+        expect(client.release).toHaveBeenCalled();
     } finally {
         jest.useRealTimers();
     }
-});
-
-it('reads only exact proof metadata for external verification instead of full logs and steps', async () => {
-    const findOne = jest.fn(async (..._args: any[]) => null);
-    const store = new MongoRunProjectionStore({ findOne } as never);
-    await store.get(
-        'run',
-        { organizationId: 'org' },
-        { timeoutMs: 1000, view: 'external_verification' },
-    );
-    const projection = findOne.mock.calls[0][1].projection;
-    expect(projection).toMatchObject({
-        'runId': 1,
-        'organizationId': 1,
-        'teamId': 1,
-        'repositoryId': 1,
-        'prNumber': 1,
-        'headSha': 1,
-        'imageId': 1,
-        'state': 1,
-        'finishedAt': 1,
-        'probes.probeId': 1,
-        'probes.verdict': 1,
-        'probes.baseStepIds': 1,
-        'probes.prStepIds': 1,
-    });
-    expect(projection.steps).toBeUndefined();
-    expect(projection.probes).toBeUndefined();
 });

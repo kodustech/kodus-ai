@@ -13,9 +13,14 @@ import (
 type liveConn struct {
 	claim, host, source string
 	port                int
-	injects             bool
-	started             time.Time
-	client, upstream    net.Conn
+	// injects: the connection goes to the injector, for a credential or
+	// for inspection (inspects).
+	injects, inspects bool
+	// tls: the connection replayed a ClientHello (an HTTP one carries one
+	// checked request).
+	tls              bool
+	started          time.Time
+	client, upstream net.Conn
 
 	up, down   atomic.Int64
 	lastActive atomic.Int64 // unix nano
@@ -99,6 +104,10 @@ type countingConn struct {
 	n    *atomic.Int64
 	live *liveConn
 	now  func() time.Time
+	// budget and claimUp count what the client side sends out (D8); nil on
+	// the upstream side and with the budget off.
+	budget  *uploadBudget
+	claimUp *claimUpload
 }
 
 func (c countingConn) Read(b []byte) (int, error) {
@@ -106,6 +115,7 @@ func (c countingConn) Read(b []byte) (int, error) {
 	if n > 0 {
 		c.n.Add(int64(n))
 		c.live.touch(c.now())
+		c.budget.add(c.live.claim, c.live.host, c.claimUp, int64(n))
 	}
 	return n, err
 }
@@ -128,11 +138,11 @@ func newRegistry() *registry {
 	return &registry{byClaim: map[string]map[*liveConn]struct{}{}, bySource: map[string]int{}}
 }
 
-// admit counts a new connection from source unless it already has max.
-func (r *registry) admit(source string, max int) bool {
+// admit counts a new connection from source unless it already has limit.
+func (r *registry) admit(source string, limit int) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if max > 0 && r.bySource[source] >= max {
+	if limit > 0 && r.bySource[source] >= limit {
 		return false
 	}
 	r.bySource[source]++

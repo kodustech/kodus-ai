@@ -1,6 +1,7 @@
 import { posix } from 'path';
 
 import { redactPatterns } from '@libs/runtime/redaction';
+import { SECRET_NAME } from '@libs/runtime/run/recipe-inference';
 
 /**
  * What the recipe author may read of a repository: one commit, read only. The
@@ -14,6 +15,8 @@ export interface RepoReader {
     read(path: string, maxBytes: number): Promise<string | null>;
     /** Whether the file is at the commit, without reading it when the reader can tell otherwise. Throws when it cannot tell. */
     exists?(path: string): Promise<boolean>;
+    /** Every file path at the commit, when the reader has the whole tree in one call. */
+    paths?(): Promise<string[]>;
 }
 
 /**
@@ -28,6 +31,31 @@ export async function fileExists(reader: RepoReader, path: string): Promise<bool
         if (e instanceof RepoPathError) return false;
         throw e;
     }
+}
+
+/**
+ * How to ask whether a directory is at the commit, or undefined when the
+ * reader cannot tell a directory from a missing one (it lists no whole tree,
+ * so an empty listing proves nothing). A path the reader refuses is no
+ * directory; any other failure (a Git API error) is thrown, never read as
+ * "not there".
+ */
+export async function directoryExistsCheck(reader: RepoReader): Promise<((path: string) => Promise<boolean>) | undefined> {
+    if (!reader.paths) return undefined;
+    try {
+        await reader.paths();
+    } catch (e) {
+        if (e instanceof RepoPathError) return undefined;
+        throw e;
+    }
+    return async (path: string) => {
+        try {
+            return (await reader.list(path)).length > 0;
+        } catch (e) {
+            if (e instanceof RepoPathError) return false;
+            throw e;
+        }
+    };
 }
 
 export const READ_LIMITS = {
@@ -50,6 +78,7 @@ export function repoPath(input: unknown, opts: { dir?: boolean } = {}): string {
     const raw = input.trim().replace(/^\.\/+/, '');
     if (opts.dir && (raw === '' || raw === '.' || raw === '/')) return '';
     if (raw.length > 512) throw new RepoPathError('the path is too long');
+    // eslint-disable-next-line no-control-regex -- matching a control character is the check itself
     if (/[\u0000-\u001f\u007f\\]/.test(raw)) throw new RepoPathError('the path has a control character or a backslash');
     if (raw.startsWith('/') || /^[A-Za-z]:/.test(raw)) throw new RepoPathError('the path must be relative to the repository root');
     const n = posix.normalize(raw).replace(/\/+$/, '');
@@ -58,23 +87,89 @@ export function repoPath(input: unknown, opts: { dir?: boolean } = {}): string {
     return n === '.' ? '' : n;
 }
 
-/** Files whose values are secrets by name: their content never reaches the model. */
-const SECRET_FILE =
-    /(^|\/)(\.env(\.(?!example$|sample$|template$|dist$|defaults$)[^/]+)?|\.npmrc|\.pypirc|\.netrc|\.dockercfg|id_(rsa|dsa|ecdsa|ed25519)|[^/]*\.(pem|key|p12|pfx|jks|keystore)|credentials(\.[^/]+)?|secrets?\.(ya?ml|json|toml))$/i;
+/**
+ * Files whose values are secrets by name: their content never reaches the
+ * model. Env files, shell env hooks, Terraform variables and state, Git and
+ * registry credentials, kubeconfigs, keys and keystores, and per-environment
+ * .NET and Spring settings.
+ */
+const SECRET_FILE = new RegExp(
+    '(^|/)(' +
+        [
+            '\\.env(\\.(?!example$|sample$|template$|dist$|defaults$)[^/]+)?',
+            '[^/]+\\.env',
+            '\\.envrc',
+            '\\.npmrc',
+            '\\.pypirc',
+            '\\.netrc',
+            '\\.dockercfg',
+            '\\.git-credentials',
+            '\\.docker/config\\.json',
+            '\\.kube/config',
+            'kubeconfig(\\.[^/]+)?',
+            'id_(rsa|dsa|ecdsa|ed25519)',
+            '[^/]*\\.(pem|key|p12|pfx|jks|keystore)',
+            '[^/]*\\.tfvars(\\.json)?',
+            '[^/]*\\.tfstate(\\.backup)?',
+            'credentials(\\.[^/]+)?',
+            'secrets?\\.(ya?ml|json|toml)',
+            'appsettings\\.[^/]+\\.json',
+            'application-[^/]+\\.properties',
+        ].join('|') +
+        ')$',
+    'i',
+);
 
-/** Whether the file is one whose content is withheld (only its variable names are shown, for .env files). */
+/** Whether the file is one whose content is withheld (only its variable names are shown, for env files). */
 export const isSecretFile = (path: string) => SECRET_FILE.test(path);
+
+/** Secret files written as NAME=value lines: the model sees their names, never their values. */
+const ENV_STYLE_FILE = /(^|\/)(\.env(\.[^/]+)?|[^/]+\.env|\.envrc)$/i;
 
 const ENV_LINE = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]{0,127})\s*=/;
 
+/** Files read as configuration: a secret-named key's value in them is masked before the model sees it. */
+const CONFIG_FILE = /(^|\/)([^/]*\.(ya?ml|json|jsonc|json5|toml|ini|cfg|conf|properties|env|hcl|xml|plist)|\.env[^/]*|[^/]*Dockerfile[^/]*|[^/]*\.dockerfile)$/i;
+
+/** `KEY=value`, `key: value`, `"key": "value"`, `- KEY=value`, `export KEY=value`, `ENV KEY=value`. */
+const ASSIGNMENT = /^(\s*(?:-\s+)?(?:export\s+|ENV\s+|ARG\s+)?["']?)([A-Za-z_][A-Za-z0-9_.-]{0,127})(["']?\s*[:=]\s*)(\S.*)$/;
+
+/** A value that names another variable (`${DB_PASSWORD}`) instead of holding the secret. */
+const VARIABLE_REFERENCE = /^["']?\$\{?[A-Za-z_][A-Za-z0-9_]*\}?["']?,?$/;
+
+export const SECRET_VALUE_MARKER = '[redacted:secret-name]';
+
 /**
- * What the model sees of a file: the text with every known secret pattern
- * redacted, cut at the limit. A .env-style secret file gives only its
- * variable names; any other secret file gives nothing.
+ * A configuration file's text with the value of every secret-named key
+ * masked (the recipe's secret-name rule), whatever the pattern pass knows of
+ * the value. Other files come back unchanged.
+ */
+export function maskSecretAssignments(path: string, text: string): string {
+    if (!CONFIG_FILE.test(path)) return text;
+    return text
+        .split('\n')
+        .map((line) => {
+            const m = ASSIGNMENT.exec(line);
+            if (!m || !SECRET_NAME.test(m[2])) return line;
+            const value = m[4].trim();
+            if (VARIABLE_REFERENCE.test(value) || /^(["']{2}|[{[]),?$/.test(value)) return line;
+            return `${m[1]}${m[2]}${m[3]}${SECRET_VALUE_MARKER}${value.endsWith(',') ? ',' : ''}`;
+        })
+        .join('\n');
+}
+
+/** Text the model may see of a non-secret file: secret-named config values masked, then every known secret pattern redacted. */
+export const redactForModel = (path: string, text: string): string => redactPatterns(maskSecretAssignments(path, text)).text;
+
+/**
+ * What the model sees of a file: the text with secret-named config values
+ * masked and every known secret pattern redacted, cut at the limit. An
+ * env-style secret file gives only its variable names; any other secret file
+ * gives nothing.
  */
 export function modelView(path: string, text: string, maxBytes: number = READ_LIMITS.fileBytes): string {
     if (isSecretFile(path)) {
-        if (!/(^|\/)\.env/i.test(path)) return `[${path} is a secret file; its content is not shown]`;
+        if (!ENV_STYLE_FILE.test(path)) return `[${path} is a secret file; its content is not shown]`;
         const names = text
             .split('\n')
             .map((l) => ENV_LINE.exec(l)?.[1])
@@ -83,6 +178,6 @@ export function modelView(path: string, text: string, maxBytes: number = READ_LI
     }
     const cut = Buffer.byteLength(text) > maxBytes;
     const body = cut ? Buffer.from(text).subarray(0, maxBytes).toString('utf8') : text;
-    const { text: redacted } = redactPatterns(body);
+    const redacted = redactForModel(path, body);
     return cut ? `${redacted}\n[cut at ${maxBytes} bytes]` : redacted;
 }

@@ -215,23 +215,41 @@ var typeNames = map[string]string{
 	"step.result/probe":                           "ProbeResult",
 	"step.result/probe/requests[]":                "RequestLogEntry",
 	"step.result/exec":                            "ExecResult",
-	"step.result/executor":                        "Executor",
-	"step.result/vmHealth":                        "VMHealth",
-	"blocked/kind":                                "BlockerKind",
-	"claim.failed/kind":                           "BlockerKind",
-	"claim.acquire/repo":                          "RepoRef",
-	"claim.acquire/repo/provider":                 "GitProvider",
-	"claim.ready/manifest":                        "Manifest",
-	"claim.ready/manifest/services[]":             "ManifestService",
-	"claim.ready/manifest/services[]/health":      "ServiceHealth",
-	"claim.ready/observer":                        "ObserverState",
-	"claim.ready/timing":                          "ReadyTiming",
-	"claim.ready/observer/state":                  "ObserverPhase",
-	"egress.blocked/phase":                        "EgressPhase",
-	"machine.reset/snapshot":                      "Snapshot",
-	"upload/files[]":                              "UploadFile",
-	"claim.acquire/recipe/files[]":                "AuthoredFile",
-	"heartbeat/claims[]":                          "HeartbeatClaim",
+	// The code sandbox (docs/runtime/sandbox.md): one op and one result shape, hub to cell to guest agent.
+	"sandbox.op/op":                          "SandboxOp",
+	"sandbox.op/op/op":                       "SandboxOpKind",
+	"guest.result/result":                    "SandboxResult",
+	"guest.result/result/error":              "SandboxError",
+	"guest.result/result/error/code":         "SandboxErrorCode",
+	"guest.result/result/exec":               "SandboxExecResult",
+	"guest.result/result/type":               "SandboxEntryType",
+	"guest.result/result/entries[]":          "SandboxEntry",
+	"step.result/sandbox":                    "SandboxResult",
+	"step.result/sandbox/error":              "SandboxError",
+	"step.result/sandbox/error/code":         "SandboxErrorCode",
+	"step.result/sandbox/exec":               "SandboxExecResult",
+	"step.result/sandbox/type":               "SandboxEntryType",
+	"step.result/sandbox/entries[]":          "SandboxEntry",
+	"step.result/sandbox/entries[]/type":     "SandboxEntryType",
+	"guest.result/result/entries[]/type":     "SandboxEntryType",
+	"step.result/executor":                   "Executor",
+	"step.result/vmHealth":                   "VMHealth",
+	"blocked/kind":                           "BlockerKind",
+	"claim.failed/kind":                      "BlockerKind",
+	"claim.acquire/repo":                     "RepoRef",
+	"claim.acquire/repo/provider":            "GitProvider",
+	"claim.ready/manifest":                   "Manifest",
+	"claim.ready/manifest/services[]":        "ManifestService",
+	"claim.ready/manifest/services[]/health": "ServiceHealth",
+	"claim.ready/observer":                   "ObserverState",
+	"claim.ready/timing":                     "ReadyTiming",
+	"claim.ready/timing/phases[]":            "BootPhase",
+	"claim.ready/observer/state":             "ObserverPhase",
+	"egress.blocked/phase":                   "EgressPhase",
+	"machine.reset/snapshot":                 "Snapshot",
+	"upload/files[]":                         "UploadFile",
+	"claim.acquire/recipe/files[]":           "AuthoredFile",
+	"heartbeat/claims[]":                     "HeartbeatClaim",
 	// Evidence capture (EVIDENCE-CAPTURE-DESIGN): one request shape for probe.run and exec.
 	"probe.run/evidence":                          "EvidenceRequest",
 	"probe.run/evidence/capture[]":                "EvidenceCapture",
@@ -260,6 +278,10 @@ var typeNames = map[string]string{
 	// One machine size shape: what a claim asks and what a cell grants.
 	"hello/maxClaimSize": "MachineSize",
 	"claim.acquire/size": "MachineSize",
+	// What a cell's machines can be (docs/runtime/isolation-architecture.md C2).
+	"hello/capabilities":         "HelloCapabilities",
+	"hello/capabilities/arch":    "MachineArch",
+	"hello/capabilities/maxSize": "MachineSize",
 }
 
 type gen struct {
@@ -503,10 +525,10 @@ func main() {
 	src = append(src, tail.Bytes()...)
 	formatted, err := format.Source(src)
 	if err != nil {
-		_ = os.WriteFile(*out, src, 0o644)
+		_ = os.WriteFile(*out, src, 0o644) //nolint:gosec // G306: a checked-in Go source file, world-readable like the rest of the tree
 		log.Fatalf("format: %v", err)
 	}
-	if err := os.WriteFile(*out, formatted, 0o644); err != nil {
+	if err := os.WriteFile(*out, formatted, 0o644); err != nil { //nolint:gosec // G306: a checked-in Go source file, world-readable like the rest of the tree
 		log.Fatal(err)
 	}
 }

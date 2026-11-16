@@ -7,10 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observerauth"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
 
@@ -32,7 +31,7 @@ const observerSQLTimeout = 30 * time.Second
 
 func sqlObserverTarget(rec *recipe.Recipe) (*recipe.ExposedPort, error) {
 	if rec == nil {
-		return nil, nil
+		return nil, nil //nolint:nilnil // no target is no SQL observer: ProvisionObserverSQL provisions nothing on nil
 	}
 	var selected *recipe.ExposedPort
 	for _, target := range rec.Services.Expose {
@@ -42,11 +41,11 @@ func sqlObserverTarget(rec *recipe.Recipe) (*recipe.ExposedPort, error) {
 		if selected != nil || target.Kind != "postgres" {
 			return nil, &driver.ObserverSQLError{Reason: "sql_seed_target_unsupported"}
 		}
-		copy := target
-		selected = &copy
+		found := target
+		selected = &found
 	}
 	if selected == nil {
-		return nil, nil
+		return nil, nil //nolint:nilnil // no target is no SQL observer: ProvisionObserverSQL provisions nothing on nil
 	}
 	seed := rec.Data.Seed
 	if seed.Service != selected.Service || seed.User == "" || seed.Database == "" || strings.HasPrefix(seed.User, "-") || !sqlSeedIdentifier(seed.User) {
@@ -171,7 +170,7 @@ func (d *Driver) ProvisionObserverSQL(ctx context.Context, ref driver.MachineRef
 	}
 	pctx, cancel := context.WithTimeout(ctx, observerSQLTimeout)
 	defer cancel()
-	pctx = driver.WithOutput(pctx, nil)
+	pctx = dockercli.WithOutput(pctx, nil)
 	// -X ignores .psqlrc; -w never prompts. No PG* environment, shell expansion,
 	// password argument or output sink is inherited by this provisioning path.
 	output, err := d.d.ExecInput(pctx, at.container, script, "/usr/bin/env", "-i", "PATH=/usr/local/bin:/usr/bin:/bin", "psql", "-X", "-q", "-w", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", strconv.Itoa(target.Port), "-U", rec.Data.Seed.User, "-d", rec.Data.Seed.Database)
@@ -180,7 +179,7 @@ func (d *Driver) ProvisionObserverSQL(ctx context.Context, ref driver.MachineRef
 			return nil, ctx.Err()
 		}
 		reason := "sql_provision_failed"
-		if strings.Contains(err.Error(), "KODY_OBSERVER_SCHEMA_UNSAFE") || strings.Contains(string(output), "KODY_OBSERVER_SCHEMA_UNSAFE") {
+		if psqlSaysSchemaUnsafe(err, output) {
 			reason = "sql_schema_unsafe"
 		}
 		return nil, &driver.ObserverSQLError{Reason: reason}
@@ -255,9 +254,18 @@ func (d *Driver) sqlObserverExpiry(ctx context.Context, machine string) (time.Ti
 	if h.Labels[dockercli.LabelFromTag(driver.TagCell)] != d.cfg.CellID || h.Labels[dockercli.LabelFromTag(driver.TagRole)] != string(driver.RoleWorkload) {
 		return time.Time{}, &driver.ObserverSQLError{Reason: "sql_machine_unavailable"}
 	}
-	hard, err := protocol.ParseTime(h.Labels[dockercli.LabelFromTag(driver.TagHardExpires)])
-	if err != nil || !hard.After(d.clock.Now()) {
+	ceiling := dockercli.CeilingTags(h.Labels)
+	if driver.Expired(ceiling, d.clock.Now()) {
 		return time.Time{}, &driver.ObserverSQLError{Reason: "sql_machine_unavailable"}
 	}
+	hard, _ := driver.Ceiling(ceiling)
 	return hard, nil
+}
+
+// psqlSaysSchemaUnsafe is psql's output of the exception the provisioning
+// script raises (observerauth.ProvisionSQL) for an observer role that already
+// owns or holds more than it may: the only channel psql has for it is text.
+func psqlSaysSchemaUnsafe(err error, output []byte) bool {
+	const marker = "KODY_OBSERVER_SCHEMA_UNSAFE"
+	return strings.Contains(err.Error(), marker) || strings.Contains(string(output), marker)
 }

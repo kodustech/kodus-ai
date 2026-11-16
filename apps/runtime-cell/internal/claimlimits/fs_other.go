@@ -9,6 +9,7 @@ import "fmt"
 func New(root string) (*FS, error) {
 	return nil, fmt.Errorf("%w: local Linux cgroup v2 required", ErrUnavailable)
 }
+
 func readProcessCgroup(pid int) (string, error) {
 	return "", fmt.Errorf("%w: local Linux required", ErrUnavailable)
 }

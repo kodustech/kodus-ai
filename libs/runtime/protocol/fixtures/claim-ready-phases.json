@@ -1,0 +1,73 @@
+{
+  "name": "claim-ready-phases",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-1",
+    "type": "claim.ready",
+    "body": {
+      "manifest": {
+        "services": [
+          {
+            "name": "api",
+            "health": "ok"
+          }
+        ],
+        "expose": [
+          {
+            "service": "api",
+            "port": 3000,
+            "kind": "http"
+          }
+        ],
+        "imageId": "img-1",
+        "seedSha": "none"
+      },
+      "observer": {
+        "id": "claim-1-observer",
+        "state": "ready"
+      },
+      "timing": {
+        "prepareMs": 2712000,
+        "bootMs": 2690000,
+        "buildMs": 2650000,
+        "upMs": 30000,
+        "phases": [
+          {
+            "name": "export layers",
+            "ms": 1260400
+          },
+          {
+            "name": "yarn install",
+            "ms": 1005300
+          },
+          {
+            "name": "COPY . .",
+            "ms": 88200
+          },
+          {
+            "name": "send tarball",
+            "ms": 87100
+          },
+          {
+            "name": "docker load",
+            "ms": 61000
+          },
+          {
+            "name": "compose up",
+            "ms": 21000
+          },
+          {
+            "name": "first healthy",
+            "ms": 9000
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "ok": true,
+    "type": "claim.ready"
+  }
+}

@@ -10,8 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation"
 )
 
 func machineName(spec driver.MachineSpec) string {
@@ -102,8 +103,13 @@ func (d *Driver) Create(ctx context.Context, spec driver.MachineSpec) (driver.Ma
 	if err != nil {
 		return driver.MachineRef{}, err
 	}
-	h := dockercli.HolderSpec{Name: name, Image: d.cfg.HolderImage, Network: spec.ClaimGroupID, Runtime: d.cfg.Runtime,
-		PidsLimit: d.cfg.PidsLimit, Labels: labels, Resolv: resolv, CgroupParent: g.parent}
+	h := isolation.Spec{
+		Shape: isolation.ShapeEnvironment, Name: name, Image: d.cfg.HolderImage, Network: spec.ClaimGroupID,
+		PidsLimit: d.cfg.PidsLimit, Labels: labels, Resolv: resolv, CgroupParent: g.parent, DiskSize: d.cfg.ContainerDiskSize,
+	}
+	if spec.Role == driver.RoleWorkload {
+		h.Rates = d.ratesFor(spec.ClaimSize)
+	}
 	observerNet := ""
 	if spec.Role == driver.RoleObserver && d.cfg.ObserverImage != "" {
 		if observerNet, err = d.ensureObserverNetwork(ctx); err != nil {
@@ -112,7 +118,7 @@ func (d *Driver) Create(ctx context.Context, spec driver.MachineSpec) (driver.Ma
 		h.Image, h.Mounts, h.Cmd = d.cfg.ObserverImage, []string{d.cfg.ObserverTLSDir + ":" + observerTLSMount}, observerCmd(d.cfg.CellID)
 		h.AlsoOn = []string{observerNet}
 	}
-	c, err := d.d.RunHolder(ctx, h)
+	c, err := d.backend.Create(ctx, h)
 	if err != nil {
 		return driver.MachineRef{}, err
 	}
@@ -120,7 +126,7 @@ func (d *Driver) Create(ctx context.Context, spec driver.MachineSpec) (driver.Ma
 		if err := d.cfg.ClaimLimits.Verify(g.key, c.PID); err != nil {
 			cleanup, cancel := cleanupContext(ctx)
 			defer cancel()
-			return driver.MachineRef{}, errors.Join(ErrResourceEnforcement, err, d.d.Remove(cleanup, name))
+			return driver.MachineRef{}, errors.Join(ErrResourceEnforcement, err, d.backend.Discard(cleanup, name))
 		}
 	}
 	// The cell dials an observer on the observer network: the claim
@@ -128,7 +134,7 @@ func (d *Driver) Create(ctx context.Context, spec driver.MachineSpec) (driver.Ma
 	address := c.IP(spec.ClaimGroupID)
 	if observerNet != "" {
 		if address = c.IP(observerNet); address == "" {
-			return driver.MachineRef{}, errors.Join(fmt.Errorf("dockergvisor: observer %s has no address on %s", name, observerNet), d.d.Remove(context.WithoutCancel(ctx), name))
+			return driver.MachineRef{}, errors.Join(fmt.Errorf("dockergvisor: observer %s has no address on %s", name, observerNet), d.backend.Discard(context.WithoutCancel(ctx), name))
 		}
 	}
 	d.mu.Lock()
@@ -155,9 +161,9 @@ func (d *Driver) owned(ctx context.Context, machine string) (exists bool, err er
 	if err != nil {
 		return false, err
 	}
-	for _, c := range cs {
-		if c.Labels[dockercli.LabelFromTag(driver.TagCell)] != d.cfg.CellID {
-			return true, fmt.Errorf("%w: container %s", driver.ErrNotOwned, c.Name)
+	for i := range cs {
+		if cs[i].Labels[dockercli.LabelFromTag(driver.TagCell)] != d.cfg.CellID {
+			return true, fmt.Errorf("%w: container %s", driver.ErrNotOwned, cs[i].Name)
 		}
 	}
 	return len(cs) > 0, nil
@@ -167,14 +173,14 @@ func (d *Driver) Suspend(ctx context.Context, ref driver.MachineRef, _ driver.Su
 	if _, err := d.owned(ctx, ref.MachineID); err != nil {
 		return err
 	}
-	return d.d.ComposeStop(ctx, ref.MachineID)
+	return d.backend.Pause(ctx, ref.MachineID)
 }
 
 func (d *Driver) Resume(ctx context.Context, ref driver.MachineRef) error {
 	if _, err := d.owned(ctx, ref.MachineID); err != nil {
 		return err
 	}
-	return d.d.ComposeStart(ctx, ref.MachineID)
+	return d.backend.Start(ctx, ref.MachineID)
 }
 
 // Reset between rounds: the project's volumes are dropped and the cell
@@ -210,10 +216,7 @@ func (d *Driver) Destroy(ctx context.Context, ref driver.MachineRef) error {
 	d.mu.Unlock()
 	keepData := pin != nil && len(pin.volumes) > 0
 	if exists {
-		err = d.d.ComposeDown(ctx, ref.MachineID, !keepData)
-		if rerr := d.d.Remove(ctx, ref.MachineID); rerr != nil {
-			err = errors.Join(err, rerr)
-		}
+		err = d.backend.Destroy(ctx, ref.MachineID, isolation.DestroyOptions{KeepData: keepData})
 	}
 	if keepData {
 		if rerr := d.downForBake(ctx, ref.MachineID, pin); rerr != nil {
@@ -268,7 +271,8 @@ func (d *Driver) List(ctx context.Context, selector map[string]string) ([]driver
 		return nil, err
 	}
 	var out []driver.MachineRef
-	for _, c := range cs {
+	for i := range cs {
+		c := &cs[i]
 		tags := map[string]string{}
 		for k, v := range c.Labels {
 			tags[dockercli.TagFromLabel(k)] = v
@@ -296,12 +300,9 @@ func (d *Driver) SetExpiry(ctx context.Context, ref driver.MachineRef, at time.T
 	if len(holders) != 1 || holders[0].Labels[dockercli.LabelFromTag(driver.TagCell)] != d.cfg.CellID {
 		return fmt.Errorf("%w: machine %s", driver.ErrNotOwned, ref.MachineID)
 	}
-	hard, perr := time.Parse(time.RFC3339, holders[0].Labels[dockercli.LabelFromTag(driver.TagHardExpires)])
-	if perr != nil {
-		return fmt.Errorf("dockergvisor: machine %s has no ceiling: %w", ref.MachineID, perr)
-	}
-	if at.After(hard) {
-		at = hard
+	at, err = driver.ClampToCeiling(at, dockercli.CeilingTags(holders[0].Labels))
+	if err != nil {
+		return fmt.Errorf("dockergvisor: machine %s: %w", ref.MachineID, err)
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()

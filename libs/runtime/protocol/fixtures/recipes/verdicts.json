@@ -321,6 +321,56 @@
             "cell": "refuse: fakes",
             "runo": "unvalidated",
             "why": "Fake environment is bounded in UTF-8 bytes and refuses prototype-control keys in both parsers; Runo not executed."
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-needs.yaml": {
+            "cell": "accept",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of services.needs only; Runo execution was not rerun.",
+            "needs": [
+                {
+                    "repo": "acme/billing-service",
+                    "alias": "billing"
+                },
+                {
+                    "repo": "acme/Web_App",
+                    "alias": "web_app"
+                }
+            ]
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-needs-map.yaml": {
+            "cell": "refuse: services.needs must be a list of repositories",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of services.needs only; Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-needs-null.yaml": {
+            "cell": "refuse: services.needs must be a list of repositories",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of services.needs only; Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-needs-repo.yaml": {
+            "cell": "refuse: services.needs[0].repo: \"billing\" must be owner/name",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of services.needs only; Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-needs-alias.yaml": {
+            "cell": "refuse: services.needs[0].alias: \"Billing\" must match",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of services.needs only; Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-needs-alias-twice.yaml": {
+            "cell": "refuse: services.needs[1]: alias billing twice",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of services.needs only; Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-needs-unknown-field.yaml": {
+            "cell": "refuse: services.needs[0]: unknown field \"path\"",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of services.needs only; Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-needs-too-many.yaml": {
+            "cell": "refuse: services.needs: at most 9 repositories",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of services.needs only; Runo execution was not rerun."
         }
     }
 }

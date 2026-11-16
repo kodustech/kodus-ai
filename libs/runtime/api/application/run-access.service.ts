@@ -7,6 +7,7 @@ import { TEAM_CLI_KEY_CAPABILITIES } from '@libs/organization/domain/team-cli-ke
 import type { RuntimeRunProjection } from '@libs/runtime/run';
 
 import { RUNTIME_RUN_PROJECTION_STORE, type RunProjectionReader } from '../domain/ports';
+import { environmentRepositoryIds, RuntimeEnvironmentMembers } from './environment-members.service';
 
 /** Who is asking: a dashboard user, or a team key (ADR-057: capability + repo list). */
 export type RuntimePrincipal =
@@ -37,30 +38,54 @@ export class RuntimeRunAccessService {
         private readonly runs: RunProjectionReader,
         @Inject(AuthorizationService)
         private readonly authorization: RuntimeAuthorization,
+        // Required by Nest; a service made without it (the older tests) checks the Run's own repository only.
+        @Inject(RuntimeEnvironmentMembers)
+        private readonly members?: RuntimeEnvironmentMembers,
     ) {}
 
-    async load(principal: RuntimePrincipal, runId: string, action: Action = Action.Read): Promise<RuntimeRunProjection> {
+    /**
+     * Every repository a Run's machine held: its own and every other one of
+     * its environment. Reading or acting on the Run needs access to all of
+     * them (docs/plans/2026-11-11-runtime-multi-repo-environments.md, Access).
+     */
+    repositoryIdsOf(run: Pick<RuntimeRunProjection, 'organizationId' | 'environmentId' | 'repositoryId'>): Promise<string[]> {
+        return environmentRepositoryIds(this.members, run);
+    }
+
+    /**
+     * `resource` is what the caller acts on through the Run: the Run itself by
+     * default, or its preview (RuntimePreview, repo-scoped for every role but
+     * owner). A team key reaches only the Run.
+     */
+    async load(
+        principal: RuntimePrincipal,
+        runId: string,
+        action: Action = Action.Read,
+        resource: ResourceType.RuntimeRun | ResourceType.RuntimePreview = ResourceType.RuntimeRun,
+    ): Promise<RuntimeRunProjection> {
         const organizationId = principalOrganizationId(principal);
         const run = organizationId && typeof runId === 'string' && runId.length <= 128 ? await this.runs.get(runId, { organizationId }) : null;
         if (!organizationId || !run || run.organizationId !== organizationId) {
             throw new NotFoundException('Run not found');
         }
 
+        const repoIds = await this.repositoryIdsOf(run);
         if (principal.kind === 'user') {
             await this.authorization.ensure({
                 user: principal.user,
                 action,
-                resource: ResourceType.RuntimeRun,
-                repoIds: [run.repositoryId],
+                resource,
+                repoIds,
             });
             return run;
         }
 
         if (run.teamId !== principal.teamId) throw new NotFoundException('Run not found');
+        if (resource !== ResourceType.RuntimeRun) throw new ForbiddenException('A team key cannot open a Runtime preview');
         if (action !== Action.Read || !principal.capabilities.includes(TEAM_CLI_KEY_CAPABILITIES.RUNS_READ)) {
             throw new ForbiddenException('This team key cannot read Runtime runs');
         }
-        if (!principal.repositoryIds.includes(run.repositoryId)) {
+        if (!repoIds.every((id) => principal.repositoryIds.includes(id))) {
             throw new ForbiddenException('This team key does not reach this repository');
         }
         return run;

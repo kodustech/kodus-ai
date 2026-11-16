@@ -1,3 +1,4 @@
+import type { ForkApprovalTokens } from '@libs/runtime/contracts/runtime-commands';
 import type { EnvironmentRuntime } from '@libs/runtime/environment';
 import type { RunProjectionStore, RunStreamEvent, RuntimePublishRequested } from '@libs/runtime/run';
 import type { RuntimeMetrics } from '@libs/runtime/telemetry';
@@ -32,10 +33,12 @@ export interface RunClaims {
     egressBlocked(claimIds: string[]): Promise<{ host: string; port: number; phase: string }[]>;
     /** Security violations the cell reported on these claims (the hub records them): side and alert kind. */
     securityViolations(claimIds: string[]): Promise<{ claimId: string; side: string; signature: string }[]>;
+    /**
+     * The hard ceiling the hub gave the claim's boot round (runtime_claims.hard_expires_at), of the
+     * org's claim only; undefined when the hub has recorded no round of it yet (a first acquire).
+     */
+    hardExpiryOf?(organizationId: string, claimId: string): Promise<string | undefined>;
 }
-
-/** @deprecated the old name of RunClaims. */
-export type ClaimLedger = RunClaims;
 
 /** Ends a claim through the hub (no Run context needed: the reaper uses it too). */
 export interface ClaimReleaser {
@@ -56,7 +59,7 @@ export interface ClaimLeases {
 /** What an approval delivers to the waiting gate: the approved head and, from the product, fresh sealed tokens. */
 export interface ForkApprovalMessage {
     headSha: string;
-    tokens?: { repoToken: string; prRepoToken?: string; runToken: string };
+    tokens?: ForkApprovalTokens;
 }
 
 export interface ForkApprovals {
@@ -75,6 +78,8 @@ export interface RunLog {
     info(event: RunLogEvent): void;
     warn(event: RunLogEvent): void;
 }
+
+import type { PastPlans } from './plan-reuse';
 
 export interface RunDeps {
     step: StepRunner;
@@ -107,4 +112,11 @@ export interface RunDeps {
     onReleaseFailed?: (claimId: string, e: Error) => void;
     /** One line per phase and one canonical line at the end (run.phase, run.finished); absent: silent. */
     log?: RunLog;
+    /**
+     * RUNTIME_ROUND_SNAPSHOTS=1: each side's acquire step also takes the claim's round snapshot
+     * once it is ready, and the Run's resets go back to it (cells that keep snapshots only).
+     */
+    roundSnapshots?: boolean;
+    /** Earlier Runs' accepted plans, for a Run of the same head (plan-reuse.ts); absent: every Run plans. */
+    pastPlans?: PastPlans;
 }

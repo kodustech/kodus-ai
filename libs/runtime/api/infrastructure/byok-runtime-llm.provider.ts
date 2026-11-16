@@ -17,6 +17,7 @@ import {
     type RuntimeLlmCompletion,
     type RuntimeLlmMessage,
     type RuntimeLlmProvider,
+    type RuntimeSpanAttribution,
 } from '../domain/ports';
 
 /**
@@ -142,11 +143,24 @@ export class ByokRuntimeAgentRunnerFactory implements RuntimeAgentRunnerFactory 
         private readonly hasManagedDefault: () => boolean = hasManagedModelKey,
     ) {}
 
-    async forOrganization(orgTeam: OrgTeam) {
+    async forOrganization(orgTeam: OrgTeam, attribution?: RuntimeSpanAttribution) {
         const slot = (await this.slots.resolveTaskSlot({ organizationId: orgTeam.organizationId, teamId: orgTeam.teamId }, LLM_TASK.runtime)) ?? undefined;
         if (!slot && !this.hasManagedDefault()) return null;
+        // The usage span of each call carries the Runtime route and the Run's ids, as the gateway's calls do:
+        // without them the managed default stamps no route and the Run cost cannot find the call.
+        const spanAttrs = attribution
+            ? {
+                  route: LLM_TASK.runtime,
+                  runId: attribution.runId,
+                  task: attribution.task,
+                  teamId: orgTeam.teamId,
+                  ...(attribution.repositoryId ? { repositoryId: attribution.repositoryId } : {}),
+                  ...(attribution.environmentId ? { environmentId: attribution.environmentId } : {}),
+                  ...(attribution.prNumber ? { prNumber: attribution.prNumber } : {}),
+              }
+            : { route: LLM_TASK.runtime };
         return {
-            runner: new AiSdkAgentRunner(slot, { organizationId: orgTeam.organizationId }),
+            runner: new AiSdkAgentRunner(slot, { organizationId: orgTeam.organizationId, spanAttrs }),
             ...(slot?.model ? { model: slot.model } : {}),
         };
     }

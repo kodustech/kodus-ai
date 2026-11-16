@@ -2,7 +2,9 @@ package dockergvisor
 
 import (
 	"context"
+	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/buildstate"
 )
 
@@ -19,6 +21,13 @@ type stateStore interface {
 	// disk is below its floor. It may remove gigabytes, so the cell's
 	// periodic sweep runs it, never a build.
 	Evict() error
+	// Evicted lists the environments whose state eviction removed and no
+	// seed made again, newest first; EvictedAt says it of one.
+	Evicted() []buildstate.Evicted
+	EvictedAt(org, env string) (time.Time, bool)
+	// Settle returns once the store's own background work has ended (a
+	// spare's clone, a released view's removal): Shutdown waits for it.
+	Settle()
 }
 
 // noStates is the store of a cell that keeps no state (PersistBuildState
@@ -28,5 +37,21 @@ type noStates struct{}
 func (noStates) Acquire(context.Context, buildstate.Request) (buildstate.State, bool) {
 	return buildstate.State{}, false
 }
-func (noStates) Release(buildstate.State) {}
-func (noStates) Evict() error             { return nil }
+func (noStates) Release(buildstate.State)      {}
+func (noStates) Settle()                       {}
+func (noStates) Evict() error                  { return nil }
+func (noStates) Evicted() []buildstate.Evicted { return nil }
+func (noStates) EvictedAt(string, string) (time.Time, bool) {
+	return time.Time{}, false
+}
+
+// EvictedBuildStates is driver.BuildStateReporter: the environments whose
+// build state this cell's disk floor removed and no seed made again.
+func (d *Driver) EvictedBuildStates() []driver.EvictedBuildState {
+	ev := d.states.Evicted()
+	out := make([]driver.EvictedBuildState, 0, len(ev))
+	for _, e := range ev {
+		out = append(out, driver.EvictedBuildState{Org: e.Org, Env: e.Env, At: e.At, Rebuild: e.Rebuild})
+	}
+	return out
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -33,6 +34,38 @@ func TestPushAndRemove(t *testing.T) {
 	}
 	if _, ok := store.ForSource(net.ParseIP("10.0.0.1")); ok || len(deleted) != 1 {
 		t.Fatal("not removed")
+	}
+}
+
+// A component that cannot enforce a policy refuses it at the push, by name
+// and with its reason, and keeps the one it had: the agent's Push fails
+// instead of the claim running on a policy nobody enforces.
+func TestAPolicyTheComponentCannotEnforceIsRefusedAtThePushAndNotStored(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	store := policy.NewStore(nil)
+	var applied int
+	srv := httptest.NewServer((&Server{
+		Policies: store, AgentKey: pub, OnPolicy: func(policy.ClaimPolicy) { applied++ },
+		Enforceable: func(p policy.ClaimPolicy) error {
+			if len(p.CredentialHosts) > 0 {
+				return errors.New("no injector")
+			}
+			return nil
+		},
+	}).Handler())
+	defer srv.Close()
+	p := Pusher{Endpoints: []Endpoint{{Name: "egress", URL: srv.URL}}, Key: priv}
+	pol := policy.ClaimPolicy{ClaimID: "claim-1", OrgID: "o", Sources: []string{"10.0.0.1"}, Phase: policy.PhaseTest, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now()}
+	if err := p.Push(context.Background(), pol); err != nil {
+		t.Fatal(err)
+	}
+	pol.Allow, pol.CredentialHosts = []string{"api.example"}, []string{"api.example"}
+	err := p.Push(context.Background(), pol)
+	if err == nil || !strings.Contains(err.Error(), "egress: status 422: no injector") {
+		t.Fatalf("an unenforceable policy pushed: %v", err)
+	}
+	if got, ok := store.ForClaim("claim-1"); !ok || len(got.CredentialHosts) != 0 || applied != 1 {
+		t.Fatalf("the store after the refusal: %+v %v, applied %d", got, ok, applied)
 	}
 }
 

@@ -35,7 +35,7 @@ func (a *Agent) isCleanSetupClaim(c *claims.Claim) bool {
 // a default-branch commit, never from a claim that ran PR code. The hub and
 // the worker already checked the commit; the cell refuses a bake tied to a
 // PR claim, to another kind of claim, or to another commit.
-func (a *Agent) bake(claimID string, b protocol.ImageBakeBody) error {
+func (a *Agent) bake(ctx context.Context, claimID string, b protocol.ImageBakeBody) error {
 	bakeClaim, err := a.bakeSource(claimID, b)
 	if err != nil {
 		return err
@@ -58,6 +58,9 @@ func (a *Agent) bake(claimID string, b protocol.ImageBakeBody) error {
 		}
 	}()
 	spec := driver.BakeSpec{CellID: a.cfg.CellID, EnvironmentID: b.EnvironmentID, OrgID: b.OrgID, RecipeSHA: b.RecipeSha, SHA: b.Sha, KMSKeyRef: key, Size: a.cfg.WorkloadSize}
+	if b.RefsDigest != nil {
+		spec.RefsDigest = *b.RefsDigest
+	}
 	if bakeClaim != nil {
 		spec.Source = bakeClaim.Machines().Workload
 	}
@@ -74,12 +77,12 @@ func (a *Agent) bake(claimID string, b protocol.ImageBakeBody) error {
 	}
 	// A driver that bakes from the setup machine's output takes it now,
 	// before the ack lets the worker release the claim.
-	if p := a.cfg.BakePinner; p != nil {
+	if p := a.cfg.Parts.BakePinner; p != nil {
 		if spec.Source.MachineID == "" {
 			finishMemory()
 			return nack("bake_source", "this cell's %s driver bakes from a setup claim's machine", a.cfg.Driver.Kind())
 		}
-		if err := p.PinBakeSource(spec.Source); err != nil {
+		if err := p.PinBakeSource(ctx, spec.Source); err != nil {
 			finishMemory()
 			log := a.log.With("env", b.EnvironmentID, "sha", b.Sha)
 			log.Error("bake.refused", "reason", "bake_source", "err", err)
@@ -103,7 +106,7 @@ func (a *Agent) bakeSource(claimID string, b protocol.ImageBakeBody) (*claims.Cl
 	if !a.acceptingWork() {
 		return nil, nack("not_accepting", "cell is not accepting work")
 	}
-	if !a.cfg.Driver.Capabilities().Bake {
+	if !a.cfg.Parts.Bakes() {
 		return nil, nack("bake_unsupported", "this cell's %s driver builds no image", a.cfg.Driver.Kind())
 	}
 	var bakeClaim *claims.Claim
@@ -124,6 +127,18 @@ func (a *Agent) bakeSource(claimID string, b protocol.ImageBakeBody) (*claims.Cl
 			return nil, nack("wrong_environment", "the bake is for another org or environment than the claim")
 		case acq.Sha != b.Sha:
 			return nil, nack("sha_mismatch", "the bake commit is not the one the setup claim booted")
+		case (b.RefsDigest != nil) != (len(acq.Repos) > 0 && a.laysOutWorkspaces()):
+			// A bake of several repositories is keyed by all their commits;
+			// one keyed by the primary's alone could be reused when another
+			// repository moved, and the reverse names refs nothing booted.
+			return nil, nack("refs_mismatch", "the bake's refsDigest and the repositories the setup claim booted disagree")
+		case len(c.OrgSecrets) > 0 && a.cfg.Parts.SnapshotsMemory():
+			// S-28 (c): a setup handed the org's secrets, its image builds'
+			// included (upRequest), never becomes a memory template: their
+			// placeholders would be in every machine restored from it. The
+			// environment keeps no image and its Runs boot cold.
+			c.Log.Info("bake.refused", "reason", "setup_secrets", "secrets", len(c.OrgSecrets))
+			return nil, nack("setup_secrets", "a setup handed the org's secrets, at build or run time, never becomes a template (S-28): the environment's machines boot cold")
 		}
 	}
 	return bakeClaim, nil
@@ -142,7 +157,7 @@ func (a *Agent) runBake(ctx context.Context, spec driver.BakeSpec, log *slog.Log
 	}()
 	ctx, cancel := context.WithTimeout(ctx, bakeTimeout)
 	defer cancel()
-	img, err := a.cfg.Driver.Bake(ctx, spec)
+	img, err := a.cfg.Parts.Baker.Bake(ctx, spec)
 	if err != nil {
 		if errors.Is(err, driver.ErrResourceCleanupPending) {
 			// A daemon failure is not physical release. Quarantine this
@@ -156,8 +171,8 @@ func (a *Agent) runBake(ctx context.Context, spec driver.BakeSpec, log *slog.Log
 		return
 	}
 	a.origin.Add(img.ImageID, provenance.Image{OrgID: spec.OrgID, EnvironmentID: spec.EnvironmentID, SHA: spec.SHA}, true)
-	if a.cfg.BakeCatalog != nil {
-		if err := a.cfg.BakeCatalog.AcknowledgeBake(ctx, img.ImageID); err != nil {
+	if a.cfg.Parts.BakeCatalog != nil {
+		if err := a.cfg.Parts.BakeCatalog.AcknowledgeBake(ctx, img.ImageID); err != nil {
 			log.Error("bake.catalog.cleanup_pending", "alarm", true, "err", err)
 		}
 	}
@@ -188,7 +203,7 @@ func (a *Agent) poolTarget(claimID string, b protocol.PoolTargetBody) error {
 	if !latest && (!baked || img.OrgID != b.OrgID || img.EnvironmentID != b.EnvironmentID) {
 		return nack("image_not_baked", "the pool only takes an image this cell baked from the default branch (S-52)")
 	}
-	if a.cfg.Pooler == nil {
+	if a.cfg.Parts.Pooler == nil {
 		return nack("pool_unsupported", "this cell's %s driver keeps no pool", a.cfg.Driver.Kind())
 	}
 	// A size this cell grants no claim would fill a pool nothing adopts.

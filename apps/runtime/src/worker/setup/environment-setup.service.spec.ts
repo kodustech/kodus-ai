@@ -4,6 +4,7 @@ import type { EnvironmentRuntime } from '@libs/runtime/environment';
 
 import { recipeDigest, sealSecret } from '@libs/runtime/run';
 
+import { loadSetupConfig } from '../../shared/config';
 import { CellUnavailableError } from '../../shared/errors';
 import { devSealKey } from '../../testing/dev-seal-key';
 import { testSetupService } from '../../testing/setup-service';
@@ -11,8 +12,9 @@ import { HttpRecipeAuthorClient, type RecipeAuthorClient, type RecipeAuthorOutco
 import { poolCellOf } from '../dbos/run-deps.factory';
 import { capacityBlocked } from '../env/hub-environment-runtime';
 import { SealedSecretOpener } from '../secrets/sealed-tokens';
-import { InMemoryLessonStore } from './lesson.store';
-import { InMemoryEnvironmentSetupStore, loadSetupOptions, type SetupStepRunner, BLOCKER_MESSAGE_MAX, blockerMessage, BOOT_PROGRESS_POLL_MS, carriedBuildCell } from './environment-setup.service';
+import { RECIPE_AUTHOR_VERSION, recipeAuthorRevision } from '@libs/runtime/run/recipe-author-version';
+import { lastAuthoredRecipe, setupOptionsFrom, type SetupStepRunner, BLOCKER_MESSAGE_MAX, blockerMessage, causeLine, BOOT_PROGRESS_POLL_MS, carriedBuildCell } from './environment-setup.service';
+import { InMemoryEnvironmentSetupStore, InMemoryLessonStore } from './testing';
 
 const SHA = 'c'.repeat(40);
 const KEY = 'env-1:2026-10-30T12:00:00.000Z';
@@ -611,7 +613,7 @@ describe('lessons (ADR-018)', () => {
         const store = new InMemoryEnvironmentSetupStore();
         await blockedBefore(store);
         const rec = await testSetupService({ envForSetup: () => fakeEnv().env }, store, {
-            lessons: { store: { record: async () => Promise.reject(new Error('mongo down')), update: async () => false }, approvedHosts: async () => ['registry.npmjs.org'] },
+            lessons: { store: { record: async () => Promise.reject(new Error('database down')), update: async () => false }, approvedHosts: async () => ['registry.npmjs.org'] },
         }).run(cmd());
         expect(rec.state).toBe('active');
     });
@@ -744,12 +746,19 @@ describe('machine size', () => {
     });
 });
 
-describe('loadSetupOptions', () => {
+describe('setupOptionsFrom', () => {
+    const options = (env: Record<string, string>) => setupOptionsFrom(loadSetupConfig(env));
+
     it('reads the dev overrides and refuses malformed ones', () => {
-        expect(loadSetupOptions({})).toEqual({ devSha: undefined, devExpose: undefined, healthPath: undefined });
-        expect(loadSetupOptions({ RUNTIME_SETUP_DEV_SHA: SHA, RUNTIME_SETUP_EXPOSE: JSON.stringify(EXPOSE) })).toMatchObject({ devSha: SHA, devExpose: EXPOSE });
-        expect(() => loadSetupOptions({ RUNTIME_SETUP_DEV_SHA: 'main' })).toThrow('40-hex');
-        expect(() => loadSetupOptions({ RUNTIME_SETUP_EXPOSE: '[{"service":"app"}]' })).toThrow('RUNTIME_SETUP_EXPOSE');
+        expect(options({})).toEqual({ devSha: undefined, devExpose: undefined, healthPath: undefined, authorRepairs: 2 });
+        expect(options({ RUNTIME_SETUP_DEV_SHA: SHA, RUNTIME_SETUP_EXPOSE: JSON.stringify(EXPOSE) })).toMatchObject({ devSha: SHA, devExpose: EXPOSE });
+        expect(() => options({ RUNTIME_SETUP_DEV_SHA: 'main' })).toThrow('40-hex');
+        expect(() => options({ RUNTIME_SETUP_EXPOSE: '[{"service":"app"}]' })).toThrow('RUNTIME_SETUP_EXPOSE');
+    });
+
+    it('passes on the repairs the config read', () => {
+        expect(options({ RUNTIME_SETUP_AUTHOR_REPAIRS: '1' })).toMatchObject({ authorRepairs: 1 });
+        expect(options({ RUNTIME_SETUP_AUTHOR_REPAIRS: '0' })).toMatchObject({ authorRepairs: 0 });
     });
 
     it('is deterministic for the workflow engine: the health probe id and the trace id derive from the command key', async () => {
@@ -858,7 +867,8 @@ describe('a recipe Kody writes (no recipe on the default branch, none inferred)'
         };
         return { client, calls };
     };
-    const submitted: RecipeAuthorOutcome = { status: 'submitted', recipe: AUTHORED, notes: 'The root compose file; the app listens on 3000.', usage: { inputTokens: 900, outputTokens: 80 } };
+    // A product as deployed now: it says which version of the author's instructions wrote the recipe.
+    const submitted: RecipeAuthorOutcome = { status: 'submitted', recipe: AUTHORED, notes: 'The root compose file; the app listens on 3000.', authorVersion: RECIPE_AUTHOR_VERSION, usage: { inputTokens: 900, outputTokens: 80 } };
     /** The env, with the recipe each boot was asked to use. */
     const recordingEnv = (opts: Parameters<typeof fakeEnv>[0] = {}) => {
         const f = fakeEnv(opts);
@@ -875,7 +885,7 @@ describe('a recipe Kody writes (no recipe on the default branch, none inferred)'
         const { env, recipes } = recordingEnv();
         const a = author(submitted);
         const rec = await testSetupService({ envForSetup: () => env }, new InMemoryEnvironmentSetupStore(), { author: a.client }).run(noRecipeCmd());
-        expect(a.calls).toEqual([{ organizationId: 'org-1', llmToken: LLM_TOKEN, setupKey: KEY, sha: SHA }]);
+        expect(a.calls).toEqual([{ organizationId: 'org-1', llmToken: LLM_TOKEN, setupKey: KEY, sha: SHA, attempt: 'author-0' }]);
         expect(rec.state).toBe('active');
         expect(rec.recipe).toMatchObject({ path: '.kodus/workspace.yaml', sha: SHA, state: 'found', origin: 'authored', content: AUTHORED, notes: submitted.status === 'submitted' ? submitted.notes : '', cleanBoots: 1 });
         expect(rec.recipe?.digest).toMatch(/^sha256:/);
@@ -895,6 +905,128 @@ describe('a recipe Kody writes (no recipe on the default branch, none inferred)'
         expect(again.recipe).toMatchObject({ origin: 'authored', content: AUTHORED, cleanBoots: 2 });
         expect(again.steps.find((s) => s.name === 'recipe')?.detail).toMatch(/^written by Kody \(kept from the last setup\)/);
     });
+
+    // kr-nextjs's recipe (environment 8828bec0) was written before the author was told to start the production
+    // server (41350054e). "Set up again" kept it at the same commit and a new commit reused it with no model call, so
+    // the change never reached it. A recipe written under an older version of the instructions than a revision that
+    // recipes must get is written again once; the old one stays when the new one does not pass its checks.
+    describe('a recipe written before a revision of the instructions that recipes must get', () => {
+        const SECOND = 'env-1:2026-11-13T13:00:00.000Z';
+        const THIRD = 'env-1:2026-11-13T14:00:00.000Z';
+        const again = (key: string) => noRecipeCmd({ key, requestedAt: key.slice('env-1:'.length), llmToken: sealSecret('kst1.setup-token', devSealKey(), key) });
+        const old: RecipeAuthorOutcome = { status: 'submitted', recipe: AUTHORED, notes: 'next dev on 3000', usage: { inputTokens: 900, outputTokens: 80 } };
+        const production = AUTHORED.replace('public: app', 'public: app\n    health: /');
+        const rewritten: RecipeAuthorOutcome = { status: 'submitted', recipe: production, notes: 'next start on 3000', authorVersion: RECIPE_AUTHOR_VERSION, usage: { inputTokens: 900, outputTokens: 80 } };
+        const answers = (...outs: RecipeAuthorOutcome[]) => {
+            const calls: RecipeAuthorRequestInput[] = [];
+            const client: RecipeAuthorClient = { author: async (req) => (calls.push(req), outs[Math.min(calls.length - 1, outs.length - 1)]) };
+            return { client, calls };
+        };
+        // AUTHORED's notes name no next/font/google, so v3 (Google Fonts) does not apply: these recipes get v2.
+        const REV = recipeAuthorRevision(2)!;
+        const reason = REV.reason;
+
+        it('"Set up again" at the same commit writes it again once, records the version, and says so on the screen', async () => {
+            const store = new InMemoryEnvironmentSetupStore();
+            const a = answers(old, rewritten, rewritten);
+            const service = () => testSetupService({ envForSetup: () => fakeEnv().env }, store, { author: a.client });
+            const first = await service().run(noRecipeCmd());
+            expect(first.recipe?.authorVersion).toBeUndefined();
+            const second = await service().run(again(SECOND));
+            expect(a.calls[1]).toMatchObject({ sha: SHA, last: { recipe: AUTHORED }, reauthor: { from: 1, to: REV.version } });
+            expect(second).toMatchObject({ state: 'active', recipe: { content: production, authorVersion: RECIPE_AUTHOR_VERSION } });
+            expect(second.reauthor).toEqual({ version: REV.version, from: 1, reason, outcome: 'updated' });
+            expect(second.steps.find((s) => s.name === 'recipe')?.detail).toMatch(new RegExp(`^recipe updated to author v${REV.version} \\(its rule: .*\\); Kody's notes say what it does now`));
+            // Never again for this version: the next setup keeps the new recipe with no call.
+            const third = await service().run(again(THIRD));
+            expect(a.calls).toHaveLength(2);
+            expect(third.recipe).toMatchObject({ content: production, authorVersion: RECIPE_AUTHOR_VERSION });
+            expect(third.reauthor).toEqual(second.reauthor);
+        });
+
+        // kr-nextjs on 2026-11-13: written again under v2, it still starts `pnpm dev` (the app imports next/font/google,
+        // the rule's own exception), and the step read "recipe updated to author v2: an app with pages starts on its
+        // production server (next start, not next dev)": the revision's rule, printed as what the recipe does.
+        it("says what the rewritten recipe does in Kody's own words, and names the revision's rule as a rule", async () => {
+            const store = new InMemoryEnvironmentSetupStore();
+            const notes = 'The app imports next/font/google, so it runs next dev: a production next build would fetch Google Fonts and fail on the isolated network.';
+            const keptDev: RecipeAuthorOutcome = { status: 'submitted', recipe: production, notes, authorVersion: RECIPE_AUTHOR_VERSION, usage: { inputTokens: 900, outputTokens: 80 } };
+            const a = answers(old, keptDev);
+            const service = () => testSetupService({ envForSetup: () => fakeEnv().env }, store, { author: a.client });
+            await service().run(noRecipeCmd());
+            const second = await service().run(again(SECOND));
+            const detail = second.steps.find((s) => s.name === 'recipe')?.detail ?? '';
+            expect(second.reauthor).toMatchObject({ version: REV.version, outcome: 'updated' });
+            expect(detail).toMatch(new RegExp(`^recipe updated to author v${REV.version} \\(its rule: .*\\); Kody's notes say what it does now`));
+            expect(detail).toContain(`(its rule: ${reason})`);
+            expect(detail).not.toContain(`author v${REV.version}: ${reason}`);
+            // The notes are on the recipe, for the card; a step's detail never carries text written from the repository.
+            expect(detail).not.toContain('next/font/google');
+            expect(second.recipe?.notes).toBe(notes);
+        });
+
+        it('a rewrite that does not pass its checks keeps the recipe that booted, and is not asked again', async () => {
+            const store = new InMemoryEnvironmentSetupStore();
+            const a = answers(old, { status: 'no_recipe', reason: 'every submission was refused by the checks', usage: { inputTokens: 1, outputTokens: 1 } });
+            const service = () => testSetupService({ envForSetup: () => fakeEnv().env }, store, { author: a.client });
+            await service().run(noRecipeCmd());
+            const second = await service().run(again(SECOND));
+            expect(second).toMatchObject({ state: 'active', recipe: { content: AUTHORED, origin: 'authored' } });
+            expect(second.reauthor).toMatchObject({ version: REV.version, outcome: 'kept' });
+            expect(second.steps.find((s) => s.name === 'recipe')?.detail).toMatch(/did not pass its checks \(every submission was refused by the checks\), so the recipe that booted stays/);
+            await service().run(again(THIRD));
+            expect(a.calls).toHaveLength(2);
+        });
+
+        it('no answer from the product keeps the recipe and leaves the rewrite to the next setup', async () => {
+            const store = new InMemoryEnvironmentSetupStore();
+            const a = answers(old, { status: 'unavailable', code: 'llm_budget_exceeded', message: "the setup's LLM budget is spent" }, rewritten);
+            const service = () => testSetupService({ envForSetup: () => fakeEnv().env }, store, { author: a.client });
+            await service().run(noRecipeCmd());
+            const second = await service().run(again(SECOND));
+            expect(second.recipe?.content).toBe(AUTHORED);
+            expect(second.reauthor).toBeUndefined();
+            const third = await service().run(again(THIRD));
+            expect(a.calls[2].reauthor).toEqual({ from: 1, to: REV.version });
+            expect(third.recipe?.content).toBe(production);
+        });
+
+        it('a recipe Kody already wrote under the current version is kept as before', async () => {
+            const store = new InMemoryEnvironmentSetupStore();
+            const a = answers(rewritten);
+            const service = () => testSetupService({ envForSetup: () => fakeEnv().env }, store, { author: a.client });
+            await service().run(noRecipeCmd());
+            const second = await service().run(again(SECOND));
+            expect(a.calls).toHaveLength(1);
+            expect(second.reauthor).toBeUndefined();
+            expect(second.steps.find((s) => s.name === 'recipe')?.detail).toMatch(/^written by Kody \(kept from the last setup\)/);
+        });
+
+        // kr-nextjs on 2026-11-13: written again under v2, it kept `next dev` because next/font/google could not reach
+        // Google Fonts from a build, and said so in its notes. With the fonts on the recommended list (v3), its next
+        // setup writes it once more; a v2 recipe that names no Google font is left alone.
+        it('a v2 recipe that kept the dev server for next/font/google is written again for v3, and only that one', async () => {
+            const devNotes = 'The app imports next/font/google, so it runs next dev: a production next build would fetch Google Fonts.';
+            const v2Dev: RecipeAuthorOutcome = { status: 'submitted', recipe: AUTHORED, notes: devNotes, authorVersion: 2, usage: { inputTokens: 900, outputTokens: 80 } };
+            const store = new InMemoryEnvironmentSetupStore();
+            const a = answers(v2Dev, rewritten);
+            const service = () => testSetupService({ envForSetup: () => fakeEnv().env }, store, { author: a.client });
+            await service().run(noRecipeCmd());
+            const second = await service().run(again(SECOND));
+            expect(a.calls[1].reauthor).toEqual({ from: 2, to: 3 });
+            expect(second.reauthor).toMatchObject({ version: 3, from: 2, outcome: 'updated' });
+            expect(second.recipe).toMatchObject({ content: production });
+
+            const plainStore = new InMemoryEnvironmentSetupStore();
+            const p = answers({ ...v2Dev, notes: 'the compose file at the root' } as RecipeAuthorOutcome);
+            const plain = () => testSetupService({ envForSetup: () => fakeEnv().env }, plainStore, { author: p.client });
+            await plain().run(noRecipeCmd());
+            const kept = await plain().run(again(SECOND));
+            expect(p.calls).toHaveLength(1);
+            expect(kept.reauthor).toBeUndefined();
+        });
+    });
+
 
     const KODY_FILES = [
         { path: '.kodus/Dockerfile', content: 'FROM node:22-bookworm-slim\nCOPY . .\nCMD ["npm", "start"]\n' },
@@ -970,12 +1102,14 @@ describe('a recipe Kody writes (no recipe on the default branch, none inferred)'
         const rec = await testSetupService({ envForSetup: () => fakeEnv().env }, new InMemoryEnvironmentSetupStore(), { author: a.client }).run(noRecipeCmd());
         expect(rec.state).toBe('active');
         expect(rec.steps.find((s) => s.name === 'recipe')).toMatchObject({ state: 'skipped', detail: expect.stringContaining("Kody could not write one (the setup's LLM budget is spent)") });
-        // With nothing to build from either, the inference's own blocker stands.
+        // With nothing to build from either, the inference's blocker stands, and says Kody was not reached (not Kody's verdict).
         const message = 'There is no compose file and no Dockerfile at the repository root, so Kodus has nothing to infer a recipe from.';
         const blocked = await testSetupService({ envForSetup: () => fakeEnv().env }, new InMemoryEnvironmentSetupStore(), { author: a.client }).run(
             noRecipeCmd({ recipe: { path: '.kodus/workspace.yaml', sha: SHA, content: null, inference: { reason: 'no_build_files', message } } }),
         );
-        expect(blocked.blockers).toEqual([expect.objectContaining({ kind: 'no_recipe', message })]);
+        expect(blocked.blockers).toEqual([
+            expect.objectContaining({ kind: 'no_recipe', message: `${message} Kody could not write one: the setup's LLM budget is spent.` }),
+        ]);
     });
 
     it('a model failure in the product is no verdict: the setup goes on as without Kody and says so, never blocks on no_recipe', async () => {
@@ -1024,6 +1158,132 @@ describe('a recipe Kody writes (no recipe on the default branch, none inferred)'
         expect(a.calls).toHaveLength(1);
         expect(calls.filter((c) => c.startsWith('acquire'))).toHaveLength(1);
     });
+
+    describe('the recipe that last booted, at a new commit (RepoLaunch reuse)', () => {
+        const NEW_SHA = 'd'.repeat(40);
+        const at = (sha: string, key: string) =>
+            noRecipeCmd({
+                key,
+                requestedAt: key.slice('env-1:'.length),
+                ref: { sha, branch: 'main' },
+                recipe: { path: '.kodus/workspace.yaml', sha, content: null, inference },
+                llmToken: sealSecret('kst1.setup-token', devSealKey(), key),
+            });
+        const SECOND = 'env-1:2026-10-31T09:00:00.000Z';
+        /** A client that answers each call with the next answer, recording what it was asked. */
+        const answers = (...outs: RecipeAuthorOutcome[]) => {
+            const calls: RecipeAuthorRequestInput[] = [];
+            const client: RecipeAuthorClient = { author: async (req) => (calls.push(req), outs[Math.min(calls.length - 1, outs.length - 1)]) };
+            return { client, calls };
+        };
+        const NOTES = submitted.status === 'submitted' ? submitted.notes : undefined;
+
+        it('asks the product to check it at the new commit with no model call, and says on the step it was reused', async () => {
+            const store = new InMemoryEnvironmentSetupStore();
+            const a = answers(submitted, { status: 'submitted', recipe: AUTHORED, notes: NOTES, reused: true, usage: { inputTokens: 0, outputTokens: 0 } });
+            const first = await testSetupService({ envForSetup: () => fakeEnv().env }, store, { author: a.client }).run(noRecipeCmd());
+            const again = await testSetupService({ envForSetup: () => fakeEnv().env }, store, { author: a.client }).run(at(NEW_SHA, SECOND));
+            expect(a.calls[1]).toEqual({ organizationId: 'org-1', llmToken: expect.any(String), setupKey: SECOND, sha: NEW_SHA, attempt: 'author-0', last: { recipe: AUTHORED, notes: NOTES } });
+            expect(again.state).toBe('active');
+            expect(again.recipe).toMatchObject({ sha: NEW_SHA, origin: 'authored', content: AUTHORED, digest: first.recipe?.digest, cleanBoots: 2 });
+            expect(again.steps.find((s) => s.name === 'recipe')?.detail).toMatch(/^written by Kody \(reused from the last setup that booted: it passes the checks at this commit, no model call\)/);
+        });
+
+        it('a recipe whose boot failed goes back to Kody with that failure, even at the same commit', async () => {
+            const store = new InMemoryEnvironmentSetupStore();
+            const fixed = AUTHORED.replace('public: app', 'public: app\n    health: /');
+            const a = answers(submitted, { status: 'submitted', recipe: fixed, usage: { inputTokens: 900, outputTokens: 80 } });
+            const first = await testSetupService({ envForSetup: () => fakeEnv({ status: 503 }).env }, store, { author: a.client }).run(noRecipeCmd());
+            expect(first).toMatchObject({ state: 'blocked', blockers: [expect.objectContaining({ kind: 'not_ready' })] });
+            const again = await testSetupService({ envForSetup: () => fakeEnv().env }, store, { author: a.client }).run(at(SHA, SECOND));
+            expect(a.calls[1].last).toEqual({ recipe: AUTHORED, notes: NOTES, failure: { signature: first.blockers[0].signature, title: expect.any(String), evidence: [expect.stringContaining('answered 503')] } });
+            expect(again.recipe).toMatchObject({ content: fixed, cleanBoots: 1 });
+            expect(again.steps.find((s) => s.name === 'recipe')?.detail).toContain(`rewritten after the last setup's recipe failed on ${first.blockers[0].signature}`);
+        });
+
+        it('a platform failure is no verdict on the recipe: the next setup keeps it, with no call at the same commit', async () => {
+            const store = new InMemoryEnvironmentSetupStore();
+            const a = answers(submitted);
+            const first = await testSetupService({ envForSetup: () => fakeEnv({ held: true }).env }, store, { author: a.client }).run(noRecipeCmd());
+            expect(first.blockers[0]).toMatchObject({ kind: 'platform' });
+            const again = await testSetupService({ envForSetup: () => fakeEnv().env }, store, { author: a.client }).run(at(SHA, SECOND));
+            expect(a.calls).toHaveLength(1);
+            expect(again.steps.find((s) => s.name === 'recipe')?.detail).toMatch(/^written by Kody \(kept from the last setup\)/);
+        });
+
+        it('with no answer from the product at the new commit, the recipe that booted is kept, and the step says it was not checked', async () => {
+            const store = new InMemoryEnvironmentSetupStore();
+            const a = answers(submitted, { status: 'unavailable', code: 'llm_unavailable', message: 'the product answered 400' });
+            await testSetupService({ envForSetup: () => fakeEnv().env }, store, { author: a.client }).run(noRecipeCmd());
+            const again = await testSetupService({ envForSetup: () => fakeEnv().env }, store, { author: a.client }).run(at(NEW_SHA, SECOND));
+            expect(again).toMatchObject({ state: 'active', recipe: { content: AUTHORED } });
+            expect(again.steps.find((s) => s.name === 'recipe')?.detail).toMatch(/^written by Kody \(kept from the last setup\); not checked at this commit: the product answered 400/);
+        });
+
+        it('Kody writing no recipe at the new commit keeps the one that booted, and the step says so', async () => {
+            const store = new InMemoryEnvironmentSetupStore();
+            const a = answers(submitted, { status: 'no_recipe', reason: 'the repository has no server to boot', usage: { inputTokens: 1, outputTokens: 1 } });
+            await testSetupService({ envForSetup: () => fakeEnv().env }, store, { author: a.client }).run(noRecipeCmd());
+            const again = await testSetupService({ envForSetup: () => fakeEnv().env }, store, { author: a.client }).run(at(NEW_SHA, SECOND));
+            expect(a.calls).toHaveLength(2);
+            expect(again).toMatchObject({ state: 'active', recipe: { content: AUTHORED, origin: 'authored' } });
+            expect(again.blockers).toEqual([]);
+            expect(again.steps.find((s) => s.name === 'recipe')?.detail).toMatch(/^written by Kody \(kept from the last setup\); Kody wrote no recipe at this commit: the repository has no server to boot/);
+        });
+
+        it('what Kodus rewrote in Kody\'s compose files is on the recipe step and the record', async () => {
+            const adjusted = ['.kodus/compose.yaml services.app.env_file: dropped .env, which is not in the repository at this commit'];
+            const rec = await testSetupService({ envForSetup: () => fakeEnv().env }, new InMemoryEnvironmentSetupStore(), { author: answers({ ...(withFiles as any), adjusted }).client }).run(noRecipeCmd());
+            expect(rec.recipe?.adjusted).toEqual(adjusted);
+            expect(rec.steps.find((s) => s.name === 'recipe')?.detail).toContain("; Kodus changed Kody's compose files: .kodus/compose.yaml services.app.env_file: dropped .env");
+        });
+    });
+});
+
+describe('lastAuthoredRecipe', () => {
+    const recipe = 'version: 1\nservices:\n  compose:\n    public: app\n';
+    const blocked = (blockers: Array<{ kind: string; signature: string; message: string }>) =>
+        ({
+            key: 'env-1:2026-10-30T12:00:00.000Z',
+            state: 'blocked',
+            blockers: blockers.map((b) => ({ ...b, at: '2026-10-30T12:05:00.000Z' })),
+            recipe: { path: '.kodus/workspace.yaml', sha: 'a'.repeat(40), state: 'found', origin: 'authored', content: recipe },
+        }) as unknown as Parameters<typeof lastAuthoredRecipe>[0];
+    const NEXT = 'env-1:2026-10-31T09:00:00.000Z';
+
+    it('a resources failure of the boot goes back to Kody as the recipe failure', () => {
+        const out = lastAuthoredRecipe(blocked([{ kind: 'resources', signature: 'out_of_memory', message: 'the app was killed: out of memory' }]), NEXT);
+        expect(out?.last.failure).toMatchObject({ signature: 'out_of_memory' });
+    });
+
+    it('a security violation goes back to Kody as the recipe failure, never as a recipe that booted', () => {
+        const out = lastAuthoredRecipe(blocked([{ kind: 'security_violation', signature: 'canary_egress', message: 'the code sent its test credential out' }]), NEXT);
+        expect(out?.last.failure).toMatchObject({ signature: 'canary_egress' });
+    });
+
+    it("a boot that ran out of time in the recipe's build goes back to the next setup with its slowest steps", () => {
+        const previous = {
+            ...(blocked([{ kind: 'resources', signature: 'boot_timeout', message: 'the boot did not come up within 30 minutes' }]) as object),
+            steps: [{ name: 'boot', state: 'failed', startedAt: '2026-10-30T12:00:00.000Z', phases: [{ name: 'yarn install', ms: 1_005_300 }, { name: 'pull node:22', ms: 21_000 }] }],
+        } as unknown as Parameters<typeof lastAuthoredRecipe>[0];
+        expect(lastAuthoredRecipe(previous, NEXT)?.last.failure).toEqual({
+            signature: 'boot_timeout',
+            title: "The build did not finish within the setup's limit",
+            evidence: ['yarn install: 1005.3 s', 'pull node:22: 21.0 s'],
+        });
+    });
+
+    it('blocked with no blocker is no verdict on the recipe: it comes back with no failure', () => {
+        expect(lastAuthoredRecipe(blocked([]), NEXT)).toEqual({ sha: 'a'.repeat(40), last: { recipe } });
+    });
+
+    it.each([
+        ['the platform', { kind: 'platform', signature: 'setup:ClaimLeaseUnavailableError', message: 'lease lost' }],
+        ['no cell', { kind: 'cell_unavailable', signature: 'cell_unavailable', message: 'no cell connected' }],
+        ['no room on a cell', { kind: 'resources', signature: 'org_capacity', message: 'the org has no room' }],
+    ])('%s is no verdict on the recipe', (_name, b) => {
+        expect(lastAuthoredRecipe(blocked([b]), NEXT)?.last.failure).toBeUndefined();
+    });
 });
 
 describe('blockerMessage', () => {
@@ -1035,6 +1295,27 @@ describe('blockerMessage', () => {
         expect(out.startsWith('compose_up: dockergvisor: build app')).toBe(true);
         expect(out.endsWith(cause)).toBe(true);
         expect(blockerMessage('short')).toBe('short');
+    });
+
+    it("keeps the tool's own error line that falls between the command and docker's tail", () => {
+        const tail = 'error: failed to solve: process "/bin/sh -c pnpm install --frozen-lockfile" did not complete successfully: exit code: 1';
+        const text = [
+            'compose_up: dockergvisor: build app: step [stage-0 5/6] RUN pnpm install --frozen-lockfile failed',
+            ...Array.from({ length: 40 }, (_, i) => `#9 ${i}.1 Progress: resolved ${i}, reused ${i}, downloaded 0`),
+            '#9 12.40  ERR_PNPM_IGNORED_BUILDS  Ignored build scripts: esbuild, sharp',
+            ...Array.from({ length: 20 }, (_, i) => `   ${i} | COPY examples/with-docker/ .`),
+            tail,
+        ].join('\n');
+        const out = blockerMessage(text);
+        expect(Array.from(out).length).toBeLessThanOrEqual(BLOCKER_MESSAGE_MAX);
+        expect(out).toContain('ERR_PNPM_IGNORED_BUILDS');
+        expect(out.startsWith('compose_up: dockergvisor: build app')).toBe(true);
+        expect(out.endsWith('exit code: 1')).toBe(true);
+    });
+
+    it('takes no generic docker line for the cause', () => {
+        expect(causeLine('step failed\nerror: failed to solve: process "/bin/sh -c x" did not complete successfully: exit code: 2')).toBeUndefined();
+        expect(causeLine('#5 1.2 npm ERR! code E404\nmore')).toBe('npm ERR! code E404');
     });
 
     it('never cuts a character in two', () => {

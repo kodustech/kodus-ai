@@ -2,24 +2,37 @@ import { Logger } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { Pool } from 'pg';
 import { PgExternalStopReader } from '../infrastructure/pg-external-stop.reader';
+import { RuntimeReadDb } from '../infrastructure/runtime-read-db';
+import { isolatedDatabase } from '../../../../apps/runtime/src/testing/isolated-database';
 
-const url = process.env.EXTERNAL_FINDINGS_IT_DATABASE_URL;
-(url ? describe : describe.skip)(
+// The reader reads runtime.runtime_stops by that name, so the suite owns a
+// database of its own (isolated-database.ts) instead of a schema: the
+// shared integration database's runtime schema is never touched.
+const base = process.env.EXTERNAL_FINDINGS_IT_DATABASE_URL ?? process.env.RUNTIME_IT_DATABASE_URL;
+const database = isolatedDatabase(base ?? '', 'external_stop');
+(base && process.env.SKIP_INTEGRATION !== 'true' ? describe : describe.skip)(
     'external admission stop reader with real column-only PostgreSQL grants',
     () => {
         it('reads only stop authority and cannot inspect actors or change Runtime state', async () => {
-            const owner = new Pool({ connectionString: url, max: 1 });
             const suffix = randomBytes(8).toString('hex');
+            const admin = new Pool({ connectionString: base, max: 1 });
+            await database.create();
+            const url = new URL(database.url);
+            const owner = new Pool({ connectionString: url.toString(), max: 1 });
+            // A connection pg is still closing is not a failure of the suite.
+            owner.on('error', () => undefined);
             const role = `external_reader_${suffix}`;
             const password = randomBytes(24).toString('hex');
-            const restricted = new URL(url!);
+            const restricted = new URL(url.toString());
             restricted.username = role;
             restricted.password = password;
-            const reader = new PgExternalStopReader(restricted.toString());
+            const readDb = new RuntimeReadDb(restricted.toString());
+            const reader = new PgExternalStopReader(readDb);
             const client = new Pool({
                 connectionString: restricted.toString(),
                 max: 1,
             });
+            client.on('error', () => undefined);
             try {
                 await owner.query('CREATE SCHEMA runtime');
                 await owner.query(
@@ -70,7 +83,7 @@ const url = process.env.EXTERNAL_FINDINGS_IT_DATABASE_URL;
                     );
                     expect(killed.rows).toEqual([{ killed: true }]);
                     expect(await idleWarning).toEqual({
-                        event: 'runtime.a2a.stop_reader_unavailable',
+                        event: 'runtime.read_db.unavailable',
                         reason: 'idle_connection_error',
                     });
                     expect(await reader.isStopped('org-a')).toBe(true);
@@ -87,11 +100,41 @@ const url = process.env.EXTERNAL_FINDINGS_IT_DATABASE_URL;
                     client.query('DELETE FROM runtime.runtime_stops'),
                 ).rejects.toMatchObject({ code: '42501' });
             } finally {
-                await reader.onModuleDestroy();
+                await readDb.onModuleDestroy();
                 await client.end();
-                await owner.query('DROP SCHEMA IF EXISTS runtime CASCADE');
-                await owner.query(`DROP ROLE IF EXISTS "${role}"`);
+                // The database outlives the suite (leased): the role's grants in it go first.
+                await owner.query(`DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role}') THEN EXECUTE 'DROP OWNED BY "${role}"'; END IF; END $$`);
                 await owner.end();
+                await admin.query(`DROP ROLE IF EXISTS "${role}"`);
+                await admin.end();
+                await database.drop();
+            }
+        });
+
+        // Behavior: a stop table the reader cannot read is an error, never "not stopped" (the gate fails closed),
+        // and every failed read gives its connection back, so the reader answers again once the table is readable.
+        it('fails closed on an unreadable stop table and answers again once it is readable', async () => {
+            const unreadable = isolatedDatabase(base ?? '', 'external_stop_unreadable');
+            await unreadable.create();
+            const owner = new Pool({ connectionString: unreadable.url, max: 1 });
+            owner.on('error', () => undefined);
+            const readDb = new RuntimeReadDb(unreadable.url);
+            const reader = new PgExternalStopReader(readDb);
+            try {
+                // More failed reads than the shared read pool holds connections (max 10): a leaked one would hang the next.
+                for (let i = 0; i < 11; i++) {
+                    await expect(reader.isStopped('org-a')).rejects.toMatchObject({ code: '42P01' });
+                }
+                await owner.query('CREATE SCHEMA runtime');
+                await owner.query('CREATE TABLE runtime.runtime_stops(scope text, organization_id text, requested_by text, cleared_at timestamptz)');
+                await owner.query("INSERT INTO runtime.runtime_stops VALUES('org','org-a','fixture-owner',NULL)");
+
+                expect(await reader.isStopped('org-a')).toBe(true);
+                expect(await reader.isStopped('org-b')).toBe(false);
+            } finally {
+                await readDb.onModuleDestroy();
+                await owner.end();
+                await unreadable.drop();
             }
         });
     },

@@ -23,7 +23,7 @@ describe('RuntimePublicationRedriveCron', () => {
     });
 
     it('a failed sweep is logged and the next tick runs', async () => {
-        const sweep = jest.fn().mockRejectedValueOnce(new Error('mongo down')).mockResolvedValueOnce({ stuck: 1, redriven: 1, recovered: 1, gaveUp: 0 });
+        const sweep = jest.fn().mockRejectedValueOnce(new Error('database down')).mockResolvedValueOnce({ stuck: 1, redriven: 1, recovered: 1, gaveUp: 0 });
         const cron = new RuntimePublicationRedriveCron({ sweep } as any);
         await cron.handleCron();
         expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ message: 'Runtime publication redrive: sweep failed' }));

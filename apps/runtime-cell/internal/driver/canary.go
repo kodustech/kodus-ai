@@ -1,10 +1,5 @@
 package driver
 
-import (
-	"context"
-	"sort"
-)
-
 // Canary is one of a Run's decoys (claim.acquire canaries, ADR-043): a
 // value nothing legitimate reads out of the workload, so seeing it in a
 // prompt, the egress, the evidence or the comment means code sent it out.
@@ -44,23 +39,4 @@ func CanaryFileOf(cs []Canary) string {
 		}
 	}
 	return ""
-}
-
-type canaryKey struct{}
-
-// WithCanaries carries a claim's decoys to the driver's boot (Up), as
-// WithOutput carries its sink: per call, never kept in the driver's state.
-func WithCanaries(ctx context.Context, cs []Canary) context.Context {
-	if len(cs) == 0 {
-		return ctx
-	}
-	out := append([]Canary(nil), cs...)
-	sort.Slice(out, func(i, j int) bool { return out[i].Slot < out[j].Slot })
-	return context.WithValue(ctx, canaryKey{}, out)
-}
-
-// CanariesFrom is what WithCanaries set, or nil.
-func CanariesFrom(ctx context.Context) []Canary {
-	cs, _ := ctx.Value(canaryKey{}).([]Canary)
-	return cs
 }

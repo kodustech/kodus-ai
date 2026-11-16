@@ -1,5 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { RUNTIME_CRON_SCHEDULES } from './runtime-cron-schedules';
 import { metrics, type Meter } from '@opentelemetry/api';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -9,7 +10,6 @@ import { RuntimePoolController } from '../application/pool-controller.service';
 
 // Every 5 minutes: a schedule opens or closes within that, a warm-up ends,
 // and the month's usage moves forward for the budget.
-const RUNTIME_CRON_POOL_SCHEDULER = process.env.RUNTIME_CRON_POOL_SCHEDULER || '*/5 * * * *';
 
 export const POOL_SCHEDULER_TICK_METRIC = 'runtime.pool_scheduler.tick';
 
@@ -50,7 +50,7 @@ export class RuntimePoolSchedulerCron {
         private readonly metrics: PoolSchedulerMetrics = new OtelPoolSchedulerMetrics(),
     ) {}
 
-    @Cron(RUNTIME_CRON_POOL_SCHEDULER, { name: 'Runtime pool scheduler' })
+    @Cron(RUNTIME_CRON_SCHEDULES.poolScheduler, { name: 'Runtime pool scheduler' })
     async handleCron(): Promise<void> {
         let lock: DistributedLock | null;
         try {
@@ -80,6 +80,7 @@ export class RuntimePoolSchedulerCron {
                 error: error instanceof Error ? error : undefined,
             });
         } finally {
+            // DistributedLock.release logs its own failure, and the TTL frees the lock anyway.
             await lock.release().catch(() => undefined);
         }
     }

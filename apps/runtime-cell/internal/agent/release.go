@@ -55,6 +55,10 @@ func (a *Agent) cleanup(ctx context.Context, c *claims.Claim, reason string) {
 	if !c.BeginCleanup() {
 		return
 	}
+	if a.cfg.Preview != nil {
+		// No preview stream outlives its claim's machines.
+		a.cfg.Preview.Service.ReleaseClaim(c.ID)
+	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
 	defer cancel()
 	if err := a.leases.Release(ctx, c.ID); err != nil && !errors.Is(err, lease.ErrUnknownClaim) {
@@ -83,8 +87,9 @@ func (a *Agent) cleanup(ctx context.Context, c *claims.Claim, reason string) {
 	if a.cfg.Keys != nil {
 		a.cfg.Keys.Forget(c.ID)
 	}
-	if a.cfg.SQLObservers != nil {
-		a.cfg.SQLObservers.ForgetObserverSQL(c.Machines().Workload.MachineID)
+	a.guests.close(c.ID)
+	if a.cfg.Parts.SQLObservers != nil {
+		a.cfg.Parts.SQLObservers.ForgetObserverSQL(c.Machines().Workload.MachineID)
 	}
 	a.origin.Untaint(c.Machines().Workload.MachineID)
 	if dir, err := claims.WorkDir(a.cfg.WorkDir, c.ID); err == nil {

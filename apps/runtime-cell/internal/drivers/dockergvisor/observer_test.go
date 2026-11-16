@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
 )
 
@@ -15,8 +15,10 @@ const observerJSON = `[{"Id":"c0ffee","Name":"/kodus-claim-1-observer","Config":
 func TestTheObserverMachineServesProbesUnderGVisor(t *testing.T) {
 	r := &recorder{answers: map[string]string{"info": `{"runsc":{}}`, "run": "c0ffee\n", "create": "c0ffee\n", "inspect": observerJSON, "network subnet": "10.213.5.0/24 \n"}}
 	tls := t.TempDir()
-	d, err := New(context.Background(), dockercli.CLI{Run: r.run}, Config{CellID: "cell-1", HolderImage: "kodus/holder@sha256:abc",
-		ObserverImage: "kodus/observer@sha256:def", ObserverTLSDir: tls, WorkDir: t.TempDir()})
+	d, err := New(context.Background(), dockercli.CLI{Run: r.run}, Config{
+		CellID: "cell-1", HolderImage: "kodus/holder@sha256:abc",
+		ObserverImage: "kodus/observer@sha256:def", ObserverTLSDir: tls, WorkDir: t.TempDir(),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,8 +50,10 @@ func TestTheObserverMachineServesProbesUnderGVisor(t *testing.T) {
 		t.Fatalf("observer lifecycle %q, want %q", order, want)
 	}
 	run := strings.Join(r.find("create"), " ")
-	for _, want := range []string{"--runtime runsc", "--network kodus-claim-1", "--cap-drop ALL", "--read-only",
-		"-v " + tls + ":/etc/kodus/observer:ro", "kodus/observer@sha256:def /observer -listen :7443 -cell-id cell-1 -cert /etc/kodus/observer/cert.pem"} {
+	for _, want := range []string{
+		"--runtime runsc", "--network kodus-claim-1", "--cap-drop ALL", "--read-only",
+		"-v " + tls + ":/etc/kodus/observer:ro", "kodus/observer@sha256:def /observer -listen :7443 -cell-id cell-1 -cert /etc/kodus/observer/cert.pem",
+	} {
 		if !strings.Contains(run, want) {
 			t.Fatalf("observer run lacks %q: %s", want, run)
 		}

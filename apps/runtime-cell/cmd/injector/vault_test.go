@@ -30,23 +30,24 @@ func TestInjectorVaultFlagsRefuseDefaultAndPartialConfiguration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer vault.Close()
+		t.Cleanup(func() { _ = vault.Close() })
 		if _, err = vault.Credential(context.Background(), "org-a", "claim-a", "example.test"); !errors.Is(err, injector.ErrVaultNotConfigured) {
 			t.Fatalf("default vault did not refuse: %v", err)
 		}
 	}
 }
+
 func TestInjectorVaultFlagsSelectPrivateDurableAdapterWithoutGrantAuthority(t *testing.T) {
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(base, "vault")
-	if err = os.Mkdir(dir, 0700); err != nil {
+	if err = os.Mkdir(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	key := filepath.Join(base, "owner.key")
-	if err = os.WriteFile(key, bytes.Repeat([]byte{9}, 32), 0600); err != nil {
+	if err = os.WriteFile(key, bytes.Repeat([]byte{9}, 32), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	fs := flag.NewFlagSet("injector", flag.ContinueOnError)

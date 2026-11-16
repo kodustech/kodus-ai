@@ -8,7 +8,7 @@ import { MockLanguageModelV3 } from 'ai/test';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
 
-import { SUBMIT_PLAN_TOOL } from '../application/test-planner/test-planner.agent';
+import { SUBMIT_PLAN_TOOL } from '@libs/runtime/planner/test-planner.agent';
 import { RuntimeTestPlannerUseCase, TEST_PLANNER_TASK } from '../application/use-cases/test-planner.use-case';
 import type { RuntimeGitPort } from '../domain/ports';
 import { signRunToken, signSetupToken } from '../domain/run-token';
@@ -158,5 +158,17 @@ describe('POST /internal/runtime/plan', () => {
         await expect(t.uc.execute({ authorization: tokenFor(t.r), body: body(t.r.runId) })).rejects.toBeInstanceOf(BadGatewayException);
         expect(t.usage.rows.every((row) => !row.pending)).toBe(true);
         expect(t.usage.rows.reduce((n, row) => n + row.inputTokens + row.outputTokens, 0)).toBeGreaterThan(0);
+    });
+
+    it("a round that throws is left to the API's exception filter: the 502 carries the Run's ids, the round and its error, and the use case logs nothing", async () => {
+        const t = await make();
+        const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+        (t.uc as any).logger = logger;
+        const boom = new Error('runner exploded');
+        (t.uc as any).runners = { forOrganization: async () => ({ runner: { run: async () => Promise.reject(boom) }, model: 'mock-model' }) };
+        const err = await t.uc.execute({ authorization: tokenFor(t.r), body: body(t.r.runId) }).catch((e) => e);
+        expect(err).toBeInstanceOf(BadGatewayException);
+        expect(err).toMatchObject({ runId: t.r.runId, organizationId: t.r.organizationId, round: 0, cause: boom });
+        expect(logger.error).not.toHaveBeenCalled();
     });
 });

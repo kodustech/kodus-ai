@@ -1,13 +1,18 @@
+import type { PreviewSecrets } from '@libs/runtime/contracts/preview';
 import type { EnvironmentSetupRecord, RunProjectionReader, RunProjectionStore, RunStreamStore, RuntimeRunProjection, RuntimeRunRequested } from '@libs/runtime/run';
 import type { AgentRunner } from '@libs/agent-harness/domain/contracts/agent.contract';
 import type { Lesson } from '@libs/runtime/blockers/lessons';
-import type { ForkPullRequestPolicy, RecipeChangedPath } from '@libs/runtime/contracts/enums';
+import type { EnvironmentRepositoryRole, ForkPullRequestPolicy, RecipeChangedPath } from '@libs/runtime/contracts/enums';
 import type { MachineSizePreset } from '@libs/runtime/contracts/machine-size';
+import { MAX_WORKSPACE_REPOSITORIES } from '@libs/runtime/contracts/workspace';
 import type { S3EvidenceConfig } from '@libs/runtime/contracts/evidence-s3';
 import type { RuntimeLlmBudgetLimits } from './budget';
-import type { CellTopology } from './cell-token';
+import type { CellTopology } from '@libs/runtime/contracts/cell-token';
 import type { RuntimeMachineSizePlan } from './machine-size-plan';
 import type { CellHostPrice, RunClaimUsage } from './run-cost';
+import type { RuntimeLlmSpendRow } from './llm-spend';
+import type { MachineUnitPrices, UsageClaimRecord, UsageReportFilters, UsageRunRecord, UsageSandboxOperations } from './usage-report';
+import type { RuntimeMachineUsageToday } from './machine-minutes-today';
 import type { PoolPolicy, PoolUsage, RuntimePoolPlan } from './pool';
 import type { RuntimeMode, TriggerRule } from './trigger-rules';
 
@@ -18,6 +23,7 @@ import type { RuntimeMode, TriggerRule } from './trigger-rules';
 export const RUNTIME_RUN_PROJECTION_STORE = Symbol.for('RuntimeApi.RunProjectionStore');
 export const RUNTIME_RUN_STREAM_STORE = Symbol.for('RuntimeApi.RunStreamStore');
 export const RUNTIME_CELL_READER = Symbol.for('RuntimeApi.CellReader');
+export const RUNTIME_CELL_TOKEN_READER = Symbol.for('RuntimeApi.CellTokenReader');
 export const RUNTIME_ENVIRONMENT_READER = Symbol.for('RuntimeApi.EnvironmentReader');
 export const RUNTIME_GIT_PORT = Symbol.for('RuntimeApi.GitPort');
 export const RUNTIME_REPO_TOKEN_ISSUER = Symbol.for('RuntimeApi.RepoTokenIssuer');
@@ -26,11 +32,12 @@ export const RUNTIME_LLM_USAGE_STORE = Symbol.for('RuntimeApi.LlmUsageStore');
 export const RUNTIME_TEAM_REPOSITORIES = Symbol.for('RuntimeApi.TeamRepositories');
 export const RUNTIME_SETTINGS_STORE = Symbol.for('RuntimeApi.SettingsStore');
 export const RUNTIME_PRODUCT_ENVIRONMENT_STORE = Symbol.for('RuntimeApi.ProductEnvironments');
-/** @deprecated use RUNTIME_PRODUCT_ENVIRONMENT_STORE (same token). */
-export const RUNTIME_PRODUCT_ENVIRONMENTS = RUNTIME_PRODUCT_ENVIRONMENT_STORE;
+export const RUNTIME_ENVIRONMENT_REPOSITORY_STORE = Symbol.for('RuntimeApi.EnvironmentRepositories');
 export const RUNTIME_ORG_REPOSITORIES = Symbol.for('RuntimeApi.OrgRepositories');
 export const RUNTIME_EGRESS_READER = Symbol.for('RuntimeApi.EgressReader');
 export const RUNTIME_CLAIM_USAGE_READER = Symbol.for('RuntimeApi.ClaimUsageReader');
+export const RUNTIME_MACHINE_USAGE_READER = Symbol.for('RuntimeApi.MachineUsageReader');
+export const RUNTIME_USAGE_REPORT_READER = Symbol.for('RuntimeApi.UsageReportReader');
 export const RUNTIME_API_CONFIG = Symbol.for('RuntimeApi.Config');
 export const RUNTIME_CLOCK = Symbol.for('RuntimeApi.Clock');
 
@@ -43,6 +50,20 @@ export type { RunProjectionReader, RunStreamStore, RuntimeRunProjection };
 export type { RunProjectionStore };
 
 export interface RuntimeApiConfig {
+    /**
+     * Ed25519 private key the API signs preview grants with
+     * (RUNTIME_PREVIEW_GRANT_PRIVATE_KEY: PKCS8 PEM, or base64 of PKCS8 DER);
+     * the preview edge verifies them with the public key. Absent: no grant.
+     */
+    previewGrantPrivateKey?: string;
+    /** Dev only (RUNTIME_PREVIEW_PUBLIC_PORT): the local preview edge's port in the grant URL. */
+    previewPublicPort?: number;
+    /**
+     * RUNTIME_PREVIEW_DOMAIN, as the worker reads it: previews are offered
+     * (the Run page, the PR comment, the settings) only where it is set and
+     * a grant key is, the "off until set" rule of decision 1.
+     */
+    previewDomain?: string;
     /** Trusted deployment origin advertised by the public A2A card; never request Host. */
     a2aBaseUrl?: string;
     /** HMAC secret of the Run token (RUNTIME_RUN_TOKEN_SECRET). */
@@ -85,6 +106,14 @@ export interface RuntimeApiConfig {
      * what prices a Run's held memory on it (run-cost.ts). A cell absent here is not priced.
      */
     cellPrices?: Record<string, CellHostPrice>;
+    /**
+     * What one GB·min and one vCPU·min of machine time cost
+     * (RUNTIME_MACHINE_USD_PER_GB_MINUTE, RUNTIME_MACHINE_USD_PER_VCPU_MINUTE);
+     * 0, the default, is "no price set" and the usage report prices nothing with it.
+     */
+    machineUnitPrices?: MachineUnitPrices;
+    /** The org's machine minutes per UTC day the hub admits (RUNTIME_MACHINE_MINUTES_PER_ORG_DAY, shared with apps/runtime); 0 = unlimited. */
+    machineMinutesPerOrgDay?: number;
 }
 
 export type Clock = () => Date;
@@ -110,6 +139,25 @@ export interface RuntimeCellReader {
     /** The managed cells (owner `kodus`, not revoked): shared by every org, shown only as one aggregate. */
     listManaged(): Promise<RuntimeCell[]>;
     get(cellId: string): Promise<RuntimeCell | null>;
+}
+
+/** A registration token as the Runtime stores it: its hash (the id), never the token. */
+export interface RuntimeCellTokenRow {
+    tokenHash: string;
+    organizationId: string;
+    topology: CellTopology;
+    issuedBy: string;
+    issuedAt: string;
+    expiresAt: string;
+    usedAt?: string;
+    revokedAt?: string;
+}
+
+/** runtime_cell_tokens, read-only (the Runtime writes it; the API revokes through the outbox). */
+export interface RuntimeCellTokenReader {
+    /** The org's tokens issued since `since`, newest first. */
+    listByOrganization(organizationId: string, since: Date): Promise<RuntimeCellTokenRow[]>;
+    get(tokenHash: string): Promise<RuntimeCellTokenRow | null>;
 }
 
 export interface RuntimeEnvironmentRef {
@@ -138,6 +186,8 @@ export interface PullRequestHead {
     baseSha: string;
     /** The native PR target ref, when the Git API answers it; never the repo default. */
     baseBranch?: string;
+    /** The branch the PR comes from, when the Git API answers it: what a paired repository's PR is found by. */
+    headBranch?: string;
     fork: boolean;
     authorId?: string;
     authorLogin?: string;
@@ -148,6 +198,20 @@ export interface PullRequestHead {
     draft?: boolean;
     /** Live labels; undefined when the platform has none or did not answer. */
     labels?: string[];
+}
+
+/**
+ * An open pull request as a platform's listing gives it. `updatedAt` is the
+ * PR's last change of any kind (a push, a comment, a label): never earlier
+ * than the push of its head, so a PR not updated since a time had its head
+ * pushed before it.
+ */
+export interface OpenPullRequestSummary {
+    number: number;
+    headSha: string;
+    draft?: boolean;
+    /** ISO time; absent when the listing does not say. */
+    updatedAt?: string;
 }
 
 /** The PR's diff as the Git API gave it, and whether the product had to cut it. */
@@ -176,6 +240,23 @@ export interface RuntimeGitPort {
     userCanWrite(input: OrgTeam & { repositoryId: string; repositoryName: string; identity: GitIdentity }): Promise<boolean | undefined>;
     /** Whether the Git identity belongs to the org of the integration; undefined when the platform cannot say (which denies). */
     isOrganizationMember(input: OrgTeam & { identity: GitIdentity }): Promise<boolean | undefined>;
+    /**
+     * The newest open, non-fork pull request of the repository whose source
+     * branch is `branch`, with its shas, or null when there is none: the PR a
+     * paired repository of a multi-repository Run boots (pair_branches).
+     */
+    findOpenPullRequestByBranch?(
+        input: OrgTeam & { repositoryId: string; repositoryName: string; branch: string },
+    ): Promise<{ number: number; headSha: string; baseSha: string } | null>;
+    /**
+     * Every open pull request of the repository with its head, from one
+     * listing call (the lost-webhook reconciler). `unsupported_platform` when
+     * this platform's listing does not give a full head SHA. A PR the listing
+     * gives no full SHA for is left out, never guessed.
+     */
+    listOpenPullRequests?(
+        input: OrgTeam & { repositoryId: string; repositoryName: string },
+    ): Promise<OpenPullRequestSummary[] | 'unsupported_platform'>;
     /** The default branch and its head SHA, the commit an environment setup boots (§6). */
     getDefaultBranchHead(input: OrgTeam & { repositoryId: string; repositoryName: string }): Promise<DefaultBranchHead>;
     /**
@@ -275,7 +356,7 @@ export interface RuntimeLlmSpendSnapshot {
 }
 
 /**
- * The gateway's budget (S-47), in the product Mongo. Each call's consumption is
+ * The gateway's budget (S-47), in the product Postgres. Each call's consumption is
  * also its usage span in `observability_telemetry`; this store holds only the
  * counters the budget decides on and the reservations in flight.
  */
@@ -292,13 +373,11 @@ export interface RuntimeLlmUsageStore {
         orgDayStart: Date;
         decide: (spend: RuntimeLlmSpendSnapshot) => number | null;
     }): Promise<{ reservationId: string; tokens: number } | null>;
-    /** Replaces a reservation with what the provider reported, and keeps the Run's split by model for its cost. */
+    /** Replaces a reservation with what the provider reported (the Run's cost reads the usage spans, not this). */
     settle(reservationId: string, actual: RuntimeLlmSettledUsage): Promise<void>;
     /** Drops a reservation whose call never happened or failed. */
     cancel(reservationId: string): Promise<void>;
     totalForRun(runId: string): Promise<number>;
-    /** What each Run spent, by model, in one read (the Run list); a Run without usage is absent. */
-    usageForRuns(runIds: string[]): Promise<Map<string, RuntimeLlmRunUsage>>;
 }
 
 /** What one settled call spent. Cache tokens are part of inputTokens. */
@@ -310,18 +389,20 @@ export interface RuntimeLlmSettledUsage {
     model?: string;
 }
 
-/** A Run's LLM spend: the budget counter, and the settled calls split by model. */
-export interface RuntimeLlmRunUsage {
-    /** The budget counter: settled calls plus reservations still in flight (or lost in a crash). */
-    tokens: number;
-    byModel: Array<{ model?: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }>;
+/**
+ * The Runtime's LLM spend from the usage spans LLM.run writes (the source
+ * Token Usage reads), priced per call at its tier with the org's overrides
+ * (domain/llm-spend.ts). The budget counters are never read for cost.
+ */
+export interface RuntimeLlmSpendReader {
+    /**
+     * The org's Runtime spans in [start, end), only of `runIds` when given.
+     * Undefined when this deployment cannot read them (no telemetry store or
+     * price list here): the LLM part is then "not measured", never zero.
+     */
+    spendOf(query: { organizationId: string; start: Date; end: Date; runIds?: string[] }): Promise<RuntimeLlmSpendRow[] | undefined>;
 }
-
-/** List price of a model, US$ per token; null when the product cannot price it. */
-export interface RuntimeModelPricing {
-    usdPerToken(model: string): Promise<{ input: number; output: number; cacheRead: number; cacheWrite: number } | null>;
-}
-export const RUNTIME_MODEL_PRICING = Symbol.for('RuntimeApi.ModelPricing');
+export const RUNTIME_LLM_SPEND_READER = Symbol.for('RuntimeApi.LlmSpendReader');
 
 /** Repositories configured for a team (to bound a team key's repo list). */
 export interface RuntimeTeamRepositories {
@@ -388,6 +469,19 @@ export interface FindingIntentStore {
 export const RUNTIME_FINDING_INTENT_STORE = Symbol.for('RuntimeApi.FindingIntentStore');
 
 /** `runtime_settings` and `runtime_repository_settings`, product Postgres (§8), written by the API. */
+/** A repository whose Runtime runs without anyone asking (mode `rules`), and when its settings last changed. */
+export interface AutomaticRepositoryRow {
+    organizationId: string;
+    repositoryId: string;
+    /** ISO time of the settings row's last write: the mode may have been turned on then. */
+    updatedAt: string;
+}
+
+/** Repositories in mode `rules`, across organizations: only the lost-webhook reconciler (a system job) reads it. */
+export interface AutomaticRepositoriesReader {
+    listAutomaticAcrossOrganizations(limit: number): Promise<AutomaticRepositoryRow[]>;
+}
+
 export interface RuntimeSettingsStore {
     getOrganization(organizationId: string): Promise<{ tokenBudgetPerDay: number | null } | null>;
     setTokenBudget(organizationId: string, tokenBudgetPerDay: number | null): Promise<void>;
@@ -420,9 +514,21 @@ export interface ProductEnvironment {
     poolAppliedSize?: number | null;
     /** This month's estimated machine-minutes kept ready. */
     poolUsage?: PoolUsage | null;
+    /** The org's secrets in this environment's previews; absent: none (decision 4). */
+    previewSecrets?: PreviewSecrets;
     createdAt: string;
     updatedAt: string;
 }
+
+/** What the org admin sets on one environment (PATCH /runtime/environments/:id/settings). */
+export type ProductEnvironmentSettings = Partial<{
+    diagnosticHold: boolean;
+    machineSize: MachineSizePreset | null;
+    forkPullRequests: ForkPullRequestPolicy;
+    poolSize: number | null;
+    poolPolicy: PoolPolicy | null;
+    previewSecrets: PreviewSecrets;
+}>;
 
 /** Every read and write names the org: another org's environment reads as absent and is never written. */
 export interface ProductEnvironmentStore {
@@ -432,11 +538,8 @@ export interface ProductEnvironmentStore {
     /** Idempotent on (organizationId, repositoryId): returns the existing row when there is one. */
     create(input: Omit<ProductEnvironment, 'environmentId' | 'createdAt' | 'updatedAt' | 'state' | 'setupRequestedAt'>): Promise<ProductEnvironment>;
     markSetupRequested(organizationId: string, environmentId: string, at: Date): Promise<void>;
-    setDiagnosticHold(organizationId: string, environmentId: string, on: boolean): Promise<void>;
-    setPoolSize(organizationId: string, environmentId: string, size: number | null): Promise<void>;
-    setMachineSize(organizationId: string, environmentId: string, size: MachineSizePreset | null): Promise<void>;
-    setForkPullRequests(organizationId: string, environmentId: string, policy: ForkPullRequestPolicy): Promise<void>;
-    setPoolPolicy(organizationId: string, environmentId: string, policy: PoolPolicy | null): Promise<void>;
+    /** The org admin's settings, written together in one update: a field left out keeps its value. */
+    updateSettings(organizationId: string, environmentId: string, settings: ProductEnvironmentSettings): Promise<void>;
     markPoolActivity(organizationId: string, environmentId: string, at: Date): Promise<void>;
     /** What the cell was asked for and the month's usage, written together by the pool controller. */
     setPoolApplied(organizationId: string, environmentId: string, size: number, usage: PoolUsage): Promise<void>;
@@ -445,6 +548,70 @@ export interface ProductEnvironmentStore {
      * pool scheduler (a system job) reads it, and each row it acts on names its own org.
      */
     listPoolManagedAcrossOrganizations(limit: number): Promise<ProductEnvironment[]>;
+}
+
+/**
+ * A repository of an environment (`runtime_environment_repositories`,
+ * product Postgres): the `primary`, which is the environment's own
+ * repository and holds the recipe, or a `member` booted beside it.
+ */
+export interface EnvironmentRepository {
+    environmentId: string;
+    organizationId: string;
+    repositoryId: string;
+    repositoryName: string;
+    fullName: string;
+    role: EnvironmentRepositoryRole;
+    /** Its directory in the workspace (contracts/workspace.ts REPOSITORY_ALIAS_PATTERN), unique in the environment. */
+    alias: string;
+    /** A pull request of this repository starts a Run of this environment. */
+    triggers: boolean;
+    /** A Run boots this repository's open pull request of the same branch name instead of its default branch. */
+    pairBranches: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+/** What may change on a repository of an environment; its role never does. */
+export type EnvironmentRepositoryPatch = Partial<Pick<EnvironmentRepository, 'alias' | 'triggers' | 'pairBranches'>>;
+
+/** The write would give the environment a second primary, an alias another of its repositories has, or more repositories than it may hold. */
+export class EnvironmentRepositoryConflictError extends Error {
+    constructor(readonly conflict: 'primary' | 'alias' | 'limit') {
+        super(
+            conflict === 'primary'
+                ? 'The environment already has a primary repository'
+                : conflict === 'alias'
+                  ? 'Another repository of the environment has that alias'
+                  : `An environment holds at most ${MAX_WORKSPACE_REPOSITORIES} repositories`,
+        );
+        this.name = 'EnvironmentRepositoryConflictError';
+    }
+}
+
+/**
+ * `runtime_environment_repositories`, written by the API. Every read and
+ * write names the org: another org's environment has no repositories and is
+ * never written.
+ */
+export interface EnvironmentRepositoryStore {
+    /** The environment's repositories, the primary first, then by alias. */
+    listByEnvironment(organizationId: string, environmentId: string): Promise<EnvironmentRepository[]>;
+    /** Every environment the repository is part of, as its primary or a member. */
+    listByRepository(organizationId: string, repositoryId: string): Promise<EnvironmentRepository[]>;
+    /**
+     * Adds the repository to the org's environment. Idempotent on (environment,
+     * repository): an existing row is returned unchanged. Null when the
+     * environment is not the org's. A second primary, an alias taken, or a
+     * member past MAX_WORKSPACE_REPOSITORIES (the primary counted, even before
+     * its row) throws EnvironmentRepositoryConflictError; adds that arrive
+     * together never get past the cap.
+     */
+    add(input: Omit<EnvironmentRepository, 'createdAt' | 'updatedAt'>): Promise<EnvironmentRepository | null>;
+    /** Removes a member; false when there is none, and for the primary, which leaves only with its environment. */
+    remove(organizationId: string, environmentId: string, repositoryId: string): Promise<boolean>;
+    /** Changes the given fields together; null when there is no such row. An alias taken throws EnvironmentRepositoryConflictError. */
+    update(organizationId: string, environmentId: string, repositoryId: string, patch: EnvironmentRepositoryPatch): Promise<EnvironmentRepository | null>;
 }
 
 /** Repositories connected to the org (integration config of its team). */
@@ -470,13 +637,38 @@ export interface RuntimeEnvironmentSetupReader {
 export const RUNTIME_ENVIRONMENT_SETUP_READER = Symbol.for('RuntimeApi.EnvironmentSetupReader');
 
 /**
+ * Reads runtime_build_state_evictions (written by the hub from each cell's
+ * heartbeat): the cells whose disk floor removed the environment's build
+ * state and that still say so. Ids and times only.
+ */
+export interface RuntimeBuildStateEvictionReader {
+    evictions(organizationId: string, environmentId: string): Promise<Array<{ cellId: string; evictedAt: string }>>;
+}
+
+export const RUNTIME_BUILD_STATE_EVICTION_READER = Symbol.for('RuntimeApi.BuildStateEvictionReader');
+
+/**
  * The agent runner of an org's Runtime work (ADR-057): the harness on the
  * org's LLM_TASK.runtime BYOK slot, resolved like the gateway resolves it. The
  * key stays in the slot until LLM.run builds the model; it never leaves the API.
  */
+/**
+ * What the usage span of each model call of a Runtime agent carries, so the
+ * Run cost and the usage report attribute it (docs/runtime/usage-report.md):
+ * the Run (or the setup's scope) it served and where.
+ */
+export interface RuntimeSpanAttribution {
+    /** The Run's id, or the setup's learn scope (setupLearnScopeId) for the recipe author. */
+    runId: string;
+    task: string;
+    repositoryId?: string;
+    environmentId?: string;
+    prNumber?: number;
+}
+
 export interface RuntimeAgentRunnerFactory {
     /** Null when the org has no LLM for the Runtime (no slot and no managed default). */
-    forOrganization(orgTeam: OrgTeam): Promise<{ runner: AgentRunner; model?: string } | null>;
+    forOrganization(orgTeam: OrgTeam, attribution?: RuntimeSpanAttribution): Promise<{ runner: AgentRunner; model?: string } | null>;
 }
 
 export const RUNTIME_AGENT_RUNNER_FACTORY = Symbol.for('RuntimeApi.AgentRunnerFactory');
@@ -509,9 +701,75 @@ export interface RuntimeClaimUsageReader {
     claimsOfRuns(organizationId: string, runIds: string[]): Promise<Map<string, RunClaimUsage[]>>;
 }
 
+/** The org's machine minutes of the current UTC day (runtime_machine_usage), read only; undefined without the read URL. */
+/**
+ * The Runtime Postgres rows the usage report reads (runtime_runs,
+ * runtime_claims, runtime_environment_setups), with the read-only role inside
+ * BEGIN READ ONLY (ADR-025); org-scoped, the filters in the query, bounded.
+ */
+export interface RuntimeUsageReportReader {
+    /** The org's Runs requested in [start, end), newest first, at most `limit`; and how many there are in all. */
+    runsOfMonth(organizationId: string, window: { start: Date; end: Date }, filters: UsageReportFilters, limit: number): Promise<{ runs: UsageRunRecord[]; total: number }>;
+    /**
+     * The claims of the Runs requested in the window (consumer runtime), and
+     * every other claim created in it (setups, sandbox sessions, MCP, custom
+     * agents), each at most `limit`; `truncated` when a limit cut one.
+     */
+    claimsOfMonth(organizationId: string, window: { start: Date; end: Date }, filters: UsageReportFilters, limit: number): Promise<{ claims: UsageClaimRecord[]; truncated: boolean }>;
+    /** The org's sandbox operations audited in [start, end) (runtime_sandbox_audit). */
+    sandboxOperationsOfMonth(organizationId: string, window: { start: Date; end: Date }): Promise<UsageSandboxOperations>;
+}
+
+export interface RuntimeMachineUsageReader {
+    today(organizationId: string): Promise<RuntimeMachineUsageToday | undefined>;
+}
+
+/** One approval as the screens show it (docs/runtime/egress-allowlist.md §9). */
+export interface EgressApprovalRow {
+    host: string;
+    approvedBy?: string;
+    approvedAt?: string;
+    /** inspected (GET/HEAD under pathPrefixes) or passthrough (full access; every approval before tiers). */
+    mode?: 'inspected' | 'passthrough';
+    pathPrefixes?: string[];
+    source?: 'blocker' | 'settings';
+    revokedAt?: string;
+    revokedBy?: string;
+    /** When a claim last got it (D5: approvals do not expire; this is their last use). */
+    lastSentAt?: string;
+}
+
+/** One approval, revocation or settings change (runtime_egress_audit). */
+export interface EgressAuditRow {
+    action: 'approve' | 'revoke' | 'settings';
+    environmentId?: string;
+    host?: string;
+    mode?: string;
+    pathPrefixes?: string[];
+    actor: string;
+    source: string;
+    sourceRef?: string;
+    recommendedVersion?: number;
+    reason?: string;
+    at: string;
+}
+
+/** The org's outbound access settings (D2, D3); the defaults when never set. */
+export interface EgressSettingsRow {
+    recommendedEnabled: boolean;
+    whoMayAdd: 'owners' | 'owners_and_repo_admins' | 'nobody';
+    updatedBy?: string;
+    updatedAt?: string;
+}
+
 export interface RuntimeEgressReader {
     blockedForRuns(organizationId: string, runIds: string[], since: Date): Promise<EgressBlockedRow[]>;
-    approvals(organizationId: string, environmentId: string): Promise<Array<{ host: string; approvedBy?: string; approvedAt?: string }>>;
+    /** The scope's approvals, revoked ones included (marked), newest first; ORG_EGRESS_SCOPE is the org list. */
+    approvals(organizationId: string, environmentId: string): Promise<EgressApprovalRow[]>;
+    /** The org's settings; never-set reads as the defaults (recommended on, owners only). */
+    settings?(organizationId: string): Promise<EgressSettingsRow>;
+    /** The audit, newest first, of one environment (or the org list) or of the whole org. */
+    audit?(organizationId: string, environmentId?: string): Promise<EgressAuditRow[]>;
 }
 
 // The /mcp/env ports (Inc. 1) live beside their rules.

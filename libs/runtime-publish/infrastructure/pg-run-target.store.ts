@@ -2,7 +2,7 @@ import type { Pool } from 'pg';
 
 import type { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
-import { RunTargetConflictError, sameRunTarget, type RunTarget, type RunTargetStore } from '../domain/run-target';
+import { RunTargetConflictError, sameRunTarget, type RunTarget, type RunTargetScope, type RunTargetStore, type RunTargetWorkspaceRef } from '../domain/run-target';
 
 const TABLE = /^("?[a-z_][a-z0-9_]*"?\.)?"?[a-z_][a-z0-9_]*"?$/;
 
@@ -17,6 +17,7 @@ interface Row {
     platform: string;
     pr_number: number;
     head_sha: string;
+    workspace: RunTargetWorkspaceRef[] | null;
 }
 
 /**
@@ -39,9 +40,12 @@ export class PgRunTargetStore implements RunTargetStore {
     }
 
     async record(target: RunTarget): Promise<void> {
+        // The workspace column is written only for a multi-repository Run, so a
+        // one-repository target is the same statement on any version of the table.
+        const workspace = target.workspace?.length ? target.workspace : null;
         const inserted = await this.pool.query(
-            `INSERT INTO ${this.table} (run_id, attempt, organization_id, team_id, repository_id, repository_name, repository_full_name, platform, pr_number, head_sha)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            `INSERT INTO ${this.table} (run_id, attempt, organization_id, team_id, repository_id, repository_name, repository_full_name, platform, pr_number, head_sha${workspace ? ', workspace' : ''})
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10${workspace ? ', $11::jsonb' : ''})
              ON CONFLICT (run_id) DO NOTHING
              RETURNING run_id`,
             [
@@ -55,6 +59,7 @@ export class PgRunTargetStore implements RunTargetStore {
                 target.platform,
                 target.pullRequestNumber,
                 target.headSha,
+                ...(workspace ? [JSON.stringify(workspace)] : []),
             ],
         );
         if (inserted.rowCount) return;
@@ -62,11 +67,13 @@ export class PgRunTargetStore implements RunTargetStore {
         if (!existing || !sameRunTarget(existing, target)) throw new RunTargetConflictError(target.runId);
     }
 
-    async get(runId: string): Promise<RunTarget | null> {
+    async get(runId: string, scope?: RunTargetScope): Promise<RunTarget | null> {
         const { rows } = await this.pool.query<Row>(
-            `SELECT run_id, attempt, organization_id, team_id, repository_id, repository_name, repository_full_name, platform, pr_number, head_sha
-             FROM ${this.table} WHERE run_id = $1`,
-            [runId],
+            // to_jsonb(t) reads the workspace as null on a table that has no such column yet.
+            `SELECT run_id, attempt, organization_id, team_id, repository_id, repository_name, repository_full_name, platform, pr_number, head_sha,
+                    to_jsonb(t) -> 'workspace' AS workspace
+             FROM ${this.table} t WHERE run_id = $1 AND ($2::text IS NULL OR organization_id = $2::text)`,
+            [runId, scope?.organizationId ?? null],
         );
         const r = rows[0];
         if (!r) return null;
@@ -81,6 +88,7 @@ export class PgRunTargetStore implements RunTargetStore {
             platform: r.platform as PlatformType,
             pullRequestNumber: r.pr_number,
             headSha: r.head_sha,
+            ...(Array.isArray(r.workspace) && r.workspace.length ? { workspace: r.workspace } : {}),
         };
     }
 }

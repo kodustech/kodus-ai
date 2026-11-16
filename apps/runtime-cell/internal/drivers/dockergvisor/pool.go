@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 )
 
 // A pool machine on docker-gvisor is what a claim would make before its

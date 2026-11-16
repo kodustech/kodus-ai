@@ -1,14 +1,18 @@
-import type { Pool, PoolClient } from 'pg';
+import { withTransaction } from '@libs/runtime/run/adapters/advisory-lock';
+import type { Pool } from 'pg';
 
-import { CellTokenLedger, InMemoryCellTokenStore, type RedeemResult } from '@libs/runtime/api/domain/cell-token';
+import { CellTokenLedger, type RedeemResult } from '@libs/runtime/contracts/cell-token';
+import { ORG_EGRESS_SCOPE } from '@libs/runtime/contracts/egress';
+import { assertClaimTransition, LIVE_CLAIM_STATES, REBINDABLE_CLAIM_STATES, type ClaimState } from '@libs/runtime/contracts/enums';
 import type { Consumer } from '@libs/runtime/environment';
-import { knownCellFeatures } from '@libs/runtime/protocol';
+import { type ClaimStart, knownCellFeatures } from '@libs/runtime/protocol';
+import { SANDBOX_ENVIRONMENT_ID } from '@libs/runtime/protocol/sandbox';
 
 import { reserveCellRow } from '../shared/persistence/cell-directory';
 import { PgCommandStore } from '../shared/persistence/pg-command-store';
 import type { CellCapabilities } from './cell-capabilities';
 
-// What the hub keeps in the Runtime Postgres (docs §1b, §8): which replica
+// What the hub keeps in the Runtime Postgres: which replica
 // holds each cell, the claims, the stepId → cell, claim, org index and the
 // egress events. Shared between replicas. The hub is the only writer of
 // runtime_claims; every claim state change names the states it may leave
@@ -28,18 +32,6 @@ export interface CellSession extends Partial<CellCapabilities> {
     orgId?: string | null;
     driver: string;
 }
-
-export const CLAIM_STATES = ['pending', 'bound', 'held', 'blocked', 'failed', 'compromised', 'released', 'terminated'] as const;
-export type ClaimState = (typeof CLAIM_STATES)[number];
-/** A claim that holds (or is about to hold) machines on a cell. */
-export const LIVE_CLAIM_STATES: readonly ClaimState[] = ['pending', 'bound', 'held'];
-/**
- * Every state but the two final ones. `compromised`: the cell reported a
- * security violation on the claim; it takes no step, its machines stay as
- * evidence until the claim is released.
- */
-export const OPEN_CLAIM_STATES: readonly ClaimState[] = ['pending', 'bound', 'held', 'blocked', 'failed', 'compromised'];
-export const isFinalClaimState = (s: ClaimState) => s === 'released' || s === 'terminated';
 
 /**
  * Why a claim is in its state: a closed set that code, dashboards and alerts
@@ -78,6 +70,8 @@ export type ClaimReason = (typeof CLAIM_REASONS)[number];
 export interface ClaimCause {
     reason: ClaimReason;
     detail?: string;
+    /** With reason ready: how the cell says the workload came to be (claim.ready start). */
+    start?: ClaimStart;
 }
 
 export interface ClaimRow {
@@ -103,12 +97,16 @@ export interface ClaimRow {
     admittedAt?: string | null;
     readyAt?: string | null;
     releasedAt?: string | null;
+    /** The PR side of a pull request from a fork: the environment's approved egress hosts never reach it (false on rows from before migration 19). */
+    forkPullRequest?: boolean;
+    /** How the round's workload came to be, as its claim.ready said (migration 24); null until then, or from a cell that does not say. */
+    start?: ClaimStart | null;
 }
 
 /**
  * What one acquire round of a claim holds, recorded once when the hub admits
  * it (migration 11), so the API prices a Run by what its claims held: the
- * cell's driver, and on a cell whose claims share its memory (ADR-070) the
+ * cell's driver, and on a cell whose claims share its memory the
  * MB the hub counts the claim for while it boots and once ready, and what
  * the cell may commit to claims in all. The memory is null on a cell that
  * reports none (an aws-ec2 cell, one VM per claim; an older cell).
@@ -118,6 +116,8 @@ export interface ClaimMetering {
     bootMb: number | null;
     readyMb: number | null;
     allocatableMb: number | null;
+    /** The vCPUs of the claim's machine size (migration 23); absent on a claim that asks none (the cell's default size). */
+    cpus?: number | null;
 }
 
 export interface StepRow {
@@ -151,7 +151,7 @@ export interface CellSessionRepository {
         sessionEpoch?: string): Promise<void>;
     /**
      * A connected cell that may serve this org (its own cells, or a managed
-     * one, ADR-054), with one slot taken from its last reported free slots so
+     * one), with one slot taken from its last reported free slots so
      * concurrent acquires spread out, and the org's claims spread over the
      * cells where it holds fewer. The next heartbeat restores the truth.
      * Falls back to the best cell with no free slot (the cell then refuses).
@@ -166,9 +166,12 @@ export interface ClaimRepository {
     /** false when the claim already exists. */
     insertClaim(c: ClaimRow & { leaseExpiresAt: string }): Promise<boolean>;
     claim(claimId: string): Promise<ClaimRow | null>;
-    /** Moves the claim to `to` only when its current state is one of `from`; true when it moved. */
+    /**
+     * Moves the claim to `to` only when its current state is one of `from`; true when it moved.
+     * Throws InvalidClaimTransitionError when any `from` may not reach `to` (contracts/enums.ts CLAIM_TRANSITIONS).
+     */
     transitionClaim(claimId: string, from: readonly ClaimState[], to: ClaimState, cause: ClaimCause): Promise<boolean>;
-    /** A new acquire round: the claim (any open state) belongs to cellId, pending again, admitted now with this round's metering. */
+    /** A new acquire round: the claim (any open state but compromised) belongs to cellId, pending again, admitted now with this round's metering. */
     rebindClaim(claimId: string, c: { cellId: string; leaseExpiresAt: string; hardExpiresAt: string; metering?: ClaimMetering | null }): Promise<boolean>;
     /**
      * The lease the cell acked for a claim.renew: moves forward only (never
@@ -209,24 +212,61 @@ export interface ClaimBlockerRepository {
 }
 
 export interface StepRepository {
-    /** false when the stepId already exists with another command or claim (S-30). */
+    /** false when the stepId already exists with another command or claim. */
     insertStep(s: StepRow, opts?: { requireFresh?: boolean }): Promise<boolean>;
     step(stepId: string): Promise<StepRow | null>;
     finishStep(stepId: string): Promise<void>;
     insertEgress(e: { claimId: string; cellId: string; orgId: string; host: string; port: number; phase: string; at: string }): Promise<void>;
     /** The hosts approved for an environment (runtime_egress_approvals): a new claim gets them after claim.ready. */
     approvedHosts(orgId: string, environmentId: string): Promise<string[]>;
+    /**
+     * What a claim of the environment gets (docs/runtime/egress-allowlist.md §9): its approvals and the org list
+     * (ORG_EGRESS_SCOPE; never for the sandbox environment, G5), none revoked; inspect are the hosts approved as
+     * inspected with their path prefixes.
+     */
+    approvedEgress(orgId: string, environmentId: string): Promise<ApprovedEgress>;
+    /** Whether the org keeps the Kodus recommended list on (D2); true when it never said. */
+    egressRecommendedEnabled(orgId: string): Promise<boolean>;
+    /** A claim just got these hosts of the environment (D5: the screen shows each approval's last use). Best effort. */
+    markEgressSent(orgId: string, environmentId: string, hosts: string[], at: Date): Promise<void>;
+    /** Every live claim of the org, for an org-list change. */
+    liveClaimsOfOrganization(orgId: string): Promise<ClaimRow[]>;
+    /** One sandbox operation, per org (runtime_sandbox_audit): what, where, and how it ended. Never the command's output or a file's content. */
+    recordSandboxAudit(r: SandboxAuditRow): Promise<void>;
+}
+
+/** An environment's approved egress: every host, and the ones approved as inspected with their paths. */
+export interface ApprovedEgress {
+    allow: string[];
+    inspect: Array<{ host: string; paths: string[] }>;
+}
+
+/** One sandbox operation as the hub audits it. command is the exec's command line, redacted; path the file op's path. */
+export interface SandboxAuditRow {
+    orgId: string;
+    claimId: string;
+    cellId: string;
+    stepId: string;
+    op: string;
+    command?: string;
+    path?: string;
+    outcome: 'ok' | 'refused' | 'failed';
+    detail?: string;
+    exitCode?: number;
+    bytes?: number;
+    durationMs: number;
+    at: string;
 }
 
 export interface CellRegistryRepository {
-    /** A registered cell (ADR-054): its pinned certificate serial, owner, org and status. */
+    /** A registered cell: its pinned certificate serial, owner, org and status. */
     registeredCell(cellId: string): Promise<RegisteredCell | null>;
     /**
      * Redeems a registration token and, when it is good, inserts the cell, in
      * one transaction: a database error never burns the token. A refused
      * token (expired, wrong topology) is still burned (single use).
      */
-    redeemAndRegister(token: string, topology: string, cell: (redeemed: { organizationId: string; topology: string }) => RegisteredCell): Promise<RedeemResult>;
+    redeemAndRegister(token: string, topology: string | undefined, cell: (redeemed: { organizationId: string; topology: string }) => RegisteredCell): Promise<RedeemResult>;
     /** Moves the pin to a renewed certificate; false when the cell is revoked or unknown. */
     pinCertificate(cellId: string, serial: string, expiresAt: string): Promise<boolean>;
     /**
@@ -240,187 +280,37 @@ export interface CellRegistryRepository {
     filterRevoked(cellIds: string[]): Promise<string[]>;
 }
 
-/** Everything the hub persists, one repository per aggregate. */
-export interface HubStore extends CellSessionRepository, ClaimRepository, ClaimBlockerRepository, StepRepository, CellRegistryRepository {}
-
-const isOpen = (s: ClaimState) => (OPEN_CLAIM_STATES as readonly string[]).includes(s);
-
-export class InMemoryHubStore implements HubStore {
-    readonly sessions = new Map<string, CellSession & { connected: boolean; lastHeartbeatAt: number; freeSlots: number }>();
-    readonly claims = new Map<string, ClaimRow>();
-    readonly steps = new Map<string, StepRow & { finished?: boolean }>();
-    readonly egress: Array<{ claimId: string; cellId: string; orgId: string; host: string; port: number; phase: string; at: string }> = [];
-    readonly cells = new Map<string, RegisteredCell>();
-    readonly approvals = new Map<string, string[]>();
-    readonly blockers: ClaimBlockerRow[] = [];
-    private readonly managedSerials = new Map<string, string>();
-    readonly ledger: CellTokenLedger;
-
-    constructor(opts: { ledger?: CellTokenLedger } = {}) {
-        this.ledger = opts.ledger ?? new CellTokenLedger(new InMemoryCellTokenStore());
-    }
-
-    async upsertSession(s: CellSession) {
-        const prev = this.sessions.get(s.cellId);
-        this.sessions.set(s.cellId, { ...s, connected: true, lastHeartbeatAt: Date.now(), freeSlots: prev?.freeSlots ?? 0 });
-        const c = this.cells.get(s.cellId);
-        if (c && c.status !== 'revoked') c.status = 'connected';
-    }
-    async heartbeat(cellId: string, replicaId: string, freeSlots: number,
-        sessionEpoch?: string,
-    ) {
-        const s = this.sessions.get(cellId);
-        if (s && s.replicaId === replicaId &&
-            (!sessionEpoch || s.sessionEpoch === sessionEpoch)
-        ) Object.assign(s, { lastHeartbeatAt: Date.now(), freeSlots });
-    }
-    async disconnect(cellId: string, replicaId: string, sessionEpoch?: string) {
-        const s = this.sessions.get(cellId);
-        if (!s || s.replicaId !== replicaId || !s.connected ||
-            (sessionEpoch && s.sessionEpoch !== sessionEpoch)
-        ) return;
-        s.connected = false;
-        const c = this.cells.get(cellId);
-        if (c?.status === 'connected') c.status = 'disconnected';
-    }
-    async reserveCell(orgId: string) {
-        const ok = [...this.sessions.values()].filter((s) => s.connected && (s.owner === 'kodus' || s.orgId === orgId));
-        // As reserveCellRow: the org's own cells, then where the org holds fewer live claims, then the most free slots.
-        const load = (cellId: string) => [...this.claims.values()].filter((c) => c.orgId === orgId && c.cellId === cellId && LIVE_CLAIM_STATES.includes(c.state)).length;
-        const rank = (a: (typeof ok)[number], b: (typeof ok)[number]) =>
-            (a.orgId === orgId ? -1 : 0) - (b.orgId === orgId ? -1 : 0) ||
-            load(a.cellId) - load(b.cellId) ||
-            b.freeSlots - a.freeSlots ||
-            b.lastHeartbeatAt - a.lastHeartbeatAt;
-        ok.sort(rank);
-        const free = ok.find((s) => s.freeSlots > 0);
-        if (free) free.freeSlots -= 1;
-        return free ?? ok[0] ?? null;
-    }
-    async session(cellId: string) {
-        const s = this.sessions.get(cellId);
-        return s && s.connected ? s : null;
-    }
-    async insertClaim(c: ClaimRow & { leaseExpiresAt: string }) {
-        if (this.claims.has(c.claimId)) return false;
-        const now = new Date().toISOString();
-        this.claims.set(c.claimId, { ...c, reason: 'acquired', reasonDetail: null, stateChangedAt: now, admittedAt: now, readyAt: null, releasedAt: null });
-        return true;
-    }
-    async claim(claimId: string) {
-        const c = this.claims.get(claimId);
-        return c ? { ...c } : null;
-    }
-    async transitionClaim(claimId: string, from: readonly ClaimState[], to: ClaimState, cause: ClaimCause) {
-        const c = this.claims.get(claimId);
-        if (!c || !from.includes(c.state)) return false;
-        const now = new Date().toISOString();
-        Object.assign(c, {
-            state: to,
-            reason: cause.reason,
-            reasonDetail: cause.detail ?? null,
-            stateChangedAt: now,
-            readyAt: cause.reason === 'ready' ? now : (c.readyAt ?? null),
-            releasedAt: to === 'released' || to === 'terminated' ? now : (c.releasedAt ?? null),
-        });
-        return true;
-    }
-    async rebindClaim(claimId: string, n: { cellId: string; leaseExpiresAt: string; hardExpiresAt: string; metering?: ClaimMetering | null }) {
-        const c = this.claims.get(claimId);
-        if (!c || !isOpen(c.state)) return false;
-        const now = new Date().toISOString();
-        Object.assign(c, {
-            cellId: n.cellId,
-            state: 'pending' as const,
-            leaseExpiresAt: n.leaseExpiresAt,
-            hardExpiresAt: n.hardExpiresAt,
-            reason: 'reacquired' as const,
-            reasonDetail: null,
-            stateChangedAt: now,
-            metering: n.metering ?? null,
-            admittedAt: now,
-            readyAt: null,
-            releasedAt: null,
-        });
-        return true;
-    }
-    async renewClaimLease(claimId: string, leaseExpiresAt: string, states: readonly ClaimState[]) {
-        const c = this.claims.get(claimId);
-        if (!c || !states.includes(c.state)) return false;
-        const until = Math.min(Date.parse(leaseExpiresAt), Date.parse(c.hardExpiresAt));
-        if (c.leaseExpiresAt && Date.parse(c.leaseExpiresAt) >= until) return false;
-        c.leaseExpiresAt = new Date(until).toISOString();
-        return true;
-    }
-    async liveClaimsOfEnvironment(orgId: string, environmentId: string) {
-        return [...this.claims.values()].filter((c) => c.orgId === orgId && c.environmentId === environmentId && c.state === 'bound');
-    }
-    async liveClaimsOfCell(cellId: string) {
-        return [...this.claims.values()].filter((c) => c.cellId === cellId && LIVE_CLAIM_STATES.includes(c.state));
-    }
-    async recordClaimBlocker(b: ClaimBlockerRow) {
-        if (!this.blockers.some((x) => x.claimId === b.claimId && x.kind === b.kind && x.signature === b.signature)) this.blockers.push({ ...b });
-    }
-    async claimBlockers(claimIds: string[]) {
-        return this.blockers.filter((b) => claimIds.includes(b.claimId)).map((b) => ({ ...b }));
-    }
-    async insertStep(s: StepRow, opts?: { requireFresh?: boolean }) {
-        const prev = this.steps.get(s.stepId);
-        if (prev) return !opts?.requireFresh && prev.commandHash === s.commandHash && prev.claimId === s.claimId;
-        this.steps.set(s.stepId, s);
-        return true;
-    }
-    async step(stepId: string) {
-        return this.steps.get(stepId) ?? null;
-    }
-    async finishStep(stepId: string) {
-        const s = this.steps.get(stepId);
-        if (s) s.finished = true;
-    }
-    async insertEgress(e: { claimId: string; cellId: string; orgId: string; host: string; port: number; phase: string; at: string }) {
-        this.egress.push(e);
-    }
-    async approvedHosts(orgId: string, environmentId: string) {
-        return [...(this.approvals.get(`${orgId}/${environmentId}`) ?? [])].sort();
-    }
-    async registeredCell(cellId: string) {
-        return this.cells.get(cellId) ?? null;
-    }
-    async redeemAndRegister(token: string, topology: string, cell: (r: { organizationId: string; topology: string }) => RegisteredCell) {
-        const r = await this.ledger.redeem(token, topology);
-        if (r.ok) {
-            const row = cell(r);
-            this.cells.set(row.cellId, row);
-        }
-        return r;
-    }
-    async filterRevoked(cellIds: string[]) {
-        return cellIds.filter((id) => this.cells.get(id)?.status === 'revoked');
-    }
-    async pinCertificate(cellId: string, serial: string, expiresAt: string) {
-        const c = this.cells.get(cellId);
-        if (!c || c.status === 'revoked') return false;
-        c.certificateSerial = serial;
-        c.certificateExpiresAt = expiresAt;
-        return true;
-    }
-    async upsertManagedCell(m: { cellId: string; certificateSerial: string; certificateExpiresAt: string }) {
-        const c = this.cells.get(m.cellId);
-        if (c?.status === 'revoked') return;
-        const repin = !c || this.managedSerials.get(m.cellId) !== m.certificateSerial || c.certificateSerial === m.certificateSerial;
-        this.managedSerials.set(m.cellId, m.certificateSerial);
-        if (!repin) return;
-        this.cells.set(m.cellId, { cellId: m.cellId, organizationId: null, owner: 'kodus', topology: 'managed', status: c?.status ?? 'disconnected', ...m });
-    }
-    async cellPins() {
-        return [...this.cells.values()].map((c) => ({ cellId: c.cellId, serial: c.certificateSerial, status: c.status }));
-    }
+/** An environment whose build state a cell's disk floor removed (heartbeat evictedBuildStates). */
+export interface EvictedBuildStateRow {
+    orgId: string;
+    environmentId: string;
+    evictedAt: string;
+    /** How long the build that made the state from none took (heartbeat rebuildSeconds); absent: not measured. */
+    rebuildSeconds?: number;
 }
+
+/**
+ * runtime_build_state_evictions: what each cell said in its last heartbeat
+ * of the environments whose build state its disk floor removed and no setup
+ * made again. The hub writes it; the API reads it (needs setup again) and the
+ * hub reads it into a claim's outcome (a build that ran cold because of it).
+ */
+export interface BuildStateRepository {
+    /** The cell's whole list: rows it no longer names go (a setup made the state again). */
+    syncEvictedBuildStates(cellId: string, rows: EvictedBuildStateRow[]): Promise<void>;
+    /** When the cell's disk floor removed the environment's build state, when it did and the cell still says so. */
+    evictedBuildStateAt(cellId: string, orgId: string, environmentId: string): Promise<string | null>;
+    /** The environment's row of the cell's list, with what the state cost to make; null when the cell does not name it. */
+    evictedBuildState(cellId: string, orgId: string, environmentId: string): Promise<EvictedBuildStateRow | null>;
+}
+
+/** Everything the hub persists, one repository per aggregate. */
+export interface HubStore extends CellSessionRepository, ClaimRepository, ClaimBlockerRepository, StepRepository, CellRegistryRepository, BuildStateRepository {}
 
 type Queryable = Pick<Pool, 'query'>;
 
-/** The four metering columns of a claim row, null when the round recorded none. */
-const meteringValues = (m: ClaimMetering | null | undefined) => [m?.driver ?? null, m?.bootMb ?? null, m?.readyMb ?? null, m?.allocatableMb ?? null];
+/** The five metering columns of a claim row, null when the round recorded none. */
+const meteringValues = (m: ClaimMetering | null | undefined) => [m?.driver ?? null, m?.bootMb ?? null, m?.readyMb ?? null, m?.allocatableMb ?? null, m?.cpus ?? null];
 
 export class PgHubStore implements HubStore {
     constructor(private readonly pool: Queryable & Partial<Pick<Pool, 'connect'>>) {}
@@ -429,12 +319,14 @@ export class PgHubStore implements HubStore {
         await this.pool.query(
             `WITH s AS (
                INSERT INTO runtime.runtime_cell_sessions (cell_id, replica_id, replica_url, owner, org_id, driver, features, max_claim_memory_mb, max_claim_cpus, session_epoch, isolation,
-                 connected_at, last_heartbeat_at, disconnected_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now(), now(), NULL)
+                 default_claim_memory_mb, default_claim_cpus, sandbox_claim_memory_mb, sandbox_claim_cpus, connected_at, last_heartbeat_at, disconnected_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now(), now(), NULL)
                ON CONFLICT (cell_id) DO UPDATE SET replica_id = EXCLUDED.replica_id, replica_url = EXCLUDED.replica_url, owner = EXCLUDED.owner,
                  org_id = EXCLUDED.org_id, driver = EXCLUDED.driver, features = EXCLUDED.features,
                  max_claim_memory_mb = EXCLUDED.max_claim_memory_mb, max_claim_cpus = EXCLUDED.max_claim_cpus,
                  session_epoch = EXCLUDED.session_epoch, isolation = EXCLUDED.isolation,
+                 default_claim_memory_mb = EXCLUDED.default_claim_memory_mb, default_claim_cpus = EXCLUDED.default_claim_cpus,
+                 sandbox_claim_memory_mb = EXCLUDED.sandbox_claim_memory_mb, sandbox_claim_cpus = EXCLUDED.sandbox_claim_cpus,
                  connected_at = now(), last_heartbeat_at = now(), disconnected_at = NULL
                RETURNING cell_id)
              UPDATE runtime.runtime_cells c SET status = 'connected', last_heartbeat_at = now() FROM s WHERE c.cell_id = s.cell_id AND c.status <> 'revoked'`,
@@ -442,6 +334,10 @@ export class PgHubStore implements HubStore {
             [s.cellId, s.replicaId, s.replicaUrl, s.owner, s.orgId ?? null, s.driver, [...(s.features ?? [])], s.maxClaimSize?.memoryMb ?? null, s.maxClaimSize?.cpus ?? null,
                 s.sessionEpoch ?? null,
                 s.isolation ?? null,
+                s.defaultClaimSize?.memoryMb ?? null,
+                s.defaultClaimSize?.cpus ?? null,
+                s.sandboxClaimSize?.memoryMb ?? null,
+                s.sandboxClaimSize?.cpus ?? null,
             ],
         );
     }
@@ -475,6 +371,8 @@ export class PgHubStore implements HubStore {
             driver: r.driver,
             features: knownCellFeatures(r.features ?? []),
             maxClaimSize: r.max_claim_memory_mb != null && r.max_claim_cpus != null ? { memoryMb: r.max_claim_memory_mb, cpus: r.max_claim_cpus } : null,
+            defaultClaimSize: r.default_claim_memory_mb != null && r.default_claim_cpus != null ? { memoryMb: r.default_claim_memory_mb, cpus: r.default_claim_cpus } : null,
+            sandboxClaimSize: r.sandbox_claim_memory_mb != null && r.sandbox_claim_cpus != null ? { memoryMb: r.sandbox_claim_memory_mb, cpus: r.sandbox_claim_cpus } : null,
         };
     }
     async reserveCell(orgId: string) {
@@ -488,8 +386,8 @@ export class PgHubStore implements HubStore {
     async insertClaim(c: ClaimRow & { leaseExpiresAt: string }) {
         const r = await this.pool.query(
             `INSERT INTO runtime.runtime_claims (claim_id, cell_id, org_id, environment_id, run_id, side, state, lease_expires_at, hard_expires_at, consumer, reason, state_changed_at,
-                                                 driver, memory_mb_boot, memory_mb_ready, memory_allocatable_mb, admitted_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'acquired', now(), $11, $12, $13, $14, now()) ON CONFLICT (claim_id) DO NOTHING`,
+                                                 driver, memory_mb_boot, memory_mb_ready, memory_allocatable_mb, cpus, admitted_at, fork_pull_request)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'acquired', now(), $11, $12, $13, $14, $15, now(), $16) ON CONFLICT (claim_id) DO NOTHING`,
             [
                 c.claimId,
                 c.cellId,
@@ -502,6 +400,7 @@ export class PgHubStore implements HubStore {
                 c.hardExpiresAt,
                 c.consumer ?? null,
                 ...meteringValues(c.metering),
+                c.forkPullRequest === true,
             ],
         );
         return r.rowCount === 1;
@@ -525,20 +424,32 @@ export class PgHubStore implements HubStore {
             reason: x.reason ?? null,
             reasonDetail: x.reason_detail ?? null,
             stateChangedAt: x.state_changed_at ? x.state_changed_at.toISOString() : null,
-            metering: x.driver ? { driver: x.driver, bootMb: x.memory_mb_boot ?? null, readyMb: x.memory_mb_ready ?? null, allocatableMb: x.memory_allocatable_mb ?? null } : null,
+            metering: x.driver
+                ? {
+                      driver: x.driver,
+                      bootMb: x.memory_mb_boot ?? null,
+                      readyMb: x.memory_mb_ready ?? null,
+                      allocatableMb: x.memory_allocatable_mb ?? null,
+                      ...(x.cpus != null ? { cpus: x.cpus } : {}),
+                  }
+                : null,
             admittedAt: x.admitted_at ? x.admitted_at.toISOString() : null,
             readyAt: x.ready_at ? x.ready_at.toISOString() : null,
             releasedAt: x.released_at ? x.released_at.toISOString() : null,
+            forkPullRequest: x.fork_pull_request === true,
+            start: x.start_source ?? null,
         };
     }
     async transitionClaim(claimId: string, from: readonly ClaimState[], to: ClaimState, cause: ClaimCause) {
+        assertClaimTransition(from, to);
         const r = await this.pool.query(
             `UPDATE runtime.runtime_claims
                 SET state = $3, reason = $4, reason_detail = $5, state_changed_at = now(),
                     released_at = CASE WHEN $3 IN ('released', 'terminated') THEN now() ELSE released_at END,
-                    ready_at = CASE WHEN $4 = 'ready' THEN now() ELSE ready_at END
+                    ready_at = CASE WHEN $4 = 'ready' THEN now() ELSE ready_at END,
+                    start_source = CASE WHEN $4 = 'ready' THEN $6::text ELSE start_source END
               WHERE claim_id = $1 AND state = ANY($2::text[])`,
-            [claimId, [...from], to, cause.reason, cause.detail ?? null],
+            [claimId, [...from], to, cause.reason, cause.detail ?? null, cause.start ?? null],
         );
         return r.rowCount === 1;
     }
@@ -547,9 +458,9 @@ export class PgHubStore implements HubStore {
             `UPDATE runtime.runtime_claims
                 SET cell_id = $2, state = 'pending', lease_expires_at = $3, hard_expires_at = $4, released_at = NULL,
                     reason = 'reacquired', reason_detail = NULL, state_changed_at = now(),
-                    driver = $6, memory_mb_boot = $7, memory_mb_ready = $8, memory_allocatable_mb = $9, admitted_at = now(), ready_at = NULL
+                    driver = $6, memory_mb_boot = $7, memory_mb_ready = $8, memory_allocatable_mb = $9, cpus = $10, admitted_at = now(), ready_at = NULL, start_source = NULL
               WHERE claim_id = $1 AND state = ANY($5::text[])`,
-            [claimId, n.cellId, n.leaseExpiresAt, n.hardExpiresAt, [...OPEN_CLAIM_STATES], ...meteringValues(n.metering)],
+            [claimId, n.cellId, n.leaseExpiresAt, n.hardExpiresAt, [...REBINDABLE_CLAIM_STATES], ...meteringValues(n.metering)],
         );
         return r.rowCount === 1;
     }
@@ -574,11 +485,78 @@ export class PgHubStore implements HubStore {
         return r.rows.map((x) => this.claimRow(x));
     }
     async approvedHosts(orgId: string, environmentId: string) {
+        return (await this.approvedEgress(orgId, environmentId)).allow;
+    }
+    async approvedEgress(orgId: string, environmentId: string) {
+        const scopes = environmentId === SANDBOX_ENVIRONMENT_ID ? [environmentId] : [environmentId, ORG_EGRESS_SCOPE];
+        // The environment's own row wins over the org list's for the same host (its mode and paths).
         const r = await this.pool.query(
-            `SELECT DISTINCT host FROM runtime.runtime_egress_approvals WHERE organization_id = $1 AND environment_id = $2 ORDER BY host`,
-            [orgId, environmentId],
+            `SELECT DISTINCT ON (host) host, mode, path_prefixes FROM runtime.runtime_egress_approvals
+              WHERE organization_id = $1 AND environment_id = ANY($2::text[]) AND revoked_at IS NULL
+              ORDER BY host, (environment_id = $3) DESC LIMIT 256`,
+            [orgId, scopes, ORG_EGRESS_SCOPE],
         );
-        return r.rows.map((x) => x.host as string);
+        const rows = r.rows as Array<{ host: string; mode: string; path_prefixes: string[] | null }>;
+        return {
+            allow: rows.map((x) => x.host),
+            inspect: rows.filter((x) => x.mode === 'inspected' && x.path_prefixes?.length).map((x) => ({ host: x.host, paths: x.path_prefixes! })),
+        };
+    }
+    async egressRecommendedEnabled(orgId: string) {
+        const r = await this.pool.query(`SELECT recommended_enabled FROM runtime.runtime_egress_settings WHERE organization_id = $1`, [orgId]);
+        return r.rows.length ? r.rows[0].recommended_enabled !== false : true;
+    }
+    async markEgressSent(orgId: string, environmentId: string, hosts: string[], at: Date) {
+        if (!hosts.length) return;
+        const scopes = environmentId === SANDBOX_ENVIRONMENT_ID ? [environmentId] : [environmentId, ORG_EGRESS_SCOPE];
+        await this.pool.query(
+            `UPDATE runtime.runtime_egress_approvals SET last_sent_at = $4::timestamptz
+              WHERE organization_id = $1 AND environment_id = ANY($2::text[]) AND host = ANY($3::text[]) AND revoked_at IS NULL
+                AND (last_sent_at IS NULL OR last_sent_at < $4::timestamptz - interval '1 minute')`,
+            [orgId, scopes, hosts, at],
+        );
+    }
+    async liveClaimsOfOrganization(orgId: string) {
+        const r = await this.pool.query(`SELECT * FROM runtime.runtime_claims WHERE org_id = $1 AND state = 'bound' AND hard_expires_at > now()`, [orgId]);
+        return r.rows.map((x) => this.claimRow(x));
+    }
+    async recordSandboxAudit(a: SandboxAuditRow) {
+        await this.pool.query(
+            `INSERT INTO runtime.runtime_sandbox_audit (org_id, claim_id, cell_id, step_id, op, command, path, outcome, detail, exit_code, bytes, duration_ms, at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            [a.orgId, a.claimId, a.cellId, a.stepId, a.op, a.command?.slice(0, 2_048) ?? null, a.path?.slice(0, 4_096) ?? null, a.outcome, a.detail?.slice(0, 256) ?? null, a.exitCode ?? null, a.bytes ?? null, a.durationMs, a.at],
+        );
+    }
+    async syncEvictedBuildStates(cellId: string, rows: EvictedBuildStateRow[]) {
+        // One statement: the cell's rows become exactly its list.
+        await this.pool.query(
+            `WITH listed AS (
+               SELECT * FROM unnest($2::text[], $3::text[], $4::timestamptz[], $5::integer[]) AS l(org_id, environment_id, evicted_at, rebuild_seconds)),
+             gone AS (
+               DELETE FROM runtime.runtime_build_state_evictions e WHERE e.cell_id = $1
+                AND NOT EXISTS (SELECT 1 FROM listed l WHERE l.org_id = e.org_id AND l.environment_id = e.environment_id))
+             INSERT INTO runtime.runtime_build_state_evictions (cell_id, org_id, environment_id, evicted_at, rebuild_seconds)
+             SELECT $1, org_id, environment_id, evicted_at, rebuild_seconds FROM listed
+             ON CONFLICT (cell_id, org_id, environment_id) DO UPDATE SET evicted_at = EXCLUDED.evicted_at, rebuild_seconds = EXCLUDED.rebuild_seconds`,
+            [cellId, rows.map((r) => r.orgId), rows.map((r) => r.environmentId), rows.map((r) => r.evictedAt), rows.map((r) => r.rebuildSeconds ?? null)],
+        );
+    }
+    async evictedBuildStateAt(cellId: string, orgId: string, environmentId: string) {
+        const r = await this.pool.query(
+            `SELECT evicted_at FROM runtime.runtime_build_state_evictions WHERE cell_id = $1 AND org_id = $2 AND environment_id = $3`,
+            [cellId, orgId, environmentId],
+        );
+        const at = r.rows[0]?.evicted_at;
+        return at ? new Date(at).toISOString() : null;
+    }
+    async evictedBuildState(cellId: string, orgId: string, environmentId: string) {
+        const r = await this.pool.query(
+            `SELECT evicted_at, rebuild_seconds FROM runtime.runtime_build_state_evictions WHERE cell_id = $1 AND org_id = $2 AND environment_id = $3`,
+            [cellId, orgId, environmentId],
+        );
+        const row = r.rows[0];
+        if (!row) return null;
+        return { orgId, environmentId, evictedAt: new Date(row.evicted_at).toISOString(), ...(row.rebuild_seconds ? { rebuildSeconds: Number(row.rebuild_seconds) } : {}) };
     }
     async recordClaimBlocker(b: ClaimBlockerRow) {
         await this.pool.query(
@@ -659,11 +637,9 @@ export class PgHubStore implements HubStore {
             certificateExpiresAt: x.certificate_expires_at?.toISOString() ?? new Date(0).toISOString(),
         };
     }
-    async redeemAndRegister(token: string, topology: string, cell: (r: { organizationId: string; topology: string }) => RegisteredCell): Promise<RedeemResult> {
+    async redeemAndRegister(token: string, topology: string | undefined, cell: (r: { organizationId: string; topology: string }) => RegisteredCell): Promise<RedeemResult> {
         if (!this.pool.connect) throw new Error('redeemAndRegister needs a pool');
-        const client: PoolClient = await this.pool.connect();
-        try {
-            await client.query('BEGIN');
+        return withTransaction(this.pool as Pick<Pool, 'connect'>, async (client) => {
             const r = await new CellTokenLedger(new PgCommandStore(client)).redeem(token, topology);
             if (r.ok) {
                 const c = cell(r);
@@ -673,14 +649,8 @@ export class PgHubStore implements HubStore {
                     [c.cellId, c.organizationId, c.owner, c.topology, c.certificateSerial, c.certificateExpiresAt],
                 );
             }
-            await client.query('COMMIT');
             return r;
-        } catch (e) {
-            await client.query('ROLLBACK').catch(() => undefined);
-            throw e;
-        } finally {
-            client.release();
-        }
+        });
     }
     async pinCertificate(cellId: string, serial: string, expiresAt: string) {
         const r = await this.pool.query(

@@ -1,7 +1,9 @@
-import { isBlocked } from '@libs/runtime/environment';
+import { FakeEnvironmentRuntime, isBlocked } from '@libs/runtime/environment';
+
+import { SCENARIOS } from '../../fake-cell/scenarios';
 
 import { shopRunRequest } from '../../e2e/fixtures';
-import { inMemoryRunDeps } from './in-memory-deps';
+import { inMemoryRunDeps } from './testing';
 import { runRuntimeRun } from './run-orchestrator';
 
 // The Run keeps each side's claim.ready.timing next to its bootMs, so the
@@ -99,5 +101,71 @@ describe('the boot timing of a Run', () => {
             ],
         });
         expect(JSON.stringify(logged)).not.toContain('go build');
+    });
+    // kr-calcom#2, Run b8efd73b: the PR's build ran cold for 30 min and the cell answered boot_timeout;
+    // the comment said "Booted in 30m" above "the machine ran out of resources".
+    it.each(['pr', 'base'] as const)('a Run whose %s side never booted publishes no boot time', async (side) => {
+        const env = new FakeEnvironmentRuntime(SCENARIOS, () => new Date());
+        const acquire = env.acquire.bind(env);
+        env.acquire = async (r) =>
+            r.ref.side === side ? { status: 'blocked', blockers: [{ kind: 'resources', signature: 'boot_timeout', message: 'the boot did not finish in 30 min, the most a setup waits' }] } : acquire(r);
+        const { deps, projection, published } = inMemoryRunDeps({ env });
+        const req = shopRunRequest();
+        await seed(projection, req);
+        await runRuntimeRun(req, deps);
+        const reports = published.filter((p) => p.report).map((p) => p.report!);
+        expect(reports.length).toBeGreaterThan(0);
+        expect(reports.map((r) => r.bootMs)).toEqual(reports.map(() => undefined));
+        expect((await projection.get(req.runId))!.bootMs).toBeUndefined();
+    });
+
+    // The same Run: the cell had evicted the environment's build state at 07:31, so the PR built cold. The report
+    // said "the machine ran out of resources" and nothing told the owner a new setup brings the cache back.
+    it('a PR side that timed out building on an evicted state names that cause, and the report says it built with no cache', async () => {
+        const env = new FakeEnvironmentRuntime(SCENARIOS, () => new Date());
+        const acquire = env.acquire.bind(env);
+        const evictedAt = '2026-11-13T07:31:31.000Z';
+        env.acquire = async (r) =>
+            r.ref.side === 'pr'
+                ? { status: 'blocked', buildStateEvictedAt: evictedAt, blockers: [{ kind: 'resources', signature: 'boot_timeout', message: 'the boot did not finish in 30 min, the most a boot of this claim waits' }] }
+                : acquire(r);
+        const { deps, projection, published } = inMemoryRunDeps({ env });
+        const req = shopRunRequest();
+        await seed(projection, req);
+        await runRuntimeRun(req, deps);
+        const report = published.filter((p) => p.report).at(-1)!.report!;
+        expect(report.state).toBe('partly_tested');
+        expect(report.coldBuild).toEqual({ side: 'pr', cause: 'build_state_evicted', evictedAt });
+        expect(report.uncovered.length).toBeGreaterThan(0);
+        expect(report.uncovered.every((u) => u.blocker?.kind === 'resources' && u.blocker.cause === 'build_state_evicted')).toBe(true);
+    });
+
+    it('a boot_timeout with its state in place is named a timeout, not a machine out of resources', async () => {
+        const env = new FakeEnvironmentRuntime(SCENARIOS, () => new Date());
+        const acquire = env.acquire.bind(env);
+        env.acquire = async (r) =>
+            r.ref.side === 'pr' ? { status: 'blocked', blockers: [{ kind: 'resources', signature: 'boot_timeout', message: 'the boot did not finish in 30 min' }] } : acquire(r);
+        const { deps, projection, published } = inMemoryRunDeps({ env });
+        const req = shopRunRequest();
+        await seed(projection, req);
+        await runRuntimeRun(req, deps);
+        const report = published.filter((p) => p.report).at(-1)!.report!;
+        expect(report.coldBuild).toBeUndefined();
+        expect(report.uncovered.every((u) => u.blocker?.cause === 'boot_timeout')).toBe(true);
+    });
+
+    it('a side that booted after building on an evicted state still says it built with no cache', async () => {
+        const { deps, projection, published } = inMemoryRunDeps();
+        const acquire = deps.env.acquire.bind(deps.env);
+        const evictedAt = '2026-11-13T07:31:31.000Z';
+        deps.env.acquire = async (r) => {
+            const c = await acquire(r);
+            return isBlocked(c) || r.ref.side !== 'pr' ? c : { ...c, buildStateEvictedAt: evictedAt };
+        };
+        const req = shopRunRequest();
+        await seed(projection, req);
+        await runRuntimeRun(req, deps);
+        expect((await projection.get(req.runId))!.coldBuild).toEqual({ side: 'pr', cause: 'build_state_evicted', evictedAt });
+        expect(published.filter((p) => p.report).at(-1)!.report!.coldBuild).toEqual({ side: 'pr', cause: 'build_state_evicted', evictedAt });
     });
 });

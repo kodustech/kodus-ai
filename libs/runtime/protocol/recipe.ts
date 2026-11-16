@@ -6,11 +6,14 @@ import { z } from 'zod';
 import { RecipeValidationChecksSchema, type RecipeValidationCheck } from '@libs/runtime/contracts/recipe-validation';
 
 import { EXPOSE_KINDS } from '@libs/runtime/contracts/enums';
+import { MAX_RECIPE_NEEDS, MAX_REPOSITORY_FULL_NAME, REPOSITORY_ALIAS_PATTERN, REPOSITORY_FULL_NAME_PATTERN, repositoryAliasOf } from '@libs/runtime/contracts/workspace';
 import { RecipeFakesSchema, normalizeRecipeFakes, rawFakeInputError, type RecipeFake } from './recipe-fakes';
 import {
     MACHINE_SIZES,
     MACHINE_SIZE_LIMITS,
 } from '@libs/runtime/contracts/machine-size';
+import CONTROL_ENV from './recipe-control-env.json';
+import { UNTRUSTED_YAML } from './yaml-limits';
 
 // `.kodus/workspace.yaml` (docs §6): the recipe Runo reads on a developer's
 // machine and the cell boots from. This is its one TS definition. The cell
@@ -52,6 +55,12 @@ export const RecipeComposeSchema = z.strictObject({
     health: z.string().optional().describe('HTTP path asked on the public service, over its http entry in services.expose.'),
     health_timeout: duration.optional().describe('How long the boot waits for health: seconds, or 120s, 10m. Unset or 0 waits 2 minutes; more than 15 minutes waits 15.'),
     env: z.record(z.string(), scalar).optional().describe('Variables every service gets, over the compose file. Never secrets.'),
+});
+
+/** One other repository the recipe boots beside its own (services.needs). */
+export const RecipeNeedSchema = z.strictObject({
+    repo: z.string().describe('The repository, as owner/name (or group/subgroup/name) on the same Git provider.'),
+    alias: z.string().optional().describe("Its directory beside this one (../<alias> in a compose file): lower case letters, digits, '.', '_' and '-'. Default: the repository's short name."),
 });
 
 export const RecipeExposedPortSchema = z.strictObject({
@@ -160,7 +169,11 @@ export const RecipeSchema = z.strictObject({
         .strictObject({
             compose: RecipeComposeSchema.optional(),
             expose: z.array(RecipeExposedPortSchema).optional().describe('The ports the probes reach, by service.'),
-            needs: z.unknown().optional(),
+            needs: z
+                .array(RecipeNeedSchema)
+                .max(MAX_RECIPE_NEEDS, { error: `at most ${MAX_RECIPE_NEEDS} repositories` })
+                .optional()
+                .describe('Other repositories booted beside this one, each in its own directory next to it.'),
         })
         .optional(),
     data: z
@@ -209,12 +222,20 @@ export interface Recipe {
     fakes?: RecipeFake[];
     /** A cell capability requirement only; the public Expose shape stays unchanged. */
     seededSQL?: true;
+    /** services.needs with every alias resolved; absent when the recipe needs no other repository. */
+    needs?: RecipeNeed[];
     /**
      * The keys the recipe sets that no cell acts on yet (recipe.Unapplied in
      * the cell, held to the same list by the recipe contract): the cell boots
      * as if they were absent, so the setup says so. Absent when there is none.
      */
     unapplied?: string[];
+}
+
+/** One other repository a recipe boots beside its own, its alias resolved. */
+export interface RecipeNeed {
+    repo: string;
+    alias: string;
 }
 
 /**
@@ -236,34 +257,14 @@ const SECRET_VALUE = /(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|sk-[A-Za-z0-9_-]{1
 // time.ParseDuration's grammar without the minus a positive duration never has.
 const GO_DURATION = /^\+?(\d+(\.\d*)?|\.\d+)(ns|us|µs|ms|s|m|h)((\d+(\.\d*)?|\.\d+)(ns|us|µs|ms|s|m|h))*$/;
 /** The longest time.Duration, in seconds: past it the cell's parser refuses the value, so the worker does too. */
-const MAX_GO_DURATION_SECONDS = 9_223_372_036.854_775_807;
+// The largest Go duration, 9223372036.854775807 s, as the nearest double.
+const MAX_GO_DURATION_SECONDS = 9_223_372_036.854_776;
 const DURATION_UNIT: Record<string, number> = { ns: 1e-9, us: 1e-6, µs: 1e-6, ms: 1e-3, s: 1, m: 60, h: 3600 };
 
-// What changes what runs rather than how the app is configured (validate.go isControlEnv).
-const CONTROL_ENV_PREFIXES = ['LD_', 'DYLD_', 'DOCKER_', 'COMPOSE_'];
-const CONTROL_ENV_NAMES = new Set([
-    'PATH',
-    'IFS',
-    'BASH_ENV',
-    'ENV',
-    'PROMPT_COMMAND',
-    'SHELLOPTS',
-    'BASHOPTS',
-    'NODE_OPTIONS',
-    'NODE_PATH',
-    'PYTHONSTARTUP',
-    'PYTHONPATH',
-    'PYTHONHOME',
-    'PERL5OPT',
-    'PERL5LIB',
-    'PERLLIB',
-    'RUBYOPT',
-    'RUBYLIB',
-    'JAVA_TOOL_OPTIONS',
-    '_JAVA_OPTIONS',
-    'JDK_JAVA_OPTIONS',
-    'GCONV_PATH',
-]);
+// What changes what runs rather than how the app is configured. recipe-control-env.json
+// is the one source; apps/runtime-cell/internal/recipe/recipe-control-env.json is its byte copy.
+const CONTROL_ENV_PREFIXES: readonly string[] = CONTROL_ENV.prefixes;
+const CONTROL_ENV_NAMES: ReadonlySet<string> = new Set(CONTROL_ENV.names);
 const isControlEnv = (name: string) => {
     const n = name.toUpperCase();
     return CONTROL_ENV_NAMES.has(n) || CONTROL_ENV_PREFIXES.some((p) => n.startsWith(p));
@@ -319,6 +320,44 @@ function recipeEnvironmentError(env: Record<string, string>, prefix: string): st
     return undefined;
 }
 
+export const RECIPE_NEEDS_SHAPE = 'services.needs must be a list of repositories (- repo: owner/name, alias: name)';
+
+/**
+ * services.needs with each alias resolved (the repository's short name when
+ * none is given), or why it is refused: a repository is owner/name, each
+ * repository and each alias once. The cell resolves the same (recipe.go).
+ */
+function resolveNeeds(needs: ReadonlyArray<{ repo: string; alias?: string }>): RecipeNeed[] | string {
+    const repos = new Set<string>();
+    const aliases = new Set<string>();
+    const out: RecipeNeed[] = [];
+    for (const [i, n] of needs.entries()) {
+        const at = `services.needs[${i}]`;
+        if (n.repo.length > MAX_REPOSITORY_FULL_NAME || !REPOSITORY_FULL_NAME_PATTERN.test(n.repo)) return `${at}.repo: ${JSON.stringify(n.repo)} must be owner/name`;
+        if (n.alias !== undefined && !REPOSITORY_ALIAS_PATTERN.test(n.alias)) return `${at}.alias: ${JSON.stringify(n.alias)} must match ${REPOSITORY_ALIAS_PATTERN.source}`;
+        const alias = n.alias ?? repositoryAliasOf(n.repo);
+        const repo = n.repo.toLowerCase();
+        if (repos.has(repo)) return `${at}: ${n.repo} twice`;
+        if (aliases.has(alias)) return `${at}: alias ${alias} twice`;
+        repos.add(repo);
+        aliases.add(alias);
+        out.push({ repo: n.repo, alias });
+    }
+    return out;
+}
+
+/**
+ * Why services.needs cannot boot beside the environment's own repository, or
+ * undefined: a need never names that repository, nor takes its alias.
+ */
+export function recipeNeedsConflict(needs: readonly RecipeNeed[] | undefined, primary: { fullName: string; alias: string }): string | undefined {
+    for (const [i, n] of (needs ?? []).entries()) {
+        if (n.repo.toLowerCase() === primary.fullName.toLowerCase()) return `services.needs[${i}]: ${n.repo} is the environment's own repository`;
+        if (n.alias === primary.alias) return `services.needs[${i}]: alias ${n.alias} is the environment's own repository's`;
+    }
+    return undefined;
+}
+
 /** The rules every cell enforces (validate.go), in its order, on the resolved recipe. */
 function recipeRules(r: Recipe): string | undefined {
     if (r.filesCopy.length) return 'files.copy is refused in a cell: env files never go to the machine; use a fake';
@@ -368,7 +407,7 @@ export function parseRecipe(text: string): RecipeParseResult {
     if (!text.trim()) return fail('empty');
     let doc: unknown;
     try {
-        doc = yaml.load(text, { schema: yaml.CORE_SCHEMA });
+        doc = yaml.load(text, { ...UNTRUSTED_YAML, schema: yaml.CORE_SCHEMA });
     } catch (e) {
         return fail(
             String((e as Error)?.message ?? e)
@@ -383,6 +422,7 @@ export function parseRecipe(text: string): RecipeParseResult {
     if (unsafeFakeInput) return fail(unsafeFakeInput);
     // Runo's services mode ({ db: { image }, app: { run } }) named before the strict check says "unknown field".
     if (isMap(doc.services)) {
+        if (doc.services.needs !== undefined && !Array.isArray(doc.services.needs)) return fail(RECIPE_NEEDS_SHAPE);
         const other = Object.keys(doc.services)
             .sort()
             .find((k) => !['compose', 'expose', 'needs'].includes(k));
@@ -412,6 +452,8 @@ export function parseRecipe(text: string): RecipeParseResult {
     const fakes = normalizeRecipeFakes(d.fakes, Object.fromEntries(Object.entries(c.env ?? {}).map(([k, v]) => [k, str(v)])), recipeEnvironmentError);
     if (typeof fakes === 'string') return fail(fakes);
     if (c.file && c.files?.length) return fail('services.compose: file and files together; use one');
+    const needs = resolveNeeds(d.services?.needs ?? []);
+    if (typeof needs === 'string') return fail(needs);
     let healthTimeoutSeconds: number | undefined;
     if (c.health_timeout !== undefined) {
         const seconds = recipeDurationSeconds(c.health_timeout);
@@ -452,6 +494,7 @@ export function parseRecipe(text: string): RecipeParseResult {
         ...(d.egress ? { egressAllow } : {}),
         ...(d.fakes ? { fakes } : {}),
         ...((d.services?.expose ?? []).some((e) => e.readonly_user_from_seed === true) ? { seededSQL: true as const } : {}),
+        ...(needs.length ? { needs } : {}),
     };
     const unapplied: string[] = RECIPE_UNAPPLIED_KEYS.filter((k) => d[k] !== undefined);
     if (d.limits)

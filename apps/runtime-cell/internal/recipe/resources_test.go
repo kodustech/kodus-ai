@@ -14,6 +14,7 @@ func TestResourceDeclarationsAreNotIgnored(t *testing.T) {
 		t.Fatal("declared resources are still ignored")
 	}
 }
+
 func TestMalformedResourceDeclarationsFail(t *testing.T) {
 	for _, line := range []string{"size: { cpu: -1, memory: 8gb }", "size: { cpu: 1.5, memory: 8gb }", "size: { cpu: 4, memory: 0gb }", "size: { cpu: 4, memory: 8gb, disk: -1gb }", "size: { cpu: 4, memory: 8gb, typo: 1 }", "egress: { allow: ['*.example.com'] }", "egress: { allow: ['https://api.example.com'] }", "egress: { allow: ['127.0.0.1'] }", "egress: { allow: ['api.example.com'], typo: true }"} {
 		t.Run(line, func(t *testing.T) {

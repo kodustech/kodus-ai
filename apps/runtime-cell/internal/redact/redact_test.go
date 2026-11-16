@@ -241,3 +241,24 @@ func TestMaskingWriterMasksAcrossChunkBoundaries(t *testing.T) {
 		}
 	}
 }
+
+// A writer with nothing long enough to mask passes the stream through: no
+// secret, or only ones shorter than MinKnownLen, must not hold bytes back
+// past the end of the buffer.
+func TestMaskingWriterWithNothingToMaskPassesThrough(t *testing.T) {
+	for _, secrets := range [][]string{nil, {}, {"short"}} {
+		var out bytes.Buffer
+		mw := NewMaskingWriter(&out, secrets, "***")
+		for _, chunk := range []string{"hello ", "world", ""} {
+			if _, err := mw.Write([]byte(chunk)); err != nil {
+				t.Fatalf("%v: write: %v", secrets, err)
+			}
+		}
+		if err := mw.Close(); err != nil {
+			t.Fatalf("%v: close: %v", secrets, err)
+		}
+		if out.String() != "hello world" {
+			t.Fatalf("%v: got %q", secrets, out.String())
+		}
+	}
+}

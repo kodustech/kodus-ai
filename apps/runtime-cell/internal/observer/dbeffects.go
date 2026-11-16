@@ -84,7 +84,7 @@ func (r *Prober) readOnly(ctx context.Context, t Target, f func(*sql.Tx) error) 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // read-only: rollback is how it ends
 	if t.Kind == "postgres" {
 		if _, err := tx.ExecContext(ctx, "SET LOCAL statement_timeout = "+strconv.FormatInt(dbEffectsTimeout.Milliseconds(), 10)); err != nil {
 			return err
@@ -104,7 +104,7 @@ func query(ctx context.Context, tx *sql.Tx, q string) (*sql.Rows, error) {
 func (r *Prober) markDB(ctx context.Context) (*dbMark, error) {
 	t, ok := r.dbTarget()
 	if !ok {
-		return nil, nil
+		return nil, nil //nolint:nilnil // no database target: no mark, and RunStep reads a nil mark as "no effects asked"
 	}
 	ctx, cancel := context.WithTimeout(ctx, dbEffectsTimeout)
 	defer cancel()
@@ -116,13 +116,16 @@ func (r *Prober) markDB(ctx context.Context) (*dbMark, error) {
 			if qerr != nil {
 				return qerr
 			}
-			defer rows.Close()
+			defer func() { _ = rows.Close() }()
 			if rows.Next() {
 				var x int64
 				if err := rows.Scan(&x); err != nil {
 					return err
 				}
-				m.xmax = uint64(x)
+				m.xmax = uint64(x) //nolint:gosec // G115: a txid snapshot xmax is never negative
+			}
+			if err := rows.Err(); err != nil {
+				return err
 			}
 			if err := rows.Close(); err != nil {
 				return err
@@ -146,7 +149,7 @@ func (r *Prober) tableCounts(ctx context.Context, tx *sql.Tx, t Target) (map[str
 		if err != nil {
 			return nil, nil, err
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		for rows.Next() {
 			var schema, rel string
 			var c tableCounts
@@ -159,38 +162,55 @@ func (r *Prober) tableCounts(ctx context.Context, tx *sql.Tx, t Target) (map[str
 		}
 		return counts, order, rows.Err()
 	}
-	rows, err := query(ctx, tx, "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' ORDER BY table_name LIMIT "+strconv.Itoa(MaxEffectTables))
+	names, err := mysqlTables(ctx, tx)
 	if err != nil {
 		return nil, nil, err
 	}
-	var names []string
-	for rows.Next() {
-		var n string
-		if err := rows.Scan(&n); err != nil {
-			rows.Close()
-			return nil, nil, err
-		}
-		names = append(names, n)
-	}
-	rows.Close()
 	for _, n := range names {
 		id, ok := quoteIdent("mysql", n)
 		if !ok {
 			continue
 		}
-		cr, err := query(ctx, tx, "SELECT COUNT(*) FROM "+id)
+		c, err := countRows(ctx, tx, id)
 		if err != nil {
 			return nil, nil, err
 		}
-		var c int64
-		if cr.Next() {
-			_ = cr.Scan(&c)
-		}
-		cr.Close()
 		counts[n] = tableCounts{ins: c}
 		order = append(order, n)
 	}
 	return counts, order, nil
+}
+
+// mysqlTables lists the database's base tables, at most MaxEffectTables.
+func mysqlTables(ctx context.Context, tx *sql.Tx) ([]string, error) {
+	rows, err := query(ctx, tx, "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' ORDER BY table_name LIMIT "+strconv.Itoa(MaxEffectTables))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var names []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		names = append(names, n)
+	}
+	return names, rows.Err()
+}
+
+// countRows is the row count of the quoted table id.
+func countRows(ctx context.Context, tx *sql.Tx, id string) (int64, error) {
+	rows, err := query(ctx, tx, "SELECT COUNT(*) FROM "+id)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rows.Close() }()
+	var c int64
+	if rows.Next() {
+		_ = rows.Scan(&c)
+	}
+	return c, rows.Err()
 }
 
 // quoteIdent quotes a name the database itself returned; a name with NUL is skipped.
@@ -275,14 +295,14 @@ func (r *Prober) dbEffects(ctx context.Context, m *dbMark) (*protocol.DBEffects,
 func (r *Prober) rowsSince(ctx context.Context, tx *sql.Tx, table string, xmax uint64) (*protocol.DBSample, error) {
 	id, ok := quoteIdent("postgres", table)
 	if !ok {
-		return nil, nil
+		return nil, nil //nolint:nilnil // documented: nil sample for a name that cannot be quoted, callers check sample != nil
 	}
 	low := strconv.FormatUint(xmax%(1<<32), 10)
 	rows, err := query(ctx, tx, "SELECT * FROM "+id+" WHERE xmin::text::bigint >= "+low+" LIMIT "+strconv.Itoa(MaxEffectRows))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	all, err := rows.Columns()
 	if err != nil {
 		return nil, err
@@ -312,7 +332,7 @@ func (r *Prober) rowsSince(ctx context.Context, tx *sql.Tx, table string, xmax u
 		return nil, err
 	}
 	if len(s.Rows) == 0 {
-		return nil, nil
+		return nil, nil //nolint:nilnil // documented: nil when no rows were written, callers check sample != nil
 	}
 	return s, nil
 }

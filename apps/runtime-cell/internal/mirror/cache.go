@@ -72,7 +72,7 @@ func (o *OCIProxy) serveCached(w http.ResponseWriter, r *http.Request, name, kin
 	}
 	o.Metrics.count(metricKind, "miss")
 	accept := o.accept(r)
-	if err := o.flights.do(r.Context(), ref, func() error {
+	if err := o.flights.do(r.Context(), ref, func() error { //nolint:contextcheck // the shared fetch outlives any one requester on purpose (fetchContext)
 		ctx, cancel := o.fetchContext()
 		defer cancel()
 		return o.fetchDigest(ctx, name, kind, ref, accept)
@@ -84,6 +84,7 @@ func (o *OCIProxy) serveCached(w http.ResponseWriter, r *http.Request, name, kin
 		// Evicted between its commit and this read: only when the cache is
 		// smaller than what is being pulled at once.
 		http.Error(w, "the mirror's cache is too small for this pull", http.StatusServiceUnavailable)
+		return
 	}
 }
 
@@ -96,7 +97,7 @@ func (o *OCIProxy) serveTag(w http.ResponseWriter, r *http.Request, name, tag st
 		o.Metrics.count("manifest", "hit")
 		return
 	}
-	err := o.flights.do(r.Context(), "tag\x00"+key, func() error {
+	err := o.flights.do(r.Context(), "tag\x00"+key, func() error { //nolint:contextcheck // the shared fetch outlives any one requester on purpose (fetchContext)
 		ctx, cancel := o.fetchContext()
 		defer cancel()
 		return o.refreshTag(ctx, key, name, tag, accept)
@@ -126,7 +127,7 @@ func (o *OCIProxy) refreshTag(ctx context.Context, key, name, tag, accept string
 		if err != nil {
 			return err
 		}
-		res.Body.Close()
+		_ = res.Body.Close()
 		if res.Header.Get("Docker-Content-Digest") == e.digest {
 			o.setTag(key, tagEntry{digest: e.digest, checked: o.now()})
 			o.Metrics.count("manifest", "revalidated")
@@ -137,7 +138,7 @@ func (o *OCIProxy) refreshTag(ctx context.Context, key, name, tag, accept string
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(res.Body, manifestMax+1))
 	if err != nil || len(body) > manifestMax {
 		return errors.New("mirror: the tag's manifest could not be read whole")
@@ -161,7 +162,7 @@ func (o *OCIProxy) fetchDigest(ctx context.Context, name, kind, ref, accept stri
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	limit := o.maxBytes()
 	if kind == "manifests" {
 		limit = manifestMax
@@ -192,7 +193,7 @@ func (o *OCIProxy) upstream(ctx context.Context, method, name, kind, ref, accept
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, method, o.Registry.JoinPath("v2", name, kind, ref).String(), nil)
+	req, err := http.NewRequestWithContext(ctx, method, o.Registry.JoinPath("v2", name, kind, ref).String(), nil) //nolint:gosec // G704: the host is the operator's Registry; the path is a parsed OCI reference the claim pins
 	if err != nil {
 		return nil, err
 	}
@@ -200,12 +201,12 @@ func (o *OCIProxy) upstream(ctx context.Context, method, name, kind, ref, accept
 	if kind == "manifests" {
 		req.Header.Set("Accept", accept)
 	}
-	res, err := o.client().Do(req)
+	res, err := o.client().Do(req) //nolint:gosec // G704: the host is the operator's Registry; the path is a parsed OCI reference the claim pins
 	if err != nil {
 		return nil, err
 	}
 	if res.StatusCode != http.StatusOK {
-		res.Body.Close()
+		_ = res.Body.Close()
 		return nil, &upstreamError{code: res.StatusCode}
 	}
 	return res, nil
@@ -217,7 +218,7 @@ func (o *OCIProxy) serveStored(w http.ResponseWriter, r *http.Request, kind, dig
 	if err != nil {
 		return false
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }()
 	var content io.ReadSeeker = b
 	ctype := "application/octet-stream"
 	if kind == "manifests" {

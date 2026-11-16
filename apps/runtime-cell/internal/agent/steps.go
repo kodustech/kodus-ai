@@ -6,6 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/telemetry"
+
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/claims"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dedup"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
@@ -16,6 +21,8 @@ import (
 
 // stepAdmission is what admitStep needs to know of a step frame.
 type stepAdmission struct {
+	// trace is the hub's span that sent the step (nil: none); the step's span is its child.
+	trace   context.Context
 	kind    protocol.MessageType
 	claimID string
 	stepID  string
@@ -30,6 +37,8 @@ type stepAdmission struct {
 // at-most-once rule last (a step recorded and then refused would be acked
 // as a duplicate on the hub's retry and never run), acks, and runs work in
 // the background once the claim is ready.
+//
+//nolint:contextcheck,nolintlint // a step outlives the frame that admits it: its context derives from the Run context on purpose (contextcheck reports at the callers, so nolintlint sees the directive as unused)
 func (a *Agent) admitStep(s stepAdmission, work func(context.Context, *claims.Claim)) error {
 	c, ok := a.claims.Get(s.claimID)
 	if !ok || c.State() == claims.Released {
@@ -63,10 +72,20 @@ func (a *Agent) admitStep(s stepAdmission, work func(context.Context, *claims.Cl
 			return nack("step_capacity", "claim active step limit %d reached; no work started", a.cfg.MaxClaimSteps)
 		}
 		return nack("unknown_claim", "%s", s.claimID)
+	case dedup.New:
+		// admitted: run it below
 	}
-	c.Log.Info("step.start", "step", s.stepID, "kind", s.kind)
+	parent := s.trace
+	if parent == nil {
+		parent = context.Background()
+	}
+	sctx, span := telemetry.Tracer().Start(parent, "cell.step", trace.WithAttributes(
+		telemetry.ID(telemetry.ClaimID, s.claimID), telemetry.ID(telemetry.StepID, s.stepID), attribute.String(telemetry.StepKind, string(s.kind))))
+	ctx = trace.ContextWithSpan(ctx, span)
+	c.Log.Info("step.start", append([]any{"step", s.stepID, "kind", s.kind}, telemetry.LogIDs(sctx)...)...)
 	a.goTracked(func(context.Context) {
 		defer func() {
+			span.End()
 			cancel()
 			c.RemoveStep(s.stepID)
 		}()
@@ -169,6 +188,7 @@ func (a *Agent) runProbe(ctx context.Context, frameID string, c *claims.Claim, b
 	}
 	m := c.Machines()
 	targets := observerTargets(c)
+	before, known := a.machineHealth(ctx, m.Workload)
 	t0 := a.clock.Now()
 	res, err := a.observe(ctx, frameID, c, b, targets)
 	t1 := a.clock.Now()
@@ -179,6 +199,10 @@ func (a *Agent) runProbe(ctx context.Context, frameID string, c *claims.Claim, b
 		// The observer did not answer: the probe is inconclusive.
 		c.Log.Warn("observer.unavailable", "step", b.StepID, "err", err)
 		res = &protocol.StepResultBody{VMHealth: protocol.VMHealthOk}
+	}
+	// The machine's own health is the cell's word, never the observer's.
+	if a.cfg.Parts.Health != nil && m.Workload.MachineID != "" {
+		res.VMHealth = a.healthAfter(ctx, c, b.StepID, m.Workload, before, known)
 	}
 	// What the observer says is evidence about the probe, never about which
 	// step it answers nor which machine it ran on: the step, the executor
@@ -223,10 +247,10 @@ func (a *Agent) observe(ctx context.Context, frameID string, c *claims.Claim, b 
 	return res, err
 }
 
-func (a *Agent) runExec(ctx context.Context, c *claims.Claim, b *protocol.ExecBody, cwd string) {
+func (a *Agent) runExec(ctx context.Context, c *claims.Claim, b *protocol.ExecBody, cwd, repository string) {
 	// The download token never goes to the VM, not even as a value to mask:
 	// the cell redacts the output on its side (S-51).
-	req := kodyexec.Request{Command: b.Command, TimeoutMs: b.TimeoutMs, Cwd: cwd, Limits: a.cfg.ExecLimits}
+	req := kodyexec.Request{Command: b.Command, TimeoutMs: b.TimeoutMs, Cwd: cwd, Limits: a.cfg.ExecLimits, Repository: repository}
 	// kody-exec ends the command at timeoutMs; past that and the grace the
 	// VM is not answering.
 	ectx, cancel := context.WithTimeout(ctx, time.Duration(b.TimeoutMs)*time.Millisecond+a.cfg.ExecGrace)
@@ -252,18 +276,28 @@ func (a *Agent) runReset(ctx context.Context, c *claims.Claim, b *protocol.Machi
 	workload := c.Machines().Workload
 	res := &protocol.StepResultBody{StepID: b.StepID, Executor: protocol.ExecutorVM, ImageID: workload.ImageID, VMHealth: protocol.VMHealthOk}
 	start := a.clock.Now()
-	err := a.cfg.Driver.Reset(ctx, workload, driver.SnapshotRef{Kind: string(b.Snapshot.Kind), Ref: b.Snapshot.Ref})
-	if err == nil {
-		err = a.composeUpAgain(ctx, c, workload)
+	var err error
+	switch {
+	case b.Snapshot.Kind == protocol.SnapshotKindMemory:
+		// The whole machine back at the claim's first ready state: its
+		// processes, its containers and their data, in memory.
+		err = a.resetToRound(ctx, c, b.Snapshot.Ref)
+	case a.cfg.Parts.Resetter == nil:
+		err = fmt.Errorf("%w: the %s driver resets no machine", driver.ErrUnsupported, a.cfg.Driver.Kind())
+	default:
+		err = a.cfg.Parts.Resetter.Reset(ctx, workload, driver.SnapshotRef{Kind: string(b.Snapshot.Kind), Ref: b.Snapshot.Ref})
+		if err == nil {
+			err = a.composeUpAgain(ctx, c, workload)
+		}
 	}
 	if a.stepCancelled(ctx, c, "machine.reset", b.StepID, err) {
 		return
 	}
 	d := a.clock.Now().Sub(start).Milliseconds()
 	attrs := []any{"step", b.StepID, "snapshot", b.Snapshot.Kind}
-	if a.cfg.BootTimes != nil && err == nil {
+	if a.cfg.Parts.BootTimes != nil && err == nil {
 		// The driver's own measure of this reset, when it has one.
-		if t, ok := a.cfg.BootTimes.BootTiming(c.ID); ok && t.Kind == "reset" && !t.At.Before(start.Add(-time.Second)) {
+		if t, ok := a.cfg.Parts.BootTimes.BootTiming(c.ID); ok && t.Kind == "reset" && !t.At.Before(start.Add(-time.Second)) {
 			d = t.TotalMs
 			attrs = append(attrs, "downMs", t.DownMs, "restoreMs", t.RestoreMs, "upMs", t.UpMs, "seedMs", t.SeedMs, "readyMs", t.ReadyMs)
 		}
@@ -285,10 +319,10 @@ func (a *Agent) runReset(ctx context.Context, c *claims.Claim, b *protocol.Machi
 // containers came back on other addresses.
 func (a *Agent) composeUpAgain(ctx context.Context, c *claims.Claim, workload driver.MachineRef) error {
 	file, dir := c.Compose()
-	if a.cfg.Composer == nil || file == nil {
+	if a.cfg.Parts.Composer == nil || file == nil {
 		return nil
 	}
-	sources, err := a.cfg.Composer.Up(driver.WithCanaries(ctx, claimCanaries(c.Acquire)), workload, file, dir)
+	sources, err := a.cfg.Parts.Composer.Up(ctx, a.upRequest(c, workload, file, dir, claimCanaries(c.Acquire), nil))
 	if err != nil {
 		return fmt.Errorf("compose up after reset: %w", err)
 	}
@@ -301,9 +335,41 @@ func (a *Agent) composeUpAgain(ctx context.Context, c *claims.Claim, workload dr
 	// down -v made new containers and volumes: the recipe's steps run again,
 	// so the round starts as the first boot did.
 	if a.recipeSteps(c) {
-		if err := a.runRecipe(ctx, c, workload); err != nil {
+		if err := a.runRecipe(ctx, c, workload, nil); err != nil {
 			return fmt.Errorf("recipe after reset: %w", err)
 		}
 	}
 	return a.provisionObserverSQL(ctx, c, dir)
+}
+
+// machineHealth is the workload's health before a step; known false when
+// it could not be read (then only a machine that stopped counts after it).
+func (a *Agent) machineHealth(ctx context.Context, ref driver.MachineRef) (driver.MachineHealth, bool) {
+	if a.cfg.Parts.Health == nil || ref.MachineID == "" {
+		return driver.MachineHealth{}, false
+	}
+	h, err := a.cfg.Parts.Health.MachineHealth(ctx, ref)
+	if err != nil {
+		return driver.MachineHealth{}, false
+	}
+	return h, true
+}
+
+// healthAfter is the step's vmHealth from the workload's health after it:
+// crashed when it no longer runs, oom when its kernel killed for memory
+// during the step, ok otherwise (and when it cannot be read).
+func (a *Agent) healthAfter(ctx context.Context, c *claims.Claim, stepID string, ref driver.MachineRef, before driver.MachineHealth, known bool) protocol.VMHealth {
+	after, err := a.cfg.Parts.Health.MachineHealth(ctx, ref)
+	switch {
+	case err != nil:
+		c.Log.Warn("machine.health.unread", "step", stepID, "err", err)
+		return protocol.VMHealthOk
+	case !after.Running:
+		c.Log.Warn("machine.health", "step", stepID, "vmHealth", protocol.VMHealthCrashed)
+		return protocol.VMHealthCrashed
+	case known && after.OOMKills > before.OOMKills:
+		c.Log.Warn("machine.health", "step", stepID, "vmHealth", protocol.VMHealthOom, "oomKills", after.OOMKills-before.OOMKills)
+		return protocol.VMHealthOom
+	}
+	return protocol.VMHealthOk
 }

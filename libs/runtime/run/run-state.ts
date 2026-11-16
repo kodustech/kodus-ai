@@ -4,7 +4,7 @@ import type { ReplayLanes } from './replay-lanes';
 import type { ResponseDiff } from './response-diff';
 
 // Run lifecycle (docs §3). Every transition is one DBOS step in the
-// runtime-worker; the Mongo projection is written by the same step.
+// runtime-worker; the Postgres projection (runtime.runtime_runs) is written by the same step.
 
 export const RUN_STATES = [
     'queued',
@@ -16,6 +16,7 @@ export const RUN_STATES = [
     'regression',
     'partly_tested',
     'could_not_boot',
+    'nothing_to_test',
     'superseded',
     'cancelled',
     'timed_out',
@@ -25,14 +26,19 @@ export const RUN_STATES = [
 
 export type RunState = (typeof RUN_STATES)[number];
 
-/** The computed verdict, kept next to `state`. It decides the check even when the Run is halted. */
-export type VerdictState = 'no_regressions' | 'regression' | 'partly_tested' | 'could_not_boot';
+/**
+ * The computed verdict, kept next to `state`. It decides the check even when the Run is halted.
+ * `nothing_to_test`: the diff changes nothing that runs (only comments, layout or documentation,
+ * read by a parser before anything boots, entry-points/no-effect.ts).
+ */
+export type VerdictState = 'no_regressions' | 'regression' | 'partly_tested' | 'could_not_boot' | 'nothing_to_test';
 
 export const TERMINAL_STATES: ReadonlySet<RunState> = new Set([
     'no_regressions',
     'regression',
     'partly_tested',
     'could_not_boot',
+    'nothing_to_test',
     'skipped',
     'superseded',
     'cancelled',
@@ -43,7 +49,8 @@ export const TERMINAL_STATES: ReadonlySet<RunState> = new Set([
 
 const TRANSITIONS: Record<RunState, RunState[]> = {
     // partly_tested straight from the queue: a PR that changes only the recipe the Run replaces boots nothing (S-19).
-    queued: ['skipped', 'awaiting_approval', 'booting', 'partly_tested', 'timed_out', 'superseded', 'cancelled'],
+    // nothing_to_test straight from the queue: a PR whose every change is a comment, layout or documentation.
+    queued: ['skipped', 'awaiting_approval', 'booting', 'partly_tested', 'nothing_to_test', 'timed_out', 'superseded', 'cancelled'],
     awaiting_approval: ['queued', 'cancelled', 'superseded', 'timed_out'],
     booting: ['could_not_boot', 'regression', 'partly_tested', 'testing', 'errored', 'superseded', 'cancelled', 'timed_out', 'halted'],
     testing: [
@@ -60,6 +67,7 @@ const TRANSITIONS: Record<RunState, RunState[]> = {
     regression: [],
     partly_tested: [],
     could_not_boot: [],
+    nothing_to_test: [],
     skipped: [],
     superseded: [],
     cancelled: [],
@@ -137,6 +145,13 @@ export interface ProbeVerdict {
      * patch: where the Run page links the finding to the diff.
      */
     diffRef?: { file: string; line?: number };
+    /**
+     * The differences the PR's diff spells out (gate/intended-change.ts): each
+     * field with main's literal and the PR's, as the diff's removed and added
+     * lines hold them (redacted, cut to 200 characters), and the added line.
+     * Set, a finding is the PR's intended change (`intent: 'intended'`).
+     */
+    intendedChange?: Array<{ field: string; base: string; pr: string; file: string; line: number }>;
 }
 
 export interface VerdictInput {
@@ -155,15 +170,20 @@ export interface VerdictOutcome {
     verdictState: Exclude<VerdictState, 'could_not_boot'>;
     findings: ProbeVerdict[];
     intendedFindings: ProbeVerdict[];
+    /** Routes the PR adds that main does not have, answered on the PR: informational, never a finding. */
+    newEndpoints: ProbeVerdict[];
     uncoveredEntryPoints: string[];
     forcedNeutral: string[];
 }
 
-const DECIDED_WITHOUT_FINDING: ReadonlySet<Verdict> = new Set<Verdict>(['not_reproduced', 'pre_existing']);
+const DECIDED_WITHOUT_FINDING: ReadonlySet<Verdict> = new Set<Verdict>(['not_reproduced', 'pre_existing', 'new_endpoint']);
+/** What settles an entry point: the same result on both sides, or a route the PR adds that main does not have. */
+const SETTLES: ReadonlySet<Verdict> = new Set<Verdict>(['not_reproduced', 'new_endpoint']);
 
 /**
  * The verdict table of §3: regression > partly_tested > no_regressions.
- * success needs not_reproduced on every entry point of the diff. A
+ * success needs not_reproduced (or new_endpoint: a route the PR adds, absent
+ * on main and answered on the PR) on every entry point of the diff. A
  * pre_existing probe does not satisfy that requirement or invalidate another
  * not_reproduced probe. No probe on that entry point may be undecided: an
  * inconclusive, blocker or unverified probe keeps its entry point uncovered
@@ -174,7 +194,7 @@ export function decideRunVerdict(input: VerdictInput): VerdictOutcome {
     const unintended = findings.filter((p) => p.intent !== 'intended');
     const intended = findings.filter((p) => p.intent === 'intended');
 
-    const settled = new Set(input.probes.filter((p) => p.verdict === 'not_reproduced').map((p) => p.entryPoint));
+    const settled = new Set(input.probes.filter((p) => SETTLES.has(p.verdict)).map((p) => p.entryPoint));
     const undecided = new Set(input.probes.filter((p) => p.verdict !== 'finding' && !DECIDED_WITHOUT_FINDING.has(p.verdict)).map((p) => p.entryPoint));
     const uncovered = input.entryPoints.filter(
         (e) => !findings.some((f) => f.entryPoint === e) && (!settled.has(e) || undecided.has(e)),
@@ -190,21 +210,43 @@ export function decideRunVerdict(input: VerdictInput): VerdictOutcome {
     if (input.dependencyChangeUntested) forcedNeutral.push('dependency change not behavior-tested');
     if (input.diffTruncated) forcedNeutral.push('diff too large to test whole');
 
-    return { verdictState, findings: unintended, intendedFindings: intended, uncoveredEntryPoints: uncovered, forcedNeutral };
+    const newEndpoints = input.probes.filter((p) => p.verdict === 'new_endpoint');
+    return { verdictState, findings: unintended, intendedFindings: intended, newEndpoints, uncoveredEntryPoints: uncovered, forcedNeutral };
 }
-
-/** @deprecated use decideRunVerdict. */
-export const aggregateVerdicts = decideRunVerdict;
 
 export interface CheckOutcome {
     conclusion: CheckConclusion;
     title: string;
 }
 
-type VerdictForCheck = Pick<VerdictOutcome, 'verdictState' | 'findings' | 'intendedFindings' | 'forcedNeutral'> | { verdictState: 'could_not_boot' };
+type VerdictForCheck =
+    | (Pick<VerdictOutcome, 'verdictState' | 'findings' | 'intendedFindings' | 'forcedNeutral'> & Partial<Pick<VerdictOutcome, 'newEndpoints'>>)
+    | { verdictState: 'could_not_boot' };
 
 const emptyVerdict = (verdictState: VerdictState): VerdictForCheck =>
-    verdictState === 'could_not_boot' ? { verdictState } : { verdictState, findings: [], intendedFindings: [], forcedNeutral: [] };
+    verdictState === 'could_not_boot' ? { verdictState } : { verdictState, findings: [], intendedFindings: [], newEndpoints: [], forcedNeutral: [] };
+
+const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** The check of a diff that changes nothing that runs: neutral, never green (nothing was tested) and never "partly". */
+export const NOTHING_TO_TEST_TITLE = 'Nothing to test at runtime';
+
+/** The verdict of a diff that changes nothing that runs: no probe, no entry point, decided before anything boots. */
+export const NOTHING_TO_TEST: VerdictOutcome = { verdictState: 'nothing_to_test', findings: [], intendedFindings: [], newEndpoints: [], uncoveredEntryPoints: [], forcedNeutral: [] };
+
+/** A finding on a route the PR adds (5xx where main has no such route): it fails the check, but it is not a regression against main. */
+export const isNewEndpointError = (p: Pick<ProbeVerdict, 'verdict' | 'findingKind'>) => p.verdict === 'finding' && p.findingKind === 'new_endpoint_error';
+
+/** "1 regression · 1 error on a new endpoint": the findings of a failed check, by what they are. */
+function findingsTitle(findings: Pick<ProbeVerdict, 'verdict' | 'findingKind'>[]): string {
+    const errors = findings.filter(isNewEndpointError).length;
+    const regressions = findings.length - errors;
+    const parts = [
+        ...(regressions || !errors ? [count(regressions, 'regression')] : []),
+        ...(errors ? [count(errors, 'error on a new endpoint', 'errors on new endpoints')] : []),
+    ];
+    return parts.join(' · ');
+}
 
 /**
  * Maps state + verdictState to the check conclusion and the comment title (§3 table).
@@ -215,19 +257,20 @@ export function checkConclusionFor(state: RunState, verdict?: VerdictForCheck, r
         v && 'forcedNeutral' in v && v.forcedNeutral.length ? ` · ${v.forcedNeutral.join(' · ')}` : '';
     const fromVerdict = (v: NonNullable<typeof verdict>): CheckOutcome => {
         if (v.verdictState === 'could_not_boot') return { conclusion: 'neutral', title: 'Could not boot' };
+        if (v.verdictState === 'nothing_to_test') return { conclusion: 'neutral', title: NOTHING_TO_TEST_TITLE };
         const neutralForced = v.forcedNeutral.length > 0;
+        const added = v.newEndpoints?.length ? ` · ${count(v.newEndpoints.length, 'new endpoint')}` : '';
         if (v.verdictState === 'regression') {
-            const n = v.findings.length;
-            return { conclusion: 'failure', title: `${n} regression${n === 1 ? '' : 's'}${suffix(v)}` };
+            return { conclusion: 'failure', title: `${findingsTitle(v.findings)}${added}${suffix(v)}` };
         }
         if (v.verdictState === 'partly_tested') {
             const intended = v.intendedFindings.length;
             const title = intended ? `Partly tested · ${intended} intended change${intended === 1 ? '' : 's'}` : 'Partly tested';
-            return { conclusion: 'neutral', title: `${title}${suffix(v)}` };
+            return { conclusion: 'neutral', title: `${title}${added}${suffix(v)}` };
         }
         return {
             conclusion: neutralForced ? 'neutral' : 'success',
-            title: `No regressions in what was tested${suffix(v)}`,
+            title: `No regressions in what was tested${added}${suffix(v)}`,
         };
     };
 
@@ -236,6 +279,7 @@ export function checkConclusionFor(state: RunState, verdict?: VerdictForCheck, r
         case 'regression':
         case 'partly_tested':
         case 'could_not_boot':
+        case 'nothing_to_test':
             return fromVerdict(verdict ?? emptyVerdict(state));
         case 'halted': {
             const base = verdict ? fromVerdict(verdict) : { conclusion: 'neutral' as const, title: 'Partly tested' };
@@ -259,6 +303,3 @@ export function checkConclusionFor(state: RunState, verdict?: VerdictForCheck, r
             return { conclusion: 'neutral', title: state };
     }
 }
-
-/** @deprecated use checkConclusionFor. */
-export const checkFor = checkConclusionFor;

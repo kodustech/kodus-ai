@@ -19,6 +19,7 @@ import (
 func Serve(ctx context.Context, socketPath string, vault VaultAdmin, log *slog.Logger) error {
 	return serve(ctx, socketPath, vault, log, nil)
 }
+
 func serve(ctx context.Context, path string, v VaultAdmin, log *slog.Logger, ready chan<- struct{}) error {
 	if ctx.Err() != nil {
 		return failure("cancelled", 408)
@@ -30,7 +31,7 @@ func serve(ctx context.Context, path string, v VaultAdmin, log *slog.Logger, rea
 	if e != nil {
 		return e
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	handler := &handler{vault: v, slots: make(chan struct{}, 4), log: log}
 	s := &http.Server{Handler: handler, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 5 * time.Second, MaxHeaderBytes: 1024, BaseContext: func(net.Listener) context.Context { return ctx }, ErrorLog: slog.NewLogLogger(slog.NewTextHandler(io.Discard, nil), slog.LevelError)}
 	stopped := make(chan struct{})
@@ -166,6 +167,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
 func vaultFailure(e error) error {
 	var typed *Error
 	if errors.As(e, &typed) {
@@ -197,9 +199,10 @@ func (w *responseWriter) WriteHeader(status int) {
 	w.status = status
 	w.ResponseWriter.WriteHeader(status)
 }
+
 func (w *responseWriter) Write(b []byte) (int, error) {
 	if w.status == 0 {
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 	}
 	return w.ResponseWriter.Write(b)
 }

@@ -14,8 +14,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -28,12 +30,21 @@ const (
 	SignatureHeader = "X-Kodus-Signature"
 	// SignedAtHeader is the unix time the removal was signed at.
 	SignedAtHeader = "X-Kodus-Signed-At"
+	// DenyFingerprintHeader is the fingerprint of the operator's deny list
+	// a component enforces (netguard.DenyList.Fingerprint), on its answer
+	// to a policy push.
+	DenyFingerprintHeader = "X-Kodus-Deny-Fingerprint"
 	// MaxRemovalSkew is how far a removal's signing time may be from now.
 	MaxRemovalSkew = 5 * time.Minute
 	// maxPolicyBytes fits a large go.sum's pins (ClaimPolicy.GoPins: a few
 	// thousand module@version); the policy is signed and sent over mTLS.
 	maxPolicyBytes = 2 << 20
 )
+
+// ErrDenyListsDiffer is a push the components took with different operator
+// deny lists: the proxy refuses what the resolver answers, or the reverse.
+// The push fails, so no claim runs on a policy enforced two ways.
+var ErrDenyListsDiffer = errors.New("control: the components enforce different operator deny lists (-deny-hosts, -owned-hosts): give them the same values")
 
 func removalMessage(claimID string, at int64) []byte {
 	return []byte("delete:" + claimID + ":" + strconv.FormatInt(at, 10))
@@ -56,11 +67,22 @@ type Server struct {
 	// Memory policy and connection callbacks are dropped first; failure never
 	// keeps authority live, but returns 503 instead of claiming durability.
 	DurableDelete func(context.Context, string) error
+	// Enforceable, when set, is asked about each verified policy before it
+	// is stored: a component that cannot enforce it as signed (the proxy
+	// with no injector for a credentialed host) refuses it with 422 and its
+	// reason, and keeps what it had, so the agent learns at the push and
+	// not from each refused request.
+	Enforceable func(policy.ClaimPolicy) error
 	// OnPolicy and OnDelete run after the store changed: the proxy
 	// re-checks the claim's live connections, the resolver drops its
 	// answers.
 	OnPolicy func(policy.ClaimPolicy)
 	OnDelete func(claimID string)
+	// DenyFingerprint is the operator deny list this component enforces
+	// (netguard.DenyList.Fingerprint), sent on every push answer so the
+	// agent can check the proxy and the resolver agree. Empty: a component
+	// with no deny list (the injector) reports none.
+	DenyFingerprint string
 }
 
 func (s *Server) now() time.Time {
@@ -103,12 +125,21 @@ func (s *Server) put(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), code)
 		return
 	}
+	if s.Enforceable != nil {
+		if err := s.Enforceable(p); err != nil {
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+	}
 	if err := s.Policies.Put(p); err != nil {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
 	if s.OnPolicy != nil {
 		s.OnPolicy(p)
+	}
+	if s.DenyFingerprint != "" {
+		w.Header().Set(DenyFingerprintHeader, s.DenyFingerprint)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -224,26 +255,49 @@ func (c Pusher) Push(ctx context.Context, p policy.ClaimPolicy) error {
 	if err != nil {
 		return err
 	}
-	return c.each(ctx, func(ep Endpoint) (*http.Request, error) {
+	reported := map[string]string{}
+	err = c.each(func(ep Endpoint) (*http.Request, error) {
 		return http.NewRequestWithContext(ctx, http.MethodPut, ep.URL+"/v1/policy", bytes.NewReader(body))
+	}, func(ep Endpoint, resp *http.Response) {
+		if f := resp.Header.Get(DenyFingerprintHeader); f != "" {
+			reported[ep.Name] = f
+		}
 	})
+	return errors.Join(err, denyListsAgree(reported))
+}
+
+// denyListsAgree: every component that reported its operator deny list
+// (the proxy, the resolver) reported the same one. A component of an older
+// release reports none and is not compared.
+func denyListsAgree(reported map[string]string) error {
+	var first, firstName string
+	for _, name := range slices.Sorted(maps.Keys(reported)) {
+		if first == "" {
+			first, firstName = reported[name], name
+			continue
+		}
+		if reported[name] != first {
+			return fmt.Errorf("%w: %s has %s, %s has %s", ErrDenyListsDiffer, firstName, first, name, reported[name])
+		}
+	}
+	return nil
 }
 
 func (c Pusher) Remove(ctx context.Context, claimID string) error {
 	sig, at := SignRemoval(c.Key, claimID, c.now())
-	return c.each(ctx, func(ep Endpoint) (*http.Request, error) {
+	return c.each(func(ep Endpoint) (*http.Request, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, ep.URL+"/v1/policy/"+url.PathEscape(claimID), nil)
 		if err == nil {
 			req.Header.Set(SignatureHeader, sig)
 			req.Header.Set(SignedAtHeader, at)
 		}
 		return req, err
-	})
+	}, nil)
 }
 
 // each sends one request per endpoint; every endpoint that did not answer
-// 204 is in the error, by name.
-func (c Pusher) each(ctx context.Context, build func(ep Endpoint) (*http.Request, error)) error {
+// 204 is in the error, by name. answered, when set, sees each 204.
+func (c Pusher) each(build func(ep Endpoint) (*http.Request, error), answered func(Endpoint, *http.Response)) error {
 	if len(c.Endpoints) == 0 {
 		return errors.New("control: no endpoints")
 	}
@@ -264,9 +318,11 @@ func (c Pusher) each(ctx context.Context, build func(ep Endpoint) (*http.Request
 			continue
 		}
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusNoContent {
 			errs = append(errs, fmt.Errorf("%s: status %d: %s", ep.Name, resp.StatusCode, bytes.TrimSpace(msg)))
+		} else if answered != nil {
+			answered(ep, resp)
 		}
 	}
 	return errors.Join(errs...)

@@ -131,6 +131,8 @@ func (d *Driver) BootTiming(claimID string) (driver.BootTiming, bool) {
 	if !ok {
 		return driver.BootTiming{}, false
 	}
-	return driver.BootTiming{Kind: r.Kind, At: r.At, TotalMs: r.TotalMs, DownMs: r.DownMs, BuildMs: r.BuildMs, UpMs: r.UpMs, SeedMs: r.SeedMs,
-		ReadyMs: r.ReadyMs, SnapshotMs: r.SnapshotMs, RestoreMs: r.RestoreMs}, true
+	return driver.BootTiming{
+		Kind: r.Kind, At: r.At, TotalMs: r.TotalMs, DownMs: r.DownMs, BuildMs: r.BuildMs, UpMs: r.UpMs, SeedMs: r.SeedMs,
+		ReadyMs: r.ReadyMs, SnapshotMs: r.SnapshotMs, RestoreMs: r.RestoreMs,
+	}, true
 }

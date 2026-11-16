@@ -1,5 +1,9 @@
 import type { Pool } from 'pg';
 
+import { lockKey, lockStatement } from '@libs/runtime/run/adapters/advisory-lock';
+
+import { LIVE_CLAIM_STATES } from '@libs/runtime/contracts/enums';
+
 import type {
     PhysicalAdmissionRequest,
     PhysicalAdmissionResult,
@@ -53,10 +57,8 @@ export class PgPhysicalAdmissionDirectory implements PhysicalAdmissionDirectory 
         return this.opts.inTransaction(async (db) => {
             await db.query("SET LOCAL lock_timeout = '5s'");
             await db.query("SET LOCAL statement_timeout = '5s'");
-            await db.query(
-                "SELECT pg_advisory_xact_lock(hashtext('runtime.cell_reservation:' || $1))",
-                [req.organizationId],
-            );
+            const lock = lockStatement('pg_advisory_xact_lock', lockKey('cell_reservation', req.organizationId));
+            await db.query(lock.text, lock.values);
             await db.query(
                 'DELETE FROM runtime.runtime_cell_reservations WHERE org_id=$1 AND expires_at <= now()',
                 [req.organizationId],
@@ -101,7 +103,7 @@ export class PgPhysicalAdmissionDirectory implements PhysicalAdmissionDirectory 
                 SELECT c.cell_id FROM runtime.runtime_claims c WHERE c.org_id=$1 AND c.state=ANY($3::text[]) AND c.released_at IS NULL AND c.hard_expires_at>now() AND NOT(c.claim_id=ANY($2::text[]))
                 UNION ALL SELECT r.cell_id FROM runtime.runtime_cell_reservations r WHERE r.org_id=$1 AND r.expires_at>now() AND NOT(r.claim_id=ANY($2::text[])) AND NOT EXISTS(SELECT 1 FROM runtime.runtime_claims c WHERE c.claim_id=r.claim_id AND (r.owner_token IS NULL OR (c.released_at IS NULL AND c.state=ANY($3::text[]) AND c.hard_expires_at>now())))
                 ) m JOIN runtime.runtime_cell_sessions s USING(cell_id) WHERE s.owner='kodus'`,
-                        [req.organizationId, ids, ['pending', 'bound', 'held']],
+                        [req.organizationId, ids, [...LIVE_CLAIM_STATES]],
                     )
                 ).rows[0]?.n ?? 0,
             );
@@ -224,10 +226,8 @@ export class PgPhysicalAdmissionDirectory implements PhysicalAdmissionDirectory 
         return this.opts.inTransaction(async (db) => {
             await db.query("SET LOCAL lock_timeout = '5s'");
             await db.query("SET LOCAL statement_timeout = '5s'");
-            await db.query(
-                "SELECT pg_advisory_xact_lock(hashtext('runtime.cell_reservation:' || $1))",
-                [ticket.organizationId],
-            );
+            const lock = lockStatement('pg_advisory_xact_lock', lockKey('cell_reservation', ticket.organizationId));
+            await db.query(lock.text, lock.values);
             const current = await db.query(
                 'SELECT claim_id FROM runtime.runtime_cell_reservations WHERE org_id=$1 AND cell_id=$2 AND owner_token=$3 AND expires_at>now() FOR UPDATE',
                 [ticket.organizationId, ticket.cellId, ticket.ticketOwnerToken],

@@ -1,8 +1,8 @@
-import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryDistributedLocks } from '../../shared/persistence/locks';
 import { RunRequestedHandler } from './run-requested.handler';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/testing';
+import { InMemoryDistributedLocks } from '../../shared/persistence/testing';
 
 it('does not admit a terminal Run again when its request is redelivered', async () => {
     const request = shopRunRequest();

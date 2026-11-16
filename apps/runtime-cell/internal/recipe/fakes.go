@@ -61,6 +61,7 @@ func fakeNode(n *yaml.Node) (*yaml.Node, error) {
 	}
 	return n, nil
 }
+
 func (r *Recipe) normalizeFakes() error {
 	if r.Fakes.IsZero() {
 		return nil

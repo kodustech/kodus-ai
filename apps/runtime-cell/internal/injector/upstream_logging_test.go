@@ -110,7 +110,7 @@ func TestReflectedCredentialHeaderNameIsRefused(t *testing.T) {
 	})
 	ctx := context.WithValue(context.Background(), ctxKey{}, connInfo{pol: policy.ClaimPolicy{OrgID: "org-a", ClaimID: "claim-a"}, host: host, upstream: upstream})
 	w := httptest.NewRecorder()
-	in.proxyWithCredential(w, httptest.NewRequest("GET", "https://"+host+"/", nil).WithContext(ctx))
+	in.proxyWithCredential(w, httptest.NewRequest(http.MethodGet, "https://"+host+"/", nil).WithContext(ctx))
 	for name := range w.Header() {
 		if strings.EqualFold(name, strings.TrimPrefix(secret, "Bearer ")) {
 			t.Fatal("credential escaped in response header name")
@@ -135,7 +135,7 @@ func TestCredentialLookupFailureLogsClosedCodeWithoutProviderDetails(t *testing.
 		in := &Injector{Log: slog.New(slog.NewJSONHandler(&logs, nil)), Vault: auditVault(func(context.Context, string, string, string) (Credential, error) { return Credential{}, failure.err })}
 		in.defaults()
 		ctx := context.WithValue(context.Background(), ctxKey{}, connInfo{pol: policy.ClaimPolicy{OrgID: "org-a", ClaimID: "claim-a"}, host: host})
-		r := httptest.NewRequest("GET", "https://"+host+"/", nil).WithContext(ctx)
+		r := httptest.NewRequest(http.MethodGet, "https://"+host+"/", nil).WithContext(ctx)
 		w := httptest.NewRecorder()
 		in.proxyWithCredential(w, r)
 		if w.Code != 403 || strings.Contains(logs.String(), secret) || !strings.Contains(logs.String(), `"code":"`+failure.code+`"`) {

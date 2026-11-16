@@ -15,6 +15,7 @@ func systemdPropertiesFixture() map[string]any {
 		"MemoryMax": uint64(1024), "MemorySwapMax": uint64(0), "TasksMax": uint64(10), "CPUQuotaPerSecUSec": uint64(500000), "CPUQuotaPeriodUSec": uint64(100000),
 	}
 }
+
 func TestSystemdPropertiesRequireExactTypesAndAllResourceCeilings(t *testing.T) {
 	p := systemdPropertiesFixture()
 	got, err := decodeSystemdUnit(p)
@@ -49,6 +50,7 @@ func TestSystemdPropertiesRequireExactTypesAndAllResourceCeilings(t *testing.T) 
 		t.Fatal("delegation lost before ownership validation")
 	}
 }
+
 func TestSystemdLifecycleRefusesLostRootClosedBusWrongMembershipAndUnsupportedVersion(t *testing.T) {
 	m, b, r := fakeSystemd(t)
 	m.verifyRoot = func() error { return errors.New("root inode changed") }
@@ -86,6 +88,7 @@ func TestSystemdLifecycleRefusesLostRootClosedBusWrongMembershipAndUnsupportedVe
 		}
 	}
 }
+
 func TestSystemdPruneRetainsPopulatedClaimsAndReportsBusFailure(t *testing.T) {
 	m, b, r := fakeSystemd(t)
 	name, err := m.Ensure(testKey, testLimits)

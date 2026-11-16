@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
 
@@ -22,9 +22,6 @@ import (
 // labelMachine and the cell's label, destroy and the sweep find it. Compose
 // does not label it, so a down -v never takes it.
 const labelSnapshotOf = "kodus.snapshot-of"
-
-// ErrNoSnapshotDocker: the Docker in use cannot copy volumes.
-var errNoSnapshotDocker = errors.New("this Docker cannot copy volumes")
 
 func wantsSnapshot(rec *recipe.Recipe) bool {
 	return rec != nil && rec.ResetStrategy() == recipe.ResetSnapshot
@@ -50,14 +47,6 @@ func projectVolumes(project string, plan *bootPlan) (volumes, services []string)
 	sort.Strings(volumes)
 	sort.Strings(services)
 	return volumes, services
-}
-
-func (d *Driver) snapshotDocker() (SnapshotDocker, error) {
-	sd, ok := d.docker.(SnapshotDocker)
-	if !ok {
-		return nil, errNoSnapshotDocker
-	}
-	return sd, nil
 }
 
 func (d *Driver) hasSnapshot(name string) bool {
@@ -93,10 +82,7 @@ func (d *Driver) snapshots(name string) map[string]string {
 // copy did. An error from the copy is a snapshot not taken (the caller
 // falls back); an error from bringing it up again is a broken machine.
 func (d *Driver) takeSnapshot(ctx context.Context, ref driver.MachineRef, plan *bootPlan) (copyErr, upErr error) {
-	sd, err := d.snapshotDocker()
-	if err != nil {
-		return err, nil
-	}
+	sd := d.docker
 	volumes, services := projectVolumes(ref.MachineID, plan)
 	if len(volumes) == 0 {
 		return errors.New("the project has no named volume to snapshot"), nil
@@ -129,10 +115,7 @@ func (d *Driver) takeSnapshot(ctx context.Context, ref driver.MachineRef, plan *
 // restoreSnapshot stops every service, empties each named volume and
 // copies its snapshot back. The caller brings the project up.
 func (d *Driver) restoreSnapshot(ctx context.Context, ref driver.MachineRef, plan *bootPlan) error {
-	sd, err := d.snapshotDocker()
-	if err != nil {
-		return err
-	}
+	sd := d.docker
 	snaps := d.snapshots(ref.MachineID)
 	volumes, _ := projectVolumes(ref.MachineID, plan)
 	for _, v := range volumes {
@@ -156,10 +139,7 @@ func (d *Driver) restoreSnapshot(ctx context.Context, ref driver.MachineRef, pla
 
 // removeSnapshots removes the machine's snapshot volumes.
 func (d *Driver) removeSnapshots(ctx context.Context, machine string) error {
-	sd, ok := d.docker.(SnapshotDocker)
-	if !ok {
-		return nil
-	}
+	sd := d.docker
 	vols, err := sd.Volumes(ctx, map[string]string{labelMachine: machine, labelSnapshotOf: ""})
 	if err != nil {
 		return err
@@ -174,10 +154,7 @@ func (d *Driver) removeSnapshots(ctx context.Context, machine string) error {
 // sweepSnapshots removes this cell's snapshot volumes whose machine the
 // state file no longer knows (a crash between destroy and its cleanup).
 func (d *Driver) sweepSnapshots(ctx context.Context) error {
-	sd, ok := d.docker.(SnapshotDocker)
-	if !ok {
-		return nil
-	}
+	sd := d.docker
 	vols, err := sd.Volumes(ctx, map[string]string{dockercli.LabelFromTag(driver.TagCell): d.cfg.CellID, labelSnapshotOf: ""})
 	if err != nil {
 		return err

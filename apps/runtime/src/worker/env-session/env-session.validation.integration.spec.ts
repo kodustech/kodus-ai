@@ -1,25 +1,31 @@
-import { randomBytes, randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
 import { Pool } from 'pg';
 import { PgEnvSessionStore } from './env-session.store';
+import { isolatedDatabase } from '../../testing/isolated-database';
 
-// Dedicated disposable database only: never activate against the product/runtime DB.
-const url = process.env.ENV_SESSION_VALIDATION_IT_DATABASE_URL;
-(url ? describe : describe.skip)(
+// A database of its own, on the server the Runtime's integration suites use
+// (or a dedicated one): never the product's (isolated-database.ts).
+const url = process.env.ENV_SESSION_VALIDATION_IT_DATABASE_URL ?? process.env.RUNTIME_IT_DATABASE_URL;
+/** An empty database with the env-session schema, released after `body`. */
+async function withDatabase(body: (pool: Pool) => Promise<void>) {
+    const database = isolatedDatabase(url!, 'env_session_validation');
+    let pool: Pool | undefined;
+    try {
+        await database.create();
+        pool = new Pool({ connectionString: database.url, max: 1 });
+        await PgEnvSessionStore.ensureSchema(pool);
+        await body(pool);
+    } finally {
+        await pool?.end();
+        await database.drop();
+    }
+}
+
+(url && process.env.SKIP_INTEGRATION !== 'true' ? describe : describe.skip)(
     'immutable validation session pins in real PostgreSQL',
     () => {
         it('persists the pin across store instances and refuses updates to its authority', async () => {
-            const owner = new Pool({ connectionString: url, max: 1 });
-            const database = `validation_fixture_${randomBytes(8).toString('hex')}`;
-            let pool: Pool | undefined;
-            try {
-                await owner.query(`CREATE DATABASE "${database}"`);
-                const connection = new URL(url!);
-                connection.pathname = `/${database}`;
-                pool = new Pool({
-                    connectionString: connection.toString(),
-                    max: 1,
-                });
-                await PgEnvSessionStore.ensureSchema(pool);
+            await withDatabase(async (pool) => {
                 const store = new PgEnvSessionStore(pool);
                 const sessionId = randomUUID();
                 const snapshot = {
@@ -58,11 +64,34 @@ const url = process.env.ENV_SESSION_VALIDATION_IT_DATABASE_URL;
                         ?.validationSnapshot?.checks[0].run,
                 ).toBe('pnpm test');
                 expect(await another.get('another-org', sessionId)).toBeNull();
-            } finally {
-                await pool?.end();
-                await owner.query(`DROP DATABASE IF EXISTS "${database}"`);
-                await owner.end();
-            }
+            });
+        });
+
+        it("keeps a multi-repository session's layout across store instances, and no update changes it", async () => {
+            await withDatabase(async (pool) => {
+                const sessionId = randomUUID();
+                const layout = [
+                    { repositoryId: 'repo', fullName: 'acme/shop', alias: 'shop', role: 'primary' as const, sha: 'c'.repeat(40) },
+                    { repositoryId: 'repo-api', fullName: 'acme/api', alias: 'api', role: 'member' as const, sha: 'd'.repeat(40) },
+                ];
+                await new PgEnvSessionStore(pool).insert({
+                    sessionId,
+                    organizationId: 'org-fixture',
+                    teamId: 'team',
+                    keyId: 'key',
+                    repositoryId: 'repo',
+                    environmentId: 'env',
+                    sha: 'c'.repeat(40),
+                    repositories: layout,
+                    state: 'acquiring',
+                    createdAt: new Date().toISOString(),
+                    lastUsedAt: new Date().toISOString(),
+                });
+                const another = new PgEnvSessionStore(pool);
+                await another.update('org-fixture', sessionId, { state: 'ready', repositories: [layout[0]] });
+                const row = await another.get('org-fixture', sessionId);
+                expect(row).toMatchObject({ state: 'ready', repositories: layout });
+            });
         });
     },
 );

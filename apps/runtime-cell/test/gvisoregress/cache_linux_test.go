@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver/drivertest"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/policy"
 )
@@ -45,8 +45,10 @@ func TestAPRBuildReadsTheDefaultBranchsBuildCache(t *testing.T) {
 	compose := []byte("services:\n  api:\n    build: ./app\n")
 	registryOnly := []string{"registry-1.docker.io", "auth.docker.io", "production.cloudfront.docker.com"}
 
-	d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{CellID: cell, HolderImage: "alpine:3.20",
-		WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name, BuilderImage: builderImage})
+	d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{
+		CellID: cell, HolderImage: "alpine:3.20",
+		WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name, BuilderImage: builderImage,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +58,7 @@ func TestAPRBuildReadsTheDefaultBranchsBuildCache(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = d.ReleaseClaim(context.Background(), n) })
+		t.Cleanup(func() { _ = d.ReleaseClaim(context.WithoutCancel(ctx), n) })
 		spec := drivertest.BaseSpec(cell, id, n)
 		spec.OrgID, spec.EnvironmentID, spec.Setup = org, env, setup
 		spec.ExpiresAt, spec.HardExpiresAt = time.Now().Add(10*time.Minute), time.Now().Add(time.Hour)
@@ -64,10 +66,12 @@ func TestAPRBuildReadsTheDefaultBranchsBuildCache(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = d.Destroy(context.Background(), ref) })
-		if err := e.push.Push(ctx, policy.ClaimPolicy{ClaimID: id, OrgID: org, Phase: policy.PhaseBuild,
+		t.Cleanup(func() { _ = d.Destroy(context.WithoutCancel(ctx), ref) })
+		if err := e.push.Push(ctx, policy.ClaimPolicy{
+			ClaimID: id, OrgID: org, Phase: policy.PhaseBuild,
 			Sources: append([]string{ref.PrivateAddress}, n.Sources...), Allow: allow,
-			SteerTo: n.EgressAddress, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now()}); err != nil {
+			SteerTo: n.EgressAddress, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now(),
+		}); err != nil {
 			t.Fatalf("push policy: %v", err)
 		}
 		return ref
@@ -80,10 +84,10 @@ func TestAPRBuildReadsTheDefaultBranchsBuildCache(t *testing.T) {
 	})
 
 	setup := claim(t, "claim-setup", "env-cache", true, buildHosts)
-	if _, err := d.Up(ctx, setup, compose, project); err != nil {
+	if _, err := d.Up(ctx, driver.UpRequest{Ref: setup, Compose: compose, ProjectDir: project}); err != nil {
 		t.Fatalf("setup up: %v", err)
 	}
-	if err := d.PinBakeSource(setup); err != nil {
+	if err := d.PinBakeSource(t.Context(), setup); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.Destroy(ctx, setup); err != nil {
@@ -96,7 +100,7 @@ func TestAPRBuildReadsTheDefaultBranchsBuildCache(t *testing.T) {
 	write("app.txt", "the pr\n")
 	pr := claim(t, "claim-pr", "env-cache", false, registryOnly)
 	start := time.Now()
-	if _, err := d.Up(ctx, pr, compose, project); err != nil {
+	if _, err := d.Up(ctx, driver.UpRequest{Ref: pr, Compose: compose, ProjectDir: project}); err != nil {
 		t.Fatalf("a PR build with the mirror blocked did not take the RUN from the cache: %v", err)
 	}
 	t.Logf("PR build from the cache %s", time.Since(start).Round(time.Millisecond))
@@ -107,7 +111,7 @@ func TestAPRBuildReadsTheDefaultBranchsBuildCache(t *testing.T) {
 
 	// Control: no cache, same build, same blocked mirror.
 	cold := claim(t, "claim-cold", "env-nocache", false, registryOnly)
-	if _, err := d.Up(ctx, cold, compose, project); err == nil || !strings.Contains(err.Error(), "apk add") {
+	if _, err := d.Up(ctx, driver.UpRequest{Ref: cold, Compose: compose, ProjectDir: project}); err == nil || !strings.Contains(err.Error(), "apk add") {
 		t.Fatalf("without a cache the RUN should fail with the mirror blocked, got %v", err)
 	}
 }

@@ -32,7 +32,8 @@ type syncBuf struct {
 }
 
 func (s *syncBuf) Write(p []byte) (int, error) { s.mu.Lock(); defer s.mu.Unlock(); return s.b.Write(p) }
-func (s *syncBuf) String() string              { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
+
+func (s *syncBuf) String() string { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
 
 // hubConn is a fake hub connection: it records every frame and answers
 // each Request with the next error of its script (nil when empty).
@@ -109,7 +110,7 @@ func (s stubTransport) Exec(ctx context.Context, _ driver.MachineRef, req kodyex
 	return s.exec(ctx, req)
 }
 
-func (s stubTransport) Upload(context.Context, driver.MachineRef, string, string) error {
+func (s stubTransport) Upload(context.Context, driver.MachineRef, string, string, func(string)) error {
 	return s.upload
 }
 
@@ -199,7 +200,7 @@ func newHarness(t *testing.T, edit ...func(*Config)) *harness {
 	repo := repoServer(t)
 	h := &harness{t: t, drv: d, conn: newHubConn(), clk: clock.NewFake(time.Now()), egress: &recEgress{}, keys: &recKeys{}, logs: &syncBuf{}}
 	cfg := Config{
-		CellID: "cell-1", Driver: d, Transport: stubTransport{},
+		CellID: "cell-1", Driver: d, Parts: driver.Parts{Baker: d, Resetter: d}, Transport: stubTransport{},
 		Observers: func(context.Context, ClaimInfo, []observer.Target) (observer.Client, error) {
 			return nil, errors.New("no observer in this test")
 		},
@@ -241,6 +242,8 @@ func msg(claimID string, typ protocol.MessageType, body any) *protocol.Message {
 }
 
 // handle runs a frame through Handle, and a deferred answer to its end.
+//
+//nolint:contextcheck,nolintlint // the test hub sends this frame on its own, not under the caller's context (contextcheck reports at the callers, so nolintlint sees the directive as unused)
 func (h *harness) handle(claimID string, typ protocol.MessageType, body any) error {
 	err := h.a.Handle(context.Background(), msg(claimID, typ, body))
 	if run, ok := hubclient.IsLater(err); ok {

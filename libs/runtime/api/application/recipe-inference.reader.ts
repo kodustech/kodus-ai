@@ -47,6 +47,7 @@ export async function inferRecipeAtCommit(git: Pick<RuntimeGitPort, 'readFileAtC
     try {
         return inferRecipe(await readInferenceFiles(git, target));
     } catch {
+        // Every caller reports null itself (the setup warns, the proposal answers unavailable).
         return null;
     }
 }

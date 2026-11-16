@@ -50,13 +50,13 @@ func TestAuthoredFilesAreWrittenIntoTheCheckout(t *testing.T) {
 	if err := ApplyRecipe(dir, r); err != nil {
 		t.Fatal(err)
 	}
-	if got := mustRead(t, filepath.Join(dir, ".kodus/Dockerfile.kody")); got != dockerfile {
+	if got := mustRead(t, filepath.Join(dir, ".kodus", "Dockerfile.kody")); got != dockerfile {
 		t.Fatalf("Dockerfile %q", got)
 	}
-	if got := mustRead(t, filepath.Join(dir, ".kodus/compose.kody.yaml")); got != compose {
+	if got := mustRead(t, filepath.Join(dir, ".kodus", "compose.kody.yaml")); got != compose {
 		t.Fatalf("compose %q", got)
 	}
-	st, err := os.Lstat(filepath.Join(dir, ".kodus/Dockerfile.kody"))
+	st, err := os.Lstat(filepath.Join(dir, ".kodus", "Dockerfile.kody"))
 	if err != nil || st.Mode().Perm() != 0o644 || !st.Mode().IsRegular() {
 		t.Fatalf("mode %v %v", st.Mode(), err)
 	}
@@ -131,16 +131,16 @@ func TestAuthoredFilesNeverReplaceAFileOfTheCheckout(t *testing.T) {
 	dir := checkout(t, "")
 	_ = os.MkdirAll(filepath.Join(dir, ".kodus"), 0o755)
 	planted := "FROM evil.example/backdoor:latest\n"
-	if err := os.WriteFile(filepath.Join(dir, ".kodus/Dockerfile.kody"), []byte(planted), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".kodus", "Dockerfile.kody"), []byte(planted), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	wantRefused(t, WriteAuthoredFiles(dir, authoredRecipe(kody(".kodus/Dockerfile.kody", dockerfile))), "is already in the checkout with other content")
-	if got := mustRead(t, filepath.Join(dir, ".kodus/Dockerfile.kody")); got != planted {
+	if got := mustRead(t, filepath.Join(dir, ".kodus", "Dockerfile.kody")); got != planted {
 		t.Fatalf("the PR's file was replaced: %q", got)
 	}
 	// Same length, other bytes: refused all the same.
 	same := strings.Repeat("x", len(dockerfile))
-	_ = os.WriteFile(filepath.Join(dir, ".kodus/Dockerfile"), []byte(same), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, ".kodus", "Dockerfile"), []byte(same), 0o644)
 	wantRefused(t, WriteAuthoredFiles(dir, authoredRecipe(kody(".kodus/Dockerfile", dockerfile))), "with other content")
 }
 
@@ -149,7 +149,7 @@ func TestAuthoredFilesNeverReplaceAFileOfTheCheckout(t *testing.T) {
 func TestAuthoredFilesAcceptTheSameBytesAlreadyThere(t *testing.T) {
 	dir := checkout(t, "")
 	_ = os.MkdirAll(filepath.Join(dir, ".kodus"), 0o755)
-	if err := os.WriteFile(filepath.Join(dir, ".kodus/Dockerfile.kody"), []byte(dockerfile), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".kodus", "Dockerfile.kody"), []byte(dockerfile), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := WriteAuthoredFiles(dir, authoredRecipe(kody(".kodus/Dockerfile.kody", dockerfile))); err != nil {
@@ -165,12 +165,12 @@ func TestAuthoredFilesRefuseALinkAtTheFilePath(t *testing.T) {
 	if err := os.WriteFile(outside, []byte(dockerfile), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(outside, filepath.Join(dir, ".kodus/Dockerfile.kody")); err != nil {
+	if err := os.Symlink(outside, filepath.Join(dir, ".kodus", "Dockerfile.kody")); err != nil {
 		t.Fatal(err)
 	}
 	// A dangling one too: O_CREAT alone would create its target.
 	dangling := filepath.Join(t.TempDir(), "created-through-the-link")
-	if err := os.Symlink(dangling, filepath.Join(dir, ".kodus/Dockerfile")); err != nil {
+	if err := os.Symlink(dangling, filepath.Join(dir, ".kodus", "Dockerfile")); err != nil {
 		t.Fatal(err)
 	}
 	wantRefused(t, WriteAuthoredFiles(dir, authoredRecipe(kody(".kodus/Dockerfile.kody", dockerfile))), "is not a regular file")
@@ -184,7 +184,7 @@ func TestAuthoredFilesRefuseALinkAtTheFilePath(t *testing.T) {
 func TestAuthoredFilesRefuseAFIFOWithoutBlocking(t *testing.T) {
 	dir := checkout(t, "")
 	_ = os.MkdirAll(filepath.Join(dir, ".kodus"), 0o755)
-	if err := syscall.Mkfifo(filepath.Join(dir, ".kodus/Dockerfile.kody"), 0o644); err != nil {
+	if err := syscall.Mkfifo(filepath.Join(dir, ".kodus", "Dockerfile.kody"), 0o644); err != nil {
 		t.Skip("no mkfifo here:", err)
 	}
 	wantRefused(t, WriteAuthoredFiles(dir, authoredRecipe(kody(".kodus/Dockerfile.kody", dockerfile))), "is not a regular file")

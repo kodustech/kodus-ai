@@ -19,6 +19,33 @@ export const HEALTH_RETRY_INTERVAL_SECONDS = 5;
  * is never compared.
  */
 export const STABLE_ERROR_TRIES = 6;
+/**
+ * The span the same 5xx must cover besides STABLE_ERROR_TRIES: what six tries
+ * five seconds apart cover. A faster cadence asks more often, never decides sooner.
+ */
+export const STABLE_ERROR_WINDOW_MS = (STABLE_ERROR_TRIES - 1) * HEALTH_RETRY_INTERVAL_SECONDS * 1_000;
+/**
+ * Between two tries after a reset in a Run. The whole wait is one durable step,
+ * so a try costs one observer probe and no checkpoint; kr-twenty's app takes
+ * about 80 s to listen again after each reset (Run 95c0f2f1), and a 5 s
+ * cadence left it answering for 2.5 s on average before the round went on.
+ */
+export const RUN_READY_INTERVAL_MS = 1_000;
+/** What a round's machine.reset waits when the Run has no ready check to size it by. */
+export const DEFAULT_RESET_TIMEOUT_MS = 120_000;
+
+/**
+ * How long a round's machine.reset may take. The reset takes the project down
+ * and brings it up again: the containers, the recipe's steps and the
+ * dependencies' health checks, the same start a setup waits health_timeout for.
+ * A fixed 120 s cut kodus-ai's reset (99–114 s, then 120 s) and left a probe
+ * inconclusive (Run 89254b3e). Never under the default, never past the
+ * recipe's ceiling.
+ */
+export function resetTimeoutMs(ready: Pick<ReadyTarget, 'waitSeconds'> | undefined): number {
+    return Math.max(DEFAULT_RESET_TIMEOUT_MS, Math.min(ready?.waitSeconds ?? 0, MAX_HEALTH_TIMEOUT_SECONDS) * 1_000);
+}
+
 /** The health path when the recipe names none and the worker sets no RUNTIME_SETUP_HEALTH_PATH. */
 export const DEFAULT_HEALTH_PATH = '/health';
 
@@ -108,10 +135,12 @@ export async function waitUntilReady(args: {
      * 5xx on the default branch is a boot that failed.
      */
     acceptStableError?: boolean;
+    /** Between two tries; HEALTH_RETRY_INTERVAL_SECONDS when unset. */
+    intervalMs?: number;
 }): Promise<ReadyWaitResult> {
     const { env, claimId, target } = args;
     const waitMs = target.waitSeconds * 1_000;
-    const interval = HEALTH_RETRY_INTERVAL_SECONDS * 1_000;
+    const interval = args.intervalMs ?? HEALTH_RETRY_INTERVAL_SECONDS * 1_000;
     const startedAt = args.now();
     const probe = readyProbe(target, args.who);
     let last: ProbeOutcome | undefined;
@@ -119,14 +148,17 @@ export async function waitUntilReady(args: {
     let same = 0;
     let previous: number | undefined;
     let stableError: number | undefined;
+    let sameSince = startedAt;
     for (;;) {
+        const at = args.now();
         last = await env.probe(claimId, probe, args.stepIdOf(tries));
         tries++;
         if (!notAnsweringYet(last)) break;
         const status = isEnvError(last) ? undefined : last.http?.status;
         same = status !== undefined && status === previous ? same + 1 : status !== undefined ? 1 : 0;
+        if (same === 1) sameSince = at;
         previous = status;
-        if (args.acceptStableError && status !== undefined && same >= STABLE_ERROR_TRIES) {
+        if (args.acceptStableError && status !== undefined && same >= STABLE_ERROR_TRIES && at - sameSince >= STABLE_ERROR_WINDOW_MS) {
             stableError = status;
             break;
         }

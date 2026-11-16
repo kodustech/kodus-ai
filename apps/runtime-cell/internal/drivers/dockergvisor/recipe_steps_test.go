@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/clock"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
@@ -64,8 +64,7 @@ func commands(docker *memDocker) []string {
 func TestRecipeStepsRunInOrderWhereTheRecipeSays(t *testing.T) {
 	d, docker, ref, dir, _ := stepsDriver(t, stepsRecipe)
 	var lines []string
-	ctx := driver.WithOutput(context.Background(), func(l string) { lines = append(lines, l) })
-	if err := d.RunRecipe(ctx, ref, dir); err != nil {
+	if err := d.RunRecipe(context.Background(), ref, dir, func(l string) { lines = append(lines, l) }); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := commands(docker), []string{"capp:/app make assets", "capp:/app echo ready", "capp:/app npm run migrate"}; !slices.Equal(got, want) {
@@ -103,7 +102,7 @@ func TestASeedCommandRunsInItsServiceAndAStringInThePublicOne(t *testing.T) {
 		"npm run seed":                        "capp:/app npm run seed",
 	} {
 		d, docker, ref, dir, _ := stepsDriver(t, "version: 1\nservices: { compose: { public: app } }\ndata: { seed: "+seed+" }\n")
-		if err := d.RunRecipe(context.Background(), ref, dir); err != nil {
+		if err := d.RunRecipe(context.Background(), ref, dir, nil); err != nil {
 			t.Fatal(err)
 		}
 		if got := commands(docker); !slices.Equal(got, []string{want}) || len(docker.inputs) != 0 {
@@ -118,7 +117,7 @@ func TestASeedCommandRunsInItsServiceAndAStringInThePublicOne(t *testing.T) {
 func TestAClaimOnTheBakedDataMigratesButDoesNotSeedAgain(t *testing.T) {
 	d, docker, ref, dir, _ := stepsDriver(t, stepsRecipe)
 	d.machineLocked(ref.MachineID).restoredData = true
-	if err := d.RunRecipe(context.Background(), ref, dir); err != nil {
+	if err := d.RunRecipe(context.Background(), ref, dir, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := commands(docker); !slices.Contains(got, "capp:/app npm run migrate") || len(docker.inputs) != 0 {
@@ -135,7 +134,7 @@ func TestAFailedRecipeStepIsTheRepositorysNamedFailure(t *testing.T) {
 		}
 		return kodyexec.Result{}
 	}
-	err := d.RunRecipe(context.Background(), ref, dir)
+	err := d.RunRecipe(context.Background(), ref, dir, nil)
 	var step *driver.RecipeStepError
 	if !errors.As(err, &step) || step.Step != "setup" || step.Field != "setup[1]" || !errors.Is(err, driver.ErrWorkloadBoot) || !strings.Contains(err.Error(), "no rule") {
 		t.Fatalf("err %v", err)
@@ -151,13 +150,13 @@ func TestAFailedRecipeStepIsTheRepositorysNamedFailure(t *testing.T) {
 		}
 		return kodyexec.Result{}
 	}
-	if err := d.RunRecipe(context.Background(), ref, dir); !errors.As(err, &step) || step.Step != "migrate" || !strings.Contains(err.Error(), "ran past") {
+	if err := d.RunRecipe(context.Background(), ref, dir, nil); !errors.As(err, &step) || step.Step != "migrate" || !strings.Contains(err.Error(), "ran past") {
 		t.Fatalf("a migrate killed at its deadline: %v", err)
 	}
 
 	d, docker, ref, dir, _ = stepsDriver(t, stepsRecipe)
 	docker.inputErr = errors.New("psql: ERROR: relation \"orders\" does not exist")
-	if err := d.RunRecipe(context.Background(), ref, dir); !errors.As(err, &step) || step.Step != "seed" || !strings.Contains(err.Error(), "orders") {
+	if err := d.RunRecipe(context.Background(), ref, dir, nil); !errors.As(err, &step) || step.Step != "seed" || !strings.Contains(err.Error(), "orders") {
 		t.Fatalf("a failed seed: %v", err)
 	}
 }
@@ -167,11 +166,11 @@ func TestAFailedRecipeStepIsTheRepositorysNamedFailure(t *testing.T) {
 func TestAStepWithNowhereToRunFailsInsteadOfBeingSkipped(t *testing.T) {
 	d, _, ref, dir, _ := stepsDriver(t, stepsRecipe)
 	d.machineLocked(ref.MachineID).exec = nil
-	if err := d.RunRecipe(context.Background(), ref, dir); !errors.Is(err, ErrNoExecService) {
+	if err := d.RunRecipe(context.Background(), ref, dir, nil); !errors.Is(err, ErrNoExecService) {
 		t.Fatalf("setup with no public service: %v", err)
 	}
 	d, _, ref, dir, _ = stepsDriver(t, "version: 1\ndata: { seed: { service: postgres, sql: db/seed.sql } }\n")
-	if err := d.RunRecipe(context.Background(), ref, dir); err == nil || !strings.Contains(err.Error(), `"postgres" is not in the compose project`) {
+	if err := d.RunRecipe(context.Background(), ref, dir, nil); err == nil || !strings.Contains(err.Error(), `"postgres" is not in the compose project`) {
 		t.Fatalf("a seed into a missing service: %v", err)
 	}
 }
@@ -186,7 +185,7 @@ func TestASeedFilePlantedAsASymlinkIsNotRead(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(dir, "db", "seed.sql")); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.RunRecipe(context.Background(), ref, dir); err == nil || len(docker.inputs) != 0 {
+	if err := d.RunRecipe(context.Background(), ref, dir, nil); err == nil || len(docker.inputs) != 0 {
 		t.Fatalf("seeded through a planted symlink: %v %+v", err, docker.inputs)
 	}
 }
@@ -195,7 +194,7 @@ func TestASeedFilePlantedAsASymlinkIsNotRead(t *testing.T) {
 func TestNoStepsRunNothing(t *testing.T) {
 	for _, text := range []string{"", "version: 1\nservices: { compose: { public: app } }\ndata: { reset: snapshot }\n"} {
 		d, docker, ref, dir, _ := stepsDriver(t, text)
-		if err := d.RunRecipe(context.Background(), ref, dir); err != nil || len(docker.execs) != 0 || len(docker.inputs) != 0 {
+		if err := d.RunRecipe(context.Background(), ref, dir, nil); err != nil || len(docker.execs) != 0 || len(docker.inputs) != 0 {
 			t.Fatalf("%q: %v, ran %q", text, err, commands(docker))
 		}
 	}
@@ -232,10 +231,10 @@ func TestUpThenRecipeStepsThroughTheDockerCLI(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "seed.sql"), "SELECT 1;\n")
 	r.answers["compose config"] = canonicalDBAndApp()
 	r.answers["ps"] = "s1\ns2\n"
-	if _, err := d.Up(context.Background(), ref, []byte(dbAndApp), dir); err != nil {
+	if _, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte(dbAndApp), ProjectDir: dir}); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.RunRecipe(context.Background(), ref, dir); err != nil {
+	if err := d.RunRecipe(context.Background(), ref, dir, nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(execs) != 1 || !slices.Contains(execs[0], "s2") || execs[0][len(execs[0])-1] != "npm run migrate" {
@@ -280,7 +279,7 @@ func TestASeedTheDatabaseRunsAtItsInitIsNotRepeated(t *testing.T) {
 	}
 	d, docker, ref, dir, _ := stepsDriver(t, stepsRecipe)
 	d.machineLocked(ref.MachineID).seedAtInit = true
-	if err := d.RunRecipe(context.Background(), ref, dir); err != nil || len(docker.inputs) != 0 || !slices.Contains(commands(docker), "capp:/app npm run migrate") {
+	if err := d.RunRecipe(context.Background(), ref, dir, nil); err != nil || len(docker.inputs) != 0 || !slices.Contains(commands(docker), "capp:/app npm run migrate") {
 		t.Fatalf("seeded again at init: %v %+v", err, docker.inputs)
 	}
 }

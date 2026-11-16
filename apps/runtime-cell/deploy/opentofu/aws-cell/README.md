@@ -1,6 +1,6 @@
 # AWS cell foundation
 
-Implements the foundation in [#2480](https://github.com/kodustech/kodus-ai/issues/2480#issuecomment-6720634241). This module creates **no EC2 instances, image bake, proxy attachment, bootstrap scripts, Lambda, schedule or working cell**. `foundation_only = true` and `data_plane_routes_ready = false` are deliberate output contracts.
+The network, identity and encryption foundation of a Kodus-managed AWS cell. This module creates **no EC2 instances, image bake, proxy attachment, bootstrap scripts, Lambda, schedule or working cell**. `foundation_only = true` and `data_plane_routes_ready = false` are deliberate output contracts.
 
 Validated locally with OpenTofu **1.13.9**, compatible configuration floor **1.9.0**, and AWS provider **6.72.0** exactly, recorded in `.terraform.lock.hcl`. This is a child module: provider identity and a separate encrypted/locked remote state backend belong in the caller. Never use production's VPC/account/state. No secrets are inputs or outputs; Terraform state still contains infrastructure identifiers and IAM policies.
 
@@ -27,11 +27,11 @@ Organization keys are separate, but the cell role can use the declared set of ke
 Use a private CLI/cache location. `init` downloads the pinned provider and checks its signed checksums; `validate` and `test` use provider schemas/mocks. Tests intentionally contain `command = apply` only to materialize **mock resources**, never AWS resources. No AWS credentials or provider API calls are required.
 
 ```sh
-export TF_DATA_DIR=/private/tmp/kody-runtime-next/iac-data
-/private/tmp/kody-runtime-next/tooling/tofu -chdir=apps/runtime-cell/deploy/opentofu/aws-cell init -backend=false -input=false
-/private/tmp/kody-runtime-next/tooling/tofu -chdir=apps/runtime-cell/deploy/opentofu/aws-cell fmt -check -recursive
-/private/tmp/kody-runtime-next/tooling/tofu -chdir=apps/runtime-cell/deploy/opentofu/aws-cell validate
-/private/tmp/kody-runtime-next/tooling/tofu -chdir=apps/runtime-cell/deploy/opentofu/aws-cell test
+export TF_DATA_DIR="$(mktemp -d)"
+tofu -chdir=apps/runtime-cell/deploy/opentofu/aws-cell init -backend=false -input=false
+tofu -chdir=apps/runtime-cell/deploy/opentofu/aws-cell fmt -check -recursive
+tofu -chdir=apps/runtime-cell/deploy/opentofu/aws-cell validate
+tofu -chdir=apps/runtime-cell/deploy/opentofu/aws-cell test
 ```
 
 Seven native mock runs cover private topology/LT flags, account/region mismatch, wildcard DNS, unapproved images, public VPC rejection, computed storage/IAM policies and IAM inline policy size for the fixture. Mocks validate declared configuration; they do **not** prove service authorization, actual routing, TLS, AMI provenance, image reset, ready/hibernate, live performance/cost or cleanup.

@@ -4,7 +4,7 @@ jest.mock('@libs/ee/configs/environment', () => ({ environment: {} }));
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { AzureReposService } from '@libs/platform/infrastructure/adapters/services/azureRepos/azureRepos.service';
 
-import { decideForkRun, forkPolicyOf, forkRunMaxTokens } from '../domain/fork-policy';
+import { decideForkRun, effectiveForkPolicy, forkPolicyOf, forkRunMaxTokens } from '../domain/fork-policy';
 import { CodeManagementRuntimeGitAdapter } from '../infrastructure/code-management-git.adapter';
 
 describe('decideForkRun (ADR-030)', () => {
@@ -38,6 +38,14 @@ describe('decideForkRun (ADR-030)', () => {
 
     it('a head whose fork flag is not a plain false counts as a fork', () => {
         expect(decideForkRun('run', { fork: undefined as unknown as boolean })).toMatchObject({ fork: true });
+    });
+
+    it("an environment of several repositories holds a fork for a maintainer even when set to run; one repository keeps its policy", () => {
+        expect(effectiveForkPolicy('run', 2)).toBe('require_approval');
+        expect(effectiveForkPolicy('skip', 2)).toBe('skip');
+        expect(effectiveForkPolicy('require_approval', 3)).toBe('require_approval');
+        for (const policy of ['skip', 'require_approval', 'run'] as const) expect(effectiveForkPolicy(policy, 1)).toBe(policy);
+        expect(effectiveForkPolicy(undefined, 1)).toBe('require_approval');
     });
 
     it('the fork budget is a quarter of the per-Run one, at least one token', () => {

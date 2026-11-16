@@ -1,5 +1,7 @@
 import { Meter, metrics } from '@opentelemetry/api';
 
+import { ATTR, CatalogMeter, dimension, exportStepsOf, METRIC_DRIVERS } from '@libs/runtime/telemetry';
+
 import type { Envelope, MessageBody } from '@libs/runtime/protocol';
 
 // Types shared by the hub's parts (connections, enrollment, claims, steps).
@@ -80,16 +82,28 @@ export type BootPhase = (typeof BOOT_PHASES)[keyof typeof BOOT_PHASES];
  * itself (hello.driver, any string up to 64 characters): a customer cell
  * must not be able to grow a series per name, so anything else is 'other'.
  */
-export const METRIC_DRIVERS = ['local-docker', 'docker-gvisor', 'aws-ec2', 'k8s-sandbox', 'fake'] as const;
-export const driverLabel = (driver: string | undefined): string => ((METRIC_DRIVERS as readonly string[]).includes(driver ?? '') ? driver! : 'other');
+export { METRIC_DRIVERS };
+export const driverLabel = (driver: string | undefined): string => dimension(ATTR.driver, driver);
 
 /** How a claim.renew ended, as the `outcome` label: renewed, renewed up to the hard ceiling, the claim is gone, or the cell did not move the lease. */
 export type RenewOutcome = 'renewed' | 'ceiling' | 'gone' | 'failed';
+
+/** One connected cell as the hub's capacity gauges read it. */
+export interface CellCapacityView {
+    owner: string;
+    isolation?: string;
+    driver?: string;
+    /** From the last heartbeat; absent before the first one. */
+    freeSlots?: number;
+    lastFrameAt: number;
+}
 
 /** Hub metrics beyond the §11 set (libs/runtime/telemetry); every label is a closed set, never an org, environment or claim id. */
 export class HubMetrics {
     private readonly readyWait;
     private readonly bootPhase;
+    private readonly exportDuration;
+    private readonly claimStart;
     private readonly stepDuration;
     private readonly background;
     private readonly reconciled;
@@ -97,24 +111,29 @@ export class HubMetrics {
     private readonly renewals;
     private readonly capacityWaits;
     private readonly connectionOverloads;
+    private readonly gbMinutes;
+    private readonly vcpuMinutes;
+    private readonly meter: CatalogMeter;
 
     constructor(meter: Meter = metrics.getMeter('kody-runtime-hub')) {
-        this.readyWait = meter.createHistogram('runtime.claim.ready_wait', { unit: 'ms', description: 'claim.acquire to claim.ready/failed/lost' });
-        this.bootPhase = meter.createHistogram('runtime.claim.boot_phase', {
-            unit: 'ms',
-            description: 'Each boot phase the cell measured for a claim that became ready (claim.ready.timing)',
-        });
-        this.stepDuration = meter.createHistogram('runtime.step.duration', { unit: 'ms', description: 'step sent to step.result' });
-        this.background = meter.createCounter('runtime.hub.background_error', { description: 'Failures of background work (pins, revocation, stream, session)' });
-        this.reconciled = meter.createCounter('runtime.claim.reconciled', { description: 'Claims a cell held that the hub had finished: released on heartbeat' });
-        this.transitions = meter.createCounter('runtime.claim.transition', { description: 'Claim state changes, by state reached and ClaimReason' });
-        this.renewals = meter.createCounter('runtime.claim.renew', { description: 'claim.renew sent for a live claim, by how it ended' });
-        this.capacityWaits = meter.createCounter('runtime.claim.capacity_wait', { description: 'claim.acquire rounds refused for memory before anything started (ADR-070): the worker waits and asks again' });
-        this.connectionOverloads = meter.createCounter('runtime.hub.connection_overload', { description: 'Cell connections closed at an outgoing byte or in-flight work ceiling' });
+        const m = (this.meter = new CatalogMeter(meter));
+        this.readyWait = m.histogram('runtime.claim.ready_wait');
+        this.bootPhase = m.histogram('runtime.claim.boot_phase');
+        this.exportDuration = m.histogram('runtime.build.export_duration');
+        this.claimStart = m.counter('runtime.claim.start');
+        this.stepDuration = m.histogram('runtime.step.duration');
+        this.background = m.counter('runtime.hub.background_error');
+        this.reconciled = m.counter('runtime.claim.reconciled');
+        this.transitions = m.counter('runtime.claim.transition');
+        this.renewals = m.counter('runtime.claim.renew');
+        this.capacityWaits = m.counter('runtime.claim.capacity_wait');
+        this.connectionOverloads = m.counter('runtime.hub.connection_overload');
+        this.gbMinutes = m.counter('runtime.machine.gb_minutes');
+        this.vcpuMinutes = m.counter('runtime.machine.vcpu_minutes');
     }
 
     claimReadyWait(ms: number, attrs: { outcome: string; consumer: string; driver?: string }) {
-        this.readyWait.record(Math.max(0, ms), { outcome: attrs.outcome, consumer: attrs.consumer, driver: driverLabel(attrs.driver) });
+        this.readyWait.record(ms, { outcome: attrs.outcome, [ATTR.claimConsumer]: attrs.consumer, [ATTR.driver]: attrs.driver });
     }
     /**
      * One point per phase the cell reported. A phase it did not measure
@@ -122,14 +141,23 @@ export class HubMetrics {
      */
     claimBootPhases(timing: Partial<Record<keyof typeof BOOT_PHASES, number>> | undefined, attrs: { consumer: string; driver?: string }) {
         if (!timing) return;
-        const driver = driverLabel(attrs.driver);
         for (const [field, phase] of Object.entries(BOOT_PHASES) as Array<[keyof typeof BOOT_PHASES, BootPhase]>) {
             const ms = timing[field];
-            if (typeof ms === 'number' && Number.isFinite(ms)) this.bootPhase.record(Math.max(0, ms), { phase, consumer: attrs.consumer, driver });
+            if (typeof ms === 'number' && Number.isFinite(ms)) this.bootPhase.record(ms, { [ATTR.bootPhase]: phase, [ATTR.claimConsumer]: attrs.consumer, [ATTR.driver]: attrs.driver });
         }
     }
+    /** The export parts of a ready claim's timing.phases (absent parts are not recorded as 0). */
+    claimExport(phases: ReadonlyArray<{ name: string; ms: number; running?: true }> | undefined, attrs: { consumer: string; driver?: string }) {
+        for (const [step, ms] of Object.entries(exportStepsOf(phases))) {
+            this.exportDuration.record(ms, { [ATTR.exportStep]: step, [ATTR.claimConsumer]: attrs.consumer, [ATTR.driver]: attrs.driver });
+        }
+    }
+    /** A claim that became ready, by how its workload came to be (absent: the cell did not say). */
+    claimStarted(start: string | undefined, attrs: { consumer: string }) {
+        if (start) this.claimStart.add(1, { [ATTR.claimStart]: start, [ATTR.claimConsumer]: attrs.consumer });
+    }
     step(ms: number, attrs: { kind: string; outcome: string }) {
-        this.stepDuration.record(Math.max(0, ms), attrs);
+        this.stepDuration.record(ms, { [ATTR.stepKind]: attrs.kind, outcome: attrs.outcome });
     }
     backgroundError(op: string) {
         this.background.add(1, { op });
@@ -139,15 +167,44 @@ export class HubMetrics {
     }
     /** Both labels are closed sets: ClaimState and ClaimReason. */
     claimTransition(attrs: { to: string; reason: string }) {
-        this.transitions.add(1, attrs);
+        this.transitions.add(1, { [ATTR.claimState]: attrs.to, [ATTR.claimReason]: attrs.reason });
     }
     claimRenew(attrs: { outcome: RenewOutcome; consumer: string }) {
-        this.renewals.add(1, attrs);
+        this.renewals.add(1, { outcome: attrs.outcome, [ATTR.claimConsumer]: attrs.consumer });
     }
     claimCapacityWait(attrs: { consumer: string }) {
-        this.capacityWaits.add(1, attrs);
+        this.capacityWaits.add(1, { [ATTR.claimConsumer]: attrs.consumer });
     }
     connectionOverload(reason: 'buffer' | 'frame' | 'requests' | 'steps') {
         this.connectionOverloads.add(1, { reason });
+    }
+    /** A claim that ended: its machine time as the usage report counts it (vCPU only when its size is known). */
+    machineTime(usage: { gbMinutes: number; vcpuMinutes?: number }, attrs: { consumer?: string | null; owner: string; orgId: string }) {
+        const labels = { [ATTR.claimConsumer]: attrs.consumer ?? undefined, [ATTR.cellOwner]: attrs.owner, [ATTR.organizationId]: attrs.orgId };
+        if (usage.gbMinutes > 0) this.gbMinutes.add(usage.gbMinutes, labels);
+        if (usage.vcpuMinutes && usage.vcpuMinutes > 0) this.vcpuMinutes.add(usage.vcpuMinutes, labels);
+    }
+    /**
+     * The capacity gauges of the cells connected to this replica, read at
+     * collection: sessions by isolation and driver, free slots, full cells, and
+     * the age of the oldest last frame (a cell that is connected but silent).
+     */
+    observeCells(read: () => CellCapacityView[], now: () => number = Date.now) {
+        const byOwner = <T>(cells: CellCapacityView[], f: (c: CellCapacityView[]) => T) =>
+            [...new Set(cells.map((c) => c.owner))].map((owner) => ({ owner, value: f(cells.filter((c) => c.owner === owner)) }));
+        this.meter.gauge('runtime.cell.sessions', () => {
+            const groups = new Map<string, { labels: Record<string, unknown>; value: number }>();
+            for (const c of read()) {
+                const labels = { [ATTR.cellOwner]: c.owner, [ATTR.isolationLevel]: c.isolation, [ATTR.driver]: c.driver };
+                const key = JSON.stringify(labels);
+                groups.set(key, { labels, value: (groups.get(key)?.value ?? 0) + 1 });
+            }
+            return [...groups.values()];
+        });
+        this.meter.gauge('runtime.cell.free_slots', () => byOwner(read(), (cs) => cs.reduce((n, c) => n + (c.freeSlots ?? 0), 0)).map((g) => ({ value: g.value, labels: { [ATTR.cellOwner]: g.owner } })));
+        this.meter.gauge('runtime.cell.full', () => byOwner(read(), (cs) => cs.filter((c) => c.freeSlots === 0).length).map((g) => ({ value: g.value, labels: { [ATTR.cellOwner]: g.owner } })));
+        this.meter.gauge('runtime.cell.heartbeat_age', () =>
+            byOwner(read(), (cs) => Math.max(0, ...cs.map((c) => now() - c.lastFrameAt))).map((g) => ({ value: g.value, labels: { [ATTR.cellOwner]: g.owner } })),
+        );
     }
 }

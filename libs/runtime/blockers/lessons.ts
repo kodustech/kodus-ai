@@ -1,10 +1,11 @@
-import { createHash } from 'crypto';
+import { nulJoinedHex } from '@libs/runtime/contracts/derive-id';
 
 import * as yaml from 'js-yaml';
 
 import type { EnvironmentSetupRecord } from '@libs/runtime/run';
 
 import { type BlockerKindView, classifyBlocker, type FixAction } from './catalog';
+import { UNTRUSTED_YAML } from '@libs/runtime/protocol/yaml-limits';
 
 // Lessons (docs §4 Memory, ADR-018): what fixed a blocker, kept so the next
 // time the same blocker shows up, in the same repository or (once an org
@@ -16,8 +17,6 @@ import { type BlockerKindView, classifyBlocker, type FixAction } from './catalog
 // (the recipe field it sets, the host that was allowed). That clean boot is
 // the independent replay ADR-018 asks for. The action is a typed fix, never a
 // command line, and a recipe value is never kept, only the field it set.
-
-export const RUNTIME_LESSONS_COLLECTION = 'runtime_lessons';
 
 export type LessonScope = 'repo' | 'org';
 
@@ -60,7 +59,7 @@ const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 
 const compose = (text?: string) => {
     if (!text) return undefined;
     try {
-        const doc = yaml.load(text, { schema: yaml.CORE_SCHEMA });
+        const doc = yaml.load(text, { ...UNTRUSTED_YAML, schema: yaml.CORE_SCHEMA });
         const c = isMap(doc) && isMap(doc.services) ? doc.services.compose : undefined;
         return isMap(c) ? c : undefined;
     } catch {
@@ -70,7 +69,7 @@ const compose = (text?: string) => {
 
 /** The id of the repo-scope lesson; promotion keeps it. */
 export const lessonIdFor = (organizationId: string, repositoryId: string, signature: string, fixId: string) =>
-    createHash('sha256').update(`${organizationId}\0${repositoryId}\0${signature}\0${fixId}`).digest('hex').slice(0, 32);
+    nulJoinedHex([organizationId, repositoryId, signature, fixId], 32);
 
 const CAUSE: Partial<Record<BlockerKindView, string>> = {
     missing_env: 'The app reads an environment variable the machine did not set.',

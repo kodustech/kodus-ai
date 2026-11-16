@@ -97,12 +97,14 @@ func TestBrowserProbeForwardsEvidenceModeAndRejectsUnknownBeforeRunner(t *testin
 }
 
 func browserProbeRun(ev *protocol.EvidenceRequest) *protocol.ProbeRunBody {
-	goto_, shot := "/", "orders"
+	gotoPath, shot := "/", "orders"
 	return &protocol.ProbeRunBody{StepID: step1, Evidence: ev, Probe: protocol.Probe{
 		ID: "orders-page", Origin: protocol.ProbeOriginAgent, Purpose: "p", Expected: "the list",
 		Compare: []protocol.CompareField{protocol.CompareFieldPixels},
-		Spec: protocol.ProbeSpec{Browser: &protocol.BrowserProbe{Kind: "browser", Steps: []protocol.BrowserStep{{Goto: &goto_}, {Screenshot: &shot}},
-			Viewport: protocol.BrowserProbeViewport{Width: 1280, Height: 720}, TimeoutMs: 30_000}},
+		Spec: protocol.ProbeSpec{Browser: &protocol.BrowserProbe{
+			Kind: "browser", Steps: []protocol.BrowserStep{{Goto: &gotoPath}, {Screenshot: &shot}},
+			Viewport: protocol.BrowserProbeViewport{Width: 1280, Height: 720}, TimeoutMs: 30_000,
+		}},
 	}}
 }
 

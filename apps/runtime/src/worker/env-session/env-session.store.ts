@@ -2,7 +2,7 @@ import type { RecipeValidationSnapshot } from '@libs/runtime/contracts/recipe-va
 
 import type { Pool } from 'pg';
 
-import type { EnvSessionBlocker, EnvSessionOwner, EnvSessionState, EnvStepView } from '@libs/runtime/contracts/env-session';
+import type { EnvSessionBlocker, EnvSessionOwner, EnvSessionRepositoryView, EnvSessionState, EnvStepView } from '@libs/runtime/contracts/env-session';
 
 // The dev's interactive sessions (consumer mcp) and their exec steps, in the
 // Runtime Postgres: any worker replica answers a call for a session another
@@ -15,6 +15,8 @@ export interface EnvSessionRow extends Omit<EnvSessionOwner, 'repositoryIds'> {
     sha: string;
     /** Immutable authority from the setup recipe, never from guest files. */
     validationSnapshot?: RecipeValidationSnapshot;
+    /** A multi-repository session's layout (no tokens), set at open and never changed; absent for one repository. */
+    repositories?: EnvSessionRepositoryView[];
     state: EnvSessionState;
     claimId?: string;
     cellId?: string;
@@ -52,47 +54,6 @@ export interface EnvSessionStore {
     finishStep(organizationId: string, stepId: string, patch: Pick<EnvStepRow, 'state' | 'finishedAt' | 'result'>): Promise<void>;
 }
 
-export class InMemoryEnvSessionStore implements EnvSessionStore {
-    readonly sessions = new Map<string, EnvSessionRow>();
-    readonly steps = new Map<string, EnvStepRow>();
-
-    async insert(row: EnvSessionRow) {
-        if (this.sessions.has(row.sessionId)) return false;
-        this.sessions.set(row.sessionId, structuredClone(row));
-        return true;
-    }
-    async get(organizationId: string, sessionId: string) {
-        const r = this.sessions.get(sessionId);
-        return r && r.organizationId === organizationId ? structuredClone(r) : null;
-    }
-    async update(organizationId: string, sessionId: string, patch: Partial<EnvSessionRow>) {
-        const r = this.sessions.get(sessionId);
-        if (r && r.organizationId === organizationId) this.sessions.set(sessionId, { ...r, ...patch, validationSnapshot:r.validationSnapshot });
-    }
-    async listLive(organizationId: string) {
-        return [...this.sessions.values()]
-            .filter((s) => s.organizationId === organizationId && (s.state === 'acquiring' || s.state === 'ready'))
-            .map((s) => structuredClone(s));
-    }
-    async listStale(idleBefore: string, now: string, limit: number) {
-        return [...this.sessions.values()]
-            .filter((s) => (s.state === 'acquiring' || s.state === 'ready') && (s.lastUsedAt < idleBefore || (!!s.leaseExpiresAt && s.leaseExpiresAt < now)))
-            .slice(0, limit)
-            .map((s) => structuredClone(s));
-    }
-    async insertStep(row: EnvStepRow) {
-        this.steps.set(row.stepId, { ...row });
-    }
-    async getStep(organizationId: string, stepId: string) {
-        const r = this.steps.get(stepId);
-        return r && r.organizationId === organizationId ? { ...r } : null;
-    }
-    async finishStep(organizationId: string, stepId: string, patch: Pick<EnvStepRow, 'state' | 'finishedAt' | 'result'>) {
-        const r = this.steps.get(stepId);
-        if (r && r.organizationId === organizationId) this.steps.set(stepId, { ...r, ...patch });
-    }
-}
-
 const SCHEMA = `
 CREATE SCHEMA IF NOT EXISTS runtime;
 CREATE TABLE IF NOT EXISTS runtime.runtime_env_sessions (
@@ -114,6 +75,7 @@ CREATE TABLE IF NOT EXISTS runtime.runtime_env_sessions (
     last_used_at timestamptz NOT NULL
 );
 ALTER TABLE runtime.runtime_env_sessions ADD COLUMN IF NOT EXISTS validation_snapshot jsonb;
+ALTER TABLE runtime.runtime_env_sessions ADD COLUMN IF NOT EXISTS repositories jsonb;
 CREATE INDEX IF NOT EXISTS runtime_env_sessions_live ON runtime.runtime_env_sessions (organization_id) WHERE state IN ('acquiring', 'ready');
 CREATE INDEX IF NOT EXISTS runtime_env_sessions_idle ON runtime.runtime_env_sessions (last_used_at) WHERE state IN ('acquiring', 'ready');
 CREATE TABLE IF NOT EXISTS runtime.runtime_env_steps (
@@ -161,6 +123,7 @@ function sessionFrom(r: Record<string, any>): EnvSessionRow {
         sha: r.sha,
         state: r.state,
         ...(r.validation_snapshot ? {validationSnapshot: r.validation_snapshot} : {}),
+        ...(r.repositories ? { repositories: r.repositories } : {}),
         ...(r.claim_id ? { claimId: r.claim_id } : {}),
         ...(r.cell_id ? { cellId: r.cell_id } : {}),
         ...(r.lease_expires_at ? { leaseExpiresAt: iso(r.lease_expires_at) } : {}),
@@ -196,9 +159,22 @@ export class PgEnvSessionStore implements EnvSessionStore {
 
     async insert(s: EnvSessionRow) {
         const result = await this.pool.query(
-            `INSERT INTO runtime.runtime_env_sessions (session_id, organization_id, team_id, repository_id, key_id, environment_id, sha, state, created_at, last_used_at, validation_snapshot)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT (session_id) DO NOTHING RETURNING session_id`,
-            [s.sessionId, s.organizationId, s.teamId, s.repositoryId, s.keyId, s.environmentId, s.sha, s.state, s.createdAt, s.lastUsedAt, s.validationSnapshot ? JSON.stringify(s.validationSnapshot) : null],
+            `INSERT INTO runtime.runtime_env_sessions (session_id, organization_id, team_id, repository_id, key_id, environment_id, sha, state, created_at, last_used_at, validation_snapshot, repositories)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (session_id) DO NOTHING RETURNING session_id`,
+            [
+                s.sessionId,
+                s.organizationId,
+                s.teamId,
+                s.repositoryId,
+                s.keyId,
+                s.environmentId,
+                s.sha,
+                s.state,
+                s.createdAt,
+                s.lastUsedAt,
+                s.validationSnapshot ? JSON.stringify(s.validationSnapshot) : null,
+                s.repositories?.length ? JSON.stringify(s.repositories) : null,
+            ],
         );
         return result.rows.length === 1;
     }

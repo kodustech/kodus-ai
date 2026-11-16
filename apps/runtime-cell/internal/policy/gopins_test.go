@@ -6,9 +6,11 @@ import (
 )
 
 func TestBuildKeepsTheGoPinsSortedAndPinsGoFindsThem(t *testing.T) {
-	p, _, err := Build(Spec{ClaimID: "c1", OrgID: "o", Phase: PhaseBuild, Sources: []string{"10.0.0.2"},
+	p, _, err := Build(Spec{
+		ClaimID: "c1", OrgID: "o", Phase: PhaseBuild, Sources: []string{"10.0.0.2"},
 		GoPins:    []string{"golang.org/x/mod@v0.20.0", "github.com/a/b@v1.0.0", "github.com/a/b@v1.0.0"},
-		ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now()}, nil)
+		ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now(),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

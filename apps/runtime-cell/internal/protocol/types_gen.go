@@ -20,6 +20,7 @@ const (
 	MessageTypeHello          MessageType = "hello"
 	MessageTypeHeartbeat      MessageType = "heartbeat"
 	MessageTypeClaimAcquire   MessageType = "claim.acquire"
+	MessageTypeSandboxAcquire MessageType = "sandbox.acquire"
 	MessageTypeClaimReady     MessageType = "claim.ready"
 	MessageTypeClaimFailed    MessageType = "claim.failed"
 	MessageTypeClaimRenew     MessageType = "claim.renew"
@@ -29,28 +30,36 @@ const (
 	MessageTypeExec           MessageType = "exec"
 	MessageTypeUpload         MessageType = "upload"
 	MessageTypeExecCancel     MessageType = "exec.cancel"
+	MessageTypeSandboxOp      MessageType = "sandbox.op"
+	MessageTypeGuestResult    MessageType = "guest.result"
 	MessageTypeMachineReset   MessageType = "machine.reset"
+	MessageTypeClaimSnapshot  MessageType = "claim.snapshot"
 	MessageTypeStepResult     MessageType = "step.result"
 	MessageTypeStepStream     MessageType = "step.stream"
 	MessageTypeImageBake      MessageType = "image.bake"
+	MessageTypeSnapshotForget MessageType = "snapshot.forget"
 	MessageTypePoolTarget     MessageType = "pool.target"
 	MessageTypeBlocked        MessageType = "blocked"
 	MessageTypeEgressBlocked  MessageType = "egress.blocked"
 	MessageTypeClaimProgress  MessageType = "claim.progress"
 	MessageTypeEgressPolicy   MessageType = "egress.policy"
+	MessageTypePreviewTunnel  MessageType = "preview.tunnel"
+	MessageTypePreviewRoute   MessageType = "preview.route"
+	MessageTypePreviewUnroute MessageType = "preview.unroute"
 	MessageTypeCellRevoked    MessageType = "cell.revoked"
 	MessageTypeAck            MessageType = "ack"
 	MessageTypeNack           MessageType = "nack"
 )
 
 type Envelope struct {
-	V       int64           `json:"v"`
-	ID      string          `json:"id"`
-	Re      *string         `json:"re,omitempty"`
-	CellID  string          `json:"cellId"`
-	ClaimID *string         `json:"claimId,omitempty"`
-	Type    MessageType     `json:"type"`
-	Body    json.RawMessage `json:"body"`
+	V           int64           `json:"v"`
+	ID          string          `json:"id"`
+	Re          *string         `json:"re,omitempty"`
+	CellID      string          `json:"cellId"`
+	ClaimID     *string         `json:"claimId,omitempty"`
+	Traceparent *string         `json:"traceparent,omitempty"`
+	Type        MessageType     `json:"type"`
+	Body        json.RawMessage `json:"body"`
 }
 
 type Isolation string
@@ -74,14 +83,33 @@ type MachineSize struct {
 	Cpus     int64 `json:"cpus"`
 }
 
+type MachineArch string
+
+const (
+	MachineArchX8664 MachineArch = "x86_64"
+	MachineArchArm64 MachineArch = "arm64"
+)
+
+type HelloCapabilities struct {
+	Backends       []string     `json:"backends"`
+	SnapshotMemory bool         `json:"snapshotMemory"`
+	NestedDocker   bool         `json:"nestedDocker"`
+	Kvm            bool         `json:"kvm"`
+	Arch           MachineArch  `json:"arch"`
+	MaxSize        *MachineSize `json:"maxSize,omitempty"`
+	DefaultSize    *MachineSize `json:"defaultSize,omitempty"`
+	SandboxSize    *MachineSize `json:"sandboxSize,omitempty"`
+}
+
 type HelloBody struct {
-	Versions     []int64      `json:"versions"`
-	Driver       string       `json:"driver"`
-	Isolation    Isolation    `json:"isolation"`
-	Regions      []string     `json:"regions"`
-	Owner        CellOwner    `json:"owner"`
-	Features     []string     `json:"features,omitempty"`
-	MaxClaimSize *MachineSize `json:"maxClaimSize,omitempty"`
+	Versions     []int64            `json:"versions"`
+	Driver       string             `json:"driver"`
+	Isolation    Isolation          `json:"isolation"`
+	Regions      []string           `json:"regions"`
+	Owner        CellOwner          `json:"owner"`
+	Features     []string           `json:"features,omitempty"`
+	MaxClaimSize *MachineSize       `json:"maxClaimSize,omitempty"`
+	Capabilities *HelloCapabilities `json:"capabilities,omitempty"`
 }
 
 type HeartbeatClaim struct {
@@ -96,10 +124,43 @@ type HeartbeatBodyMemory struct {
 	ReadyMb       int64 `json:"readyMb"`
 }
 
+type HeartbeatBodyEvictedBuildStatesItem struct {
+	OrgID          string `json:"orgId"`
+	EnvironmentID  string `json:"environmentId"`
+	EvictedAt      string `json:"evictedAt"`
+	RebuildSeconds *int64 `json:"rebuildSeconds,omitempty"`
+}
+
+type HeartbeatBodyHostPolicy string
+
+const (
+	HeartbeatBodyHostPolicyShared    HeartbeatBodyHostPolicy = "shared"
+	HeartbeatBodyHostPolicyDedicated HeartbeatBodyHostPolicy = "dedicated"
+)
+
+type HeartbeatBodyHostSmt string
+
+const (
+	HeartbeatBodyHostSmtOn      HeartbeatBodyHostSmt = "on"
+	HeartbeatBodyHostSmtOff     HeartbeatBodyHostSmt = "off"
+	HeartbeatBodyHostSmtUnknown HeartbeatBodyHostSmt = "unknown"
+)
+
+type HeartbeatBodyHost struct {
+	Policy     HeartbeatBodyHostPolicy `json:"policy"`
+	Smt        HeartbeatBodyHostSmt    `json:"smt"`
+	Ksm        HeartbeatBodyHostSmt    `json:"ksm"`
+	Swap       HeartbeatBodyHostSmt    `json:"swap"`
+	Vulnerable []string                `json:"vulnerable"`
+	Microcode  *string                 `json:"microcode,omitempty"`
+}
+
 type HeartbeatBody struct {
-	Claims    []HeartbeatClaim     `json:"claims"`
-	FreeSlots int64                `json:"freeSlots"`
-	Memory    *HeartbeatBodyMemory `json:"memory,omitempty"`
+	Claims             []HeartbeatClaim                      `json:"claims"`
+	FreeSlots          int64                                 `json:"freeSlots"`
+	Memory             *HeartbeatBodyMemory                  `json:"memory,omitempty"`
+	EvictedBuildStates []HeartbeatBodyEvictedBuildStatesItem `json:"evictedBuildStates,omitempty"`
+	Host               *HeartbeatBodyHost                    `json:"host,omitempty"`
 }
 
 type Side string
@@ -117,6 +178,8 @@ const (
 	ConsumerSetup       Consumer = "setup"
 	ConsumerMcp         Consumer = "mcp"
 	ConsumerCustomAgent Consumer = "custom_agent"
+	ConsumerSandbox     Consumer = "sandbox"
+	ConsumerPreview     Consumer = "preview"
 )
 
 type GitProvider string
@@ -162,6 +225,11 @@ type ClaimAcquireBodyRecipe struct {
 	Files   []AuthoredFile  `json:"files,omitempty"`
 }
 
+type ClaimAcquireBodyEgressInspectItem struct {
+	Host  string   `json:"host"`
+	Paths []string `json:"paths"`
+}
+
 type ClaimAcquireBodyCanariesItemSlot string
 
 const (
@@ -175,25 +243,56 @@ type ClaimAcquireBodyCanariesItem struct {
 	Value string                           `json:"value"`
 }
 
+type ClaimAcquireBodyReposItem struct {
+	Alias     string  `json:"alias"`
+	Repo      RepoRef `json:"repo"`
+	Sha       string  `json:"sha"`
+	RepoToken string  `json:"repoToken"`
+}
+
+type ClaimAcquireBodySecretsItem struct {
+	ID    string   `json:"id"`
+	Name  string   `json:"name"`
+	Hosts []string `json:"hosts"`
+}
+
 type ClaimAcquireBody struct {
-	OrgID          string                         `json:"orgId"`
-	EnvironmentID  string                         `json:"environmentId"`
-	RunID          *string                        `json:"runId,omitempty"`
-	ImageID        string                         `json:"imageId"`
-	Side           Side                           `json:"side"`
-	Sha            string                         `json:"sha"`
-	Consumer       Consumer                       `json:"consumer"`
-	Repo           RepoRef                        `json:"repo"`
-	RepoToken      string                         `json:"repoToken"`
-	Expose         []Expose                       `json:"expose"`
-	HardExpiresAt  string                         `json:"hardExpiresAt"`
-	LeaseExpiresAt *string                        `json:"leaseExpiresAt,omitempty"`
-	DiagnosticHold *bool                          `json:"diagnosticHold,omitempty"`
-	SeedsCache     *bool                          `json:"seedsCache,omitempty"`
-	Recipe         *ClaimAcquireBodyRecipe        `json:"recipe,omitempty"`
-	EgressAllow    []string                       `json:"egressAllow,omitempty"`
-	Size           *MachineSize                   `json:"size,omitempty"`
-	Canaries       []ClaimAcquireBodyCanariesItem `json:"canaries,omitempty"`
+	OrgID             string                              `json:"orgId"`
+	EnvironmentID     string                              `json:"environmentId"`
+	RunID             *string                             `json:"runId,omitempty"`
+	ImageID           string                              `json:"imageId"`
+	Side              Side                                `json:"side"`
+	Sha               string                              `json:"sha"`
+	Consumer          Consumer                            `json:"consumer"`
+	Repo              RepoRef                             `json:"repo"`
+	RepoToken         string                              `json:"repoToken"`
+	Expose            []Expose                            `json:"expose"`
+	HardExpiresAt     string                              `json:"hardExpiresAt"`
+	LeaseExpiresAt    *string                             `json:"leaseExpiresAt,omitempty"`
+	DiagnosticHold    *bool                               `json:"diagnosticHold,omitempty"`
+	SeedsCache        *bool                               `json:"seedsCache,omitempty"`
+	Recipe            *ClaimAcquireBodyRecipe             `json:"recipe,omitempty"`
+	EgressAllow       []string                            `json:"egressAllow,omitempty"`
+	EgressInspect     []ClaimAcquireBodyEgressInspectItem `json:"egressInspect,omitempty"`
+	EgressRecommended *bool                               `json:"egressRecommended,omitempty"`
+	Size              *MachineSize                        `json:"size,omitempty"`
+	Canaries          []ClaimAcquireBodyCanariesItem      `json:"canaries,omitempty"`
+	Repos             []ClaimAcquireBodyReposItem         `json:"repos,omitempty"`
+	Secrets           []ClaimAcquireBodySecretsItem       `json:"secrets,omitempty"`
+}
+
+type SandboxAcquireBody struct {
+	OrgID             string                              `json:"orgId"`
+	HardExpiresAt     string                              `json:"hardExpiresAt"`
+	LeaseExpiresAt    *string                             `json:"leaseExpiresAt,omitempty"`
+	EgressAllow       []string                            `json:"egressAllow,omitempty"`
+	EgressInspect     []ClaimAcquireBodyEgressInspectItem `json:"egressInspect,omitempty"`
+	EgressRecommended *bool                               `json:"egressRecommended,omitempty"`
+	Size              *MachineSize                        `json:"size,omitempty"`
+	Secrets           []ClaimAcquireBodySecretsItem       `json:"secrets,omitempty"`
+	Prepares          *bool                               `json:"prepares,omitempty"`
+	TemplateKey       *string                             `json:"templateKey,omitempty"`
+	ResumeFrom        *string                             `json:"resumeFrom,omitempty"`
 }
 
 type ServiceHealth string
@@ -228,6 +327,16 @@ type ObserverState struct {
 	State ObserverPhase `json:"state"`
 }
 
+type ClaimReadyBodyStart string
+
+const (
+	ClaimReadyBodyStartCold     ClaimReadyBodyStart = "cold"
+	ClaimReadyBodyStartPool     ClaimReadyBodyStart = "pool"
+	ClaimReadyBodyStartBake     ClaimReadyBodyStart = "bake"
+	ClaimReadyBodyStartTemplate ClaimReadyBodyStart = "template"
+	ClaimReadyBodyStartSession  ClaimReadyBodyStart = "session"
+)
+
 type ReadyTimingBuildStepsSlowestItem struct {
 	Service string `json:"service"`
 	Name    string `json:"name"`
@@ -242,6 +351,12 @@ type ReadyTimingBuildSteps struct {
 	Slowest []ReadyTimingBuildStepsSlowestItem `json:"slowest"`
 }
 
+type BootPhase struct {
+	Name    string `json:"name"`
+	Ms      int64  `json:"ms"`
+	Running *bool  `json:"running,omitempty"`
+}
+
 type ReadyTiming struct {
 	PrepareMs  int64                  `json:"prepareMs"`
 	BootMs     *int64                 `json:"bootMs,omitempty"`
@@ -251,12 +366,14 @@ type ReadyTiming struct {
 	ReadyMs    *int64                 `json:"readyMs,omitempty"`
 	SnapshotMs *int64                 `json:"snapshotMs,omitempty"`
 	BuildSteps *ReadyTimingBuildSteps `json:"buildSteps,omitempty"`
+	Phases     []BootPhase            `json:"phases,omitempty"`
 }
 
 type ClaimReadyBody struct {
-	Manifest Manifest      `json:"manifest"`
-	Observer ObserverState `json:"observer"`
-	Timing   *ReadyTiming  `json:"timing,omitempty"`
+	Manifest Manifest             `json:"manifest"`
+	Observer ObserverState        `json:"observer"`
+	Start    *ClaimReadyBodyStart `json:"start,omitempty"`
+	Timing   *ReadyTiming         `json:"timing,omitempty"`
 }
 
 type BlockerKind string
@@ -273,6 +390,7 @@ const (
 	BlockerKindRecipeOutdated    BlockerKind = "recipe_outdated"
 	BlockerKindUnknown           BlockerKind = "unknown"
 	BlockerKindSecurityViolation BlockerKind = "security_violation"
+	BlockerKindCapacity          BlockerKind = "capacity"
 )
 
 type ClaimFailedBodyBundleServicesItem struct {
@@ -316,6 +434,7 @@ type ClaimFailedBody struct {
 	Reason    string                 `json:"reason"`
 	Bundle    *ClaimFailedBodyBundle `json:"bundle,omitempty"`
 	Held      *bool                  `json:"held,omitempty"`
+	Phases    []BootPhase            `json:"phases,omitempty"`
 }
 
 type ClaimRenewBody struct {
@@ -610,12 +729,13 @@ type ProbeRunBody struct {
 }
 
 type ExecBody struct {
-	StepID    string           `json:"stepId"`
-	Command   string           `json:"command"`
-	Cwd       *string          `json:"cwd,omitempty"`
-	TimeoutMs int64            `json:"timeoutMs"`
-	Stream    *bool            `json:"stream,omitempty"`
-	Evidence  *EvidenceRequest `json:"evidence,omitempty"`
+	StepID     string           `json:"stepId"`
+	Command    string           `json:"command"`
+	Cwd        *string          `json:"cwd,omitempty"`
+	TimeoutMs  int64            `json:"timeoutMs"`
+	Stream     *bool            `json:"stream,omitempty"`
+	Evidence   *EvidenceRequest `json:"evidence,omitempty"`
+	Repository *string          `json:"repository,omitempty"`
 }
 
 type UploadFile struct {
@@ -633,11 +753,108 @@ type ExecCancelBody struct {
 	StepID string `json:"stepId"`
 }
 
+type SandboxOpKind string
+
+const (
+	SandboxOpKindExec   SandboxOpKind = "exec"
+	SandboxOpKindRead   SandboxOpKind = "read"
+	SandboxOpKindWrite  SandboxOpKind = "write"
+	SandboxOpKindList   SandboxOpKind = "list"
+	SandboxOpKindStat   SandboxOpKind = "stat"
+	SandboxOpKindRemove SandboxOpKind = "remove"
+)
+
+type SandboxOp struct {
+	Op         SandboxOpKind     `json:"op"`
+	Path       *string           `json:"path,omitempty"`
+	Command    *string           `json:"command,omitempty"`
+	Cwd        *string           `json:"cwd,omitempty"`
+	TimeoutMs  *int64            `json:"timeoutMs,omitempty"`
+	Env        map[string]string `json:"env,omitempty"`
+	Offset     *int64            `json:"offset,omitempty"`
+	Length     *int64            `json:"length,omitempty"`
+	Content    *string           `json:"content,omitempty"`
+	Mode       *int64            `json:"mode,omitempty"`
+	Append     *bool             `json:"append,omitempty"`
+	Mkdirs     *bool             `json:"mkdirs,omitempty"`
+	Depth      *int64            `json:"depth,omitempty"`
+	MaxEntries *int64            `json:"maxEntries,omitempty"`
+}
+
+type SandboxOpBody struct {
+	StepID string    `json:"stepId"`
+	Op     SandboxOp `json:"op"`
+}
+
+type SandboxErrorCode string
+
+const (
+	SandboxErrorCodeNotFound     SandboxErrorCode = "not_found"
+	SandboxErrorCodeNotDirectory SandboxErrorCode = "not_directory"
+	SandboxErrorCodeNotRegular   SandboxErrorCode = "not_regular"
+	SandboxErrorCodeSymlink      SandboxErrorCode = "symlink"
+	SandboxErrorCodeIsDirectory  SandboxErrorCode = "is_directory"
+	SandboxErrorCodeTooLarge     SandboxErrorCode = "too_large"
+	SandboxErrorCodeInvalidPath  SandboxErrorCode = "invalid_path"
+	SandboxErrorCodeDenied       SandboxErrorCode = "denied"
+	SandboxErrorCodeIo           SandboxErrorCode = "io"
+	SandboxErrorCodeBusy         SandboxErrorCode = "busy"
+)
+
+type SandboxError struct {
+	Code    SandboxErrorCode `json:"code"`
+	Message string           `json:"message"`
+}
+
+type SandboxExecResult struct {
+	ExitCode   int64  `json:"exitCode"`
+	Stdout     string `json:"stdout"`
+	Stderr     string `json:"stderr"`
+	Truncated  bool   `json:"truncated"`
+	TimedOut   bool   `json:"timedOut"`
+	DurationMs int64  `json:"durationMs"`
+}
+
+type SandboxEntryType string
+
+const (
+	SandboxEntryTypeFile    SandboxEntryType = "file"
+	SandboxEntryTypeDir     SandboxEntryType = "dir"
+	SandboxEntryTypeSymlink SandboxEntryType = "symlink"
+	SandboxEntryTypeOther   SandboxEntryType = "other"
+)
+
+type SandboxEntry struct {
+	Path string           `json:"path"`
+	Type SandboxEntryType `json:"type"`
+	Size int64            `json:"size"`
+}
+
+type SandboxResult struct {
+	Ok        bool               `json:"ok"`
+	Error     *SandboxError      `json:"error,omitempty"`
+	Exec      *SandboxExecResult `json:"exec,omitempty"`
+	Content   *string            `json:"content,omitempty"`
+	Size      *int64             `json:"size,omitempty"`
+	Eof       *bool              `json:"eof,omitempty"`
+	Written   *int64             `json:"written,omitempty"`
+	Type      *SandboxEntryType  `json:"type,omitempty"`
+	Mode      *int64             `json:"mode,omitempty"`
+	Entries   []SandboxEntry     `json:"entries,omitempty"`
+	Truncated *bool              `json:"truncated,omitempty"`
+}
+
+type GuestResultBody struct {
+	StepID string        `json:"stepId"`
+	Result SandboxResult `json:"result"`
+}
+
 type SnapshotKind string
 
 const (
 	SnapshotKindComposeVolumes SnapshotKind = "compose_volumes"
 	SnapshotKindDisk           SnapshotKind = "disk"
+	SnapshotKindMemory         SnapshotKind = "memory"
 )
 
 type Snapshot struct {
@@ -648,6 +865,19 @@ type Snapshot struct {
 type MachineResetBody struct {
 	StepID   string   `json:"stepId"`
 	Snapshot Snapshot `json:"snapshot"`
+}
+
+type ClaimSnapshotBodyPurpose string
+
+const (
+	ClaimSnapshotBodyPurposeTemplate ClaimSnapshotBodyPurpose = "template"
+	ClaimSnapshotBodyPurposeSession  ClaimSnapshotBodyPurpose = "session"
+	ClaimSnapshotBodyPurposeRound    ClaimSnapshotBodyPurpose = "round"
+)
+
+type ClaimSnapshotBody struct {
+	StepID  string                   `json:"stepId"`
+	Purpose ClaimSnapshotBodyPurpose `json:"purpose"`
 }
 
 type Executor string
@@ -884,16 +1114,24 @@ type BrowserExploreResult struct {
 	Truncated        bool                      `json:"truncated"`
 }
 
+type StepResultBodySnapshot struct {
+	ID      string                   `json:"id"`
+	Purpose ClaimSnapshotBodyPurpose `json:"purpose"`
+	Ms      int64                    `json:"ms"`
+}
+
 type StepResultBody struct {
-	StepID             string                `json:"stepId"`
-	Executor           Executor              `json:"executor"`
-	ImageID            string                `json:"imageId"`
-	VMHealth           VMHealth              `json:"vmHealth"`
-	Exec               *ExecResult           `json:"exec,omitempty"`
-	Probe              *ProbeResult          `json:"probe,omitempty"`
-	BrowserExploration *BrowserExploreResult `json:"browserExploration,omitempty"`
-	Redactions         *int64                `json:"redactions,omitempty"`
-	DurationMs         *int64                `json:"durationMs,omitempty"`
+	StepID             string                  `json:"stepId"`
+	Executor           Executor                `json:"executor"`
+	ImageID            string                  `json:"imageId"`
+	VMHealth           VMHealth                `json:"vmHealth"`
+	Exec               *ExecResult             `json:"exec,omitempty"`
+	Probe              *ProbeResult            `json:"probe,omitempty"`
+	BrowserExploration *BrowserExploreResult   `json:"browserExploration,omitempty"`
+	Sandbox            *SandboxResult          `json:"sandbox,omitempty"`
+	Snapshot           *StepResultBodySnapshot `json:"snapshot,omitempty"`
+	Redactions         *int64                  `json:"redactions,omitempty"`
+	DurationMs         *int64                  `json:"durationMs,omitempty"`
 }
 
 type StepStreamBody struct {
@@ -902,10 +1140,16 @@ type StepStreamBody struct {
 }
 
 type ImageBakeBody struct {
-	EnvironmentID string `json:"environmentId"`
-	OrgID         string `json:"orgId"`
-	RecipeSha     string `json:"recipeSha"`
-	Sha           string `json:"sha"`
+	EnvironmentID string  `json:"environmentId"`
+	OrgID         string  `json:"orgId"`
+	RecipeSha     string  `json:"recipeSha"`
+	Sha           string  `json:"sha"`
+	RefsDigest    *string `json:"refsDigest,omitempty"`
+}
+
+type SnapshotForgetBody struct {
+	OrgID       string   `json:"orgId"`
+	SnapshotIds []string `json:"snapshotIds"`
 }
 
 type PoolTargetBody struct {
@@ -946,16 +1190,34 @@ const (
 )
 
 type ClaimProgressBody struct {
-	Phase string                 `json:"phase"`
-	State ClaimProgressBodyState `json:"state"`
-	At    string                 `json:"at"`
-	Ms    *int64                 `json:"ms,omitempty"`
-	Lines []string               `json:"lines,omitempty"`
+	Phase  string                 `json:"phase"`
+	State  ClaimProgressBodyState `json:"state"`
+	At     string                 `json:"at"`
+	Ms     *int64                 `json:"ms,omitempty"`
+	Lines  []string               `json:"lines,omitempty"`
+	Phases []BootPhase            `json:"phases,omitempty"`
 }
 
 type EgressPolicyBody struct {
-	Allow    []string `json:"allow"`
-	IssuedAt string   `json:"issuedAt"`
+	Allow    []string                            `json:"allow"`
+	Inspect  []ClaimAcquireBodyEgressInspectItem `json:"inspect,omitempty"`
+	IssuedAt string                              `json:"issuedAt"`
+}
+
+type PreviewTunnelBody struct {
+	URL       string `json:"url"`
+	Ticket    string `json:"ticket"`
+	ExpiresAt string `json:"expiresAt"`
+}
+
+type PreviewRouteBody struct {
+	PreviewID string      `json:"previewId"`
+	Target    ProbeTarget `json:"target"`
+	Until     string      `json:"until"`
+}
+
+type PreviewUnrouteBody struct {
+	PreviewID string `json:"previewId"`
 }
 
 type CellRevokedBody struct {
@@ -981,6 +1243,8 @@ func newBody(t MessageType) (any, bool) {
 		return new(HeartbeatBody), true
 	case MessageTypeClaimAcquire:
 		return new(ClaimAcquireBody), true
+	case MessageTypeSandboxAcquire:
+		return new(SandboxAcquireBody), true
 	case MessageTypeClaimReady:
 		return new(ClaimReadyBody), true
 	case MessageTypeClaimFailed:
@@ -999,14 +1263,22 @@ func newBody(t MessageType) (any, bool) {
 		return new(UploadBody), true
 	case MessageTypeExecCancel:
 		return new(ExecCancelBody), true
+	case MessageTypeSandboxOp:
+		return new(SandboxOpBody), true
+	case MessageTypeGuestResult:
+		return new(GuestResultBody), true
 	case MessageTypeMachineReset:
 		return new(MachineResetBody), true
+	case MessageTypeClaimSnapshot:
+		return new(ClaimSnapshotBody), true
 	case MessageTypeStepResult:
 		return new(StepResultBody), true
 	case MessageTypeStepStream:
 		return new(StepStreamBody), true
 	case MessageTypeImageBake:
 		return new(ImageBakeBody), true
+	case MessageTypeSnapshotForget:
+		return new(SnapshotForgetBody), true
 	case MessageTypePoolTarget:
 		return new(PoolTargetBody), true
 	case MessageTypeBlocked:
@@ -1017,6 +1289,12 @@ func newBody(t MessageType) (any, bool) {
 		return new(ClaimProgressBody), true
 	case MessageTypeEgressPolicy:
 		return new(EgressPolicyBody), true
+	case MessageTypePreviewTunnel:
+		return new(PreviewTunnelBody), true
+	case MessageTypePreviewRoute:
+		return new(PreviewRouteBody), true
+	case MessageTypePreviewUnroute:
+		return new(PreviewUnrouteBody), true
 	case MessageTypeCellRevoked:
 		return new(CellRevokedBody), true
 	case MessageTypeAck:
@@ -1036,6 +1314,8 @@ func bodyType(body any) (MessageType, bool) {
 		return MessageTypeHeartbeat, true
 	case ClaimAcquireBody, *ClaimAcquireBody:
 		return MessageTypeClaimAcquire, true
+	case SandboxAcquireBody, *SandboxAcquireBody:
+		return MessageTypeSandboxAcquire, true
 	case ClaimReadyBody, *ClaimReadyBody:
 		return MessageTypeClaimReady, true
 	case ClaimFailedBody, *ClaimFailedBody:
@@ -1054,14 +1334,22 @@ func bodyType(body any) (MessageType, bool) {
 		return MessageTypeUpload, true
 	case ExecCancelBody, *ExecCancelBody:
 		return MessageTypeExecCancel, true
+	case SandboxOpBody, *SandboxOpBody:
+		return MessageTypeSandboxOp, true
+	case GuestResultBody, *GuestResultBody:
+		return MessageTypeGuestResult, true
 	case MachineResetBody, *MachineResetBody:
 		return MessageTypeMachineReset, true
+	case ClaimSnapshotBody, *ClaimSnapshotBody:
+		return MessageTypeClaimSnapshot, true
 	case StepResultBody, *StepResultBody:
 		return MessageTypeStepResult, true
 	case StepStreamBody, *StepStreamBody:
 		return MessageTypeStepStream, true
 	case ImageBakeBody, *ImageBakeBody:
 		return MessageTypeImageBake, true
+	case SnapshotForgetBody, *SnapshotForgetBody:
+		return MessageTypeSnapshotForget, true
 	case PoolTargetBody, *PoolTargetBody:
 		return MessageTypePoolTarget, true
 	case BlockedBody, *BlockedBody:
@@ -1072,6 +1360,12 @@ func bodyType(body any) (MessageType, bool) {
 		return MessageTypeClaimProgress, true
 	case EgressPolicyBody, *EgressPolicyBody:
 		return MessageTypeEgressPolicy, true
+	case PreviewTunnelBody, *PreviewTunnelBody:
+		return MessageTypePreviewTunnel, true
+	case PreviewRouteBody, *PreviewRouteBody:
+		return MessageTypePreviewRoute, true
+	case PreviewUnrouteBody, *PreviewUnrouteBody:
+		return MessageTypePreviewUnroute, true
 	case CellRevokedBody, *CellRevokedBody:
 		return MessageTypeCellRevoked, true
 	case AckBody, *AckBody:

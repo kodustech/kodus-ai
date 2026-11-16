@@ -3,9 +3,14 @@ package sandbox
 import (
 	"encoding/json"
 	"fmt"
+	"math"
+	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/claimlimits"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/machinetrust"
 )
 
 // VerifyCanonical checks the project as docker compose will run it (the
@@ -53,6 +58,9 @@ func VerifyCanonical(configJSON []byte, o Options) error {
 		if _, ok := v["driver_opts"]; ok {
 			c.add("volumes."+name+".driver_opts", "driver options")
 		}
+	}
+	if nonEmpty(doc["secrets"]) {
+		c.add("secrets", "set") // Apply drops them: no service mounts a secret
 	}
 	nets, _ := doc["networks"].(map[string]any)
 	for _, name := range sortedKeys(nets) {
@@ -106,7 +114,10 @@ func (c *checker) verifyService(name string, svc map[string]any) {
 	} else if nonEmpty(svc["extra_hosts"]) {
 		c.add(path+".extra_hosts", "set")
 	}
-	for _, k := range []string{"cap_add", "devices", "device_cgroup_rules", "ports", "volumes_from", "dns", "links", "external_links", "secrets", "configs", "sysctls", "group_add"} {
+	c.verifyCaps(path, svc)
+	c.verifyLimits(path, svc)
+	c.verifyDisk(path, svc)
+	for _, k := range []string{"devices", "device_cgroup_rules", "ports", "volumes_from", "dns", "links", "external_links", "secrets", "configs", "sysctls", "group_add"} {
 		if nonEmpty(svc[k]) {
 			c.add(path+"."+k, "set")
 		}
@@ -132,6 +143,17 @@ func (c *checker) verifyService(name string, svc map[string]any) {
 	if c.o.Decoy != "" && !mountsReadOnly(svc["volumes"], c.o.Decoy, DecoyTarget) {
 		c.add(path+".volumes", "the cell's decoy file is not mounted")
 	}
+	if c.o.Trust.Set() {
+		if !mountsReadOnly(svc["volumes"], c.o.Trust.Bundle, machinetrust.BundleTarget) || !mountsReadOnly(svc["volumes"], c.o.Trust.CellCA, machinetrust.CellCATarget) {
+			c.add(path+".volumes", "the cell's trust files are not mounted")
+		}
+		env, _ := svc["environment"].(map[string]any)
+		for k, v := range machinetrust.Env(machinetrust.BundleTarget, machinetrust.CellCATarget) {
+			if env[k] != v {
+				c.add(path+".environment."+k, fmt.Sprintf("%v, not the cell's %s", env[k], v))
+			}
+		}
+	}
 	labels, _ := svc["labels"].(map[string]any)
 	for k, v := range c.o.Labels {
 		if labels[k] != v {
@@ -142,6 +164,9 @@ func (c *checker) verifyService(name string, svc map[string]any) {
 	for i, v := range vols {
 		m, _ := v.(map[string]any)
 		vp := fmt.Sprintf("%s.volumes[%d]", path, i)
+		if t, _ := m["target"].(string); (t == machinetrust.Dir || strings.HasPrefix(t, machinetrust.Dir+"/")) && !c.cellTrustMount(m) {
+			c.add(vp, t+" is the cell's")
+		}
 		switch m["type"] {
 		case "bind":
 			src, _ := m["source"].(string)
@@ -154,7 +179,10 @@ func (c *checker) verifyService(name string, svc map[string]any) {
 			if c.o.Decoy != "" && src == c.o.Decoy && m["target"] == DecoyTarget {
 				break // the other one: the cell's decoy file
 			}
-			if _, err := ResolveInside(c.o.ProjectDir, src); err != nil {
+			if c.cellTrustMount(m) {
+				break // the cell's trust files
+			}
+			if _, err := c.o.resolve(src); err != nil {
 				c.add(vp, err.Error())
 			}
 			if b, ok := m["bind"].(map[string]any); ok {
@@ -181,6 +209,134 @@ func (c *checker) verifyService(name string, svc map[string]any) {
 		}
 	}
 }
+
+// verifyDisk: the service logs through the local driver within the cell's
+// bound, and its writable layer has the cell's disk size, or none when the
+// cell sets none.
+func (c *checker) verifyDisk(path string, svc map[string]any) {
+	_, sizeBytes, files, err := c.o.logBound()
+	if err != nil {
+		c.add(path+".logging", err.Error())
+		return
+	}
+	l, _ := svc["logging"].(map[string]any)
+	opts, _ := l["options"].(map[string]any)
+	if l == nil || l["driver"] != "local" || opts["max-size"] == nil || opts["max-file"] == nil {
+		c.add(path+".logging", "not the cell's (the local driver within its bound)")
+	}
+	for _, k := range sortedKeys(opts) {
+		switch k {
+		case "max-size":
+			s, _ := opts[k].(string)
+			if b, ok := parseLogSize(s); !ok || b > sizeBytes {
+				c.add(path+".logging.options.max-size", fmt.Sprintf("%v, past the cell's bound", opts[k]))
+			}
+		case "max-file":
+			if f, ok := logFiles(opts[k]); !ok || f < 1 || f > files {
+				c.add(path+".logging.options.max-file", fmt.Sprintf("%v, past the cell's bound", opts[k]))
+			}
+		default:
+			c.add(path+".logging.options."+k, "not the cell's")
+		}
+	}
+	so, _ := svc["storage_opt"].(map[string]any)
+	switch {
+	case c.o.DiskSize == "" && nonEmpty(svc["storage_opt"]):
+		c.add(path+".storage_opt", "set")
+	case c.o.DiskSize != "" && (len(so) != 1 || so["size"] != c.o.DiskSize):
+		c.add(path+".storage_opt", fmt.Sprintf("%v, not the cell's size %s", svc["storage_opt"], c.o.DiskSize))
+	}
+}
+
+// verifyCaps: the service drops ALL and adds back only ServiceCaps.
+func (c *checker) verifyCaps(path string, svc map[string]any) {
+	drops, _ := svc["cap_drop"].([]any)
+	if !slices.ContainsFunc(drops, func(v any) bool { s, _ := v.(string); return capName(s) == "ALL" }) {
+		c.add(path+".cap_drop", "does not drop ALL")
+	}
+	switch adds := svc["cap_add"].(type) {
+	case nil:
+	case []any:
+		for _, v := range adds {
+			if s, _ := v.(string); !slices.Contains(ServiceCaps, capName(s)) {
+				c.add(path+".cap_add", fmt.Sprintf("%v is not one of the service capabilities", v))
+			}
+		}
+	default:
+		c.add(path+".cap_add", "not a list")
+	}
+}
+
+// verifyLimits: the limits Apply forced are the ones compose will run with
+// (pids_limit, mem_limit and cpus), and nothing in deploy sets others.
+func (c *checker) verifyLimits(path string, svc map[string]any) {
+	pids := c.o.PidsLimit
+	if pids == 0 {
+		pids = 2048
+	}
+	if got, ok := number(svc["pids_limit"]); !ok || got != float64(pids) {
+		c.add(path+".pids_limit", fmt.Sprintf("%v, not %d", svc["pids_limit"], pids))
+	}
+	if c.o.MemLimit != "" {
+		want, err := memBytes(c.o.MemLimit)
+		if err != nil {
+			c.add(path+".mem_limit", "the cell's memory limit does not parse: "+err.Error())
+		} else if got, err := memBytes(svc["mem_limit"]); err != nil || got != want {
+			c.add(path+".mem_limit", fmt.Sprintf("%v, not %s", svc["mem_limit"], c.o.MemLimit))
+		}
+	}
+	if c.o.CPUs != "" {
+		want, okW := number(c.o.CPUs)
+		if got, ok := number(svc["cpus"]); !okW || !ok || math.Abs(got-want) > 1e-6 {
+			c.add(path+".cpus", fmt.Sprintf("%v, not %s", svc["cpus"], c.o.CPUs))
+		}
+	}
+	if d, ok := svc["deploy"].(map[string]any); ok {
+		if res, ok := d["resources"].(map[string]any); ok && nonEmpty(res["limits"]) {
+			c.add(path+".deploy.resources.limits", "the cell sets the limits")
+		}
+	}
+}
+
+// number reads a JSON number or a numeric string.
+func number(v any) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case int:
+		return float64(x), true
+	case string:
+		f, err := strconv.ParseFloat(strings.TrimSpace(x), 64)
+		return f, err == nil
+	}
+	return 0, false
+}
+
+// memBytes reads a memory size as compose and docker take it: a byte count
+// (a JSON number or "4294967296") or a number with a unit ("4g", "12288m",
+// "512MiB"), in powers of 1024.
+func memBytes(v any) (int64, error) {
+	if f, ok := v.(float64); ok {
+		return int64(f), nil
+	}
+	s, ok := v.(string)
+	if !ok {
+		return 0, fmt.Errorf("%v is not a size", v)
+	}
+	m := memSize.FindStringSubmatch(strings.ToLower(strings.TrimSpace(s)))
+	if m == nil {
+		return 0, fmt.Errorf("%q is not a size", s)
+	}
+	n, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		return 0, err
+	}
+	unit := strings.TrimSuffix(strings.TrimSuffix(m[2], "ib"), "b")
+	shift := map[string]uint{"": 0, "k": 10, "m": 20, "g": 30, "t": 40}[unit]
+	return int64(n * float64(uint64(1)<<shift)), nil
+}
+
+var memSize = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?)\s*(b|[kmgt](?:i?b)?)?$`)
 
 func hasKey(m map[string]any, k string) bool {
 	_, ok := m[k]
@@ -220,4 +376,14 @@ func mountsReadOnly(v any, source, target string) bool {
 		}
 	}
 	return false
+}
+
+// cellTrustMount: m is one of the cell's trust files, bound where Apply
+// put it.
+func (c *checker) cellTrustMount(m map[string]any) bool {
+	if !c.o.Trust.Set() || m["type"] != "bind" {
+		return false
+	}
+	src, _ := m["source"].(string)
+	return src == c.o.Trust.Bundle && m["target"] == machinetrust.BundleTarget || src == c.o.Trust.CellCA && m["target"] == machinetrust.CellCATarget
 }

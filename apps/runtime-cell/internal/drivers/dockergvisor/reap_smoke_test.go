@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/reaper"
 )
 
@@ -70,7 +70,7 @@ func TestSmokeReaper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep, err := (&reaper.Reaper{CellID: cell, Driver: rp}).Run(context.Background())
+	rep, err := (&reaper.Reaper{CellID: cell, Driver: rp, Orphans: rp}).Run(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -23,6 +23,30 @@ type RunConfig struct {
 	MaxBackoff time.Duration
 	// AckTimeout is how long a frame waits for its ack (default 5 s).
 	AckTimeout time.Duration
+	// MissedHeartbeats is how many heartbeats in a row the hub may leave
+	// unanswered before the session is taken for dead (default 3).
+	MissedHeartbeats int
+}
+
+// silence counts the heartbeats the hub left unanswered in a row. A path
+// that dies without closing the socket (a tunnel or a load balancer that
+// keeps the cell's end open) still takes the cell's frames, so only the
+// missing acks tell: after max of them the session ends and the cell dials
+// again, instead of holding a dead connection until the dead-man acts.
+type silence struct{ missed, max int }
+
+// after takes a heartbeat's result. An ack or a nack is the hub answering;
+// anything else is a heartbeat it did not answer. The error ends the session.
+func (s *silence) after(err error) error {
+	var nack *hubclient.NackError
+	if err == nil || errors.As(err, &nack) {
+		s.missed = 0
+		return nil
+	}
+	if s.missed++; s.missed < s.max {
+		return nil
+	}
+	return fmt.Errorf("hub silent: %d heartbeats unanswered (last: %w)", s.missed, err)
 }
 
 // Run keeps the cell alive until ctx ends: it connects, says hello, sends
@@ -44,13 +68,22 @@ func (a *Agent) Run(ctx context.Context, rc RunConfig) error {
 	if rc.MaxBackoff == 0 {
 		rc.MaxBackoff = 30 * time.Second
 	}
+	if rc.MissedHeartbeats <= 0 {
+		rc.MissedHeartbeats = 3
+	}
 	a.mu.Lock()
 	a.runCtx = ctx
 	a.mu.Unlock()
 	housekept := make(chan struct{})
 	go func() { defer close(housekept); a.housekeeping(ctx, rc) }()
-	if a.cfg.Alerts != nil {
-		a.goTracked(a.watchAlerts)
+	for i := range a.alertSources {
+		a.goTracked(func(ctx context.Context) { a.watchAlerts(ctx, i) })
+	}
+	if a.sandboxPool != nil {
+		a.goTracked(a.sandboxPool.run)
+	}
+	if a.cfg.DiskWatch != nil {
+		a.goTracked(a.watchDisk)
 	}
 	backoff := rc.Backoff
 	for ctx.Err() == nil {
@@ -74,7 +107,7 @@ func (a *Agent) Run(ctx context.Context, rc RunConfig) error {
 	}
 	<-housekept
 	a.Wait()
-	return nil
+	return nil //nolint:nilerr // Run ends cleanly with its context; each session's error was logged and retried
 }
 
 func (a *Agent) session(ctx context.Context, rc RunConfig) error {
@@ -82,7 +115,7 @@ func (a *Agent) session(ctx context.Context, rc RunConfig) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close("bye")
+	defer func() { _ = conn.Close("bye") }()
 	sctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	served := make(chan error, 1)
@@ -102,8 +135,7 @@ func (a *Agent) session(ctx context.Context, rc RunConfig) error {
 	}
 	version, err := chosenVersion(ack)
 	if err != nil {
-		a.log.Error("hub.version", "err", err)
-		return err
+		return err // Run logs it as hub.disconnected
 	}
 	accepts := protocol.Accepted(ack)
 	a.mu.Lock()
@@ -123,6 +155,14 @@ func (a *Agent) session(ctx context.Context, rc RunConfig) error {
 	// The first heartbeat right after hello: the hub knows the cell's slots
 	// and memory before it places a claim, not a tick later.
 	a.nudgeHeartbeat()
+	quiet := silence{max: rc.MissedHeartbeats}
+	beat := func() error {
+		err := conn.Request(sctx, protocol.Header{ID: a.cfg.NewID()}, a.Heartbeat())
+		if err == nil {
+			a.deadman.Contact()
+		}
+		return quiet.after(err)
+	}
 	for {
 		select {
 		case err := <-served:
@@ -130,12 +170,12 @@ func (a *Agent) session(ctx context.Context, rc RunConfig) error {
 		case <-sctx.Done():
 			return errors.New("session ended")
 		case <-t.C:
-			if err := conn.Request(sctx, protocol.Header{ID: a.cfg.NewID()}, a.Heartbeat()); err == nil {
-				a.deadman.Contact()
+			if err := beat(); err != nil {
+				return err
 			}
 		case <-a.beat:
-			if err := conn.Request(sctx, protocol.Header{ID: a.cfg.NewID()}, a.Heartbeat()); err == nil {
-				a.deadman.Contact()
+			if err := beat(); err != nil {
+				return err
 			}
 		}
 	}

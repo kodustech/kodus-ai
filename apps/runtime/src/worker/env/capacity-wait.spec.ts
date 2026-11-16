@@ -2,7 +2,11 @@ import { getEventListeners } from 'node:events';
 
 import type { AcquireRequest, Blocked, Claim } from '@libs/runtime/environment';
 
-import { acquireWaitingForRoom, type CapacityWaitOptions } from './capacity-wait';
+import { CellUnavailableError } from '../../shared/errors';
+import { devSealKey } from '../../testing/dev-seal-key';
+import { SealedSecretOpener } from '../secrets/sealed-tokens';
+import { acquireWaitingForRoom, CELL_LOST_WAIT_MS, type CapacityWaitOptions } from './capacity-wait';
+import { HubClient, HubEnvironmentClient } from './hub-environment-runtime';
 
 const refused: Blocked = {
     status: 'blocked',
@@ -137,5 +141,121 @@ describe('capacity wait cancellation and deadline', () => {
 
         expect(result).toEqual({ claim: refused, waitedMs: 20_000, rounds: 1 });
         expect(acquire).toHaveBeenCalledTimes(1);
+    });
+});
+
+const cellLost: Blocked = {
+    status: 'blocked',
+    blockers: [{ kind: 'platform', signature: 'cell_lost', message: 'the cell disconnected while the claim was booting' }],
+};
+
+describe('a cell lost while the claim boots', () => {
+    const clock = () => {
+        let t = 0;
+        return { now: () => new Date(t), sleep: async (ms: number) => void (t += ms), at: () => t, pass: (ms: number) => void (t += ms) };
+    };
+
+    it('asks again with the same request until the cell is back, past the budget for room', async () => {
+        const c = clock();
+        const answers: Array<() => Promise<Claim | Blocked>> = [
+            // The boot ran for 14 min before the cell dropped: the budget for room (10 min) is long gone.
+            async () => (c.pass(14 * 60_000), cellLost),
+            async () => { throw new CellUnavailableError('no cell is connected for this organization'); },
+            async () => ready,
+        ];
+        const acquire = jest.fn((_req: AcquireRequest) => answers.shift()!());
+        const onWait = jest.fn();
+
+        const r = await acquireWaitingForRoom({ acquire }, request, { until: 10 * 60_000, now: c.now, sleep: c.sleep, jitter: () => 1, onWait });
+
+        expect(r.claim).toBe(ready);
+        expect(r.rounds).toBe(3);
+        expect(acquire.mock.calls.every(([req]) => req === request)).toBe(true);
+        // Never reported as a wait for room.
+        expect(onWait).not.toHaveBeenCalled();
+    });
+
+    it('returns cell_lost when the cell is not back in CELL_LOST_WAIT_MS', async () => {
+        const c = clock();
+        const acquire = jest.fn(async () => cellLost);
+
+        const r = await acquireWaitingForRoom({ acquire }, request, { until: 0, now: c.now, sleep: c.sleep, jitter: () => 1 });
+
+        expect(r.claim).toBe(cellLost);
+        expect(c.at()).toBeLessThanOrEqual(CELL_LOST_WAIT_MS);
+        expect(c.at()).toBeGreaterThan(CELL_LOST_WAIT_MS - 15_000);
+    });
+
+    it('goes back to the budget for room when the cell returns and has no room', async () => {
+        const c = clock();
+        const answers = [cellLost, refused, refused, ready];
+        const acquire = jest.fn(async () => answers.shift()!);
+        const onWait = jest.fn();
+
+        const r = await acquireWaitingForRoom({ acquire }, request, { until: 60_000, now: c.now, sleep: c.sleep, jitter: () => 1, onWait });
+
+        expect(r.claim).toBe(ready);
+        expect(onWait).toHaveBeenCalledTimes(2);
+    });
+
+    it('still throws when the first answer is an unreachable cell', async () => {
+        const c = clock();
+        const acquire = jest.fn(async () => { throw new CellUnavailableError('cell-1'); });
+
+        await expect(acquireWaitingForRoom({ acquire }, request, { until: 60_000, now: c.now, sleep: c.sleep })).rejects.toBeInstanceOf(CellUnavailableError);
+        expect(acquire).toHaveBeenCalledTimes(1);
+    });
+});
+
+// A hub replica restarting (a deploy) while a claim boots drops the worker's acquire: the
+// cell keeps preparing the claim and joins it again when asked with the same key.
+describe('a hub that restarts while the claim boots', () => {
+    const secrets = new SealedSecretOpener(devSealKey());
+    const clock = () => {
+        let t = 0;
+        return { now: () => new Date(t), sleep: async (ms: number) => void (t += ms), at: () => t };
+    };
+    const env = (post: () => Promise<{ status: number; text: string }>) =>
+        new HubEnvironmentClient(
+            new HubClient({
+                cellDirectory: { reserveCell: async () => ({ cellId: 'cell-a', replicaUrl: 'https://hub-1', owner: 'kodus' as const }), replicaForClaim: async () => null },
+                hubBaseUrl: 'https://hub',
+                postImpl: post,
+                refusedRetryDelaysMs: [],
+            }),
+            secrets,
+            {
+                correlationId: 'corr',
+                organizationId: 'org-a',
+                repo: { provider: 'github', fullName: 'acme/shop', apiBase: 'https://api.github.com' } as any,
+                sealedRepoToken: secrets.seal('ghs_plain', 'setup-key'),
+                tokenBinding: 'setup-key',
+                imageId: 'setup',
+                expose: [],
+            },
+        );
+    const setupAcquire = { organizationId: 'org-a', environmentId: 'env-1', idempotencyKey: 'setup:key-1', consumer: 'setup', ref: { side: 'setup', sha: 'a'.repeat(40) } } as AcquireRequest;
+    const dropped = () => Promise.reject(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }));
+
+    it('gets the claim the cell was preparing when the first acquire is dropped mid-boot', async () => {
+        const c = clock();
+        const bodies: string[] = [];
+        const answers = [dropped, async () => ({ status: 200, text: JSON.stringify(ready) })];
+        const hubEnv = env(() => answers.shift()!());
+        const acquire = jest.fn((req: AcquireRequest) => (bodies.push(req.idempotencyKey), hubEnv.acquire(req)));
+
+        const r = await acquireWaitingForRoom({ acquire }, setupAcquire, { until: 60_000, now: c.now, sleep: c.sleep, jitter: () => 1 });
+
+        expect(r.claim).toEqual(ready);
+        expect(bodies).toEqual(['setup:key-1', 'setup:key-1']);
+    });
+
+    it('ends with the hub unreachable once it stays away past CELL_LOST_WAIT_MS', async () => {
+        const c = clock();
+        const acquire = jest.fn((req: AcquireRequest) => env(dropped).acquire(req));
+
+        await expect(acquireWaitingForRoom({ acquire }, setupAcquire, { until: 0, now: c.now, sleep: c.sleep, jitter: () => 1 })).rejects.toBeInstanceOf(CellUnavailableError);
+        expect(acquire.mock.calls.length).toBeGreaterThan(1);
+        expect(c.at()).toBeLessThanOrEqual(CELL_LOST_WAIT_MS);
     });
 });

@@ -14,7 +14,7 @@ import (
 // baked for env-1.
 func poolHarness(t *testing.T, edit ...func(*Config)) (*harness, string) {
 	t.Helper()
-	h := newHarness(t, append([]func(*Config){func(c *Config) { c.Pooler = c.Driver.(driver.Pooler) }}, edit...)...)
+	h := newHarness(t, append([]func(*Config){func(c *Config) { c.Parts.Pooler = c.Driver.(driver.Pooler) }}, edit...)...)
 	return h, bakeImage(t, h)
 }
 
@@ -207,7 +207,7 @@ func TestAFailedFillIsTriedAgainLater(t *testing.T) {
 // "latest" asked before the bake is done waits for it, then fills from it;
 // asked after, it takes the environment's last bake.
 func TestPoolTargetLatestFollowsTheEnvironmentsBake(t *testing.T) {
-	h := newHarness(t, func(c *Config) { c.Pooler = c.Driver.(driver.Pooler) })
+	h := newHarness(t, func(c *Config) { c.Parts.Pooler = c.Driver.(driver.Pooler) })
 	if err := h.handle("", protocol.MessageTypePoolTarget, &protocol.PoolTargetBody{OrgID: "org-a", EnvironmentID: "env-1", ImageID: "latest", Size: 1}); err != nil {
 		t.Fatal(err)
 	}

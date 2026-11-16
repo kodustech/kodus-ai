@@ -23,7 +23,22 @@ import (
 // boots on the default branch's migrated and seeded data. The copies run
 // under Runtime with no network: the data is the org's app's.
 
-const defaultHelperImage = "busybox:1.36"
+// defaultHelperImage is busybox:1.36's multi-arch index, pinned: the helper
+// runs over an org's data, so a moved tag must not change what runs there.
+// A configured helper must be pinned too (checkHelperImage).
+const defaultHelperImage = "busybox:1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662"
+
+// helperImage is the data helper the driver runs: defaultHelperImage when
+// none is configured, refused when not pinned by digest (repo@sha256:...).
+func helperImage(ref string) (string, error) {
+	if ref == "" {
+		return defaultHelperImage, nil
+	}
+	if !digestRef.MatchString(ref) {
+		return "", fmt.Errorf("dockergvisor: helper image %q is not pinned by digest (repo@sha256:...): it copies the org's data", ref)
+	}
+	return ref, nil
+}
 
 // Labels of a bake volume: which project volume it stands for, and the
 // commit it was baked at. kodus.cell, kodus.org and kodus.env say whose.
@@ -94,7 +109,7 @@ func (d *Driver) pinnedBakeSHA(ref driver.MachineRef) (string, error) {
 		return "", ErrBakeDataUnavailable
 	}
 	for _, c := range sha {
-		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			return "", ErrBakeDataUnavailable
 		}
 	}
@@ -226,8 +241,8 @@ func (d *Driver) restoreData(ctx context.Context, ref driver.MachineRef, keys []
 			made = append(made, to)
 			d.log().Warn("data.restore.failed", "machine", ref.MachineID, "volume", k, "err", err)
 			cleanup, cancel := cleanupContext(ctx)
-			defer cancel()
 			cleanupErr := d.d.VolumeRemove(cleanup, made...)
+			cancel()
 			return 0, errors.Join(err, cleanupErr)
 		}
 		made = append(made, to)
@@ -241,8 +256,8 @@ func (d *Driver) bakeData(ctx context.Context, spec driver.BakeSpec, keys []stri
 	machine := spec.Source.MachineID
 	parent := ""
 	if d.cfg.ClaimLimits != nil {
-		hard := driver.ParseExpiry(spec.Source.Tags, driver.TagHardExpires)
-		if hard.IsZero() {
+		hard, ok := driver.Ceiling(spec.Source.Tags)
+		if !ok {
 			return 0, ErrResourceEnforcement
 		}
 		var cancel context.CancelFunc

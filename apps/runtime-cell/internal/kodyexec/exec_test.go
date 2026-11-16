@@ -80,7 +80,9 @@ func TestHelperSetsidChild(t *testing.T) {
 
 // H1: a child that called setsid used to hold Run (and the step) until it
 // exited on its own. Run now returns at the timeout plus KillGrace, and on
-// Linux the child is dead.
+// Linux the child is dead. killTree used to read the tree only after killing
+// the group, when the dead shell had already handed the child to init: on
+// the KVM host the child outlived every timeout.
 func TestRunTimeoutHoldsAgainstASetsidChild(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	helper := fmt.Sprintf("KODYEXEC_HELPER_PIDFILE=%s %s -test.run=^TestHelperSetsidChild$ &", pidFile, os.Args[0])

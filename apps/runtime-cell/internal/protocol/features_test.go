@@ -12,7 +12,7 @@ import (
 // which the TS side checks against CELL_FEATURES: a feature added on one
 // side only fails one of the two suites.
 func TestFeaturesAreTheSharedFixtures(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join(fixturesDir, "hello-features-recipe-execution.json"))
+	raw, err := os.ReadFile(filepath.Join(fixturesDir, "hello-features-workspace.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

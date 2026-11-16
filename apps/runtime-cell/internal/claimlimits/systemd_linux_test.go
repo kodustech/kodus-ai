@@ -5,9 +5,10 @@ package claimlimits
 import (
 	"context"
 	"errors"
+	"testing"
+
 	systemdbus "github.com/coreos/go-systemd/v22/dbus"
 	dbus "github.com/godbus/dbus/v5"
-	"testing"
 )
 
 func TestNativeSystemdJobNeedsCompletedJobBeforeSuccess(t *testing.T) {
@@ -25,6 +26,7 @@ func TestNativeSystemdJobNeedsCompletedJobBeforeSuccess(t *testing.T) {
 		t.Fatalf("unbounded job wait: %v", err)
 	}
 }
+
 func TestNativeSystemdRejectsForeignRootBeforeDialOrFilesystemAccess(t *testing.T) {
 	if _, err := NewSystemd(context.Background(), "system.slice", "cell-1"); err == nil {
 		t.Fatal("foreign system unit accepted")
@@ -53,7 +55,7 @@ func TestNativeSliceWritesOnlySupportedResourceProperties(t *testing.T) {
 			t.Fatalf("unsupported/read-only property written: %s", forbidden)
 		}
 	}
-	if len(values) != 10 || values["MemorySwapMax"] != uint64(0) || values["MemoryMax"] != uint64(testLimits.MemoryBytes) || values["CPUQuotaPerSecUSec"] != uint64(500000) || values["CPUQuotaPeriodUSec"] != uint64(testLimits.CPUPeriod) || values["TasksMax"] != uint64(testLimits.Pids) {
+	if len(values) != 10 || values["MemorySwapMax"] != uint64(0) || values["MemoryMax"] != uint64(testLimits.MemoryBytes) || values["CPUQuotaPerSecUSec"] != uint64(500000) || values["CPUQuotaPeriodUSec"] != uint64(testLimits.CPUPeriod) || values["TasksMax"] != uint64(testLimits.Pids) { //nolint:gosec // G115: testLimits are positive constants
 		t.Fatalf("properties=%v", values)
 	}
 }
@@ -68,12 +70,14 @@ type fakePropertyReader struct {
 func (f *fakePropertyReader) GetUnitPropertiesContext(context.Context, string) (map[string]any, error) {
 	return f.common, nil
 }
+
 func (f *fakePropertyReader) GetUnitTypePropertiesContext(_ context.Context, _ string, kind string) (map[string]any, error) {
 	if kind != "Slice" {
 		return nil, errors.New("wrong unit interface")
 	}
 	return f.resource, nil
 }
+
 func (f *fakePropertyReader) GetUnitTypePropertyContext(_ context.Context, _, kind, name string) (*systemdbus.Property, error) {
 	f.hiddenReads++
 	if f.fail != nil {
@@ -84,6 +88,7 @@ func (f *fakePropertyReader) GetUnitTypePropertyContext(_ context.Context, _, ki
 	}
 	return &systemdbus.Property{Name: name, Value: dbus.MakeVariant(f.cpu)}, nil
 }
+
 func TestNativeExplicitResourceInterfaceAndHiddenAccountingReadback(t *testing.T) {
 	r := &fakePropertyReader{common: map[string]any{}, resource: map[string]any{}, cpu: true}
 	for k, v := range systemdPropertiesFixture() {

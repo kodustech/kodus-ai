@@ -166,8 +166,9 @@ type egress struct {
 }
 
 // startEgress runs the cell's egress (proxy and resolver, not transparent)
-// on the default bridge, with control mTLS and a policy key of its own.
-func startEgress(t *testing.T, dir, name string) egress {
+// on the default bridge, with control mTLS and a policy key of its own;
+// extra flags go after the rest (an -injector-addr).
+func startEgress(t *testing.T, dir, name string, extra ...string) egress {
 	t.Helper()
 	_ = exec.Command("docker", "rm", "-f", name).Run()
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", name).Run() })
@@ -200,9 +201,11 @@ func startEgress(t *testing.T, dir, name string) egress {
 	for _, f := range []string{"cert.pem", "key.pem", "ca.pem"} {
 		_ = os.Chmod(filepath.Join(dir, f), 0o644)
 	}
-	docker(t, "run", "-d", "--name", name, "-v", dir+":/e:ro", "alpine:3.20", "/e/egress",
+	docker(t, append([]string{
+		"run", "-d", "--name", name, "-v", dir + ":/e:ro", "alpine:3.20", "/e/egress",
 		"-listen-tls", ":443", "-listen-http", ":80", "-dns-listen", ":53", "-control", ":9443",
 		"-cert", "/e/cert.pem", "-key", "/e/key.pem", "-ca", "/e/ca.pem", "-agent-pub", "/e/agent.pub.pem",
-		"-upstream-dns", "1.1.1.1:53", "-transparent=false")
+		"-upstream-dns", "1.1.1.1:53", "-transparent=false",
+	}, extra...)...)
 	return egress{name: name, push: control2(t, ca, agent, priv, ipOn(t, name, "bridge"))}
 }

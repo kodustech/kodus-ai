@@ -238,3 +238,23 @@ ui: { login: /login }
 		t.Fatal("data.migrate is a boot step")
 	}
 }
+
+// A recipe the PR links to a file outside its checkout is refused, never
+// read: the cell's own files (its key, its config) must not reach the YAML
+// parser, whose errors quote what it read. Load used to follow the link.
+func TestARecipeLinkedOutOfTheCheckoutIsRefused(t *testing.T) {
+	outside := filepath.Join(t.TempDir(), "elsewhere.yaml")
+	if err := os.WriteFile(outside, []byte("version: 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	checkout := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(checkout, ".kodus"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(checkout, Path)); err != nil {
+		t.Fatal(err)
+	}
+	if rec, err := Load(checkout); err == nil {
+		t.Fatalf("Load read a recipe outside the checkout: %+v", rec)
+	}
+}

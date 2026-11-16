@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/clock"
 )
@@ -169,4 +170,69 @@ func (c *Generations) sweepDir(dir string) error {
 		errs = append(errs, c.retireLocked(p))
 	}
 	return errors.Join(errs...)
+}
+
+// Cache is one environment's exported cache of a service that has a current
+// generation.
+type Cache struct {
+	// Dir is the cache's directory (<root>/<env>/<service>); Env the
+	// environment's directory name under root.
+	Dir, Env string
+	// Promoted is when its current generation became current.
+	Promoted time.Time
+}
+
+// Current lists the caches that have a current generation.
+func (c *Generations) Current() []Cache {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []Cache
+	envs, _ := os.ReadDir(c.root)
+	for _, env := range envs {
+		services, _ := os.ReadDir(filepath.Join(c.root, env.Name()))
+		for _, svc := range services {
+			dir := filepath.Join(c.root, env.Name(), svc.Name())
+			if c.currentLocked(dir) == "" {
+				continue
+			}
+			// The link's own time: Promote makes a new link each time.
+			info, err := os.Lstat(filepath.Join(dir, currentLink))
+			if err != nil {
+				continue
+			}
+			out = append(out, Cache{Dir: dir, Env: env.Name(), Promoted: info.ModTime()})
+		}
+	}
+	return out
+}
+
+// Drop takes the current generation of the cache in dir out of the tree and
+// removes its bytes, for the disk floor. A generation a build reads stays
+// (false), and so does the cache; with none, nothing is done (false).
+func (c *Generations) Drop(dir string) (bool, error) {
+	c.mu.Lock()
+	gen := c.currentLocked(dir)
+	if gen == "" || c.held[gen] > 0 {
+		c.mu.Unlock()
+		return false, nil
+	}
+	// No build finds the cache from here on: the link goes first.
+	if err := os.Remove(filepath.Join(dir, currentLink)); err != nil {
+		c.mu.Unlock()
+		return false, err
+	}
+	if err := os.MkdirAll(c.trash, 0o700); err != nil {
+		c.mu.Unlock()
+		return true, err
+	}
+	c.seq++
+	to := filepath.Join(c.trash, fmt.Sprintf("%s-%d-%d", filepath.Base(gen), c.clock.Now().UnixNano(), c.seq))
+	err := os.Rename(gen, to)
+	c.mu.Unlock()
+	if err != nil {
+		return true, err
+	}
+	// Outside the lock: the bytes may be gigabytes, and the caller measures
+	// the disk again right after.
+	return true, os.RemoveAll(to)
 }

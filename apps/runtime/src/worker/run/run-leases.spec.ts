@@ -3,7 +3,7 @@ import { type AcquireRequest, type Blocked, FakeEnvironmentRuntime, type LeaseRe
 import { SCENARIOS } from '../../fake-cell/scenarios';
 
 import { shopRunRequest } from '../../e2e/fixtures';
-import { inMemoryRunDeps } from './in-memory-deps';
+import { inMemoryRunDeps } from './testing';
 import { ClaimLeaseKeeper, Timers } from './lease-keeper';
 import type { ClaimLeases } from './ports';
 import { runRuntimeRun } from './run-orchestrator';
@@ -108,7 +108,7 @@ describe('a Run keeps its claims leased while it works', () => {
             name = 'DBOSWorkflowCancelledError';
         }
         const step = deps.step;
-        deps.step = (name, fn) => (name === 'agent:plan' ? Promise.reject(new DBOSWorkflowCancelledError('cancelled')) : step(name, fn));
+        deps.step = (name, fn) => (name === 'agent:plan:early' ? Promise.reject(new DBOSWorkflowCancelledError('cancelled')) : step(name, fn));
         const req = shopRunRequest();
         await seed(projection, req);
         await expect(runRuntimeRun(req, { ...deps, leases })).rejects.toThrow('cancelled');
@@ -128,15 +128,13 @@ describe('a Run keeps its claims leased while it works', () => {
             },
             { timers },
         );
-        const step = deps.step;
-        deps.step = async (name, fn) => {
-            if (name === 'agent:plan') {
-                for (let i = 0; i < 3 && fire.length; i++) {
-                    fire.shift()!();
-                    for (let j = 0; j < 10; j++) await Promise.resolve();
-                }
+        const plan = deps.agent.plan.bind(deps.agent);
+        deps.agent.plan = async (input) => {
+            for (let i = 0; i < 3 && fire.length; i++) {
+                fire.shift()!();
+                for (let j = 0; j < 10; j++) await Promise.resolve();
             }
-            return step(name, fn);
+            return plan(input);
         };
         const req = shopRunRequest();
         await seed(projection, req);

@@ -28,6 +28,7 @@ import {
     ServiceUnavailableException,
 } from '@nestjs/common';
 
+import { EnvironmentRequiredException } from '../../application/external-findings.service';
 import type { EnvKeyPrincipal } from '../../domain/env-tools';
 import {
     RUNTIME_EXTERNAL_FINDINGS,
@@ -87,6 +88,13 @@ function configuredEndpoint(base: string | undefined): string {
 }
 
 function fixedError(error: unknown): Error {
+    // The one refusal a client can act on: it names environment ids the key already reaches, nothing else.
+    if (error instanceof EnvironmentRequiredException)
+        return new JsonRpcRequestMalformedError({
+            message:
+                'The repository is part of several environments; send environmentId with one of environmentIds',
+            metadata: { environmentIds: error.environmentIds.join(',') },
+        });
     const status = error instanceof HttpException ? error.getStatus() : 500;
     if (status === 404) return new JsonRpcTaskNotFoundError();
     if (status === 400 || status === 409)
@@ -181,7 +189,7 @@ export class RuntimeA2AAdapter {
                     id: 'submit_findings',
                     name: 'Submit findings',
                     description:
-                        'Receive a completed receipt with a separate durable verification task. Requires findings:submit and env:exec for executable probes.',
+                        'Receive a completed receipt with a separate durable verification task. Requires findings:submit and env:exec for executable probes. Name environmentId when the repository is part of several environments.',
                     tags: ['findings', 'verification'],
                 },
                 {
@@ -308,9 +316,11 @@ export class RuntimeA2AAdapter {
             getTaskPushNotificationConfig: pushUnsupported,
             listTaskPushNotificationConfigs: pushUnsupported,
             deleteTaskPushNotificationConfig: pushUnsupported,
+            // eslint-disable-next-line require-yield -- an unsupported stream fails on its first read, as the A2A handler expects of a stream
             sendMessageStream: async function* () {
                 throw new JsonRpcUnsupportedOperationError();
             },
+            // eslint-disable-next-line require-yield -- an unsupported stream fails on its first read, as the A2A handler expects of a stream
             resubscribe: async function* () {
                 throw new JsonRpcUnsupportedOperationError();
             },

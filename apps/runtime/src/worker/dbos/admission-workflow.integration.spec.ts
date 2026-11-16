@@ -8,16 +8,18 @@ import { RuntimeMetrics } from '@libs/runtime/telemetry';
 import { shopRunRequest } from '../../e2e/fixtures';
 import { ADMISSION_WAIT_MS, type AdmissionRef, type PhysicalAdmissionClient } from '../../shared/admission/admission-contract';
 import { PgAdmissionStore } from '../../shared/admission/pg-admission-store';
-import { InMemoryDistributedLocks } from '../../shared/persistence/locks';
-import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
-import { ensureDatabase, ensureRuntimeSchema } from '../../shared/persistence/runtime-schema';
-import { inMemoryRunDeps } from '../run/in-memory-deps';
+import { ensureRuntimeSchema } from '../../shared/persistence/runtime-schema';
+import { inMemoryRunDeps } from '../run/testing';
 import { AdmissionCoordinator } from './admission-coordinator';
 import { ADMISSION_QUEUE, EXECUTION_QUEUE, RunEngineService, admissionAttemptWorkflowId, approvedRunWorkflowId, setupWorkflowId } from './run-engine.service';
+import { isolatedDatabase } from '../../testing/isolated-database';
+import { InMemoryCommandStore, InMemoryDistributedLocks } from '../../shared/persistence/testing';
 
 // Real PostgreSQL + public DBOS scheduling, with fake physical admission and recorded in-memory Run work.
 // This creates no containers, PRs, provider requests or live workloads.
-const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
+// A database of its own: suites in parallel never read each other's rows (isolated-database.ts).
+const database = isolatedDatabase(process.env.RUNTIME_IT_DATABASE_URL ?? '', 'admission_workflow');
+const url = database.url;
 const skip = !url || process.env.SKIP_INTEGRATION === 'true';
 const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 async function until(check: () => Promise<boolean>, timeout = 15_000) {
@@ -29,7 +31,7 @@ async function until(check: () => Promise<boolean>, timeout = 15_000) {
 }
 
 (skip ? describe.skip : describe)('durable admission scheduling (real PostgreSQL)', () => {
-    const pool = new Pool({ connectionString: url });
+    const pool = new Pool({ connectionString: url, max: 4 });
     const store = new PgAdmissionStore(pool);
     const memory = inMemoryRunDeps();
     const limits = { globalWaiting: 100, perOrgWaiting: 20, globalExecuting: 2, perOrgExecuting: 2, maxAttempts: 360, leaseMs: 2_000, retryMs: 100, attemptConcurrency: 4, attemptPerOrg: 1 };
@@ -72,7 +74,7 @@ async function until(check: () => Promise<boolean>, timeout = 15_000) {
     }
 
     beforeAll(async () => {
-        await ensureDatabase(url);
+        await database.create();
         await ensureRuntimeSchema(pool);
         await engine.onModuleInit();
         await (await DBOS.retrieveQueue(ADMISSION_QUEUE))!.setMinPollingIntervalMs(20);
@@ -87,6 +89,7 @@ async function until(check: () => Promise<boolean>, timeout = 15_000) {
         await engine.repairAdmission();
         await DBOS.shutdown({ deregister: true });
         await pool.end();
+        await database.drop();
     }, 60_000);
 
     it('org B progresses while org A stays durably delayed for capacity', async () => {

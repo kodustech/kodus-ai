@@ -37,7 +37,7 @@ func startVM(t *testing.T, keys *ClaimKeys) *vm {
 	authorized := keys.Client.PublicKey().Marshal()
 	cfg := &ssh.ServerConfig{PublicKeyCallback: func(_ ssh.ConnMetadata, k ssh.PublicKey) (*ssh.Permissions, error) {
 		if bytes.Equal(k.Marshal(), authorized) {
-			return nil, nil
+			return &ssh.Permissions{}, nil
 		}
 		return nil, io.EOF
 	}}
@@ -141,13 +141,13 @@ func TestSSHExecAndUploadWithPinnedHost(t *testing.T) {
 	src := t.TempDir()
 	_ = os.MkdirAll(filepath.Join(src, "src"), 0o755)
 	_ = os.WriteFile(filepath.Join(src, "src", "a.js"), []byte("x"), 0o644)
-	if err := tr.Upload(context.Background(), ref(v.addr), src, "workspace"); err != nil {
+	if err := tr.Upload(context.Background(), ref(v.addr), src, "workspace", nil); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Join(v.uploaded, ",") != "src/,src/a.js" {
 		t.Fatalf("uploaded %v", v.uploaded)
 	}
-	if err := tr.Upload(context.Background(), ref(v.addr), src, "workspace; curl evil"); err == nil {
+	if err := tr.Upload(context.Background(), ref(v.addr), src, "workspace; curl evil", nil); err == nil {
 		t.Fatal("shell in the destination")
 	}
 	if !strings.HasPrefix(authorizedLine(keys), "ssh-ed25519 ") {
@@ -244,7 +244,7 @@ func TestUploadLeavesNoWriterWhenTheRemoteFails(t *testing.T) {
 	v := startVM(t, keys)
 	tr := sshFor(v.addr)
 	tr.SetKeys("claim-1", keys)
-	if err := tr.Upload(context.Background(), ref(v.addr), uploadSource(t, 8<<20), "elsewhere"); err == nil {
+	if err := tr.Upload(context.Background(), ref(v.addr), uploadSource(t, 8<<20), "elsewhere", nil); err == nil {
 		t.Fatal("a failed remote tar reported success")
 	}
 	deadline := time.Now().Add(2 * time.Second)
@@ -265,7 +265,7 @@ func TestUploadEndsWithItsContext(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- tr.Upload(ctx, ref(v.addr), uploadSource(t, 1<<10), "hang") }()
+	go func() { done <- tr.Upload(ctx, ref(v.addr), uploadSource(t, 1<<10), "hang", nil) }()
 	select {
 	case err := <-done:
 		if err == nil {
@@ -279,7 +279,7 @@ func TestUploadEndsWithItsContext(t *testing.T) {
 func TestUploadDestinationIsAPlainRelativePath(t *testing.T) {
 	tr := &SSH{User: "runner"}
 	for _, dst := range []string{"", "/abs", "a/../b", "..", "./x", "w>x", "w*", "w x", "w$(id)", "w\nid"} {
-		if err := tr.Upload(context.Background(), driver.MachineRef{}, t.TempDir(), dst); err == nil || !strings.Contains(err.Error(), "destination") {
+		if err := tr.Upload(context.Background(), driver.MachineRef{}, t.TempDir(), dst, nil); err == nil || !strings.Contains(err.Error(), "destination") {
 			t.Fatalf("%q: %v", dst, err)
 		}
 	}

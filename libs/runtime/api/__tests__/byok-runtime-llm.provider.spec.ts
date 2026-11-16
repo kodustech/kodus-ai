@@ -5,7 +5,9 @@ import { LLM_TASK } from '@libs/llm/llm-tasks';
 
 import { LlmProviderUnavailableError, RuntimeLlmGatewayUseCase } from '../application/use-cases/llm-gateway.use-case';
 import { signRunToken } from '../domain/run-token';
-import { ByokRuntimeLlmProvider, type RuntimeSlotResolver } from '../infrastructure/byok-runtime-llm.provider';
+import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
+
+import { ByokRuntimeAgentRunnerFactory, ByokRuntimeLlmProvider, type RuntimeSlotResolver } from '../infrastructure/byok-runtime-llm.provider';
 import { clock, config, InMemoryLlmUsage, NOW, ORG, run, SECRET, storeWith, TEAM } from './fixtures';
 
 jest.mock('@libs/llm/llm', () => ({ LLM: { run: jest.fn() } }));
@@ -168,5 +170,34 @@ describe('Runtime LLM gateway with the BYOK provider', () => {
         await expect(uc.execute({ authorization: tokenFor(r), body: { runId: r.runId, task: 'runtime.plan', messages: [{ role: 'user', content: 'go' }] } })).rejects.toBeInstanceOf(
             ServiceUnavailableException,
         );
+    });
+});
+
+describe('Runtime agents on the harness (recipe author, test planner)', () => {
+    beforeEach(() => {
+        llmRun.mockReset();
+        llmRun.mockResolvedValue({ steps: [], text: 'done', usage: { inputTokens: 10, outputTokens: 2 } });
+    });
+
+    it("stamp the runtime route and the Run's ids on every usage span, also on the managed default", async () => {
+        const factory = new ByokRuntimeAgentRunnerFactory(new FakeSlots(undefined), () => true);
+        const agent = await factory.forOrganization(
+            { organizationId: ORG, teamId: TEAM },
+            { runId: 'setup-learn-1', task: 'runtime.recipe_author', repositoryId: 'repo-1', environmentId: 'env-1' },
+        );
+        await agent!.runner.run(
+            { id: 'runtime-recipe-author', agentName: 'RuntimeRecipeAuthor', systemPrompt: 's', maxSteps: 1, tools: new InMemoryToolRegistry([]), policies: [] },
+            { prompt: 'go' },
+            { runId: 'setup-learn-1' },
+        );
+
+        expect(llmRun.mock.calls[0][0].attrs).toMatchObject({
+            route: LLM_TASK.runtime,
+            runId: 'setup-learn-1',
+            task: 'runtime.recipe_author',
+            repositoryId: 'repo-1',
+            environmentId: 'env-1',
+            agentName: 'RuntimeRecipeAuthor',
+        });
     });
 });

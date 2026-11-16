@@ -1,5 +1,6 @@
 import { DEV_SECRET_SEAL_KEY_HEX } from '../testing/dev-seal-key';
-import { loadRuntimeConfig, loadWorkerConfig } from './config';
+import { loadRuntimeConfig, loadSetupConfig, loadWorkerConfig } from './config';
+import { DEFAULT_MAX_TOKENS_PER_RUN } from '@libs/runtime/contracts/limits';
 import { signUploadGrant } from '@libs/runtime/contracts/evidence';
 import { UploadGrantSchema } from '@libs/runtime/protocol/messages';
 
@@ -64,6 +65,14 @@ describe('runtime config', () => {
         ).toBeUndefined();
     });
 
+    it('keeps round snapshots on unless RUNTIME_ROUND_SNAPSHOTS is 0, and refuses any other value', () => {
+        const base = { RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX };
+        expect(loadWorkerConfig(base).roundSnapshots).toBe(true);
+        expect(loadWorkerConfig({ ...base, RUNTIME_ROUND_SNAPSHOTS: '0' }).roundSnapshots).toBe(false);
+        expect(loadWorkerConfig({ ...base, RUNTIME_ROUND_SNAPSHOTS: '1' }).roundSnapshots).toBe(true);
+        expect(() => loadWorkerConfig({ ...base, RUNTIME_ROUND_SNAPSHOTS: 'true' })).toThrow(/RUNTIME_ROUND_SNAPSHOTS must be 0 or 1/);
+    });
+
     it('keeps durable admission opt-in and bounds pending input by counts and bytes', () => {
         const base = { RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX };
         expect((loadWorkerConfig(base) as any).durableAdmission).toBe(false);
@@ -101,6 +110,14 @@ describe('runtime config', () => {
                 .admission.perOrgExecuting,
         ).toBe(1);
     });
+    it("runs 2 setups of one organization at once unless set, between 1 and 8", () => {
+        const base = { RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX };
+        expect(loadWorkerConfig(base).setupPerOrg).toBe(2);
+        expect(loadWorkerConfig({ ...base, RUNTIME_SETUP_PER_ORG: '8' }).setupPerOrg).toBe(8);
+        for (const bad of ['0', '9', '1.5'])
+            expect(() => loadWorkerConfig({ ...base, RUNTIME_SETUP_PER_ORG: bad })).toThrow(/RUNTIME_SETUP_PER_ORG/);
+    });
+
     it('requires an explicit worker release in production and uses development only outside production', () => {
         const base = { RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX };
         expect(loadWorkerConfig(base).releaseVersion).toBe('development');
@@ -121,6 +138,8 @@ describe('runtime config', () => {
                 loadWorkerConfig({
                     ...base,
                     ...production,
+                    // The production image refuses the dev key (test below).
+                    RUNTIME_SECRET_SEAL_KEY: 'a1'.repeat(32),
                     RUNTIME_RELEASE_VERSION: 'runtime-e968eceb5',
                 }).releaseVersion,
             ).toBe('runtime-e968eceb5');
@@ -146,6 +165,19 @@ describe('runtime config', () => {
                 expect((e as Error).message).not.toContain('SECRET');
             }
         }
+    });
+
+    it('gives each org 10000 machine minutes a day unless RUNTIME_MACHINE_MINUTES_PER_ORG_DAY says otherwise, 0 meaning unlimited', () => {
+        expect(loadRuntimeConfig({}).machineMinutesPerOrgDay).toBe(10_000);
+        expect(loadRuntimeConfig({ RUNTIME_MACHINE_MINUTES_PER_ORG_DAY: '0' }).machineMinutesPerOrgDay).toBe(0);
+        expect(loadRuntimeConfig({ RUNTIME_MACHINE_MINUTES_PER_ORG_DAY: '600' }).machineMinutesPerOrgDay).toBe(600);
+        expect(() => loadRuntimeConfig({ RUNTIME_MACHINE_MINUTES_PER_ORG_DAY: '-1' })).toThrow(/RUNTIME_MACHINE_MINUTES_PER_ORG_DAY/);
+    });
+
+    it("admits a sandbox that asks no size at 2048 MB on a cell that names none, unless RUNTIME_SANDBOX_MEMORY_MB says otherwise", () => {
+        expect(loadRuntimeConfig({}).sandboxMemoryMb).toBe(2_048);
+        expect(loadRuntimeConfig({ RUNTIME_SANDBOX_MEMORY_MB: '4096' }).sandboxMemoryMb).toBe(4_096);
+        expect(() => loadRuntimeConfig({ RUNTIME_SANDBOX_MEMORY_MB: '100' })).toThrow(/RUNTIME_SANDBOX_MEMORY_MB/);
     });
 
     it('separates the internal listener from the public one', () => {
@@ -241,6 +273,29 @@ describe('runtime config', () => {
         ).toThrow(/RUNTIME_MANAGED_CELLS must be JSON/);
     });
 
+    it('a production worker refuses the dev-only evidence signing secret, or one shorter than 32 characters', () => {
+        const prod = { NODE_ENV: 'production', RUNTIME_RELEASE_VERSION: 'r1', RUNTIME_SECRET_SEAL_KEY: 'a1'.repeat(32) };
+        expect(() => loadWorkerConfig({ ...prod, RUNTIME_EVIDENCE_SIGNING_SECRET: 'dev-only-runtime-evidence-signing-secret-000000' })).toThrow(/RUNTIME_EVIDENCE_SIGNING_SECRET is the dev-only value/);
+        expect(() => loadWorkerConfig({ ...prod, RUNTIME_EVIDENCE_SIGNING_SECRET: 'short' })).toThrow(/RUNTIME_EVIDENCE_SIGNING_SECRET must be at least 32 characters/);
+        expect(loadWorkerConfig({ ...prod, RUNTIME_EVIDENCE_SIGNING_SECRET: 'e'.repeat(40) }).evidence.secret).toBe('e'.repeat(40));
+        expect(loadWorkerConfig({ RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX, RUNTIME_EVIDENCE_SIGNING_SECRET: 'short' }).evidence.secret).toBe('short');
+    });
+
+    it('a production worker refuses the dev-only seal key that is public in the repo', () => {
+        const prod = { NODE_ENV: 'production', RUNTIME_RELEASE_VERSION: 'r1' };
+        expect(() =>
+            loadWorkerConfig({ ...prod, RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX }),
+        ).toThrow(/dev-only seal key/);
+        const ownKey = 'a1'.repeat(32);
+        let error: unknown;
+        try {
+            loadWorkerConfig({ ...prod, RUNTIME_SECRET_SEAL_KEY: ownKey });
+        } catch (e) {
+            error = e;
+        }
+        expect(String(error ?? '')).not.toMatch(/seal key/i);
+    });
+
     it('the worker does not start without a 32-byte seal key', () => {
         expect(() => loadWorkerConfig({})).toThrow(
             /RUNTIME_SECRET_SEAL_KEY is required/,
@@ -280,5 +335,48 @@ describe('runtime config', () => {
                 RUNTIME_ORG_SHARED_CLAIM_CAP: '0',
             }),
         ).toThrow(/RUNTIME_ORG_SHARED_CLAIM_CAP/);
+    });
+});
+
+describe('RUNTIME_SETUP_AUTHOR_REPAIRS', () => {
+    const repairs = (value?: string) => loadSetupConfig(value === undefined ? {} : { RUNTIME_SETUP_AUTHOR_REPAIRS: value }).authorRepairs;
+
+    it('repairs a failed recipe of Kody twice in one setup when unset or empty', () => {
+        expect(repairs()).toBe(2);
+        expect(repairs('')).toBe(2);
+    });
+
+    it('reads a whitespace-only value as unset, not as 0 (repairs stay on)', () => {
+        expect(repairs('  ')).toBe(2);
+        expect(repairs('\t\n')).toBe(2);
+    });
+
+    it('reads a padded number as that number', () => {
+        expect(repairs(' 1 ')).toBe(1);
+    });
+
+    it('turns repairs off with 0', () => {
+        expect(repairs('0')).toBe(0);
+    });
+
+    it('takes any whole number up to 5', () => {
+        expect(repairs('1')).toBe(1);
+        expect(repairs('5')).toBe(5);
+    });
+
+    it.each(['6', '-1', '1.5', 'two', 'true'])('refuses %j, so the worker does not start', (value) => {
+        expect(() => repairs(value)).toThrow('RUNTIME_SETUP_AUTHOR_REPAIRS');
+    });
+
+    it('is what the worker config carries to the setup service', () => {
+        expect(loadWorkerConfig({ RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX, RUNTIME_SETUP_AUTHOR_REPAIRS: '0' }).setup.authorRepairs).toBe(0);
+        expect(loadWorkerConfig({ RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX }).setup.authorRepairs).toBe(2);
+    });
+});
+
+describe('tokens per Run', () => {
+    it('defaults to the one shared limit on the worker side', () => {
+        expect(loadWorkerConfig({ RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX }).maxTokensPerRun).toBe(DEFAULT_MAX_TOKENS_PER_RUN);
+        expect(loadWorkerConfig({ RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX, RUNTIME_MAX_TOKENS_PER_RUN: '  ' }).maxTokensPerRun).toBe(DEFAULT_MAX_TOKENS_PER_RUN);
     });
 });

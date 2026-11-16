@@ -1,10 +1,8 @@
-import type { ForkPullRequestPolicy } from '@libs/runtime/contracts/enums';
 import { randomUUID } from 'crypto';
 
 import { BadRequestException, ForbiddenException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
-import type { MachineSizePreset } from '@libs/runtime/contracts/machine-size';
 
 import {
     CreateRuntimeEnvironmentUseCase,
@@ -26,6 +24,7 @@ import { RuntimeSetupRequester } from '../application/runtime-setup-requester.se
 import type {
     DefaultBranchHead,
     ProductEnvironment,
+    ProductEnvironmentSettings,
     ProductEnvironmentStore,
     RuntimeApiConfig,
     RuntimeEgressReader,
@@ -35,10 +34,11 @@ import type {
     RuntimeRepositorySettingsRecord,
     RuntimeSettingsStore,
 } from '../domain/ports';
-import { RuntimeCommandName } from '../domain/runtime-commands';
-import { effectivePoolSize, type PoolPolicy, type PoolUsage } from '../domain/pool';
+import { RuntimeCommandName } from '@libs/runtime/contracts/runtime-commands';
+import { effectivePoolSize, type PoolUsage } from '../domain/pool';
 import { RuntimePoolController } from '../application/pool-controller.service';
-import { clock, config, FakeOutbox, NOW, ORG, OTHER_ORG, OTHER_REPO, REPO, realAuthorization, run, storeWith, TEAM, user, openSealed } from './fixtures';
+import { RuntimeEnvironmentMembers } from '../application/environment-members.service';
+import { clock, config, FakeOutbox, InMemoryEnvironmentRepositories, NOW, ORG, OTHER_ORG, OTHER_REPO, REPO, realAuthorization, run, storeWith, TEAM, user, openSealed } from './fixtures';
 
 class InMemoryEnvironments implements ProductEnvironmentStore {
     readonly rows: ProductEnvironment[] = [];
@@ -67,25 +67,11 @@ class InMemoryEnvironments implements ProductEnvironmentStore {
         e.state = 'setup_requested';
         e.setupRequestedAt = at.toISOString();
     }
-    async setDiagnosticHold(organizationId: string, environmentId: string, on: boolean) {
+    readonly settingsWrites: ProductEnvironmentSettings[] = [];
+    async updateSettings(organizationId: string, environmentId: string, settings: ProductEnvironmentSettings) {
+        this.settingsWrites.push(settings);
         const e = this.rows.find((x) => x.organizationId === organizationId && x.environmentId === environmentId);
-        if (e) e.diagnosticHold = on;
-    }
-    async setMachineSize(organizationId: string, environmentId: string, size: MachineSizePreset | null) {
-        const e = this.rows.find((x) => x.organizationId === organizationId && x.environmentId === environmentId);
-        if (e) e.machineSize = size;
-    }
-    async setForkPullRequests(organizationId: string, environmentId: string, policy: ForkPullRequestPolicy) {
-        const e = this.rows.find((x) => x.organizationId === organizationId && x.environmentId === environmentId);
-        if (e) e.forkPullRequests = policy;
-    }
-    async setPoolSize(organizationId: string, environmentId: string, size: number | null) {
-        const e = this.rows.find((x) => x.organizationId === organizationId && x.environmentId === environmentId);
-        if (e) e.poolSize = size;
-    }
-    async setPoolPolicy(organizationId: string, environmentId: string, policy: PoolPolicy | null) {
-        const e = this.rows.find((x) => x.organizationId === organizationId && x.environmentId === environmentId);
-        if (e) e.poolPolicy = policy;
+        if (e) Object.assign(e, settings);
     }
     async markPoolActivity(organizationId: string, environmentId: string, at: Date) {
         const e = this.rows.find((x) => x.organizationId === organizationId && x.environmentId === environmentId);
@@ -193,7 +179,7 @@ async function setup(cfg: RuntimeApiConfig = config()) {
     const requester = new RuntimeSetupRequester(environments, git as unknown as RuntimeGitPort, tokens, outbox as any, clock, cfg);
     const reader = new RuntimeEnvironmentsReader(environments, runs, egress, clock, undefined, config());
     const get = new GetRuntimeEnvironmentUseCase(reader, authorization);
-    const create = new CreateRuntimeEnvironmentUseCase(environments, orgRepos, authorization, requester);
+    const create = new CreateRuntimeEnvironmentUseCase(environments, orgRepos, authorization, requester, undefined, settings);
     const readSettings = new GetRuntimeSettingsUseCase(settings, orgRepos);
     return {
         environments,
@@ -554,7 +540,7 @@ describe('Machine size', () => {
         expect(await update.execute({ user: owner, environmentId: env.environmentId, body: { machineSize: 'medium' } })).toMatchObject({ machineSize: 'medium' });
 
         // Saved under an earlier plan: do not silently clamp the declared size.
-        await s.environments.setMachineSize(ORG, env.environmentId, 'large');
+        await s.environments.updateSettings(ORG, env.environmentId, { machineSize: 'large' });
         await s.setupEnv.execute({ user: owner, environmentId: env.environmentId });
         expect(setupPayload()).toMatchObject({
             blocker: { kind: 'resources' },
@@ -563,6 +549,35 @@ describe('Machine size', () => {
         expect(setupPayload()).not.toHaveProperty('repoToken');
     });
     });
+
+describe('an invalid base recipe', () => {
+    const blockerOf = (s: Awaited<ReturnType<typeof setup>>) =>
+        s.outbox.rows
+            .filter((r: any) => r.payload.event_name === 'runtime.environment.setup_requested')
+            .at(-1)!.payload.payload.blocker;
+
+    it("names the file and the rule it breaks, and the Runtime-only file that wins over a Runo recipe", async () => {
+        const s = await setup();
+        s.git.recipe = RECIPE + 'files:\n  copy: [.env]\n';
+        await s.create.execute({ user: owner, repositoryId: REPO });
+        const blocker = blockerOf(s);
+        expect(blocker.kind).toBe('recipe_invalid');
+        expect(blocker.message).toContain('.kodus/workspace.yaml');
+        expect(blocker.message).toContain('files.copy is refused in a cell');
+        expect(blocker.message).toContain('.kodus/workspace.runtime.yaml');
+        expect(s.tokens.issued).toBe(0);
+    });
+
+    it('does not point a broken .kodus/workspace.runtime.yaml at itself', async () => {
+        const s = await setup();
+        s.git.runtimeRecipe = 'version: 2\n';
+        await s.create.execute({ user: owner, repositoryId: REPO });
+        const blocker = blockerOf(s);
+        expect(blocker.kind).toBe('recipe_invalid');
+        expect(blocker.message).toMatch(/^\.kodus\/workspace\.runtime\.yaml is invalid: /);
+        expect(blocker.message).not.toContain('reads first');
+    });
+});
 
 describe('recipe resources are resolved before the setup command', () => {
     it('puts the base recipe size into the exact command that admission will reserve', async () => {
@@ -583,7 +598,7 @@ describe('recipe resources are resolved before the setup command', () => {
         const s = await setup();
         s.git.recipe = RECIPE + 'size: { cpu: 4, memory: 8gb }\n';
         const env = await s.create.execute({ user: owner, repositoryId: REPO });
-        await s.environments.setMachineSize(ORG, env.environmentId, 'small');
+        await s.environments.updateSettings(ORG, env.environmentId, { machineSize: 'small' });
         await s.setupEnv.execute({
             user: owner,
             environmentId: env.environmentId,
@@ -620,6 +635,21 @@ describe('recipe resources are resolved before the setup command', () => {
     });
 });
 
+describe("Secrets in an environment's previews (docs/runtime/preview-urls.md §7)", () => {
+    it('are none by default; only an owner sets them to the same as the Run, and to nothing else', async () => {
+        const s = await setup();
+        const env = await s.create.execute({ user: owner, repositoryId: REPO });
+        expect(await s.get.execute({ user: owner, environmentId: env.environmentId })).toMatchObject({ previewSecrets: 'none' });
+        const update = new UpdateEnvironmentSettingsUseCase(s.environments, realAuthorization([REPO]), config(), new RuntimePoolController(s.environments, config(), s.outbox, clock));
+        for (const bad of [{ previewSecrets: 'all' }, { previewSecrets: true }, { previewSecrets: null }]) {
+            await expect(update.execute({ user: owner, environmentId: env.environmentId, body: bad })).rejects.toBeInstanceOf(BadRequestException);
+        }
+        await expect(update.execute({ user: repoAdmin, environmentId: env.environmentId, body: { previewSecrets: 'run' } })).rejects.toBeInstanceOf(ForbiddenException);
+        await expect(update.execute({ user: owner, environmentId: env.environmentId, body: { previewSecrets: 'run' } })).resolves.toMatchObject({ previewSecrets: 'run' });
+        expect(await s.get.execute({ user: owner, environmentId: env.environmentId })).toMatchObject({ previewSecrets: 'run' });
+    });
+});
+
 describe('Pull requests from forks (ADR-030)', () => {
     it('defaults to require_approval; only the org admin changes it, to one of the three policies', async () => {
         const s = await setup();
@@ -639,6 +669,19 @@ describe('Pull requests from forks (ADR-030)', () => {
         }
         // The policy alone sends nothing to the Runtime.
         expect(s.outbox.rows.filter((r: any) => r.payload.event_name === 'runtime.environment.pool_requested')).toHaveLength(0);
+    });
+
+    it('the environment view says a fork waits for a maintainer once the environment holds several repositories, whatever its policy says', async () => {
+        const s = await setup();
+        const { environmentId } = await s.create.execute({ user: owner, repositoryId: REPO });
+        await s.environments.updateSettings(ORG, environmentId, { forkPullRequests: 'run' });
+        const rows = new InMemoryEnvironmentRepositories(s.environments.rows);
+        const reader = new RuntimeEnvironmentsReader(s.environments, await storeWith(), egress, clock, undefined, config(), undefined, new RuntimeEnvironmentMembers(s.environments, rows));
+        const get = new GetRuntimeEnvironmentUseCase(reader, realAuthorization([REPO, OTHER_REPO]));
+        expect(await get.execute({ user: owner, environmentId })).toMatchObject({ forkPullRequests: 'run', effectiveForkPullRequests: 'run' });
+
+        await rows.add({ environmentId, organizationId: ORG, repositoryId: OTHER_REPO, repositoryName: 'acme/api', fullName: 'acme/api', role: 'member', alias: 'api', triggers: true, pairBranches: false });
+        expect(await get.execute({ user: owner, environmentId })).toMatchObject({ forkPullRequests: 'run', effectiveForkPullRequests: 'require_approval' });
     });
 });
 
@@ -691,10 +734,44 @@ describe('Warm pool size', () => {
         expect((await s.get.execute({ user: owner, environmentId: env.environmentId })).pool).toMatchObject({ policy: null });
     });
 
+    it('a PATCH of several fields is one write of all of them', async () => {
+        const s = await setup();
+        const env = await s.create.execute({ user: owner, repositoryId: REPO });
+        const update = new UpdateEnvironmentSettingsUseCase(s.environments, realAuthorization([REPO]), config(), new RuntimePoolController(s.environments, config(), s.outbox, clock));
+        const policy = { schedule: { timezone: 'America/Sao_Paulo', days: ['mon'], start: '08:00', end: '19:00' }, monthlyBudgetUsd: 50 };
+        s.environments.settingsWrites.length = 0;
+        const out = await update.execute({
+            user: owner,
+            environmentId: env.environmentId,
+            body: { diagnosticHold: true, machineSize: 'medium', forkPullRequests: 'skip', poolSize: 2, poolPolicy: policy },
+        });
+        expect(s.environments.settingsWrites).toEqual([{ diagnosticHold: true, machineSize: 'medium', forkPullRequests: 'skip', poolSize: 2, poolPolicy: expect.objectContaining({ monthlyBudgetUsd: 50 }) }]);
+        expect(out).toMatchObject({ diagnosticHold: true, machineSize: 'medium', forkPullRequests: 'skip', poolSize: 2 });
+    });
+
     it("the plan's ceiling bounds the default too", () => {
         expect(effectivePoolSize({ defaultSize: 5, maxSize: 2 }, null)).toBe(2);
         expect(effectivePoolSize({ defaultSize: 0, maxSize: 2 }, undefined)).toBe(0);
         expect(effectivePoolSize({ defaultSize: 1, maxSize: 2 }, 2)).toBe(2);
+    });
+});
+
+describe('Set up turns a repository on', () => {
+    // A developer who pressed Set up and saw the environment ready, then got
+    // "Kody Runtime is off for this repository" on @kody runtime, had asked
+    // for it twice. Set up is the opt-in; On request runs only when asked.
+    it('Set up of a repository with no Runtime settings turns it on, on request', async () => {
+        const s = await setup();
+        await s.create.execute({ user: owner, repositoryId: REPO });
+        const [row] = await s.settings.listRepositories(ORG);
+        expect(row).toMatchObject({ repositoryId: REPO, mode: 'on_request', pilot: true, whoCanAsk: 'writers' });
+    });
+
+    it('Set up leaves a repository someone turned off as it is', async () => {
+        const s = await setup();
+        await s.settings.upsertRepository(ORG, { repositoryId: REPO, pilot: false, whoCanAsk: 'maintainers', mode: 'off' });
+        await s.create.execute({ user: owner, repositoryId: REPO });
+        expect((await s.settings.listRepositories(ORG))[0]).toMatchObject({ mode: 'off', whoCanAsk: 'maintainers' });
     });
 });
 

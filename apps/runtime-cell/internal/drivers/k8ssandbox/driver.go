@@ -1,119 +1,117 @@
-// Package k8ssandbox is the skeleton of the k8s-sandbox MachineDriver (docs
-// §4b, second driver): a namespace per claim, default-deny NetworkPolicy,
-// pods on an isolated RuntimeClass (gVisor or Kata), no service account
-// token, no host namespaces or paths. It is written against KubeAPI, the
-// few calls it needs over unstructured manifests, so tests run on a mock and
-// nothing here needs client-go or a cluster.
+// Package k8ssandbox is the k8s-sandbox MachineDriver (docs/runtime/
+// kubernetes.md): a cell's machines are pods in one sandbox namespace the
+// chart made, on an isolated RuntimeClass (gVisor or Kata), with no service
+// account token, no host namespaces or paths, Pod Security restricted, and
+// the chart's default-deny NetworkPolicies, which let a claim pod reach the
+// cell's proxy and resolver only. The cell's Role is pods (and pods/exec)
+// in that namespace; the driver never creates a namespace or a policy.
+//
+// It runs code sandboxes (its Parts: Sandboxes and Sweeper). Environment
+// Runs (compose, observers, builds) are refused with driver.ErrUnsupported
+// (NoRuns); it has no bake and no reset part.
 package k8ssandbox
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
 )
 
-// Object is an unstructured manifest (apiVersion, kind, metadata, spec).
-type Object = map[string]any
+// Kind is the driver's name in -driver and in the cell's hello.
+const Kind = "k8s-sandbox"
 
-type KubeAPI interface {
-	Apply(ctx context.Context, obj Object) error
-	Get(ctx context.Context, apiVersion, kind, namespace, name string) (Object, error)
-	Delete(ctx context.Context, apiVersion, kind, namespace, name string) error
-	List(ctx context.Context, apiVersion, kind string, labels map[string]string) ([]Object, error)
-}
+// Container names in a claim pod.
+const (
+	containerMain    = "main"
+	containerSandbox = "sandbox"
+)
 
-var ErrNotFound = errors.New("k8ssandbox: not found")
+// GuestUser is the sandbox image's user (uid and gid 1000), the guest
+// agent's; GuestCommand starts the guest agent on the exec stream.
+const GuestUser = 1000
+
+var GuestCommand = []string{"/usr/local/bin/kody-guest", "-stdio", "-root", "/workspace"}
 
 type Config struct {
-	CellID          string
-	CellNamespace   string // where the agent runs
-	EgressNamespace string // proxy and resolver
-	RuntimeClass    string // gvisor | kata
-	HolderImage     string // by digest
-	ObserverImage   string // by digest, signed
-	ObserverPort    int
-	ResolverIP      string // the cell resolver: the pods' only DNS
-	// AdmissionPolicy is the ValidatingAdmissionPolicy the chart installs.
-	AdmissionPolicy string
-	// NetworkPolicyCRDs are the CustomResourceDefinitions that show a CNI
-	// enforcing NetworkPolicy is installed (one is enough). Empty: the
-	// known enforcing CNIs (Cilium, Calico, Antrea, the EKS network policy
-	// agent).
-	NetworkPolicyCRDs []string
-	Now               func() time.Time
+	CellID string
+	// Namespace is the cell's sandbox namespace: every pod it makes lives
+	// there, and only there.
+	Namespace    string
+	RuntimeClass string // gvisor | kata | the cluster's own name
+	// HolderImage runs a Create machine; SandboxImage a code sandbox (with
+	// the guest agent). Both by digest.
+	HolderImage  string
+	SandboxImage string
+	// EgressAddress is the cell's proxy and resolver as claim pods reach
+	// them (the egress Service's address): their only DNS server, and the
+	// address the resolver steers every allowed name to.
+	EgressAddress string
+	// MaxClaimSize is the most one claim may ask; DefaultClaimSize what a
+	// claim that asks none runs at (the sandbox size).
+	MaxClaimSize     driver.ClaimSize
+	DefaultClaimSize driver.ClaimSize
+	// Arch is what the claim pods run on (x86_64, arm64).
+	Arch string
+	// ReadyTimeout bounds how long a pod may take to run (image pull
+	// included); Poll is how often it is asked.
+	ReadyTimeout time.Duration
+	Poll         time.Duration
+	Now          func() time.Time
 }
 
 type Driver struct {
-	k   KubeAPI
-	cfg Config
+	k    KubeAPI
+	exec Execer
+	cfg  Config
 }
 
-var (
-	ErrNoRuntimeClass = errors.New("k8ssandbox: the isolated RuntimeClass is missing")
-	ErrNoAdmission    = errors.New("k8ssandbox: the admission policy is missing")
-	// ErrNoNetworkPolicyEnforcement: on a CNI that ignores NetworkPolicy
-	// (kindnet, flannel) every policy this driver writes is decorative.
-	ErrNoNetworkPolicyEnforcement = errors.New("k8ssandbox: no CNI that enforces NetworkPolicy was found")
-)
-
-// enforcingCNIs are CRDs each NetworkPolicy-enforcing CNI installs.
-var enforcingCNIs = []string{
-	"ciliumnetworkpolicies.cilium.io",
-	"networkpolicies.crd.projectcalico.org",
-	"clusternetworkpolicies.crd.antrea.io",
-	"policyendpoints.networking.k8s.aws",
-}
-
-// New refuses to run without the RuntimeClass and the admission policy
-// (S-10: "a célula não sobe sem ela").
-func New(ctx context.Context, k KubeAPI, cfg Config) (*Driver, error) {
-	if cfg.CellID == "" || cfg.RuntimeClass == "" || cfg.HolderImage == "" || cfg.ObserverImage == "" || cfg.ResolverIP == "" {
-		return nil, errors.New("k8ssandbox: cell id, runtime class, images and resolver required")
+// New checks the configuration only; the preflight (Preflight) is what
+// proves the cluster enforces it.
+func New(k KubeAPI, exec Execer, cfg Config) (*Driver, error) {
+	if cfg.CellID == "" || cfg.Namespace == "" || cfg.RuntimeClass == "" || cfg.HolderImage == "" || cfg.EgressAddress == "" {
+		return nil, errors.New("k8ssandbox: cell id, namespace, runtime class, holder image and egress address required")
 	}
-	if cfg.ObserverPort == 0 {
-		cfg.ObserverPort = 7443
+	if cfg.MaxClaimSize.IsZero() {
+		cfg.MaxClaimSize = driver.ClaimSize{MemoryMB: 8192, CPUs: 4}
 	}
-	if cfg.AdmissionPolicy == "" {
-		cfg.AdmissionPolicy = "kodus-runtime-cell-sandbox"
+	if cfg.DefaultClaimSize.IsZero() {
+		cfg.DefaultClaimSize = driver.ClaimSize{MemoryMB: 2048, CPUs: 2}
 	}
-	if _, err := k.Get(ctx, "node.k8s.io/v1", "RuntimeClass", "", cfg.RuntimeClass); err != nil {
-		return nil, ErrNoRuntimeClass
+	if cfg.Arch == "" {
+		cfg.Arch = "x86_64"
 	}
-	if _, err := k.Get(ctx, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "", cfg.AdmissionPolicy); err != nil {
-		return nil, ErrNoAdmission
+	if cfg.ReadyTimeout == 0 {
+		cfg.ReadyTimeout = 5 * time.Minute
 	}
-	crds := cfg.NetworkPolicyCRDs
-	if len(crds) == 0 {
-		crds = enforcingCNIs
-	}
-	enforced := false
-	for _, crd := range crds {
-		if _, err := k.Get(ctx, "apiextensions.k8s.io/v1", "CustomResourceDefinition", "", crd); err == nil {
-			enforced = true
-			break
-		}
-	}
-	if !enforced {
-		return nil, ErrNoNetworkPolicyEnforcement
+	if cfg.Poll == 0 {
+		cfg.Poll = time.Second
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	return &Driver{k: k, cfg: cfg}, nil
+	return &Driver{k: k, exec: exec, cfg: cfg}, nil
 }
 
-func (d *Driver) Kind() string { return "k8s-sandbox" }
+func (d *Driver) Kind() string { return Kind }
 
 func (d *Driver) Capabilities() driver.Capabilities {
-	return driver.Capabilities{Isolation: driver.IsolationSandboxedContainer, NestedContainers: d.cfg.RuntimeClass == "kata", Suspend: "none", Arch: []string{"x86_64", "arm64"}}
+	return driver.Capabilities{
+		Isolation: driver.IsolationSandboxedContainer, NestedContainers: d.cfg.RuntimeClass == "kata",
+		Arch: []string{"x86_64", "arm64"}, HostArch: d.cfg.Arch,
+		MaxClaimSize: d.cfg.MaxClaimSize, DefaultClaimSize: d.cfg.DefaultClaimSize,
+	}
 }
 
-func (d *Driver) Bake(context.Context, driver.BakeSpec) (driver.ImageRef, error) {
-	return driver.ImageRef{}, fmt.Errorf("%w: k8ssandbox bakes no image yet", driver.ErrUnsupported)
+// Parts returns code sandboxes and the sweep of pods past their ceiling.
+func (d *Driver) Parts() driver.Parts {
+	return driver.Parts{Sandboxes: d, Sweeper: d}
 }
 
 // Label values cannot hold ':' or timestamps; ids go in labels, times in
@@ -122,113 +120,56 @@ const prefix = "kodus.io/"
 
 func label(tag string) string { return prefix + strings.TrimPrefix(tag, "kodus:") }
 
-func namespaceOf(claimID string) string { return "kodus-" + strings.ToLower(claimID) }
-
 func (d *Driver) claimLabels(org, claim string) map[string]any {
 	return map[string]any{label(driver.TagCell): d.cfg.CellID, label(driver.TagOrg): org, label(driver.TagClaim): claim}
 }
 
-func port(p int) map[string]any { return map[string]any{"protocol": "TCP", "port": p} }
-
-// egressPorts are the only ports a claim's pods reach in the egress
-// namespace: the proxy's and the resolver's, not their control ports or
-// the injector's listener.
-func egressPorts() []any {
-	return []any{port(80), port(443), map[string]any{"protocol": "UDP", "port": 53}, port(53)}
-}
-
-func selectorRole(role string) map[string]any {
-	return map[string]any{"matchLabels": map[string]any{label(driver.TagRole): role}}
-}
-
-func nsSelector(name string) map[string]any {
-	return map[string]any{"namespaceSelector": map[string]any{"matchLabels": map[string]any{"kubernetes.io/metadata.name": name}}}
-}
-
-// PrepareClaim: the claim's namespace and its policies. Default deny both
-// ways; the workload accepts the expose ports only from the observer and
-// exec from the cell agent's namespace; both reach only the egress
-// namespace (proxy and resolver).
-func (d *Driver) PrepareClaim(ctx context.Context, spec driver.ClaimNetworkSpec) (driver.ClaimNetwork, error) {
+// PrepareClaim creates nothing: the chart's policies already isolate every
+// claim pod (no ingress, egress to the cell's proxy and resolver only). The
+// claim's group is its id, the label its pods carry.
+func (d *Driver) PrepareClaim(_ context.Context, spec driver.ClaimNetworkSpec) (driver.ClaimNetwork, error) {
 	if err := driver.ValidateClaimID(spec.ClaimID); err != nil {
 		return driver.ClaimNetwork{}, err
 	}
-	ns := namespaceOf(spec.ClaimID)
-	labels := d.claimLabels(spec.OrgID, spec.ClaimID)
-	// baseline is enforced (the workload may need root inside gVisor);
-	// restricted is warned and audited, so every gap shows.
-	labels["pod-security.kubernetes.io/enforce"] = "baseline"
-	labels["pod-security.kubernetes.io/warn"] = "restricted"
-	labels["pod-security.kubernetes.io/audit"] = "restricted"
-	objs := []Object{
-		{"apiVersion": "v1", "kind": "Namespace", "metadata": map[string]any{"name": ns, "labels": labels}},
-		{"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": map[string]any{"name": "default-deny", "namespace": ns},
-			"spec": map[string]any{"podSelector": map[string]any{}, "policyTypes": []any{"Ingress", "Egress"}}},
+	if len(spec.Expose) > 0 {
+		return driver.ClaimNetwork{}, fmt.Errorf("%w: k8ssandbox exposes no claim port (no Runs)", driver.ErrUnsupported)
 	}
-	var exposePorts []any
-	for _, e := range spec.Expose {
-		if e.Port < 1 || e.Port > 65535 {
-			return driver.ClaimNetwork{}, fmt.Errorf("k8ssandbox: bad expose port %d", e.Port)
-		}
-		exposePorts = append(exposePorts, port(e.Port))
-	}
-	egress := []any{map[string]any{"to": []any{nsSelector(d.cfg.EgressNamespace)}, "ports": egressPorts()}}
-	// An empty ports list in a NetworkPolicy means every port: with no
-	// expose, the observer gets no rule to the workload at all.
-	workloadIngress := []any{map[string]any{"from": []any{nsSelector(d.cfg.CellNamespace)}}}
-	observerEgress := egress
-	if len(exposePorts) > 0 {
-		workloadIngress = append([]any{map[string]any{"from": []any{map[string]any{"podSelector": selectorRole("observer")}}, "ports": exposePorts}}, workloadIngress...)
-		observerEgress = append([]any{map[string]any{"to": []any{map[string]any{"podSelector": selectorRole("workload")}}, "ports": exposePorts}}, egress...)
-	}
-	objs = append(objs,
-		Object{"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": map[string]any{"name": "workload", "namespace": ns},
-			"spec": map[string]any{
-				"podSelector": selectorRole("workload"),
-				"policyTypes": []any{"Ingress", "Egress"},
-				"ingress":     workloadIngress,
-				"egress":      egress,
-			}},
-		Object{"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": map[string]any{"name": "observer", "namespace": ns},
-			"spec": map[string]any{
-				"podSelector": selectorRole("observer"),
-				"policyTypes": []any{"Ingress", "Egress"},
-				"ingress":     []any{map[string]any{"from": []any{nsSelector(d.cfg.CellNamespace)}, "ports": []any{port(d.cfg.ObserverPort)}}},
-				"egress":      observerEgress,
-			}},
-	)
-	for _, o := range objs {
-		if err := d.k.Apply(ctx, o); err != nil {
-			return driver.ClaimNetwork{}, err
-		}
-	}
-	return driver.ClaimNetwork{WorkloadGroupID: ns, ObserverGroupID: ns}, nil
+	return driver.ClaimNetwork{WorkloadGroupID: spec.ClaimID, ObserverGroupID: spec.ClaimID, EgressAddress: d.cfg.EgressAddress}, nil
 }
 
-// ReleaseClaim deletes the claim's namespace, and with it everything in it,
-// only when it carries this cell's label: a namespace is the widest thing
-// the driver deletes.
+// ReleaseClaim deletes this cell's pods of the claim. The selector names
+// this cell, so another cell's pods are never touched.
 func (d *Driver) ReleaseClaim(ctx context.Context, n driver.ClaimNetwork) error {
 	if n.WorkloadGroupID == "" {
 		return nil
 	}
-	ns, err := d.k.Get(ctx, "v1", "Namespace", "", n.WorkloadGroupID)
-	if errors.Is(err, ErrNotFound) {
-		return nil
+	if err := driver.ValidateClaimID(n.WorkloadGroupID); err != nil {
+		return err
 	}
+	pods, err := d.k.ListPods(ctx, d.cfg.Namespace, map[string]string{label(driver.TagCell): d.cfg.CellID, label(driver.TagClaim): n.WorkloadGroupID})
 	if err != nil {
 		return err
 	}
-	if !d.owns(ns) {
-		return fmt.Errorf("%w: namespace %s", driver.ErrNotOwned, n.WorkloadGroupID)
+	var errs []error
+	for _, p := range pods {
+		if !d.owns(p) {
+			continue
+		}
+		if err := ignoreNotFound(d.k.DeletePod(ctx, d.cfg.Namespace, str(meta(p)["name"]))); err != nil {
+			errs = append(errs, err)
+		}
 	}
-	return ignoreNotFound(d.k.Delete(ctx, "v1", "Namespace", "", n.WorkloadGroupID))
+	return errors.Join(errs...)
 }
 
-// owns reports whether a cluster object carries this cell's label.
-func (d *Driver) owns(o Object) bool {
+func meta(o Object) map[string]any {
 	md, _ := o["metadata"].(map[string]any)
-	labels, _ := md["labels"].(map[string]any)
+	return md
+}
+
+// owns reports whether a pod carries this cell's label.
+func (d *Driver) owns(o Object) bool {
+	labels, _ := meta(o)["labels"].(map[string]any)
 	return labels[label(driver.TagCell)] == d.cfg.CellID
 }
 
@@ -239,56 +180,228 @@ func ignoreNotFound(err error) error {
 	return err
 }
 
-func (d *Driver) Create(ctx context.Context, spec driver.MachineSpec) (driver.MachineRef, error) {
-	if err := spec.ValidateFor(d.Capabilities()); err != nil {
-		return driver.MachineRef{}, err
+func podName(spec driver.MachineSpec) string {
+	return fmt.Sprintf("%s-%s", spec.Role, strings.ToLower(spec.ClaimID))
+}
+
+// size is the claim's size, else its machine size, else the default; never
+// zero (requests equal limits: every pod is Guaranteed).
+func (d *Driver) size(spec driver.MachineSpec) (memMB, cpus int) {
+	memMB, cpus = spec.ClaimSize.MemoryMB, spec.ClaimSize.CPUs
+	if memMB == 0 && spec.Size.MemoryGB > 0 {
+		memMB = spec.Size.MemoryGB * 1024
 	}
-	if err := driver.ValidateClaimID(spec.ClaimID); err != nil {
-		return driver.MachineRef{}, err
+	if cpus == 0 {
+		cpus = spec.Size.CPU
 	}
-	ns := namespaceOf(spec.ClaimID)
-	name := fmt.Sprintf("%s-%s", spec.Role, strings.ToLower(spec.ClaimID))
-	image := d.cfg.HolderImage
-	if spec.Role == driver.RoleObserver {
-		image = d.cfg.ObserverImage
+	if memMB == 0 {
+		memMB = d.cfg.DefaultClaimSize.MemoryMB
 	}
+	if cpus == 0 {
+		cpus = d.cfg.DefaultClaimSize.CPUs
+	}
+	return memMB, cpus
+}
+
+// podShape is what differs between a machine pod and a sandbox pod.
+type podShape struct {
+	container string
+	image     string
+	// workspaceMB > 0 mounts /workspace (and a small /tmp) in memory, and
+	// runs the pod read-only as the guest user.
+	workspaceMB int
+}
+
+// pod is a claim pod: on the RuntimeClass, restricted (non-root, no
+// capability, no escalation, RuntimeDefault seccomp), no token, no
+// service links, its DNS the cell's resolver only, ended by the kubelet at
+// the claim's hard ceiling whatever happens to the cell.
+func (d *Driver) pod(spec driver.MachineSpec, shape podShape) (Object, error) {
+	deadline := int64(spec.HardExpiresAt.Sub(d.cfg.Now()).Seconds())
+	if deadline < 1 {
+		return nil, errors.New("k8ssandbox: hardExpiresAt passed")
+	}
+	memMB, cpus := d.size(spec)
 	labels := d.claimLabels(spec.OrgID, spec.ClaimID)
 	labels[label(driver.TagRole)] = string(spec.Role)
 	labels[label(driver.TagEnv)] = spec.EnvironmentID
 	tags := spec.AllTags()
-	// The ceiling is enforced by the kubelet too: activeDeadlineSeconds.
-	deadline := int64(spec.HardExpiresAt.Sub(d.cfg.Now()).Seconds())
-	if deadline < 1 {
-		return driver.MachineRef{}, errors.New("k8ssandbox: hardExpiresAt passed")
+	limits := map[string]any{"cpu": strconv.Itoa(cpus), "memory": fmt.Sprintf("%dMi", memMB)}
+	container := map[string]any{
+		"name": shape.container, "image": shape.image, "imagePullPolicy": "IfNotPresent",
+		"command": []any{"sleep", "infinity"},
+		"securityContext": map[string]any{
+			"allowPrivilegeEscalation": false, "privileged": false, "readOnlyRootFilesystem": shape.workspaceMB > 0,
+			"runAsNonRoot": true, "capabilities": map[string]any{"drop": []any{"ALL"}},
+		},
+		"resources": map[string]any{"limits": limits, "requests": limits},
 	}
-	pod := Object{
+	podSec := map[string]any{"runAsNonRoot": true, "runAsUser": GuestUser, "runAsGroup": GuestUser, "seccompProfile": map[string]any{"type": "RuntimeDefault"}}
+	podSpec := map[string]any{
+		"runtimeClassName":             d.cfg.RuntimeClass,
+		"automountServiceAccountToken": false,
+		"enableServiceLinks":           false,
+		"hostNetwork":                  false, "hostPID": false, "hostIPC": false,
+		"restartPolicy":                 "Never",
+		"terminationGracePeriodSeconds": 5,
+		"activeDeadlineSeconds":         deadline,
+		"dnsPolicy":                     "None",
+		"dnsConfig":                     map[string]any{"nameservers": []any{d.cfg.EgressAddress}},
+		"securityContext":               podSec,
+		"containers":                    []any{container},
+	}
+	if shape.workspaceMB > 0 {
+		podSec["fsGroup"] = GuestUser
+		// What the commands write lives in the sandbox's memory, counted in
+		// its limit: half of it for the checkout, a little for /tmp.
+		podSpec["volumes"] = []any{
+			map[string]any{"name": "workspace", "emptyDir": map[string]any{"medium": "Memory", "sizeLimit": fmt.Sprintf("%dMi", shape.workspaceMB)}},
+			map[string]any{"name": "tmp", "emptyDir": map[string]any{"medium": "Memory", "sizeLimit": "512Mi"}},
+		}
+		container["volumeMounts"] = []any{
+			map[string]any{"name": "workspace", "mountPath": "/workspace"},
+			map[string]any{"name": "tmp", "mountPath": "/tmp"},
+		}
+	}
+	return Object{
 		"apiVersion": "v1", "kind": "Pod",
-		"metadata": map[string]any{"name": name, "namespace": ns, "labels": labels, "annotations": map[string]any{
+		"metadata": map[string]any{"name": podName(spec), "namespace": d.cfg.Namespace, "labels": labels, "annotations": map[string]any{
 			label(driver.TagExpires): tags[driver.TagExpires], label(driver.TagHardExpires): tags[driver.TagHardExpires], prefix + "image": spec.ImageID,
 		}},
-		"spec": map[string]any{
-			"runtimeClassName":             d.cfg.RuntimeClass,
-			"automountServiceAccountToken": false,
-			"enableServiceLinks":           false,
-			"hostNetwork":                  false, "hostPID": false, "hostIPC": false,
-			"restartPolicy":         "Never",
-			"activeDeadlineSeconds": deadline,
-			"dnsPolicy":             "None",
-			"dnsConfig":             map[string]any{"nameservers": []any{d.cfg.ResolverIP}},
-			"securityContext":       map[string]any{"seccompProfile": map[string]any{"type": "RuntimeDefault"}},
-			"containers": []any{map[string]any{
-				"name": "main", "image": image,
-				"securityContext": map[string]any{"allowPrivilegeEscalation": false, "privileged": false, "capabilities": map[string]any{"drop": []any{"ALL"}}},
-				"resources": map[string]any{"limits": map[string]any{
-					"cpu": fmt.Sprint(max(spec.Size.CPU, 1)), "memory": fmt.Sprintf("%dGi", max(spec.Size.MemoryGB, 1)), "ephemeral-storage": fmt.Sprintf("%dGi", max(spec.Size.DiskGB, 1)),
-				}},
-			}},
-		},
+		"spec": podSpec,
+	}, nil
+}
+
+func (d *Driver) check(spec driver.MachineSpec) error {
+	if err := spec.ValidateFor(d.Capabilities()); err != nil {
+		return err
 	}
-	if err := d.k.Apply(ctx, pod); err != nil {
+	if err := driver.ValidateClaimID(spec.ClaimID); err != nil {
+		return err
+	}
+	if spec.CellID != d.cfg.CellID {
+		return fmt.Errorf("k8ssandbox: spec is for cell %s, not %s", spec.CellID, d.cfg.CellID)
+	}
+	return nil
+}
+
+func (d *Driver) ref(spec driver.MachineSpec, name, address string) driver.MachineRef {
+	id := d.cfg.Namespace + "/" + name
+	return driver.MachineRef{MachineID: id, DriverRef: id, PrivateAddress: address, ImageID: spec.ImageID, Tags: spec.AllTags()}
+}
+
+// Create makes a machine pod of the holder image. Nothing runs a Run on it
+// (NoRuns); it is the machine the conformance suite and a lease track.
+func (d *Driver) Create(ctx context.Context, spec driver.MachineSpec) (driver.MachineRef, error) {
+	if err := d.check(spec); err != nil {
 		return driver.MachineRef{}, err
 	}
-	return driver.MachineRef{MachineID: ns + "/" + name, DriverRef: ns + "/" + name, ImageID: spec.ImageID, Tags: tags}, nil
+	p, err := d.pod(spec, podShape{container: containerMain, image: d.cfg.HolderImage})
+	if err != nil {
+		return driver.MachineRef{}, err
+	}
+	if _, err := d.k.CreatePod(ctx, d.cfg.Namespace, p, false); err != nil {
+		return driver.MachineRef{}, err
+	}
+	return d.ref(spec, podName(spec), ""), nil
+}
+
+// ErrNoSandboxImage means the cell runs no sandboxes (no sandbox image).
+var ErrNoSandboxImage = errors.New("k8ssandbox: no sandbox image configured")
+
+// SandboxesEnabled reports whether the driver makes sandboxes.
+func (d *Driver) SandboxesEnabled() bool { return d.cfg.SandboxImage != "" }
+
+// CreateSandbox makes the sandbox pod and waits until it runs: the claim's
+// egress policy names its address, which exists only then. A pod that
+// fails or does not run in ReadyTimeout is deleted. A sandbox that must
+// trust the cell CA is refused: no trust files reach a pod (Capabilities
+// SandboxCellTrust false).
+func (d *Driver) CreateSandbox(ctx context.Context, req driver.SandboxRequest) (driver.MachineRef, error) {
+	spec := req.Spec
+	if !d.SandboxesEnabled() {
+		return driver.MachineRef{}, ErrNoSandboxImage
+	}
+	if req.CellTrust {
+		return driver.MachineRef{}, fmt.Errorf("%w: k8s-sandbox pods take no cell trust files", driver.ErrUnsupported)
+	}
+	if spec.Role != driver.RolePool {
+		spec.Role = driver.RoleWorkload // a blank pool sandbox keeps its role until a claim takes it
+	}
+	spec.ImageID, spec.ImageRef = "sandbox", d.cfg.SandboxImage
+	if err := d.check(spec); err != nil {
+		return driver.MachineRef{}, err
+	}
+	memMB, _ := d.size(spec)
+	p, err := d.pod(spec, podShape{container: containerSandbox, image: d.cfg.SandboxImage, workspaceMB: max(memMB/2, 1)})
+	if err != nil {
+		return driver.MachineRef{}, err
+	}
+	name := podName(spec)
+	if _, err := d.k.CreatePod(ctx, d.cfg.Namespace, p, false); err != nil {
+		return driver.MachineRef{}, err
+	}
+	ip, err := d.waitRunning(ctx, name)
+	if err != nil {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		return driver.MachineRef{}, errors.Join(err, ignoreNotFound(d.k.DeletePod(cleanup, d.cfg.Namespace, name)))
+	}
+	return d.ref(spec, name, ip), nil
+}
+
+// waitRunning polls the pod until it runs with an address, and names why
+// when it cannot (Failed, a waiting reason such as ErrImagePull).
+func (d *Driver) waitRunning(ctx context.Context, name string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, d.cfg.ReadyTimeout)
+	defer cancel()
+	last := "Pending"
+	for {
+		p, err := d.k.GetPod(ctx, d.cfg.Namespace, name)
+		if err != nil && ctx.Err() == nil {
+			return "", err
+		}
+		st := podStatus(p)
+		switch {
+		case st.phase == "Running" && st.ip != "":
+			return st.ip, nil
+		case st.phase == "Failed" || st.phase == "Succeeded":
+			return "", fmt.Errorf("k8ssandbox: pod %s ended (%s): %s", name, st.phase, st.why)
+		case st.why != "":
+			last = st.why
+		}
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("k8ssandbox: pod %s did not run in %s: %s", name, d.cfg.ReadyTimeout, last)
+		case <-time.After(d.cfg.Poll):
+		}
+	}
+}
+
+type status struct{ phase, ip, why string }
+
+func podStatus(p Object) status {
+	st, _ := p["status"].(map[string]any)
+	s := status{phase: str(st["phase"]), ip: str(st["podIP"])}
+	if m := str(st["message"]); m != "" {
+		s.why = str(st["reason"]) + ": " + m
+	}
+	cs, _ := st["containerStatuses"].([]any)
+	for _, c := range cs {
+		cm, _ := c.(map[string]any)
+		state, _ := cm["state"].(map[string]any)
+		if w, ok := state["waiting"].(map[string]any); ok && str(w["reason"]) != "" && str(w["reason"]) != "ContainerCreating" {
+			s.why = strings.TrimSpace(str(w["reason"]) + " " + str(w["message"]))
+		}
+	}
+	return s
+}
+
+func str(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
 
 func split(ref driver.MachineRef) (string, string) {
@@ -296,34 +409,49 @@ func split(ref driver.MachineRef) (string, string) {
 	return ns, name
 }
 
-// errNoSuspend: a pod is not suspended; it stops and a pool hands out a
-// fresh one.
-var errNoSuspend = fmt.Errorf("%w: k8ssandbox pods stop and come back from the warm pool", driver.ErrUnsupported)
-
-func (d *Driver) Suspend(context.Context, driver.MachineRef, driver.SuspendMode) error {
-	return errNoSuspend
+// ownPod reads the pod named by ref in this cell's namespace and checks it
+// is this cell's; nil without error when it is gone.
+func (d *Driver) ownPod(ctx context.Context, ref driver.MachineRef) (Object, string, error) {
+	ns, name := split(ref)
+	if ns != d.cfg.Namespace || name == "" {
+		return nil, name, fmt.Errorf("%w: %s is not in namespace %s", driver.ErrNotOwned, ref.DriverRef, d.cfg.Namespace)
+	}
+	p, err := d.k.GetPod(ctx, ns, name)
+	if errors.Is(err, ErrNotFound) {
+		return nil, name, nil
+	}
+	if err != nil {
+		return nil, name, err
+	}
+	if !d.owns(p) {
+		return nil, name, fmt.Errorf("%w: pod %s/%s", driver.ErrNotOwned, ns, name)
+	}
+	return p, name, nil
 }
 
-func (d *Driver) Resume(context.Context, driver.MachineRef) error { return errNoSuspend }
-
-func (d *Driver) Reset(context.Context, driver.MachineRef, driver.SnapshotRef) error {
-	return fmt.Errorf("%w: k8ssandbox has no reset yet", driver.ErrUnsupported)
+// DialGuest starts the guest agent in this cell's sandbox pod, on an exec
+// stream (pods/exec over WebSocket).
+func (d *Driver) DialGuest(ctx context.Context, ref driver.MachineRef) (io.ReadWriteCloser, error) {
+	if d.exec == nil {
+		return nil, errors.New("k8ssandbox: no exec client")
+	}
+	p, name, err := d.ownPod(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		return nil, fmt.Errorf("k8ssandbox: sandbox %s is gone", ref.MachineID)
+	}
+	return d.exec.Exec(ctx, d.cfg.Namespace, name, containerSandbox, GuestCommand)
 }
 
 // Destroy deletes the pod only when it carries this cell's label.
 func (d *Driver) Destroy(ctx context.Context, ref driver.MachineRef) error {
-	ns, name := split(ref)
-	pod, err := d.k.Get(ctx, "v1", "Pod", ns, name)
-	if errors.Is(err, ErrNotFound) {
-		return nil
-	}
-	if err != nil {
+	p, name, err := d.ownPod(ctx, ref)
+	if err != nil || p == nil {
 		return err
 	}
-	if !d.owns(pod) {
-		return fmt.Errorf("%w: pod %s/%s", driver.ErrNotOwned, ns, name)
-	}
-	return ignoreNotFound(d.k.Delete(ctx, "v1", "Pod", ns, name))
+	return ignoreNotFound(d.k.DeletePod(ctx, d.cfg.Namespace, name))
 }
 
 // List asks the cluster for this cell's pods only: a selector naming
@@ -340,13 +468,16 @@ func (d *Driver) List(ctx context.Context, selector map[string]string) ([]driver
 		ls[label(k)] = v
 	}
 	ls[label(driver.TagCell)] = d.cfg.CellID
-	pods, err := d.k.List(ctx, "v1", "Pod", ls)
+	pods, err := d.k.ListPods(ctx, d.cfg.Namespace, ls)
 	if err != nil {
 		return nil, err
 	}
 	var out []driver.MachineRef
 	for _, p := range pods {
-		md, _ := p["metadata"].(map[string]any)
+		if !d.owns(p) {
+			continue
+		}
+		md := meta(p)
 		tags := map[string]string{}
 		for _, src := range []string{"labels", "annotations"} {
 			m, _ := md[src].(map[string]any)
@@ -360,7 +491,7 @@ func (d *Driver) List(ctx context.Context, selector map[string]string) ([]driver
 			continue
 		}
 		ref := fmt.Sprintf("%v/%v", md["namespace"], md["name"])
-		out = append(out, driver.MachineRef{MachineID: ref, DriverRef: ref, ImageID: tags["kodus:image"], Tags: tags})
+		out = append(out, driver.MachineRef{MachineID: ref, DriverRef: ref, PrivateAddress: podStatus(p).ip, ImageID: tags["kodus:image"], Tags: tags})
 	}
 	return out, nil
 }
@@ -369,26 +500,70 @@ func (d *Driver) List(ctx context.Context, selector map[string]string) ([]driver
 // pod, held under the ceiling the pod carries (not the one the caller's ref
 // says).
 func (d *Driver) SetExpiry(ctx context.Context, ref driver.MachineRef, at time.Time) error {
-	ns, name := split(ref)
-	pod, err := d.k.Get(ctx, "v1", "Pod", ns, name)
+	p, name, err := d.ownPod(ctx, ref)
 	if err != nil {
 		return err
 	}
-	if !d.owns(pod) {
-		return fmt.Errorf("%w: pod %s/%s", driver.ErrNotOwned, ns, name)
+	if p == nil {
+		return fmt.Errorf("k8ssandbox: pod %s is gone: %w", ref.DriverRef, ErrNotFound)
 	}
-	md, _ := pod["metadata"].(map[string]any)
-	annotations, _ := md["annotations"].(map[string]any)
-	hard, perr := time.Parse(time.RFC3339, fmt.Sprint(annotations[label(driver.TagHardExpires)]))
-	if perr != nil {
-		return fmt.Errorf("k8ssandbox: pod %s/%s has no ceiling: %w", ns, name, perr)
+	annotations, _ := meta(p)["annotations"].(map[string]any)
+	ceiling := map[string]string{}
+	if v, ok := annotations[label(driver.TagHardExpires)].(string); ok {
+		ceiling[driver.TagHardExpires] = v
 	}
-	if at.After(hard) {
-		at = hard
+	at, err = driver.ClampToCeiling(at, ceiling)
+	if err != nil {
+		return fmt.Errorf("k8ssandbox: pod %s: %w", ref.DriverRef, err)
 	}
-	return d.k.Apply(ctx, Object{"apiVersion": "v1", "kind": "Pod", "metadata": map[string]any{
-		"name": name, "namespace": ns, "annotations": map[string]any{label(driver.TagExpires): driver.FormatTime(at)},
-	}})
+	return d.k.PatchPodAnnotations(ctx, d.cfg.Namespace, name, map[string]string{label(driver.TagExpires): driver.FormatTime(at)})
 }
 
-var _ driver.MachineDriver = (*Driver)(nil)
+// Sweep deletes this cell's pods past their hard ceiling, or with none that
+// parses (driver.Expired): a cell that crashed before it released them. The
+// kubelet's activeDeadlineSeconds has stopped a dated one already; this
+// removes what is left.
+func (d *Driver) Sweep(ctx context.Context, now time.Time) ([]string, error) {
+	refs, err := d.List(ctx, map[string]string{driver.TagCell: d.cfg.CellID})
+	if err != nil {
+		return nil, err
+	}
+	var gone []string
+	var errs []error
+	for _, r := range refs {
+		if !driver.Expired(r.Tags, now) {
+			continue
+		}
+		if err := d.Destroy(ctx, r); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		gone = append(gone, r.MachineID)
+	}
+	return gone, errors.Join(errs...)
+}
+
+// NewForReaper is a driver that can only list and destroy this cell's pods
+// in its namespace: the reaper's (its Role has pods get, list, delete).
+func NewForReaper(k KubeAPI, cellID, namespace string) *Driver {
+	return &Driver{k: k, cfg: Config{CellID: cellID, Namespace: namespace, Now: time.Now}}
+}
+
+// NoRuns is the transport of a k8s-sandbox cell: environment Runs (compose
+// boot, upload, exec in a service) are not wired on Kubernetes.
+type NoRuns struct{}
+
+var errNoRuns = fmt.Errorf("%w: environment Runs on Kubernetes are not wired yet (k8s-sandbox runs code sandboxes)", driver.ErrUnsupported)
+
+func (NoRuns) Exec(context.Context, driver.MachineRef, kodyexec.Request) (kodyexec.Result, error) {
+	return kodyexec.Result{}, errNoRuns
+}
+
+func (NoRuns) Upload(context.Context, driver.MachineRef, string, string, func(string)) error {
+	return errNoRuns
+}
+
+var (
+	_ driver.MachineDriver = (*Driver)(nil)
+	_ driver.Sandboxer     = (*Driver)(nil)
+)

@@ -84,8 +84,14 @@ func (h *fakeEnrollHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "register takes no client certificate", http.StatusBadRequest)
 			return
 		}
-		if body["token"] != "tok-1" || body["topology"] != "single-vm" {
+		// As the hub: the token is bound to its topology; a cell that names
+		// none gets the token's, one that names another is refused.
+		if body["token"] != "tok-1" {
 			http.Error(w, `{"ok":false,"error":"invalid_token"}`, http.StatusUnauthorized)
+			return
+		}
+		if topo, named := body["topology"]; named && topo != "self_hosted" {
+			http.Error(w, `{"code":"registration_refused","reason":"topology_mismatch"}`, http.StatusForbidden)
 			return
 		}
 		h.sign(w, body["csr"], "cell-new")
@@ -129,6 +135,12 @@ func TestRegisterAndRenew(t *testing.T) {
 		t.Fatal("key written after a refused registration")
 	}
 
+	// A topology the token was not made for is refused.
+	if code := runEnroll("register", []string{"-hub", srv.URL, "-token", "tok-1", "-topology", "hybrid", "-ca", caFile, "-out", out}, &stdout, &stderr); code == 0 {
+		t.Fatal("registered with another topology than the token's")
+	}
+
+	// Without -topology the cell registers with the token's.
 	stdout.Reset()
 	stderr.Reset()
 	if code := runEnroll("register", []string{"-hub", srv.URL, "-token", "tok-1", "-ca", caFile, "-out", out}, &stdout, &stderr); code != 0 {
@@ -137,7 +149,8 @@ func TestRegisterAndRenew(t *testing.T) {
 	if strings.Contains(stdout.String()+stderr.String(), "PRIVATE KEY") {
 		t.Fatal("key material printed")
 	}
-	if got := fh.got[len(fh.got)-1]; len(got) != 3 || !strings.HasPrefix(got["csr"], "-----BEGIN CERTIFICATE REQUEST-----") {
+	// No topology is sent unless named: the token's applies.
+	if got := fh.got[len(fh.got)-1]; len(got) != 2 || !strings.HasPrefix(got["csr"], "-----BEGIN CERTIFICATE REQUEST-----") {
 		t.Fatalf("register body %v", got)
 	}
 	if fi, err := os.Stat(filepath.Join(out, "key.pem")); err != nil || fi.Mode().Perm() != 0o600 {
@@ -181,13 +194,55 @@ func TestRegisterAndRenew(t *testing.T) {
 	}
 }
 
+// A restarted Kubernetes cell pod runs register again: with
+// -if-unregistered it keeps the cell it has and spends no token (the hub
+// would refuse the used token and the pod would never start again).
+func TestRegisterIfUnregisteredKeepsTheCell(t *testing.T) {
+	ca, err := testpki.NewCA("hub-test-ca")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fh := &fakeEnrollHub{t: t, ca: ca}
+	srv := httptest.NewUnstartedServer(fh)
+	srv.Config.ErrorLog = log.New(io.Discard, "", 0)
+	serverCert, _ := ca.Issue("runtime-hub", time.Hour, "127.0.0.1")
+	srv.TLS = &tls.Config{Certificates: []tls.Certificate{serverCert}, MinVersion: tls.VersionTLS13}
+	srv.StartTLS()
+	defer srv.Close()
+	dir := t.TempDir()
+	caFile := filepath.Join(dir, "hub-ca.pem")
+	if err := os.WriteFile(caFile, ca.PEM, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "identity")
+	args := []string{"-hub", srv.URL, "-token", "tok-1", "-ca", caFile, "-out", out, "-if-unregistered"}
+	var stdout, stderr bytes.Buffer
+	if code := runEnroll("register", args, &stdout, &stderr); code != 0 {
+		t.Fatalf("first register: %s", stderr.String())
+	}
+	first, _ := os.ReadFile(filepath.Join(out, "cert.pem"))
+	calls := len(fh.got)
+	stdout.Reset()
+	if code := runEnroll("register", args, &stdout, &stderr); code != 0 {
+		t.Fatalf("second register: %s", stderr.String())
+	}
+	if len(fh.got) != calls || !strings.Contains(stdout.String(), "already registered") {
+		t.Fatalf("the second run asked the hub again (%d calls): %s", len(fh.got), stdout.String())
+	}
+	if again, _ := os.ReadFile(filepath.Join(out, "cert.pem")); !bytes.Equal(first, again) {
+		t.Fatal("the identity changed")
+	}
+}
+
 func TestEnrollRefusesACertificateForAnotherKey(t *testing.T) {
 	ca, _ := testpki.NewCA("hub-test-ca")
 	other, _ := ca.Issue("cell-x", time.Hour)
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "cellId": "cell-x",
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true, "cellId": "cell-x",
 			"certificate":   string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: other.Certificate[0]})),
-			"caCertificate": string(ca.PEM), "expiresAt": "2030-01-01T00:00:00Z", "serial": "1"})
+			"caCertificate": string(ca.PEM), "expiresAt": "2030-01-01T00:00:00Z", "serial": "1",
+		})
 	}))
 	defer srv.Close()
 	key, _, _ := enrollment.NewKeyAndCSR()
@@ -207,10 +262,10 @@ func TestPolicyPusherUnionAndRepush(t *testing.T) {
 	var endpoints []control.Endpoint
 	for i, s := range stores {
 		srv := httptest.NewServer((&egress.Control{Policies: s, Events: egress.NewEvents(1), AgentKey: pub}).Handler())
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 		endpoints = append(endpoints, control.Endpoint{Name: []string{"egress", "resolver"}[i], URL: srv.URL})
 	}
-	p := policyPusher{client: control.Pusher{Endpoints: endpoints, HTTP: &http.Client{}, Key: priv}, base: []string{"registry.npmjs.org"}}
+	p := policyPusher{client: control.Pusher{Endpoints: endpoints, HTTP: &http.Client{}, Key: priv}, rules: agent.EgressRules{Base: []string{"registry.npmjs.org"}}}
 	info := agent.ClaimInfo{
 		ClaimID:  "claim-1",
 		Acquire:  protocol.ClaimAcquireBody{OrgID: "org-a", Side: protocol.SidePr, HardExpiresAt: time.Now().Add(time.Hour).UTC().Format(time.RFC3339)},
@@ -280,6 +335,11 @@ func TestRegisterWritesTheConfigTLSPaths(t *testing.T) {
 	}
 	if _, err := tls.LoadX509KeyPair(s.Cert, s.Key); err != nil {
 		t.Fatalf("the cell cannot load what register wrote: %v", err)
+	}
+	// The hub registered it as a customer cell: its hello must say customer
+	// with no flag (the hub refuses an owner other than the registration's).
+	if s.Owner != "customer" {
+		t.Fatalf("a registered cell starts as owner %q, not customer", s.Owner)
 	}
 	if b, _ := os.ReadFile(s.CA); !bytes.Equal(b, ca.PEM) {
 		t.Fatal("ca not at the config's tls.ca")

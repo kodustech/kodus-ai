@@ -21,8 +21,10 @@ import (
 )
 
 type registerRequest struct {
-	Token    string `json:"token"`
-	Topology string `json:"topology"`
+	Token string `json:"token"`
+	// Topology is omitted unless the operator names one: the hub takes the
+	// token's (a token is bound to its topology when it is created).
+	Topology string `json:"topology,omitempty"`
 	CSR      string `json:"csr"`
 }
 
@@ -34,9 +36,11 @@ func runEnroll(cmd string, args []string, stdout, stderr io.Writer) int {
 	ca := fs.String("ca", "", "PEM of the CA that signs the hub's TLS certificate; register pins it as the cell's hub CA (renew: default the cell's CA file)")
 	out := fs.String("out", "/etc/kodus/cell", "directory for key.pem, cert.pem, ca.pem and issuer.pem (unless -config names them)")
 	var token, topology, cert, key *string
+	var ifUnregistered *bool
 	if cmd == "register" {
 		token = fs.String("token", "", "one-time registration token (or KODUS_CELL_REGISTRATION_TOKEN)")
-		topology = fs.String("topology", "single-vm", "cell topology")
+		ifUnregistered = fs.Bool("if-unregistered", false, "do nothing when a cell certificate is already where register would write it (a restarted Kubernetes cell pod keeps its cell; the token is single use)")
+		topology = fs.String("topology", "", "the token's topology (hybrid | self_hosted); empty: whatever the token was made for. A topology that is not the token's is refused and burns the token")
 	} else {
 		cert = fs.String("cert", "", "current cell certificate (default the cell's cert file)")
 		key = fs.String("key", "", "current cell key (default the cell's key file)")
@@ -54,6 +58,10 @@ func runEnroll(cmd string, args []string, stdout, stderr io.Writer) int {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	var res *enrollment.CertificateResponse
+	if cmd == "register" && *ifUnregistered && registered(paths) {
+		fmt.Fprintf(stdout, "cell register: already registered (%s); nothing to do\n", paths.Cert)
+		return 0
+	}
 	if cmd == "register" {
 		tok := *token
 		if tok == "" {
@@ -81,21 +89,34 @@ func enrollTargets(conf, out, hub string, outSet bool) (enrollment.Paths, string
 	if conf == "" {
 		return p, hub, nil
 	}
-	fc, err := loadFile(conf)
+	var cell settings
+	cellFlags := flag.NewFlagSet("cell", flag.ContinueOnError)
+	cell.register(cellFlags)
+	fc, err := loadFile(conf, cellFlags)
 	if err != nil {
 		return p, hub, err
 	}
 	if !outSet {
-		p.Key, p.Cert, p.CA = orValue(fc.TLS.Key, p.Key), orValue(fc.TLS.Cert, p.Cert), orValue(fc.TLS.CA, p.CA)
-		p.Issuer = orValue(fc.TLS.Issuer, filepath.Join(filepath.Dir(p.Cert), "issuer.pem"))
+		p.Key, p.Cert, p.CA = orValue(fc["key"], p.Key), orValue(fc["cert"], p.Cert), orValue(fc["ca"], p.CA)
+		p.Issuer = orValue(fc["issuer"], filepath.Join(filepath.Dir(p.Cert), "issuer.pem"))
 	}
-	if hub == "" && fc.HubURL != "" {
-		hub, err = enrollment.HTTPSBase(fc.HubURL)
+	if hub == "" && fc["hub-url"] != "" {
+		hub, err = enrollment.HTTPSBase(fc["hub-url"])
 		if err != nil {
 			return p, hub, err
 		}
 	}
 	return p, hub, nil
+}
+
+// registered reports whether a cell certificate and its key are in place.
+func registered(p enrollment.Paths) bool {
+	for _, f := range []string{p.Cert, p.Key} {
+		if st, err := os.Stat(f); err != nil || st.Size() == 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func orValue(v, def string) string {
@@ -111,7 +132,7 @@ func register(ctx context.Context, hub, caFile, token, topology string, p enroll
 	if token == "" || caFile == "" {
 		return nil, errors.New("-token and -ca are required")
 	}
-	caPEM, err := os.ReadFile(caFile)
+	caPEM, err := os.ReadFile(caFile) //nolint:gosec // G304: caFile is the operator's -ca flag
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +153,10 @@ func register(ctx context.Context, hub, caFile, token, topology string, p enroll
 		return nil, err
 	}
 	if err := enrollment.WriteHubCA(p.CA, caPEM); err != nil {
+		return nil, err
+	}
+	// A cell that redeemed a token is a customer cell; its hello says so.
+	if err := os.WriteFile(ownerFile(p.Cert), []byte("customer\n"), 0o644); err != nil { //nolint:gosec // G306: not a secret
 		return nil, err
 	}
 	return got.Response, nil

@@ -4,7 +4,7 @@ import { SCENARIOS } from '../../fake-cell/scenarios';
 import { shopRunRequest } from '../../e2e/fixtures';
 import shopTurns from '../agent/fixtures/shop-orders.json';
 import { HmacCanaryVault } from '../canary/canary';
-import { inMemoryRunDeps } from './in-memory-deps';
+import { inMemoryRunDeps } from './testing';
 import { finalizeStoppedRun, runRuntimeRun } from './run-orchestrator';
 
 // What a Run tells the operator and the Run page about itself: one line per

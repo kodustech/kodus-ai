@@ -1,10 +1,16 @@
+import { TRACEPARENT } from '@libs/runtime/contracts/trace-context';
+import { traceparentFor } from '@libs/runtime/telemetry/runtime-telemetry';
 import { randomUUID } from 'crypto';
 
 import { ConflictException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 
+import { RepositoryFullNameSchema } from '@libs/runtime/contracts/workspace';
+import type { RunTargetWorkspaceRef } from '@libs/runtime-publish/domain/run-target';
 import { DIFF_TRUNCATED_MARKER_PATH, RuntimeRunRequestedSchema, type RuntimeRunRequested } from '@libs/runtime/run';
+import type { RunWorkspaceRepository } from '@libs/runtime/run/run-messages';
+import type { ForkApprovalTokens } from '@libs/runtime/contracts/runtime-commands';
 
-import { forkRunMaxTokens } from '../domain/fork-policy';
+import { forkMayRunUnheld, forkRunMaxTokens } from '../domain/fork-policy';
 import { RUN_TOKEN_DEFAULT_TTL_SECONDS, signRunToken } from '../domain/run-token';
 import {
     RUNTIME_API_CONFIG,
@@ -13,6 +19,7 @@ import {
     RUNTIME_GIT_PORT,
     RUNTIME_REPO_TOKEN_ISSUER,
     type Clock,
+    type EnvironmentRepository,
     type ProductEnvironment,
     type PullRequestDiff,
     type PullRequestHead,
@@ -21,7 +28,18 @@ import {
     type RuntimeGitPort,
     type RuntimeRepoTokenIssuer,
 } from '../domain/ports';
+import { RuntimeEnvironmentMembers } from './environment-members.service';
 import { sealForRuntime } from './secret-sealer';
+
+/** A branch name the request may carry (what the report says a repository ran from), or nothing. */
+const branchOf = (branch: string | undefined) => (branch && branch.length <= 256 ? { branch } : {});
+
+/** The repository a Run is on: the pull request's. */
+export interface RunRepository {
+    repositoryId: string;
+    repositoryName: string;
+    fullName?: string;
+}
 
 /** The diff a Run carries: the Git API's files, plus the marker entry when the product had to cut it. */
 export function diffForRun(diff: PullRequestDiff): Pick<RuntimeRunRequested, 'diff' | 'diffTruncated' | 'prChangedRecipeFiles'> {
@@ -49,10 +67,18 @@ export class RuntimeRunRequestBuilder {
         private readonly config: RuntimeApiConfig,
         @Inject(RUNTIME_CLOCK)
         private readonly now: Clock,
+        // Required by Nest; a builder made without it (the older tests) builds single-repository Runs only.
+        @Inject(RuntimeEnvironmentMembers)
+        private readonly members?: RuntimeEnvironmentMembers,
     ) {}
 
     async build(input: {
+        /** The environment (its primary repository is `repositoryId`). */
         env: Pick<ProductEnvironment, 'environmentId' | 'organizationId' | 'teamId' | 'repositoryId' | 'repositoryName'>;
+        /** The PR's repository when it is a member of the environment, not its primary. */
+        repository?: RunRepository;
+        /** The commits a previous Run of this PR pinned (Run again): reused for every repository still in the environment. */
+        workspace?: RunTargetWorkspaceRef[];
         prNumber: number;
         head: PullRequestHead;
         trigger: RuntimeRunRequested['trigger'];
@@ -63,43 +89,59 @@ export class RuntimeRunRequestBuilder {
         attempt?: number;
         /** The repository's full name when the product stores it apart from the name. */
         repositoryFullName?: string;
-        /** A fork Run the environment's policy runs without a maintainer (ADR-030); ignored for a non-fork. */
+        /** A fork Run the environment's policy runs without a maintainer (ADR-030); ignored for a non-fork, and for an environment of several repositories. */
         forkApprovalRequired?: boolean;
         /** Exact product-admitted probes, not supplied by the planner. */
         externalVerification?: RuntimeRunRequested['externalVerification'];
+        /** The trace the request came in (the webhook's); absent: a new trace named by the Run's correlation id. */
+        traceparent?: string;
     }): Promise<RuntimeRunRequested> {
         this.ensureTokenConfig();
         const { env, prNumber, head } = input;
         const runId = input.runId ?? randomUUID();
         const attempt = input.attempt ?? 1;
         const orgTeam = { organizationId: env.organizationId, teamId: env.teamId };
-        const repo = { repositoryId: env.repositoryId, repositoryName: env.repositoryName };
+        const own = input.repository ?? { repositoryId: env.repositoryId, repositoryName: env.repositoryName };
+        const repo = { repositoryId: own.repositoryId, repositoryName: own.repositoryName };
 
         const environment = await this.environmentReader.get(env.organizationId, env.environmentId);
         // The gate pins the image the setup baked; without one there is nothing to pin, so no Run.
         if (!environment?.imageId) {
             throw new ConflictException('The environment has no image yet; run its setup first');
         }
+        const members = await this.membersOf(env, own.repositoryId);
         const diff = input.diff ?? (await this.git.getPullRequestDiff({ ...orgTeam, ...repo, prNumber, headSha: head.headSha }));
         const now = this.now();
         const maxTokens = this.maxTokensFor(head.fork);
+        // Every commit is pinned before any token is minted: a repository Kodus cannot read stops the Run with nothing issued.
+        const pins = members.length > 1 ? await this.pinWorkspace({ ...orgTeam, members, own: own.repositoryId, head, pinned: input.workspace }) : undefined;
         const tokens = await this.mintTokens({ ...orgTeam, ...repo, runId, attempt, prNumber, fork: head.fork });
-        const fullName = input.repositoryFullName ?? (env.repositoryName.includes('/') ? env.repositoryName : undefined);
+        const workspace = pins ? await this.sealWorkspace({ ...orgTeam, pins, runId }) : undefined;
+        const ownMember = members.find((m) => m.repositoryId === own.repositoryId);
+        const fullName =
+            input.repositoryFullName ??
+            own.fullName ??
+            (ownMember?.fullName.includes('/') ? ownMember.fullName : undefined) ??
+            (own.repositoryName.includes('/') ? own.repositoryName : undefined);
+        const correlationId = randomUUID();
         return RuntimeRunRequestedSchema.parse({
             runId,
             attempt,
-            correlationId: randomUUID(),
+            correlationId,
+            // One trace from the webhook (or this API call) to the cell (docs/runtime/observability.md, "Trace path").
+            traceparent: input.traceparent && TRACEPARENT.test(input.traceparent) ? input.traceparent : traceparentFor(correlationId),
             requestedAt: now.toISOString(),
             organizationId: env.organizationId,
             teamId: env.teamId,
-            repository: { id: env.repositoryId, name: env.repositoryName, ...(fullName ? { fullName } : {}) },
+            repository: { id: own.repositoryId, name: own.repositoryName, ...(fullName ? { fullName } : {}) },
             pullRequest: {
                 number: prNumber,
                 headSha: head.headSha,
                 baseSha: head.baseSha,
                 ...(head.baseBranch === undefined ? {} : { baseBranch: head.baseBranch }),
                 fork: head.fork,
-                ...(head.fork && input.forkApprovalRequired === false ? { forkApprovalRequired: false } : {}),
+                // Every path that starts a Run comes here: in an environment of several repositories a fork always waits for a maintainer.
+                ...(head.fork && input.forkApprovalRequired === false && forkMayRunUnheld(Math.max(1, members.length)) ? { forkApprovalRequired: false } : {}),
                 ...(head.authorId ? { authorId: head.authorId } : {}),
             },
             environment: {
@@ -112,7 +154,128 @@ export class RuntimeRunRequestBuilder {
             budget: { maxTokens },
             trigger: input.trigger,
             ...(input.externalVerification ? { externalVerification: input.externalVerification } : {}),
+            // Only an environment of several repositories carries it: a single-repository request stays as it was.
+            ...(workspace ? { workspace } : {}),
         });
+    }
+
+    /** The environment's repositories; the PR's own must be one of them. */
+    private async membersOf(env: Pick<ProductEnvironment, 'environmentId' | 'organizationId' | 'repositoryId' | 'repositoryName'>, own: string) {
+        const members = this.members ? await this.members.list(env) : [];
+        const known = members.length ? members.some((m) => m.repositoryId === own) : own === env.repositoryId;
+        if (!known) throw new ConflictException('The repository of this pull request is not part of the environment');
+        return members;
+    }
+
+    /**
+     * The commits every repository of the Run boots on each side, pinned once
+     * (docs/plans/2026-11-11-runtime-multi-repo-environments.md): the PR's
+     * repository at the PR; with pair_branches, a repository's open PR of the
+     * same branch name; any other at its default-branch head on both sides.
+     * A previous Run's pins (Run again) are kept for the repositories still here.
+     */
+    private async pinWorkspace(input: {
+        organizationId: string;
+        teamId: string;
+        members: EnvironmentRepository[];
+        own: string;
+        head: PullRequestHead;
+        pinned?: RunTargetWorkspaceRef[];
+    }): Promise<Array<{ member: EnvironmentRepository; ref: Omit<RunWorkspaceRepository, 'repositoryId' | 'fullName' | 'alias' | 'role' | 'sealedRepoToken' | 'sealedPrRepoToken'> }>> {
+        const orgTeam = { organizationId: input.organizationId, teamId: input.teamId };
+        const out = [];
+        for (const member of input.members) {
+            if (!RepositoryFullNameSchema.safeParse(member.fullName).success) {
+                throw new ConflictException(`Kodus does not know the full name (owner/name) of ${member.repositoryName}; add it to the environment again`);
+            }
+            if (member.repositoryId === input.own) {
+                out.push({ member, ref: { baseSha: input.head.baseSha, headSha: input.head.headSha, source: 'pull_request' as const, ...branchOf(input.head.headBranch) } });
+                continue;
+            }
+            const stored = input.pinned?.find((r) => r.repositoryId === member.repositoryId && r.source !== 'pull_request');
+            if (stored) {
+                out.push({
+                    member,
+                    ref: {
+                        baseSha: stored.baseSha,
+                        headSha: stored.headSha,
+                        source: stored.source,
+                        ...(stored.source === 'paired' && stored.pairedPrNumber !== undefined ? { pairedPrNumber: stored.pairedPrNumber } : {}),
+                        ...branchOf(stored.branch),
+                    },
+                });
+                continue;
+            }
+            const repo = { ...orgTeam, repositoryId: member.repositoryId, repositoryName: member.repositoryName };
+            if (member.pairBranches && input.head.headBranch && this.git.findOpenPullRequestByBranch) {
+                const paired = await this.git.findOpenPullRequestByBranch({ ...repo, branch: input.head.headBranch }).catch(() => {
+                    throw new ServiceUnavailableException(`Kodus could not read the pull requests of ${member.fullName}; try again`);
+                });
+                if (paired) {
+                    out.push({ member, ref: { baseSha: paired.baseSha, headSha: paired.headSha, source: 'paired' as const, pairedPrNumber: paired.number, branch: input.head.headBranch } });
+                    continue;
+                }
+            }
+            const branchHead = await this.git.getDefaultBranchHead(repo).catch(() => {
+                throw new ServiceUnavailableException(`Kodus could not read the default branch of ${member.fullName}; try again`);
+            });
+            if (branchHead.status !== 'ok') {
+                throw new ConflictException(`Kodus cannot read the default branch of ${member.fullName}, which this environment boots beside the pull request`);
+            }
+            out.push({ member, ref: { baseSha: branchHead.sha, headSha: branchHead.sha, source: 'default_branch' as const, ...branchOf(branchHead.branch) } });
+        }
+        return out;
+    }
+
+    /** One download token per side for every repository but the PR's (which uses the request's own two), each for that repository only, sealed for this Run. */
+    private async sealWorkspace(input: {
+        organizationId: string;
+        teamId: string;
+        runId: string;
+        pins: Awaited<ReturnType<RuntimeRunRequestBuilder['pinWorkspace']>>;
+    }): Promise<RunWorkspaceRepository[]> {
+        return Promise.all(
+            input.pins.map(async ({ member, ref }) => {
+                const entry = { repositoryId: member.repositoryId, fullName: member.fullName, alias: member.alias, role: member.role, ...ref };
+                if (ref.source === 'pull_request') return entry;
+                const repo = { organizationId: input.organizationId, teamId: input.teamId, repositoryId: member.repositoryId, repositoryName: member.repositoryName };
+                const [base, pr] = await Promise.all([this.repoTokens.issue(repo), this.repoTokens.issue(repo)]);
+                return {
+                    ...entry,
+                    sealedRepoToken: sealForRuntime(this.config, base, input.runId),
+                    sealedPrRepoToken: sealForRuntime(this.config, pr, input.runId),
+                };
+            }),
+        );
+    }
+
+    /**
+     * Fresh tokens, one per side, for every repository of a multi-repository
+     * Run but the PR's own, sealed for its runId: a fork approval sends them
+     * with the PR's (mintTokens), since the ones the Run was requested with
+     * expired while it waited. A repository that is no longer in the
+     * environment gets none: its claim is then refused, naming it.
+     */
+    async mintMemberTokens(input: {
+        env: Pick<ProductEnvironment, 'environmentId' | 'organizationId' | 'teamId' | 'repositoryId' | 'repositoryName'>;
+        runId: string;
+        refs: readonly RunTargetWorkspaceRef[];
+    }): Promise<ForkApprovalTokens['workspace']> {
+        this.ensureTokenConfig();
+        const others = input.refs.filter((r) => r.source !== 'pull_request');
+        if (!others.length || !this.members) return undefined;
+        const members = await this.members.list(input.env);
+        const out = await Promise.all(
+            others.map(async (ref) => {
+                const member = members.find((m) => m.repositoryId === ref.repositoryId);
+                if (!member) return undefined;
+                const repo = { organizationId: input.env.organizationId, teamId: input.env.teamId, repositoryId: member.repositoryId, repositoryName: member.repositoryName };
+                const [base, pr] = await Promise.all([this.repoTokens.issue(repo), this.repoTokens.issue(repo)]);
+                return { repositoryId: member.repositoryId, sealedRepoToken: sealForRuntime(this.config, base, input.runId), sealedPrRepoToken: sealForRuntime(this.config, pr, input.runId) };
+            }),
+        );
+        const minted = out.filter((t) => t !== undefined);
+        return minted.length ? minted : undefined;
     }
 
     /**

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/browser"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 )
 
 const browserImage = "kodus/browser-runner@sha256:" + "2aa72c7971cca987809c0b820f6780eb039c6ff0ed639bba109eb0bb965012e8"

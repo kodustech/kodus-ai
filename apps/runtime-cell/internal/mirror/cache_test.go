@@ -91,7 +91,7 @@ func newCacheFixture(t *testing.T) *cacheFixture {
 			return
 		}
 		if i := strings.Index(r.URL.Path, "/blobs/"); i > 0 {
-			http.Redirect(w, r, storage.URL+"/"+r.URL.Path[i+len("/blobs/"):], http.StatusTemporaryRedirect)
+			http.Redirect(w, r, storage.URL+"/"+r.URL.Path[i+len("/blobs/"):], http.StatusTemporaryRedirect) //nolint:gosec // G710: a fake registry redirecting to its own httptest storage
 			return
 		}
 		ref := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
@@ -126,14 +126,16 @@ func newCacheFixture(t *testing.T) *cacheFixture {
 	logs := &bytes.Buffer{}
 	ru, _ := url.Parse(reg.URL)
 	au, _ := url.Parse(auth.URL + "/token")
-	client := &http.Client{CheckRedirect: ociRedirect, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
-	p := &OCIProxy{Registry: ru, Auth: au, Client: client, Store: store, Clock: clk, Metrics: cm,
+	client := &http.Client{CheckRedirect: ociRedirect, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}} //nolint:gosec // G402: the httptest TLS registry presents a self-signed cert
+	p := &OCIProxy{
+		Registry: ru, Auth: au, Client: client, Store: store, Clock: clk, Metrics: cm,
 		Log: slog.New(slog.NewJSONHandler(logs, nil)), TagTTL: 10 * time.Minute, StaleFor: time.Hour,
 		// Two claims: 10.0.0.1 names golang, 10.0.0.2 names node.
 		Pins: func(r *http.Request, repo, ref string) bool {
 			want := map[string]string{"10.0.0.1": "library/golang", "10.0.0.2": "library/node"}[strings.Split(r.RemoteAddr, ":")[0]]
 			return repo == want && (IsDigest(ref) || ref == "1.24")
-		}}
+		},
+	}
 	return &cacheFixture{p: p, hub: hub, clk: clk, store: store, logs: logs, dir: dir}
 }
 
@@ -145,7 +147,7 @@ func (f *cacheFixture) fetch(t *testing.T, addr, method, path string) (int, stri
 	req.RemoteAddr = addr + ":40000"
 	func() {
 		defer func() {
-			if r := recover(); r != nil && r != http.ErrAbortHandler {
+			if r := recover(); r != nil && r != http.ErrAbortHandler { //nolint:errorlint // r is a recovered panic value, compared by identity like net/http does
 				panic(r)
 			}
 		}()

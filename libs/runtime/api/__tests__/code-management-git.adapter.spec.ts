@@ -150,3 +150,29 @@ describe('CodeManagementRuntimeGitAdapter: facts from the Git API (ADR-057)', ()
         ).toBeUndefined();
     });
 });
+
+describe('CodeManagementRuntimeGitAdapter: open pull requests (the lost-webhook reconciler)', () => {
+    it("lists the repository's open PRs with their full head SHA, draft flag and last update; an abbreviated or missing SHA is left out", async () => {
+        const asked: any[] = [];
+        const codeManagement = {
+            getPullRequests: async (input: any) => {
+                asked.push(input);
+                return [
+                    { number: 7, state: PullRequestState.OPENED, isDraft: false, updated_at: '2026-11-13T10:00:00Z', head: { sha: 'A'.repeat(40) } },
+                    { number: 8, state: PullRequestState.OPENED, isDraft: true, updated_at: 'not a date', head: { sha: 'b'.repeat(40) } },
+                    // Bitbucket Cloud's listing abbreviates the hash: it never matches the head a Run recorded.
+                    { number: 9, state: PullRequestState.OPENED, isDraft: false, updated_at: '2026-11-13T10:00:00Z', head: { sha: 'c'.repeat(12) } },
+                    { number: 10, state: PullRequestState.OPENED, head: {} },
+                    { number: 11, state: PullRequestState.CLOSED, head: { sha: 'd'.repeat(40) } },
+                ];
+            },
+        };
+        const adapter = new CodeManagementRuntimeGitAdapter(codeManagement as any);
+        const listed = await adapter.listOpenPullRequests({ organizationId: 'o', teamId: 't', repositoryId: '42', repositoryName: 'acme/shop' });
+        expect(listed).toEqual([
+            { number: 7, headSha: 'a'.repeat(40), draft: false, updatedAt: '2026-11-13T10:00:00.000Z' },
+            { number: 8, headSha: 'b'.repeat(40), draft: true },
+        ]);
+        expect(asked[0]).toMatchObject({ organizationAndTeamData: { organizationId: 'o', teamId: 't' }, repository: { id: '42', name: 'acme/shop' }, filters: { state: PullRequestState.OPENED } });
+    });
+});

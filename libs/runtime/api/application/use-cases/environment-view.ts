@@ -1,97 +1,43 @@
-import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { stuckSetups } from '@libs/runtime/health/stuck';
+import { Inject, Injectable, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
 
 import type { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
-import { type BlockerEvidence, type BlockerFixView } from '@libs/runtime/blockers/catalog';
-import { type ForkPullRequestPolicy } from '@libs/runtime/contracts/enums';
-import { type MachineSizePreset } from '@libs/runtime/contracts/machine-size';
-import type { EnvironmentLearnRecord, EnvironmentRecipeRecord, EnvironmentSetupRecord, RuntimeRunProjection } from '@libs/runtime/run';
+import type { ForkPullRequestPolicy } from '@libs/runtime/contracts/enums';
+import type { MachineSizePreset } from '@libs/runtime/contracts/machine-size';
+import type { PreviewSecrets } from '@libs/runtime/contracts/preview';
+import type { EnvironmentLearnRecord, EnvironmentSetupRecord, RuntimeRunProjection } from '@libs/runtime/run';
+import type {
+    RuntimeBlockerFixView,
+    RuntimeBlockerGroupView,
+    RuntimeEnvironmentRepositoryView,
+    RuntimeEnvironmentState,
+    RuntimeEnvironmentView,
+    RuntimeLearnView,
+    RuntimeMembershipBlockerGroupView,
+    RuntimeMembershipFixView,
+} from '@libs/runtime/contracts/views/environments';
 
-import { forkPolicyOf } from '../../domain/fork-policy';
-import { effectivePoolSize, type PoolPolicy, type PoolReason } from '../../domain/pool';
+import { effectiveForkPolicy, forkPolicyOf } from '../../domain/fork-policy';
+import { effectivePoolSize } from '../../domain/pool';
 import {
     RUNTIME_API_CONFIG,
+    RUNTIME_BUILD_STATE_EVICTION_READER,
     RUNTIME_CLOCK,
     RUNTIME_EGRESS_READER,
     RUNTIME_ENVIRONMENT_SETUP_READER,
     RUNTIME_PRODUCT_ENVIRONMENT_STORE,
     RUNTIME_RUN_PROJECTION_STORE,
     type Clock,
-    type EgressBlockedRow,
     type ProductEnvironment,
     type ProductEnvironmentStore,
     type RunProjectionReader,
+    type RuntimeBuildStateEvictionReader,
     type RuntimeEgressReader,
     type RuntimeEnvironmentSetupReader,
     type RuntimeApiConfig,
 } from '../../domain/ports';
+import { environmentRepositoryIds, RuntimeEnvironmentMembers } from '../environment-members.service';
 import { RuntimePoolController } from '../pool-controller.service';
-
-export interface RuntimeEnvironmentView {
-    environmentId: string;
-    repositoryId: string;
-    repositoryName?: string;
-    state?: string;
-    /** The org admin's diagnostic hold for failed default-branch setups (§11 runbook). */
-    diagnosticHold?: boolean;
-    /**
-     * The org admin's machine size for builds and services (a preset of
-     * contracts/machine-size.ts); null: the cell's default. It applies from
-     * the next setup; `setup.machineSize` is what the last one booted at.
-     */
-    machineSize?: MachineSizePreset | null;
-    /** What a PR from a fork does (contracts/enums.ts); set only for an environment of the product table. */
-    forkPullRequests?: ForkPullRequestPolicy;
-    /**
-     * The warm pool: the size when ready (the admin's choice, null: the plan's default) and the plan's bounds,
-     * when it is kept ready (policy), what the cell holds now and why, the month's estimated spend and the
-     * most the policy may cost a month at list price.
-     */
-    pool?: {
-        size: number;
-        setting: number | null;
-        defaultSize: number;
-        maxSize: number;
-        policy: PoolPolicy | null;
-        now?: { size: number; reason: PoolReason };
-        spentUsd?: number;
-        estimate?: { hours: number | null; usd: number | null };
-        usdPerMachineHour?: number;
-        lastPullRequestAt?: string;
-    };
-    cellOwner?: 'kodus' | 'customer';
-    metrics: {
-        bootRate7d?: number;
-        readyP50Ms?: number;
-        readyP90Ms?: number;
-        runs7d: number;
-        egressBlocked: EgressBlockedRow[];
-        /**
-         * The environment's setup boots of the last 7 days (each from zero, so
-         * slower than a Run's boot on the bake): how many, the share whose
-         * machines became ready, and their time to ready. Kept apart from the
-         * Run numbers above, which the warm pool and the targets read.
-         */
-        setupBoots?: { boots7d: number; bootRate7d: number; readyP50Ms?: number; readyP90Ms?: number };
-    };
-    egressApprovals: Array<{ host: string; approvedBy?: string; approvedAt?: string }>;
-    /** The latest setup the runtime-worker recorded (progress and blockers). */
-    setup?: Pick<EnvironmentSetupRecord, 'state' | 'steps' | 'blockers' | 'requestedAt' | 'updatedAt' | 'finishedAt' | 'sha' | 'branch' | 'refSource' | 'cellId' | 'expose' | 'failureBundle' | 'diagnosticHold' | 'progress' | 'lastActive' | 'machineSize' | 'bootTiming'> & {
-        /** Which recipe the environment boots with; its text stays in the Runtime store. */
-        recipe?: { path: string; sha: string; state: 'found' | 'absent'; digest?: string } & Pick<EnvironmentRecipeRecord, 'origin' | 'cleanBoots' | 'inference' | 'notes'> & {
-                /** Only for a recipe Kodus inferred or Kody wrote: it is not repository text, and not on the default branch yet. */
-                content?: string;
-            };
-        /** Kody's learn loop: what it tried and how each attempt ended, in Kodus's words (S-23). */
-        learn?: RuntimeLearnView;
-    };
-    createdAt?: string;
-    updatedAt?: string;
-}
-
-/** The learn loop as the product shows it: typed fixes and results; the proven recipe text only when Kodus wrote the recipe. */
-export type RuntimeLearnView = Pick<EnvironmentLearnRecord, 'attempts' | 'stopped' | 'tried'> & {
-    proven?: Omit<NonNullable<EnvironmentLearnRecord['proven']>, 'content' | 'change'> & { content?: string };
-};
 
 const learnView = (learn: EnvironmentLearnRecord): RuntimeLearnView => {
     const { proven } = learn;
@@ -125,29 +71,19 @@ const learnView = (learn: EnvironmentLearnRecord): RuntimeLearnView => {
     };
 };
 
-// The port lives in domain/ports; re-exported for the callers that imported it from here.
-export { RUNTIME_ENVIRONMENT_SETUP_READER, type RuntimeEnvironmentSetupReader };
-
-/** A fix as the product shows it: the catalog's, with the recipe diff when it changes the recipe. */
-export type RuntimeBlockerFixView = Omit<BlockerFixView, 'recipeChange'> & {
-    /** The one-field recipe change, as a unified diff of .kodus/workspace.yaml (ENV-05). */
-    recipeDiff?: string;
-    /** This fix got the same blocker past before (ADR-018): in this repo, or anywhere in the org. */
-    learned?: { lessonId: string; scope: 'repo' | 'org'; helped: number; lastAt: string };
+// The views live in contracts/views/environments.ts (the web imports them too); re-exported for the callers that imported them from here.
+export type {
+    RuntimeBlockerFixView,
+    RuntimeBlockerGroupView,
+    RuntimeEnvironmentRepositoryView,
+    RuntimeEnvironmentView,
+    RuntimeLearnView,
+    RuntimeMembershipBlockerGroupView,
+    RuntimeMembershipFixView,
 };
 
-export interface RuntimeBlockerGroupView {
-    signature: string;
-    kind: string;
-    title: string;
-    count: number;
-    lastAt?: string;
-    lastPr?: number;
-    state: 'open';
-    evidence?: BlockerEvidence;
-    /** In order; the first is the recommended one (ADR-015). */
-    fixes: RuntimeBlockerFixView[];
-}
+// The port lives in domain/ports; re-exported for the callers that imported it from here.
+export { RUNTIME_ENVIRONMENT_SETUP_READER, type RuntimeEnvironmentSetupReader };
 
 const WEEK_MS = 7 * 24 * 3_600_000;
 
@@ -197,7 +133,9 @@ interface EnvironmentSource {
     organizationId: string;
     repositoryId: string;
     repositoryName?: string;
-    state?: string;
+    /** It has a row in the product table; absent or false: only Runs know it. */
+    managed?: boolean;
+    state?: RuntimeEnvironmentState;
     setupRequestedAt?: string;
     diagnosticHold?: boolean;
     /** Set only for an environment of the product table: the admin's machine size (null: the cell's default). */
@@ -206,6 +144,8 @@ interface EnvironmentSource {
     forkPullRequests?: ForkPullRequestPolicy;
     /** Set only for an environment of the product table: the admin's pool size (null: the plan's default). */
     poolSize?: number | null;
+    /** Set only for an environment of the product table: the org's secrets in its previews. */
+    previewSecrets?: PreviewSecrets;
     /** The product table's pool state (policy, activity, applied size, usage), for the pool view. */
     pool?: Pick<ProductEnvironment, 'poolSize' | 'poolPolicy' | 'poolActivityAt' | 'poolAppliedSize' | 'poolUsage'> & Pick<ProductEnvironment, 'environmentId' | 'organizationId'>;
     createdAt?: string;
@@ -237,7 +177,51 @@ export class EnvironmentViewBuilder {
         private readonly config?: Pick<RuntimeApiConfig, 'pool'>,
         @Optional()
         private readonly poolController?: RuntimePoolController,
+        // Required by Nest; a builder made without it (the older tests) lists no repositories.
+        @Inject(RuntimeEnvironmentMembers)
+        private readonly members?: RuntimeEnvironmentMembers,
+        @Optional()
+        @Inject(RUNTIME_BUILD_STATE_EVICTION_READER)
+        private readonly evictions?: RuntimeBuildStateEvictionReader,
     ) {}
+
+    /**
+     * The eviction of the build state the environment's last setup left: on
+     * the cell that setup built on, after it finished. A read that fails says
+     * nothing (the screen loses a hint, never the environment).
+     */
+    private async buildCacheOf(env: EnvironmentSource, setup: EnvironmentSetupRecord | null): Promise<RuntimeEnvironmentView['buildCache']> {
+        if (!this.evictions || !setup || setup.state !== 'active') return undefined;
+        const cell = setup.buildCellId ?? setup.cellId;
+        const since = Date.parse(setup.finishedAt ?? setup.updatedAt);
+        const rows = await this.evictions.evictions(env.organizationId, env.environmentId).catch(() => []);
+        const hit = rows.find((r) => (!cell || r.cellId === cell) && !(Date.parse(r.evictedAt) < since));
+        return hit ? { state: 'evicted', evictedAt: hit.evictedAt, cellId: hit.cellId, reason: 'disk_floor' } : undefined;
+    }
+
+    /**
+     * Every repository of the environment: reading or acting on it needs
+     * access to all of them, since its machines hold all their code.
+     */
+    repositoryIdsOf(env: Pick<EnvironmentSource, 'organizationId' | 'environmentId' | 'repositoryId'>): Promise<string[]> {
+        return environmentRepositoryIds(this.members, env);
+    }
+
+    private async repositoriesOf(env: EnvironmentSource, setup: EnvironmentSetupRecord | null): Promise<RuntimeEnvironmentRepositoryView[] | undefined> {
+        // Only an environment of the product table has repositories to list; one only Runs know is its Run's.
+        if (!this.members || !env.pool || !env.repositoryName) return undefined;
+        const rows = await this.members.list({ ...env, repositoryName: env.repositoryName });
+        return rows.map((r) => ({
+            repositoryId: r.repositoryId,
+            repositoryName: r.repositoryName,
+            fullName: r.fullName,
+            alias: r.alias,
+            role: r.role,
+            triggers: r.triggers,
+            pairBranches: r.pairBranches,
+            ...(lastSetupShaOf(r, setup) ? { lastSetupSha: lastSetupShaOf(r, setup) } : {}),
+        }));
+    }
 
     private poolView(env: ProductEnvironment): NonNullable<RuntimeEnvironmentView['pool']> {
         const plan = this.config!.pool;
@@ -255,7 +239,11 @@ export class EnvironmentViewBuilder {
     }
 
     async setup(organizationId: string, environmentId: string): Promise<EnvironmentSetupRecord | null> {
-        const rec = (await this.setups?.get(organizationId, environmentId).catch(() => null)) ?? null;
+        // A store that cannot be read is not an environment without a setup: the view and its blockers fail as unavailable.
+        const rec =
+            (await this.setups?.get(organizationId, environmentId).catch(() => {
+                throw new ServiceUnavailableException('The environment setup could not be read. Try again.');
+            })) ?? null;
         return rec && rec.organizationId === organizationId ? rec : null;
     }
 
@@ -282,6 +270,7 @@ export class EnvironmentViewBuilder {
                 organizationId,
                 repositoryId: r.repositoryId,
                 repositoryName: r.repositoryName,
+                managed: false,
                 updatedAt: r.updatedAt,
             });
         }
@@ -298,7 +287,7 @@ export class EnvironmentViewBuilder {
         const latest = runs[0];
         if (!latest) return null;
         return {
-            env: { environmentId, organizationId, repositoryId: latest.repositoryId, repositoryName: latest.repositoryName, updatedAt: latest.updatedAt },
+            env: { environmentId, organizationId, repositoryId: latest.repositoryId, repositoryName: latest.repositoryName, managed: false, updatedAt: latest.updatedAt },
             runs,
         };
     }
@@ -320,17 +309,24 @@ export class EnvironmentViewBuilder {
             : [[], []];
         const latest = mine[0];
         const ours = await this.setup(env.organizationId, env.environmentId);
+        const repositories = await this.repositoriesOf(env, ours);
         const setupBoots = setupBootMetrics(ours?.boots, since);
+        const buildCache = await this.buildCacheOf(env, ours);
         // The worker's record wins once it answers the latest request (setup_requested → setting_up → active | blocked).
         const state = ours && (!env.setupRequestedAt || ours.requestedAt >= env.setupRequestedAt) ? ours.state : env.state;
         return {
             environmentId: env.environmentId,
             repositoryId: env.repositoryId,
             ...(env.repositoryName ? { repositoryName: env.repositoryName } : {}),
+            managed: env.managed === true,
+            ...(repositories ? { repositories } : {}),
             ...(state ? { state } : {}),
             ...(env.diagnosticHold !== undefined ? { diagnosticHold: env.diagnosticHold } : {}),
             ...(env.machineSize !== undefined ? { machineSize: env.machineSize } : {}),
-            ...(env.forkPullRequests !== undefined ? { forkPullRequests: env.forkPullRequests } : {}),
+            ...(env.forkPullRequests !== undefined
+                ? { forkPullRequests: env.forkPullRequests, effectiveForkPullRequests: effectiveForkPolicy(env.forkPullRequests, repositories?.length ?? 1) }
+                : {}),
+            ...(env.previewSecrets !== undefined ? { previewSecrets: env.previewSecrets } : {}),
             // Only an environment of the product table has settings to change.
             ...(this.config && env.pool
                 ? { pool: this.poolView(env.pool as ProductEnvironment) }
@@ -343,6 +339,8 @@ export class EnvironmentViewBuilder {
                           blockers: ours.blockers,
                           requestedAt: ours.requestedAt,
                           updatedAt: ours.updatedAt,
+                          // Past the longest a setup may last, or without a saved step for longer than one boot (libs/runtime/health/stuck.ts).
+                          ...stuckSetupView(ours, this.now()),
                           ...(ours.finishedAt ? { finishedAt: ours.finishedAt } : {}),
                           ...(ours.sha ? { sha: ours.sha } : {}),
                           ...(ours.branch ? { branch: ours.branch } : {}),
@@ -360,6 +358,7 @@ export class EnvironmentViewBuilder {
                                                   cleanBoots: ours.recipe.cleanBoots ?? 0,
                                                   ...(ours.recipe.content ? { content: ours.recipe.content } : {}),
                                                   ...(ours.recipe.origin === 'authored' && ours.recipe.notes ? { notes: ours.recipe.notes } : {}),
+                                                  ...(ours.recipe.origin === 'authored' && ours.recipe.authorVersion ? { authorVersion: ours.recipe.authorVersion } : {}),
                                               }
                                             : {}),
                                         ...(ours.recipe.inference ? { inference: ours.recipe.inference } : {}),
@@ -375,10 +374,27 @@ export class EnvironmentViewBuilder {
                           ...(ours.machineSize ? { machineSize: ours.machineSize } : {}),
                           ...(ours.bootTiming ? { bootTiming: ours.bootTiming } : {}),
                           ...(ours.learn ? { learn: learnView(ours.learn) } : {}),
+                          // Kody's last rewrite of the recipe for a new version of its instructions: versions, the reason, the outcome.
+                          ...(ours.reauthor ? { reauthor: ours.reauthor } : {}),
+                          // Kody's rewrites of its own recipe in this setup: digests, outcomes and the catalog's blocker titles, never recipe text.
+                          ...(ours.repairs?.length
+                              ? {
+                                    repairs: ours.repairs.map((r) => ({
+                                        n: r.n,
+                                        max: r.max,
+                                        blocker: { kind: r.blocker.kind, signature: r.blocker.signature, title: r.blocker.title },
+                                        failedDigest: r.failedDigest,
+                                        ...(r.recipeDigest ? { recipeDigest: r.recipeDigest } : {}),
+                                        outcome: r.outcome,
+                                        at: r.at,
+                                    })),
+                                }
+                              : {}),
                       },
                   }
                 : {}),
             ...(latest?.cellOwner ? { cellOwner: latest.cellOwner } : {}),
+            ...(buildCache ? { buildCache } : {}),
             metrics: {
                 ...(attempted.length ? { bootRate7d: booted.length / attempted.length } : {}),
                 ...(readyP50Ms !== undefined ? { readyP50Ms } : {}),
@@ -394,16 +410,22 @@ export class EnvironmentViewBuilder {
     }
 }
 
+/** The commit the setup booted a repository at: the setup's own for the primary, its workspace entry for a member. */
+const lastSetupShaOf = (r: Pick<RuntimeEnvironmentRepositoryView, 'repositoryId' | 'role'>, setup: EnvironmentSetupRecord | null): string | undefined =>
+    r.role === 'primary' ? setup?.sha : setup?.workspace?.find((w) => w.repositoryId === r.repositoryId)?.sha;
+
 const fromProduct = (e: ProductEnvironment): EnvironmentSource => ({
     environmentId: e.environmentId,
     organizationId: e.organizationId,
     repositoryId: e.repositoryId,
     repositoryName: e.repositoryName,
+    managed: true,
     state: e.state,
     setupRequestedAt: e.setupRequestedAt,
     diagnosticHold: e.diagnosticHold === true,
     machineSize: e.machineSize ?? null,
     forkPullRequests: forkPolicyOf(e.forkPullRequests),
+    previewSecrets: e.previewSecrets === 'run' ? 'run' : 'none',
     poolSize: e.poolSize ?? null,
     pool: {
         environmentId: e.environmentId,
@@ -422,3 +444,9 @@ const fromProduct = (e: ProductEnvironment): EnvironmentSource => ({
 export const RuntimeEnvironmentsReader = EnvironmentViewBuilder;
 /** @deprecated use EnvironmentViewBuilder. */
 export type RuntimeEnvironmentsReader = EnvironmentViewBuilder;
+
+/** The hang detector's verdict on this setup, for Environment Health: absent while it is within its bound. */
+function stuckSetupView(setup: EnvironmentSetupRecord, now: Date): { stuck?: { state: string; since: string; ageMs: number; boundMs: number } } {
+    const [item] = stuckSetups([{ environmentId: setup.environmentId, organizationId: setup.organizationId, setupKey: setup.key, state: setup.state, requestedAt: setup.requestedAt, updatedAt: setup.updatedAt }], now);
+    return item ? { stuck: { state: item.state, since: item.since, ageMs: item.ageMs, boundMs: item.boundMs } } : {};
+}

@@ -13,8 +13,10 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
 
-const fakeStripeImage = "stripe/stripe-mock@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-const fakeEmailImage = "axllent/mailpit@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+const (
+	fakeStripeImage = "stripe/stripe-mock@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	fakeEmailImage  = "axllent/mailpit@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+)
 
 // Before #2494 local-docker accepted this declaration but never added a fake.
 func TestDeclaredFakesBecomePrivateServicesBeforeBuild(t *testing.T) {

@@ -27,6 +27,8 @@ export interface RunBootFailure {
     logTail: string[];
     /** When the hub answered the claim as failed. */
     at: string;
+    /** The repository of a multi-repository environment the blocker is about (its alias); absent: the environment's own, or not known. */
+    alias?: string;
 }
 
 /** The cell's name of the bundle entry that holds the boot's own output (apps/runtime-cell/internal/agent/bundle.go). */
@@ -67,8 +69,11 @@ export function bootOutputOf(b: Pick<BlockerInput, 'message' | 'bundle'>, clean:
     };
 }
 
+/** Why a fork's PR side could not reach a host: approvals and secrets never reach a fork's code (D7). */
+export const FORK_EGRESS_TITLE = "A fork's code gets no approved host and no secret";
+
 /** The boot failure detail of one side, from the first blocker its cell reported. */
-export function bootFailureOf(args: { side: 'base' | 'pr'; blocker: BlockerInput; at: string; clean: (text: string) => string }): RunBootFailure {
+export function bootFailureOf(args: { side: 'base' | 'pr'; blocker: BlockerInput; at: string; clean: (text: string) => string; alias?: string; fork?: boolean }): RunBootFailure {
     const { blocker, clean } = args;
     const c = classifyBlocker({ kind: blocker.kind, signature: blocker.signature, message: blocker.message, ...(blocker.bundle ? { bundle: blocker.bundle } : {}) });
     const kind: BlockerKind = (BLOCKER_KINDS as readonly string[]).includes(c.kind) ? (c.kind as BlockerKind) : 'unknown';
@@ -77,8 +82,14 @@ export function bootFailureOf(args: { side: 'base' | 'pr'; blocker: BlockerInput
         side: args.side,
         kind,
         signature: clipMiddle(firstLine(c.signature) || 'unknown', BOOT_FAILURE_SIGNATURE_MAX),
-        title: clipMiddle(firstLine(c.title) || 'The machine did not boot', BOOT_FAILURE_TITLE_MAX),
+        // D7: the PR side of a fork never gets the environment's approved hosts nor the org's secrets, so a host
+        // only an approval opens stops it; the Run ends partly tested (infraBootBlocker), and the title says why.
+        title: clipMiddle(
+            (args.fork && args.side === 'pr' && kind === 'external_service' ? `${FORK_EGRESS_TITLE}: ${firstLine(c.title)}` : firstLine(c.title)) || 'The machine did not boot',
+            BOOT_FAILURE_TITLE_MAX,
+        ),
         ...bootOutputOf(blocker, clean),
         at: args.at,
+        ...(args.alias ? { alias: args.alias } : {}),
     };
 }

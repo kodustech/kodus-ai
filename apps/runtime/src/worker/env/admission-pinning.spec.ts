@@ -62,6 +62,19 @@ describe('reserved ticket pins the environment client', () => {
         expect(h.directory.reserveCell).not.toHaveBeenCalled();
     });
 
+    it("boots Kody's repair of a setup's recipe on the ticket's cell, as a learn-loop attempt", async () => {
+        const h = fixture();
+        const setupTicket: PhysicalAdmissionTicket = { ...ticket, kind: 'setup', key: 'setup-key', members: [{ side: 'setup', idempotencyKey: 'setup:setup-key', claimId: claimIdFor(ticket.organizationId, 'setup:setup-key') }] };
+        const env = new HubEnvironmentClient(new HubClient({ cellDirectory: h.directory, hubBaseUrl: 'http://hub', postImpl: h.post }), { open: h.open }, {
+            organizationId: ticket.organizationId, correlationId: 'trace', sealedRepoToken: 'sealed:v1:synthetic', tokenBinding: 'setup-key', expose: [], admissionTicket: setupTicket,
+        } as any);
+        h.post.mockResolvedValueOnce({ status: 200, text: '{"ok":true}' });
+        await env.acquire({ ...h.request, runId: undefined, consumer: 'setup', ref: { side: 'setup', sha: 'a'.repeat(40) }, idempotencyKey: 'setup:setup-key:repair-1' });
+        expect(h.post.mock.calls[0][0]).toMatch(/retarget-setup$/);
+        expect(h.post.mock.calls[1][0]).toMatch(/acquire$/);
+        await expect(env.acquire({ ...h.request, runId: undefined, consumer: 'setup', ref: { side: 'setup', sha: 'a'.repeat(40) }, idempotencyKey: 'setup:setup-key:repair-99' })).rejects.toThrow('admission member mismatch');
+    });
+
     it('does not acquire or open credentials when setup retarget ownership is lost', async () => {
         const h = fixture();
         const env = new HubEnvironmentClient(new HubClient({ cellDirectory: h.directory, hubBaseUrl: 'http://hub', postImpl: h.post }), { open: h.open }, {

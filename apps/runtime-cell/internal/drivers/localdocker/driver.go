@@ -43,7 +43,7 @@ const Kind = "local-docker"
 // DevEnv is the environment variable that, with the flag, opens the gate.
 const DevEnv = "KODY_RUNTIME_DEV"
 
-// ErrNotDev: the driver was asked for without both halves of the dev gate.
+// ErrNotDev means the driver was asked for without both halves of the dev gate.
 var ErrNotDev = errors.New("localdocker: refused: the local-docker driver has no isolation and needs both -dev-insecure-local-docker and " + DevEnv + "=1")
 
 // Warning is printed to Config.Out every time the driver starts.
@@ -127,11 +127,14 @@ func New(ctx context.Context, docker Docker, cfg Config) (*Driver, error) {
 func (d *Driver) Kind() string { return Kind }
 
 func (d *Driver) Capabilities() driver.Capabilities {
-	return driver.Capabilities{Isolation: driver.IsolationNone, NestedContainers: true, Suspend: "stop", Arch: []string{"x86_64", "arm64"}}
+	return driver.Capabilities{Isolation: driver.IsolationNone, NestedContainers: true, Arch: []string{"x86_64", "arm64"}}
 }
 
-func (d *Driver) Bake(context.Context, driver.BakeSpec) (driver.ImageRef, error) {
-	return driver.ImageRef{}, fmt.Errorf("%w: localdocker builds the environment from the checkout at boot", driver.ErrUnsupported)
+// Parts returns resets, boot timings, diagnostics and the sweep. No bake: the
+// environment is built from the checkout at every boot. What it booted
+// (Manifest) is the agent's own port, wired apart.
+func (d *Driver) Parts() driver.Parts {
+	return driver.Parts{Resetter: d, BootTimes: d, Diagnoser: d, Sweeper: d}
 }
 
 // saveLocked persists the state; the caller holds d.mu.
@@ -150,7 +153,7 @@ func httpStatus(ctx context.Context, url string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	return resp.StatusCode, nil
 }
 

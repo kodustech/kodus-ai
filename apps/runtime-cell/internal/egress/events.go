@@ -22,7 +22,7 @@ type Event struct {
 // Events is the bounded log of refusals the control port serves.
 type Events struct{ log *eventlog.Log[Event] }
 
-func NewEvents(max int) *Events { return &Events{log: eventlog.New[Event](max)} }
+func NewEvents(capacity int) *Events { return &Events{log: eventlog.New[Event](capacity)} }
 
 func (e *Events) Add(ev Event) {
 	e.log.Add(func(seq int64) Event { ev.Seq = seq; return ev })

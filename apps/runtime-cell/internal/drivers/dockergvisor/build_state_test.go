@@ -11,8 +11,16 @@ import (
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/clock"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/buildstate"
 )
+
+// bootErr is boot for a build expected to fail.
+func bootErr(d *Driver, ref driver.MachineRef, builds ...sandbox.Build) error {
+	_, _, err := d.build(context.Background(), ref, builds, "net", "resolv", bakeSubnet, nil)
+	return err
+}
 
 // The store's own rules (who may hold a state, eviction order, leftover
 // overlays) are tested in buildstate. Here: what the driver's build path and
@@ -80,6 +88,11 @@ func testStates(t *testing.T, d *Driver, m buildstate.Mounter, opts ...func(*bui
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Before the temp dir goes: a released view may still be being removed.
+	t.Cleanup(func() {
+		st.WaitSpares()
+		st.WaitRemovals()
+	})
 	return st
 }
 
@@ -120,8 +133,8 @@ func TestTheBuildStateGoesFromTheSetupToPullRequestsOnly(t *testing.T) {
 	asSetup(d, setup, true)
 	boot(t, d, setup, build)
 	got := docker.builds[len(docker.builds)-1]
-	if got.StateDir != env || got.CacheTo != "" || got.CacheFrom != "" || got.GCKeepStorage != "20GB" {
-		t.Fatalf("seeding setup: state %q cache from %q to %q keep %q", got.StateDir, got.CacheFrom, got.CacheTo, got.GCKeepStorage)
+	if got.StateDir != env || got.CacheFrom != "" || got.GCKeepStorage != "20GB" {
+		t.Fatalf("seeding setup: state %q cache from %q keep %q", got.StateDir, got.CacheFrom, got.GCKeepStorage)
 	}
 
 	pr := machine("claim-pr", bakeEnv)
@@ -240,5 +253,59 @@ func TestAcquireLeavesEvictionToTheSweep(t *testing.T) {
 	}
 	if _, err := os.Stat(left); !os.IsNotExist(err) {
 		t.Fatal("the sweep left a half-removed state")
+	}
+}
+
+// The state read through an overlay is a cache: a build that fails on it runs
+// again without it, and only that second result is the build's. A pull
+// request is not blamed for what the overlay refused.
+func TestABuildThatFailsOnTheStateOverlayRunsAgainWithoutIt(t *testing.T) {
+	d, docker, m := statefulDriver(t)
+	build := sandbox.Build{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}
+	env := states(d).EnvDir(bakeOrg, bakeEnv)
+	setup := machine("claim-setup", bakeEnv)
+	asSetup(d, setup, true)
+	boot(t, d, setup, build)
+
+	before := len(docker.builds)
+	docker.duringBuild = func(b dockercli.BuildRun) {
+		docker.buildErr = nil
+		if b.StateDir != "" && b.StateDir != env {
+			docker.buildErr = errors.New("failed to solve: remove /app/package.json: operation not permitted")
+		}
+	}
+	pr := machine("claim-pr", bakeEnv)
+	boot(t, d, pr, build)
+	ran := docker.builds[before:]
+	if len(ran) != 2 {
+		t.Fatalf("the pull request built %d times, want the overlay build and one more without it", len(ran))
+	}
+	if ran[0].StateDir == "" || ran[0].StateDir == env {
+		t.Fatalf("the first build mounted %q, want the overlay", ran[0].StateDir)
+	}
+	if ran[1].StateDir != "" {
+		t.Fatalf("the second build still mounted %q", ran[1].StateDir)
+	}
+	if len(m.unmounts) != 1 || m.unmounts[0] != ran[0].StateDir {
+		t.Fatalf("the overlay was not dropped before the second build: unmounts %v", m.unmounts)
+	}
+}
+
+// What fails without the state too is the build's own failure, reported once the second build ends.
+func TestABuildThatFailsWithoutTheStateTooFails(t *testing.T) {
+	d, docker, _ := statefulDriver(t)
+	build := sandbox.Build{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}
+	setup := machine("claim-setup", bakeEnv)
+	asSetup(d, setup, true)
+	boot(t, d, setup, build)
+
+	before := len(docker.builds)
+	docker.buildErr = errors.New("failed to solve: process \"/bin/sh -c npm run build\" did not complete successfully: exit code: 1")
+	pr := machine("claim-pr", bakeEnv)
+	if err := bootErr(d, pr, build); err == nil {
+		t.Fatal("a build that fails with and without the state was accepted")
+	}
+	if n := len(docker.builds) - before; n != 2 {
+		t.Fatalf("built %d times, want 2", n)
 	}
 }

@@ -1,4 +1,4 @@
-import { InMemoryPrAdmissionStore } from './pr-admission-store';
+import { InMemoryPrAdmissionStore } from './testing';
 const scope = { organizationId: 'org', repositoryId: 'repo', prNumber: 1 };
 
 it('keeps same-head IDs in one generation and fences older retries', async () => {

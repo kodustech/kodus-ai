@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver/drivertest"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 )
 
 func withEgress(t *testing.T) (*Driver, *memDocker) {
@@ -99,8 +99,10 @@ func TestClaimResolvNamesTheEgressAndGoesWithTheNetwork(t *testing.T) {
 func TestClaimNetworkSkipsATakenSubnet(t *testing.T) {
 	docker := newMemDocker()
 	docker.subnets["someone-else"] = "10.213.0.0/24"
-	d, err := New(context.Background(), docker, Config{CellID: "cell-1", HolderImage: "kodus/holder@sha256:abc", WorkDir: t.TempDir(),
-		ClaimSubnets: netip.MustParsePrefix("10.213.0.0/23")})
+	d, err := New(context.Background(), docker, Config{
+		CellID: "cell-1", HolderImage: "kodus/holder@sha256:abc", WorkDir: t.TempDir(),
+		ClaimSubnets: netip.MustParsePrefix("10.213.0.0/23"),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,5 +112,20 @@ func TestClaimNetworkSkipsATakenSubnet(t *testing.T) {
 	}
 	if got := docker.subnets[n.WorkloadGroupID]; got != "10.213.1.0/24" {
 		t.Fatalf("claim network on %s, want the free 10.213.1.0/24", got)
+	}
+}
+
+// A claim pool that holds no /24 is refused when the cell starts. It used to
+// pass New and panic on a negative shift at the first claim (an IPv6 pool on
+// As4).
+func TestAClaimPoolWithoutARoomFor24IsRefusedAtStart(t *testing.T) {
+	for _, pool := range []string{"10.213.0.0/25", "fd00::/64"} {
+		_, err := New(context.Background(), newMemDocker(), Config{
+			CellID: "cell-1", HolderImage: "kodus/holder@sha256:abc", WorkDir: t.TempDir(),
+			ClaimSubnets: netip.MustParsePrefix(pool),
+		})
+		if err == nil {
+			t.Fatalf("pool %s accepted", pool)
+		}
 	}
 }

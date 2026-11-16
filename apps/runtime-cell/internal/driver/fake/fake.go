@@ -8,6 +8,7 @@ package fake
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"sync"
 	"time"
@@ -18,9 +19,12 @@ import (
 type Machine struct {
 	Ref       driver.MachineRef
 	Spec      driver.MachineSpec
-	State     string // running | stopped | hibernated
+	State     string // running
 	Resets    []driver.SnapshotRef
 	Destroyed bool
+	// CellTrust: the sandbox was made for a claim the agent asked the cell's
+	// trust for (SandboxRequest.CellTrust, Sandboxes.CreateSandbox).
+	CellTrust bool
 }
 
 type Driver struct {
@@ -48,13 +52,20 @@ type Driver struct {
 	Isolation driver.Isolation
 	// Bakes lists every bake asked of the driver.
 	Bakes []driver.BakeSpec
-	// CannotBake makes the fake a driver that builds no image, as every real
-	// driver is today.
-	CannotBake bool
+	// NoSandboxCellTrust makes the fake a driver whose sandboxes take no
+	// trust files (microvm, k8s-sandbox): Sandboxes refuses a request for them.
+	NoSandboxCellTrust bool
 	// Diagnostics is what Diagnose answers (nil: an error).
 	Diagnostics *driver.Diagnostics
 	// MaxClaimSize is the largest claim size the fake grants (default none).
 	MaxClaimSize driver.ClaimSize
+	// DefaultClaimSize is the size the fake says a claim that asks none gets (default none).
+	DefaultClaimSize driver.ClaimSize
+	// Backends, KVM and HostArch are what the fake announces of its
+	// isolation backends and host (default none, no KVM, the cell's arch).
+	Backends []string
+	KVM      bool
+	HostArch string
 	// FailPool makes PoolCreate fail; Adoptions lists "claim=machine".
 	FailPool  error
 	Adoptions []string
@@ -75,20 +86,27 @@ func NewForCell(cellID string) *Driver {
 // owns reports whether a machine or network of cell is this fake's.
 func (d *Driver) owns(cell string) bool { return d.CellID == "" || cell == d.CellID }
 
-func (d *Driver) Kind() string { return "fake" }
+// Kind is the fake driver's name (-driver fake, development only).
+const Kind = "fake"
+
+func (d *Driver) Kind() string { return Kind }
 
 func (d *Driver) Capabilities() driver.Capabilities {
 	iso := d.Isolation
 	if iso == "" {
 		iso = driver.IsolationNone
 	}
-	return driver.Capabilities{Isolation: iso, NestedContainers: true, Suspend: "hibernate", Arch: []string{"x86_64", "arm64"}, Bake: !d.CannotBake, MaxClaimSize: d.MaxClaimSize}
+	return driver.Capabilities{Isolation: iso, NestedContainers: true, Arch: []string{"x86_64", "arm64"}, MaxClaimSize: d.MaxClaimSize, DefaultClaimSize: d.DefaultClaimSize, Backends: d.Backends, KVM: d.KVM, HostArch: d.HostArch, SandboxCellTrust: !d.NoSandboxCellTrust}
+}
+
+// Parts is what the fake cell (-driver fake) runs: bakes, resets and the
+// canned diagnostics. Its pool and sandboxes are wired apart (PoolCreate,
+// Sandboxes), by the test that wants them.
+func (d *Driver) Parts() driver.Parts {
+	return driver.Parts{Baker: d, Resetter: d, Diagnoser: d}
 }
 
 func (d *Driver) Bake(_ context.Context, spec driver.BakeSpec) (driver.ImageRef, error) {
-	if d.CannotBake {
-		return driver.ImageRef{}, fmt.Errorf("%w: fake set to build no image", driver.ErrUnsupported)
-	}
 	if spec.KMSKeyRef == "" {
 		return driver.ImageRef{}, fmt.Errorf("fake: bake needs the org key")
 	}
@@ -187,28 +205,6 @@ func (d *Driver) get(id string) (*Machine, error) {
 	return m, nil
 }
 
-func (d *Driver) Suspend(_ context.Context, ref driver.MachineRef, mode driver.SuspendMode) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	m, err := d.get(ref.MachineID)
-	if err != nil {
-		return err
-	}
-	m.State = map[driver.SuspendMode]string{driver.SuspendStop: "stopped", driver.SuspendHibernate: "hibernated"}[mode]
-	return nil
-}
-
-func (d *Driver) Resume(_ context.Context, ref driver.MachineRef) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	m, err := d.get(ref.MachineID)
-	if err != nil {
-		return err
-	}
-	m.State = "running"
-	return nil
-}
-
 func (d *Driver) Reset(_ context.Context, ref driver.MachineRef, snap driver.SnapshotRef) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -262,8 +258,9 @@ func (d *Driver) SetExpiry(_ context.Context, ref driver.MachineRef, at time.Tim
 	if !d.owns(m.Ref.Tags[driver.TagCell]) {
 		return fmt.Errorf("%w: machine %s", driver.ErrNotOwned, ref.MachineID)
 	}
-	if at.After(driver.ParseExpiry(m.Ref.Tags, driver.TagHardExpires)) {
-		at = driver.ParseExpiry(m.Ref.Tags, driver.TagHardExpires)
+	at, err = driver.ClampToCeiling(at, m.Ref.Tags)
+	if err != nil {
+		return fmt.Errorf("fake: machine %s: %w", ref.MachineID, err)
 	}
 	m.Ref.Tags[driver.TagExpires] = driver.FormatTime(at)
 	return nil
@@ -272,12 +269,19 @@ func (d *Driver) SetExpiry(_ context.Context, ref driver.MachineRef, at time.Tim
 // Plant puts a machine of another cell in the fake, as a shared account
 // would hold it, and returns its ref.
 func (d *Driver) Plant(cellID, claimID string) driver.MachineRef {
+	return d.PlantTags(map[string]string{
+		driver.TagCell: cellID, driver.TagClaim: claimID, driver.TagRole: string(driver.RoleWorkload),
+	})
+}
+
+// PlantTags puts a machine with exactly these tags in the fake (one a
+// crashed cell left, with no ceiling), and returns its ref.
+func (d *Driver) PlantTags(tags map[string]string) driver.MachineRef {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.seq++
 	id := fmt.Sprintf("m-%d", d.seq)
-	ref := driver.MachineRef{MachineID: id, DriverRef: "fake-" + id, Tags: map[string]string{
-		driver.TagCell: cellID, driver.TagClaim: claimID, driver.TagRole: string(driver.RoleWorkload)}}
+	ref := driver.MachineRef{MachineID: id, DriverRef: "fake-" + id, Tags: maps.Clone(tags)}
 	d.machines[id] = &Machine{Ref: ref, State: "running"}
 	return cloneRef(ref)
 }
@@ -354,9 +358,11 @@ func (d *Driver) PoolCreate(ctx context.Context, spec driver.PoolSpec) (driver.P
 	if err != nil {
 		return driver.PoolMachine{}, err
 	}
-	ref, err := d.Create(ctx, driver.MachineSpec{CellID: spec.CellID, EnvironmentID: spec.EnvironmentID, Role: driver.RolePool, OrgID: spec.OrgID, ClaimID: id,
+	ref, err := d.Create(ctx, driver.MachineSpec{
+		CellID: spec.CellID, EnvironmentID: spec.EnvironmentID, Role: driver.RolePool, OrgID: spec.OrgID, ClaimID: id,
 		ImageID: spec.ImageID, ImageRef: spec.ImageID, Size: spec.Size, ClaimSize: spec.ClaimSize, ClaimGroupID: net.WorkloadGroupID, KMSKeyRef: spec.KMSKeyRef,
-		ExpiresAt: spec.ExpiresAt, HardExpiresAt: spec.HardExpiresAt})
+		ExpiresAt: spec.ExpiresAt, HardExpiresAt: spec.HardExpiresAt,
+	})
 	if err != nil {
 		return driver.PoolMachine{}, err
 	}

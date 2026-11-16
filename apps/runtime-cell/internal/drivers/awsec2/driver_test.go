@@ -263,8 +263,10 @@ func TestCreateRefusesAGroupThatIsNotTheClaims(t *testing.T) {
 func TestPrepareClaimRemovesWhatItMadeWhenItFails(t *testing.T) {
 	m := &mockEC2{failOn: map[string]error{"AuthorizeSecurityGroupEgress": errors.New("throttled")}}
 	d := newDriver(t, m)
-	if _, err := d.PrepareClaim(context.Background(), driver.ClaimNetworkSpec{CellID: "cell-1", OrgID: "org-a", ClaimID: "claim-1",
-		Expose: []driver.ExposePort{{Service: "api", Port: 3000}}}); err == nil {
+	if _, err := d.PrepareClaim(context.Background(), driver.ClaimNetworkSpec{
+		CellID: "cell-1", OrgID: "org-a", ClaimID: "claim-1",
+		Expose: []driver.ExposePort{{Service: "api", Port: 3000}},
+	}); err == nil {
 		t.Fatal("no error")
 	}
 	for id := range m.sgs {
@@ -279,8 +281,10 @@ func TestPrepareClaimRemovesWhatItMadeWhenItFails(t *testing.T) {
 func TestReleaseClaimDeletesGroupsThatReferenceEachOther(t *testing.T) {
 	m := &mockEC2{}
 	d := newDriver(t, m)
-	net, err := d.PrepareClaim(context.Background(), driver.ClaimNetworkSpec{CellID: "cell-1", OrgID: "org-a", ClaimID: "claim-1",
-		Expose: []driver.ExposePort{{Service: "api", Port: 3000}}})
+	net, err := d.PrepareClaim(context.Background(), driver.ClaimNetworkSpec{
+		CellID: "cell-1", OrgID: "org-a", ClaimID: "claim-1",
+		Expose: []driver.ExposePort{{Service: "api", Port: 3000}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

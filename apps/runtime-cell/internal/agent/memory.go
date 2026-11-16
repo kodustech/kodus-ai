@@ -2,6 +2,7 @@ package agent
 
 import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/claims"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 )
 
@@ -11,7 +12,7 @@ import (
 
 // maxReportedMemoryMB is the most heartbeat memory may name (1 TiB,
 // MAX_CELL_MEMORY_MB in libs/runtime/protocol/messages.ts).
-const maxReportedMemoryMB = 1 << 20
+const maxReportedMemoryMB = protocol.MaxCellMemoryMB
 
 // claimMemoryNeed is what a new claim is counted for while it boots: the
 // base side of a Run is counted at its ready size when it takes a warm pool
@@ -20,6 +21,16 @@ const maxReportedMemoryMB = 1 << 20
 // bake-booted base at build size made it wait the whole PR build on
 // cell-dev-1 (its build took 0.7 s from the bake's cache).
 func (a *Agent) claimMemoryNeed(acq protocol.ClaimAcquireBody, pooled bool) int {
+	if acq.Consumer == protocol.ConsumerSandbox {
+		// A sandbox at its own size (sandboxMemoryMB). One that takes a
+		// blank sandbox adds nothing: the blank is counted already, at the
+		// same size, and its memory passes to the claim when taken
+		// (countSandbox).
+		if pooled {
+			return 0
+		}
+		return a.sandboxMemoryMB(a.sandboxSizeOf(acq))
+	}
 	mem := a.budget.ClaimMemory(claimSize(acq))
 	if acq.Side == protocol.SideBase && (pooled || a.bootsLocalBake(acq)) {
 		return mem.ReadyMB
@@ -31,10 +42,11 @@ func (a *Agent) claimMemoryNeed(acq protocol.ClaimAcquireBody, pooled bool) int 
 // environment at the claim's commit. "latest" before any bake here, "setup",
 // a bake made on another cell, or the environment's bake of another commit
 // (a PR whose base is an older default branch: kr-grafana#7 after main moved)
-// all build, at build size.
+// all build, at build size. So does a claim of several repositories: the
+// bake's commit is its own repository's, and another may have moved.
 func (a *Agent) bootsLocalBake(acq protocol.ClaimAcquireBody) bool {
 	b, ok := a.origin.Baked(acq.ImageID)
-	return ok && b.OrgID == acq.OrgID && b.EnvironmentID == acq.EnvironmentID && b.SHA == acq.Sha
+	return ok && b.OrgID == acq.OrgID && b.EnvironmentID == acq.EnvironmentID && b.SHA == acq.Sha && len(acq.Repos) == 0
 }
 
 // memoryReport is heartbeat memory, nil when the cell does no memory
@@ -63,9 +75,49 @@ func (a *Agent) nudgeHeartbeat() {
 	}
 }
 
-// countReady counts a claim whose builds are over at its ready size.
-func (a *Agent) countReady(c *claims.Claim) {
+// sandboxSizeOf is the size a sandbox claim runs at: the one it asked, else
+// the cell's sandbox size (Config.SandboxSize), never the cell's default
+// Run size. Zero only on a cell with no sandbox size: the driver's default.
+func (a *Agent) sandboxSizeOf(acq protocol.ClaimAcquireBody) driver.ClaimSize {
+	if size := claimSize(acq); !size.IsZero() {
+		return size
+	}
+	return a.cfg.SandboxSize
+}
+
+// sandboxMemoryMB is what a sandbox of size is counted for, from its boot to
+// its release: all of its machine's memory limit, which its commands and its
+// in-memory /workspace share (it builds nothing, so it has no smaller ready
+// size). The zero size is the driver's default memory. A driver that counts
+// a sandbox for more than its memory (a microVM's VMM, Parts.SandboxMemory)
+// names its own figure.
+func (a *Agent) sandboxMemoryMB(size driver.ClaimSize) int {
+	return a.cfg.Parts.SandboxMemoryMB(size)
+}
+
+// countSandbox counts a sandbox claim at its machine's size once it holds
+// one: the blank it took (no longer counted under the pool, made at the same
+// size), or its own. Admitted at nothing for a blank another claim took
+// first, the cell may then be over what it may commit until a claim ends; it
+// is logged.
+func (a *Agent) countSandbox(c *claims.Claim) {
 	if a.mem == nil {
+		return
+	}
+	mb := a.sandboxMemoryMB(a.sandboxSizeOf(c.Acquire))
+	if a.mem.Count(c.ID) >= mb {
+		return
+	}
+	if a.mem.Set(c.ID, mb) {
+		c.Log.Warn("claim.memory_over", "sandboxMb", mb, "committedMb", a.mem.Committed(), "allocatableMb", a.mem.Allocatable())
+	}
+	a.nudgeHeartbeat()
+}
+
+// countReady counts a claim whose builds are over at its ready size. A
+// sandbox builds nothing: it stays at its size (countSandbox).
+func (a *Agent) countReady(c *claims.Claim) {
+	if a.mem == nil || isSandbox(c) {
 		return
 	}
 	if a.mem.Count(c.ID) != a.budget.ClaimMemory(claimSize(c.Acquire)).ReadyMB {

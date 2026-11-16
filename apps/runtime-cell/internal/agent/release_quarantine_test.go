@@ -19,12 +19,14 @@ type uncertainCleanupDriver struct {
 func (d uncertainCleanupDriver) ClaimMemory(driver.ClaimSize) driver.ClaimMemory {
 	return driver.ClaimMemory{BootMB: 4096, ReadyMB: 4096}
 }
+
 func (d uncertainCleanupDriver) Destroy(ctx context.Context, r driver.MachineRef) error {
 	if d.failure == "destroy" {
 		return errors.New("daemon could not confirm container removal")
 	}
 	return d.Driver.Destroy(ctx, r)
 }
+
 func (d uncertainCleanupDriver) ReleaseClaim(ctx context.Context, n driver.ClaimNetwork) error {
 	if d.failure == "network" {
 		return errors.New("resource parent remains populated")
@@ -38,7 +40,8 @@ func TestRequiredMemoryAdmissionQuarantinesAnUnconfirmedRelease(t *testing.T) {
 	for _, failure := range []string{"destroy", "network"} {
 		t.Run(failure, func(t *testing.T) {
 			h := newHarness(t, func(c *Config) {
-				c.Driver = uncertainCleanupDriver{Driver: c.Driver.(*fake.Driver), failure: failure}
+				drv := uncertainCleanupDriver{Driver: c.Driver.(*fake.Driver), failure: failure}
+				c.Driver, c.Parts.Memory = drv, drv
 				c.MemoryAllocatableMB = 4096
 				c.RequireMemoryAdmission = true
 			})
@@ -74,7 +77,8 @@ func TestConfirmedReleaseAndLegacyModeDoNotQuarantineMemory(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t, func(c *Config) {
-				c.Driver = uncertainCleanupDriver{Driver: c.Driver.(*fake.Driver), failure: tc.failure}
+				drv := uncertainCleanupDriver{Driver: c.Driver.(*fake.Driver), failure: tc.failure}
+				c.Driver, c.Parts.Memory = drv, drv
 				c.MemoryAllocatableMB = 4096
 				c.RequireMemoryAdmission = tc.strict
 			})
@@ -100,10 +104,10 @@ func TestPendingPhysicalCleanupCannotBecomeAWorkloadBootFailure(t *testing.T) {
 					c.Transport = stubTransport{upload: fault}
 				case "compose":
 					failing := enforcementFailureComposer{up: fault}
-					c.Composer, c.Recipes = failing, failing
+					c.Parts.Composer, c.Parts.Recipes = failing, failing
 				case "recipe":
 					failing := enforcementFailureComposer{recipe: &driver.RecipeStepError{Step: "setup", Field: "setup[0]", Err: fault}}
-					c.Composer, c.Recipes = failing, failing
+					c.Parts.Composer, c.Parts.Recipes = failing, failing
 				}
 			})
 			b := h.acquireBody()

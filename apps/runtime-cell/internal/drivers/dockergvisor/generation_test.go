@@ -9,11 +9,12 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/bakecatalog"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
-	"golang.org/x/sys/unix"
 )
 
 func TestRestartCleansOnlyOwnedPendingCatalogFiles(t *testing.T) {
@@ -281,7 +282,7 @@ func TestMissingManifestImageNeverRebuildsUnderTheSameGeneration(t *testing.T) {
 	setup := machine("claim-setup", bakeEnv)
 	b := sandbox.Build{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}
 	boot(t, d, setup, b)
-	if err := d.PinBakeSource(setup); err != nil {
+	if err := d.PinBakeSource(t.Context(), setup); err != nil {
 		t.Fatal(err)
 	}
 	image, err := d.Bake(ctx, bakeSpec(setup))
@@ -295,7 +296,7 @@ func TestMissingManifestImageNeverRebuildsUnderTheSameGeneration(t *testing.T) {
 	ref := machine("claim-base", bakeEnv)
 	ref.ImageID = image.ImageID
 	before := len(docker.builds)
-	_, _, err = d.build(ctx, ref, []sandbox.Build{b}, "net", "resolv", bakeSubnet)
+	_, _, err = d.build(ctx, ref, []sandbox.Build{b}, "net", "resolv", bakeSubnet, nil)
 	if !errors.Is(err, ErrBakeDataUnavailable) || len(docker.builds) != before {
 		t.Fatalf("missing member rebuilt: builds=%d err=%v", len(docker.builds)-before, err)
 	}
@@ -426,7 +427,7 @@ func TestPostRenameSyncFailurePreservesPotentiallyCommittedGeneration(t *testing
 	id := installGenerationForTest(t, d, docker)
 	g := generationForTest(t, d, id)
 	c, _ := d.catalogFor(ctx)
-	d.syncCatalogDir = func(*os.File) error { return errors.New("fsync failed after rename") }
+	d.hooksForTest().syncCatalogDir = func(*os.File) error { return errors.New("fsync failed after rename") }
 	if err := d.publishGeneration(ctx, g); !errors.Is(err, bakecatalog.ErrCommitUncertain) {
 		t.Fatalf("lost commit uncertainty: %v", err)
 	}
@@ -462,7 +463,7 @@ func TestFullBakeUncertaintyKeepsTheAgentsPreviousLatestUsable(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncs := 0
-	d.syncCatalogDir = func(f *os.File) error {
+	d.hooksForTest().syncCatalogDir = func(f *os.File) error {
 		syncs++
 		if syncs == 2 {
 			return errors.New("one-shot postrename fsync failure")

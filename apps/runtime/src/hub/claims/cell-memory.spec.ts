@@ -82,6 +82,21 @@ describe('CellMemoryBook', () => {
         expect(siblingKeysOf('r1', 'r1:base:1:x')).toEqual([]);
     });
 
+    it('a preview ranks below every Run and setup: it waits while one waits, even when it asked first, and never holds one back', () => {
+        const book = new CellMemoryBook();
+        book.report('cell', report(4_096), ['busy'], 0);
+        const preview = { claimId: 'p1', side: 'pr', consumer: 'preview' as const };
+        const setup = { claimId: 's1', side: 'setup', consumer: 'setup' as const };
+        // The preview asks first and does not fit: it waits.
+        expect(book.admit('cell', preview, 1)).toMatchObject({ kind: 'wait', ahead: 0 });
+        // A setup asks after it: the preview is not ahead of it.
+        expect(book.admit('cell', setup, 2)).toMatchObject({ kind: 'wait', ahead: 0 });
+        // Room for one build: the setup goes, and the preview, which asked first, still waits behind it.
+        book.report('cell', report(0), [], 10_000);
+        expect(book.admit('cell', preview, 10_001)).toMatchObject({ kind: 'wait', ahead: 1 });
+        expect(book.admit('cell', setup, 10_002)).toEqual({ kind: 'admitted', needMb: 12_288, siblingMb: 0 });
+    });
+
     it('waits in order: a claim that would fit waits behind one that asked first', () => {
         const book = new CellMemoryBook();
         book.report('cell', { ...report(10_000) }, ['other'], 0);
@@ -93,6 +108,57 @@ describe('CellMemoryBook', () => {
         expect(book.admit('cell', small, 11)).toMatchObject({ kind: 'wait', ahead: 1 });
         expect(book.admit('cell', big, 12).kind).toBe('admitted');
         expect(book.admit('cell', small, 13).kind).toBe('admitted');
+    });
+
+    describe('code sandboxes (interactive: never in the line)', () => {
+        const sandbox = (id: string) => ({ claimId: id, side: 'pr', consumer: 'sandbox' as const, sizeMb: 2_048 });
+
+        it('a sandbox refused for capacity does not block the next sandbox open', () => {
+            const book = new CellMemoryBook();
+            book.report('cell', report(13_000), ['other'], 0);
+            // cell-dev-1: the refused claim stayed in the line for WAITER_TTL_MS, and every open in that
+            // minute was refused behind it ("1 claim(s) asked this cell first and still wait").
+            expect(book.admit('cell', sandbox('sbx-1'), 1)).toEqual({ kind: 'wait', needMb: 2_048, freeMb: 1_745, allocatableMb: 14_745, ahead: 0 });
+            expect(book.view('cell')).toMatchObject({ waiting: 0 });
+            book.report('cell', report(0), [], 2);
+            expect(book.admit('cell', sandbox('sbx-2'), 3)).toEqual({ kind: 'admitted', needMb: 2_048, siblingMb: 0 });
+        });
+
+        it.each([
+            ['a setup', { claimId: 'setup-1', side: 'setup', consumer: 'setup' as const }],
+            ["a Run's base", claim('r1', 'base')],
+        ])('nor %s that asks after it', (_name, next) => {
+            const book = new CellMemoryBook();
+            book.report('cell', report(13_000), ['other'], 0);
+            expect(book.admit('cell', sandbox('sbx-1'), 1).kind).toBe('wait');
+            book.report('cell', report(0), [], 2);
+            expect(book.admit('cell', next, 3)).toMatchObject({ kind: 'admitted' });
+        });
+
+        it('Run and setup admission order is unchanged: a sandbox never goes ahead of a claim that waits, nor takes its place', () => {
+            const book = new CellMemoryBook();
+            book.report('cell', report(10_000), ['other'], 0);
+            const setup = { claimId: 'setup-1', side: 'setup', consumer: 'setup' as const };
+            expect(book.admit('cell', setup, 1)).toMatchObject({ kind: 'wait', ahead: 0 });
+            // 4745 MB are free: the sandbox would fit, but the setup asked first.
+            expect(book.admit('cell', sandbox('sbx-1'), 2)).toMatchObject({ kind: 'wait', needMb: 2_048, freeMb: 4_745, ahead: 1 });
+            // A Run's base asks next: only the setup is ahead of it, as before sandboxes existed.
+            expect(book.admit('cell', claim('r1', 'base'), 3)).toMatchObject({ kind: 'wait', ahead: 1 });
+            book.report('cell', report(0), [], 10);
+            expect(book.admit('cell', claim('r1', 'base'), 11)).toMatchObject({ kind: 'wait', ahead: 1 });
+            expect(book.admit('cell', setup, 12).kind).toBe('admitted');
+            // The Run is first in line now, and goes once the setup gives its memory back.
+            expect(book.admit('cell', claim('r1', 'base'), 13)).toMatchObject({ kind: 'wait', ahead: 0 });
+            book.report('cell', report(12_288), ['setup-1'], 14);
+            book.report('cell', report(0), [], 15);
+            expect(book.admit('cell', claim('r1', 'base'), 16)).toEqual({ kind: 'admitted', needMb: 2_048, siblingMb: 12_288 });
+        });
+
+        it('is counted at its whole size, booting and ready', () => {
+            const book = new CellMemoryBook();
+            book.report('cell', report(0), [], 0);
+            expect(book.sizesOf('cell', { side: 'pr', consumer: 'sandbox', sizeMb: 8_192 })).toEqual({ bootMb: 8_192, readyMb: 8_192, allocatableMb: 14_745 });
+        });
     });
 
     it('a waiter that stopped asking leaves the line', () => {
@@ -321,7 +387,11 @@ describe('setup ticket lifetime reservation', () => {
         expect(
             b.canRetargetSetup(ticket, `${initial}:learn-1-replay`, 12),
         ).toBe('member_cleanup_pending');
+        // Kody's repairs of the setup's recipe are its children too, up to the setup's most.
+        expect(b.canRetargetSetup(ticket, `${initial}:repair-1`, 12)).toBe('member_cleanup_pending');
         for (const bad of [
+            `${initial}:repair-0`,
+            `${initial}:repair-99`,
             `${initial}:learn-4`,
             `${initial}:learn-1:evil`,
             `setup:other:learn-1`,

@@ -37,7 +37,7 @@ func NewSystemd(ctx context.Context, rootSlice, cellID string) (Lifecycle, error
 	closeBus := true
 	defer func() {
 		if closeBus {
-			b.Close()
+			_ = b.Close()
 		}
 	}()
 	deadline, cancel := context.WithTimeout(ctx, systemdOperationTimeout)
@@ -54,7 +54,7 @@ func NewSystemd(ctx context.Context, rootSlice, cellID string) (Lifecycle, error
 	closeRoot := true
 	defer func() {
 		if closeRoot {
-			d.Close()
+			_ = d.Close()
 		}
 	}()
 	if err = lockRoot(d); err != nil {
@@ -65,7 +65,7 @@ func NewSystemd(ctx context.Context, rootSlice, cellID string) (Lifecycle, error
 		if e != nil {
 			return e
 		}
-		defer current.Close()
+		defer func() { _ = current.Close() }()
 		old, e := d.file.Stat()
 		if e != nil {
 			return e
@@ -79,7 +79,7 @@ func NewSystemd(ctx context.Context, rootSlice, cellID string) (Lifecycle, error
 		}
 		return nil
 	}
-	m, err := newSystemd(b, d, rootSlice, cellID, verify, readProcessCgroup)
+	m, err := newSystemd(b, d, rootSlice, cellID, verify, readProcessCgroup) //nolint:contextcheck // newSystemd bounds its own startup checks with systemdOperationTimeout on purpose
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func openSystemdRoot(root string) (*localDirectory, error) {
 	}
 	for _, part := range strings.Split(strings.TrimPrefix(root, "/"), "/") {
 		next, e := unix.Openat(fd, part, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
-		unix.Close(fd)
+		_ = unix.Close(fd) // read-only directory fd; the open error below is what matters
 		if e != nil {
 			return nil, fmt.Errorf("%w: open systemd kernel root: %w", ErrUnavailable, e)
 		}
@@ -107,8 +107,8 @@ func openSystemdRoot(root string) (*localDirectory, error) {
 	d := &localDirectory{os.NewFile(uintptr(fd), "claimlimits-systemd-root")}
 	var st unix.Statfs_t
 	var owner unix.Stat_t
-	if unix.Fstatfs(fd, &st) != nil || uint64(st.Type) != uint64(unix.CGROUP2_SUPER_MAGIC) || unix.Fstat(fd, &owner) != nil || owner.Mode&0022 != 0 || owner.Uid != 0 {
-		d.Close()
+	if unix.Fstatfs(fd, &st) != nil || st.Type != unix.CGROUP2_SUPER_MAGIC || unix.Fstat(fd, &owner) != nil || owner.Mode&0o022 != 0 || owner.Uid != 0 {
+		_ = d.Close()
 		return nil, fmt.Errorf("%w: root-owned cgroup v2 directory required", ErrUnavailable)
 	}
 	return d, nil
@@ -129,7 +129,7 @@ func connectSystemd(parent context.Context) (*nativeSystemdBus, error) {
 				e = c.Hello()
 			}
 			if e != nil {
-				c.Close()
+				_ = c.Close()
 				return nil, e
 			}
 			if raw == nil {
@@ -144,7 +144,7 @@ func connectSystemd(parent context.Context) (*nativeSystemdBus, error) {
 		b := &nativeSystemdBus{conn: conn, raw: raw, cancel: cancel}
 		select {
 		case <-lifetime.Done():
-			b.Close()
+			_ = b.Close()
 		case out <- b:
 		}
 	}()
@@ -177,6 +177,7 @@ func (b *nativeSystemdBus) Version(ctx context.Context) (string, error) {
 	}
 	return s, nil
 }
+
 func (b *nativeSystemdBus) Unit(ctx context.Context, name string) (systemdUnit, error) {
 	p, err := readSystemdProperties(ctx, b.conn, name)
 	if err != nil {
@@ -232,21 +233,28 @@ func (b *nativeSystemdBus) List(ctx context.Context, pattern string) ([]string, 
 		return nil, err
 	}
 	out := make([]string, 0, len(units))
-	for _, u := range units {
-		out = append(out, u.Name)
+	for i := range units {
+		out = append(out, units[i].Name)
 	}
 	return out, nil
 }
+
 func sliceProperties(u systemdUnit) []systemdbus.Property {
 	props := []systemdbus.Property{}
 	for _, p := range []struct {
 		name  string
 		value any
 	}{
-		{"Description", u.Description}, {"StopWhenUnneeded", false},
-		{"CPUAccounting", true}, {"MemoryAccounting", true}, {"TasksAccounting", true},
-		{"MemoryMax", u.MemoryMax}, {"MemorySwapMax", uint64(0)}, {"TasksMax", u.TasksMax},
-		{"CPUQuotaPerSecUSec", u.CPUQuotaPerSecUSec}, {"CPUQuotaPeriodUSec", u.CPUQuotaPeriodUSec},
+		{"Description", u.Description},
+		{"StopWhenUnneeded", false},
+		{"CPUAccounting", true},
+		{"MemoryAccounting", true},
+		{"TasksAccounting", true},
+		{"MemoryMax", u.MemoryMax},
+		{"MemorySwapMax", uint64(0)},
+		{"TasksMax", u.TasksMax},
+		{"CPUQuotaPerSecUSec", u.CPUQuotaPerSecUSec},
+		{"CPUQuotaPeriodUSec", u.CPUQuotaPeriodUSec},
 	} {
 		props = append(props, systemdbus.Property{Name: p.name, Value: dbus.MakeVariant(p.value)})
 	}
@@ -260,6 +268,7 @@ func (b *nativeSystemdBus) Start(ctx context.Context, u systemdUnit) error {
 	}
 	return awaitSystemdJob(ctx, done)
 }
+
 func (b *nativeSystemdBus) Stop(ctx context.Context, name string) error {
 	done := make(chan string, 1)
 	if _, err := b.conn.StopUnitContext(ctx, name, "replace", done); err != nil {
@@ -284,6 +293,7 @@ func (b *nativeSystemdBus) Stop(ctx context.Context, name string) error {
 		}
 	}
 }
+
 func awaitSystemdJob(ctx context.Context, done <-chan string) error {
 	select {
 	case result := <-done:

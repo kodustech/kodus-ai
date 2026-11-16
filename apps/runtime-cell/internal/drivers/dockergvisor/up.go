@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
 
@@ -21,9 +21,11 @@ import (
 // refuses. It returns the containers' addresses on the claim network.
 //
 // The steps run in this order and each leaves what the next needs in the
-// projectBoot. The first that fails ends it.
-func (d *Driver) Up(ctx context.Context, ref driver.MachineRef, composeFile []byte, projectDir string) ([]string, error) {
-	b := &projectBoot{d: d, ctx: ctx, ref: ref, composeFile: composeFile, projectDir: projectDir}
+// projectBoot. The first that fails ends it. Every docker command of the
+// boot tees its stderr to req.Output.
+func (d *Driver) Up(ctx context.Context, req driver.UpRequest) ([]string, error) {
+	ctx = dockercli.WithOutput(ctx, req.Output)
+	b := &projectBoot{d: d, ctx: ctx, req: req, ref: req.Ref, composeFile: req.Compose, projectDir: req.ProjectDir}
 	defer b.finish()
 	for _, step := range []func() error{
 		b.sandbox, // the claim's network, limits and decoy: what compose is rewritten with
@@ -34,17 +36,55 @@ func (d *Driver) Up(ctx context.Context, ref driver.MachineRef, composeFile []by
 		b.record,  // timing, and what the machine now runs
 	} {
 		if err := step(); err != nil {
+			// Where the time went until it stopped (a build the claim's
+			// ceiling cut, an up that did not answer): claim.failed says it.
+			b.keepPhases(b.phases(nil))
 			return nil, err
 		}
 	}
 	return b.sources, nil
 }
 
+// phases is the boot in words: its builds' phases and, once compose ran,
+// the cell's own (timing).
+func (b *projectBoot) phases(t *driver.BootTiming) []driver.BootPhase {
+	var own []driver.BootPhase
+	if t != nil {
+		own = []driver.BootPhase{
+			{Name: "compose down", Ms: t.DownMs},
+			{Name: "restore data", Ms: t.RestoreMs},
+			{Name: "snapshot data", Ms: t.SnapshotMs},
+			// Up is compose creating and starting the containers, the
+			// services that wait on others' healthchecks included (seed);
+			// ready is the last ones until their first healthy answer.
+			{Name: "compose up", Ms: t.UpMs + t.SeedMs},
+			{Name: "first healthy", Ms: t.ReadyMs},
+		}
+	} else if !b.upAt.IsZero() && b.upped.IsZero() {
+		// compose up was running when the boot stopped.
+		own = []driver.BootPhase{{Name: "compose up", Ms: b.d.clock.Now().Sub(b.upAt).Milliseconds(), Running: true}}
+	}
+	return driver.MergePhases(driver.MaxPhases, b.steps.Phases, own)
+}
+
+// keepPhases records the boot's phases for the claim it booted for.
+func (b *projectBoot) keepPhases(phases []driver.BootPhase) {
+	if len(phases) == 0 {
+		return
+	}
+	b.d.mu.Lock()
+	b.d.machineLocked(b.ref.MachineID).phases = &claimPhases{claim: b.ref.Tags[driver.TagClaim], phases: phases}
+	b.d.mu.Unlock()
+}
+
 // projectBoot is one Up of a machine's compose project: what each step leaves for
 // the next. It lives for one Up call.
 type projectBoot struct {
-	d           *Driver
-	ctx         context.Context
+	d   *Driver
+	ctx context.Context
+	// req is what the agent asked of this Up; ref, composeFile and
+	// projectDir are its fields.
+	req         driver.UpRequest
 	ref         driver.MachineRef
 	composeFile []byte
 	projectDir  string
@@ -88,7 +128,7 @@ type projectBoot struct {
 
 func (b *projectBoot) finish() {
 	for _, f := range b.files {
-		os.Remove(f)
+		_ = os.Remove(f)
 	}
 }
 
@@ -133,15 +173,19 @@ func (b *projectBoot) sandbox() error {
 	mem, cpus := d.limits(ref.MachineID)
 	b.opts = sandbox.Options{
 		CgroupParent: parent,
-		ProjectDir:   b.projectDir, Project: ref.MachineID, Runtime: d.cfg.Runtime, PidsLimit: d.cfg.PidsLimit,
+		ProjectDir:   b.projectDir, Root: b.req.WorkspaceRoot, Project: ref.MachineID, Runtime: d.cfg.Runtime, PidsLimit: d.cfg.PidsLimit,
 		MemLimit: mem, CPUs: cpus, Network: b.network, Subnet: b.subnet, Resolv: b.resolv,
-		HealthStartInterval: d.healthEvery,
+		HealthStartInterval: d.healthEvery, HostEnv: dockercli.EnvNames(),
+		LogMaxSize: d.cfg.ServiceLogMaxSize, LogMaxFile: d.cfg.ServiceLogMaxFile, DiskSize: d.cfg.ContainerDiskSize,
 		Labels: toLabels(map[string]string{
 			driver.TagCell: d.cfg.CellID, driver.TagOrg: ref.Tags[driver.TagOrg], driver.TagClaim: ref.Tags[driver.TagClaim],
 			driver.TagRole: ref.Tags[driver.TagRole], driver.TagHardExpires: ref.Tags[driver.TagHardExpires],
 		}),
 	}
-	if b.opts.Decoy, err = d.writeDecoy(ref.MachineID, driver.CanariesFrom(ctx)); err != nil {
+	if b.req.CellTrust {
+		b.opts.Trust = d.cfg.Trust // a claim with org secrets: the cell CA in every service
+	}
+	if b.opts.Decoy, err = d.writeDecoy(ref.MachineID, b.req.Canaries); err != nil {
 		return fmt.Errorf("dockergvisor: decoy file: %w", err)
 	}
 	return nil
@@ -154,8 +198,21 @@ func (b *projectBoot) build() error {
 	if err != nil {
 		return err
 	}
+	// The whole file is checked before anything is built. render checks it
+	// again with the images' real names, but a file the cell refuses (a
+	// container_name, an extends, an env file that is not in the checkout)
+	// used to be refused only there, after every image was built: immich on
+	// cell-dev-1 built for 875 s and then was refused.
+	pre := b.opts
+	pre.Built = make(map[string]string, len(builds))
+	for _, bl := range builds {
+		pre.Built[bl.Service] = "kodus-build/unbuilt"
+	}
+	if _, err := sandbox.Apply(b.composeFile, pre); err != nil {
+		return err
+	}
 	b.started = d.clock.Now()
-	if b.opts.Built, b.steps, err = d.build(ctx, ref, builds, b.network, b.resolv, b.subnet); err != nil {
+	if b.opts.Built, b.steps, err = d.build(ctx, ref, builds, b.network, b.resolv, b.subnet, b.req.BuildSecrets); err != nil {
 		return err
 	}
 	b.buildMs = d.clock.Now().Sub(b.started).Milliseconds()
@@ -211,7 +268,7 @@ func (b *projectBoot) render() error {
 		// What the copy was made from changed: recreate, as before it.
 		d.goldenOff(ctx, ref.MachineID, "inputs changed")
 		b.gold, b.opts.DataVolumes = nil, nil
-		os.Remove(b.project.File)
+		_ = os.Remove(b.project.File)
 		if b.project, _, err = b.renderProject(); err != nil {
 			return err
 		}
@@ -230,7 +287,7 @@ func (b *projectBoot) data() error {
 		if err := d.restoreGolden(ctx, ref, b.gold); err != nil {
 			d.goldenOff(ctx, ref.MachineID, err.Error())
 			b.opts.DataVolumes = nil
-			os.Remove(b.project.File)
+			_ = os.Remove(b.project.File)
 			if b.project, _, err = b.renderProject(); err != nil {
 				return err
 			}
@@ -310,6 +367,8 @@ func (b *projectBoot) record() error {
 		timing.Kind, timing.At, timing.DownMs = "reset", b.reset.at, b.reset.downMs
 		timing.TotalMs = b.upped.Sub(b.reset.at).Milliseconds()
 	}
+	timing.Phases = b.phases(&timing)
+	b.keepPhases(timing.Phases)
 	d.log().Info(timing.Kind+".timing", "machine", ref.MachineID, "totalMs", timing.TotalMs, "downMs", timing.DownMs, "buildMs", timing.BuildMs,
 		"restoreMs", timing.RestoreMs, "upMs", timing.UpMs, "seedMs", timing.SeedMs, "readyMs", timing.ReadyMs)
 	d.mu.Lock()
@@ -317,23 +376,30 @@ func (b *projectBoot) record() error {
 	d.mu.Unlock()
 	services := map[string]string{}
 	containers := map[string]dockercli.Container{}
-	for _, c := range b.cs {
+	for i := range b.cs {
+		c := &b.cs[i]
 		if ip := c.IP(b.network); ip != "" {
 			b.sources = append(b.sources, ip)
 			if svc := c.Labels["com.docker.compose.service"]; svc != "" {
 				services[svc] = ip
-				containers[svc] = c
+				containers[svc] = *c
 			}
 		}
 	}
 	at, ok := execService(b.projectDir, containers)
 	targets := make(map[string]execTarget, len(containers))
-	for svc, c := range containers {
-		targets[svc] = targetOf(c)
+	for svc := range containers {
+		targets[svc] = targetOf(containers[svc])
+	}
+	repoExec := map[string]execTarget{}
+	for alias, svc := range repositoryServices(b.canonical, b.opts.Root, b.abs) {
+		if t, ok := targets[svc]; ok {
+			repoExec[alias] = t
+		}
 	}
 	d.mu.Lock()
 	m := d.machineLocked(ref.MachineID)
-	m.services, m.exec, m.targets = services, nil, targets
+	m.services, m.exec, m.targets, m.repoExec = services, nil, targets, repoExec
 	if ok {
 		m.exec = &at
 	}
@@ -362,11 +428,11 @@ func (d *Driver) render(ctx context.Context, machine, abs string, composeFile []
 	}
 	project := dockercli.ComposeProject{Name: machine, Dir: abs, File: f.Name(), EnvFile: os.DevNull}
 	fail := func(err error) (dockercli.ComposeProject, []byte, error) {
-		os.Remove(f.Name())
+		_ = os.Remove(f.Name())
 		return dockercli.ComposeProject{}, nil, err
 	}
 	if _, err := f.Write(out); err != nil {
-		f.Close()
+		_ = f.Close()
 		return fail(err)
 	}
 	if err := f.Close(); err != nil {
@@ -404,7 +470,8 @@ func (d *Driver) goldenOff(ctx context.Context, machine, why string) {
 func bootPhases(started, upAt, upped time.Time, cs []dockercli.Container) driver.BootTiming {
 	t := driver.BootTiming{Kind: "boot", At: started, UpMs: upped.Sub(upAt).Milliseconds(), TotalMs: upped.Sub(started).Milliseconds()}
 	var first, last time.Time
-	for _, c := range cs {
+	for i := range cs {
+		c := &cs[i]
 		if c.Labels["com.docker.compose.service"] == "" || c.StartedAt.IsZero() {
 			continue
 		}

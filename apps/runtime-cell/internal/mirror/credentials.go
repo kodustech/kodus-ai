@@ -26,7 +26,7 @@ func (c Credentials) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, c.St
 // access token) from a file the operator provides. Its errors never quote
 // the file's content.
 func LoadCredentials(path string) (*Credentials, error) {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) //nolint:gosec // G304: the path is the operator's credentials-file flag
 	if err != nil {
 		return nil, fmt.Errorf("mirror: read the registry credentials: %w", err)
 	}

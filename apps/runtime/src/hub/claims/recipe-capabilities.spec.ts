@@ -4,8 +4,8 @@ import { InMemoryRunStreamStore } from '@libs/runtime/run/testing';
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 import { createCa } from '../ca/x509';
 import { CellHub } from '../cell-hub';
-import { InMemoryHubStore } from '../hub-store';
 import { claimIdFor } from './claim.service';
+import { InMemoryHubStore } from '../testing';
 
 const CELL = 'cell-recipe';
 const SHA = 'a'.repeat(40);

@@ -211,4 +211,26 @@ describe('Runtime LLM gateway', () => {
         await expect(uc.execute({ authorization: tokenFor(r), body: body(r.runId) })).rejects.toMatchObject({ status: 502 });
         expect(usage.rows).toHaveLength(0);
     });
+
+    it("a failed provider call is left to the API's exception filter: the 502 carries the Run's ids and the provider error, and the gateway logs nothing", async () => {
+        const { uc, provider, r } = await setup();
+        const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+        (uc as any).logger = logger;
+        const boom = new Error('boom');
+        provider.fail = boom;
+        const err = await uc.execute({ authorization: tokenFor(r), body: body(r.runId) }).catch((e) => e);
+        expect(err).toMatchObject({ status: 502, runId: r.runId, organizationId: r.organizationId, cause: boom });
+        expect(logger.error).not.toHaveBeenCalled();
+        expect(logger.warn).not.toHaveBeenCalled();
+    });
+
+    it("a call the budget refuses is left to the API's exception filter: the 429 carries the Run's ids, and the gateway logs nothing", async () => {
+        const { uc, r } = await setup();
+        const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+        (uc as any).logger = logger;
+        const huge = { runId: r.runId, task: 'runtime.plan', messages: [{ role: 'user', content: 'x'.repeat(3_100) }] };
+        const err = await uc.execute({ authorization: tokenFor(r), body: huge }).catch((e) => e);
+        expect(err).toMatchObject({ status: 429, runId: r.runId, organizationId: r.organizationId, response: { code: 'llm_budget_exceeded' } });
+        expect(logger.warn).not.toHaveBeenCalled();
+    });
 });

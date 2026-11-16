@@ -4,6 +4,7 @@ import {
     Inject,
     Injectable,
     NotFoundException,
+    Optional,
 } from '@nestjs/common';
 
 import {
@@ -13,10 +14,21 @@ import {
 import { Action } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import type { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 
-import { RuntimeCommandName, runtimeCommandOutboxMessage } from '../../domain/runtime-commands';
-import { RUNTIME_CLOCK, RUNTIME_GIT_PORT, type Clock, type GitIdentity, type PullRequestHead, type RuntimeGitPort } from '../../domain/ports';
+import { RuntimeCommandName, runtimeCommandOutboxMessage } from '@libs/runtime/contracts/runtime-commands';
+import { decideForkRun } from '../../domain/fork-policy';
+import {
+    RUNTIME_CLOCK,
+    RUNTIME_GIT_PORT,
+    RUNTIME_PRODUCT_ENVIRONMENT_STORE,
+    type Clock,
+    type GitIdentity,
+    type ProductEnvironmentStore,
+    type PullRequestHead,
+    type RuntimeGitPort,
+} from '../../domain/ports';
 import { RuntimeRunAccessService } from '../run-access.service';
 import { RuntimeRunRequestBuilder } from '../run-request-builder.service';
+import { RuntimeRunEnqueuer } from '../runtime-run-enqueuer.service';
 
 const same = (a?: string, b?: string) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 
@@ -28,7 +40,8 @@ export function isPullRequestAuthor(identity: GitIdentity, head: PullRequestHead
  * POST /runtime/runs/:id/approvals — a maintainer approves a fork PR at the
  * head SHA it has now (ADR-030, ADR-057). The approver needs write on the repo
  * confirmed by the Git API, cannot be the PR author, and any doubt denies.
- * A push after the approval moves the head and asks again. The approval
+ * A push after the approval moves the head and asks again; a closed PR, or an
+ * environment whose fork policy now skips forks, starts nothing. The approval
  * carries fresh sealed tokens: the Run's own expired while it waited.
  */
 @Injectable()
@@ -42,6 +55,12 @@ export class ApproveForkRunUseCase {
         @Inject(RUNTIME_CLOCK)
         private readonly now: Clock,
         private readonly requests: RuntimeRunRequestBuilder,
+        // A multi-repository Run's other repositories (its stored target) get fresh tokens too.
+        @Optional()
+        private readonly enqueuer?: RuntimeRunEnqueuer,
+        @Optional()
+        @Inject(RUNTIME_PRODUCT_ENVIRONMENT_STORE)
+        private readonly environments?: Pick<ProductEnvironmentStore, 'get'>,
     ) {}
 
     async execute(input: { user: Partial<IUser>; runId: string }) {
@@ -55,8 +74,14 @@ export class ApproveForkRunUseCase {
         const repo = { repositoryId: run.repositoryId, repositoryName: run.repositoryName };
         const head = await this.git.getPullRequestHead({ ...orgTeam, ...repo, prNumber: run.prNumber });
         if (!head) throw new NotFoundException('Pull request not found');
+        if (head.state && head.state !== 'open') throw new ConflictException('The pull request is not open');
         if (head.headSha !== run.headSha) {
             throw new ConflictException('The pull request has a newer head; approve the new Run');
+        }
+        // The environment's fork policy as it is now, as Run again reads it: one that skips forks since starts nothing.
+        const environment = await this.environments?.get(run.organizationId, run.environmentId);
+        if (decideForkRun(environment?.forkPullRequests, head).start === false) {
+            throw new ConflictException("This environment's fork policy now skips pull requests from forks");
         }
 
         const identity = await this.git.resolveGitIdentity({ ...orgTeam, userId: input.user.uuid!, email: input.user.email });
@@ -86,6 +111,7 @@ export class ApproveForkRunUseCase {
             prNumber: run.prNumber,
             fork: true,
         });
+        const workspace = await this.memberTokens(run);
         const approvedAt = this.now().toISOString();
         const key = `${run.runId}:${run.headSha}`;
         await this.outbox.create(
@@ -104,12 +130,21 @@ export class ApproveForkRunUseCase {
                         ...(identity.login ? { gitLogin: identity.login } : {}),
                     },
                     approvedAt,
-                    tokens,
+                    tokens: { ...tokens, ...(workspace ? { workspace } : {}) },
                     key,
                 },
                 key,
             ),
         );
         return { runId: run.runId, headSha: run.headSha, approvedAt };
+    }
+
+    /** Fresh tokens of every other repository a multi-repository Run pinned (its stored target); none for a Run of one. */
+    private async memberTokens(run: { runId: string; organizationId: string; environmentId: string }) {
+        const target = await this.enqueuer?.storedTarget(run.runId);
+        if (!target?.workspace?.some((r) => r.source !== 'pull_request') || target.organizationId !== run.organizationId) return undefined;
+        const env = await this.environments?.get(run.organizationId, run.environmentId);
+        if (!env) return undefined;
+        return this.requests.mintMemberTokens({ env, runId: run.runId, refs: target.workspace });
     }
 }

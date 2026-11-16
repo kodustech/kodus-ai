@@ -33,6 +33,7 @@ func TestFakesPreserveAppDependenciesAndNeverInheritAppEnv(t *testing.T) {
 		}
 	}
 }
+
 func TestFakeConflictIsAtomic(t *testing.T) {
 	for _, body := range []string{
 		"services: { first: { image: app }, last: { image: app, environment: { SMTP_HOST: real.example } } }",

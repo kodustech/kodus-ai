@@ -13,7 +13,7 @@ import type {
     AdmissionRef,
     PhysicalAdmissionTicket,
 } from './admission-contract';
-import { InMemoryAdmissionStore } from './admission-store';
+import { InMemoryAdmissionStore } from './testing';
 
 const AT = Date.parse('2026-11-08T12:00:00Z');
 const limits: AdmissionLimits = {

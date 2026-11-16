@@ -31,7 +31,7 @@ func refuseWhatLocalDockerCannotRun(rec *recipe.Recipe) error {
 			}
 		}
 	}
-	if rec != nil && !rec.Services.Needs.IsZero() {
+	if rec != nil && len(rec.Services.Needs) > 0 {
 		return errors.New("localdocker: services.needs (other repos) is not supported by local-docker")
 	}
 	return nil
@@ -45,7 +45,6 @@ func recipeKeysIgnored(rec *recipe.Recipe) []string {
 		name string
 		set  bool
 	}{
-
 		{"limits", !rec.Limits.IsZero()},
 		{"size", !rec.Size.IsZero()},
 		{"flags", !rec.Flags.IsZero()},

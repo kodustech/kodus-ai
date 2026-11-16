@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { sealSecret, sealingKeyFrom } from '@libs/runtime/run';
 import { HmacCanaryVault } from '../../../../apps/runtime/src/worker/canary/canary';
+import { LlmBudgetBusyError } from '../domain/ports';
 import { signRunToken } from '../domain/run-token';
 import {
     clock,
@@ -127,6 +128,22 @@ async function setup(perRun = 20_000) {
     return { uc, r, plain, sealedToken, usage, receipts, provider, input };
 }
 describe('fixed Runtime model-turn gateway', () => {
+    it("a budget too busy to hold a raw attempt answers 502 with the busy budget as the line's cause", async () => {
+        const h = await setup();
+        const reserve = h.usage.reserve.bind(h.usage);
+        jest.spyOn(h.usage, 'reserve')
+            .mockImplementationOnce(reserve)
+            .mockImplementation(async () => {
+                throw new LlmBudgetBusyError();
+            });
+        const err = await h.uc.execute(h.input).catch((e) => e);
+        expect(err).toBeInstanceOf(HttpException);
+        expect(err.getStatus()).toBe(502);
+        expect(err.getResponse()).toMatchObject({ code: 'llm_unavailable' });
+        expect(err).toMatchObject({ failure: 'llm_budget_busy' });
+        expect(err.cause).toBeInstanceOf(LlmBudgetBusyError);
+    });
+
     it('resolves scope from a signed token, budgets one turn and replays its persisted receipt', async () => {
         const h = await setup();
         const out = await h.uc.execute(h.input);

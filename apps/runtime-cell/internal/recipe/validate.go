@@ -1,12 +1,17 @@
 package recipe
 
 import (
+	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 )
 
 // Bounds on the lists a recipe carries.
@@ -31,7 +36,7 @@ var (
 	// themselves, so a name that looks like a secret may hold one, and an
 	// app that only needs SESSION_SECRET set boots without a secret on the
 	// machine (ADR-008). Any other value under such a name is refused.
-	testValues = map[string]bool{"kodus-test-value": true, "http://kodus-fake.invalid": true}
+	testValues = map[string]bool{protocol.TestValue: true, protocol.TestURLValue: true}
 )
 
 // The env names a recipe never sets, because they change what runs rather
@@ -43,24 +48,42 @@ var (
 // configuration, and a driver that hands the env to a process on the cell
 // (local-docker gives it to setup, migrate and seed) must not pass them, so
 // every cell refuses them here, before any driver sees the recipe.
-var (
-	controlEnvPrefixes = []string{"LD_", "DYLD_", "DOCKER_", "COMPOSE_"}
-	controlEnvNames    = map[string]bool{
-		"PATH": true, "IFS": true, "BASH_ENV": true, "ENV": true, "PROMPT_COMMAND": true, "SHELLOPTS": true, "BASHOPTS": true,
-		"NODE_OPTIONS": true, "NODE_PATH": true,
-		"PYTHONSTARTUP": true, "PYTHONPATH": true, "PYTHONHOME": true,
-		"PERL5OPT": true, "PERL5LIB": true, "PERLLIB": true, "RUBYOPT": true, "RUBYLIB": true,
-		"JAVA_TOOL_OPTIONS": true, "_JAVA_OPTIONS": true, "JDK_JAVA_OPTIONS": true,
-		"GCONV_PATH": true,
+//
+// controlEnvJSON is a byte-identical copy of
+// libs/runtime/protocol/recipe-control-env.json, which the worker reads too;
+// control_env_test.go fails when they differ.
+//
+//go:embed recipe-control-env.json
+var controlEnvJSON []byte
+
+type controlEnvList struct {
+	Prefixes []string `json:"prefixes"`
+	Names    []string `json:"names"`
+	Cases    struct {
+		Refused []string `json:"refused"`
+		Allowed []string `json:"allowed"`
+	} `json:"cases"`
+}
+
+var controlEnv = mustControlEnv(controlEnvJSON)
+
+func mustControlEnv(b []byte) controlEnvList {
+	var l controlEnvList
+	if err := json.Unmarshal(b, &l); err != nil {
+		panic(fmt.Sprintf("recipe: recipe-control-env.json: %v", err))
 	}
-)
+	if len(l.Prefixes) == 0 || len(l.Names) == 0 {
+		panic("recipe: recipe-control-env.json: empty list")
+	}
+	return l
+}
 
 func isControlEnv(name string) bool {
 	n := strings.ToUpper(name)
-	if controlEnvNames[n] {
+	if slices.Contains(controlEnv.Names, n) {
 		return true
 	}
-	for _, p := range controlEnvPrefixes {
+	for _, p := range controlEnv.Prefixes {
 		if strings.HasPrefix(n, p) {
 			return true
 		}

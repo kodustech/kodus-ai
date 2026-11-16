@@ -4,7 +4,7 @@ import type {
     PhysicalAdmissionTicket,
     PhysicalAdmissionResult,
 } from '../../shared/admission/admission-contract';
-import { claimIdFor } from '../../shared/claim-id';
+import { claimIdFor, isSetupChildSuffix } from '../../shared/claim-id';
 
 // Memory admission on the hub (ADR-070). A cell whose claims share its host
 // memory (docker-gvisor) reports in each heartbeat what it may commit to
@@ -16,6 +16,14 @@ import { claimIdFor } from '../../shared/claim-id';
 // does not fit is refused before anything is recorded or sent (the worker
 // waits and asks again), and claims that asked this cell first go first.
 //
+// A code sandbox never joins that line: it is interactive, and its caller
+// opens a new sandbox (a new claim id) rather than asking again, so a waiter
+// it left would hold every later claim behind it until WAITER_TTL_MS. A
+// sandbox that does not fit, or that finds claims waiting, is refused at once
+// (no_capacity, with what it needs and what is free), and the claims that
+// wait keep their order. It is counted at its whole size (the cell's
+// sandboxSize when it asks none), never at a ready size: it builds nothing.
+//
 // Only this replica sends claims to the cell (it holds the session), and
 // each admission runs without an await, so two admissions never read the
 // same free memory. The cell checks again with its own ledger (exact): the
@@ -26,7 +34,7 @@ import { claimIdFor } from '../../shared/claim-id';
 export const UNLISTED_TTL_MS = 2 * 60_000;
 /** What is set aside for a Run's other side, until that side asks. */
 export const SIBLING_TTL_MS = 2 * 60_000;
-/** A claim that waited and did not ask again for this long left the line (its Run ended, or it went to another cell). */
+/** A claim that waited and did not ask again for this long left the line (its Run ended, or it went to another cell). Never a sandbox: it does not wait. */
 export const WAITER_TTL_MS = 60_000;
 
 export interface MemoryClaim {
@@ -34,7 +42,7 @@ export interface MemoryClaim {
     runId?: string | null;
     side: string;
     consumer: Consumer;
-    /** The machine size the claim asks (MB); absent: the cell's default. */
+    /** The machine size the claim asks (MB); absent: the cell's default. A sandbox always has one (ClaimService.sizeMbOf). */
     sizeMb?: number;
     /**
      * The ids the Run's other claim may have (siblingKeysOf). A cell that lists
@@ -48,14 +56,14 @@ export type MemoryAdmission =
     /** The cell sends no memory: admitted by slots, as before. */
     | { kind: 'unmetered' }
     | { kind: 'admitted'; needMb: number; siblingMb: number }
-    /** Not now: wait and ask again. */
+    /** Not now: wait and ask again (a sandbox is refused, not kept in the line: see the file comment). */
     | { kind: 'wait'; needMb: number; freeMb: number; allocatableMb: number; ahead: number }
     /** Never on this cell: the claim alone is more than the cell may commit. */
     | { kind: 'too_large'; needMb: number; allocatableMb: number };
 
 type Held = { mb: number; runId?: string; side: string; at: number; listed: boolean };
 type SetAside = { runId: string; side: string; mb: number; at: number };
-type Waiter = { firstAt: number; seenAt: number; runId?: string };
+type Waiter = { firstAt: number; seenAt: number; runId?: string; preview?: boolean };
 type TicketHold = {
     ref: PhysicalAdmissionTicket;
     bootMb: number;
@@ -222,16 +230,21 @@ export class CellMemoryBook {
         // A Run that already holds memory here goes before every Run that holds none: making it wait
         // behind one deadlocks the cell (cell-dev-1: Run 1's base was ready and its PR fit, but Run 2,
         // which needed Run 1 to finish, asked first after the cell refused Run 1's PR once).
+        // A preview ranks below every other claim (docs/runtime/preview-urls.md §5.2): it waits behind every
+        // waiter that is not a preview, whenever that one asked, and is never ahead of one.
+        const preview = c.consumer === 'preview';
         const ahead = runHere
             ? 0
-            : [...s.waiters.entries()].filter(([id, w]) => id !== c.claimId && w.firstAt < firstAt && !(runId && w.runId === runId)).length;
+            : [...s.waiters.entries()].filter(
+                  ([id, w]) => id !== c.claimId && !(runId && w.runId === runId) && (preview ? !w.preview || w.firstAt < firstAt : !w.preview && w.firstAt < firstAt),
+              ).length;
         if (!ahead && needMb + siblingMb <= freeMb &&
             (s.freeSlots === undefined || s.freeSlots > this.pendingSlots(s))
         ) {
             if (siblingMb) s.setAside.push({ runId: runId!, side: other!, mb: siblingMb, at: now });
             return hold(needMb, siblingMb);
         }
-        s.waiters.set(c.claimId, { firstAt, seenAt: now, runId });
+        if (c.consumer !== 'sandbox') s.waiters.set(c.claimId, { firstAt, seenAt: now, runId, ...(preview ? { preview } : {}) });
         return { kind: 'wait', needMb: needMb + siblingMb, freeMb: Math.max(0, freeMb), allocatableMb: r.allocatableMb, ahead };
     }
 
@@ -246,7 +259,8 @@ export class CellMemoryBook {
         const r = this.cells.get(cellId)?.report;
         if (!r) return null;
         const bootMb = this.needOf(r, c);
-        return { bootMb, readyMb: Math.min(bootMb, r.readyMb), allocatableMb: r.allocatableMb };
+        // A sandbox builds nothing: the cell counts it at its whole size until it is released.
+        return { bootMb, readyMb: c.consumer === 'sandbox' ? bootMb : Math.min(bootMb, r.readyMb), allocatableMb: r.allocatableMb };
     }
 
     /** What this replica admitted that the cell's last report does not hold yet, and what is set aside. */
@@ -533,7 +547,7 @@ export class CellMemoryBook {
         const suffix = idempotencyKey.slice(prefix.length);
         if (
             !idempotencyKey.startsWith(prefix) ||
-            (suffix !== '' && !/^:learn-[1-3](-replay)?$/.test(suffix))
+            (suffix !== '' && !(suffix.startsWith(':') && isSetupChildSuffix(suffix.slice(1))))
         )
             return 'owner_changed';
         const next = claimIdFor(ref.organizationId, idempotencyKey);

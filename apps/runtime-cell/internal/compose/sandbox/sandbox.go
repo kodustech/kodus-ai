@@ -24,16 +24,23 @@ package sandbox
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/netip"
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/claimlimits"
 	"go.yaml.in/yaml/v3"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/claimlimits"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/machinetrust"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/yamlbound"
 )
 
 // Violation is one refused part of the compose file.
@@ -60,8 +67,14 @@ func (e *RefusedError) Error() string {
 const ClaimNetworkKey = "kodus-claim"
 
 type Options struct {
-	// ProjectDir is the checkout: every host path must resolve inside it.
+	// ProjectDir is the checkout: relative host paths are read from it, and
+	// every host path must resolve inside it, or inside Root when set.
 	ProjectDir string
+	// Root is the workspace of a claim of several repositories (ws/, with
+	// ProjectDir one of its directories): a host path may then name another
+	// repository's directory (../<alias>), and nothing outside Root. Empty:
+	// ProjectDir is the root.
+	Root string
 	// Project is the compose project name (named volumes become
 	// <project>_<name>).
 	Project string
@@ -88,6 +101,13 @@ type Options struct {
 	// a file the cell owns; mounted read-only at DecoyTarget on every
 	// service. Empty: none.
 	Decoy string
+	// Trust are the cell's trust files (machinetrust: the public roots and
+	// the cell CA, and the cell CA alone), set for a claim with org secrets:
+	// mounted read-only on every service at machinetrust.BundleTarget and
+	// CellCATarget, with machinetrust.Env in every service's environment,
+	// over what the file or the recipe set under those names. Zero: none,
+	// and the services keep their own trust.
+	Trust machinetrust.Files
 	// Built are the images the cell built for services with a build
 	// section (Builds), by service. Their build sections give way to these
 	// images; any other build section is refused.
@@ -96,12 +116,110 @@ type Options struct {
 	// healthcheck first passes (fastStartHealth); zero leaves healthchecks
 	// as written. The daemon must have API 1.44 (Docker 25).
 	HealthStartInterval time.Duration
+	// HostEnv names the variables of the environment docker compose runs
+	// with: compose interpolates $NAME and ${NAME} from it, so none of them
+	// may be named, not even where interpolation is otherwise allowed. PATH,
+	// HOME and every DOCKER_, COMPOSE_ and XDG_ name are refused whatever it
+	// holds.
+	HostEnv []string
 	// DataVolumes mounts a project volume of the cell's at a path of a
 	// service, by service, then target, to the volume's key: where the
 	// image keeps its data in an anonymous volume, a reset can then give
 	// the service a volume the cell filled (the driver's golden data). The
 	// key must be new to the file and the target unmounted.
 	DataVolumes map[string]map[string]string
+	// LogMaxSize and LogMaxFile bound every service's logs (DefaultLogMaxSize
+	// and DefaultLogMaxFile when empty or zero): each service logs through
+	// the local driver with at most this many files of at most this size,
+	// whatever the file says, so no service fills the Docker disk with its
+	// logs. A smaller bound the file asks for is kept.
+	LogMaxSize string
+	LogMaxFile int
+	// DiskSize caps every service's writable layer (storage_opt size, "20G"),
+	// as dockergvisor's ContainerDiskSize does the holder's and the
+	// builder's. Only some storage drivers take it (overlay2 on XFS mounted
+	// with pquota, btrfs, zfs); the daemon refuses the container on the
+	// others. Empty: no cap.
+	DiskSize string
+}
+
+// The log bound of a service when the cell sets none: 30 MiB of logs.
+const (
+	DefaultLogMaxSize = "10m"
+	DefaultLogMaxFile = 3
+)
+
+// logBound is the cell's log bound: the size as written, in bytes, and the
+// number of files.
+func (o Options) logBound() (string, int64, int, error) {
+	size, files := o.LogMaxSize, o.LogMaxFile
+	if size == "" {
+		size = DefaultLogMaxSize
+	}
+	if files == 0 {
+		files = DefaultLogMaxFile
+	}
+	b, ok := parseLogSize(size)
+	if !ok || files < 1 {
+		return "", 0, 0, fmt.Errorf("sandbox: log bound %q x %d is not a size and a file count", size, files)
+	}
+	return size, b, files, nil
+}
+
+var logSizeRE = regexp.MustCompile(`^(?i)([0-9]{1,12})([kmg]?)b?$`)
+
+// parseLogSize reads a log driver's max-size ("10m", "512k", "1g", bytes),
+// in units of 1024: never less than the daemon reads (it counts 1000), so
+// a size taken as within the bound is.
+func parseLogSize(s string) (int64, bool) {
+	m := logSizeRE.FindStringSubmatch(strings.TrimSpace(s))
+	if m == nil {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(m[1], 10, 64)
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	switch strings.ToLower(m[2]) {
+	case "k":
+		n <<= 10
+	case "m":
+		n <<= 20
+	case "g":
+		n <<= 30
+	}
+	return n, true
+}
+
+// logFiles reads a log driver's max-file, a string or a number.
+func logFiles(v any) (int, bool) {
+	switch x := v.(type) {
+	case int:
+		return x, true
+	case float64:
+		return int(x), x == float64(int(x))
+	case string:
+		n, err := strconv.Atoi(x)
+		return n, err == nil
+	}
+	return 0, false
+}
+
+// serviceLogging is the logging every service runs with: the local driver
+// within the cell's bound, or the file's own bound when it is smaller.
+func serviceLogging(v any, size string, sizeBytes int64, files int) map[string]any {
+	if l, ok := v.(map[string]any); ok {
+		opts, _ := l["options"].(map[string]any)
+		if s, ok := opts["max-size"].(string); ok {
+			if b, ok := parseLogSize(s); ok && b <= sizeBytes {
+				size = s
+			}
+		}
+		if f, ok := logFiles(opts["max-file"]); ok && f >= 1 && f <= files {
+			files = f
+		}
+	}
+	return map[string]any{"driver": "local", "options": map[string]any{"max-size": size, "max-file": strconv.Itoa(files)}}
 }
 
 // Keys a service may use. Anything else is refused: the list is an
@@ -153,12 +271,17 @@ var refusedKeys = map[string]string{
 	"include":             "files outside the one the cell checked",
 }
 
-var topKeys = map[string]bool{"services": true, "volumes": true, "networks": true, "name": true, "version": true}
+// topKeys are the top-level keys the cell takes. Top-level secrets name the
+// org secrets a build asks for (build_secrets.go) and leave the file once
+// read: no service mounts them.
+var topKeys = map[string]bool{"services": true, "volumes": true, "networks": true, "name": true, "version": true, "secrets": true}
 
-// interpolated are the service keys whose text compose interpolates and
-// that are meant for the container's shell ($HOME in a command). Everywhere
-// else a '$' is refused: the value the cell checks must be the value
-// compose uses.
+// interpolated are the service keys meant for the container's shell ($$HOME
+// in a command). Everywhere else a '$' is refused: the value the cell checks
+// must be the value compose uses. Here compose still interpolates a single
+// '$' from its own environment, so a name that environment holds is refused
+// (noHostEnv); any other resolves to its default or to nothing, as compose
+// says.
 var interpolated = map[string]bool{"environment": true, "command": true, "entrypoint": true, "healthcheck": true}
 
 var loggingOptions = map[string]bool{"max-size": true, "max-file": true, "compress": true, "mode": true, "max-buffer-size": true}
@@ -181,21 +304,21 @@ func Apply(raw []byte, o Options) ([]byte, error) {
 	if o.ProjectDir == "" || o.Runtime == "" || o.Project == "" {
 		return nil, errors.New("sandbox: project dir, project and runtime required")
 	}
+	if o.Root != "" {
+		if _, err := ResolveWithin(o.Root, o.ProjectDir, "."); err != nil {
+			return nil, fmt.Errorf("sandbox: %w", err)
+		}
+	}
 	if o.PidsLimit == 0 {
 		o.PidsLimit = 2048
 	}
+	if _, _, _, err := o.logBound(); err != nil {
+		return nil, err
+	}
 	c := &checker{o: o}
-	var node yaml.Node
-	if err := yaml.Unmarshal(raw, &node); err != nil {
-		return nil, fmt.Errorf("compose: %w", err)
-	}
-	c.checkTags(&node, "")
-	var doc map[string]any
-	if err := node.Decode(&doc); err != nil {
-		return nil, fmt.Errorf("compose: %w", err)
-	}
-	if doc == nil {
-		doc = map[string]any{}
+	doc, err := c.parse(raw)
+	if err != nil {
+		return nil, err
 	}
 	for _, k := range sortedKeys(doc) {
 		if strings.HasPrefix(k, "x-") {
@@ -210,6 +333,7 @@ func Apply(raw []byte, o Options) ([]byte, error) {
 	if len(services) == 0 {
 		c.add("services", "no services")
 	}
+	c.topSecrets(doc["secrets"])
 	declared := c.checkVolumes(doc["volumes"])
 	c.checkNetworks(doc["networks"])
 	for _, name := range sortedKeys(services) {
@@ -226,16 +350,42 @@ func Apply(raw []byte, o Options) ([]byte, error) {
 		c.addrs = addrs
 	}
 	for _, name := range sortedKeys(services) {
-		c.rewriteService(name, services[name].(map[string]any))
+		svc, ok := services[name].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("sandbox: service %s is not a mapping", name)
+		}
+		c.rewriteService(name, svc)
 	}
 	if err := addDataVolumes(doc, services, o.DataVolumes); err != nil {
 		return nil, err
 	}
-	delete(doc, "name") // the cell names the project (-p)
+	delete(doc, "name")    // the cell names the project (-p)
+	delete(doc, "secrets") // read by Builds; the builds are gone from the file
 	if o.Network != "" {
 		doc["networks"] = map[string]any{ClaimNetworkKey: map[string]any{"name": o.Network, "external": true}}
 	}
 	return yaml.Marshal(doc)
+}
+
+// parse reads the compose file the one way both Apply and Builds read it:
+// YAML tags compose gives a meaning this reader does not are recorded as
+// violations (checkTags), anchors and merges are resolved.
+func (c *checker) parse(raw []byte) (map[string]any, error) {
+	// Bounded as the files it came from (yamlbound): the cell parses it in
+	// its own process.
+	node, err := yamlbound.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("compose: %w", err)
+	}
+	c.checkTags(node, "")
+	var doc map[string]any
+	if err := node.Decode(&doc); err != nil {
+		return nil, fmt.Errorf("compose: %w", err)
+	}
+	if doc == nil {
+		doc = map[string]any{}
+	}
+	return doc, nil
 }
 
 // checkTags refuses YAML tags compose gives a meaning the cell's reader
@@ -282,6 +432,48 @@ func (c *checker) noInterpolation(v any, path string) {
 	case []any:
 		for i, e := range x {
 			c.noInterpolation(e, fmt.Sprintf("%s[%d]", path, i))
+		}
+	}
+}
+
+// variable is a name compose interpolates: $NAME or ${NAME, with ${...}'s
+// default or error text read again for the names it holds.
+var variable = regexp.MustCompile(`\$(?:\{([A-Za-z_][A-Za-z0-9_]*)|([A-Za-z_][A-Za-z0-9_]*))`)
+
+// hostEnvPrefixes are names compose's own environment may hold whatever
+// HostEnv says: the daemon's and compose's settings, the user's runtime dir.
+var hostEnvPrefixes = []string{"DOCKER_", "COMPOSE_", "XDG_"}
+
+func (c *checker) hostEnv(name string) bool {
+	if name == "PATH" || name == "HOME" || slices.Contains(c.o.HostEnv, name) {
+		return true
+	}
+	for _, p := range hostEnvPrefixes {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// noHostEnv refuses, where a single '$' is interpolated, a variable that
+// compose's own environment holds (an escaped "$$" is the container's).
+func (c *checker) noHostEnv(v any, path string) {
+	switch x := v.(type) {
+	case string:
+		for _, m := range variable.FindAllStringSubmatch(strings.ReplaceAll(x, "$$", ""), -1) {
+			if name := m[1] + m[2]; c.hostEnv(name) {
+				c.add(path, fmt.Sprintf("interpolates $%s, which compose would read from the cell's environment (write $$%s for the container's)", name, name))
+			}
+		}
+	case map[string]any:
+		for _, k := range sortedKeys(x) {
+			c.noHostEnv(k, path+"."+k)
+			c.noHostEnv(x[k], path+"."+k)
+		}
+	case []any:
+		for i, e := range x {
+			c.noHostEnv(e, fmt.Sprintf("%s[%d]", path, i))
 		}
 	}
 }
@@ -393,8 +585,16 @@ func (c *checker) checkService(name string, v any, declared map[string]bool) {
 			c.refuseKey(path+"."+k, k)
 			continue
 		}
-		if !interpolated[k] {
+		if interpolated[k] {
+			c.noHostEnv(svc[k], path+"."+k)
+		} else {
 			c.noInterpolation(svc[k], path+"."+k)
+		}
+	}
+	c.checkCapDrop(svc["cap_drop"], path+".cap_drop")
+	if c.o.Trust.Set() {
+		if _, err := environmentMap(svc["environment"]); err != nil {
+			c.add(path+".environment", err.Error())
 		}
 	}
 	if pp, _ := svc["pull_policy"].(string); pp == "build" && !built {
@@ -477,7 +677,7 @@ func (c *checker) checkMount(vol any, path string, declared map[string]bool) {
 	if t := mountTarget(vol); t == ResolvTarget || t == "/etc/hosts" {
 		c.add(path, "name resolution is the cell's: "+t+" cannot be mounted")
 		return
-	} else if t == DecoyTarget {
+	} else if t == DecoyTarget || t == machinetrust.Dir || strings.HasPrefix(t, machinetrust.Dir+"/") {
 		c.add(path, t+" is the cell's")
 		return
 	}
@@ -561,22 +761,40 @@ func isPath(s string) bool {
 // container planted), and no step of it may be a symlink. dir is true for a
 // bind mount (a file or a directory); env files must be regular files.
 func (c *checker) hostPath(p, path string, bind bool) {
-	if _, err := ResolveInside(c.o.ProjectDir, p); err != nil {
+	if _, err := c.o.resolve(p); err != nil {
 		c.add(path, err.Error())
 		return
 	}
 	if !bind {
-		abs, _ := ResolveInside(c.o.ProjectDir, p)
+		abs, _ := c.o.resolve(p)
 		if fi, err := os.Lstat(abs); err != nil || !fi.Mode().IsRegular() {
 			c.add(path, "env file is not a regular file")
 		}
 	}
 }
 
+// resolve is the absolute path of the host path p, read from the project
+// directory, after checking it stays inside the root (ResolveWithin).
+func (o Options) resolve(p string) (string, error) {
+	if o.Root == "" {
+		return ResolveInside(o.ProjectDir, p)
+	}
+	return ResolveWithin(o.Root, o.ProjectDir, p)
+}
+
 // ResolveInside returns the absolute path of p (relative to root) after
 // checking that it exists inside root and that no component, from root
 // down, is a symlink.
 func ResolveInside(root, p string) (string, error) {
+	return ResolveWithin(root, root, p)
+}
+
+// ResolveWithin returns the absolute path of p, relative to base, after
+// checking that base is inside root, that p exists inside root, and that no
+// component, from root down, is a symlink: a workspace of several
+// repositories reads a path from one of them (base, ws/<alias>) and lets it
+// name another (../<other>), never what is outside the workspace.
+func ResolveWithin(root, base, p string) (string, error) {
 	if p == "" {
 		return "", errors.New("empty path")
 	}
@@ -590,12 +808,26 @@ func ResolveInside(root, p string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if real, err := filepath.EvalSymlinks(rootAbs); err == nil {
-		rootAbs = real // the checkout itself may live under a symlinked tmp
+	// base is named from root as written, then read from root's real path:
+	// the walk below checks every component of it too, so a base that is a
+	// symlink is refused like any other path through one.
+	baseRel := "."
+	if base != root {
+		baseAbs, err := filepath.Abs(base)
+		if err != nil {
+			return "", err
+		}
+		if baseRel, err = filepath.Rel(rootAbs, baseAbs); err != nil || !filepath.IsLocal(baseRel) && baseRel != "." {
+			return "", errors.New("project directory outside the workspace")
+		}
 	}
+	if resolved, err := filepath.EvalSymlinks(rootAbs); err == nil {
+		rootAbs = resolved // the checkout itself may live under a symlinked tmp
+	}
+	baseAbs := filepath.Join(rootAbs, baseRel)
 	abs := p
 	if !filepath.IsAbs(p) {
-		abs = filepath.Join(rootAbs, p)
+		abs = filepath.Join(baseAbs, p)
 	}
 	abs = filepath.Clean(abs)
 	rel, err := filepath.Rel(rootAbs, abs)
@@ -632,7 +864,15 @@ func (c *checker) rewriteService(name string, svc map[string]any) {
 	}
 	fastStartHealth(svc, o.HealthStartInterval)
 	svc["security_opt"] = []any{"no-new-privileges:true"}
+	svc["cap_drop"], svc["cap_add"] = []any{"ALL"}, serviceCapsWithout(svc["cap_drop"])
 	svc["pids_limit"] = o.PidsLimit
+	// The shared Docker disk (review #7): logs within the cell's bound, and
+	// the writable layer capped when the cell has a disk size.
+	size, sizeBytes, files, _ := o.logBound() // Apply checked it
+	svc["logging"] = serviceLogging(svc["logging"], size, sizeBytes, files)
+	if o.DiskSize != "" {
+		svc["storage_opt"] = map[string]any{"size": o.DiskSize}
+	}
 	delete(svc, "ports") // the observer reaches services on the claim network
 	delete(svc, "deploy")
 	if o.MemLimit != "" {
@@ -679,6 +919,96 @@ func (c *checker) rewriteService(name string, svc map[string]any) {
 		vols, _ := svc["volumes"].([]any)
 		svc["volumes"] = append(vols, map[string]any{"type": "bind", "source": o.Decoy, "target": DecoyTarget, "read_only": true})
 	}
+	if o.Trust.Set() {
+		vols, _ := svc["volumes"].([]any)
+		svc["volumes"] = append(vols,
+			map[string]any{"type": "bind", "source": o.Trust.Bundle, "target": machinetrust.BundleTarget, "read_only": true},
+			map[string]any{"type": "bind", "source": o.Trust.CellCA, "target": machinetrust.CellCATarget, "read_only": true})
+		// checkService refused an environment of another shape.
+		env, _ := environmentMap(svc["environment"])
+		for k, v := range machinetrust.Env(machinetrust.BundleTarget, machinetrust.CellCATarget) {
+			env[k] = v
+		}
+		svc["environment"] = env
+	}
+}
+
+// environmentMap reads a service's environment, a mapping or a list of
+// k=v (a bare name keeps no value), as a mapping.
+func environmentMap(environment any) (map[string]any, error) {
+	out := map[string]any{}
+	switch e := environment.(type) {
+	case nil:
+	case map[string]any:
+		maps.Copy(out, e)
+	case []any:
+		for _, kv := range e {
+			s, ok := kv.(string)
+			if !ok {
+				return nil, errors.New("environment list entry is not a string")
+			}
+			if k, v, found := strings.Cut(s, "="); found {
+				out[k] = v
+			} else {
+				out[k] = nil
+			}
+		}
+	default:
+		return nil, errors.New("environment is neither a mapping nor a list")
+	}
+	return out, nil
+}
+
+// ServiceCaps are the only capabilities a service has: Docker's default set
+// without NET_RAW and AUDIT_WRITE, which do nothing under runsc (raw sockets
+// are off unless runsc runs with --net-raw, and gVisor has no audit
+// subsystem). What is left is what images commonly use when they start: an
+// entrypoint that chowns its data and drops to its user (postgres, redis), a
+// server on a port below 1024 (nginx). The cell drops ALL and adds these
+// back, so a capability Docker adds to its default set later is not given.
+var ServiceCaps = []string{"CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "KILL", "MKNOD", "NET_BIND_SERVICE", "SETFCAP", "SETGID", "SETPCAP", "SETUID", "SYS_CHROOT"}
+
+// capName is a capability as Docker reads it: "cap_chown" and "CHOWN" are one.
+func capName(s string) string {
+	return strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(s)), "CAP_")
+}
+
+// checkCapDrop allows a list of capability names: the file may drop more
+// than the cell does, never less.
+func (c *checker) checkCapDrop(v any, path string) {
+	switch x := v.(type) {
+	case nil:
+	case []any:
+		for i, e := range x {
+			if s, ok := e.(string); !ok || capName(s) == "" {
+				c.add(fmt.Sprintf("%s[%d]", path, i), "not a capability name")
+			}
+		}
+	default:
+		c.add(path, "not a list")
+	}
+}
+
+// serviceCapsWithout is ServiceCaps less what the file's cap_drop names (all
+// of them for ALL), so a file that dropped a capability keeps it dropped.
+func serviceCapsWithout(fileDrop any) []any {
+	dropped := map[string]bool{}
+	list, _ := fileDrop.([]any)
+	for _, e := range list {
+		if s, ok := e.(string); ok {
+			dropped[capName(s)] = true
+		}
+	}
+	out := []any{}
+	if dropped["ALL"] {
+		return out
+	}
+	for _, c := range ServiceCaps {
+		if !dropped[c] {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // addDataVolumes mounts the cell's data volumes (Options.DataVolumes) and
@@ -725,12 +1055,12 @@ func (c *checker) readOnlyBind(vol any) any {
 		if len(parts) < 2 || !isPath(parts[0]) {
 			return vol
 		}
-		abs, _ := ResolveInside(c.o.ProjectDir, parts[0])
+		abs, _ := c.o.resolve(parts[0])
 		return map[string]any{"type": "bind", "source": abs, "target": parts[1], "read_only": true}
 	case map[string]any:
 		if t, _ := x["type"].(string); t == "bind" {
 			src, _ := x["source"].(string)
-			abs, _ := ResolveInside(c.o.ProjectDir, src)
+			abs, _ := c.o.resolve(src)
 			x["source"], x["read_only"] = abs, true
 			delete(x, "bind")
 		}

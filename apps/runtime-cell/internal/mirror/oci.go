@@ -179,7 +179,7 @@ func (o *OCIProxy) stream(w http.ResponseWriter, r *http.Request, name, kind, re
 		return
 	}
 	up := o.Registry.JoinPath("v2", name, kind, ref)
-	req, err := http.NewRequestWithContext(r.Context(), r.Method, up.String(), nil)
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, up.String(), nil) //nolint:gosec // G704: the host is the operator's Registry; the path is a parsed OCI reference the claim pins
 	if err != nil {
 		http.Error(w, "bad upstream request", http.StatusBadGateway)
 		return
@@ -188,12 +188,12 @@ func (o *OCIProxy) stream(w http.ResponseWriter, r *http.Request, name, kind, re
 	if a := r.Header.Get("Accept"); a != "" && kind == "manifests" {
 		req.Header.Set("Accept", a)
 	}
-	res, err := o.client().Do(req)
+	res, err := o.client().Do(req) //nolint:gosec // G704: the host is the operator's Registry; the path is a parsed OCI reference the claim pins
 	if err != nil {
 		http.Error(w, "the registry is unreachable", http.StatusBadGateway)
 		return
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		// The registry's own status (404, 429) tells the builder what happened.
 		w.WriteHeader(res.StatusCode)
@@ -248,7 +248,7 @@ func (o *OCIProxy) token(ctx context.Context, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("mirror: token service answered %d", res.StatusCode)
 	}

@@ -12,6 +12,7 @@ import (
 	"errors"
 	"io"
 	"maps"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -122,7 +123,7 @@ func OpenConfiguredVault(cfg VaultConfig) (ManagedVault, error) {
 		return nil, ErrVaultConfig
 	}
 	st, err := os.Lstat(cfg.Directory)
-	if err != nil || !st.IsDir() || !privateInfo(st, 0700) {
+	if err != nil || !st.IsDir() || !privateInfo(st, 0o700) {
 		return nil, ErrVaultConfig
 	}
 	keyFile, err := os.OpenFile(cfg.KeyFile, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
@@ -130,13 +131,13 @@ func OpenConfiguredVault(cfg VaultConfig) (ManagedVault, error) {
 		return nil, ErrVaultConfig
 	}
 	info, err := keyFile.Stat()
-	if err != nil || !info.Mode().IsRegular() || !privateInfo(info, 0600) || info.Size() != 32 {
-		keyFile.Close()
+	if err != nil || !info.Mode().IsRegular() || !privateInfo(info, 0o600) || info.Size() != 32 {
+		_ = keyFile.Close()
 		return nil, ErrVaultConfig
 	}
 	keyInfo := info
 	key, err := io.ReadAll(io.LimitReader(keyFile, 33))
-	keyFile.Close()
+	_ = keyFile.Close() // read-only: the key is already read
 	defer clear(key)
 	if err != nil || len(key) != 32 {
 		return nil, ErrVaultConfig
@@ -153,14 +154,14 @@ func OpenConfiguredVault(cfg VaultConfig) (ManagedVault, error) {
 	if err != nil {
 		return nil, ErrVaultConfig
 	}
-	lock, err := root.OpenFile("lock", os.O_CREATE|os.O_RDWR|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0600)
+	lock, err := root.OpenFile("lock", os.O_CREATE|os.O_RDWR|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0o600)
 	if err != nil {
-		root.Close()
+		_ = root.Close()
 		return nil, ErrVaultConfig
 	}
-	fail := func(e error) (ManagedVault, error) { lock.Close(); root.Close(); return nil, e }
+	fail := func(e error) (ManagedVault, error) { _ = lock.Close(); _ = root.Close(); return nil, e }
 	info, err = lock.Stat()
-	if err != nil || !info.Mode().IsRegular() || !privateInfo(info, 0600) || os.SameFile(keyInfo, info) {
+	if err != nil || !info.Mode().IsRegular() || !privateInfo(info, 0o600) || os.SameFile(keyInfo, info) {
 		return fail(ErrVaultConfig)
 	}
 	if err = unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
@@ -180,7 +181,7 @@ func OpenConfiguredVault(cfg VaultConfig) (ManagedVault, error) {
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		return f.Sync()
 	}
 	if err = v.load(ctx, keyInfo); err != nil {
@@ -189,9 +190,20 @@ func OpenConfiguredVault(cfg VaultConfig) (ManagedVault, error) {
 	return v, nil
 }
 
+// effectiveUID is this process's effective uid as the kernel compares it
+// (uid_t is 32 bits). Geteuid's -1 (no uid on this platform) stays the
+// all-ones uid it always converted to, which no file or peer owns.
+func effectiveUID() uint32 {
+	uid := os.Geteuid()
+	if uid < 0 || uid > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(uid)
+}
+
 func privateInfo(st os.FileInfo, mode os.FileMode) bool {
 	sys, ok := st.Sys().(*syscall.Stat_t)
-	return ok && sys.Uid == uint32(os.Geteuid()) && (st.IsDir() || sys.Nlink == 1) && st.Mode().Perm() == mode
+	return ok && sys.Uid == effectiveUID() && (st.IsDir() || sys.Nlink == 1) && st.Mode().Perm() == mode
 }
 
 func (v *EncryptedVault) load(ctx context.Context, keyInfo os.FileInfo) error {
@@ -201,12 +213,12 @@ func (v *EncryptedVault) load(ctx context.Context, keyInfo os.FileInfo) error {
 	f, err := v.root.OpenFile("vault.json", os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 	if err == nil {
 		info, e := f.Stat()
-		if e != nil || !info.Mode().IsRegular() || !privateInfo(info, 0600) || info.Size() > maxVaultBytes || os.SameFile(keyInfo, info) {
-			f.Close()
+		if e != nil || !info.Mode().IsRegular() || !privateInfo(info, 0o600) || info.Size() > maxVaultBytes || os.SameFile(keyInfo, info) {
+			_ = f.Close()
 			return ErrVaultConfig
 		}
 		raw, e := io.ReadAll(io.LimitReader(f, maxVaultBytes+1))
-		f.Close()
+		_ = f.Close() // read-only: the vault is already read
 		if e != nil || len(raw) > maxVaultBytes {
 			return ErrVaultUnavailable
 		}
@@ -240,7 +252,7 @@ func (v *EncryptedVault) load(ctx context.Context, keyInfo os.FileInfo) error {
 	if err != nil {
 		return ErrVaultUnavailable
 	}
-	defer dir.Close()
+	defer func() { _ = dir.Close() }()
 	// Bounded startup cleanup only touches our fixed encrypted temporary files,
 	// under the exclusive lock. Unknown files and unsafe entries refuse startup.
 	entries, err := dir.ReadDir(130)
@@ -264,7 +276,7 @@ func (v *EncryptedVault) load(ctx context.Context, keyInfo os.FileInfo) error {
 		if entry.Name() == "lock" || entry.Name() == "vault.json" {
 			continue
 		}
-		if !validPendingName(entry.Name()) || !info.Mode().IsRegular() || !privateInfo(info, 0600) || info.Size() > maxVaultBytes {
+		if !validPendingName(entry.Name()) || !info.Mode().IsRegular() || !privateInfo(info, 0o600) || info.Size() > maxVaultBytes {
 			return ErrVaultConfig
 		}
 		pending = append(pending, entry.Name())
@@ -274,7 +286,7 @@ func (v *EncryptedVault) load(ctx context.Context, keyInfo os.FileInfo) error {
 			return err
 		}
 		info, err := v.root.Lstat(name)
-		if err != nil || os.SameFile(keyInfo, info) || !info.Mode().IsRegular() || !privateInfo(info, 0600) {
+		if err != nil || os.SameFile(keyInfo, info) || !info.Mode().IsRegular() || !privateInfo(info, 0o600) {
 			return ErrVaultConfig
 		}
 		if err = v.root.Remove(name); err != nil {
@@ -283,6 +295,7 @@ func (v *EncryptedVault) load(ctx context.Context, keyInfo os.FileInfo) error {
 	}
 	return nil
 }
+
 func canonicalDecode(raw []byte, out any) error {
 	if err := json.Unmarshal(raw, out); err != nil {
 		return ErrVaultConfig
@@ -293,6 +306,7 @@ func canonicalDecode(raw []byte, out any) error {
 	}
 	return nil
 }
+
 func validPendingName(s string) bool {
 	if len(s) != len("pending-")+24 || s[:8] != "pending-" {
 		return false
@@ -300,9 +314,11 @@ func validPendingName(s string) bool {
 	b, e := hex.DecodeString(s[8:])
 	return e == nil && len(b) == 12 && hex.EncodeToString(b) == s[8:]
 }
+
 func (v *EncryptedVault) aad() []byte {
 	return []byte("kodus-runtime/injector-vault/v" + strconv.Itoa(v.format) + "\x00" + v.cellID)
 }
+
 func versionKey(s SecretScope, id string, n uint64) string {
 	return s.OrganizationID + "|" + s.EnvironmentID + "|" + id + "|" + strconv.FormatUint(n, 10)
 }
@@ -337,7 +353,7 @@ func (v *EncryptedVault) pruneClaims(next *vaultState) {
 			delete(next.Claims, id)
 		}
 	}
-	for key, b := range next.Bindings {
+	for key, b := range next.Bindings { //nolint:gocritic // rangeValCopy: a map value has no address; indexing would copy it too, after a second lookup
 		if _, ok := next.Claims[b.Scope.ClaimID]; !ok || !now.Before(b.ExpiresAt) {
 			delete(next.Bindings, key)
 		}
@@ -366,13 +382,13 @@ func (v *EncryptedVault) save(ctx context.Context, next vaultState) error {
 		return ErrVaultUnavailable
 	}
 	name := "pending-" + hex.EncodeToString(random[:])
-	f, err := v.root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL|unix.O_NOFOLLOW, 0600)
+	f, err := v.root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL|unix.O_NOFOLLOW, 0o600)
 	if err != nil {
 		return ErrVaultUnavailable
 	}
 	renamed := false
 	defer func() {
-		f.Close()
+		_ = f.Close() // the checked Close is above; this one only covers an early return
 		if !renamed {
 			_ = v.root.Remove(name)
 		}
@@ -400,6 +416,7 @@ func (v *EncryptedVault) save(ctx context.Context, next vaultState) error {
 	}
 	return nil
 }
+
 func (v *EncryptedVault) Close() error {
 	v.once.Do(func() {
 		v.gate <- struct{}{}

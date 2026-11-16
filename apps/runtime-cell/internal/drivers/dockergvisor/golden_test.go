@@ -14,8 +14,8 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
 
@@ -31,6 +31,8 @@ type composeDocker struct {
 	stops []string
 	// dataDir is what the server says its data directory is.
 	dataDir string
+	// rendered are the compose files the cell asked compose config about.
+	rendered []map[string]any
 }
 
 func newComposeDocker() *composeDocker {
@@ -65,6 +67,9 @@ var composeT testing.TB
 
 func (c *composeDocker) ComposeConfig(_ context.Context, p dockercli.ComposeProject) ([]byte, error) {
 	doc, _ := readRendered(composeT, p.File)
+	c.mu.Lock()
+	c.rendered = append(c.rendered, doc)
+	c.mu.Unlock()
 	if vols, ok := doc["volumes"].(map[string]any); ok {
 		for k := range vols {
 			vols[k] = map[string]any{"name": p.Name + "_" + k}
@@ -216,13 +221,19 @@ type goldenRig struct {
 	file   []byte
 }
 
-func newGoldenRig(t *testing.T, file, recipeText string) *goldenRig {
+func newGoldenRig(t *testing.T, file, recipeText string, edit ...func(*Config)) *goldenRig {
 	t.Helper()
 	composeT = t
 	docker := newComposeDocker()
 	docker.plant(dockercli.Container{ID: "cegress", Name: "kodus-egress", Networks: map[string]string{"kodus-cell": "10.9.0.2"}})
-	d, err := New(context.Background(), docker, Config{CellID: "cell-1", HolderImage: "kodus/holder@sha256:abc", WorkDir: t.TempDir(), EgressContainer: "kodus-egress",
-		Log: slog.New(slog.NewTextHandler(testWriter{t}, nil))})
+	cfg := Config{
+		CellID: "cell-1", HolderImage: "kodus/holder@sha256:abc", WorkDir: t.TempDir(), EgressContainer: "kodus-egress",
+		Log: slog.New(slog.NewTextHandler(testWriter{t}, nil)),
+	}
+	for _, f := range edit {
+		f(&cfg)
+	}
+	d, err := New(context.Background(), docker, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,10 +263,10 @@ func newGoldenRig(t *testing.T, file, recipeText string) *goldenRig {
 // up is what the agent does: Up, then the recipe's steps.
 func (r *goldenRig) up(t *testing.T) {
 	t.Helper()
-	if _, err := r.d.Up(context.Background(), r.ref, r.file, r.dir); err != nil {
+	if _, err := r.d.Up(context.Background(), driver.UpRequest{Ref: r.ref, Compose: r.file, ProjectDir: r.dir}); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.d.RunRecipe(context.Background(), r.ref, r.dir); err != nil {
+	if err := r.d.RunRecipe(context.Background(), r.ref, r.dir, nil); err != nil {
 		t.Fatal(err)
 	}
 }

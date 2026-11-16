@@ -103,6 +103,7 @@ export class ExternalVerificationReconciler {
                     .then(resolve, reject);
             });
         } catch {
+            // Unreadable reads as no Run within the read budget: the task stays working, or fails at its deadline. A shutdown abort rethrows.
             parent?.throwIfAborted();
             return null;
         } finally {

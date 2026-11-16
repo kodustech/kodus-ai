@@ -1,13 +1,16 @@
 import { z } from 'zod';
+
+import { TraceparentSchema } from './trace-context';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
-import { RECIPE_FILE_PATHS } from '@libs/runtime/contracts/enums';
+import { ENVIRONMENT_REPOSITORY_ROLES, RECIPE_FILE_PATHS } from '@libs/runtime/contracts/enums';
+import { EGRESS_APPROVAL_MODES, EGRESS_WHO_MAY_ADD } from '@libs/runtime/contracts/egress';
 import { MachineSizeSchema } from '@libs/runtime/contracts/machine-size';
-import { RUNTIME_CONTROL_ROUTING_KEY, RUNTIME_EXCHANGE, RUNTIME_RUN_ROUTING_KEY, runtimeEnvelope } from '@libs/runtime/run/run-messages';
+import { MAX_WORKSPACE_REPOSITORIES, RepositoryAliasSchema, RepositoryFullNameSchema, workspaceShapeError } from '@libs/runtime/contracts/workspace';
+import { RUNTIME_CONTROL_ROUTING_KEY, RUNTIME_EXCHANGE, RUNTIME_RUN_ROUTING_KEY, RuntimeEventName, runtimeEnvelope } from '@libs/runtime/run/run-messages';
 import { isSealedSecret } from '@libs/runtime/run/sealed-secret';
 
-// Decisions taken in the product that change Runtime state. ADR-025 keeps the
-// Runtime database written only by the Runtime, so the API never writes the
-// §8 tables (runtime_fork_approvals, runtime_egress_approvals,
+// Decisions taken in the product that change Runtime state. Only the Runtime
+// writes its database, so the API never writes the tables (runtime_fork_approvals, runtime_egress_approvals,
 // runtime_cell_tokens, runtime_cell_revocations): it records the decision as an
 // outbox row on the runtime_run queue, in the same envelope as
 // RuntimeRunRequested, and the runtime-worker applies it idempotently.
@@ -15,11 +18,14 @@ import { isSealedSecret } from '@libs/runtime/run/sealed-secret';
 export const RuntimeCommandName = {
     ForkApproved: 'runtime.run.fork_approved',
     EgressApproved: 'runtime.environment.egress_approved',
+    EgressRevoked: 'runtime.environment.egress_revoked',
+    EgressSettingsChanged: 'runtime.org.egress_settings_changed',
     StopRequested: 'runtime.stop.requested',
     StopCleared: 'runtime.stop.cleared',
     EnvironmentSetupRequested: 'runtime.environment.setup_requested',
     EnvironmentPoolRequested: 'runtime.environment.pool_requested',
     CellTokenIssued: 'runtime.cell.registration_token_issued',
+    CellTokenRevoked: 'runtime.cell.registration_token_revoked',
     CellRevokeRequested: 'runtime.cell.revoke_requested',
     LessonUpdateRequested: 'runtime.lesson.update_requested',
 } as const;
@@ -40,7 +46,7 @@ export const RuntimeForkApprovedSchema = z.strictObject({
     organizationId: id,
     repositoryId: id,
     prNumber: z.number().int().min(1),
-    /** The head the approver saw; a new push needs a new approval (ADR-030). */
+    /** The head the approver saw; a new push needs a new approval. */
     headSha: sha,
     approver: z.strictObject({
         userId: id,
@@ -51,23 +57,77 @@ export const RuntimeForkApprovedSchema = z.strictObject({
     /**
      * Fresh repo and Run tokens, sealed for this runId: the ones the Run was
      * requested with expire while it waits (the repo token in 1 h).
+     * `workspace`: the fresh tokens of every other repository of a
+     * multi-repository Run (each side's, by repositoryId); a repository the
+     * approval leaves out has no token any more, and its claims are refused
+     * naming it rather than booting with an expired one.
      */
-    tokens: z.strictObject({ repoToken: sealedToken, prRepoToken: sealedToken.optional(), runToken: sealedToken }).optional(),
+    tokens: z
+        .strictObject({
+            repoToken: sealedToken,
+            prRepoToken: sealedToken.optional(),
+            runToken: sealedToken,
+            workspace: z
+                .array(z.strictObject({ repositoryId: id, sealedRepoToken: sealedToken, sealedPrRepoToken: sealedToken.optional() }))
+                .min(1)
+                .max(MAX_WORKSPACE_REPOSITORIES)
+                .optional(),
+        })
+        .optional(),
     /** Idempotency key `runId:headSha`. */
     key: z.string().min(1).max(256),
 });
 export type RuntimeForkApproved = z.infer<typeof RuntimeForkApprovedSchema>;
+/** The fresh sealed tokens a fork approval brings. */
+export type ForkApprovalTokens = NonNullable<RuntimeForkApproved['tokens']>;
 
+const egressPath = z.string().min(1).max(256).regex(/^\/[\x21-\x7e]*$/);
+
+// mode, pathPrefixes, source and sourceRef are optional so a worker before
+// them still takes an approval (as passthrough, as every approval was).
 export const RuntimeEgressApprovedSchema = z.strictObject({
+    /** An environment, or ORG_EGRESS_SCOPE for the org list. */
     environmentId: id,
     organizationId: id,
     host: z.string().min(1).max(253),
     approvedBy: actor,
     approvedAt: z.iso.datetime(),
+    mode: z.enum(EGRESS_APPROVAL_MODES).optional(),
+    /** For mode inspected: the path prefixes a GET or HEAD may name. */
+    pathPrefixes: z.array(egressPath).min(1).max(16).optional(),
+    /** Where it was approved from: the blocker card or the settings screen. */
+    source: z.enum(['blocker', 'settings']).optional(),
+    /** The blocker signature with its setup or Run id, for the audit. */
+    sourceRef: z.string().min(1).max(256).optional(),
+    reason: z.string().min(1).max(500).optional(),
     /** Idempotency key `environmentId:host` (unique in runtime_egress_approvals). */
     key: z.string().min(1).max(400),
-});
+}).refine((b) => b.mode !== 'inspected' || (b.pathPrefixes?.length ?? 0) > 0, { message: 'an inspected approval names its path prefixes', path: ['pathPrefixes'] });
 export type RuntimeEgressApproved = z.infer<typeof RuntimeEgressApprovedSchema>;
+
+/** An approval revoked (G3): its live claims get the list without it, which cuts their connections to the host. */
+export const RuntimeEgressRevokedSchema = z.strictObject({
+    /** An environment, or ORG_EGRESS_SCOPE for the org list. */
+    environmentId: id,
+    organizationId: id,
+    host: z.string().min(1).max(253),
+    revokedBy: actor,
+    revokedAt: z.iso.datetime(),
+    reason: z.string().min(1).max(500).optional(),
+    key: z.string().min(1).max(400),
+});
+export type RuntimeEgressRevoked = z.infer<typeof RuntimeEgressRevokedSchema>;
+
+/** The org's outbound access settings (D2, D3): the Kodus recommended list on or off, and who may add hosts. */
+export const RuntimeEgressSettingsChangedSchema = z.strictObject({
+    organizationId: id,
+    recommendedEnabled: z.boolean(),
+    whoMayAdd: z.enum(EGRESS_WHO_MAY_ADD),
+    changedBy: actor,
+    changedAt: z.iso.datetime(),
+    key: z.string().min(1).max(400),
+});
+export type RuntimeEgressSettingsChanged = z.infer<typeof RuntimeEgressSettingsChangedSchema>;
 
 const stopCommon = {
     requestedBy: actor,
@@ -96,7 +156,7 @@ export const RuntimeStopClearedSchema = z.discriminatedUnion('scope', [
 ]);
 export type RuntimeStopCleared = z.infer<typeof RuntimeStopClearedSchema>;
 
-/** Where the recipe lives (docs §6), always read from the default branch. */
+/** Where the recipe lives, always read from the default branch. */
 export const RUNTIME_RECIPE_PATH = RECIPE_FILE_PATHS[1];
 /**
  * A recipe for the Runtime only, read before RUNTIME_RECIPE_PATH: a repo whose
@@ -126,7 +186,7 @@ export type SetupRequestBlockerKind = (typeof SETUP_REQUEST_BLOCKER_KINDS)[numbe
 /**
  * Where a setup's recipe came from: the default branch, or written by Kodus
  * from the repository files because the default branch has none (the
- * deterministic first step of the learning loop, docs §4 "Ciclo de aprender").
+ * deterministic first step of the learning loop).
  */
 export const RECIPE_ORIGINS = ['repository', 'inferred'] as const;
 export type RecipeOrigin = (typeof RECIPE_ORIGINS)[number];
@@ -141,6 +201,36 @@ export type SetupRecipeOrigin = RecipeOrigin | 'authored';
 export const RECIPE_INFERENCE_GAPS = ['no_build_files', 'compose_unreadable', 'no_http_port', 'published_image'] as const;
 export type RecipeInferenceGap = (typeof RECIPE_INFERENCE_GAPS)[number];
 
+/**
+ * One repository of a multi-repository setup: the default-branch head it
+ * builds (read by the product from the Git API, like `ref`) and a download
+ * token for that repository only, sealed for this setup (bound to `key`).
+ */
+export const SetupWorkspaceRepositorySchema = z.strictObject({
+    repositoryId: id,
+    fullName: RepositoryFullNameSchema,
+    alias: RepositoryAliasSchema,
+    role: z.enum(ENVIRONMENT_REPOSITORY_ROLES),
+    sha,
+    branch: z.string().min(1).max(256),
+    sealedRepoToken: sealedToken,
+});
+export type SetupWorkspaceRepository = z.infer<typeof SetupWorkspaceRepositorySchema>;
+
+/**
+ * Why a setup's workspace disagrees with the rest of the command, or
+ * undefined: its primary is the command's repository at the command's ref.
+ */
+function setupWorkspaceError(m: { repositoryId: string; ref?: { sha: string }; workspace?: SetupWorkspaceRepository[] }): string | undefined {
+    if (!m.workspace) return undefined;
+    const shape = workspaceShapeError(m.workspace);
+    if (shape) return shape;
+    const primary = m.workspace.find((r) => r.role === 'primary')!;
+    if (primary.repositoryId !== m.repositoryId) return "the workspace's primary is the setup's repository";
+    if (m.ref && primary.sha !== m.ref.sha) return "the workspace's primary builds the setup's ref";
+    return undefined;
+}
+
 /** The product asks the Runtime to (re)build an environment's image from its recipe. */
 export const RuntimeEnvironmentSetupRequestedSchema = z.strictObject({
     environmentId: id,
@@ -153,13 +243,19 @@ export const RuntimeEnvironmentSetupRequestedSchema = z.strictObject({
     /** Idempotency key `environmentId:requestedAt`. */
     key: z.string().min(1).max(256),
     /**
+     * The W3C trace the product asked in (the API call or the pool cron): the
+     * setup's spans continue it. Deploy the runtime-worker first: an older
+     * worker's strict schema refuses the field.
+     */
+    traceparent: TraceparentSchema.optional(),
+    /**
      * The commit to build: the default branch head, read by the product from
-     * the Git API (ADR-057). With `branch`, the worker may ask for an image
-     * bake of it (S-52); without it (dev fallback) it never bakes.
+     * the Git API. With `branch`, the worker may ask for an image
+     * bake of it; without it (dev fallback) it never bakes.
      */
     ref: z.strictObject({ sha, branch: z.string().min(1).max(256).optional() }).optional(),
     repositoryFullName: z.string().max(512).optional(),
-    /** Download token for this repo only, like RuntimeRunRequested.repoToken (ADR-002), sealed for this setup (bound to `key`). */
+    /** Download token for this repo only, like RuntimeRunRequested.repoToken, sealed for this setup (bound to `key`). */
     repoToken: z
         .string()
         .min(1)
@@ -167,7 +263,7 @@ export const RuntimeEnvironmentSetupRequestedSchema = z.strictObject({
         .refine((v): boolean => isSealedSecret(v), { message: 'the token must be sealed (sealed:v1:…), never plain' })
         .optional(),
     /**
-     * The setup token for the product's LLM gateway (ADR-057), sealed for this
+     * The setup token for the product's LLM gateway, sealed for this
      * setup (bound to `key`): Kody's learn loop runs only with it. Absent when
      * the product has no run token secret; the loop is then off.
      */
@@ -177,7 +273,7 @@ export const RuntimeEnvironmentSetupRequestedSchema = z.strictObject({
         .max(8_192)
         .refine((v): boolean => isSealedSecret(v), { message: 'the token must be sealed (sealed:v1:…), never plain' })
         .optional(),
-    /** The org admin turned on the diagnostic hold for this environment (§11 runbook). */
+    /** The org admin turned on the diagnostic hold for this environment. */
     diagnosticHold: z.boolean().optional(),
     /** Warm pool machines to keep ready once the bake is accepted (plan default or the admin's choice, under the plan's ceiling). */
     poolSize: z.number().int().min(0).max(100).optional(),
@@ -188,7 +284,7 @@ export const RuntimeEnvironmentSetupRequestedSchema = z.strictObject({
      */
     machineSize: MachineSizeSchema.optional(),
     /**
-     * `.kodus/workspace.yaml` at `ref.sha` (§6: the recipe is read from the
+     * `.kodus/workspace.yaml` at `ref.sha` (the recipe is read from the
      * default branch, never from a PR). `content: null` = the default branch
      * has no recipe. Absent = the product did not read it (a blocker came first).
      * `origin: 'inferred'`: the default branch had none and `content` is the
@@ -209,6 +305,16 @@ export const RuntimeEnvironmentSetupRequestedSchema = z.strictObject({
         .optional(),
     /** Set when the product could not resolve what the setup needs; the worker records it and boots nothing. */
     blocker: z.strictObject({ kind: z.enum(SETUP_REQUEST_BLOCKER_KINDS), message: z.string().min(1).max(500) }).optional(),
+    /**
+     * Every repository of a multi-repository environment, the primary
+     * included, each at its default-branch head with its own token. Absent
+     * for an environment of one repository, which builds `ref` with
+     * `repoToken` as before.
+     */
+    workspace: z.array(SetupWorkspaceRepositorySchema).min(1).max(MAX_WORKSPACE_REPOSITORIES).optional(),
+}).superRefine((m, ctx) => {
+    const error = setupWorkspaceError(m);
+    if (error) ctx.addIssue({ code: 'custom', message: error, path: ['workspace'] });
 });
 export type RuntimeEnvironmentSetupRequested = z.infer<typeof RuntimeEnvironmentSetupRequestedSchema>;
 
@@ -235,6 +341,15 @@ export const RuntimeCellTokenIssuedSchema = z.strictObject({
 });
 export type RuntimeCellTokenIssued = z.infer<typeof RuntimeCellTokenIssuedSchema>;
 
+/** An org owner revoked an unused registration token of the org; a used one stays used (its cell is revoked as a cell). */
+export const RuntimeCellTokenRevokedSchema = z.strictObject({
+    tokenHash: z.string().regex(/^[0-9a-f]{64}$/),
+    organizationId: id,
+    revokedBy: actor,
+    revokedAt: z.iso.datetime(),
+});
+export type RuntimeCellTokenRevoked = z.infer<typeof RuntimeCellTokenRevokedSchema>;
+
 export const RuntimeCellRevokeRequestedSchema = z.strictObject({
     cellId: id,
     /** Owner org of a customer cell; absent for a managed cell (on-call). */
@@ -246,7 +361,7 @@ export const RuntimeCellRevokeRequestedSchema = z.strictObject({
 export type RuntimeCellRevokeRequested = z.infer<typeof RuntimeCellRevokeRequestedSchema>;
 
 /**
- * An org admin acts on a lesson (ADR-018): `promote` makes a repo lesson
+ * An org admin acts on a lesson: `promote` makes a repo lesson
  * apply to every repo of the org; `retire` stops it from being used.
  */
 export const RuntimeLessonUpdateRequestedSchema = z.strictObject({
@@ -262,11 +377,14 @@ export type RuntimeLessonUpdateRequested = z.infer<typeof RuntimeLessonUpdateReq
 export interface RuntimeCommandPayloads {
     'runtime.run.fork_approved': RuntimeForkApproved;
     'runtime.environment.egress_approved': RuntimeEgressApproved;
+    'runtime.environment.egress_revoked': RuntimeEgressRevoked;
+    'runtime.org.egress_settings_changed': RuntimeEgressSettingsChanged;
     'runtime.stop.requested': RuntimeStopRequested;
     'runtime.stop.cleared': RuntimeStopCleared;
     'runtime.environment.setup_requested': RuntimeEnvironmentSetupRequested;
     'runtime.environment.pool_requested': RuntimeEnvironmentPoolRequested;
     'runtime.cell.registration_token_issued': RuntimeCellTokenIssued;
+    'runtime.cell.registration_token_revoked': RuntimeCellTokenRevoked;
     'runtime.cell.revoke_requested': RuntimeCellRevokeRequested;
     'runtime.lesson.update_requested': RuntimeLessonUpdateRequested;
 }
@@ -274,24 +392,35 @@ export interface RuntimeCommandPayloads {
 const SCHEMAS: Record<RuntimeCommandEventName, z.ZodType> = {
     [RuntimeCommandName.ForkApproved]: RuntimeForkApprovedSchema,
     [RuntimeCommandName.EgressApproved]: RuntimeEgressApprovedSchema,
+    [RuntimeCommandName.EgressRevoked]: RuntimeEgressRevokedSchema,
+    [RuntimeCommandName.EgressSettingsChanged]: RuntimeEgressSettingsChangedSchema,
     [RuntimeCommandName.StopRequested]: RuntimeStopRequestedSchema,
     [RuntimeCommandName.StopCleared]: RuntimeStopClearedSchema,
     [RuntimeCommandName.EnvironmentSetupRequested]: RuntimeEnvironmentSetupRequestedSchema,
     [RuntimeCommandName.EnvironmentPoolRequested]: RuntimeEnvironmentPoolRequestedSchema,
     [RuntimeCommandName.CellTokenIssued]: RuntimeCellTokenIssuedSchema,
+    [RuntimeCommandName.CellTokenRevoked]: RuntimeCellTokenRevokedSchema,
     [RuntimeCommandName.CellRevokeRequested]: RuntimeCellRevokeRequestedSchema,
     [RuntimeCommandName.LessonUpdateRequested]: RuntimeLessonUpdateRequestedSchema,
 };
 
 /**
- * The commands that go on the Run queue: a setup is work, like a Run. Every
- * other command is control (stop, revoke, approvals, pool) and has a queue of
- * its own, so a stop never waits behind a backlog of Run requests.
+ * The events that go on the Run queue: a Run request, its cancel (so a cancel
+ * never passes the request it cancels) and a setup, which is work like a Run.
+ * Every other command is control (stop, revoke, approvals, pool) and has a
+ * queue of its own, so a stop never waits behind a backlog of Run requests.
  */
-const ON_RUN_QUEUE: ReadonlySet<RuntimeCommandEventName> = new Set([RuntimeCommandName.EnvironmentSetupRequested]);
+const RUN_LANE_EVENTS: ReadonlySet<string> = new Set([
+    RuntimeEventName.RunRequested,
+    RuntimeEventName.RunCancelRequested,
+    RuntimeCommandName.EnvironmentSetupRequested,
+]);
+
+/** Whether an event (a Run message or a command) belongs on the Run queue rather than the control queue. */
+export const isRunLaneEvent = (eventName: string): boolean => RUN_LANE_EVENTS.has(eventName);
 
 export const runtimeCommandRoute = (eventName: RuntimeCommandEventName) =>
-    ON_RUN_QUEUE.has(eventName)
+    isRunLaneEvent(eventName)
         ? { routingKey: RUNTIME_RUN_ROUTING_KEY, workflowType: WorkflowType.RUNTIME_RUN }
         : { routingKey: RUNTIME_CONTROL_ROUTING_KEY, workflowType: WorkflowType.RUNTIME_CONTROL };
 

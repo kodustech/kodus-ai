@@ -4,7 +4,7 @@ import { FakeEnvironmentRuntime } from '@libs/runtime/environment';
 import type { Probe } from '@libs/runtime/probe';
 import { shopRunRequest } from '../../e2e/fixtures';
 import { SCENARIOS } from '../../fake-cell/scenarios';
-import { inMemoryRunDeps } from './in-memory-deps';
+import { inMemoryRunDeps } from './testing';
 import { runRuntimeRun } from './run-orchestrator';
 
 const id = randomUUID();

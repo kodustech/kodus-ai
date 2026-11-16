@@ -1,6 +1,8 @@
 import type { Probe, ProbeResult } from '@libs/runtime/probe';
 
-import { effectiveCompare, expectedHolds, normalizeFields, toGateStep } from './probe-fields';
+import { effectiveCompare, expectedHolds, normalizeFields } from '@libs/runtime/gate/probe-fields';
+
+import { toGateStep } from './probe-fields';
 
 const httpProbe = (compare: Probe['compare']): Probe =>
     ({
@@ -51,6 +53,13 @@ describe('compared fields: a floor the agent cannot drop', () => {
         const b = normalizeFields(httpProbe(['status']), result(200, '<p>11</p>'));
         expect(a.json).toBe('not_json');
         expect(a['body.sha256']).not.toBe(b['body.sha256']);
+    });
+
+    it('an HTML page counts by its visible text and its markup skeleton, not by its bytes', () => {
+        const html = (body: string): ProbeResult => ({ ...result(200, body), http: { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body } });
+        const f = normalizeFields(httpProbe(['status']), html('<!DOCTYPE html><html><body><h1>Orders</h1><p>3 open</p><script>self.__next_r="r1"</script></body></html>'));
+        expect(Object.keys(f).sort()).toEqual(['html.markup.sha256', 'html.text', 'json', 'status']);
+        expect(f).toMatchObject({ status: '200', json: 'not_json', 'html.text': 'Orders\n3 open' });
     });
 
     it('the gate step carries the observer request log (S-32)', () => {

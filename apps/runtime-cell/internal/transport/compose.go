@@ -14,7 +14,7 @@ import (
 // Upload) and the root every exec.cwd lives under ("workspace/<rel>").
 const Workspace = "workspace"
 
-// ErrNoExec: the driver has no way to run a command in the project.
+// ErrNoExec means the driver has no way to run a command in the project.
 var ErrNoExec = errors.New("transport: this driver runs no commands in the project")
 
 // Compose is the transport of a driver that boots the checkout itself
@@ -40,7 +40,9 @@ func (t Compose) Exec(ctx context.Context, ref driver.MachineRef, req kodyexec.R
 	return t.Run(ctx, ref, req)
 }
 
-func (Compose) Upload(context.Context, driver.MachineRef, string, string) error { return nil }
+func (Compose) Upload(context.Context, driver.MachineRef, string, string, func(string)) error {
+	return nil
+}
 
 // WorkspaceRel is cwd without its Workspace root: "" for the workspace
 // itself, "a/b" for "workspace/a/b". A cwd outside the workspace is refused.

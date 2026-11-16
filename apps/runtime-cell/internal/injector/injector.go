@@ -7,6 +7,11 @@
 // never takes a proxy from its environment, so the credential goes where
 // the proxy's checks said and nowhere else.
 //
+// The proxy also sends it the hosts of the inspected tier (policy.InspectRule)
+// from a machine that trusts the cell CA: there the injector holds no
+// credential and lets only a GET or HEAD under the rule's paths, with no
+// body, go out (inspect.go). A registry reached that way is read only.
+//
 // The credential is short-lived, per claim, comes from the cell vault, and
 // never goes back to the VM or through the proxy: responses are masked as
 // they stream, and a request that carries the credential or a bait out is
@@ -59,7 +64,7 @@ type Vault interface {
 
 // Alert kinds.
 const (
-	AlertCredentialExfiltration = "credential_exfiltration"
+	AlertCredentialExfiltration = "credential_exfiltration" //nolint:gosec // G101: an alert kind name, not a credential
 	AlertBaitExfiltration       = "bait_exfiltration"
 )
 
@@ -85,6 +90,9 @@ const (
 type Injector struct {
 	Policies *policy.Store
 	Vault    Vault
+	// Secrets is the org secret store for placeholder secrets (the claim
+	// policy's Secrets); nil refuses a host that has one.
+	Secrets SecretStore
 	// CA signs the leaf the VM sees for each credentialed host; the VM's
 	// image trusts it (installed at bake).
 	CA    *x509.Certificate
@@ -110,6 +118,8 @@ type Injector struct {
 	Alerts  *eventlog.Log[Alert]
 	OnAlert func(Alert)
 	Log     *slog.Logger
+	// Metrics counts swaps and alerts (nil: none).
+	Metrics *Metrics
 	Now     func() time.Time
 
 	once     sync.Once
@@ -145,13 +155,13 @@ func (in *Injector) defaults() {
 
 func (in *Injector) Serve(ctx context.Context, l net.Listener) error {
 	in.defaults()
-	go func() { <-ctx.Done(); l.Close() }()
+	go func() { <-ctx.Done(); _ = l.Close() }()
 	var backoff time.Duration
 	for {
 		c, err := l.Accept()
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil
+				return nil //nolint:nilerr // Accept fails because Serve's context closed the listener: a clean stop
 			}
 			var ne net.Error
 			if errors.As(err, &ne) && ne.Timeout() || isTemporary(err) {
@@ -221,7 +231,7 @@ type connInfo struct {
 }
 
 func (in *Injector) handle(raw net.Conn) {
-	defer raw.Close()
+	defer func() { _ = raw.Close() }()
 	peer := raw.RemoteAddr().String()
 	if !in.trusted(raw) {
 		in.Log.Warn("injector.untrusted_peer", "peer", peer)
@@ -248,14 +258,14 @@ func (in *Injector) handle(raw net.Conn) {
 		MinVersion: tls.VersionTLS12,
 		GetCertificate: func(h *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			n, err := policy.NormalizeHost(h.ServerName)
-			if err != nil || !pol.Injects(n) {
-				return nil, fmt.Errorf("injector: %q has no declared credential", h.ServerName)
+			if err != nil || !pol.Injects(n) && !pol.InspectsFrom(n, src.String()) {
+				return nil, fmt.Errorf("injector: %q has no declared credential and is not inspected", h.ServerName)
 			}
 			host = n
 			return in.leaf(n)
 		},
 	})
-	if err := tc.Handshake(); err != nil {
+	if err := tc.Handshake(); err != nil { //nolint:noctx // bounded by the read deadline above; handle has no context, and Serve's must not cut a handshake short
 		in.Log.Warn("injector.handshake", "claim", pol.ClaimID, "err", err)
 		return
 	}
@@ -347,6 +357,7 @@ func (in *Injector) alert(info connInfo, kind string) {
 	if in.Alerts != nil {
 		in.Alerts.Add(func(seq int64) Alert { a.Seq = seq; return a })
 	}
+	in.Metrics.alert(kind)
 	in.Log.Error("injector.alert", "claim", a.ClaimID, "host", a.Host, "kind", kind)
 	if in.OnAlert != nil {
 		in.OnAlert(a)
@@ -359,11 +370,33 @@ func (in *Injector) proxyWithCredential(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "host does not match the TLS name", http.StatusMisdirectedRequest)
 		return
 	}
+	// The target, before anything else: every path below (inspected,
+	// placeholder secrets, vault credential) sends to upstreamURL only.
+	target, why := upstreamURL(r, info.host)
+	if why != "" {
+		in.refuseTarget(w, info, why)
+		return
+	}
+	rule, inspected := info.pol.Inspects(info.host)
+	if inspected {
+		if why := rule.Permits(r.Method, target, r.ContentLength); why != "" {
+			in.refuseInspected(w, info, why)
+			return
+		}
+	}
+	if inspected && !info.pol.Injects(info.host) {
+		in.proxyInspected(w, r, info)
+		return
+	}
 	release, err := in.acquire(r.Context(), info.pol.ClaimID)
 	if err != nil {
 		return
 	}
 	defer release()
+	if len(info.pol.SecretsFor(info.host)) > 0 {
+		in.proxyWithSecrets(w, r, info)
+		return
+	}
 	cred, err := in.Vault.Credential(r.Context(), info.pol.OrgID, info.pol.ClaimID, info.host)
 	if err != nil || !in.Now().Before(cred.ExpiresAt) {
 		in.Log.Warn("injector.no_credential", "claim", info.pol.ClaimID, "host", info.host, "code", credentialFailureCode(err))
@@ -391,7 +424,7 @@ func (in *Injector) proxyWithCredential(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "refused", http.StatusForbidden)
 		return
 	}
-	out, err := http.NewRequestWithContext(r.Context(), r.Method, "https://"+info.host+r.URL.RequestURI(), bytes.NewReader(body))
+	out, err := newUpstreamRequest(r, target, info.host, bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
@@ -409,7 +442,13 @@ func (in *Injector) proxyWithCredential(w http.ResponseWriter, r *http.Request) 
 		out.Header[k] = vs
 	}
 	out.Header.Set(cred.Header, cred.Value)
-	resp, err := info.upstream.Do(out)
+	in.relay(w, info, out, credentialForms(cred))
+}
+
+// relay sends out to the validated upstream and streams the answer back,
+// with every spelling of secrets masked.
+func (in *Injector) relay(w http.ResponseWriter, info connInfo, out *http.Request, secrets []string) {
+	resp, err := info.upstream.Do(out) //nolint:gosec // G704: same validated host as the request above
 	if err != nil {
 		// The HTTP parser may include raw upstream bytes in err, including a
 		// reflected credential. Log only a fixed code across this boundary.
@@ -417,7 +456,7 @@ func (in *Injector) proxyWithCredential(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "upstream unreachable", http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	// An encoding the transport did not undo (an upstream that compresses
 	// unasked, or br) cannot be masked: refuse it rather than pass it on.
 	if ce := strings.TrimSpace(resp.Header.Get("Content-Encoding")); ce != "" && !strings.EqualFold(ce, "identity") {
@@ -426,7 +465,6 @@ func (in *Injector) proxyWithCredential(w http.ResponseWriter, r *http.Request) 
 	}
 	// Inbound mask: an upstream that echoes the request (S-50) cannot hand
 	// the credential to the VM, in a header or in the body as it streams.
-	secrets := credentialForms(cred)
 	if sensitiveResponseHeaderName(resp.Header, secrets) {
 		in.Log.Warn("injector.response_refused", "claim", info.pol.ClaimID, "host", info.host, "code", "sensitive_header_name")
 		http.Error(w, "upstream response refused", http.StatusBadGateway)

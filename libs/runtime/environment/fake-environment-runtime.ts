@@ -1,6 +1,9 @@
+import { createHash } from 'node:crypto';
+
 import { routeShapeOf } from '@libs/runtime/entry-points/coverage';
-import type { Probe, ProbeResult } from '@libs/runtime/probe';
+import type { Probe } from '@libs/runtime/probe';
 import type { EvidenceRequest } from '@libs/runtime/protocol';
+import { type CellIsolation, isolationSatisfies } from '@libs/runtime/contracts/isolation';
 
 import {
     AcquireRequest,
@@ -14,6 +17,7 @@ import {
     LEASE_TTL_MINUTES,
     StepResult,
 } from './environment-runtime';
+import { isolationUnavailable } from './isolation-blocker';
 
 export interface FakeEnvironment {
     imageId: string;
@@ -22,6 +26,8 @@ export interface FakeEnvironment {
     /** Probe answers by side; a function lets a test vary by round. */
     probes?: Record<string, Partial<Record<'base' | 'pr', (round: number) => Partial<ProbeOutcome>>>>;
     exec?: (command: string) => Partial<StepResult>;
+    /** What the fake cell runs claims under; absent: 'sandboxed-container' (gVisor). */
+    cellIsolation?: CellIsolation;
 }
 
 /** In-memory driver for tests: no cloud, no network, deterministic clock. */
@@ -30,6 +36,10 @@ export class FakeEnvironmentRuntime implements EnvironmentRuntime {
     private readonly byKey = new Map<string, string>();
     private seq = 0;
     readonly resets: string[] = [];
+    /** The round snapshot each reset named (undefined: a compose reset), in the order of resets. */
+    readonly resetRounds: Array<string | undefined> = [];
+    /** The round snapshots taken, by claim. */
+    readonly rounds = new Map<string, string>();
 
     constructor(
         private readonly envs: Record<string, FakeEnvironment>,
@@ -44,6 +54,7 @@ export class FakeEnvironmentRuntime implements EnvironmentRuntime {
         if (!env) {
             return { status: 'blocked', blockers: [{ kind: 'platform', signature: 'unknown-environment', message: req.environmentId }] };
         }
+        if (!isolationSatisfies(env.cellIsolation ?? 'sandboxed-container', req.isolation)) return isolationUnavailable(req.isolation ?? 'any', 'the fake cell');
         if (env.blockers?.length) return { status: 'blocked', blockers: env.blockers };
         if (req.imageId && req.imageId !== env.imageId) {
             return { status: 'blocked', blockers: [{ kind: 'recipe_outdated', signature: 'image-mismatch', message: req.imageId }] };
@@ -104,13 +115,24 @@ export class FakeEnvironmentRuntime implements EnvironmentRuntime {
         return { stepId: req.stepId, exitCode: 0, stdout: '', stderr: '', truncated: false, durationMs: 5, transport: 'ok', ...out };
     }
 
-    async reset(claimId: string): Promise<void | EnvError> {
+    async reset(claimId: string, _imageId?: string, roundSnapshotId?: string): Promise<void | EnvError> {
         if (!this.live(claimId)) return { code: 'lease_expired' };
         this.resets.push(claimId);
+        this.resetRounds.push(roundSnapshotId);
+    }
+
+    /** A round snapshot of a live claim: one id per claim, as a cell that keeps snapshots answers. */
+    async snapshotRound(claimId: string, _stepId: string): Promise<{ id: string; ms: number } | EnvError> {
+        if (!this.live(claimId)) return { code: 'lease_expired' };
+        const id = `ksn-${createHash('sha256').update(claimId).digest('hex').slice(0, 32)}`;
+        this.rounds.set(claimId, id);
+        return { id, ms: 1 };
     }
 
     async release(claimId: string): Promise<void> {
         const c = this.claims.get(claimId);
         if (c) c.released = true;
+        // As a cell does: the claim's round snapshot goes with it.
+        this.rounds.delete(claimId);
     }
 }

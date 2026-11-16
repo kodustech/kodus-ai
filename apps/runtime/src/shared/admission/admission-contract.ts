@@ -1,4 +1,4 @@
-import type { RuntimeEnvironmentSetupRequested } from '@libs/runtime/contracts/runtime-commands';
+import type { ForkApprovalTokens, RuntimeEnvironmentSetupRequested } from '@libs/runtime/contracts/runtime-commands';
 import type { MachineSize } from '@libs/runtime/contracts/machine-size';
 import type { RuntimeRunRequested } from '@libs/runtime/run/run-messages';
 
@@ -152,7 +152,7 @@ export interface AdmissionStore {
     get(ref: AdmissionRef): Promise<AdmissionRecord | null>;
     approveRun(
         ref: AdmissionRef,
-        tokens?: { repoToken: string; prRepoToken?: string; runToken: string },
+        tokens?: ForkApprovalTokens,
         limits?: AdmissionLimits,
     ): Promise<AdmissionTransition>;
     cancel(

@@ -44,7 +44,7 @@ func Variants(secret string) []string {
 		encoded := strings.TrimRight(full, "=")
 		// Characters that also carry bits of the unknown neighbours are
 		// not part of the secret's fixed encoding: drop them at both ends.
-		head := (offset*8 + 5) / 6 // Math.ceil(offset*8/6)
+		head := (offset*8 + 5) / 6 // offset*8/6, rounded up
 		tail := 0
 		if (len(padded)*8)%6 != 0 {
 			tail = 1

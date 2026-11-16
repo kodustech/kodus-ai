@@ -23,11 +23,12 @@ type dirComposer struct {
 	dockerfile string
 }
 
-func (c *dirComposer) Up(_ context.Context, _ driver.MachineRef, file []byte, dir string) ([]string, error) {
+func (c *dirComposer) Up(_ context.Context, req driver.UpRequest) ([]string, error) {
+	file, dir := req.Compose, req.ProjectDir
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.file = file
-	b, _ := os.ReadFile(filepath.Join(dir, ".kodus/Dockerfile.backend"))
+	b, _ := os.ReadFile(filepath.Join(dir, ".kodus", "Dockerfile.backend"))
 	c.dockerfile = string(b)
 	return []string{"172.30.0.2"}, nil
 }
@@ -55,7 +56,7 @@ func TestThePRSideBootsThePRsComposeAndDockerfileUnderKodus(t *testing.T) {
 	})
 	cp := &dirComposer{}
 	h := newHarness(t, func(c *Config) {
-		c.Composer = cp
+		c.Parts.Composer = cp
 		c.Repo = func(protocol.ClaimAcquireBody) (string, error) { return srv + "/tarball", nil }
 	})
 	// The base's workspace file, as the setup recorded it from the default branch.

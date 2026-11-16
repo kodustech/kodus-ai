@@ -15,12 +15,14 @@ import (
 	"io"
 	"math"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"time"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/yamlbound"
 )
 
 // Path is where a checkout carries its recipe.
@@ -34,7 +36,7 @@ const DefaultHealthTimeout = 2 * time.Minute
 // the same value by the recipe contract). A longer health_timeout is read as
 // this one, not refused: a Runo recipe may wait longer on a developer's VM,
 // and boots in a cell all the same.
-const MaxHealthTimeout = 900 * time.Second
+const MaxHealthTimeout = protocol.MaxHealthTimeoutSeconds * time.Second
 
 // Recipe is .kodus/workspace.yaml. Every key of docs §6 is known, so an
 // unknown key is an error. Resource nodes are validated and normalized;
@@ -69,7 +71,11 @@ type Recipe struct {
 type Services struct {
 	Compose Compose       `yaml:"compose"`
 	Expose  []ExposedPort `yaml:"expose"`
-	Needs   yaml.Node     `yaml:"needs"`
+	// DeclaredNeeds is services.needs as written (needs.go).
+	DeclaredNeeds DeclaredNeeds `yaml:"needs"`
+	// Needs is services.needs with every alias set; empty when the recipe
+	// needs no other repository.
+	Needs []Need `yaml:"-"`
 }
 
 // Compose is how the compose project is found and when it counts as up.
@@ -166,6 +172,8 @@ func (s *Seed) UnmarshalYAML(n *yaml.Node) error {
 			return errors.New("data.seed: a mapping needs service and exactly one of sql or command")
 		}
 		return nil
+	case yaml.DocumentNode, yaml.SequenceNode, yaml.AliasNode:
+		// Refused below.
 	}
 	return errors.New("data.seed must be a string or a mapping")
 }
@@ -185,6 +193,8 @@ func (n *Names) UnmarshalYAML(node *yaml.Node) error {
 		}
 		*n = list
 		return nil
+	case yaml.DocumentNode, yaml.MappingNode, yaml.AliasNode:
+		// Refused below.
 	}
 	return errors.New("must be a name or a list of names")
 }
@@ -241,10 +251,17 @@ func refuseServicesMode(b []byte) error {
 		Validate yaml.Node      `yaml:"validate"`
 	}
 	if yaml.Unmarshal(b, &doc) != nil {
-		return nil // the strict decode reports it
+		return nil //nolint:nilerr // the strict decode reports it
 	}
 	if !doc.Validate.IsZero() && validationNode(&doc.Validate).Kind != yaml.SequenceNode {
 		return errors.New("validate must be a list of named checks")
+	}
+	// A null or a mapping never reaches DeclaredNeeds: the decoder calls no
+	// unmarshaler on a null, which would read as no needs at all.
+	if needs, ok := doc.Services["needs"]; ok {
+		if _, list := needs.([]any); !list {
+			return errors.New(needsShape)
+		}
 	}
 	keys := make([]string, 0, len(doc.Services))
 	for k := range doc.Services {
@@ -261,6 +278,11 @@ func refuseServicesMode(b []byte) error {
 
 // Parse decodes and validates a recipe.
 func Parse(b []byte) (*Recipe, error) {
+	// Bounded before any decode (yamlbound): the recipe is the PR's or the
+	// product's, parsed in the cell's own process.
+	if err := yamlbound.Check(b); err != nil {
+		return nil, fmt.Errorf("recipe: %w", err)
+	}
 	if err := refuseServicesMode(b); err != nil {
 		return nil, fmt.Errorf("recipe: %w", err)
 	}
@@ -297,14 +319,21 @@ func (r *Recipe) normalize() error {
 		}
 		c.Files, c.File = []string{c.File}, ""
 	}
+	needs, err := resolveNeeds(r.Services.DeclaredNeeds)
+	if err != nil {
+		return err
+	}
+	r.Services.Needs = needs
 	return nil
 }
 
-// Load reads the checkout's recipe; nil, nil when it has none.
+// Load reads the checkout's recipe; nil, nil when it has none. The path is
+// resolved inside the checkout (os.Root): a recipe the PR links to a file
+// outside it is refused, never read.
 func Load(checkout string) (*Recipe, error) {
-	b, err := os.ReadFile(filepath.Join(checkout, Path))
+	b, err := readInside(checkout, Path)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		return nil, nil //nolint:nilnil // no recipe is not an error: every caller boots the defaults on nil, nil
 	}
 	if err != nil {
 		return nil, err
@@ -364,11 +393,27 @@ func (r *Recipe) Unapplied() []string {
 		node *yaml.Node
 	}{
 		{"flags", &r.Flags},
-		{"llm", &r.LLM}, {"ui", &r.UI},
+		{"llm", &r.LLM},
+		{"ui", &r.UI},
 	} {
 		if !f.node.IsZero() {
 			out = append(out, f.name)
 		}
 	}
 	return append(out, r.legacyUnapplied...)
+}
+
+// readInside reads name with every path step resolved inside dir: a regular
+// file of at most yamlbound.MaxFileBytes.
+func readInside(dir, name string) ([]byte, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	b, err := yamlbound.ReadFile(root, name)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("recipe: %w", err)
+	}
+	return b, err
 }

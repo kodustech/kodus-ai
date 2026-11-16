@@ -8,7 +8,7 @@ import {
     InvalidEvidenceKeyError,
     signEvidenceUrl,
     type SignedEvidenceUrl,
-} from '../../domain/evidence';
+} from '@libs/runtime/contracts/evidence';
 import { presignEvidenceRead } from '@libs/runtime/contracts/evidence-s3';
 import { RUNTIME_API_CONFIG, RUNTIME_CLOCK, type Clock, type RuntimeApiConfig } from '../../domain/ports';
 import { RuntimeRunAccessService } from '../run-access.service';

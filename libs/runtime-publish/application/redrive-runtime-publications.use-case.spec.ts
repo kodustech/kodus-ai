@@ -1,14 +1,14 @@
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { publishKey, type RuntimePublishRequested } from '@libs/runtime/run';
 
-import { InMemoryCommentSlotStore } from '../domain/pull-request-comment-slot';
 import { MAX_REDRIVE_ATTEMPTS, REDRIVE_AFTER_MS } from '../domain/publication-redrive';
-import { InMemoryRunTargetStore } from '../domain/run-target';
-import { InMemoryPublicationStore, type RuntimePublication } from '../domain/runtime-publication';
+import { type RuntimePublication } from '../domain/runtime-publication';
 import type { CodeManagementPort, RedriveMeasurement } from '../domain/runtime-publish.ports';
 import { toPublishRepository } from '../infrastructure/integration-config-repository.resolver';
-import { PublishRuntimeRequestUseCase, type PublishOutcome } from './publish-runtime-request.use-case';
+import type { PublishOutcome } from './publication-outcome';
+import { PublishRuntimeRequestUseCase } from './publish-runtime-request.use-case';
 import { RedriveRuntimePublicationsUseCase } from './redrive-runtime-publications.use-case';
+import { InMemoryCommentSlotStore, InMemoryPublicationStore, InMemoryRunTargetStore } from '../testing';
 
 const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
 jest.mock('@libs/core/log/logger', () => ({ createLogger: () => logger }));

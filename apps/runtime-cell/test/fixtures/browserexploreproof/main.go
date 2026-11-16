@@ -7,12 +7,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/browser"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/redact"
 	"io"
 	"os"
 	"time"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/browser"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/redact"
 )
 
 type evidenceRunner []byte
@@ -21,12 +22,14 @@ func (r evidenceRunner) Run(_ context.Context, _ browser.RunSpec, _ []byte, out 
 	_, err := out.Write(r)
 	return err
 }
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "browser exploration evidence refused")
 		os.Exit(1)
 	}
 }
+
 func run() error {
 	raw, err := io.ReadAll(io.LimitReader(os.Stdin, 750001))
 	if err != nil || len(raw) > 750000 {

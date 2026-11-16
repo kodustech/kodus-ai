@@ -141,7 +141,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ws.SetReadLimit(protocol.MaxFrameBytes)
 	s := &session{cellID: cn, ws: ws, steps: map[string]string{}}
-	defer ws.CloseNow()
+	defer func() { _ = ws.CloseNow() }()
 	ctx := r.Context()
 	for {
 		typ, data, err := ws.Read(ctx)
@@ -335,11 +335,15 @@ func (h *Hub) Send(ctx context.Context, cellID, claimID string, body any) error 
 		s.remember(b.StepID, claimID)
 	case *protocol.MachineResetBody:
 		s.remember(b.StepID, claimID)
+	case *protocol.SandboxOpBody:
+		s.remember(b.StepID, claimID)
+	case *protocol.ClaimSnapshotBody:
+		s.remember(b.StepID, claimID)
 	}
 	created := false
 	h.mu.Lock()
 	switch body.(type) {
-	case *protocol.ClaimAcquireBody:
+	case *protocol.ClaimAcquireBody, *protocol.SandboxAcquireBody:
 		if _, ok := h.claims[claimID]; !ok && claimID != "" {
 			h.claims[claimID] = &claimRecord{cellID: cellID, state: ClaimAcquiring}
 			created = true
@@ -400,7 +404,11 @@ func (h *Hub) WaitReady(ctx context.Context, claimID string) (*protocol.ClaimRea
 	if f, ok := e.Body.(*protocol.ClaimFailedBody); ok {
 		return nil, fmt.Errorf("claim %s failed: %s %s: %s", claimID, f.Kind, f.Signature, f.Reason)
 	}
-	return e.Body.(*protocol.ClaimReadyBody), nil
+	ready, ok := e.Body.(*protocol.ClaimReadyBody)
+	if !ok {
+		return nil, fmt.Errorf("claim %s settled with %T", claimID, e.Body)
+	}
+	return ready, nil
 }
 
 // WaitSettled returns the next claim.ready or claim.failed of the claim.

@@ -10,8 +10,10 @@ import (
 
 func open(t *testing.T, dir string, sync func(*os.File) error) *Catalog {
 	t.Helper()
-	c, err := Open(context.Background(), Config{Dir: dir, Cell: "cell-1", Driver: "test", SyncDir: sync,
-		Valid: func(g Generation) bool { return g.ID != "" && g.Cell == "cell-1" }})
+	c, err := Open(context.Background(), Config{
+		Dir: dir, Cell: "cell-1", Driver: "test", SyncDir: sync,
+		Valid: func(g Generation) bool { return g.ID != "" && g.Cell == "cell-1" },
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,16 +8,16 @@ import { RuntimeMetrics } from '@libs/runtime/telemetry';
 import { shopRunRequest } from '../e2e/fixtures';
 import { createCa } from '../hub/ca/x509';
 import { CellHub, type CellHubOptions } from '../hub/cell-hub';
-import { InMemoryHubStore } from '../hub/hub-store';
-import { InMemoryAdmissionStore } from '../shared/admission/admission-store';
 import type { PhysicalAdmissionTicket } from '../shared/admission/admission-contract';
 import { PROTOCOL_VERSION } from '@libs/runtime/protocol';
 import { randomUUID } from 'crypto';
 import { AdmissionCoordinator } from '../worker/dbos/admission-coordinator';
-import { inMemoryRunDeps } from '../worker/run/in-memory-deps';
+import { inMemoryRunDeps } from '../worker/run/testing';
 import { runRuntimeRun } from '../worker/run/run-orchestrator';
 import { FakeCell } from './fake-cell';
 import { SCENARIOS } from './scenarios';
+import { InMemoryHubStore } from '../hub/testing';
+import { InMemoryAdmissionStore } from '../shared/admission/testing';
 
 // Hub and fake cell talking the real protocol frames, in process: every frame
 // in both directions goes through decodeFrame.

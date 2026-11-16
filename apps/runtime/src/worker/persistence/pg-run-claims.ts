@@ -1,3 +1,4 @@
+import { ORG_EGRESS_SCOPE } from '@libs/runtime/contracts/egress';
 import type { Pool } from 'pg';
 
 import type { HardExpiredClaims } from '../dbos/run-deps.factory';
@@ -31,6 +32,12 @@ export class PgRunClaims implements RunClaims, HardExpiredClaims {
         return r.rows.map((x) => ({ claimId: x.claim_id as string, side: x.side as string, signature: x.signature as string }));
     }
 
+    async hardExpiryOf(organizationId: string, claimId: string) {
+        const r = await this.pool.query(`SELECT hard_expires_at FROM runtime.runtime_claims WHERE claim_id = $1 AND org_id = $2`, [claimId, organizationId]);
+        const at = r.rows[0]?.hard_expires_at as Date | string | undefined;
+        return at === undefined ? undefined : new Date(at).toISOString();
+    }
+
     /** Claims past their hard expiry that nobody released (input of the reaper), oldest first. */
     async hardExpired(now: Date) {
         const r = await this.pool.query(
@@ -41,13 +48,13 @@ export class PgRunClaims implements RunClaims, HardExpiredClaims {
         return r.rows.map((x) => ({ claimId: x.claim_id as string, cellId: x.cell_id as string, orgId: x.org_id as string, runId: (x.run_id as string | null) ?? null }));
     }
 
-    /** The hub replicas that hold a live claim of the environment (where an approved egress host goes). */
+    /** The hub replicas that hold a live claim of the environment (where an approved egress host goes); of any environment for the org list. */
     async replicasOfEnvironment(organizationId: string, environmentId: string): Promise<string[]> {
         const r = await this.pool.query(
             `SELECT DISTINCT s.replica_url FROM runtime.runtime_claims c
                JOIN runtime.runtime_cell_sessions s ON s.cell_id = c.cell_id AND s.disconnected_at IS NULL
-              WHERE c.org_id = $1 AND c.environment_id = $2 AND c.state = 'bound' AND c.hard_expires_at > now()`,
-            [organizationId, environmentId],
+              WHERE c.org_id = $1 AND ($2::text = $3::text OR c.environment_id = $2::text) AND c.state = 'bound' AND c.hard_expires_at > now()`,
+            [organizationId, environmentId, ORG_EGRESS_SCOPE],
         );
         return r.rows.map((x) => x.replica_url as string);
     }

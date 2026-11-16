@@ -11,6 +11,12 @@ import type { CellCredential, HubLog, HubMetrics, IssuedIdentity, PeerCert } fro
 /** Short client certificates (ADR-054). */
 export const CELL_CERT_HOURS = 24;
 
+/** The one answer to a CSR the hub refuses: the parser's reason stays inside. */
+export const INVALID_CSR = 'invalid_csr';
+
+/** A CSR refused inside the token's redemption: thrown so the redemption rolls back. */
+class CsrRefused extends Error {}
+
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 const sameHash = (a: string, b: string) => timingSafeEqual(Buffer.from(hash(a)), Buffer.from(hash(b)));
 
@@ -87,27 +93,40 @@ export class CellIdentityService {
 
     /**
      * Redeems a single-use dashboard token and signs the cell's CSR: CN = the
-     * new cellId, 24 h. The CSR is checked and the certificate signed before the
-     * token is spent; the token and the cell row commit together.
+     * new cellId, 24 h. The token is checked first: the CSR is parsed and
+     * signed only inside the redemption, so nobody without a good token makes
+     * the hub read a CSR or use the CA key. A CSR that does not parse throws
+     * out of the redemption, which rolls back and keeps the token; the token
+     * and the cell row commit together. The caller learns only that the CSR
+     * was refused, never the parser's words.
      */
-    async register(token: string, topology: string, csrPem: string): Promise<IssuedIdentity | { ok: false; reason: string }> {
+    async register(token: string, topology: string | undefined, csrPem: string): Promise<IssuedIdentity | { ok: false; reason: string }> {
         const cellId = `cell-${randomUUID()}`;
-        let cert: IssuedCert;
+        let cert: IssuedCert | undefined;
+        let r: Awaited<ReturnType<CellRegistryRepository['redeemAndRegister']>>;
         try {
-            cert = this.issue(cellId, csrPem);
+            r = await this.registry.redeemAndRegister(token, topology, (redeemed) => {
+                try {
+                    cert = this.issue(cellId, csrPem);
+                } catch {
+                    throw new CsrRefused();
+                }
+                return {
+                    cellId,
+                    organizationId: redeemed.organizationId,
+                    owner: 'customer',
+                    topology: redeemed.topology,
+                    status: 'disconnected',
+                    certificateSerial: cert.serial,
+                    certificateExpiresAt: cert.notAfter.toISOString(),
+                };
+            });
         } catch (e) {
-            return { ok: false, reason: (e as Error).message };
+            if (e instanceof CsrRefused) return { ok: false, reason: INVALID_CSR };
+            throw e;
         }
-        const r = await this.registry.redeemAndRegister(token, topology, (redeemed) => ({
-            cellId,
-            organizationId: redeemed.organizationId,
-            owner: 'customer',
-            topology: redeemed.topology,
-            status: 'disconnected',
-            certificateSerial: cert.serial,
-            certificateExpiresAt: cert.notAfter.toISOString(),
-        }));
         if (r.ok === false) return { ok: false, reason: r.reason };
+        if (!cert) return { ok: false, reason: INVALID_CSR };
         this.pinnedSerialByCell.set(cellId, cert.serial);
         this.log('info', 'cell.registered', { cellId, orgId: r.organizationId, topology: r.topology });
         return { ok: true, cellId, certificate: cert.certPem, caCertificate: this.ca.certPem, expiresAt: cert.notAfter.toISOString(), serial: cert.serial };
@@ -118,8 +137,8 @@ export class CellIdentityService {
         let cert: IssuedCert;
         try {
             cert = this.issue(cred.cellId, csrPem);
-        } catch (e) {
-            return { ok: false, reason: (e as Error).message };
+        } catch {
+            return { ok: false, reason: INVALID_CSR };
         }
         if (!(await this.registry.pinCertificate(cred.cellId, cert.serial, cert.notAfter.toISOString()))) return { ok: false, reason: 'revoked' };
         this.pinnedSerialByCell.set(cred.cellId, cert.serial);

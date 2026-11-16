@@ -54,7 +54,7 @@ func newBaoReader(t *testing.T, cfg OpenBaoReaderConfig) *OpenBaoReader {
 
 func TestOpenBaoReadsExactVersionOverTLS(t *testing.T) {
 	_, cfg := baoServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.RequestURI() != "/v1/runtime-kv/data/runtime/org-a/env-a/payments?version=3" || r.Header.Get("X-Vault-Token") != "synthetic-access-token" || r.Header.Get("X-Vault-Request") != "true" {
+		if r.Method != http.MethodGet || r.URL.RequestURI() != "/v1/runtime-kv/data/runtime/org-a/env-a/payments?version=3" || r.Header.Get("X-Vault-Token") != "synthetic-access-token" || r.Header.Get("X-Vault-Request") != "true" {
 			t.Error("incorrect pinned read or authentication")
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -282,7 +282,7 @@ func TestOpenBaoRejectsIdentityErrorsAndUnsafeTokens(t *testing.T) {
 	}
 	_, cfg := baoServer(t, func(http.ResponseWriter, *http.Request) { t.Error("failed identity reached backend") })
 	cfg.Token = func(context.Context) (string, error) { return "", errors.New("synthetic-sensitive-error") }
-	if _, err := newBaoReader(t, cfg).ReadVersion(context.Background(), baoRef()); err != ErrVaultUnavailable {
+	if _, err := newBaoReader(t, cfg).ReadVersion(context.Background(), baoRef()); err != ErrVaultUnavailable { //nolint:errorlint // identity is the assertion: the token error must not be wrapped into the result
 		t.Fatal("identity error escaped")
 	}
 }

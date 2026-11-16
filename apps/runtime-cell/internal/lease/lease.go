@@ -188,12 +188,10 @@ func (m *Manager) Sweep(ctx context.Context) (destroyed int, err error) {
 	var errs []error
 	for _, ref := range refs {
 		reason := ""
-		expires := driver.ParseExpiry(ref.Tags, driver.TagExpires)
-		hard := driver.ParseExpiry(ref.Tags, driver.TagHardExpires)
 		switch {
-		case !now.Before(hard):
+		case driver.Expired(ref.Tags, now):
 			reason = "hard-expires passed"
-		case !now.Before(expires):
+		case driver.LeaseLapsed(ref.Tags, now):
 			reason = "expires passed"
 		case ref.Tags[driver.TagRole] != string(driver.RolePool) && !m.HasLiveLease(ref.Tags[driver.TagClaim]):
 			reason = "no live lease"
@@ -272,7 +270,7 @@ func (m *Manager) DestroyExpired(ctx context.Context) (int, error) {
 	n := 0
 	var errs []error
 	for _, ref := range refs {
-		if now.Before(driver.ParseExpiry(ref.Tags, driver.TagExpires)) && now.Before(driver.ParseExpiry(ref.Tags, driver.TagHardExpires)) {
+		if !driver.Expired(ref.Tags, now) && !driver.LeaseLapsed(ref.Tags, now) {
 			continue
 		}
 		if err := m.drv.Destroy(ctx, ref); err != nil {

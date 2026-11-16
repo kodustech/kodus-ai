@@ -59,10 +59,34 @@ type ClaimPolicy struct {
 	// ImagePins are the Docker Hub images the checkout's Dockerfiles name
 	// (repo:tag or repo@digest), sorted: the claim's whole image allowlist at
 	// the mirror.
-	ImagePins []string  `json:"imagePins,omitempty"`
-	Phase     Phase     `json:"phase"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	IssuedAt  time.Time `json:"issuedAt"`
+	ImagePins []string `json:"imagePins,omitempty"`
+	// Secrets are the org secrets the machines hold as placeholders; their
+	// hosts are on CredentialHosts (secrets.go).
+	Secrets []Secret `json:"secrets,omitempty"`
+	// Inspected are the hosts of the inspected tier (inspect.go): over
+	// plain HTTP the proxy checks each request, over TLS the injector does
+	// for the sources on InspectSources. Empty on a policy without them, so
+	// its bytes are what a cell before the tier signed.
+	Inspected []InspectRule `json:"inspected,omitempty"`
+	// InspectSources are the claim's sources whose machines trust the cell
+	// CA (the claim's own boot mounted it, or the driver gave it to its image
+	// builder's RUN steps). From any other source (a builder without it, a
+	// blank pool sandbox) TLS to an inspected host stays SNI passthrough: the
+	// cell cannot end TLS a client would refuse.
+	InspectSources []string `json:"inspectSources,omitempty"`
+	// BuildSources are the image builder's addresses (the driver's own,
+	// docker-gvisor's Network.Sources). From them only the hosts on
+	// BuildPassthrough leave over TLS uninspected (read-only CDNs, and what an
+	// owner gave full access); plain HTTP leaves only to a host with an
+	// inspected rule, which the proxy checks, or on BuildPassthrough. A
+	// builder whose RUN steps trust the cell CA is an inspect source too: its
+	// TLS to an inspected host or a secret's goes through the injector. G1:
+	// a Dockerfile RUN npm publish is refused either way (build.go).
+	BuildSources     []string  `json:"buildSources,omitempty"`
+	BuildPassthrough []string  `json:"buildPassthrough,omitempty"`
+	Phase            Phase     `json:"phase"`
+	ExpiresAt        time.Time `json:"expiresAt"`
+	IssuedAt         time.Time `json:"issuedAt"`
 }
 
 // PinsImage reports whether the claim may pull repo at ref from the mirror:
@@ -104,7 +128,7 @@ func NormalizeHost(h string) (string, error) {
 			return "", fmt.Errorf("policy: bad label in %q", h)
 		}
 		for _, r := range label {
-			if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' && r != '_' {
 				return "", fmt.Errorf("policy: bad character in %q", h)
 			}
 		}
@@ -149,8 +173,22 @@ type Spec struct {
 	SteerTo     string
 	GoPins      []string
 	ImagePins   []string
-	ExpiresAt   time.Time
-	IssuedAt    time.Time
+	// Secrets are the claim's placeholder secrets; their hosts join the
+	// allowlist and CredentialHosts unless denied.
+	Secrets []Secret
+	// Inspect are the inspected tier's rules the cell knows (the Kodus
+	// recommended list, approvals made as inspected); only the ones whose
+	// host ends on the allowlist are signed. InspectSources are the sources
+	// that trust the cell CA.
+	Inspect        []InspectRule
+	InspectSources []string
+	// BuildSources and BuildPassthrough: the image builder's addresses and
+	// the hosts it may still reach uninspected (build.go). BuildTrusted: its
+	// RUN steps trust the cell CA, so its sources are inspect sources too.
+	BuildSources, BuildPassthrough []string
+	BuildTrusted                   bool
+	ExpiresAt                      time.Time
+	IssuedAt                       time.Time
 }
 
 // Build is the claim's policy, least privilege: a host Denied refuses never
@@ -186,6 +224,15 @@ func Build(spec Spec, denied func(host string) bool) (ClaimPolicy, []string, err
 	if len(spec.ImagePins) > 0 {
 		p.ImagePins = slices.Compact(slices.Sorted(slices.Values(spec.ImagePins)))
 	}
+	secretsRefused, err := withSecrets(&p, spec.Secrets, denied)
+	if err != nil {
+		return ClaimPolicy{}, nil, err
+	}
+	refused = append(refused, secretsRefused...)
+	if err := withInspected(&p, spec.Inspect, spec.InspectSources); err != nil {
+		return ClaimPolicy{}, nil, err
+	}
+	withBuild(&p, spec.BuildSources, spec.BuildPassthrough, spec.BuildTrusted)
 	if err := p.validate(); err != nil {
 		return ClaimPolicy{}, nil, err
 	}
@@ -242,7 +289,13 @@ func (p ClaimPolicy) validate() error {
 			return fmt.Errorf("policy: host %q not normalized", h)
 		}
 	}
-	return nil
+	if err := p.validateBuild(); err != nil {
+		return err
+	}
+	if err := p.validateInspected(); err != nil {
+		return err
+	}
+	return p.validateSecrets()
 }
 
 func Sign(key ed25519.PrivateKey, p ClaimPolicy) (Signed, error) {
@@ -374,8 +427,8 @@ func (s *Store) Sweep() []string {
 	defer s.mu.Unlock()
 	now := s.now()
 	var gone []string
-	for id, p := range s.byClaim {
-		if !now.Before(p.ExpiresAt) {
+	for id := range s.byClaim {
+		if !now.Before(s.byClaim[id].ExpiresAt) {
 			s.dropLocked(id)
 			gone = append(gone, id)
 		}

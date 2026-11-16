@@ -5,7 +5,8 @@ import { SpanStatusCode } from '@opentelemetry/api';
 import { BROWSER_ROUND_GRACE_MS } from '@libs/runtime/contracts/evidence';
 import type { EnvError, ExecRequest, ProbeOutcome, StepResult } from '@libs/runtime/environment';
 import type { Probe } from '@libs/runtime/probe';
-import { type Envelope, type EvidenceRequest, evidenceRequestFor, type MessageBody } from '@libs/runtime/protocol';
+import { type Envelope, type EvidenceRequest, evidenceRequestFor, type MessageBody, type SandboxOp, type SandboxResult, type SnapshotPurpose } from '@libs/runtime/protocol';
+import { redactPatterns } from '@libs/runtime/redaction';
 import type { RunStreamEvent } from '@libs/runtime/run';
 import type { RuntimeMetrics } from '@libs/runtime/telemetry';
 
@@ -26,13 +27,13 @@ import type { ClaimService } from './claim.service';
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 
-type StepKind = 'probe.run' | 'exec' | 'machine.reset' | 'browser.explore';
+type StepKind = 'probe.run' | 'exec' | 'machine.reset' | 'browser.explore' | 'sandbox.op' | 'claim.snapshot';
 // Known cell admission failures only. A customer's arbitrary nack code is not
 // diagnostic data and must not reach a stream, span or structured log.
 const STEP_REFUSALS = new Set([
     'unknown_claim', 'claim_compromised', 'diagnostic_hold', 'not_accepting',
     'step_conflict', 'step_capacity', 'browser_explore_unavailable', 'invalid_body',
-    'exploration_scope', 'invalid_envelope', 'not_implemented', 'unexpected_type',
+    'exploration_scope', 'invalid_envelope', 'not_implemented', 'unexpected_type', 'not_supported',
 ]);
 
 export class StepDispatcher {
@@ -49,12 +50,23 @@ export class StepDispatcher {
         private readonly sessionOf?: (cellId: string) => Promise<{ features?: readonly string[]; sessionEpoch?: string; driver?: string; isolation?: string } | null>,
     ) {}
 
+    /** The cell's session; a read that fails is logged and answers as no session, so each caller refuses the feature or sends no evidence. */
+    private async sessionFor(cellId: string, purpose: 'evidence' | 'browser_explore' | 'workspace' | 'workload_exec') {
+        if (!this.sessionOf) return null;
+        try {
+            return await this.sessionOf(cellId);
+        } catch (e) {
+            this.log('warn', 'step.session_unreadable', { cellId, purpose, error: (e as Error).message });
+            return null;
+        }
+    }
+
     /** The evidence request as this claim's cell can read it; undefined: send none. */
     private async evidenceFor(ref: ClaimRef, req: EvidenceRequest | undefined): Promise<EvidenceRequest | undefined> {
         if (!req || !this.sessionOf) return undefined;
         const claim = await this.claims.findActiveClaim(ref, { allowHeld: true });
         if (!claim) return undefined;
-        const session = await this.sessionOf(claim.cellId).catch(() => null);
+        const session = await this.sessionFor(claim.cellId, 'evidence');
         return evidenceRequestFor(session?.features, req);
     }
 
@@ -234,7 +246,7 @@ export class StepDispatcher {
         if (claim.side !== 'base' || !parsed.success) return unavailable();
         const connection = this.connections.get(claim.cellId);
         if (!connection) return { code: 'cell_unavailable', cellId: claim.cellId };
-        const session = await this.sessionOf?.(claim.cellId).catch(() => null);
+        const session = await this.sessionFor(claim.cellId, 'browser_explore');
         if (!this.connections.isCurrent(connection) || !connection.helloDone || connection.closed) return { code: 'cell_unavailable', cellId: claim.cellId };
         if (session?.sessionEpoch !== connection.sessionEpoch || !session.features?.includes('browserExplore')) return unavailable();
         const result = await this.sendStep(ref, 'browser.explore', { stepId, request: parsed.data }, JSON.stringify({ kind: 'browser.explore', request: parsed.data }), parsed.data.timeoutMs + BROWSER_EXPLORE_LIMITS.runnerGraceMs + 10_000, connection);
@@ -242,6 +254,14 @@ export class StepDispatcher {
         if (result.body.executor !== 'observer' || result.body.exec || result.body.probe) return unavailable();
         const body = BrowserExploreResultSchema.safeParse(result.body.browserExploration);
         return body.success ? body.data : unavailable();
+    }
+
+    /** Whether the cell of the claim names workspace (exec.repository). */
+    private async namesWorkspace(ref: ClaimRef): Promise<boolean> {
+        const claim = await this.claims.findActiveClaim(ref, { allowHeld: true });
+        if (!claim || !this.sessionOf) return false;
+        const session = await this.sessionFor(claim.cellId, 'workspace');
+        return !!session?.features?.includes('workspace');
     }
 
     async exec(ref: ClaimRef, req: ExecRequest): Promise<StepResult | EnvError> {
@@ -252,7 +272,7 @@ export class StepDispatcher {
             if (!claim) return { code: 'lease_expired' };
             const connection = this.connections.get(claim.cellId);
             if (!connection) return { code: 'cell_unavailable', cellId: claim.cellId };
-            const session = await this.sessionOf?.(claim.cellId).catch(() => null);
+            const session = await this.sessionFor(claim.cellId, 'workload_exec');
             if (
                 !this.connections.isCurrent(connection) ||
                 connection.closed ||
@@ -265,11 +285,15 @@ export class StepDispatcher {
                 return { code: 'workload_exec_unavailable' };
             expectedConnection = connection;
         }
+        if (req.repository && !(await this.namesWorkspace(ref))) {
+            // A cell that cannot read it would run the command on the claim's own repository's code.
+            return { code: 'workload_exec_unavailable' };
+        }
         const ev = await this.evidenceFor(ref, req.evidence);
         const r = await this.sendStep(
             ref,
             'exec',
-            { stepId: req.stepId, command: req.command, cwd: req.cwd, timeoutMs: req.timeoutMs, ...(ev ? { evidence: ev } : {}) },
+            { stepId: req.stepId, command: req.command, cwd: req.cwd, timeoutMs: req.timeoutMs, ...(ev ? { evidence: ev } : {}), ...(req.repository ? { repository: req.repository } : {}) },
             req.command,
             req.timeoutMs + 10_000,
             expectedConnection,
@@ -290,10 +314,68 @@ export class StepDispatcher {
         };
     }
 
-    /** machine.reset; durationMs is how long the cell says the reset took (down, up, migrate, seed, ready). */
+    /**
+     * One operation on a sandbox claim (docs/runtime/sandbox.md): sandbox.op
+     * to the cell, which relays it to the guest agent in the machine. Only a
+     * claim of consumer sandbox takes it. Every op is audited per org
+     * (runtime_sandbox_audit), whatever its outcome: the op, the command
+     * redacted or the path, never output, content or env.
+     */
+    async sandboxOp(ref: ClaimRef, stepId: string, op: SandboxOp): Promise<SandboxResult | EnvError> {
+        const claim = await this.claims.findActiveClaim(ref);
+        if (!claim) return { code: 'lease_expired' };
+        if (claim.consumer !== 'sandbox') return { code: 'workload_exec_unavailable' };
+        const startedAt = Date.now();
+        const wait = (op.timeoutMs ?? 60_000) + 30_000;
+        // The step's identity is what it runs, never the content it writes or the env it carries.
+        const identity = JSON.stringify({ op: op.op, path: op.path, command: op.command, cwd: op.cwd, offset: op.offset, length: op.length, append: op.append });
+        const r = await this.sendStep(ref, 'sandbox.op', { stepId, op }, identity, wait);
+        const result = 'code' in r ? r : r.body.sandbox ?? (r.body.vmHealth === 'ok' ? { code: 'transport_lost' as const, stepId } : { code: 'vm_unhealthy' as const, stepId, vmHealth: r.body.vmHealth });
+        const failed = 'code' in result;
+        const bytes = failed ? undefined : result.written ?? (result.content !== undefined ? Math.floor((result.content.length * 3) / 4) : undefined);
+        await this.steps
+            .recordSandboxAudit({
+                orgId: claim.orgId,
+                claimId: claim.claimId,
+                cellId: claim.cellId,
+                stepId,
+                op: op.op,
+                ...(op.command ? { command: redactPatterns(op.command).text } : {}),
+                ...(op.path ? { path: op.path } : {}),
+                outcome: failed ? 'failed' : result.ok ? 'ok' : 'refused',
+                ...(failed ? { detail: result.code } : !result.ok && result.error ? { detail: result.error.code } : {}),
+                ...(!failed && result.exec ? { exitCode: result.exec.exitCode } : {}),
+                ...(bytes !== undefined ? { bytes } : {}),
+                durationMs: Date.now() - startedAt,
+                at: new Date().toISOString(),
+            })
+            .catch((e: unknown) => this.log('error', 'sandbox.audit_unrecorded', { claimId: claim.claimId, cellId: claim.cellId, stepId, error: (e as Error).message }));
+        return result;
+    }
 
-    async reset(ref: ClaimRef, imageId: string, stepId: string = randomUUID()): Promise<{ ok: true; durationMs?: number } | EnvError> {
-        const r = await this.sendStep(ref, 'machine.reset', { stepId, snapshot: { kind: 'compose_volumes', ref: `${imageId}:seed` } }, `reset:${imageId}`, 120_000);
+    /**
+     * claim.snapshot (feature snapshots, docs/runtime/isolation-p3-snapshots.md):
+     * the claim's workload kept as a memory snapshot. The cell's own rules
+     * decide what may become one; a refusal comes back as a nack or a result
+     * with no snapshot.
+     */
+    async snapshot(ref: ClaimRef, stepId: string, purpose: SnapshotPurpose): Promise<{ id: string; purpose: SnapshotPurpose; ms: number; cellId: string } | EnvError> {
+        const r = await this.sendStep(ref, 'claim.snapshot', { stepId, purpose }, `snapshot:${purpose}`, 10 * 60_000);
+        if ('code' in r) return r;
+        const s = r.body.snapshot;
+        if (!s || s.purpose !== purpose || r.body.executor !== 'vm') return { code: 'transport_lost', stepId };
+        // cellId: the only cell that holds it (a snapshot never leaves its cell); the worker prefers it for a restore.
+        return { id: s.id, purpose: s.purpose, ms: s.ms, cellId: r.cellId };
+    }
+
+    /**
+     * machine.reset; durationMs is how long the cell says the reset took (down, up, migrate, seed, ready).
+     * With roundSnapshotId the claim's machine comes back from its round snapshot instead (kind memory).
+     * timeoutMs: how long the cell may take (the Run sizes it by the recipe's health wait).
+     */
+    async reset(ref: ClaimRef, imageId: string, stepId: string = randomUUID(), roundSnapshotId?: string, timeoutMs: number = 120_000): Promise<{ ok: true; durationMs?: number } | EnvError> {
+        const snapshot = roundSnapshotId ? { kind: 'memory' as const, ref: roundSnapshotId } : { kind: 'compose_volumes' as const, ref: `${imageId}:seed` };
+        const r = await this.sendStep(ref, 'machine.reset', { stepId, snapshot }, roundSnapshotId ? `reset:memory:${roundSnapshotId}` : `reset:${imageId}`, timeoutMs);
         if ('code' in r) return r;
         // A failed reset supplies no clean starting state. It is infrastructure
         // uncertainty, never proof that this PR destabilized its workload.

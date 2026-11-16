@@ -26,7 +26,7 @@ const (
 	maxFingerprintBytes = 4 << 30
 )
 
-// ErrNone: the build cannot be fingerprinted (too large, unreadable).
+// ErrNone means the build cannot be fingerprinted (too large, unreadable).
 var ErrNone = errors.New("buildfingerprint: build has no fingerprint")
 
 // fingerprintVersion changes whenever what the fingerprint covers does, so
@@ -34,7 +34,7 @@ var ErrNone = errors.New("buildfingerprint: build has no fingerprint")
 // the entries the context's ignore file leaves out are not covered.
 const fingerprintVersion = "kodus-build-v2"
 
-// fingerprint is what a build's result depends on, as far as the cell can
+// Of fingerprints what a build's result depends on, as far as the cell can
 // see it: every entry of the context BuildKit sends (path, type, mode, and
 // content or link target), the Dockerfile and ignore file, the Dockerfile
 // name, the target, the args and the builder image.
@@ -96,7 +96,7 @@ func Of(b sandbox.Build, builderImage string) (string, error) {
 		if errors.Is(err, ErrNone) {
 			return "", err
 		}
-		return "", fmt.Errorf("%w: %v", ErrNone, err)
+		return "", fmt.Errorf("%w: %v", ErrNone, err) //nolint:errorlint // ErrNone is the contract; the walk's cause is detail, not something callers match
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
@@ -139,7 +139,7 @@ func fileSum(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err
@@ -151,13 +151,13 @@ func fileSum(path string) (string, error) {
 // without blocking, and refuses anything but a regular file: a FIFO or
 // device planted in the PR cannot hang the cell.
 func openRegular(path string) (*os.File, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0) //nolint:gosec // G304: path comes from the walk of the checkout, O_NOFOLLOW refuses a link and the result must be a regular file
 	if err != nil {
 		return nil, err
 	}
 	// Swapped for something else between the walk and the open: refuse.
 	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() {
-		f.Close()
+		_ = f.Close()
 		return nil, fmt.Errorf("%s is not a regular file", path)
 	}
 	return f, nil

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/checkoutfs"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
@@ -63,7 +64,8 @@ const seedScript = `n=0; until pg_isready -q -h 127.0.0.1 -U "$1" -d "$2"; do n=
 // (each carried this cell's label then). Each command's output goes to the
 // boot's output (claim.progress) and its time to the boot's seed phase. A
 // failed step is a driver.RecipeStepError naming it.
-func (d *Driver) RunRecipe(ctx context.Context, ref driver.MachineRef, projectDir string) error {
+func (d *Driver) RunRecipe(ctx context.Context, ref driver.MachineRef, projectDir string, output func(line string)) error {
+	ctx = dockercli.WithOutput(ctx, output) // the steps' docker commands tee to it too
 	rec, err := recipe.Load(projectDir)
 	if err != nil {
 		return driver.WorkloadRecipeRefused(fmt.Errorf("dockergvisor: %w", err))
@@ -168,7 +170,7 @@ func (d *Driver) runStep(ctx context.Context, at *execTarget, step, field, comma
 
 // say gives a line to the boot's output, when the caller asked for it.
 func say(ctx context.Context, line string) {
-	if sink := driver.OutputFrom(ctx); sink != nil {
+	if sink := dockercli.OutputFrom(ctx); sink != nil {
 		sink(line)
 	}
 }

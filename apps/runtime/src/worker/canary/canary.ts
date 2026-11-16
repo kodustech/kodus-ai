@@ -9,7 +9,7 @@ import type { LlmGateway, LlmRequest, LlmResponse } from '../agent/llm-gateway';
 
 export { HmacCanaryVault, containsCanary } from '@libs/runtime/canary';
 export type { Canary, CanarySlot, CanaryVault, LeakSite } from '@libs/runtime/canary';
-import { HmacCanaryVault, containsCanary, type Canary, type CanaryVault, type LeakSite } from '@libs/runtime/canary';
+import { containsCanary, type Canary, type CanaryVault, type LeakSite } from '@libs/runtime/canary';
 
 /** A canary crossed a boundary. The message names where, never the value. */
 export class CanaryLeakError extends Error {

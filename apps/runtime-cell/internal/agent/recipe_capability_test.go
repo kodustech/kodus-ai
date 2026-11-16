@@ -48,7 +48,7 @@ func TestHelloNegotiatesOnlyConfiguredRecipeExecution(t *testing.T) {
 			h := newHarness(t, func(cfg *Config) {
 				cfg.FakeSupport = tc.fakes
 				if tc.sql {
-					cfg.SQLObservers = &lifecycleSQLProvider{}
+					cfg.Parts.SQLObservers = &lifecycleSQLProvider{}
 				}
 			})
 			hello := h.a.Hello()

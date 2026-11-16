@@ -17,11 +17,12 @@ func registerVaultOptions(fs *flag.FlagSet) *vaultOptions {
 	fs.StringVar(&options.adminSocket, "vault-admin-socket", "", "optional owner-local Unix management socket in an existing private 0700 directory")
 	return options
 }
+
 func (options *vaultOptions) open(ctx context.Context, claims injector.ClaimAuthorizer) (injector.ManagedVault, error) {
 	if options.adminSocket != "" && (options.directory == "" || options.keyFile == "" || options.cellID == "") {
 		return nil, injector.ErrVaultConfig
 	}
 	// The verified policy store authorizes claim scope; owner provisioning is
 	// a separate boundary. Flags never authorize a claim by themselves.
-	return injector.OpenConfiguredVault(injector.VaultConfig{Directory: options.directory, KeyFile: options.keyFile, CellID: options.cellID, Context: ctx, Claims: claims})
+	return injector.OpenConfiguredVault(injector.VaultConfig{Directory: options.directory, KeyFile: options.keyFile, CellID: options.cellID, Context: ctx, Claims: claims}) //nolint:contextcheck // ctx goes in VaultConfig.Context
 }

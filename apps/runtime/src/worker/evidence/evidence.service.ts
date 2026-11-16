@@ -59,7 +59,7 @@ export class RuntimeEvidenceService implements OnModuleInit, OnApplicationShutdo
                 .then((n) => n && this.logger.log(`evidence retention: ${n} object(s) past 30 days removed`))
                 .catch((e) => this.logger.warn({ msg: 'evidence.sweep_failed', error: safeFailure(e) }));
         void sweep();
-        this.sweeper = setInterval(sweep, 3_600_000);
+        this.sweeper = setInterval(() => void sweep(), 3_600_000);
         this.sweeper.unref?.();
         if (!this.config.port || !this.config.secret) {
             this.logger.warn('evidence server off: RUNTIME_EVIDENCE_PORT and RUNTIME_EVIDENCE_SIGNING_SECRET are both needed');

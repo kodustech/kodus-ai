@@ -1,8 +1,10 @@
 import { readFileSync } from 'fs';
 
+import type { PastPlans } from '../run/plan-reuse';
+
 import type { Claim, EnvironmentRuntime } from '@libs/runtime/environment';
 import type { RepoRef } from '@libs/runtime/protocol';
-import type { RunProjectionStore, RuntimeRunRequested } from '@libs/runtime/run';
+import { type ClaimWorkspace, memberPullRequestAliasOf, type RunProjectionStore, runClaimWorkspace, type RuntimeRunRequested } from '@libs/runtime/run';
 import type { RuntimeMetrics } from '@libs/runtime/telemetry';
 
 import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
@@ -14,6 +16,7 @@ import { RuntimeAgent } from '../agent/runtime-agent';
 import { CanaryGuardedLlmGateway, CanaryVault, HmacCanaryVault, isCanaryLeak } from '../canary/canary';
 import shopTurns from '../agent/fixtures/shop-orders.json';
 import { HubClient, HubEnvironmentClient } from '../env/hub-environment-runtime';
+import { resetTimeoutMs } from '../env/ready-check';
 import { IntentClassifier } from '../intent/intent-classifier';
 import { ClaimLeaseKeeper, type LeaseEvent, type LeaseKeeperOptions } from '../run/lease-keeper';
 import type { ClaimReleaser, PublishRequester, RunClaims, RunDeps, RunEventSink, RunLog } from '../run/ports';
@@ -38,6 +41,8 @@ export interface HardExpiredClaims {
 }
 
 export interface RunDependenciesOptions {
+    /** Earlier Runs' accepted plans, for a Run of the same head (run/plan-reuse.ts). */
+    pastPlans?: PastPlans;
     /** The EnvironmentRuntime of a Run or a setup: the hub client in production, a fake in tests. */
     environment: (ctx: EnvironmentContext) => EnvironmentRuntime;
     /** Explicit development/test fake path only; production environments must implement claim renewal. */
@@ -63,6 +68,8 @@ export interface RunDependenciesOptions {
     onLeaseEvent?: (runId: string, e: LeaseEvent) => void;
     /** Each Run's phase lines and its run.finished line (ids and numbers only). */
     log?: RunLog;
+    /** RunDeps.roundSnapshots (RUNTIME_ROUND_SNAPSHOTS). */
+    roundSnapshots?: boolean;
 }
 
 /** What an environment client is built for: one Run, or one setup (no Run). */
@@ -79,6 +86,12 @@ export interface EnvironmentContext {
     tokenBinding: string;
     imageId: string;
     expose: Claim['manifest']['expose'];
+    /** The repositories of a multi-repository environment, tokens sealed; absent for one repository. */
+    workspace?: ClaimWorkspace;
+    /** A Run whose PR is in a member repository: the alias its commands run on (exec.repository). */
+    execRepository?: string;
+    /** How long a round's machine.reset may take: the recipe's health wait, never under the default. */
+    resetTimeoutMs?: number;
 }
 
 /**
@@ -111,6 +124,9 @@ export function hubEnvironments(
             tokenBinding: ctx.tokenBinding,
             imageId: ctx.imageId,
             expose: ctx.expose,
+            ...(ctx.workspace ? { workspace: ctx.workspace } : {}),
+            ...(ctx.resetTimeoutMs ? { resetTimeoutMs: ctx.resetTimeoutMs } : {}),
+            ...(ctx.execRepository ? { execRepository: ctx.execRepository } : {}),
             ...(ctx.admissionTicket ? { admissionTicket: ctx.admissionTicket } : {}),
             ...(preferCell ? { preferCell } : {}),
         });
@@ -144,21 +160,29 @@ export class RunDependenciesFactory implements RunDepsFactory {
             ...(this.deps.evidenceUploads ? { evidenceUploads: this.deps.evidenceUploads } : {}),
             ...(this.deps.onReleaseFailed ? { onReleaseFailed: this.deps.onReleaseFailed } : {}),
             ...(this.deps.log ? { log: this.deps.log } : {}),
+            ...(this.deps.roundSnapshots ? { roundSnapshots: true } : {}),
+            ...(this.deps.pastPlans ? { pastPlans: this.deps.pastPlans } : {}),
         };
     }
 
     forRun(req: RuntimeRunRequested, ticket?: PhysicalAdmissionTicket) {
+        // A multi-repository Run's claims are of the primary, which is not the PR's repository when the PR is in another one.
+        const workspace = runClaimWorkspace(req);
+        const execRepository = memberPullRequestAliasOf(req);
         const env = this.deps.environment({
             ...(ticket ? { admissionTicket: ticket } : {}),
             correlationId: req.correlationId,
             organizationId: req.organizationId,
             runId: req.runId,
-            fullName: req.repository.fullName ?? req.repository.name,
+            fullName: workspace?.primary.fullName ?? req.repository.fullName ?? req.repository.name,
             sealedRepoToken: req.repoToken,
             ...(req.prRepoToken ? { sealedPrRepoToken: req.prRepoToken } : {}),
             tokenBinding: req.runId,
             imageId: req.environment.imageId,
             expose: req.environment.expose,
+            ...(workspace ? { workspace } : {}),
+            ...(execRepository ? { execRepository } : {}),
+            resetTimeoutMs: resetTimeoutMs(req.environment.ready),
         });
         this.requireRenewal(env);
         const renew = env.renew?.bind(env);
@@ -193,7 +217,7 @@ export class RunDependenciesFactory implements RunDepsFactory {
     }
 
     /** The environment of a setup (no Run): same hub client and Git config as a Run's. */
-    envForSetup(input: { correlationId: string; organizationId: string; setupKey: string; fullName: string; sealedRepoToken: string; imageId: string; expose: Claim['manifest']['expose']; admissionTicket?: PhysicalAdmissionTicket }): EnvironmentRuntime {
+    envForSetup(input: { correlationId: string; organizationId: string; setupKey: string; fullName: string; sealedRepoToken: string; imageId: string; expose: Claim['manifest']['expose']; admissionTicket?: PhysicalAdmissionTicket; workspace?: ClaimWorkspace }): EnvironmentRuntime {
         const env = this.deps.environment({
             ...(input.admissionTicket ? { admissionTicket: input.admissionTicket } : {}),
             correlationId: input.correlationId,
@@ -203,6 +227,7 @@ export class RunDependenciesFactory implements RunDepsFactory {
             tokenBinding: setupTokenBinding(input.setupKey),
             imageId: input.imageId,
             expose: input.expose,
+            ...(input.workspace ? { workspace: input.workspace } : {}),
         });
         this.requireRenewal(env);
         return env;
@@ -233,6 +258,3 @@ export class RunDependenciesFactory implements RunDepsFactory {
         return released;
     }
 }
-
-/** @deprecated the old name of RunDependenciesFactory. */
-export const DefaultRunDepsFactory = RunDependenciesFactory;

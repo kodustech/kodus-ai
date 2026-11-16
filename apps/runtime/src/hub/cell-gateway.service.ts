@@ -18,6 +18,7 @@ export { peerCert } from './gateway/peer-cert';
 
 const h = (s: string) => createHash('sha256').update(s).digest();
 const REVOCATION_TICK_MS = 5_000;
+export const SILENCE_TICK_MS = 5_000;
 
 /**
  * Accepts the cells' outbound WebSocket at /cells (ADR-051): no compression,
@@ -32,6 +33,7 @@ export class CellGatewayService implements OnModuleInit, OnApplicationShutdown {
     private readonly logger = new Logger('CellGateway');
     private wss?: WebSocketServer;
     private revocations?: NodeJS.Timeout;
+    private silence?: NodeJS.Timeout;
 
     constructor(
         private readonly adapterHost: HttpAdapterHost,
@@ -89,6 +91,15 @@ export class CellGatewayService implements OnModuleInit, OnApplicationShutdown {
             REVOCATION_TICK_MS,
         );
         this.revocations.unref?.();
+        this.silence = setInterval(
+            () =>
+                void this.hub.dropSilentCells().catch((e) => {
+                    this.hub.hubMetrics.backgroundError('cell_silence');
+                    this.logger.error({ msg: 'cell.silence_check_failed', error: (e as Error).message });
+                }),
+            SILENCE_TICK_MS,
+        );
+        this.silence.unref?.();
     }
 
     private accept(req: IncomingMessage, socket: Duplex, head: Buffer, cred: CellCredential) {
@@ -106,6 +117,7 @@ export class CellGatewayService implements OnModuleInit, OnApplicationShutdown {
 
     onApplicationShutdown() {
         if (this.revocations) clearInterval(this.revocations);
+        if (this.silence) clearInterval(this.silence);
         for (const c of this.wss?.clients ?? []) c.close(1012, 'hub restarting');
         this.wss?.close();
     }

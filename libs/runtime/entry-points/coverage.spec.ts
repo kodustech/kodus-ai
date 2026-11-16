@@ -19,6 +19,19 @@ describe('entry-point coverage from the observer log (S-32)', () => {
         expect(requestMatchesEntryPoint('worker:src/jobs/sync.ts', { method: 'GET', route: '/' })).toBe(false);
     });
 
+    it('matches a route served below a mount it does not declare (kr-immich, kr-directus)', () => {
+        // Nest @Controller('server') under setGlobalPrefix('api'); an Express router mounted at /server.
+        expect(requestMatchesEntryPoint('GET /server/about', { method: 'GET', route: '/api/server/about' })).toBe(true);
+        expect(requestMatchesEntryPoint('GET /info', { method: 'GET', route: '/server/info' })).toBe(true);
+        expect(requestMatchesEntryPoint('GET /users/:id', { method: 'GET', route: '/api/v1/users/:id' })).toBe(true);
+        // At most two leading segments, the tail must match whole, and a declaration without a literal never matches by its tail.
+        expect(requestMatchesEntryPoint('GET /info', { method: 'GET', route: '/a/b/c/info' })).toBe(false);
+        expect(requestMatchesEntryPoint('GET /info', { method: 'GET', route: '/server/info/extra' })).toBe(false);
+        expect(requestMatchesEntryPoint('GET /', { method: 'GET', route: '/api/anything' })).toBe(false);
+        expect(requestMatchesEntryPoint('GET /:id', { method: 'GET', route: '/server/:id' })).toBe(false);
+        expect(requestMatchesEntryPoint('POST /info', { method: 'GET', route: '/server/info' })).toBe(false);
+    });
+
     const ids = ['POST /orders', 'GET /orders/:id'];
     const sent = (method: string, route: string) => [{ method, route }];
 

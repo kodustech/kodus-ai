@@ -18,6 +18,8 @@ type agentMetrics struct {
 	pool                 *metrics.Vec
 	sqlObservers         *metrics.Vec
 	sqlObserverDuration  *metrics.Vec
+	sandboxOps           *metrics.Vec
+	sandboxOpMillis      *metrics.Vec
 }
 
 func newAgentMetrics(reg *metrics.Registry) agentMetrics {
@@ -35,5 +37,7 @@ func newAgentMetrics(reg *metrics.Registry) agentMetrics {
 		pool:                 reg.Counter("cell_pool_machines_total", "Warm pool machines, by outcome: created, failed, adopted, discarded.", "outcome"),
 		sqlObservers:         reg.Counter("cell_sql_observer_provisions_total", "Managed SQL observer provisioning attempts, by closed outcome.", "outcome"),
 		sqlObserverDuration:  reg.Counter("cell_sql_observer_provision_duration_ms_total", "Cumulative managed SQL observer provisioning time in milliseconds."),
+		sandboxOps:           reg.Counter("cell_sandbox_ops_total", "Sandbox operations the guest agent ran, by op and outcome (ok, refused, failed).", "op", "outcome"),
+		sandboxOpMillis:      reg.Counter("cell_sandbox_op_milliseconds_total", "Time in sandbox operations, by op; divide by cell_sandbox_ops_total for the mean.", "op"),
 	}
 }

@@ -1,8 +1,8 @@
+import { consumerWith } from '../../worker/consumer/testing';
 import { LockScopedPg } from '../persistence/lock-scoped-pg';
 import { PgCommandStore } from '../persistence/pg-command-store';
 import { PgAdmissionStore } from './pg-admission-store';
 import { PgPhysicalAdmissionDirectory } from './physical-admission-directory';
-import { RuntimeCommandConsumer } from '../../worker/consumer/run-request.consumer';
 import { RuntimeRunRetry } from '../../worker/consumer/runtime-run-retry';
 import { PgDistributedLocks } from '../persistence/locks';
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
@@ -13,7 +13,10 @@ import { randomUUID } from 'crypto';
 import { Pool } from 'pg';
 import { PgPrAdmissionStore } from './pr-admission-store';
 import { ensureRuntimeSchema } from '../persistence/runtime-schema';
-const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
+import { isolatedDatabase } from '../../testing/isolated-database';
+// A database of its own: suites in parallel never read each other's rows (isolated-database.ts).
+const database = isolatedDatabase(process.env.RUNTIME_IT_DATABASE_URL ?? '', 'pr_admission');
+const url = database.url;
 (!url || process.env.SKIP_INTEGRATION === 'true' ? describe.skip : describe)(
     'PR generation authority (real Postgres)',
     () => {
@@ -21,27 +24,14 @@ const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
         const organizationId = `pr-fence-it-${randomUUID()}`;
         const scope = { organizationId, repositoryId: 'repo', prNumber: 1 };
         beforeAll(async () => {
+            await database.create();
             first = new Pool({ connectionString: url, max: 4 });
             second = new Pool({ connectionString: url, max: 4 });
             await ensureRuntimeSchema(first);
         });
         afterAll(async () => {
-            for (const table of [
-                'runtime_pr_run_generations',
-                'runtime_pr_cancel_generations',
-                'runtime_pr_fences',
-                'runtime_admission_requests',
-            ]) {
-                const orgColumn =
-                    table === 'runtime_admission_requests'
-                        ? 'org_id'
-                        : 'organization_id';
-                await first.query(
-                    `DELETE FROM runtime.${table} WHERE ${orgColumn}=ANY($1::text[])`,
-                    [[organizationId, `${organizationId}-other`]],
-                );
-            }
-            await Promise.all([first.end(), second.end()]);
+            await Promise.all([first?.end(), second?.end()]);
+            await database.drop();
         });
         it('persists old Run and cancel fences across separate pools and fresh store instances', async () => {
             await new PgPrAdmissionStore(first).register(
@@ -128,22 +118,8 @@ const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
                 const consumer = (pool: Pool) => {
                     const locks = new PgDistributedLocks(pool),
                         sql = new LockScopedPg(pool, locks);
-                    return new RuntimeCommandConsumer(
-                        engine as any,
-                        projection,
-                        new PgCommandStore(pool, sql),
-                        new PgPrAdmissionStore(pool, sql),
-                        undefined,
-                        setups,
-                        locks,
-                        undefined,
-                        undefined,
-                        undefined,
-                        undefined,
-                        new RuntimeRunRetry(
-                            { publish: jest.fn() },
-                            { maxRetries: 2, delayMs: 100, maxDelayMs: 1000 },
-                        ),
+                    return consumerWith({ engine: engine as any, projection, commands: new PgCommandStore(pool, sql), admissions: new PgPrAdmissionStore(pool, sql), setups, locks },
+                        new RuntimeRunRetry({ publish: jest.fn() }, { maxRetries: 2, delayMs: 100, maxDelayMs: 1000 }),
                     );
                 };
                 const a = shopRunRequest({

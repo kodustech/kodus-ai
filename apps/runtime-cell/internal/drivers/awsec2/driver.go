@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -91,22 +92,20 @@ func New(api EC2API, cfg Config) (*Driver, error) {
 	return &Driver{api: api, cfg: cfg}, nil
 }
 
-func (d *Driver) Kind() string { return "aws-ec2" }
+// Kind is the driver's name (-driver aws-ec2).
+const Kind = "aws-ec2"
+
+func (d *Driver) Kind() string { return Kind }
 
 func (d *Driver) Capabilities() driver.Capabilities {
-	s := "stop"
-	if d.cfg.Hibernate {
-		s = "hibernate"
-	}
-	return driver.Capabilities{Isolation: driver.IsolationVM, NestedContainers: true, Suspend: s, Arch: []string{"x86_64"}}
+	return driver.Capabilities{Isolation: driver.IsolationVM, NestedContainers: true, Arch: []string{"x86_64"}}
 }
 
-// ErrBakeOutsideDriver: the bake boots the recipe on a clean machine and
-// runs migrate and seed; that orchestration lives in internal/image.
-var ErrBakeOutsideDriver = fmt.Errorf("%w: awsec2 bakes through the image builder, which the cell does not have yet", driver.ErrUnsupported)
-
-func (d *Driver) Bake(context.Context, driver.BakeSpec) (driver.ImageRef, error) {
-	return driver.ImageRef{}, ErrBakeOutsideDriver
+// Parts returns a reset of a machine to its bake's disk snapshot. It has no bake
+// part: an EC2 bake boots the recipe on a clean machine, which the cell has
+// no image builder for yet.
+func (d *Driver) Parts() driver.Parts {
+	return driver.Parts{Resetter: d}
 }
 
 func ec2Tags(m map[string]string) []types.Tag {
@@ -211,8 +210,12 @@ func (d *Driver) PrepareClaim(ctx context.Context, spec driver.ClaimNetworkSpec)
 	ingress := []types.IpPermission{groupPair(22, "tcp", d.cfg.CellAgentGroupID)}
 	var observerEgress []types.IpPermission
 	for _, e := range spec.Expose {
-		ingress = append(ingress, groupPair(int32(e.Port), "tcp", net.ObserverGroupID))
-		observerEgress = append(observerEgress, groupPair(int32(e.Port), "tcp", net.WorkloadGroupID))
+		if e.Port < 1 || e.Port > 65535 {
+			return net, fmt.Errorf("awsec2: expose port %d out of range", e.Port)
+		}
+		port := int32(e.Port)
+		ingress = append(ingress, groupPair(port, "tcp", net.ObserverGroupID))
+		observerEgress = append(observerEgress, groupPair(port, "tcp", net.WorkloadGroupID))
 	}
 	if _, err = d.api.AuthorizeSecurityGroupIngress(ctx, &ec2.AuthorizeSecurityGroupIngressInput{GroupId: aws.String(net.WorkloadGroupID), IpPermissions: ingress}); err != nil {
 		return net, err
@@ -255,7 +258,8 @@ func (d *Driver) ReleaseClaim(ctx context.Context, net driver.ClaimNetwork) erro
 	if err != nil {
 		return err
 	}
-	for _, g := range out.SecurityGroups {
+	for k := range out.SecurityGroups {
+		g := &out.SecurityGroups[k]
 		if tagsOf(g.Tags)[driver.TagCell] != d.cfg.CellID {
 			return fmt.Errorf("%w: security group %s", driver.ErrNotOwned, aws.ToString(g.GroupId))
 		}
@@ -323,7 +327,7 @@ func InstanceType(s driver.MachineSize) types.InstanceType {
 	return types.InstanceTypeM7i4xlarge
 }
 
-// ErrWrongOrgKey: a disk is never encrypted with another org's key (S-11).
+// ErrWrongOrgKey means a disk is never encrypted with another org's key (S-11).
 var ErrWrongOrgKey = errors.New("awsec2: KMS key does not belong to the claim's org")
 
 func (d *Driver) Create(ctx context.Context, spec driver.MachineSpec) (driver.MachineRef, error) {
@@ -360,6 +364,9 @@ func (d *Driver) Create(ctx context.Context, spec driver.MachineSpec) (driver.Ma
 	}
 	if image == "" {
 		return driver.MachineRef{}, errors.New("awsec2: image reference required")
+	}
+	if spec.Size.DiskGB < 0 || spec.Size.DiskGB > math.MaxInt32 {
+		return driver.MachineRef{}, fmt.Errorf("awsec2: disk size %d GB out of range", spec.Size.DiskGB)
 	}
 	disk := int32(spec.Size.DiskGB)
 	if disk == 0 {
@@ -449,7 +456,7 @@ func (d *Driver) instance(ctx context.Context, id string) (*types.Instance, erro
 	out, err := d.api.DescribeInstances(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{id}})
 	var apiErr smithy.APIError
 	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "InvalidInstanceID.NotFound" {
-		return nil, nil
+		return nil, nil //nolint:nilnil // nil instance means not visible; callers poll on it
 	}
 	if err != nil {
 		return nil, err
@@ -458,13 +465,13 @@ func (d *Driver) instance(ctx context.Context, id string) (*types.Instance, erro
 		return nil, errors.New("awsec2: empty describe result")
 	}
 	for _, r := range out.Reservations {
-		for _, i := range r.Instances {
-			if aws.ToString(i.InstanceId) == id {
-				return &i, nil
+		for k := range r.Instances {
+			if i := &r.Instances[k]; aws.ToString(i.InstanceId) == id {
+				return i, nil
 			}
 		}
 	}
-	return nil, nil
+	return nil, nil //nolint:nilnil // nil instance means not visible; callers poll on it
 }
 
 // owned is the live instance behind ref when it is this cell's. The cell's
@@ -473,7 +480,7 @@ func (d *Driver) instance(ctx context.Context, id string) (*types.Instance, erro
 func (d *Driver) owned(ctx context.Context, ref driver.MachineRef) (*types.Instance, error) {
 	i, err := d.actualOwned(ctx, ref)
 	if err == nil && i != nil && i.State != nil && i.State.Name == types.InstanceStateNameTerminated {
-		return nil, nil
+		return nil, nil //nolint:nilnil // nil instance means terminated; callers treat it as gone
 	}
 	return i, err
 }
@@ -525,8 +532,8 @@ func (d *Driver) List(ctx context.Context, selector map[string]string) ([]driver
 			return nil, err
 		}
 		for _, r := range page.Reservations {
-			for _, i := range r.Instances {
-				ref := refOf(i)
+			for k := range r.Instances {
+				ref := refOf(r.Instances[k])
 				// Filters are the cloud's; the selector is checked again here.
 				if driver.Matches(ref.Tags, selector) {
 					out = append(out, ref)
@@ -561,12 +568,9 @@ func (d *Driver) SetExpiry(ctx context.Context, ref driver.MachineRef, at time.T
 	if err != nil {
 		return err
 	}
-	hard := driver.ParseExpiry(tagsOf(i.Tags), driver.TagHardExpires)
-	if hard.IsZero() {
-		return fmt.Errorf("awsec2: instance %s has no ceiling", ref.DriverRef)
-	}
-	if at.After(hard) {
-		at = hard
+	at, err = driver.ClampToCeiling(at, tagsOf(i.Tags))
+	if err != nil {
+		return fmt.Errorf("awsec2: instance %s: %w", ref.DriverRef, err)
 	}
 	return d.tag(ctx, ref.DriverRef, map[string]string{driver.TagExpires: driver.FormatTime(at)})
 }

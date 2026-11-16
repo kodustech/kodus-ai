@@ -8,7 +8,7 @@ import {
     type RuntimeRunProjection,
 } from '../run-projection';
 
-/** In-memory projection for tests and the fake driver: the same filters as the Mongo store. */
+/** In-memory projection for tests and the fake driver: the same filters as the Postgres store. */
 export class InMemoryRunProjectionStore implements RunProjectionStore {
     readonly runs = new Map<string, RuntimeRunProjection>();
 
@@ -63,7 +63,8 @@ export class InMemoryRunProjectionStore implements RunProjectionStore {
                     (!filter.environmentId ||
                         r.environmentId === filter.environmentId) &&
                     (!filter.requestedSince ||
-                        r.requestedAt >= filter.requestedSince),
+                        r.requestedAt >= filter.requestedSince) &&
+                    (!filter.trigger || r.trigger === filter.trigger),
             )
             .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
             .slice(0, filter.limit ?? 50);

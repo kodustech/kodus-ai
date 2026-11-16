@@ -75,6 +75,7 @@ func resourceAmount(n *yaml.Node, disk bool) (int, error) {
 	}
 	return int(amount), nil
 }
+
 func neutralSize(f map[string]*yaml.Node) (*ResourceSize, error) {
 	r := &ResourceSize{}
 	cpu, mem := f["cpu"], f["memory"]
@@ -122,6 +123,7 @@ func exactRecipeHost(raw string) (string, bool) {
 	}
 	return h, alpha
 }
+
 func (r *Recipe) normalizeResources() error {
 	var legacy map[string]*yaml.Node
 	var err error

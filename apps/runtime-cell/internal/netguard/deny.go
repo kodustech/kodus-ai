@@ -2,7 +2,6 @@ package netguard
 
 import (
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -11,32 +10,10 @@ import (
 
 // The Kodus deny list applies over any allowlist, recipe or admin approval:
 // generic storage and paste sites (exfiltration), tunnels (a way back in),
-// LLM APIs (a cell never pays for the PR's model calls) and DNS over HTTPS
-// (DNS goes through the cell resolver only).
-var denyExact = map[string]bool{
-	"s3.amazonaws.com": true, "storage.googleapis.com": true, "storage.cloud.google.com": true,
-	"pastebin.com": true, "transfer.sh": true, "file.io": true, "ngrok.io": true, "0x0.st": true,
-	"webhook.site": true, "requestbin.com": true, "hookbin.com": true, "pipedream.net": true,
-	"paste.ee": true, "hastebin.com": true, "termbin.com": true, "temp.sh": true, "gofile.io": true,
-	"api.openai.com": true, "api.anthropic.com": true, "generativelanguage.googleapis.com": true,
-	"dns.google": true, "dns.google.com": true, "cloudflare-dns.com": true, "mozilla.cloudflare-dns.com": true,
-	"one.one.one.one": true, "dns.quad9.net": true, "doh.opendns.com": true, "dns.nextdns.io": true,
-	"doh.cleanbrowsing.org": true, "dns.adguard-dns.com": true,
-}
-
-var denySuffix = []string{
-	".blob.core.windows.net", ".file.core.windows.net", ".dfs.core.windows.net",
-	".ngrok.io", ".ngrok-free.app", ".ngrok.app", ".ngrok.dev", ".trycloudflare.com", ".loca.lt", ".serveo.net",
-	".pastebin.com", ".transfer.sh", ".file.io", ".webhook.site", ".requestbin.net", ".pipedream.net",
-	".storage.googleapis.com", ".googleusercontent.com", ".r2.cloudflarestorage.com", ".r2.dev",
-	".digitaloceanspaces.com", ".backblazeb2.com", ".wasabisys.com", ".linodeobjects.com",
-	".openai.azure.com",
-}
-
-// s3Host is every S3 endpoint spelling: s3.amazonaws.com, s3.<region>,
-// s3-<region> (legacy), s3-accelerate, s3.dualstack.<region>, and each of
-// them with a bucket in front (virtual-hosted style).
-var s3Host = regexp.MustCompile(`(^|\.)s3([.-][a-z0-9-]+)*\.amazonaws\.com(\.cn)?$`)
+// LLM APIs (a cell never pays for the PR's model calls), DNS over HTTPS (DNS
+// goes through the cell resolver only) and local names. It is the API's list
+// too: lists.go reads it from egress-lists.json, the byte copy of
+// libs/runtime/protocol/egress-lists.json (G2).
 
 // OwnedHosts are exact hosts the cell itself owns (its evidence bucket): the
 // only names the deny list lets through.
@@ -65,16 +42,14 @@ func OnKodusDenyList(host string, owned OwnedHosts) bool {
 	return onKodusList(host)
 }
 
+// onKodusList: the cell's own names (the claim's app, the mirror) are under
+// .internal, which the list denies to every approval; they never come from
+// one, the resolver answers them itself.
 func onKodusList(host string) bool {
-	if denyExact[host] || s3Host.MatchString(host) {
-		return true
+	if host == policy.AppHost || host == policy.MirrorHost {
+		return false
 	}
-	for _, s := range denySuffix {
-		if strings.HasSuffix(host, s) {
-			return true
-		}
-	}
-	return false
+	return kodusDeny.MatchString(host)
 }
 
 // DenyList is every host no allowlist, recipe or admin approval reaches: the

@@ -1,13 +1,14 @@
+import { memberTokensOf } from '@libs/runtime/run/run-workspace';
 import { DBOS } from '@dbos-inc/dbos-sdk';
-import { createHash } from 'crypto';
+import { jsonTupleHex } from '@libs/runtime/contracts/derive-id';
 import { Inject, Injectable, Logger, OnApplicationShutdown, OnModuleInit, Optional } from '@nestjs/common';
 
-import type { RuntimeEnvironmentSetupRequested } from '@libs/runtime/api/domain/runtime-commands';
+import type { RuntimeEnvironmentSetupRequested } from '@libs/runtime/contracts/runtime-commands';
 
 import { isForkApprovalRequired, isTerminal, RunProjectionStore, RuntimeRunProjection, RuntimeRunRequested } from '@libs/runtime/run';
-import { RuntimeMetrics } from '@libs/runtime/telemetry';
+import { ATTR, RuntimeMetrics, withRunSpan } from '@libs/runtime/telemetry';
 
-import { COMMAND_STORE, RUNTIME_CONFIG, WorkerConfig } from '../../shared/config';
+import { COMMAND_STORE, RUNTIME_CONFIG, RUNTIME_RUN_PROJECTION_STORE, WorkerConfig } from '../../shared/config';
 import type { DistributedLocks } from '../../shared/persistence/locks';
 import type { CommandStore } from '../../shared/persistence/pg-command-store';
 import { ADMISSION_WAIT_MS, type AdmissionReason, type AdmissionRecord, type AdmissionRef } from '../../shared/admission/admission-contract';
@@ -16,6 +17,7 @@ import type { ForkApprovalMessage, RunDeps } from '../run/ports';
 import { ENVIRONMENT_SETUP_SERVICE, EnvironmentSetupService } from '../setup/environment-setup.service';
 import { RUN_DEPS_FACTORY, RunDepsFactory } from './run-deps.factory';
 import { ADMISSION_COORDINATOR, AdmissionCoordinator, admissionRefOf } from './admission-coordinator';
+import type { StuckDetector } from '../maintenance/stuck-detector';
 
 // The Run as a DBOS Transact workflow (ADR-046): workflowID = runId makes the
 // start idempotent, the queue is partitioned by org for fairness, and every
@@ -29,7 +31,7 @@ export const RUN_QUEUE = 'runtime-runs';
 export const RUN_WORKFLOW = 'runtimeRun';
 export const FORK_GATE_WORKFLOW = 'runtimeForkGate';
 export const STOP_WORKFLOW = 'runtimeRunStop';
-/** Environment setups: their own queue, one setup at a time per org (fair, and a setup never takes a Run's slot). */
+/** Environment setups: their own queue, RUNTIME_SETUP_PER_ORG setups at a time per org (fair, and a setup never takes a Run's slot). */
 export const SETUP_QUEUE = 'runtime-setups';
 export const SETUP_WORKFLOW = 'runtimeEnvironmentSetup';
 export const ADMISSION_QUEUE = 'runtime-admissions';
@@ -41,7 +43,7 @@ export const setupWorkflowId = (key: string) => `setup:${key}`;
 export const approvedRunWorkflowId = (runId: string) => `${runId}:run`;
 const runIdOfWorkflow = (workflowId: string) => workflowId.replace(/:run$/, '');
 export const admissionAttemptWorkflowId = (ref: AdmissionRef, generation: number, ownerEpoch: number, repairBucket?: number) =>
-    `admission:${createHash('sha256').update(JSON.stringify([ref.organizationId, ref.kind, ref.key])).digest('hex')}:${generation}:${ownerEpoch}${repairBucket === undefined ? '' : `:repair:${repairBucket}`}`;
+    `admission:${jsonTupleHex([ref.organizationId, ref.kind, ref.key])}:${generation}:${ownerEpoch}${repairBucket === undefined ? '' : `:repair:${repairBucket}`}`;
 
 interface SetupWorkflowOptions {
     admissionRef?: AdmissionRef;
@@ -61,6 +63,7 @@ const APPROVAL_WAIT_SECONDS = 7 * 24 * 3_600;
 const MAINTENANCE_LOCK = 'runtime-worker/maintenance';
 export const RUN_ENGINE_LOCKS = Symbol('RUN_ENGINE_LOCKS');
 export const RUN_ENGINE_RETENTION = Symbol('RUN_ENGINE_RETENTION');
+export const RUN_ENGINE_STUCK = Symbol('RUN_ENGINE_STUCK');
 const RETENTION_EVERY_MS = 3_600_000;
 
 export type StoppedRun = { runId: string; attempt: number; organizationId: string; correlationId: string; headSha: string };
@@ -100,13 +103,14 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
     constructor(
         @Inject(RUNTIME_CONFIG) private readonly config: WorkerConfig,
         @Inject(RUN_DEPS_FACTORY) private readonly depsFactory: RunDepsFactory,
-        @Inject('RUN_PROJECTION') private readonly projection: RunProjectionStore,
+        @Inject(RUNTIME_RUN_PROJECTION_STORE) private readonly projection: RunProjectionStore,
         @Inject(RuntimeMetrics) private readonly metrics: RuntimeMetrics,
         @Inject(COMMAND_STORE) private readonly commands: CommandStore,
         @Inject(RUN_ENGINE_LOCKS) private readonly locks: DistributedLocks,
         @Optional() @Inject(ENVIRONMENT_SETUP_SERVICE) private readonly setup?: Pick<EnvironmentSetupService, 'run'>,
         @Optional() @Inject(RUN_ENGINE_RETENTION) private readonly retention?: () => Promise<number>,
         @Optional() @Inject(ADMISSION_COORDINATOR) private readonly admission?: AdmissionCoordinator,
+        @Optional() @Inject(RUN_ENGINE_STUCK) private readonly stuck?: Pick<StuckDetector, 'pass'>,
     ) {}
 
     async onModuleInit() {
@@ -129,6 +133,8 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
                             repoToken: gate.approved.repoToken,
                             ...(gate.approved.prRepoToken ? { prRepoToken: gate.approved.prRepoToken } : {}),
                             runToken: gate.approved.runToken,
+                            // The member tokens the approved Run holds, so the stored payload boots as the Run does.
+                            ...(memberTokensOf(gate.approved) ? { workspace: memberTokensOf(gate.approved) } : {}),
                         }, this.admission!.limits);
                         if (!transition.record) return null;
                         const { payload, ...control } = transition.record;
@@ -180,7 +186,7 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
             await DBOS.registerQueue(ADMISSION_FINALIZE_QUEUE, { concurrency: this.config.admission.attemptConcurrency, partitionConcurrency: this.config.admission.attemptPerOrg, onConflict: 'always_update' });
         } else {
             await DBOS.registerQueue(RUN_QUEUE, { concurrency: this.config.globalConcurrency, partitionConcurrency: this.config.partitionConcurrency, onConflict: 'always_update' });
-            await DBOS.registerQueue(SETUP_QUEUE, { concurrency: this.config.globalConcurrency, partitionConcurrency: 1, onConflict: 'always_update' });
+            await DBOS.registerQueue(SETUP_QUEUE, { concurrency: this.config.globalConcurrency, partitionConcurrency: this.config.setupPerOrg, onConflict: 'always_update' });
         }
         this.launched = true;
         this.logger.log({ msg: 'dbos.launched', queue: this.config.durableAdmission ? EXECUTION_QUEUE : RUN_QUEUE, partitionConcurrency: this.config.partitionConcurrency, globalConcurrency: this.config.globalConcurrency });
@@ -329,7 +335,18 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
         }
     }
 
-    private async executeSetup(cmd: RuntimeEnvironmentSetupRequested, opts: SetupWorkflowOptions): Promise<unknown> {
+    /** The setup workflow inside one span, under the trace its command came in (the hub calls inherit it). */
+    private executeSetup(cmd: RuntimeEnvironmentSetupRequested, opts: SetupWorkflowOptions): Promise<unknown> {
+        return withRunSpan(
+            'runtime.setup',
+            `setup:${cmd.key}`,
+            { [ATTR.setupKey]: cmd.key, [ATTR.organizationId]: cmd.organizationId, [ATTR.teamId]: cmd.teamId, [ATTR.repositoryId]: cmd.repositoryId, [ATTR.environmentId]: cmd.environmentId },
+            () => this.executeSetupWorkflow(cmd, opts),
+            cmd.traceparent,
+        );
+    }
+
+    private async executeSetupWorkflow(cmd: RuntimeEnvironmentSetupRequested, opts: SetupWorkflowOptions): Promise<unknown> {
         if (!this.setup) throw new Error('setup service unavailable');
         if (!opts.admissionRef) return this.setup.run(cmd, dbosStep, () => DBOS.stepStatus?.cancelSignal, { admissionBlocker: opts.admissionBlocker });
         if (!this.admission) throw new Error('admission coordinator unavailable');
@@ -467,10 +484,14 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
                     const removed = await this.retention();
                     if (removed) this.logger.log({ msg: 'retention.applied', rows: removed });
                 }
+                // Last: what the sweep and the reap above left past its bound (reported, never acted on).
+                await this.stuck?.pass(now).catch(() => this.logger.warn({ msg: 'stuck.pass_failed' }));
                 return true;
             });
+            this.metrics.recordMaintenancePass(ran === true ? 'ran' : 'skipped');
             return ran === true;
         } catch (e) {
+            this.metrics.recordMaintenancePass('failed');
             this.logger.warn({ msg: 'maintenance.failed', error: (e as Error)?.message });
             return false;
         }

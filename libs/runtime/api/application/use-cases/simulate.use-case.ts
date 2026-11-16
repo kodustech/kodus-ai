@@ -15,6 +15,7 @@ import {
     type RuntimeGitPort,
 } from '../../domain/ports';
 import type { RuntimeAuthorization } from '../run-access.service';
+import { membersOr, RuntimeEnvironmentMembers } from '../environment-members.service';
 import { RuntimeRunRequestBuilder } from '../run-request-builder.service';
 import { RuntimeRunEnqueuer } from '../runtime-run-enqueuer.service';
 
@@ -22,11 +23,14 @@ type SimulationInput = { user: Partial<IUser>; environmentId: string; body: unkn
 type SimulationQueued = { runId: string; state: 'queued' };
 type SimulationBatchQueued = { runs: Array<SimulationQueued & { prNumber: number }> };
 
-function selectionOf(body: unknown): { single: boolean; prNumbers: number[] } {
-    if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some((key) => key !== 'prNumber' && key !== 'prNumbers')) {
+function selectionOf(body: unknown): { single: boolean; prNumbers: number[]; repositoryId?: string } {
+    if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some((key) => key !== 'prNumber' && key !== 'prNumbers' && key !== 'repositoryId')) {
         throw new BadRequestException('Provide either prNumber or prNumbers');
     }
-    const value = body as { prNumber?: unknown; prNumbers?: unknown };
+    const value = body as { prNumber?: unknown; prNumbers?: unknown; repositoryId?: unknown };
+    if (value.repositoryId !== undefined && (typeof value.repositoryId !== 'string' || value.repositoryId === '' || value.repositoryId.length > 128)) {
+        throw new BadRequestException('repositoryId must be a repository id');
+    }
     const single = Object.hasOwn(value, 'prNumber') && value.prNumber !== undefined;
     const batch = Object.hasOwn(value, 'prNumbers') && value.prNumbers !== undefined;
     if (single === batch) throw new BadRequestException('Provide either prNumber or prNumbers');
@@ -36,7 +40,7 @@ function selectionOf(body: unknown): { single: boolean; prNumbers: number[] } {
         || new Set(numbers).size !== numbers.length) {
         throw new BadRequestException('Select one to five unique positive integer PR numbers');
     }
-    return { single, prNumbers: numbers as number[] };
+    return { single, prNumbers: numbers as number[], ...(typeof value.repositoryId === 'string' ? { repositoryId: value.repositoryId } : {}) };
 }
 
 /**
@@ -60,6 +64,9 @@ export class SimulateRuntimeRunUseCase {
         private readonly git: RuntimeGitPort,
         private readonly requests: RuntimeRunRequestBuilder,
         private readonly enqueuer: RuntimeRunEnqueuer,
+        // Required by Nest; made without it (the older tests), the environment is its primary repository alone.
+        @Inject(RuntimeEnvironmentMembers)
+        private readonly members?: RuntimeEnvironmentMembers,
     ) {}
 
     execute(input: SimulationInput & { body: { prNumber: number } }): Promise<SimulationQueued>;
@@ -74,12 +81,17 @@ export class SimulateRuntimeRunUseCase {
                 ? await this.environments.get(organizationId, input.environmentId)
                 : null;
         if (!env || env.organizationId !== organizationId) throw new NotFoundException('Environment not found');
+        const members = await membersOr(this.members, this.environments).list(env);
+        // The PRs may be of any repository of the environment; its machines hold them all, so the caller needs every one.
+        const member = members.find((m) => m.repositoryId === (selection.repositoryId ?? env.repositoryId));
         await this.authorization.ensure({
             user: input.user,
             action: Action.Update,
             resource: ResourceType.CodeReviewSettings,
-            repoIds: [env.repositoryId],
+            repoIds: members.map((m) => m.repositoryId),
         });
+        if (!member) throw new NotFoundException('The repository is not part of this environment');
+        const repository = { repositoryId: member.repositoryId, repositoryName: member.repositoryName };
 
         const selected: Array<{ prNumber: number; head: PullRequestHead }> = [];
         // All authorization/head/fork/live checks finish before the first builder
@@ -88,20 +100,27 @@ export class SimulateRuntimeRunUseCase {
             const head = await this.git.getPullRequestHead({
                 organizationId,
                 teamId: env.teamId,
-                repositoryId: env.repositoryId,
-                repositoryName: env.repositoryName,
+                ...repository,
                 prNumber,
             });
             if (!head) throw new NotFoundException('Pull request not found');
             // ADR-030: a simulation has no maintainer approval step.
             if (head.fork) throw new ConflictException('Pull requests from forks are not simulated');
-            const live = (await this.runs.findLive({ organizationId, repositoryId: env.repositoryId, prNumber })).filter((r) => r.headSha === head.headSha);
+            const live = (await this.runs.findLive({ organizationId, repositoryId: member.repositoryId, prNumber })).filter((r) => r.headSha === head.headSha);
             if (live.length) throw new ConflictException(`Run ${live[0].runId} is still running for this commit`);
             selected.push({ prNumber, head });
         }
 
         const requests: RuntimeRunRequested[] = [];
-        for (const { prNumber, head } of selected) requests.push(await this.requests.build({ env, prNumber, head, trigger: 'simulate' }));
+        for (const { prNumber, head } of selected) requests.push(
+                await this.requests.build({
+                    env,
+                    ...(member.role === 'member' ? { repository: { ...repository, fullName: member.fullName } } : {}),
+                    prNumber,
+                    head,
+                    trigger: 'simulate',
+                }),
+            );
         if (selection.single) {
             await this.enqueuer.enqueueSimulation(requests[0]);
             return { runId: requests[0].runId, state: 'queued' };

@@ -1,9 +1,9 @@
-import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
 import { randomUUID } from 'crypto';
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryDistributedLocks } from '../../shared/persistence/locks';
 import { RunRequestedHandler } from './run-requested.handler';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/testing';
+import { InMemoryDistributedLocks } from '../../shared/persistence/testing';
 
 const request = () => {
     const id = randomUUID();
@@ -47,6 +47,7 @@ it.each(['live head', 'org stopped'])(
                 repositoryId: req.repository.id,
                 prNumber: req.pullRequest.number,
                 headSha: req.pullRequest.headSha,
+                environmentId: req.environment.environmentId,
                 state: 'testing',
                 attempt: 1,
                 requestedAt: req.requestedAt,

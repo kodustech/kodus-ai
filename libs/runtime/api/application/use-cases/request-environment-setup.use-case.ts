@@ -5,6 +5,7 @@ import type { IUser } from '@libs/identity/domain/user/interfaces/user.interface
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 
 import { RUNTIME_PRODUCT_ENVIRONMENT_STORE, type ProductEnvironment, type ProductEnvironmentStore } from '../../domain/ports';
+import { environmentRepositoryIds, RuntimeEnvironmentMembers } from '../environment-members.service';
 import type { RuntimeAuthorization } from '../run-access.service';
 import { RuntimeSetupRequester } from '../runtime-setup-requester.service';
 import { orgOf, validId } from './environment-view';
@@ -18,6 +19,9 @@ export class RequestEnvironmentSetupUseCase {
         @Inject(AuthorizationService)
         private readonly authorization: RuntimeAuthorization,
         private readonly setups: RuntimeSetupRequester,
+        // Required by Nest; made without it (the older tests), only the environment's own repository is checked.
+        @Inject(RuntimeEnvironmentMembers)
+        private readonly members?: RuntimeEnvironmentMembers,
     ) {}
 
     async execute(input: { user: Partial<IUser>; environmentId: string }): Promise<ProductEnvironment> {
@@ -28,7 +32,7 @@ export class RequestEnvironmentSetupUseCase {
             user: input.user,
             action: Action.Update,
             resource: ResourceType.CodeReviewSettings,
-            repoIds: [env.repositoryId],
+            repoIds: await environmentRepositoryIds(this.members, env),
         });
         return this.setups.request(env, input.user);
     }

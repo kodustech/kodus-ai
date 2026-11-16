@@ -50,7 +50,7 @@ func TestSharedFixtures(t *testing.T) {
 			t.Fatalf("%s: %v", file, err)
 		}
 		t.Run(f.Name, func(t *testing.T) {
-			frame := []byte(nil)
+			var frame []byte
 			if f.Frame != nil {
 				frame = []byte(*f.Frame)
 			} else {

@@ -12,9 +12,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/buildstate"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation/gvisor"
 )
 
 // The independent reaper's view of a docker-gvisor cell (S-08, cmd/reaper
@@ -40,10 +42,20 @@ type ReaperConfig struct {
 	Log             *slog.Logger
 }
 
+// machineEnder is the part of an isolation backend the reaper needs: end a
+// machine by its name, reading nothing from memory.
+type machineEnder interface {
+	Destroy(ctx context.Context, name string, opts isolation.DestroyOptions) error
+}
+
 // Reaper lists and destroys this cell's machines with no in-memory state.
 type Reaper struct {
-	d   Docker
+	d   reaperPort
 	cfg ReaperConfig
+	// ender ends a machine (its holder and project) through the isolation
+	// backend, as Driver.Destroy does; the shared layer's leftovers (images,
+	// directories, golden data, networks) stay here.
+	ender machineEnder
 	// mounted lists the overlays mounted under a directory (Linux
 	// mountinfo); a build state directory with one is left to the cell.
 	mounted func(under string) ([]buildstate.OverlayMount, error)
@@ -52,7 +64,7 @@ type Reaper struct {
 // NewForReaper is the reaper's driver: List and Destroy, nothing else. It
 // checks no runtime and creates nothing, so it runs on a host whose cell
 // is down.
-func NewForReaper(d Docker, cfg ReaperConfig) (*Reaper, error) {
+func NewForReaper(d reaperPort, cfg ReaperConfig) (*Reaper, error) {
 	if cfg.CellID == "" {
 		return nil, errors.New("dockergvisor: reaper: cell id required")
 	}
@@ -62,12 +74,12 @@ func NewForReaper(d Docker, cfg ReaperConfig) (*Reaper, error) {
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
-	return &Reaper{d: d, cfg: cfg, mounted: buildstate.MountedOverlays}, nil
+	return &Reaper{d: d, cfg: cfg, ender: gvisor.NewEnder(d), mounted: buildstate.MountedOverlays}, nil
 }
 
 // reaper is the driver's own reaper, for the cell's sweep.
 func (d *Driver) reaper() *Reaper {
-	return &Reaper{d: d.d, cfg: ReaperConfig{CellID: d.cfg.CellID, WorkDir: d.workDir(), EgressContainer: d.cfg.EgressContainer, Log: d.log()}, mounted: buildstate.MountedOverlays}
+	return &Reaper{d: d.d, cfg: ReaperConfig{CellID: d.cfg.CellID, WorkDir: d.workDir(), EgressContainer: d.cfg.EgressContainer, Log: d.log()}, ender: d.backend, mounted: buildstate.MountedOverlays}
 }
 
 const composeProjectLabel = "com.docker.compose.project"
@@ -101,7 +113,10 @@ func (g reapGroup) tags() map[string]string {
 	for k, v := range c.Labels {
 		tags[dockercli.TagFromLabel(k)] = v
 	}
-	tags[driver.TagHardExpires] = driver.FormatTime(g.hard)
+	delete(tags, driver.TagHardExpires)
+	if !g.hard.IsZero() {
+		tags[driver.TagHardExpires] = driver.FormatTime(g.hard)
+	}
 	return tags
 }
 
@@ -118,7 +133,8 @@ func (r *Reaper) groups(ctx context.Context) ([]reapGroup, error) {
 	}
 	byName := map[string]*reapGroup{}
 	var order []string
-	for _, c := range cs {
+	for i := range cs {
+		c := &cs[i]
 		if c.Labels[dockercli.LabelFromTag(driver.TagCell)] != r.cfg.CellID {
 			continue
 		}
@@ -133,12 +149,13 @@ func (r *Reaper) groups(ctx context.Context) ([]reapGroup, error) {
 			order = append(order, key)
 		}
 		if c.Labels[labelMachine] == c.Name {
-			h := c
+			h := *c
 			g.holder = &h
 		}
-		g.containers = append(g.containers, c)
-		// A container with no or a bad ceiling is past it (ParseExpiry).
-		hard := driver.ParseExpiry(map[string]string{driver.TagHardExpires: c.Labels[dockercli.LabelFromTag(driver.TagHardExpires)]}, driver.TagHardExpires)
+		g.containers = append(g.containers, *c)
+		// A container with no or a bad ceiling is past it: zero, the
+		// earliest, so its whole machine goes (driver.Expired).
+		hard, _ := driver.Ceiling(dockercli.CeilingTags(c.Labels))
 		if len(g.containers) == 1 || hard.Before(g.hard) {
 			g.hard = hard
 		}
@@ -239,9 +256,9 @@ func (r *Reaper) machineContainers(ctx context.Context, machine string) ([]docke
 	if err != nil {
 		return nil, err
 	}
-	for _, c := range cs {
-		if c.Labels[dockercli.LabelFromTag(driver.TagCell)] != r.cfg.CellID {
-			return nil, fmt.Errorf("%w: container %s", driver.ErrNotOwned, c.Name)
+	for i := range cs {
+		if cs[i].Labels[dockercli.LabelFromTag(driver.TagCell)] != r.cfg.CellID {
+			return nil, fmt.Errorf("%w: container %s", driver.ErrNotOwned, cs[i].Name)
 		}
 	}
 	return cs, nil
@@ -249,32 +266,34 @@ func (r *Reaper) machineContainers(ctx context.Context, machine string) ([]docke
 
 func (r *Reaper) removeLone(ctx context.Context, cs []dockercli.Container) error {
 	var errs []error
-	for _, c := range cs {
-		errs = append(errs, r.d.Remove(ctx, c.ID))
+	for i := range cs {
+		errs = append(errs, r.d.Remove(ctx, cs[i].ID))
 	}
 	return errors.Join(errs...)
 }
 
 // destroyMachine is Driver.Destroy without the driver's memory: the
-// project down with its volumes, the holder, the images built under the
-// machine's claim tags (named after the project's services), the build
-// directories, and then the claim networks it was on.
+// backend ends the machine (the project down with its volumes, the holder),
+// then the images built under the machine's claim tags (named after the
+// project's services), the build directories, and the claim networks it
+// was on. Ownership was read from Docker before (machineContainers).
 func (r *Reaper) destroyMachine(ctx context.Context, g reapGroup) error {
 	if !machineNamePattern.MatchString(g.name) {
 		return fmt.Errorf("dockergvisor: reaper: %q is not a machine name", g.name)
 	}
 	var errs []error
-	errs = append(errs, r.d.ComposeDown(ctx, g.name, true))
+	errs = append(errs, r.ender.Destroy(ctx, g.name, isolation.DestroyOptions{}))
 	// Each container by name too: what compose down left, or all of them
 	// when it failed (rm -f of one already gone is done).
-	for _, c := range g.containers {
-		errs = append(errs, r.d.Remove(ctx, c.Name))
+	for i := range g.containers {
+		errs = append(errs, r.d.Remove(ctx, g.containers[i].Name))
 	}
 	// What compose down leaves: a volume a bake restored or a project whose
 	// containers were already gone.
-	errs = append(errs, r.removeProjectVolumes(ctx, g.name), r.removeGolden(ctx, g.name))
-	errs = append(errs, r.removeBuilt(ctx, g), r.removeDirs(g.name))
-	errs = append(errs, r.releaseNetworks(ctx, g.networks()))
+	errs = append(errs,
+		r.removeProjectVolumes(ctx, g.name), r.removeGolden(ctx, g.name),
+		r.removeBuilt(ctx, g), r.removeDirs(g.name),
+		r.releaseNetworks(ctx, g.networks()))
 	err := errors.Join(errs...)
 	r.cfg.Log.Info("reaper.machine.destroyed", "machine", g.name, "claim", g.tags()[driver.TagClaim], "ok", err == nil)
 	return err
@@ -284,8 +303,8 @@ func (r *Reaper) destroyMachine(ctx context.Context, g reapGroup) error {
 // of each service its project ran (builtTag); one already gone is done.
 func (r *Reaper) removeBuilt(ctx context.Context, g reapGroup) error {
 	services := map[string]bool{}
-	for _, c := range g.containers {
-		if s := c.Labels["com.docker.compose.service"]; s != "" {
+	for i := range g.containers {
+		if s := g.containers[i].Labels["com.docker.compose.service"]; s != "" {
 			services[s] = true
 		}
 	}
@@ -299,8 +318,8 @@ func (r *Reaper) removeBuilt(ctx context.Context, g reapGroup) error {
 // networks are the networks the group's containers are on.
 func (g reapGroup) networks() []string {
 	set := map[string]bool{}
-	for _, c := range g.containers {
-		for n := range c.Networks {
+	for i := range g.containers {
+		for n := range g.containers[i].Networks {
 			set[n] = true
 		}
 	}
@@ -401,7 +420,7 @@ func (r *Reaper) expired(ctx context.Context, now time.Time) ([]reapGroup, error
 	}
 	var out []reapGroup
 	for _, g := range gs {
-		if !g.hard.After(now) {
+		if driver.Expired(g.tags(), now) {
 			out = append(out, g)
 		}
 	}

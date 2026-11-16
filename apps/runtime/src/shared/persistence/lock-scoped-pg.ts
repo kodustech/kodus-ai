@@ -1,3 +1,4 @@
+import { inTransaction } from '@libs/runtime/run/adapters/advisory-lock';
 import type { Pool, PoolClient } from 'pg';
 import type { PgDistributedLocks } from './locks';
 
@@ -22,19 +23,13 @@ export class LockScopedPg {
         if (this.transactions.has(client))
             throw new Error('runtime_nested_transaction');
         this.transactions.add(client);
+        let broken = false;
         try {
-            await client.query('BEGIN');
-            try {
-                const result = await fn(client);
-                await client.query('COMMIT');
-                return result;
-            } catch (error) {
-                await client.query('ROLLBACK').catch(() => undefined);
-                throw error;
-            }
+            return await inTransaction(client, () => fn(client), { onRollbackFailed: () => (broken = true) });
         } finally {
             this.transactions.delete(client);
-            if (!held) client.release();
+            // A connection whose ROLLBACK failed may still be in the transaction: it is destroyed, never pooled.
+            if (!held) client.release(broken || undefined);
         }
     }
 }

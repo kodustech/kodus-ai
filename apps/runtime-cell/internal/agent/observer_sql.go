@@ -78,7 +78,7 @@ func (a *Agent) provisionObserverSQL(ctx context.Context, c *claims.Claim, repo 
 	if !requiresObserverSQL(rec) {
 		return nil
 	}
-	if a.cfg.SQLObservers == nil {
+	if a.cfg.Parts.SQLObservers == nil {
 		return blockerErr(protocol.BlockerKindPlatform, "sql_observer_unsupported", errors.New("the cell cannot provision the declared SQL observer"))
 	}
 	start := a.clock.Now()
@@ -91,7 +91,7 @@ func (a *Agent) provisionObserverSQL(ctx context.Context, c *claims.Claim, repo 
 		c.Log.Info("observer.sql_provision", "outcome", outcome, "durationMs", elapsed)
 		a.progress(c, "sql_observer", protocol.ClaimProgressBodyStateDone, &elapsed, nil)
 	}()
-	credentials, provisionErr := a.cfg.SQLObservers.ProvisionObserverSQL(ctx, c.Machines().Workload, repo)
+	credentials, provisionErr := a.cfg.Parts.SQLObservers.ProvisionObserverSQL(ctx, c.Machines().Workload, repo)
 	if provisionErr != nil {
 		var typed *driver.ObserverSQLError
 		if errors.As(provisionErr, &typed) {

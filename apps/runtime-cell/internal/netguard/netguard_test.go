@@ -122,3 +122,23 @@ func TestDenyListRefusesWhatItCannotSayExactly(t *testing.T) {
 		}
 	}
 }
+
+// An -internal-cidrs that covered the claim pool used to be taken: every
+// claim could then connect to another claim's services through the proxy.
+func TestInternalCIDRsMayNotOverlapTheClaimPool(t *testing.T) {
+	for _, bad := range []string{"10.0.0.0/8", "10.213.7.0/24", "10.213.0.0/16", "172.16.0.0/12,10.213.200.9/32"} {
+		if _, err := ParseInternalCIDRs(bad, DefaultClaimSubnets); err == nil {
+			t.Errorf("%s overlapping %s was taken", bad, DefaultClaimSubnets)
+		}
+	}
+	got, err := ParseInternalCIDRs("10.20.0.0/24,127.0.0.0/8", DefaultClaimSubnets)
+	if err != nil || len(got) != 2 {
+		t.Fatalf("disjoint networks: %v %v", got, err)
+	}
+	if _, err := ParseInternalCIDRs("10.20.0.0/24", "10.20.0.0/16"); err == nil {
+		t.Fatal("a moved pool is not checked")
+	}
+	if _, err := ParseInternalCIDRs("", "not-a-cidr"); err == nil {
+		t.Fatal("a bad pool was taken")
+	}
+}

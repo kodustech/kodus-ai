@@ -46,9 +46,9 @@ func (a *Agent) runBrowser(ctx context.Context, c *claims.Claim, b *protocol.Pro
 		a.sendStepResult(ctx, c, "probe.run", res)
 		return
 	}
-	cap := browser.Capture{Runner: a.cfg.Browser, Redactor: redactorOf(c), Baseline: a.cfg.EvidenceHTTP}
+	capture := browser.Capture{Runner: a.cfg.Browser, Redactor: redactorOf(c), Baseline: a.cfg.EvidenceHTTP}
 	t0 := a.clock.Now()
-	out, err := cap.Run(ctx, browser.Request{
+	out, err := capture.Run(ctx, browser.Request{
 		Evidence: b.Probe.Evidence,
 		Probe:    *b.Probe.Spec.Browser,
 		Spec:     browser.RunSpec{ClaimID: c.ID, Workload: m.Workload.MachineID, Service: target.Service, Port: int(target.Port)},

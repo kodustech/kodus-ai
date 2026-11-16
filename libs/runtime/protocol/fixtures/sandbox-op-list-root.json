@@ -1,0 +1,22 @@
+{
+  "name": "sandbox-op-list-root",
+  "message": {
+    "v": 1,
+    "id": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "cellId": "cell-dev-1",
+    "claimId": "claim-sbx-1",
+    "type": "sandbox.op",
+    "body": {
+      "stepId": "0b6f2c1e-8d3a-4f5b-9c7e-1a2b3c4d5e6f",
+      "op": {
+        "op": "list",
+        "depth": 2,
+        "maxEntries": 100
+      }
+    }
+  },
+  "expect": {
+    "ok": true,
+    "type": "sandbox.op"
+  }
+}

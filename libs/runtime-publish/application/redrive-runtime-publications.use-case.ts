@@ -17,10 +17,8 @@ import {
     RUNTIME_PUBLISH_METRICS_TOKEN,
     type RedriveMetrics,
 } from '../domain/runtime-publish.ports';
-import {
-    PublishRuntimeRequestUseCase,
-    type PublishOutcome,
-} from './publish-runtime-request.use-case';
+import type { PublishOutcome } from './publication-outcome';
+import { PublishRuntimeRequestUseCase } from './publish-runtime-request.use-case';
 
 /** What one sweep did, for the cron's log line and the tests. */
 export interface RedriveSweep {

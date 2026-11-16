@@ -158,10 +158,14 @@ func TestFingerprintLeavesOutNothingWhenUnsure(t *testing.T) {
 		}},
 		// BuildKit reads a linked Dockerfile through the link; the file it
 		// reads must not sit in a left-out part of the context unseen.
-		{name: "a linked Dockerfile", files: with(map[string]string{".dockerignore": "docs\n", "docs/real.Dockerfile": "FROM alpine\n"}), build: sandbox.Build{Dockerfile: "app.Dockerfile"},
-			setup: symlink("docs/real.Dockerfile", "app.Dockerfile"), change: edit("docs/real.Dockerfile", "FROM alpine:3.21\n")},
-		{name: "a Dockerfile under a linked directory", files: with(map[string]string{".dockerignore": "docs\n", "docs/Dockerfile": "FROM alpine\n"}), build: sandbox.Build{Dockerfile: "linked/Dockerfile"},
-			setup: symlink("docs", "linked"), change: edit("docs/Dockerfile", "FROM alpine:3.21\n")},
+		{
+			name: "a linked Dockerfile", files: with(map[string]string{".dockerignore": "docs\n", "docs/real.Dockerfile": "FROM alpine\n"}), build: sandbox.Build{Dockerfile: "app.Dockerfile"},
+			setup: symlink("docs/real.Dockerfile", "app.Dockerfile"), change: edit("docs/real.Dockerfile", "FROM alpine:3.21\n"),
+		},
+		{
+			name: "a Dockerfile under a linked directory", files: with(map[string]string{".dockerignore": "docs\n", "docs/Dockerfile": "FROM alpine\n"}), build: sandbox.Build{Dockerfile: "linked/Dockerfile"},
+			setup: symlink("docs", "linked"), change: edit("docs/Dockerfile", "FROM alpine:3.21\n"),
+		},
 	} {
 		if c.change == nil {
 			c.change = change

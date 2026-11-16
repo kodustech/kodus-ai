@@ -9,8 +9,12 @@ func TestNativeCleanupOwnershipRequiresBothLabelAndParent(t *testing.T) {
 		label, actual, expected string
 		want                    bool
 	}{
-		{uuid, parent, parent, true}, {"", parent, parent, false}, {"other", parent, parent, false},
-		{uuid, "system.slice", parent, false}, {uuid, parent, "", false}, {uuid, "", "", false},
+		{uuid, parent, parent, true},
+		{"", parent, parent, false},
+		{"other", parent, parent, false},
+		{uuid, "system.slice", parent, false},
+		{uuid, parent, "", false},
+		{uuid, "", "", false},
 	} {
 		if got := ownsNativeContainer(tc.label, tc.actual, uuid, tc.expected); got != tc.want {
 			t.Fatalf("ownership(%q,%q,%q)=%v", tc.label, tc.actual, tc.expected, got)

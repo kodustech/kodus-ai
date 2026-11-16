@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 	"time"
 )
 
@@ -27,22 +28,38 @@ func ProductionIsolation(i Isolation) bool {
 	switch i {
 	case IsolationVM, IsolationMicroVM, IsolationSandboxedContainer:
 		return true
+	case IsolationNone:
+		return false
 	}
 	return false
 }
 
+// Capabilities are the facts a driver states about its machines. What it can
+// do beyond the MachineDriver core (bake, memory snapshots, sandboxes) is
+// not a flag here: it is a non-nil field of its Parts.
 type Capabilities struct {
 	Isolation        Isolation
 	NestedContainers bool
-	Suspend          string // "hibernate" | "stop" | "none"
 	Arch             []string
-	// Bake says the driver builds an image from a clean setup machine. A
-	// cell whose driver cannot refuses image.bake when it arrives, instead
-	// of accepting it and failing in the background.
-	Bake bool
 	// MaxClaimSize is the largest ClaimSize the driver grants one claim's
 	// workload. Zero: it grants none, and refuses every spec that asks one.
 	MaxClaimSize ClaimSize
+	// DefaultClaimSize is the size a claim that asks none runs at (hello
+	// capabilities.defaultSize); zero when the driver does not say.
+	DefaultClaimSize ClaimSize
+	// Backends are the isolation backends the driver runs machines with
+	// (internal/isolation: "gvisor", "firecracker"); empty for a driver that
+	// is not split into one (hello capabilities.backends).
+	Backends []string
+	// KVM: the cell's host gives it a usable /dev/kvm.
+	KVM bool
+	// HostArch is the architecture the driver's machines run on this host
+	// ("x86_64", "arm64"); empty: the cell's own (hello capabilities.arch).
+	HostArch string
+	// SandboxCellTrust: the driver's code sandboxes take the cell's trust
+	// files (SandboxRequest.CellTrust). False: it refuses a sandbox that
+	// asks them, and the agent never asks.
+	SandboxCellTrust bool
 }
 
 // ClaimSize is the memory and CPUs a claim asked for its workload
@@ -62,17 +79,22 @@ func (s ClaimSize) String() string { return fmt.Sprintf("%d MB / %d CPUs", s.Mem
 // never a retry.
 var ErrSizeUnavailable = errors.New("driver: the machine size is above what this cell grants")
 
-// Within refuses a size above max in memory or CPUs, or a negative one, with
+// ErrDiskCapacity is a machine the cell's disk cannot hold at its disk
+// ceiling next to the machines it already holds: the cell's capacity, never
+// the claim's code.
+var ErrDiskCapacity = errors.New("driver: the cell's disk cannot hold another machine")
+
+// Within refuses a size above ceiling in memory or CPUs, or a negative one, with
 // ErrSizeUnavailable. The zero size always fits.
-func (s ClaimSize) Within(max ClaimSize) error {
+func (s ClaimSize) Within(ceiling ClaimSize) error {
 	if s.IsZero() {
 		return nil
 	}
-	if s.MemoryMB < 0 || s.CPUs < 0 || s.MemoryMB > max.MemoryMB || s.CPUs > max.CPUs {
-		if max.IsZero() {
+	if s.MemoryMB < 0 || s.CPUs < 0 || s.MemoryMB > ceiling.MemoryMB || s.CPUs > ceiling.CPUs {
+		if ceiling.IsZero() {
 			return fmt.Errorf("%w: asked %s, this cell grants no machine size", ErrSizeUnavailable, s)
 		}
-		return fmt.Errorf("%w: asked %s, this cell grants at most %s", ErrSizeUnavailable, s, max)
+		return fmt.Errorf("%w: asked %s, this cell grants at most %s", ErrSizeUnavailable, s, ceiling)
 	}
 	return nil
 }
@@ -95,6 +117,49 @@ type BootTiming struct {
 	// BuildSteps is where the boot's image builds spent their time; nil
 	// when nothing was built or the driver does not measure it.
 	BuildSteps *BuildSteps
+	// Phases is the whole boot in words, slowest first, at most MaxPhases:
+	// each build's base image pull, RUN, COPY and export parts, moving the
+	// image into Docker, compose up and the services' first healthy answer
+	// (MergePhases). Nil when the driver does not measure them.
+	Phases []BootPhase
+}
+
+// MaxPhases is how many phases a boot reports.
+const MaxPhases = 8
+
+// BootPhase is one part of a boot and how long it took. Running: it had
+// not ended when the boot stopped (a claim that reached its ceiling).
+type BootPhase struct {
+	Name    string
+	Ms      int64
+	Running bool
+}
+
+// MergePhases adds up phases of the same name (two services that both ran
+// "yarn install", both exported their layers), slowest first, at most limit
+// (limit < 0: all). Phases with no name or no time are left out.
+func MergePhases(limit int, lists ...[]BootPhase) []BootPhase {
+	sums := map[string]int{}
+	var out []BootPhase
+	for _, l := range lists {
+		for _, p := range l {
+			if p.Name == "" || p.Ms <= 0 {
+				continue
+			}
+			if i, ok := sums[p.Name]; ok {
+				out[i].Ms += p.Ms
+				out[i].Running = out[i].Running || p.Running
+				continue
+			}
+			sums[p.Name] = len(out)
+			out = append(out, p)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Ms > out[j].Ms })
+	if limit >= 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out
 }
 
 // BuildSteps is a boot's image builds, step by step, as BuildKit measured
@@ -104,12 +169,39 @@ type BootTiming struct {
 type BuildSteps struct {
 	Steps, Done, Cached, Errored int
 	Slowest                      []BuildStep
+	// Phases are the builds in words (BootTiming.Phases), every one of
+	// them: the boot merges them with its own and keeps the slowest.
+	Phases []BootPhase
 }
 
 // BuildStep is one step of one service's build.
 type BuildStep struct {
 	Service, Name string
 	Ms            int64
+}
+
+// BootPhaser is a driver that says where a claim's last boot spent its
+// time in words (BootTiming.Phases), also of a boot that failed or was
+// stopped at the claim's ceiling.
+type BootPhaser interface {
+	BootPhases(claimID string) ([]BootPhase, bool)
+}
+
+// EvictedBuildState is an environment whose build state the cell's disk
+// floor removed and no setup of its default branch made again: its builds
+// run with no state until one does.
+type EvictedBuildState struct {
+	Org, Env string
+	At       time.Time
+	// Rebuild is how long the build that made the state from none took;
+	// zero: not measured.
+	Rebuild time.Duration
+}
+
+// BuildStateReporter is a driver that keeps environments' build states and
+// says which its eviction removed (docker-gvisor).
+type BuildStateReporter interface {
+	EvictedBuildStates() []EvictedBuildState
 }
 
 // BootTimer is a driver that measures its boot phases (local-docker).
@@ -132,10 +224,14 @@ type BakeSpec struct {
 	RecipeSHA     string
 	// SHA is the default-branch commit the image is built from (S-52); a
 	// bake never starts from a machine that ran a PR.
-	SHA       string
-	BaseImage string
-	KMSKeyRef string
-	Size      MachineSize
+	SHA string
+	// RefsDigest is the bake key of an environment of several repositories
+	// (image.bake refsDigest): every repository's commit and the recipe.
+	// Empty for one repository, whose key is SHA.
+	RefsDigest string
+	BaseImage  string
+	KMSKeyRef  string
+	Size       MachineSize
 	// Source is the workload machine of the clean setup claim the bake was
 	// asked on, when there is one: the agent checked it never ran PR code
 	// (S-52). A driver that bakes from what that machine built
@@ -149,7 +245,7 @@ type BakeSpec struct {
 // the claim can be released, so the machine's Destroy leaves that output to
 // the bake. Bake then consumes the pin, whether it succeeds or not.
 type BakeSourcePinner interface {
-	PinBakeSource(ref MachineRef) error
+	PinBakeSource(ctx context.Context, ref MachineRef) error
 }
 
 type ImageRef struct {
@@ -198,6 +294,11 @@ type MachineSpec struct {
 	// builds may become the environment's (its bake, its build cache). A
 	// machine without it only ever reads what the environment has.
 	Setup bool
+	// Secrets: the claim hands the machine the org's secrets (their
+	// placeholders). A driver that keeps memory snapshots records it before
+	// the machine exists, and such a machine never becomes one
+	// (docs/runtime/isolation-p3-snapshots.md).
+	Secrets bool
 	// SeedsCache, on a Setup machine: the setup builds the default branch,
 	// so each build's cache becomes the environment's as soon as the build
 	// finishes, not only at a bake (a setup that fails after its build
@@ -224,6 +325,9 @@ type SnapshotRef struct {
 	Ref  string
 }
 
+// SuspendMode is how a driver that suspends machines (aws-ec2, microvm)
+// keeps one: nothing in the cell suspends a machine yet, so it is no part
+// of the contract until the hibernated pool (ADR-004) asks for it.
 type SuspendMode string
 
 const (
@@ -262,6 +366,10 @@ type ClaimNetwork struct {
 	// network (docker-gvisor's image builder): they join the claim's policy
 	// from the start, so what they fetch goes through the same allowlist.
 	Sources []string
+	// SourcesTrustCellCA: what runs at Sources trusts the cell CA (the
+	// builder's RUN steps get the cell's trust bundle), so the claim's policy
+	// inspects their TLS like a machine's instead of refusing it.
+	SourcesTrustCellCA bool
 }
 
 // MachineDriver is what a cell asks of its cloud or cluster. Every driver
@@ -274,15 +382,14 @@ type ClaimNetwork struct {
 //   - Destroy is idempotent and refuses another cell's machine with
 //     ErrNotOwned; SetExpiry refuses it too; ReleaseClaim does the same for
 //     networks.
-//   - What Capabilities says the driver cannot do fails with ErrUnsupported.
+//
+// Anything more a driver can do is an optional part of its Parts, never a
+// method every driver must stub.
 type MachineDriver interface {
 	Describer
 	ClaimNetworker
 	MachineCreator
 	MachineKeeper
-	MachinePauser
-	MachineResetter
-	Baker
 }
 
 // The driver's contract, by what a caller needs of it. A package that uses
@@ -315,11 +422,38 @@ type MachineKeeper interface {
 	SetExpiry(ctx context.Context, ref MachineRef, expiresAt time.Time) error
 }
 
-// MachinePauser suspends and resumes a machine. Nothing in the cell calls it
-// yet: the hibernated pool (ADR-004) will.
-type MachinePauser interface {
-	Suspend(ctx context.Context, ref MachineRef, mode SuspendMode) error
-	Resume(ctx context.Context, ref MachineRef) error
+// MemorySnapshot is a machine's memory snapshot as the agent names it
+// (docs/runtime/isolation-p3-snapshots.md): its id, its org and its purpose
+// (template, session or round, as claim.snapshot names them).
+type MemorySnapshot struct {
+	ID, OrgID, Purpose string
+}
+
+// SessionForgetter removes an org's session snapshot at once (its PR
+// closed): only a session, never a template or a round; one this cell does
+// not hold is already gone.
+type SessionForgetter interface {
+	ForgetSession(ctx context.Context, orgID, snapshotID string) error
+}
+
+// Snapshotter is a driver that keeps machines as memory snapshots. The
+// rules of what may become one (a machine handed secrets never does, but
+// for its own claim's round) are the driver's backend's, read from what it
+// recorded when it made the machine.
+type Snapshotter interface {
+	// SnapshotMachine keeps this cell's machine for purpose, key being a
+	// template's key in its org. A template or a session ends the machine;
+	// a round brings it back at once in its place and returns it.
+	SnapshotMachine(ctx context.Context, ref MachineRef, purpose, key string) (MemorySnapshot, MachineRef, error)
+	// LatestTemplate is org's newest template of key this cell can restore
+	// into a sandbox; ok false when it holds none.
+	LatestTemplate(ctx context.Context, orgID, key string) (MemorySnapshot, bool, error)
+	// CreateSandboxFromSnapshot makes req.Spec's sandbox from a template or
+	// a session of its org.
+	CreateSandboxFromSnapshot(ctx context.Context, req SandboxRequest, snap MemorySnapshot) (MachineRef, error)
+	// ResetToSnapshot ends the machine and restores it in its place from its
+	// claim's round snapshot (machine.reset kind memory).
+	ResetToSnapshot(ctx context.Context, ref MachineRef, snap MemorySnapshot) (MachineRef, error)
 }
 
 // MachineResetter brings a machine back to a snapshot between rounds.
@@ -345,8 +479,9 @@ const (
 // ReservedTags are the tags only a driver writes, from the spec.
 var ReservedTags = []string{TagCell, TagEnv, TagOrg, TagClaim, TagRole, TagExpires, TagHardExpires}
 
-// ErrUnsupported is a driver asked for something its Capabilities do not
-// offer (suspend on a driver that only destroys, a bake on local-docker).
+// ErrUnsupported is a driver asked for something it does not offer (a
+// sandbox with the cell's trust on a driver whose SandboxCellTrust is false,
+// a reset kind it has no snapshot of).
 // The agent tells it from a failure: it is a fact about the driver, not a
 // fault to retry.
 var ErrUnsupported = errors.New("driver: not supported by this driver")
@@ -363,6 +498,22 @@ var ErrWorkloadBoot = errors.New("driver: the workload's own project did not com
 // its memory limit (exit 137): the blocker is resources/out_of_memory, a
 // machine size to raise or a build to trim, never a retry.
 var ErrOutOfMemory = errors.New("driver: the workload ran out of memory")
+
+// ErrBuilderFailed marks an image build whose builder ended without BuildKit
+// saying a step of the build failed: docker could not run the builder (exit
+// 125 to 127), or the builder died while steps were still running. The
+// project's code did not fail, so the blocker is the platform's, never the
+// recipe's.
+var ErrBuilderFailed = errors.New("driver: the image builder failed outside the build's steps")
+
+// ErrImageLoad marks a built image the cell could not take: the builder's
+// output was not exactly the one image it was asked for, or the host's
+// Docker did not load it. The blocker is the platform's.
+var ErrImageLoad = errors.New("driver: the built image was refused or did not load")
+
+// ErrImageTooLarge marks a build whose output passed the cell's bound on
+// what one build may leave on its disk: resources, an image to trim.
+var ErrImageTooLarge = errors.New("driver: the built image is larger than this cell allows")
 
 // ErrWorkloadRecipe marks a boot refused because of the checkout's recipe
 // (it does not parse, or holds what a recipe never may): the repository's
@@ -397,14 +548,76 @@ var ErrHardExpiresImmutable = errors.New("kodus:hard-expires is written at creat
 // FormatTime is how expiry tags are written: RFC 3339, UTC, seconds.
 func FormatTime(t time.Time) string { return t.UTC().Format(time.RFC3339) }
 
-// ParseExpiry reads an expiry tag. A missing or bad tag is "already expired":
-// a machine nobody can date is a machine nobody owns.
-func ParseExpiry(tags map[string]string, key string) time.Time {
+// A machine's life has two ends, read only through the functions below.
+//
+// kodus:hard-expires is the ceiling: written once at creation
+// (MachineSpec.AllTags), never moved. Every sweep honors it whatever
+// renewed the machine: the lease manager's, a driver's (Sweeper) and the
+// reaper's. A machine whose ceiling is missing or does not parse is already
+// past it: a machine nobody can date is a machine nobody owns.
+//
+// kodus:expires is the lease's end, which claim.renew moves under the
+// ceiling. Only the lease manager destroys at it (LeaseLapsed), since only
+// it knows which claims the hub still renews. A driver's sweep and the
+// reaper never read it: some drivers keep it only in the cell's memory,
+// which a restart loses.
+
+// ErrNoCeiling is a machine whose backend carries no kodus:hard-expires that
+// parses: it cannot be renewed, and every sweep takes it.
+var ErrNoCeiling = errors.New("driver: the machine carries no ceiling (kodus:hard-expires)")
+
+// Ceiling is the machine's kodus:hard-expires; false when it is missing or
+// does not parse, which every caller treats as already passed.
+func Ceiling(tags map[string]string) (time.Time, bool) {
+	return parseTag(tags, TagHardExpires)
+}
+
+// Expired says the machine is past its ceiling at now, or has none.
+func Expired(tags map[string]string, now time.Time) bool {
+	ceiling, ok := Ceiling(tags)
+	return !ok || !now.Before(ceiling)
+}
+
+// ClampToCeiling is at, held at the ceiling backendTags carry. backendTags
+// are what the driver read from its backend, never a caller's ref, which can
+// say any ceiling. ErrNoCeiling when the backend carries none.
+func ClampToCeiling(at time.Time, backendTags map[string]string) (time.Time, error) {
+	ceiling, ok := Ceiling(backendTags)
+	if !ok {
+		return time.Time{}, ErrNoCeiling
+	}
+	if at.After(ceiling) {
+		return ceiling, nil
+	}
+	return at, nil
+}
+
+// LeaseEnd is the machine's kodus:expires; false when it is missing or does
+// not parse.
+func LeaseEnd(tags map[string]string) (time.Time, bool) {
+	return parseTag(tags, TagExpires)
+}
+
+// LeaseLapsed says the machine's kodus:expires passed at now, or it has none
+// that parses. Only the lease manager destroys at it (see above).
+func LeaseLapsed(tags map[string]string, now time.Time) bool {
+	end, ok := LeaseEnd(tags)
+	return !ok || !now.Before(end)
+}
+
+func parseTag(tags map[string]string, key string) (time.Time, bool) {
 	t, err := time.Parse(time.RFC3339, tags[key])
 	if err != nil {
-		return time.Time{}
+		return time.Time{}, false
 	}
-	return t
+	return t, true
+}
+
+// Sweeper is a driver that removes, on its own, this cell's machines past
+// their ceiling (Expired): what a crashed or killed cell left. cmd/cell runs
+// it at start and every minute. It returns the machines it destroyed.
+type Sweeper interface {
+	Sweep(ctx context.Context, now time.Time) ([]string, error)
 }
 
 // SnapshotTags are the tags of every image or disk snapshot a bake makes:
@@ -482,6 +695,20 @@ func Matches(tags, selector map[string]string) bool {
 // what it returns before it leaves the cell.
 type Diagnoser interface {
 	Diagnose(ctx context.Context, claimID string, ref MachineRef, expose []ExposePort) (Diagnostics, error)
+}
+
+// HealthReader reads a workload machine's health for a step's result
+// (step.result vmHealth): whether it still runs, and how many processes its
+// kernel has killed for memory since it booted (a counter, compared around
+// a step). Only this cell's machines.
+type HealthReader interface {
+	MachineHealth(ctx context.Context, ref MachineRef) (MachineHealth, error)
+}
+
+// MachineHealth is HealthReader's answer.
+type MachineHealth struct {
+	Running  bool
+	OOMKills uint64
 }
 
 // ServiceLogReader reads what a claim's services logged in a window, each
@@ -577,29 +804,21 @@ type ClaimMemory struct {
 	ReadyMB int
 }
 
-// MemoryBudgetOf is d's MemoryBudget, looking through wrappers (Observed)
-// that hide it: a bare type assertion on a wrapped driver turned memory
-// admission off without a word on cell-dev-1 (ADR-070).
-func MemoryBudgetOf(d MachineDriver) (MemoryBudget, bool) {
-	for d != nil {
-		if b, ok := d.(MemoryBudget); ok {
-			return b, true
-		}
-		u, ok := d.(interface{ Unwrap() MachineDriver })
-		if !ok {
-			return nil, false
-		}
-		d = u.Unwrap()
-	}
-	return nil, false
-}
-
 // MemoryBudget is a driver whose claims share the cell's own memory
-// (docker-gvisor): the agent admits a claim only when its memory fits, and
-// tells the hub (heartbeat memory). A driver whose claims are machines of
-// their own (aws-ec2) has none.
+// (docker-gvisor, microvm): the agent admits a claim only when its memory
+// fits, and tells the hub (heartbeat memory). A driver whose claims are
+// machines of their own (aws-ec2) has none.
 type MemoryBudget interface {
 	// ClaimMemory is what a claim of this size (zero: the cell's default)
 	// is counted for.
 	ClaimMemory(size ClaimSize) ClaimMemory
+}
+
+// SandboxBudget is a MemoryBudget whose code sandbox is counted for more
+// than the memory its size names: a microVM's VMM and page cache come on
+// top of its guest's memory, and a sandbox has no observer machine.
+type SandboxBudget interface {
+	// SandboxMemoryMB is what one sandbox of this size (zero: the
+	// driver's default) is counted for, from its boot to its release.
+	SandboxMemoryMB(size ClaimSize) int
 }

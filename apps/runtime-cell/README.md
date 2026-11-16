@@ -8,7 +8,7 @@ The cell is Go (`go.mod` here); the hub and the gate are TypeScript (`apps/runti
 
 | Binary | Runs where | What it does |
 |---|---|---|
-| `cell` | the cell host | The agent: holds the outbound WebSocket to the hub, prepares and releases claims, keeps leases and the dead-man switch. Subcommands: `cell register` and `cell renew` (enrollment), and `cell extract` (the tarball extraction child, no network). |
+| `cell` | the cell host | The agent: holds the outbound WebSocket to the hub, prepares and releases claims, keeps leases and the dead-man switch. Subcommands: `cell register` and `cell renew` (enrollment), `cell extract` (the tarball extraction child, no network), and `cell update` (installs the next release once its signature verifies against a pinned key, S-17). |
 | `kody-exec` | inside the workload VM | Reads one JSON request on stdin, runs it with `sh -c`, prints the result. Enforces the timeout on the whole process tree. Its output is evidence, never a verdict. |
 | `observer` | the claim's observer machine | Runs typed HTTP and read-only SQL probes against the claim's exposed ports, outside the VM, and keeps the request log the gate uses for coverage. |
 | `egress` | the egress host | Transparent proxy: the claim's only way out (ports 80/443 redirected by nftables). Reads SNI or Host, never terminates TLS, holds no credential. With `-dns-listen` it also runs the resolver. |
@@ -17,19 +17,19 @@ The cell is Go (`go.mod` here); the hub and the gate are TypeScript (`apps/runti
 | `injector-admin` | the injector's OS owner | Reads one write-only management request from stdin and calls the running injector's optional private Unix socket. It never opens the ciphertext/key or returns a credential. |
 | `reaper` | outside the cell (EventBridge, CronJob, systemd timer) | Destroys every machine of the cell past `kodus:hard-expires`, with its own list-and-destroy credential. Drivers: `aws-ec2`, `k8s-sandbox`, `docker-gvisor` (on the host, from Docker labels and the cell's work directory only: `deploy/docker-gvisor`). |
 
-`docker/Dockerfile.runtime-cell` builds all eight into one distroless image.
+`Dockerfile` builds all eight into one distroless image (the chart's `images.cell`); `-version` on `cell` and the `*.start` log line of every binary print the release and commit it was built from.
 
 ## Package map (`internal/`)
 
 Control side (the agent and what it talks to):
 
-- `agent`: the orchestrator. `handle.go` maps each hub frame to a handler and never does I/O on the read loop. A claim's life: `acquire.go` admits the frame, `prepare.go` runs the preparation as named steps (network, machines, code, upload, compose, egress, recipe, observer SQL), `settle.go` tells the hub ready or failed, `steps.go` runs its steps and `release.go` ends it. `blocker.go` is a prepare failure's kind and signature. `config.go` is what the agent is given (its ports and optional capabilities) and its checked defaults; `agent.go` only builds the agent from it. `egress_sync.go`, `image_policy.go` (S-52 taint, bake, pool), `hold.go`, `bundle.go`, `redaction.go` and `alerts.go` cover the rest.
+- `agent`: the orchestrator. `handle.go` maps each hub frame to a handler and never does I/O on the read loop. A claim's life: `acquire.go` admits the frame, `prepare.go` runs the preparation as named steps (network, machines, code, upload, compose, egress, recipe, observer SQL), `settle.go` tells the hub ready or failed, `steps.go` runs its steps and `release.go` ends it. `blocker.go` is a prepare failure's kind and signature. `config.go` is what the agent is given (its ports and optional capabilities) and its checked defaults; `agent.go` only builds the agent from it. `egress_sync.go`, `image_policy.go` (taint, bake, pool), `hold.go`, `bundle.go`, `redaction.go` and `alerts.go` cover the rest.
 - `agent/claims`: each claim's state machine (acquiring, ready, failed, held, released), behind the claim's lock, and the registry that bounds how many claims a cell holds. Claim ids are validated here (`id.go`).
 - `agent/outbox`: claim frames (`claim.ready`, `claim.failed`, `step.result`, `blocked`) resent until the hub acks them.
-- `agent/admission`: the memory ledger (ADR-070): megabytes per claim id, what fits, what asynchronous work still holds. It knows no driver, claim or hub.
+- `agent/admission`: the memory ledger: megabytes per claim id, what fits, what asynchronous work still holds. It knows no driver, claim or hub.
 - `agent/evidence`: what a step leaves (service logs, egress, database effects, the exec's cast), redacted, bounded and uploaded only with its grant. It sees a claim as an id, a logger, a workload and a redactor.
 - `agent/pool`: the warm pool: targets per environment, the ready machines, refill and discard, behind its own lock. The agent adopts what it hands out.
-- `agent/provenance`: where machines and images came from (S-52): tainted machines, the images this cell baked, each environment's last, the bakes in progress.
+- `agent/provenance`: where machines and images came from: tainted machines, the images this cell baked, each environment's last, the bakes in progress.
 - `agent/checkout`: what the cell reads from and writes into a claim's checkout before the boot: the default branch's recipe laid over the checkout's copy, Kody's authored build files, and what the checkout pins for the mirror (`go.sum`, Dockerfile images). No claim state; the agent turns its errors into blockers.
 - `hubclient`: the mTLS WebSocket, ack/nack within 5 s, and `Later` for answers that need I/O.
 - `protocol`: the envelope and bodies generated from the TS JSON Schema, plus a strict decoder that refuses what the TS decoder refuses, with the same codes.
@@ -44,7 +44,8 @@ Control side (the agent and what it talks to):
 - `reaper`: the reaper's pass and loop.
 - `metrics`: counters and gauges in the Prometheus text format.
 - `clock`: the time source; `clock.Fake` makes retries and expiries instant in tests.
-- `tlsutil`: loading PEM keys and pools.
+- `lifecycle`: who owns a process's long-lived work. Each `cmd/*` runs its servers and loops in a `lifecycle.Group`; on SIGTERM or SIGINT they stop and the process waits for them within a deadline, then closes what they used (the cell's driver last). `ExitCode` maps a run's error to the exit code (a `Usage` error exits 2).
+- `tlsutil`: loading PEM keys and pools, and the control ports' TLS: with `-agent-cn` (the cell id) or `-agent-spki`, the proxy, resolver and injector answer only the agent's certificate, not every certificate of their CA. Without a pin they log `control.peer.unpinned` (alarm), and `GET /v1/queries` answers no one.
 - `testpki`: throwaway CAs for tests. `testing/hubstub`: a minimal hub for tests.
 
 Data plane (what enforces a claim's network and secrets):
@@ -55,10 +56,10 @@ Data plane (what enforces a claim's network and secrets):
 - `observer`: probe runner, request log, and the config server that binds an observer to one claim.
 - `observerauth`: private claim-local SQL credential and fixed provisioning data; no control/driver dependency.
 - `observerclient`: authenticated configuration binding, generation/fingerprint verification and redirect refusal.
-- `browser`: browser probes (ADR-071). Checks the closed step list, hands the job to a `Runner` (a container per round), reads its tar stream to the design's bounds, redacts the HAR and the trace's text with the claim's redactor, and diffs each screenshot against the baseline round's in Go (`pixeldiff.go`). The runner image is `browser-runner/` (Playwright, its own `package.json`).
+- `browser`: browser probes. Checks the closed step list, hands the job to a `Runner` (a container per round), reads its tar stream within fixed bounds, redacts the HAR and the trace's text with the claim's redactor, and diffs each screenshot against the baseline round's in Go (`pixeldiff.go`). The runner image is `browser-runner/` (Playwright, its own `package.json`).
 - `policy`: the per-claim policy the agent signs (ed25519) and the components verify.
 - `policy/control`: the control protocol: signed `PUT /v1/policy` and `DELETE /v1/policy/{claim}`, and the agent's `Pusher` with named endpoints.
-- `netguard`: the network rules every data-plane piece applies alike: allowed addresses, the Kodus deny list, the answers the resolver handed out.
+- `netguard`: the network rules every data-plane piece applies alike: allowed addresses, the Kodus deny list, the answers the resolver handed out. An `-internal-cidrs` that overlaps the claim pool (`-claim-subnets`, `10.213.0.0/16`) is refused at startup.
 - `eventlog`: the bounded, sequenced log that the proxy's denials and the injector's alerts are long-polled from.
 - `redact`: the last pass over everything that leaves the cell. Exact known values in every spelling, then token patterns. Replacement is one-way.
 
@@ -66,20 +67,28 @@ Environment (how a checkout boots):
 
 - `recipe`: `.kodus/workspace.yaml`: format and the rules every cell enforces. Among them: no secrets in `services.compose.env`, and no name there that changes what runs instead of configuring the app (`PATH`, `LD_*`, `DYLD_*`, `NODE_OPTIONS`, `JAVA_TOOL_OPTIONS`, `BASH_ENV`, `DOCKER_*`, `COMPOSE_*` and the like).
 - `compose`: reads and adapts a checkout's compose project, as data.
-- `compose/sandbox`: the gVisor compose allowlist. `Apply` checks and rewrites the PR's file; `VerifyCanonical` checks what compose will really run.
+- `composecmd`: the docker compose command line per verb, shell quoting for a guest line, how `ps` and `logs --timestamps` read, and service logs over any runner.
+- `compose/sandbox`: the gVisor compose allowlist. `Apply` checks and rewrites the PR's file; `VerifyCanonical` checks what compose will really run, the forced pids, memory and CPU limits included. Every service drops ALL capabilities and gets back `ServiceCaps` only. In `environment`, `command`, `entrypoint` and `healthcheck` a variable compose would read from the cell's own environment (`PATH`, `HOME`, `DOCKER_*`, ...) is refused; `$$` is the container's.
 - `checkoutfs`: the only way the cell writes its own files into a checkout. Nothing it writes follows a name the PR planted.
 - `bakecatalog`: the durable record of baked generations: staged, published, current, retired, held. One JSON file under an exclusive lock, written by rename. It knows no backend: the driver says which generations are its own and removes the artifacts of the ones the catalog drops.
 - `drivers/dockergvisor/buildstate`: BuildKit's state per environment (one seeding setup or many copy-on-write readers, never both; LRU eviction; leftover overlays).
 - `drivers/dockergvisor/buildcache`: the exported build cache as generations, so a promotion never changes files under a running build.
 - `buildfingerprint`: the identity of one image build (context BuildKit would send, Dockerfile, target, args, builder image). A driver that reuses a baked image compares fingerprints; the package knows no backend.
-- `drivers/*`: the drivers below; `drivers/dockercli` is the one adapter to the docker binary.
-- `drivers/dockergvisor`: by file, `driver.go` (configuration and construction), `network.go` (the claim's network), `lifecycle.go` (create, suspend, reset, destroy, list, expiry), `up.go` (a project's boot as six steps), `build.go` (one build: its specification, its cache input, its run), then bake, data, golden data and limits.
+- `drivers/*`: the drivers below. A driver never imports another driver.
+- `dockercli`: the one adapter to the docker binary, shared by the docker drivers, `isolation/gvisor` and `placement/docker`.
+- `isolation`: the IsolationBackend port (create, start, pause, snapshot, restore, destroy, the guest stream, capabilities) and the host probe (KVM, arch). `isolation/gvisor` is runsc on the docker placement; `isolation/firecracker` is one Firecracker microVM per machine under the jailer, its root a reflink clone of the kit's base, the guest agent over vsock (`docs/runtime/isolation-architecture.md`, "P2 as built").
+- `placement`: the Placement port (a claim's network: made with no route out, the egress attached, removed). `placement/docker` is the host's Docker; `placement/hostnet` is a bridge per claim and a tap per machine on the host, fenced by one nftables ruleset.
+- `drivers/microvm`: the driver for microVM backends (hostnet + firecracker): code sandboxes and bare environment machines; `-isolation-backend firecracker` picks it.
+- `vsock`, `guestinit`: the host side of Firecracker's vsock handshake and the guest's listener; the guest agent as a microVM's init (profile, mounts, Docker, the server under its user).
+- `releasesig`, `cellupdate`: a release's signed `SHA256SUMS` (ed25519, the pinned keys in `releasesig/keys`) and `cell update`, which verifies it offline and swaps `current`/`previous` in the installer's layout (`docs/runtime/isolation-p3-snapshots.md`, S-17). `cmd/release-sign` is the release tooling's half and never ships to a host.
+- `rootfs`, `kit`: an OCI image to an ext4 root with the guest agent as init (`cmd/kody-kit rootfs`); the microVM kit's manifest and its verification by digest (`microvm-kit/`).
+- `drivers/dockergvisor`: the shared layer over a placement and a backend. By file, `driver.go` (configuration and construction), `network.go` (the claim's network), `lifecycle.go` (create, suspend, reset, destroy, list, expiry), `up.go` (a project's boot as six steps), `build.go` (one build: its specification, its cache input, its run), then bake, data, golden data and limits.
 - `archrules`: the package boundaries of `AGENTS.md` as a test over the import graph.
-- `buildprogress`: reads BuildKit's plain progress into per-step durations (`build.steps`: the slowest steps, cached and failed counts). Names are redacted and bounded; no step output is kept.
+- `buildprogress`: reads BuildKit's plain progress into per-step durations (`build.steps`: the slowest steps, cached and failed counts). Names are redacted and bounded. Of what a step prints it keeps only its first error lines and its last few (redacted, bounded): a failed build's message starts with the failed step and those lines, ahead of the docker command.
 
 ## Executable recipe additions
 
-Declared, digest-pinned Stripe/Mailpit [local fakes](../../experiments/kody-runtime/recipe-fakes/README.md) are materialized before the normal Compose sandbox transformation. The [seeded PostgreSQL observer](../../experiments/kody-runtime/seeded-sql/README.md) is an optional docker-gvisor capability with private claim-local authentication and conservative schema/query gates. Both features are negotiated; unsupported cells refuse instead of ignoring the recipe. These initial subsets do not complete EC2 bake, arbitrary integrations, flags/LLM/UI configuration or corpus acceptance.
+Declared, digest-pinned Stripe/Mailpit local fakes are materialized before the normal Compose sandbox transformation. The seeded PostgreSQL observer is an optional docker-gvisor capability with private claim-local authentication and conservative schema/query gates. Both features are negotiated; unsupported cells refuse instead of ignoring the recipe. These initial subsets do not complete EC2 bake, arbitrary integrations, flags/LLM/UI configuration or corpus acceptance.
 
 ## Browser evidence
 
@@ -87,7 +96,7 @@ The existing browser executor uses Playwright/Chromium in a separate runner cont
 
 Required missing/incomplete measurements fail closed. PNG decoded dimensions, ZIP inflation and container cleanup are bounded. HAR exports metadata only; optional traces carrying recognized credentials are dropped. Images/video/opaque page data remain restricted to seed data, not arbitrary customer data. The inner Chromium sandbox remains off under the driver's outer gVisor boundary.
 
-This build's measured scope, privacy limits and reproduction are in [BROWSER-EVIDENCE-DELIVERY.md](../../experiments/kody-runtime/BROWSER-EVIDENCE-DELIVERY.md). The replay adapter is currently docker-gvisor and uses Playwright directly. Obscura and Lightpanda are not included. Local `agent-browser` exploration is a separate operation, described below.
+The replay adapter is currently docker-gvisor and uses Playwright directly. Obscura and Lightpanda are not included. Local `agent-browser` exploration is a separate operation, described below.
 
 ## Local UI exploration
 
@@ -95,7 +104,7 @@ This build's measured scope, privacy limits and reproduction are in [BROWSER-EVI
 
 The cell accepts `browser.explore` only for an active base-side Runtime claim and a hub that negotiated the feature. A fresh runner executes at most ten closed CSS actions with local agent-browser/Chromium, returns a bounded redacted snapshot and selector candidates, then exits. It shares the claim's step/container resource limits. It never returns a replay `ProbeResult` or decides a verdict.
 
-A blocked navigation or failed native command ends that job; no daemon/session recovery is attempted. Redirects, WebSockets, service workers and iframe selector conversion are unsupported. No external browser provider, account, token or engine selection is exposed. See [validation and rollout notes](../../experiments/kody-runtime/agent-browser/README.md).
+A blocked navigation or failed native command ends that job; no daemon/session recovery is attempted. Redirects, WebSockets, service workers and iframe selector conversion are unsupported. No external browser provider, account, token or engine selection is exposed.
 
 ## Aggregate container budgets
 
@@ -103,15 +112,15 @@ A blocked navigation or failed native command ends that job; no daemon/session r
 
 Pool adoption keeps the physical parent, required-mode boot/ready reservations equal the actual ceiling, and asynchronous bake work retains its memory through logical release. Uncertain physical cleanup quarantines capacity. A lifetime lock excludes overlapping controllers; required startup refuses surviving managed groups until drained/reaped, rather than starting with an empty memory ledger over live old work.
 
-See [CLAIM-LIMITS-DELIVERY.md](../../experiments/kody-runtime/CLAIM-LIMITS-DELIVERY.md) for exact kernel/runsc proof, configuration, cleanup and remaining recovery/packing gates. Host tasks are not gVisor guest PIDs; dockerd/image loading and trusted Go processing remain separate overhead.
+Host tasks are not gVisor guest PIDs; dockerd/image loading and trusted Go processing remain separate overhead.
 
 ## Drivers and isolation
 
 | `-driver` | Isolation reported | Use | Notes |
 |---|---|---|---|
 | `aws-ec2` | `vm` | production | One VM per claim side plus an observer VM. Per-claim security groups. The org's KMS key. Exec over SSH. |
-| `docker-gvisor` | `sandboxed-container` | self-hosted | The PR's compose project under `runsc`, after `compose/sandbox`. Booted by the agent through `ComposeBooter.Up`; the containers' addresses join the claim's policy Sources. The claim network is `--internal` in a /24 of its own; `-gvisor-egress-container` joins the cell egress to it, every machine mounts a resolv.conf naming the cell resolver alone, and services get fixed addresses with their names in `extra_hosts` (Docker's resolver forwards nothing on an internal network). A project's `build:` sections (checked by `sandbox.Builds`: context and Dockerfile inside the checkout, no remote context, ssh, secrets or caches) build with rootless BuildKit (`-gvisor-builder-image`, by digest) under runsc on the claim network, at a fixed address the policy names from the start, so `RUN` steps fetch only what the claim may; the image replaces the build section and goes with the machine. `test/gvisoregress` proves it on a Linux Docker with runsc (`KODY_E2E_GVISOR=1`). |
-| `k8s-sandbox` | `sandboxed-container` | skeleton | Namespace per claim, default-deny NetworkPolicy, gVisor or Kata RuntimeClass. Only the reaper selects it today; `cmd/cell` does not. |
+| `docker-gvisor` | `sandboxed-container` | self-hosted | The PR's compose project under `runsc`, after `compose/sandbox`. Booted by the agent through `ComposeBooter.Up`; the containers' addresses join the claim's policy Sources. The claim network is `--internal` in a /24 of its own; `-gvisor-egress-container` joins the cell egress to it, every machine mounts a resolv.conf naming the cell resolver alone, and services get fixed addresses with their names in `extra_hosts` (Docker's resolver forwards nothing on an internal network). A project's `build:` sections (checked by `sandbox.Builds`: context and Dockerfile inside the checkout, no remote context, ssh, secrets or caches) build with rootless BuildKit (`-gvisor-builder-image`, by digest) under runsc on the claim network, at a fixed address the policy names from the start, so `RUN` steps fetch only what the claim may; the image replaces the build section and goes with the machine. Before the load the cell bounds what the builder left (`-gvisor-max-image-gb`, else `resources/image_too_large`) and loads only a tarball that is exactly the one image it asked for (else `platform/image_load`); a builder that dies with no step failed is `platform/builder_failed`. `-gvisor-image-transfer registry` (the default; `tarball` is the alternative, and a pull request's build against a registry no setup has seeded sends a tarball) pushes each image to a registry container of that build's own (`-gvisor-registry-image`, by digest; on the claim network for the build and on a host-only network the cell pulls through, by digest only, over a loopback forward) instead of a tarball, so a build moves only the layers that changed; an environment's seed storage is bounded by `-gvisor-registry-keep-gb`, and a pull request's build gets storage of its own (security model in `internal/drivers/dockergvisor/registry.go`). Every boot reports where its time went in words (`claim.ready timing.phases`, `claim.failed phases`, `claim.progress phases`; feature `bootPhases`). `-gvisor-container-disk` (off by default) caps each holder's and builder's writable layer with `--storage-opt size=`, which only overlay2 on XFS with pquota, btrfs and zfs apply. `test/gvisoregress` proves it on a Linux Docker with runsc (`KODY_E2E_GVISOR=1`). |
+| `k8s-sandbox` | `sandboxed-container` | code sandboxes; no Runs | Pods in one sandbox namespace (Pod Security restricted, the chart's default-deny NetworkPolicies) on a gVisor or Kata RuntimeClass, the guest agent over `pods/exec` (WebSocket). A preflight proves the namespace refuses privileged pods, runs the RuntimeClass and enforces the policies before the cell takes work. `-driver k8s-sandbox`, or `auto` in a pod. Chart: kodus-installer `charts/kodus-runtime`; design: `docs/runtime/kubernetes.md`. |
 | `local-docker` | `none` | development only | The developer's own Docker, with no isolation. Needs `-dev-insecure-local-docker` and `KODY_RUNTIME_DEV=1`, and a hub started with `RUNTIME_DEV_ALLOW_INSECURE_CELLS=1`. |
 | `fake` | `none` | tests and `-dev` | In-memory machines. Needs `-dev`. |
 
@@ -127,9 +136,9 @@ Every driver keeps one contract, written on `driver.MachineDriver` and checked b
 
 A new driver is done when it passes the suite.
 
-Only `docker-gvisor` bakes (`Capabilities.Bake`). On any other driver the agent refuses `image.bake` with `bake_unsupported` when it arrives, and the setup records the refusal instead of an image that was never made.
+Only `docker-gvisor` and a microVM cell whose kit runs compose bake (a `Parts.Baker`). On any other driver the agent refuses `image.bake` with `bake_unsupported` when it arrives, and the setup records the refusal instead of an image that was never made.
 
-**Warm pool** (`internal/agent/pool`, `driver.Pooler`; docker-gvisor only, others answer `pool_unsupported`). `pool.target` only takes an image this cell baked (S-52) and asks the cell to keep `size` machines ready for the environment, at most `PoolMax` (4).
+**Warm pool** (`internal/agent/pool`, `driver.Pooler`; docker-gvisor only, others answer `pool_unsupported`). `pool.target` only takes an image this cell baked from a clean setup and asks the cell to keep `size` machines ready for the environment, at most `PoolMax` (4).
 - A pool machine is what a claim would make before its project comes up: its own network wired to the egress, a holder tagged `kodus:role=pool` with a ceiling `PoolTTL` (4h) away, and every baked data volume of the environment already copied into its project volumes.
 - `claim.acquire` of the same org and environment, asking for `latest` or the pool's image, with a ceiling no later than the machine's, adopts one (`Pooler.Adopt`) instead of making its network and workload. The machine keeps its pool tags; the cell keeps the claim → machine binding, moves its expiry with the claim's lease, and lets the claim's observer join the adopted network. A PR claim taints it like any machine.
 - An adopted machine is destroyed on release and never goes back to the pool. The pool refills after each adoption, after a failed fill on the next sweep tick (never in a loop of its own), and moves to the new image when the environment is baked again, discarding the old machines.
@@ -141,7 +150,7 @@ Only `docker-gvisor` bakes (`Capabilities.Bake`). On any other driver the agent 
 - The worker reserves a claim's cell preferring the one of the environment's last setup, which holds its pool, when that cell is eligible for the org and has a free slot (`reserveCellFor`'s `prefer`); otherwise the order is the usual one.
 - Not yet: a pool on awsec2.
 
-**Baking on docker-gvisor.** A bake keeps what the clean setup claim's build sections produced; the agent has already checked that the claim booted the default-branch head and never ran PR code (S-52).
+**Baking on docker-gvisor.** A bake keeps what the clean setup claim's build sections produced; the agent has already checked that the claim booted the default-branch head and never ran PR code.
 - The agent pins the setup machine's images (`driver.BakeSourcePinner`, `Config.BakePinner`) before it acks `image.bake`, so the release the worker sends next cannot remove them. `Bake` consumes the pin either way.
 - Each bake gets a fresh generation, even at the same commit. The public ID is `kodus-bake/<scope-hash>@<sha>.<generation>`; images use `kodus-bake/<cell>/<org>/<env>:<generation>-<fingerprint>`. The fingerprint hashes the build's whole context (path, type, mode, content or link target; nothing followed, FIFOs never opened), Dockerfile, target, args and builder image. A context over 200k entries or 4 GiB has none and is always built.
 - A matching build reuses only images declared in its selected generation manifest. A declared image that disappeared fails closed instead of being rebuilt under the old identity. Setup/unpinned builds do not reuse mutable legacy bake tags; ordinary BuildKit caches remain separate.
@@ -149,8 +158,8 @@ Only `docker-gvisor` bakes (`Capabilities.Bake`). On any other driver the agent 
 - Logs: `build.done` (with `reused`), `build.fingerprint.failed`, `bake.named`, `bake.service.skipped`, `bake.prune.failed`. `test/gvisoregress` proves the flow under runsc: a claim at the baked input boots with no builder and no egress; a changed Dockerfile builds and runs its own image; the environment's bake stays the setup's.
 - Data (`data.reset: snapshot`) is copied into generation-specific volumes recorded in the exact manifest, with cell/org/environment, source-SHA and generation labels. Source helpers are created before provenance inspection, holding Docker's volume reference; the trusted marker is checked inside the readonly mount before copying. An auto-created empty source, symlink/FIFO/directory marker or missing member cannot become a successful restore. Partial copies are removed and errors preserved.
 - A private version-1 catalog keeps eligible/current and staged/retired cleanup records. Atomic publication, an exclusive controller lock and bounded recovery protect the catalog: at most 1024 generations, 128 images and 128 volumes per generation, 4 MiB metadata. The CLI stores it in `<state-dir>/bakes` (driver default: `<WorkDir>/bake-catalog`); never mount it into a workload. Preserve this directory across upgrades. Legacy SHA-only IDs require fresh setup.
-- Startup restores only backend-validated bake eligibility, with a caller-cancellable 30-second ceiling. It never restores claims, leases, keys, step execution or claim-local snapshots. The [physical generation test](test/gvisoregress/generation_recovery_linux_test.go) passed under runsc for same-SHA distinct seeds, retained old-claim reset and driver restart; zero scoped containers/networks/volumes remained. Image-build/browser/full-Run and installed-service restart acceptance remain separate. See [evidence](../../experiments/kody-runtime/observability/bake-generation-validation.json).
-- Every copy of an org's data runs a helper (`-gvisor-helper-image`, `busybox:1.36` when empty) under runsc with no network (`dockercli.CopyVolumeIn`).
+- Startup restores only backend-validated bake eligibility, with a caller-cancellable 30-second ceiling. It never restores claims, leases, keys, step execution or claim-local snapshots. The [physical generation test](test/gvisoregress/generation_recovery_linux_test.go) passed under runsc for same-SHA distinct seeds, retained old-claim reset and driver restart; zero scoped containers/networks/volumes remained. Image-build/browser/full-Run and installed-service restart acceptance remain separate.
+- Every copy of an org's data runs a helper (`-gvisor-helper-image`, `busybox:1.36` pinned by digest when empty) under runsc with no network (`dockercli.CopyVolumeIn`). The driver refuses a configured helper image that is not pinned by digest (`name@sha256:...`).
 - `test/gvisoregress` proves the data path too: a service seeds its volume with a value no later boot can repeat, and the later claim finds the setup's.
 - Build cache, one way like the images: every build reads its environment's BuildKit cache (`--import-cache type=local`, mounted read-only); only the builds of a setup's workload (`driver.MachineSpec.Setup`, set by the agent for a setup claim that is not a PR) write their own (`--export-cache mode=max`) into a directory of the machine's, and a bake of that machine makes it the environment's, replacing the older one. A PR build can never put a layer where a later setup or bake would read it. A machine's cache goes with it unless a bake takes it. `test/gvisoregress` proves it: a PR that changes a file copied after the `RUN` that installs packages builds with the package mirror blocked, and the same build with no cache fails at that `RUN`.
 - A setup never adopts a pool machine: it boots the default branch from nothing, not from the last bake's data.
@@ -182,7 +191,7 @@ Not implemented yet:
 
 ## Life of a claim
 
-1. **Enroll.** `cell register` makes the key on the cell and sends a CSR with a one-time token. It writes `key.pem` (the key with its certificate), `cert.pem`, `ca.pem` (the operator's hub CA, which pins the hub) and `issuer.pem`. The agent renews over mTLS when a third of the validity is left; every renewal must chain to `issuer.pem`. The cell id is the certificate's CN.
+1. **Enroll.** `cell register` makes the key on the cell and sends a CSR with a one-time token. It writes `key.pem` (the key with its certificate), `cert.pem`, `ca.pem` (the operator's hub CA, which pins the hub) and `issuer.pem`. The agent renews over mTLS when a third of the validity is left; every renewal must chain to `issuer.pem`, and a renewal without it fails (register again). The cell id is the certificate's CN.
 2. **Hello.** The agent dials the hub and offers its protocol versions, driver, isolation and regions; the hub's ack picks the version. Heartbeats report each claim and the free slots.
 3. **`claim.acquire`.** The claim is refused unless:
    - the claim id is a plain path segment;
@@ -194,7 +203,7 @@ Not implemented yet:
 4. **Prepare** (each phase logs `claim.phase`):
    1. the claim network;
    2. the workload and observer machines (a PR side's workload is tainted: never baked, snapshotted or pooled);
-   3. the tarball at the SHA, extracted in a no-network child (links, devices, `..` and `.git` refused), then the download token revoked;
+   3. the tarball at the SHA, extracted in a no-network child (links, devices, `..` and `.git` refused), then the download token revoked. A claim of several repositories (`claim.acquire` `repos`, only on a cell that announces `workspace`: one whose driver boots the compose project, docker-gvisor) is laid out as `claim/ws/<alias>/`, its own repository under its short name, each fetched at its commit with its own token; every token is revoked, a fetched one after extraction and the others when the preparation ends. The sandbox root is `ws/`, the compose project and the recipe are `ws/<primary>`, and a build context or bind may name `../<alias>`, never what is outside `ws/` (`sandbox.Options.Root`). Mirror pins are read over `ws/`. A claim of one repository keeps `claim/repo`;
    4. the default branch's recipe written over the PR's copy;
    5. the upload (local-docker boots here);
    6. `ComposeBooter.Up` (docker-gvisor), with the claim's policy already pushed: a build fetches through the proxy during Up;
@@ -252,11 +261,15 @@ sequenceDiagram
   - its name is on that claim's allowlist and not on the deny list;
   - its address is one the resolver handed that claim, or one the proxy resolves for the name now.
 
-  Credentialed hosts go only through the injector, which reaches exactly the address the proxy validated.
+  Credentialed hosts go only through the injector, which reaches exactly the address the proxy validated. The proxy finds the injector at `-injector-addr`, and the injector takes PROXY v1 only from the IPv4 addresses in `-trusted-proxies`. A proxy without `-injector-addr` logs `egress.injector.unconfigured` (alarm) at startup and refuses, with 422, a policy that names a credentialed host, so the claim stops at `egress_policy` instead of each request failing with `credential_host_needs_injector`. An injector without `-trusted-proxies` logs `injector.proxies.unconfigured` (alarm).
+
+  The injector terminates a credentialed host's TLS with the cell CA, so the machines of a claim with org secrets must trust it. The cell takes the CA's certificate (`-cell-ca-cert`, the injector's `-cell-ca-cert`) and its own public roots (`-machine-roots`, else its trust store), writes `<workdir>/trust/ca-bundle.pem` (roots plus the cell CA) and `cell-ca.pem` once at start, and mounts both read-only at `/etc/kodus/` in every machine of such a claim, never of another (`internal/machinetrust`). Compose services get `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` and `GIT_SSL_CAINFO` (the bundle) and `NODE_EXTRA_CA_CERTS` (the CA alone), over what the file or the recipe set; a code sandbox gets the bundle over its system store too, and its guest agent sets the same variables. A sandbox with secrets never takes a blank pool sandbox. A cell that pushes policies without `-cell-ca-cert` logs `machine_trust.unconfigured` (alarm).
 - **Deny list.** No allowlist, recipe or admin approval reaches a host on it (`netguard.DenyList`):
   - the Kodus entries: storage and paste sites, tunnels, LLM APIs, DNS over HTTPS;
   - the operator's own, given to the proxy and the resolver with the same `-deny-hosts` value (an exact host, or `.domain` for every name under it);
   - `-owned-hosts` lets the cell's own hosts through the Kodus entries only.
+
+  Both flags are read by one loader (`netguard.RegisterDenyFlags`). Each enforcer answers a policy push with the fingerprint of what it was given (`X-Kodus-Deny-Fingerprint`, `DenyList.Fingerprint`); when two of them differ the push fails with `control.ErrDenyListsDiffer`, the claim stops at `egress_policy` and the cell logs `egress.deny_lists.differ` (alarm). An enforcer of an earlier release reports none and is not compared.
 
   Its zero value is the Kodus list, so a proxy or resolver nobody configured still refuses it. The agent leaves a denied host out of the policy it signs (`policy.Build`), logs `egress.policy.denied_hosts` and counts `cell_egress_hosts_denied_total`, so a policy never says a host is reachable when the proxy will refuse it.
 - **Observer.** On aws-ec2 it is its own machine, configured over `PUT /v1/config` with the claim id it is bound to (`-observer http`). The fake and local-docker cells run it in-process (`-observer inprocess`).
@@ -296,6 +309,7 @@ cd apps/runtime-cell && go generate ./internal/protocol
 ```
 
 - `TestGeneratedTypesAreCurrent` fails when `types_gen.go` is stale.
+- The same script writes `internal/protocol/constants_gen.go`: the hello features, bounds, patterns and name lists of the TS protocol. `libs/runtime/protocol/generated-go.spec.ts` fails when it is stale.
 - Rules zod expresses as refinements (read-only SQL, step result consistency, diagnostic hold only on setup claims, required `claimId`/`re`, reserved keys) are mirrored by hand in `internal/protocol/codec.go` and `strictjson.go`.
 - The fixtures in `libs/runtime/protocol/fixtures` run on both sides: `go test ./internal/protocol/` and `API_NODE_ENV=test npx jest libs/runtime/protocol`. Both must accept and refuse the same frames with the same codes.
 
@@ -303,12 +317,20 @@ cd apps/runtime-cell && go generate ./internal/protocol
 
 ```sh
 cd apps/runtime-cell
-gofmt -l . && go vet ./... && go test -race -count=1 ./...
-~/go/bin/staticcheck ./...
+golangci-lint fmt                       # gofumpt + goimports, rewrites files
+golangci-lint run ./...                 # linters from .golangci.yml
+GOOS=linux golangci-lint run ./...      # the Linux-only files too
+go vet ./... && GOOS=linux go vet ./... && go test -race -count=1 ./...
 scripts/check-licenses.sh
 ```
 
-- CI (`.github/workflows/runtime-cell.yml`) runs gofmt, vet, `go test -race` and govulncheck.
+Install the linter at the version CI pins (built with this module's Go):
+`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0`.
+`.golangci.yml` names every linter and formatter; each exclusion carries its
+reason. A `//nolint:<linter> // <reason>` is only for a confirmed false
+positive, on the line it silences.
+
+- CI (`.github/workflows/runtime-cell.yml`) runs `go mod tidy` (no diff), `go mod verify`, `golangci-lint run` and `golangci-lint fmt --diff` (no diff), `go vet`, `go test -race` and govulncheck. `runtime-supply-chain.yml` checks dependency licenses (MIT, Apache-2.0, BSD, ISC) and runs the same govulncheck. Every action is pinned by commit SHA, tag in a comment.
 - `test/integration` runs the agent on the fake driver against `testing/hubstub` over a real mTLS WebSocket.
 - Linux-only behavior (network namespaces, the child subreaper): `GOMODCACHE=$(go env GOMODCACHE) docker compose -f test/linux/docker-compose.yml run --rm go-test`.
 - Real Docker (local-docker), behind the `dockersmoke` tag:
@@ -321,9 +343,49 @@ KODY_RUNTIME_SMOKE_DIR=/path/to/checkout KODY_RUNTIME_DEV=1 \
 
 `TestSmokeCheckout` boots a real checkout from its recipe, checks its health path, resets it once and destroys it. It fails if any container or built image is left.
 
+## Release
+
+A release is a tag. `.github/workflows/runtime-cell-release.yml` runs on
+`runtime-cell/v*` tags and by hand (`workflow_dispatch`; version
+`v0.0.0-dev+<sha>`), never on pull requests:
+
+```sh
+git tag runtime-cell/v1.2.3 <commit> && git push origin runtime-cell/v1.2.3
+```
+
+It builds the eight binaries for linux/arm64 and linux/amd64
+(`CGO_ENABLED=0 -trimpath -buildvcs=true`, version and commit stamped into
+`internal/version`) with `SHA256SUMS`, an SPDX SBOM and a build-provenance
+attestation (workflow artifact `runtime-cell-<version>`); and one multi-arch
+image from `Dockerfile` (base images pinned by digest) with a BuildKit SBOM and
+max-mode provenance, built once and pushed under the same digest to AWS ECR
+(Kodus-managed cells) and `ghcr.io/<owner>/kodus-runtime-cell` (self-hosted
+cells). Each registry gets a keyless cosign signature and a GitHub provenance
+attestation. The run summary prints the digest for the chart's `images.cell`.
+Only a tag push signs `SHA256SUMS` (job `sign`, GitHub environment
+`runtime-cell-release`, which holds `RUNTIME_CELL_RELEASE_SIGNING_KEY` behind
+required reviewers and admits only `runtime-cell/v*` tags). A
+`workflow_dispatch` build is never signed, so `cell update` refuses it; `cell
+update` also refuses a lower version than the running cell's without
+`-allow-downgrade`.
+The run fails first unless the repository variables `RUNTIME_CELL_AWS_ROLE_ARN`,
+`RUNTIME_CELL_AWS_REGION` and `RUNTIME_CELL_ECR_REPOSITORY` are set; GHCR uses
+the job's `GITHUB_TOKEN`. Who pulls from where, and what a self-hosted install
+still lacks: `docs/runtime/cell-distribution.md`.
+
+Verify an image before deploying it (either registry, same digest):
+
+```sh
+cosign verify "ghcr.io/kodustech/kodus-runtime-cell@sha256:<digest>" \
+  --certificate-identity-regexp '^https://github.com/kodustech/kodus-ai/.github/workflows/runtime-cell-release.yml@refs/tags/runtime-cell/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+gh attestation verify oci://ghcr.io/kodustech/kodus-runtime-cell@sha256:<digest> --repo kodustech/kodus-ai
+gh attestation verify cell-linux-arm64 --repo kodustech/kodus-ai   # a release binary
+```
+
 ## Configuration that matters
 
-Flags override `-config` (JSON or YAML; `deploy/local-docker.example.json`). The file holds paths, never secrets.
+Flags override `-config` (JSON or YAML; `deploy/local-docker.example.json`). The file sets any flag by its name (`gvisor-mem-limit: 8g`; a list for a comma-separated flag) except `-config` and `-dev-insecure-local-docker`, and refuses a key that names no flag; the first format's keys (`hubUrl`, `tls.ca`, `observer.mode` and the rest) still work. A value from the file counts as set for the drivers' flag ownership. The file holds paths, never secrets.
 
 | Flag | Meaning |
 |---|---|
@@ -334,10 +396,15 @@ Flags override `-config` (JSON or YAML; `deploy/local-docker.example.json`). The
 | `-auto-renew` | Renew the certificate (default true). |
 | `-egress-control` | `egress=https://h:9443,resolver=https://h:9444,injector=https://h:9445`; all three required. |
 | `-policy-key`, `-egress-allow` | The ed25519 key that signs policies; the base allowlist (a mirror). |
+| `-cell-ca-cert`, `-machine-roots` | The injector's CA certificate and the public roots a claim with org secrets trusts (default: the cell's trust store). |
 | `-observer` | `http` (observer machines) or `inprocess` (fake, local-docker). |
+| `-preview` | Serve preview URLs (off by default): name the `preview` feature, dial the edge a `preview.tunnel` names with the cell's own certificate (the edge's tunnel certificate must chain to `-ca`, the hub CA), and pass a preview claim's streams to its observer's `/v1/preview` proxy (`internal/preview`, docs/runtime/preview-urls.md). |
 | `-git-api` | The one Git API tarballs come from (GitHub today). |
 | `-workdir`, `-state-dir` | Scratch for tarballs and checkouts; driver state. |
 | `-gvisor-holder-image` | Required by docker-gvisor. |
+| `-isolation-backend` | docker-gvisor's isolation backend: `gvisor` (default) or `firecracker` (microVMs on the microvm driver). With `firecracker` the cell does not start without `/dev/kvm`, the kit that matches `-firecracker-kit-digest`, root, cgroup v2 controllers, `ip`/`nft`/`sysctl`/`/dev/net/tun` and a `-firecracker-state-dir` that reflinks; it names every one missing (`isolation.ErrUnavailable`). |
+| `-firecracker-kit`, `-firecracker-kit-digest` | The microVM kit directory and the sha256 of its `manifest.json` (`microvm-kit/README.md`). |
+| `-firecracker-state-dir`, `-firecracker-egress-address` | Machines' state on XFS (`reflink=1`) or btrfs; the host address the egress listens on (`10.212.255.1`, outside the claim pool; `off`: no way out). |
 | `-aws-config` | aws-ec2: VPC, subnets, groups, launch template, org KMS keys. |
 | `-metrics-addr` | `/metrics` listener. |
 
@@ -386,14 +453,11 @@ injector/mTLS/upstream injection acceptance test. It never contacts an existing 
 The observed bootstrap needed more than the initial test client's 2s deadline;
 only that one-time fixture operation now has a separate 15s cap. Production reader
 deadlines were not raised. This is not HA, backup/restore, installed injector,
-installer, full tenant-boundary or capacity acceptance. See the
-[reader checkpoint](../../experiments/kody-runtime/observability/openbao-reader-validation.json)
-and [grant integration checkpoint](../../experiments/kody-runtime/observability/openbao-grants-validation.json).
+installer, full tenant-boundary or capacity acceptance.
 
 ### Injector review and safe diagnostics
 
-The scoped [2026-11-10 review](../../experiments/kody-runtime/reviews/2026-11-10-secrets-review-1/REPORT.md)
-fixed raw upstream parser errors leaking reflected credentials into logs and
+A security review of the injector fixed raw upstream parser errors leaking reflected credentials into logs and
 credential-bearing response header names bypassing value-only masking. Such
 header names now refuse the response before forwarding. Lookup/upstream/stream
 failures use fixed diagnostic codes instead of raw provider errors. This protects
@@ -404,14 +468,10 @@ release/cancellation. Management uses its own five-operation `VaultAdmin` port;
 metadata listing sorts a copied snapshot outside the grant gate. Entry retirement
 is not measured RSS reclamation or a global waiter/connection limit.
 
-The review suite passed118 top-level/265 cases. A subsequent fixture-stability
-follow-up confirmed that core health/mount creation can precede KV initialization.
-The fixture now probes the mount's read-only config before CAS writes, polling
+Core health and mount creation can precede KV initialization, so the test
+fixture probes the mount's read-only config before CAS writes, polling
 only its exact initialization error within3s; other failures refuse immediately.
-No production reader deadline/retry changed. Three disposable real cycles and the
-latest affected race suite passed122 top-level/277 cases across5 packages, no skips.
-See [stability evidence](../../experiments/kody-runtime/observability/openbao-stability-validation.json).
-Installed operational acceptance remains open.
+No production reader deadline/retry changed. Installed operational acceptance remains open.
 
 ### External values and durable grants
 
@@ -450,7 +510,7 @@ backend errors. A historical format1 fixture remains readable, and incompatible
 format/profile opens leave its file unchanged. Management transport for external
 registration, authenticated operational reader wiring, normal-claim eligibility,
 customer provisioning/RBAC/UI, packaging and backup/restore remain incomplete.
-Update ADR-048 for the separately operated MPL-2.0 service before distribution.
+OpenBao is MPL-2.0 and runs as a separately operated service; it is not bundled.
 
 ## Injector-local encrypted vault (prototype)
 

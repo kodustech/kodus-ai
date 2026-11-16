@@ -9,7 +9,7 @@ import request from 'supertest';
 
 import { RuntimeA2AController } from '../../../../apps/api/src/controllers/runtime/runtime-a2a.controller';
 import { SCENARIOS } from '../../../../apps/runtime/src/fake-cell/scenarios';
-import { inMemoryRunDeps } from '../../../../apps/runtime/src/worker/run/in-memory-deps';
+import { inMemoryRunDeps } from '../../../../apps/runtime/src/worker/run/testing';
 import { runRuntimeRun } from '../../../../apps/runtime/src/worker/run/run-orchestrator';
 import { TEAM_CLI_KEY_SERVICE_TOKEN } from '@libs/organization/domain/team-cli-key/contracts/team-cli-key.service.contract';
 import { FakeEnvironmentRuntime } from '@libs/runtime/environment';

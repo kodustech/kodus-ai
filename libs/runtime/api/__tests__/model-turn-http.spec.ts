@@ -139,6 +139,12 @@ async function appFixture(allowModel = false) {
     };
     return { app, r, auth, token, sealed, body, provider, git };
 }
+// A real Nest app is compiled per test: on a busy machine (the whole suite in
+// parallel) the default 5 s per test and a 3 s request deadline are passed with
+// nothing wrong. The deadline still ends a request that hangs.
+const REQUEST_DEADLINE_MS = 20_000;
+jest.setTimeout(60_000);
+
 describe('worker RPC real controller/filter boundary', () => {
     it('retains the budget machine code through the production exception filter', async () => {
         const h = await appFixture();
@@ -148,7 +154,7 @@ describe('worker RPC real controller/filter boundary', () => {
                 .set('Authorization', `Bearer ${h.token}`)
                 .set('x-runtime-sealed-token', h.sealed)
                 .send(h.body)
-                .timeout({ deadline: 3000 });
+                .timeout({ deadline: REQUEST_DEADLINE_MS });
             expect(out.status).toBe(429);
             expect(out.body.code).toBe('llm_budget_exceeded');
             expect(h.provider.complete).not.toHaveBeenCalled();
@@ -163,7 +169,7 @@ describe('worker RPC real controller/filter boundary', () => {
                 .post('/internal/runtime/model-turn')
                 .set('Authorization', 'Bearer invalid')
                 .send({ invalid: true })
-                .timeout({ deadline: 3000 });
+                .timeout({ deadline: REQUEST_DEADLINE_MS });
             expect(bad.status).toBe(401);
             const source = await request(h.app.getHttpServer())
                 .post('/internal/runtime/planner-source')
@@ -176,7 +182,7 @@ describe('worker RPC real controller/filter boundary', () => {
                     scope: { runId: h.r.runId, attempt: 1 },
                     op: 'context',
                 })
-                .timeout({ deadline: 3000 });
+                .timeout({ deadline: REQUEST_DEADLINE_MS });
             expect(source.status).toBe(404);
             expect(h.git.getPullRequestHead).not.toHaveBeenCalled();
         } finally {
@@ -222,7 +228,7 @@ it('serves one scoped source read and model turn through real HTTP parsers/contr
                 path: 'changed.ts',
                 maxBytes: 1024,
             })
-            .timeout({ deadline: 3000 });
+            .timeout({ deadline: REQUEST_DEADLINE_MS });
         expect(source.status).toBe(200);
         expect(JSON.stringify(source.body)).toContain('source');
         const call = () =>
@@ -231,7 +237,7 @@ it('serves one scoped source read and model turn through real HTTP parsers/contr
                 .set('Authorization', `Bearer ${h.token}`)
                 .set('x-runtime-sealed-token', h.sealed)
                 .send(h.body)
-                .timeout({ deadline: 3000 });
+                .timeout({ deadline: REQUEST_DEADLINE_MS });
         const one = await call(),
             two = await call();
         expect(one.status).toBe(200);

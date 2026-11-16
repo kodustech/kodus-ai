@@ -3,6 +3,7 @@ package observer
 import (
 	"bytes"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -13,8 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"database/sql"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observerauth"
 )

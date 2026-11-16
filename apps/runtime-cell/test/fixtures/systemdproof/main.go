@@ -20,12 +20,16 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/claimlimits"
 )
 
+// cgroupRoot is the cgroup v2 mount.
+const cgroupRoot = "/sys/fs/cgroup"
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
+
 func run() error {
 	id := flag.String("id", "", "owned UUID")
 	socket := flag.String("socket", "", "private Docker Unix socket")
@@ -106,7 +110,7 @@ func run() error {
 		pids = append(pids, pid)
 		members = append(members, strings.TrimSpace(string(membership)))
 	}
-	dir := filepath.Join("/sys/fs/cgroup", slice, parent)
+	dir := filepath.Join(cgroupRoot, slice, parent)
 	files := map[string]string{}
 	for _, n := range []string{"memory.max", "memory.swap.max", "cpu.max", "pids.max", "memory.current", "pids.current", "cpu.stat"} {
 		b, e := os.ReadFile(filepath.Join(dir, n))
@@ -157,6 +161,7 @@ func run() error {
 func ownsNativeContainer(label, actualParent, uuid, expectedParent string) bool {
 	return uuid != "" && expectedParent != "" && label == uuid && actualParent == expectedParent
 }
+
 func cleanupNativeContainers(socket string, names []string, uuid, parent string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

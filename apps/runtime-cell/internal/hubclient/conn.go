@@ -133,7 +133,7 @@ func Dial(ctx context.Context, cfg Config) (*Conn, error) {
 	if tlsCfg.MinVersion < tls.VersionTLS13 {
 		tlsCfg.MinVersion = tls.VersionTLS13
 	}
-	ws, _, err := websocket.Dial(ctx, cfg.URL, &websocket.DialOptions{
+	ws, _, err := websocket.Dial(ctx, cfg.URL, &websocket.DialOptions{ //nolint:bodyclose // websocket.Dial owns the handshake response; its docs say callers never close it
 		HTTPClient:      &http.Client{Transport: &http.Transport{TLSClientConfig: tlsCfg, ForceAttemptHTTP2: false}, Timeout: 30 * time.Second},
 		CompressionMode: websocket.CompressionDisabled,
 	})
@@ -220,7 +220,11 @@ func (c *Conn) RequestAck(ctx context.Context, h protocol.Header, body any) (*pr
 			c.mNacksRecv.Inc(n.Code)
 			return nil, &NackError{Code: n.Code, Message: n.Message}
 		}
-		return m.Body.(*protocol.AckBody), nil
+		ack, ok := m.Body.(*protocol.AckBody)
+		if !ok {
+			return nil, fmt.Errorf("hubclient: reply of type %T is not an ack", m.Body)
+		}
+		return ack, nil
 	case <-t.C:
 		return nil, ErrAckTimeout
 	case <-c.closed:

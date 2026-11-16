@@ -3,6 +3,8 @@ import type { AddressInfo } from 'net';
 import {
     ENV_SESSION_MAX_LIVE_PER_KEY,
     ENV_SESSION_SIGNATURE_HEADER,
+    ENV_SESSION_SIGNATURE_SKEW_MS,
+    EnvSessionNonces,
     envSessionKeyFrom,
     envSessionTokenBinding,
     signEnvSessionRequest,
@@ -13,7 +15,7 @@ import type { EnvironmentSetupRecord } from '@libs/runtime/run';
 
 import { startEnvSessionServer } from './env-session-server';
 import { EnvSessionError, EnvSessionService } from './env-session.service';
-import { InMemoryEnvSessionStore } from './env-session.store';
+import { InMemoryEnvSessionStore } from './testing';
 
 const ORG = 'org-a';
 const OWNER = { organizationId: ORG, teamId: 'team-a', keyId: 'key-a', repositoryIds: ['repo-a'] };
@@ -237,6 +239,96 @@ describe('EnvSessionService (consumer mcp)', () => {
     });
 });
 
+describe('a multi-repository session', () => {
+    const MEMBER_SHA = 'b'.repeat(40);
+    const WIDE = { ...OWNER, repositoryIds: ['repo-a', 'repo-b'] };
+    const workspace = [
+        { repositoryId: 'repo-a', fullName: 'acme/shop', alias: 'shop', role: 'primary', sha: SHA, sealedRepoToken: 'sealed:v1:x' },
+        { repositoryId: 'repo-b', fullName: 'acme/api', alias: 'api', role: 'member', sha: MEMBER_SHA, sealedRepoToken: 'sealed:v1:api' },
+    ];
+    const openWide = (over: Record<string, unknown> = {}) => open({ ...WIDE, workspace, ...over });
+    const layout = [
+        { repositoryId: 'repo-a', fullName: 'acme/shop', alias: 'shop', role: 'primary', sha: SHA },
+        { repositoryId: 'repo-b', fullName: 'acme/api', alias: 'api', role: 'member', sha: MEMBER_SHA },
+    ];
+
+    it('boots every repository at its own commit with its own sealed token, and shows the layout without any token', async () => {
+        const h = harness();
+        const view = await h.service.open(openWide() as any);
+        expect(h.calls.envInputs[0].workspace).toEqual({
+            primary: { repositoryId: 'repo-a', fullName: 'acme/shop', alias: 'shop', base: { sha: SHA, sealedToken: 'sealed:v1:x' }, pr: { sha: SHA, sealedToken: 'sealed:v1:x' } },
+            members: [
+                { repositoryId: 'repo-b', fullName: 'acme/api', alias: 'api', base: { sha: MEMBER_SHA, sealedToken: 'sealed:v1:api' }, pr: { sha: MEMBER_SHA, sealedToken: 'sealed:v1:api' } },
+            ],
+        });
+        expect(h.calls.envInputs[0].tokenBinding).toBe(envSessionTokenBinding(S1));
+        expect(view).toMatchObject({ state: 'ready', repositories: layout });
+        const status = await h.service.get(WIDE, S1);
+        expect(status.repositories).toEqual(layout);
+        expect(JSON.stringify([view, status, h.warnings])).not.toContain('sealed:');
+    });
+
+    it('a session of one repository boots no workspace and shows no layout', async () => {
+        const h = harness();
+        const view = await h.service.open(open());
+        expect(h.calls.envInputs[0]).not.toHaveProperty('workspace');
+        expect(view).not.toHaveProperty('repositories');
+    });
+
+    it('opens nothing when the key does not reach every repository of the environment', async () => {
+        const h = harness();
+        await expect(h.service.open(openWide({ repositoryIds: ['repo-a'] }) as any)).rejects.toMatchObject({ status: 404 });
+        expect(h.calls.acquire).toHaveLength(0);
+    });
+
+    it('runs a command aimed at a member in that member, and refuses an alias the session does not have, naming the valid ones', async () => {
+        const h = harness();
+        await h.service.open(openWide() as any);
+        await h.service.exec({ ...WIDE, sessionId: S1, stepId: STEP, command: 'pnpm test', timeoutMs: 5_000, repository: 'api' });
+        await h.service.settle();
+        expect(h.calls.exec).toEqual([{ stepId: STEP, command: 'pnpm test', timeoutMs: 5_000, repository: 'api' }]);
+        const refused = h.service.exec({ ...WIDE, sessionId: S1, stepId: S2, command: 'pnpm test', timeoutMs: 5_000, repository: 'web' });
+        await expect(refused).rejects.toMatchObject({ status: 409, code: 'unknown_repository' });
+        await expect(refused).rejects.toThrow(/shop.*api/);
+        expect(h.calls.exec).toHaveLength(1);
+    });
+
+    it('a session of one repository refuses a command aimed at another repository', async () => {
+        const h = harness();
+        await h.service.open(open());
+        await expect(h.service.exec({ ...OWNER, sessionId: S1, stepId: STEP, command: 'true', timeoutMs: 5_000, repository: 'api' })).rejects.toMatchObject({
+            status: 409,
+            code: 'unknown_repository',
+        });
+        expect(h.calls.exec).toHaveLength(0);
+    });
+
+    it('a pinned validation is never redirected to a member repository', async () => {
+        const content = 'version: 1\nvalidate: [{name: Unit tests, run: pnpm test}]\n';
+        const h = harness({ setup: setup({ recipe: { path: '.kodus/workspace.yaml', sha: SHA, state: 'found', content } as any }) });
+        await h.service.open(openWide() as any);
+        await expect(
+            h.service.exec({ ...WIDE, sessionId: S1, stepId: STEP, command: 'pnpm test', timeoutMs: 1000, validationName: 'Unit tests', executionScope: 'workload', repository: 'api' }),
+        ).rejects.toMatchObject({ code: 'validation_mismatch' });
+        expect(h.calls.exec).toEqual([]);
+    });
+
+    it('a key that lost a member repository can no longer see, run in or release the session', async () => {
+        const h = harness();
+        await h.service.open(openWide() as any);
+        await h.service.exec({ ...WIDE, sessionId: S1, stepId: STEP, command: 'true', timeoutMs: 5_000 });
+        await h.service.settle();
+        const shrunk = { ...WIDE, repositoryIds: ['repo-a'] };
+        await expect(h.service.get(shrunk, S1)).rejects.toMatchObject({ status: 404 });
+        await expect(h.service.exec({ ...shrunk, sessionId: S1, stepId: S2, command: 'true', timeoutMs: 5_000 })).rejects.toMatchObject({ status: 404 });
+        await expect(h.service.step(shrunk, STEP)).rejects.toMatchObject({ status: 404 });
+        await expect(h.service.close(shrunk, S1)).rejects.toMatchObject({ status: 404 });
+        await expect(h.service.open(openWide({ repositoryIds: ['repo-a'] }) as any)).rejects.toMatchObject({ status: 404 });
+        expect(h.calls.exec).toHaveLength(1);
+        expect(h.calls.release).toHaveLength(0);
+    });
+});
+
 describe('env-session listener', () => {
     const key = envSessionKeyFrom(Buffer.alloc(32, 7));
     let server: Awaited<ReturnType<typeof startEnvSessionServer>>;
@@ -279,6 +371,42 @@ describe('env-session listener', () => {
         expect(((await (await post(`/env/steps/${STEP}`, OWNER)).json()) as any).exitCode).toBe(0);
         expect((await post(`/env/steps/${STEP}`, { ...OWNER, keyId: 'key-b' })).status).toBe(404);
         expect((await post(`/env/sessions/${S1}/exec`, { ...OWNER, stepId: STEP, command: 'x', timeoutMs: 999_999 })).status).toBe(400);
+    });
+
+    it('serves a signed request once: the same request sent again is refused, a fresh one passes', async () => {
+        const raw = JSON.stringify(OWNER);
+        const path = `/env/sessions/${S1}/status`;
+        const header = signEnvSessionRequest(key, { method: 'POST', path, body: raw, at: Date.now() });
+        const send = () => fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', [ENV_SESSION_SIGNATURE_HEADER]: header }, body: raw });
+        expect((await send()).status).not.toBe(401);
+        expect((await send()).status).toBe(401);
+        expect((await post(path, OWNER)).status).not.toBe(401);
+    });
+
+    it('a signature without a nonce, or older than the 15 s window, is refused', async () => {
+        const raw = JSON.stringify(OWNER);
+        const path = `/env/sessions/${S1}/status`;
+        const legacy = signEnvSessionRequest(key, { method: 'POST', path, body: raw, at: Date.now() }).replace(/,n=[0-9a-f]{32}/, '');
+        const res = await fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', [ENV_SESSION_SIGNATURE_HEADER]: legacy }, body: raw });
+        expect(res.status).toBe(401);
+        expect((await post(path, OWNER, key, Date.now() - 20_000)).status).toBe(401);
+    });
+
+    it('a signature covers the nonce: the same signature under another nonce fails', () => {
+        const raw = JSON.stringify(OWNER);
+        const sig = signEnvSessionRequest(key, { method: 'POST', path: `/env/steps/${STEP}`, body: raw, at: 1_000, nonce: 'a'.repeat(32) });
+        expect(verifyEnvSessionRequest(key, sig.replace(`n=${'a'.repeat(32)}`, `n=${'b'.repeat(32)}`), { method: 'POST', path: `/env/steps/${STEP}`, body: raw, now: 1_000 })).toBe(false);
+    });
+
+    it('remembers a nonce only while its request could still pass, and at most its bound', () => {
+        const nonces = new EnvSessionNonces(2);
+        expect(nonces.accept('n1', 1_000, 1_000)).toBe(true);
+        expect(nonces.accept('n1', 1_000, 5_000)).toBe(false);
+        // Past the window the request fails the time check anyway; the nonce is forgotten.
+        expect(nonces.accept('n1', 1_000, 1_000 + ENV_SESSION_SIGNATURE_SKEW_MS + 1)).toBe(true);
+        nonces.accept('n2', 20_000, 20_000);
+        nonces.accept('n3', 20_000, 20_000);
+        expect(nonces.size).toBe(2);
     });
 
     it('a signature covers the path: replaying a body on another route fails', () => {

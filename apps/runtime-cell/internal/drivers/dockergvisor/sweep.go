@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/lifecycle"
 )
 
 // SweepExpired destroys every machine of this cell whose kodus:hard-expires
@@ -19,7 +20,7 @@ import (
 // its project, volumes, built images and directories, and its claim
 // network once no machine of the claim is left on it, as the independent
 // reaper takes it (reap.go). A container with no or a bad ceiling is past
-// it (driver.ParseExpiry).
+// it (driver.Expired).
 func (d *Driver) SweepExpired(ctx context.Context, now time.Time) ([]string, error) {
 	rp := d.reaper()
 	gs, err := rp.expired(ctx, now)
@@ -42,7 +43,7 @@ func (d *Driver) SweepExpired(ctx context.Context, now time.Time) ([]string, err
 		return nil, err
 	}
 	for _, o := range orphans {
-		if driver.ParseExpiry(o.Tags, driver.TagHardExpires).After(now) {
+		if !driver.Expired(o.Tags, now) {
 			continue
 		}
 		if err := rp.removeGolden(ctx, o.MachineID); err != nil {
@@ -112,7 +113,7 @@ func (d *Driver) destroyExpired(ctx context.Context, rp *Reaper, g reapGroup) er
 // the trash may take minutes; a machine past its ceiling must not wait for
 // it, so the sweep never does. A reclaim's error is logged, not returned.
 func (d *Driver) Sweep(ctx context.Context, now time.Time) ([]string, error) {
-	d.reclaim.start(d.ReclaimDisk, d.log())
+	d.reclaim.start(d.bg, d.ReclaimDisk, d.log())
 	gone, err := d.SweepExpired(ctx, now)
 	return gone, errors.Join(err, d.sweepLimitGroups(ctx))
 }
@@ -125,29 +126,36 @@ type diskReclaim struct {
 	running sync.WaitGroup
 }
 
-// start runs reclaim on its own goroutine; false when one still runs.
-func (r *diskReclaim) start(reclaim func() error, log *slog.Logger) bool {
+// start runs reclaim on a goroutine of bg, the driver's background work
+// that Shutdown waits for; false when one still runs or the driver closes.
+func (r *diskReclaim) start(bg *lifecycle.Group, reclaim func() error, log *slog.Logger) bool {
 	if !r.busy.CompareAndSwap(false, true) {
 		return false
 	}
 	r.running.Add(1)
-	go func() {
+	started := bg.Go("disk reclaim", func(context.Context) error {
 		defer r.running.Done()
 		defer r.busy.Store(false)
 		if err := reclaim(); err != nil {
 			log.Warn("disk.reclaim.failed", "err", err)
 		}
-	}()
-	return true
+		return nil
+	})
+	if !started {
+		r.running.Done()
+		r.busy.Store(false)
+	}
+	return started
 }
 
 // wait returns once the reclaim started last has ended.
 func (r *diskReclaim) wait() { r.running.Wait() }
 
-// ReclaimDisk removes what may take gigabytes and no build holds: the least
-// recently used BuildKit states while the disk is below its floor, and the
-// build cache generations no build reads any more. It runs on the sweep,
-// off every build's path.
+// ReclaimDisk removes what may take gigabytes and no build holds: the
+// BuildKit states cheapest to keep while the disk is below its floor, then,
+// still below it, the exported caches (evictCaches), and the build cache
+// generations no build reads any more. It runs on the sweep, off every
+// build's path.
 func (d *Driver) ReclaimDisk() error {
-	return errors.Join(d.states.Evict(), d.caches.Sweep())
+	return errors.Join(d.states.Evict(), d.evictCaches(), d.caches.Sweep())
 }

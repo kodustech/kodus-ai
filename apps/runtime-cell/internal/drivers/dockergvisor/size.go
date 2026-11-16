@@ -59,7 +59,9 @@ func maxClaimSize(cfg Config) (driver.ClaimSize, error) {
 	if err != nil {
 		return driver.ClaimSize{}, err
 	}
-	out := driver.ClaimSize{MemoryMB: defMem, CPUs: defCPUs}
+	// Unset, the ceiling is the host's: a claim that asks a size gets what
+	// the host can give, one that asks none still gets the default.
+	out := driver.ClaimSize{MemoryMB: max(defMem, cfg.HostMemoryMB), CPUs: max(defCPUs, cfg.HostCPUs)}
 	if cfg.MemMax != "" {
 		if out.MemoryMB, err = parseMemMB(cfg.MemMax); err != nil {
 			return driver.ClaimSize{}, err

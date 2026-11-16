@@ -47,6 +47,41 @@ func ParseCIDRs(s string) ([]*net.IPNet, error) {
 	return out, nil
 }
 
+// DefaultClaimSubnets is the pool claim networks take their subnets from
+// (docker-gvisor's /24s), unless the operator moves it.
+const DefaultClaimSubnets = "10.213.0.0/16"
+
+// CheckInternalCIDRs refuses internal networks that overlap a claim
+// network's pool. An internal network is one every claim may reach; one that
+// covers the pool would let a claim connect to another claim's services.
+func CheckInternalCIDRs(internal, claimPool []*net.IPNet) error {
+	for _, n := range internal {
+		for _, p := range claimPool {
+			if n.Contains(p.IP) || p.Contains(n.IP) {
+				return fmt.Errorf("internal network %s overlaps the claim networks %s: every claim could reach another claim's services", n, p)
+			}
+		}
+	}
+	return nil
+}
+
+// ParseInternalCIDRs reads the internal networks and the claim pool (both
+// comma-separated) and refuses an internal network inside the pool.
+func ParseInternalCIDRs(internal, claimPool string) ([]*net.IPNet, error) {
+	in, err := ParseCIDRs(internal)
+	if err != nil {
+		return nil, err
+	}
+	pool, err := ParseCIDRs(claimPool)
+	if err != nil {
+		return nil, fmt.Errorf("claim subnets: %w", err)
+	}
+	if err := CheckInternalCIDRs(in, pool); err != nil {
+		return nil, err
+	}
+	return in, nil
+}
+
 // RefusedDestination says why an egress connection may not go to ip, or "".
 // Link-local (the metadata service), multicast and unspecified addresses are
 // always refused. Loopback, private, CGNAT and other special ranges are

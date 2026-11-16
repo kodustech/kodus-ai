@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 
 import type { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
-import { RunTargetConflictError, sameRunTarget, type RunTarget, type RunTargetStore } from '../domain/run-target';
+import { RunTargetConflictError, sameRunTarget, type RunTarget, type RunTargetScope, type RunTargetStore } from '../domain/run-target';
 import { RuntimeRunTargetModel } from './runtime-run-target.model';
 
 const UNIQUE_VIOLATION = '23505';
@@ -18,7 +18,7 @@ export class TypeOrmRunTargetStore implements RunTargetStore {
 
     async record(target: RunTarget): Promise<void> {
         try {
-            await this.repo.insert({ ...target, repositoryFullName: target.repositoryFullName ?? null });
+            await this.repo.insert({ ...target, repositoryFullName: target.repositoryFullName ?? null, workspace: target.workspace?.length ? target.workspace : null, fork: target.fork ?? null });
         } catch (error) {
             const code = (error as { code?: string; driverError?: { code?: string } })?.code ?? (error as any)?.driverError?.code;
             if (code !== UNIQUE_VIOLATION) throw error;
@@ -28,8 +28,8 @@ export class TypeOrmRunTargetStore implements RunTargetStore {
         }
     }
 
-    async get(runId: string): Promise<RunTarget | null> {
-        const row = await this.repo.findOne({ where: { runId } });
+    async get(runId: string, scope?: RunTargetScope): Promise<RunTarget | null> {
+        const row = await this.repo.findOne({ where: scope ? { runId, organizationId: scope.organizationId } : { runId } });
         if (!row) return null;
         return {
             runId: row.runId,
@@ -42,6 +42,8 @@ export class TypeOrmRunTargetStore implements RunTargetStore {
             platform: row.platform as PlatformType,
             pullRequestNumber: row.pullRequestNumber,
             headSha: row.headSha,
+            ...(row.workspace?.length ? { workspace: row.workspace } : {}),
+            ...(typeof row.fork === 'boolean' ? { fork: row.fork } : {}),
         };
     }
 }

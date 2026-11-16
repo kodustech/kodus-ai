@@ -17,14 +17,14 @@ describe('RuntimeLogger', () => {
             service: 'runtime-hub',
             context: 'CellHub',
             msg: 'claim.not_ready',
-            claimId: 'c1',
+            'kodus.runtime.claim.id': 'c1',
             waitedMs: 5,
         });
         expect(b).toMatchObject({
             level: 'info',
             context: 'CellGateway',
             msg: 'cell.connected',
-            cellId: 'cell-a',
+            'kodus.runtime.cell.id': 'cell-a',
         });
         expect(c).toMatchObject({
             level: 'error',
@@ -58,7 +58,7 @@ describe('RuntimeLogger', () => {
             service: 'runtime-worker',
             level: 'warn',
             msg: 'fixture.failed',
-            runId: 'run-a',
+            'kodus.runtime.run.id': 'run-a',
         });
         expect(record.at).not.toBe('forged');
         expect(record.traceId).not.toBe('forged');
@@ -82,7 +82,7 @@ describe('RuntimeLogger', () => {
         });
         expect(JSON.parse(lines[0])).toMatchObject({
             error: { kind: 'network', code: 'ECONNRESET' },
-            runId: 'run-a',
+            'kodus.runtime.run.id': 'run-a',
         });
         expect(lines[0]).not.toContain('private');
         log.error(new Error('private error object'));
@@ -157,5 +157,20 @@ describe('RuntimeLogger', () => {
         revoke();
         expect(() => log.error(proxy)).not.toThrow();
         expect(lines).toHaveLength(1);
+    });
+
+    it('writes an older field name under its taxonomy key, once', () => {
+        const lines: string[] = [];
+        const log = new RuntimeLogger('runtime-hub', (line) => void lines.push(line));
+        log.write('info', 'claim.ready', { organizationId: 'org-1', claimId: 'c1', side: 'pr', replicaId: 'r1' });
+        const record = JSON.parse(lines[0]);
+        expect(record).toMatchObject({
+            'kodus.organization.id': 'org-1',
+            'kodus.runtime.claim.id': 'c1',
+            'kodus.runtime.claim.side': 'pr',
+            'kodus.runtime.hub.replica.id': 'r1',
+        });
+        expect(record).not.toHaveProperty('claimId');
+        expect(record).not.toHaveProperty('organizationId');
     });
 });

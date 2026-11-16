@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { nulJoinedDigest, uuidV5From } from '@libs/runtime/contracts/derive-id';
 
 // A stepId derived from the workflow (workflowID = runId), the attempt and a
 // step name unique inside the Run. A DBOS step that is retried, or re-run
@@ -11,9 +11,5 @@ import { createHash } from 'crypto';
 const NAMESPACE = 'kody-runtime/step';
 
 export function stableStepId(runId: string, attempt: number, name: string): string {
-    const b = createHash('sha256').update(`${NAMESPACE}\0${runId}\0${attempt}\0${name}`).digest().subarray(0, 16);
-    b[6] = (b[6] & 0x0f) | 0x50;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    const h = b.toString('hex');
-    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+    return uuidV5From(nulJoinedDigest([NAMESPACE, runId, attempt, name]));
 }

@@ -12,13 +12,15 @@ import {
     type EnvSessionExec,
     type EnvSessionOpen,
     type EnvSessionOwner,
+    type EnvSessionRepositoryView,
     type EnvSessionView,
     type EnvStepView,
     isLiveEnvSession,
     ownsEnvSession,
 } from '@libs/runtime/contracts/env-session';
 import { type Claim, type EnvironmentRuntime, isBlocked, isEnvError } from '@libs/runtime/environment';
-import type { EnvironmentSetupRecord } from '@libs/runtime/run';
+import type { ClaimWorkspace, EnvironmentSetupRecord, WorkspaceClaimRepo } from '@libs/runtime/run';
+import { safeFailure } from '@libs/runtime/telemetry/failure';
 
 import { acquireWaitingForRoom } from '../env/capacity-wait';
 import type { EnvSessionRow, EnvSessionStore, EnvStepRow } from './env-session.store';
@@ -43,6 +45,36 @@ export class EnvSessionError extends Error {
 }
 
 const notFound = () => new EnvSessionError(404, 'not_found', 'no such session');
+
+/**
+ * The ownership rule of the contract plus, for a multi-repository session,
+ * every repository of it: the key must still reach each one (its list can
+ * shrink between calls), or the session reads as absent.
+ */
+const ownsSession = (row: Pick<EnvSessionRow, 'organizationId' | 'teamId' | 'keyId' | 'repositoryId' | 'repositories'>, owner: EnvSessionOwner) =>
+    ownsEnvSession(row, owner) && (row.repositories ?? []).every((r) => owner.repositoryIds.includes(r.repositoryId));
+
+/** A multi-repository open's workspace as the environment boots it: each repository at its commit with its own sealed token, on both sides (a session runs the PR side). */
+function sessionClaimWorkspace(req: EnvSessionOpen): ClaimWorkspace | undefined {
+    if (!req.workspace) return undefined;
+    const repo = (r: NonNullable<EnvSessionOpen['workspace']>[number]): WorkspaceClaimRepo => ({
+        repositoryId: r.repositoryId,
+        fullName: r.fullName,
+        alias: r.alias,
+        base: { sha: r.sha, sealedToken: r.sealedRepoToken },
+        pr: { sha: r.sha, sealedToken: r.sealedRepoToken },
+    });
+    const primary = req.workspace.find((r) => r.role === 'primary');
+    if (!primary) throw new Error('the session workspace has no primary repository');
+    return { primary: repo(primary), members: req.workspace.filter((r) => r.role !== 'primary').map(repo) };
+}
+
+/** The layout of a multi-repository open, primary first, without any token. */
+function sessionLayout(req: EnvSessionOpen): EnvSessionRepositoryView[] | undefined {
+    if (!req.workspace) return undefined;
+    const ordered = [...req.workspace.filter((r) => r.role === 'primary'), ...req.workspace.filter((r) => r.role !== 'primary')];
+    return ordered.map((r) => ({ repositoryId: r.repositoryId, fullName: r.fullName, alias: r.alias, role: r.role, sha: r.sha }));
+}
 /** Output kept per stream; the cell already redacts and bounds what it sends. */
 const MAX_OUTPUT = 64 * 1024;
 const STALE_BATCH = 50;
@@ -55,6 +87,8 @@ export interface EnvSessionEnvironmentInput {
     tokenBinding: string;
     imageId: string;
     expose: Claim['manifest']['expose'];
+    /** The repositories of a multi-repository session, tokens sealed to tokenBinding; absent for one repository. */
+    workspace?: ClaimWorkspace;
 }
 
 export interface EnvSessionDeps {
@@ -80,6 +114,7 @@ export function envSessionView(row: EnvSessionRow): EnvSessionView {
         state: row.state,
         ...(row.leaseExpiresAt ? { leaseExpiresAt: row.leaseExpiresAt } : {}),
         ...(row.services ? { services: row.services } : {}),
+        ...(row.repositories?.length ? { repositories: row.repositories } : {}),
         ...(row.blockers?.length ? { blockers: row.blockers } : {}),
         ...(row.reason ? { reason: row.reason } : {}),
         createdAt: row.createdAt,
@@ -100,6 +135,7 @@ export class EnvSessionService {
 
     private track<T>(p: Promise<T>): Promise<T> {
         this.inFlight.add(p);
+        // The caller holds `p` and handles its rejection; this copy only must not be unhandled.
         void p.finally(() => this.inFlight.delete(p)).catch(() => undefined);
         return p;
     }
@@ -123,7 +159,7 @@ export class EnvSessionService {
 
     private async load(owner: EnvSessionOwner, sessionId: string): Promise<EnvSessionRow> {
         const row = await this.deps.store.get(owner.organizationId, sessionId);
-        if (!row || !ownsEnvSession(row, owner)) throw notFound();
+        if (!row || !ownsSession(row, owner)) throw notFound();
         return this.expireIfStale(row);
     }
 
@@ -155,10 +191,11 @@ export class EnvSessionService {
     async open(req: EnvSessionOpen): Promise<EnvSessionView> {
         const existing = await this.deps.store.get(req.organizationId, req.sessionId);
         if (existing) {
-            if (!ownsEnvSession(existing, req) || existing.environmentId !== req.environmentId) throw notFound();
+            if (!ownsSession(existing, req) || existing.environmentId !== req.environmentId) throw notFound();
             return envSessionView(await this.expireIfStale(existing));
         }
-        if (!req.repositoryIds.includes(req.repositoryId)) throw notFound();
+        const repositories = sessionLayout(req);
+        if (!req.repositoryIds.includes(req.repositoryId) || !(repositories ?? []).every((r) => req.repositoryIds.includes(r.repositoryId))) throw notFound();
         if (await this.deps.isStopped(req.organizationId)) {
             throw new EnvSessionError(
                 409,
@@ -187,6 +224,7 @@ export class EnvSessionService {
             keyId: req.keyId,
             environmentId: req.environmentId,
             sha: req.sha,
+            ...(repositories ? { repositories } : {}),
             state: 'acquiring',
             createdAt: at,
             lastUsedAt: at,
@@ -251,7 +289,7 @@ export class EnvSessionService {
 
     private async openedView(req: EnvSessionOpen): Promise<EnvSessionView> {
         const row = await this.deps.store.get(req.organizationId, req.sessionId);
-        if (!row || !ownsEnvSession(row, req) || row.environmentId !== req.environmentId) throw notFound();
+        if (!row || !ownsSession(row, req) || row.environmentId !== req.environmentId) throw notFound();
         return envSessionView(await this.expireIfStale(row));
     }
     private async acquire(req: EnvSessionOpen, setup: EnvironmentSetupRecord) {
@@ -261,6 +299,7 @@ export class EnvSessionService {
             sealedRepoToken: req.sealedRepoToken,
             imageId: setup.imageId ?? 'latest',
             expose: setup.expose ?? [],
+            ...(req.workspace ? { workspace: sessionClaimWorkspace(req) } : {}),
         });
         try {
             const recipe = setup.recipe
@@ -294,7 +333,8 @@ export class EnvSessionService {
             }
             // env_down while the claim was booting: give it back at once.
             if (current && !isLiveEnvSession(current.state)) {
-                await env.release(claim.claimId).catch(() => undefined);
+                // Caught here so the ended session is not marked errored; the lease takes the machines back.
+                await env.release(claim.claimId).catch((e) => this.deps.onWarn?.('env_session.release_failed', { sessionId: req.sessionId, claimId: claim.claimId, error: safeFailure(e) }));
                 return;
             }
             await this.deps.store.update(req.organizationId, req.sessionId, {
@@ -304,7 +344,7 @@ export class EnvSessionService {
                 leaseExpiresAt: claim.leaseExpiresAt,
                 services: claim.manifest.services,
             });
-        } catch (e) {
+        } catch {
             this.deps.onWarn?.('env_session.acquire_failed', { sessionId: req.sessionId, error: 'acquire_unavailable' });
             await this.deps.store.update(req.organizationId, req.sessionId, {
                 state: 'errored',
@@ -339,9 +379,20 @@ export class EnvSessionService {
         if (row.state !== 'ready' || !row.claimId) {
             throw new EnvSessionError(409, 'session_not_ready', row.reason ?? `The session is ${row.state}; wait for ready (env_up) before env_exec.`);
         }
+        // 409 like the other refusals of a call: the API passes its code and message on to the dev (a 400 reaches them as a bare 503).
+        if (req.repository !== undefined && !row.repositories?.some((r) => r.alias === req.repository)) {
+            throw new EnvSessionError(
+                409,
+                'unknown_repository',
+                row.repositories?.length
+                    ? `${req.repository} is not a repository of this session; use one of ${row.repositories.map((r) => r.alias).join(', ')}.`
+                    : 'This session has one repository; run the command without repository.',
+            );
+        }
         if (req.validationName !== undefined || req.executionScope !== undefined) {
             const resolved = await this.validation(req, req.sessionId, req.validationName ?? '');
-            if (req.executionScope !== 'workload' || req.command !== resolved.command || req.cwd !== undefined) {
+            // A pinned check runs where the recipe pinned it: never with another cwd or in another repository.
+            if (req.executionScope !== 'workload' || req.command !== resolved.command || req.cwd !== undefined || req.repository !== undefined) {
                 throw new EnvSessionError(409, 'validation_mismatch', 'Validation execution must match the pinned recipe inside its workload.');
             }
         }
@@ -357,11 +408,11 @@ export class EnvSessionService {
         };
         await this.deps.store.insertStep(step);
         await this.deps.store.update(row.organizationId, row.sessionId, { lastUsedAt: startedAt });
-        void this.track(this.runStep(row, step, req.cwd, req.executionScope));
+        void this.track(this.runStep(row, step, req.cwd, req.executionScope, req.repository));
         return stepView(step);
     }
 
-    private async runStep(row: EnvSessionRow, step: EnvStepRow, cwd?: string, executionScope?: 'workload') {
+    private async runStep(row: EnvSessionRow, step: EnvStepRow, cwd?: string, executionScope?: 'workload', repository?: string) {
         let result: EnvStepRow['result'];
         try {
             const r = await this.env(row).exec(row.claimId!, {
@@ -370,6 +421,7 @@ export class EnvSessionService {
                 ...(cwd ? { cwd } : {}),
                 timeoutMs: step.timeoutMs,
                 ...(executionScope ? {executionScope} : {}),
+                ...(repository ? { repository } : {}),
             });
             if (isEnvError(r)) {
                 result = { error: r.code };
@@ -384,7 +436,7 @@ export class EnvSessionService {
                     ...(r.transport === 'lost' ? { error: 'transport_lost' } : {}),
                 };
             }
-        } catch (e) {
+        } catch {
             this.deps.onWarn?.('env_session.exec_failed', { sessionId: row.sessionId, stepId: step.stepId, error: 'execution_unavailable' });
             result = { error: 'cell_unavailable' };
         }
@@ -394,7 +446,7 @@ export class EnvSessionService {
     async step(owner: EnvSessionOwner, stepId: string): Promise<EnvStepView> {
         const step = await this.deps.store.getStep(owner.organizationId, stepId);
         const row = step ? await this.deps.store.get(owner.organizationId, step.sessionId) : null;
-        if (!step || !row || !ownsEnvSession(row, owner)) throw notFound();
+        if (!step || !row || !ownsSession(row, owner)) throw notFound();
         await this.deps.store.update(row.organizationId, row.sessionId, { lastUsedAt: this.now().toISOString() });
         if (step.state === 'running' && this.now().getTime() > Date.parse(step.startedAt) + step.timeoutMs + ENV_STEP_LOST_AFTER_MS) {
             return { ...stepView(step), state: 'lost', error: 'The step stopped reporting; its worker went away. Run it again.' };

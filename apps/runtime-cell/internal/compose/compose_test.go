@@ -84,6 +84,127 @@ services:
 	}
 }
 
+func TestLoadReadsHostPathsFromTheFirstFilesDirectory(t *testing.T) {
+	dir := writeFiles(t, map[string]string{
+		"docker/docker-compose.dev.yml": `
+services:
+  server:
+    build:
+      context: ../
+      dockerfile: server/Dockerfile
+    env_file: [.env, { path: ../shared.env }]
+    volumes:
+      - ../server:/usr/src/app
+      - ./conf:/conf:ro
+      - /abs:/abs
+      - data:/data
+      - { type: bind, source: ../web, target: /web }
+      - { type: volume, source: data, target: /d2 }
+  web:
+    build: ../web
+  ml:
+    build: { dockerfile: Dockerfile.ml }
+  escapes:
+    build: ../../elsewhere
+    env_file: ${HOME}/.env
+  cache:
+    image: redis:7
+volumes:
+  data: {}
+`,
+		"docker/override.yml": `
+services:
+  server:
+    volumes:
+      - ./extra:/extra
+`,
+	})
+	p, err := Load(dir, []string{"docker/docker-compose.dev.yml", "docker/override.yml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := p.Service("server")
+	if got := server["build"].(map[string]any); got["context"] != "." || got["dockerfile"] != "server/Dockerfile" {
+		t.Errorf("server build %v: the context is the checkout, the dockerfile stays relative to it", got)
+	}
+	if got, want := server["env_file"], []any{"./docker/.env", map[string]any{"path": "./shared.env"}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("env_file %v, want %v", got, want)
+	}
+	wantVols := []any{
+		"./server:/usr/src/app",
+		"./docker/conf:/conf:ro",
+		"/abs:/abs",
+		"data:/data",
+		map[string]any{"type": "bind", "source": "./web", "target": "/web"},
+		map[string]any{"type": "volume", "source": "data", "target": "/d2"},
+		// Every file's paths are read from the first file's directory, as compose does.
+		"./docker/extra:/extra",
+	}
+	if got := server["volumes"]; !reflect.DeepEqual(got, wantVols) {
+		t.Errorf("volumes\n got %v\nwant %v", got, wantVols)
+	}
+	if got := p.Service("web")["build"]; got != "./web" {
+		t.Errorf("web build %v", got)
+	}
+	if got := p.Service("ml")["build"].(map[string]any)["context"]; got != "./docker" {
+		t.Errorf("ml context %v: no context is the project directory", got)
+	}
+	// What leaves the checkout, or is interpolated, stays as written: the sandbox refuses it.
+	esc := p.Service("escapes")
+	if esc["build"] != "../elsewhere" || esc["env_file"] != "${HOME}/.env" {
+		t.Errorf("escapes %v", esc)
+	}
+}
+
+func TestLoadReadsKodysFilesFromTheCheckoutWhateverTheRepositorysDo(t *testing.T) {
+	kody := "services:\n  app:\n    build: { context: ., dockerfile: .kodus/Dockerfile }\n    env_file: [.kodus/app.env]\n    volumes: [\"./seed:/seed\"]\n"
+	// Kody's file alone: the recipe of a repository with no compose file (directus on cell-dev-1).
+	dir := writeFiles(t, map[string]string{".kodus/compose.yaml": kody})
+	p, err := Load(dir, []string{".kodus/compose.yaml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := p.Service("app")
+	if !reflect.DeepEqual(app["build"], map[string]any{"context": ".", "dockerfile": ".kodus/Dockerfile"}) || !reflect.DeepEqual(app["env_file"], []any{".kodus/app.env"}) || !reflect.DeepEqual(app["volumes"], []any{"./seed:/seed"}) {
+		t.Errorf("app %v: a file of Kody's names its paths from the checkout", app)
+	}
+
+	// Laid over a repository file in docker/, in either order: each file by its own rule.
+	dir = writeFiles(t, map[string]string{
+		"docker/compose.yml":  "services:\n  db:\n    build: ../db\n  app:\n    volumes: !override [\"./conf:/conf\"]\n",
+		".kodus/compose.yaml": kody,
+	})
+	for _, files := range [][]string{{"docker/compose.yml", ".kodus/compose.yaml"}, {".kodus/compose.yaml", "docker/compose.yml"}} {
+		p, err := Load(dir, files)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := p.Service("db")["build"]; got != "./db" {
+			t.Errorf("%v: db build %v, read from docker/", files, got)
+		}
+		if got := p.Service("app")["build"]; !reflect.DeepEqual(got, map[string]any{"context": ".", "dockerfile": ".kodus/Dockerfile"}) {
+			t.Errorf("%v: app build %v, read from the checkout", files, got)
+		}
+	}
+	// The repository file last: its !override replaces Kody's volumes, rebased from docker/.
+	p, _ = Load(dir, []string{".kodus/compose.yaml", "docker/compose.yml"})
+	if got := p.Service("app")["volumes"]; !reflect.DeepEqual(got, []any{"./docker/conf:/conf"}) {
+		t.Errorf("volumes %v", got)
+	}
+}
+
+func TestLoadLeavesAFileAtTheCheckoutsRootAsItIs(t *testing.T) {
+	dir := writeFiles(t, map[string]string{"compose.yaml": "services:\n  app:\n    build: .\n    env_file: .env\n    volumes: [\"./src:/src\", \"data:/data\"]\n"})
+	p, err := Load(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := p.Service("app")
+	if app["build"] != "." || app["env_file"] != ".env" || !reflect.DeepEqual(app["volumes"], []any{"./src:/src", "data:/data"}) {
+		t.Errorf("app %v", app)
+	}
+}
+
 func TestLoadFindsTheDefaultFileOrSaysThereIsNone(t *testing.T) {
 	dir := writeFiles(t, map[string]string{"docker-compose.yml": "services: { a: { image: x } }\n", "compose.yaml": "services: { b: { image: y } }\n"})
 	if p, err := Load(dir, nil); err != nil || !reflect.DeepEqual(p.ServiceNames(), []string{"b"}) {
@@ -277,5 +398,24 @@ func TestNamedVolumesSkipProfiledServicesAndBinds(t *testing.T) {
 	p, _ := FromYAML([]byte("services:\n  db: {image: pg, volumes: [\"pg:/var/lib/pg\", \"./init:/init\", {type: volume, source: wal, target: /wal}]}\n  web: {image: w, profiles: [off], volumes: [\"cache:/c\"]}\nvolumes: {pg: {}, wal: {}, cache: {}}\n"))
 	if got := p.NamedVolumes(); !reflect.DeepEqual(got, map[string][]string{"db": {"pg", "wal"}}) {
 		t.Fatalf("%v", got)
+	}
+}
+
+// A compose file the PR links to a file outside its checkout is refused,
+// never read: the cell's own files must not reach the YAML parser, whose
+// errors quote what it read. Load used to follow the link.
+func TestLoadRefusesAComposeFileLinkedOutOfTheCheckout(t *testing.T) {
+	outside := filepath.Join(t.TempDir(), "elsewhere.yaml")
+	if err := os.WriteFile(outside, []byte("services:\n  app:\n    image: busybox\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	checkout := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(checkout, DefaultFiles[0])); err != nil {
+		t.Fatal(err)
+	}
+	for _, files := range [][]string{nil, {DefaultFiles[0]}} {
+		if p, err := Load(checkout, files); err == nil {
+			t.Fatalf("Load(%v) read a compose file outside the checkout: %+v", files, p)
+		}
 	}
 }

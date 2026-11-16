@@ -1,6 +1,7 @@
 import * as yaml from 'js-yaml';
 
 import type { RecipeChange } from './catalog';
+import { UNTRUSTED_YAML } from '@libs/runtime/protocol/yaml-limits';
 
 // A fix that changes the recipe edits one field under services.compose and
 // leaves every other byte alone: the customer's comments and layout stay, and
@@ -110,7 +111,7 @@ export function lineDiff(before: string, after: string, path = '.kodus/workspace
 export function applyRecipeChange(text: string, change: RecipeChange, path?: string): RecipeEdit {
     let before: unknown;
     try {
-        before = yaml.load(text, { schema: yaml.CORE_SCHEMA });
+        before = yaml.load(text, { ...UNTRUSTED_YAML, schema: yaml.CORE_SCHEMA });
     } catch {
         return { ok: false, error: "the recipe doesn't parse" };
     }
@@ -125,7 +126,7 @@ export function applyRecipeChange(text: string, change: RecipeChange, path?: str
     // The check: the edited recipe loads, the field has the value, and nothing else moved.
     let after: unknown;
     try {
-        after = yaml.load(edited, { schema: yaml.CORE_SCHEMA });
+        after = yaml.load(edited, { ...UNTRUSTED_YAML, schema: yaml.CORE_SCHEMA });
     } catch {
         return { ok: false, error: 'the edit would break the recipe' };
     }

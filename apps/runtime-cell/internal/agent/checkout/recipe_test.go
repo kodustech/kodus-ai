@@ -103,7 +103,7 @@ func TestClaimRecipeReplacesALinkAtItsPathWithoutFollowingIt(t *testing.T) {
 	dir := checkout(t, "")
 	_ = os.MkdirAll(filepath.Join(dir, "src"), 0o755)
 	_ = os.MkdirAll(filepath.Join(dir, ".kodus"), 0o755)
-	if err := os.WriteFile(filepath.Join(dir, "src/app.js"), []byte("app"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "src", "app.js"), []byte("app"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink("../src/app.js", filepath.Join(dir, recipe.Path)); err != nil {
@@ -113,7 +113,7 @@ func TestClaimRecipeReplacesALinkAtItsPathWithoutFollowingIt(t *testing.T) {
 	if err := ApplyRecipe(dir, &protocol.ClaimAcquireBodyRecipe{Content: content}); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(dir, "src/app.js")); string(b) != "app" {
+	if b, _ := os.ReadFile(filepath.Join(dir, "src", "app.js")); string(b) != "app" {
 		t.Fatalf("the link's target was written: %q", b)
 	}
 	st, err := os.Lstat(filepath.Join(dir, recipe.Path))

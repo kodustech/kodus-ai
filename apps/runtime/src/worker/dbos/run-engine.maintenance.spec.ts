@@ -1,9 +1,8 @@
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
-import { InMemoryDistributedLocks } from '../../shared/persistence/locks';
-import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
 import { RunEngineService } from './run-engine.service';
+import { InMemoryCommandStore, InMemoryDistributedLocks } from '../../shared/persistence/testing';
 
 // The sweep, the reaper and the retention run once per tick for the whole
 // cluster: the replica that takes the maintenance lock does them.

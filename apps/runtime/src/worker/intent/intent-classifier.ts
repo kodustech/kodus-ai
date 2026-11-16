@@ -11,7 +11,8 @@ import type { TestRun } from './test-runs';
 // with deterministic evidence: a test that existed on the base (the PR does
 // not add or change its file), ran on both sides, passed on both and
 // exercises the finding's entry point. Anything else, including an LLM error,
-// is at most `uncertain`.
+// is at most `uncertain`. A finding the PR's diff spells out arrives already
+// intended (gate/intended-change.ts) and is not classified again.
 
 export type Intent = NonNullable<ProbeVerdict['intent']>;
 
@@ -69,6 +70,7 @@ function parseIntent(text: string): { intent?: Intent; testId?: string } {
         const intent = ['unintended', 'uncertain', 'intended'].includes(o?.intent) ? (o.intent as Intent) : undefined;
         return { intent, testId: typeof o?.testId === 'string' ? o.testId : undefined };
     } catch {
+        // Model text that is not JSON gives no intent, the same as an answer outside the three.
         return {};
     }
 }
@@ -158,7 +160,8 @@ export async function classifyIntents(args: {
     // (kr-shop#1). Each batch starts its steps in index order, so a resumed
     // workflow replays the same steps.
     const decisions: Array<IntentDecision | undefined> = [];
-    const findings = [...args.verdicts.entries()].filter(([, v]) => v.verdict === 'finding');
+    // A finding the diff already explains (gate/intended-change.ts) is intended: no turn is spent on it.
+    const findings = [...args.verdicts.entries()].filter(([, v]) => v.verdict === 'finding' && v.intent !== 'intended');
     for (let at = 0; at < findings.length; at += INTENT_CONCURRENCY) {
         const batch = findings.slice(at, at + INTENT_CONCURRENCY);
         const done = await Promise.all(batch.map(([i, v]) => args.step(`intent:${i}:${v.probeId}`, () => args.classifier.classify(v, args.ctx))));

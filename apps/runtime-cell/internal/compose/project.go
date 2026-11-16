@@ -8,17 +8,20 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/yamlbound"
 )
 
 // DefaultFiles are the files docker compose looks for, in its order.
 var DefaultFiles = []string{"compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"}
 
-// ErrNoComposeFile: the checkout has none of DefaultFiles.
+// ErrNoComposeFile means the checkout has none of DefaultFiles.
 var ErrNoComposeFile = errors.New("compose: the checkout has no compose file")
 
 // Project is a compose project as docker compose reads it. It is a plain
@@ -30,11 +33,12 @@ type Project struct {
 
 // Load reads the project from dir. With files (a recipe's), each must
 // exist and they lay over each other in order, like docker compose -f a -f
-// b; without, the first of DefaultFiles that exists.
+// b; without, the first of DefaultFiles that exists. Every path resolves
+// inside dir (os.Root): a file the PR links outside it is refused, never read.
 func Load(dir string, files []string) (*Project, error) {
 	if len(files) == 0 {
 		for _, name := range DefaultFiles {
-			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			if _, err := inside(dir, func(r *os.Root) (os.FileInfo, error) { return r.Stat(name) }); err == nil {
 				files = []string{name}
 				break
 			}
@@ -43,23 +47,28 @@ func Load(dir string, files []string) (*Project, error) {
 			return nil, ErrNoComposeFile
 		}
 	}
+	projectDir := composeProjectDir(files)
 	var doc map[string]any
 	for _, f := range files {
-		b, err := os.ReadFile(filepath.Join(dir, f))
+		// The PR's file is read bounded and refused past the node bound
+		// before it is decoded (yamlbound): the cell parses it in its own
+		// process, outside any claim's cgroup.
+		b, err := inside(dir, func(r *os.Root) ([]byte, error) { return yamlbound.ReadFile(r, f) })
 		if err != nil {
 			return nil, fmt.Errorf("compose: %w", err)
 		}
-		var node yaml.Node
-		if err := yaml.Unmarshal(b, &node); err != nil {
+		node, err := yamlbound.Parse(b)
+		if err != nil {
 			return nil, fmt.Errorf("compose: %s: %w", f, err)
 		}
-		if err := markMergeTags(&node); err != nil {
+		if err := markMergeTags(node); err != nil {
 			return nil, fmt.Errorf("compose: %s: %w", f, err)
 		}
 		var layer map[string]any
 		if err := node.Decode(&layer); err != nil {
 			return nil, fmt.Errorf("compose: %s: %w", f, err)
 		}
+		rebaseHostPaths(layer, pathBase(f, projectDir))
 		doc = overlay(doc, layer)
 	}
 	if doc == nil {
@@ -70,6 +79,134 @@ func Load(dir string, files []string) (*Project, error) {
 	return &Project{doc: doc}, nil
 }
 
+// kodusDir holds the files Kody writes for a repository (a Dockerfile, a
+// compose file). Their paths are written from the checkout's root, whatever
+// the repository's own compose files do.
+const kodusDir = ".kodus"
+
+// composeProjectDir is the directory the repository's compose files read
+// their relative paths from, as docker compose does: the directory of the
+// first of them. Kody's own files do not count.
+func composeProjectDir(files []string) string {
+	for _, f := range files {
+		if dir := path.Dir(filepath.ToSlash(f)); dir != kodusDir {
+			return dir
+		}
+	}
+	return "."
+}
+
+// pathBase is where the relative host paths of one compose file start: the
+// checkout for a file of Kody's, the project directory for the repository's.
+func pathBase(file, projectDir string) string {
+	if path.Dir(filepath.ToSlash(file)) == kodusDir {
+		return "."
+	}
+	return projectDir
+}
+
+// rebaseHostPaths makes one compose file's relative host paths relative to
+// the checkout. Docker compose resolves them from the project directory,
+// and the cell reads the project as one file at the checkout's root: a file
+// in docker/ whose build context is ".." (the repository) would name the
+// checkout's parent and be refused as outside the project. Only what
+// compose reads as a host path is touched: a build context, an env file and
+// a bind mount's source. A path that still leaves the checkout stays so,
+// for the sandbox to refuse. It runs on a file as it was read, before the
+// files are laid over each other, so a !override value is rebased too.
+func rebaseHostPaths(doc map[string]any, base string) {
+	if base == "." || base == "" {
+		return
+	}
+	_, sv := marker(doc["services"])
+	services, _ := sv.(map[string]any)
+	for _, v := range services {
+		_, in := marker(v)
+		svc, _ := in.(map[string]any)
+		if svc == nil {
+			continue
+		}
+		for _, key := range []string{"build", "env_file", "volumes"} {
+			tag, val := marker(svc[key])
+			if tag == resetKey || val == nil {
+				continue
+			}
+			val = rebaseField(key, val, base)
+			if tag == overrideKey {
+				val = map[string]any{overrideKey: val}
+			}
+			svc[key] = val
+		}
+	}
+}
+
+// rebaseField returns one service field with its host paths rebased; maps
+// and lists are changed in place.
+func rebaseField(key string, v any, base string) any {
+	switch key {
+	case "build":
+		switch b := v.(type) {
+		case string:
+			return rebased(base, b)
+		case map[string]any:
+			if ctx, ok := b["context"].(string); ok {
+				b["context"] = rebased(base, ctx)
+			} else if b["context"] == nil {
+				// No context is the project directory.
+				b["context"] = rebased(base, ".")
+			}
+		}
+	case "env_file":
+		switch ef := v.(type) {
+		case string:
+			return rebased(base, ef)
+		case []any:
+			for i, f := range ef {
+				switch x := f.(type) {
+				case string:
+					ef[i] = rebased(base, x)
+				case map[string]any:
+					if s, ok := x["path"].(string); ok {
+						x["path"] = rebased(base, s)
+					}
+				}
+			}
+		}
+	case "volumes":
+		vols, _ := v.([]any)
+		for i, vol := range vols {
+			switch x := vol.(type) {
+			case string:
+				// "source:target[:mode]": a source compose reads as a path starts with "." (or "/", "~": left as they are).
+				if src, rest, ok := strings.Cut(x, ":"); ok && strings.HasPrefix(src, ".") {
+					vols[i] = rebased(base, src) + ":" + rest
+				}
+			case map[string]any:
+				if t, _ := x["type"].(string); t == "bind" {
+					if src, ok := x["source"].(string); ok {
+						x["source"] = rebased(base, src)
+					}
+				}
+			}
+		}
+	}
+	return v
+}
+
+// rebased is the relative host path p, read from base, as a path from the
+// checkout: "./..." so it stays a path and never becomes a volume's name.
+// Absolute, remote, interpolated and home paths are returned as they are.
+func rebased(base, p string) string {
+	if p == "" || strings.HasPrefix(p, "/") || strings.HasPrefix(p, "~") || strings.Contains(p, "$") || strings.Contains(p, "://") || strings.HasPrefix(p, "git@") {
+		return p
+	}
+	joined := path.Join(base, filepath.ToSlash(p))
+	if joined == "." || joined == ".." || strings.HasPrefix(joined, "../") {
+		return joined
+	}
+	return "./" + joined
+}
+
 // SingleService is a one-service project that builds the checkout's
 // Dockerfile: how a repo without a compose file runs.
 func SingleService(name string) *Project {
@@ -78,8 +215,12 @@ func SingleService(name string) *Project {
 
 // FromYAML is a project from a compose file's contents.
 func FromYAML(b []byte) (*Project, error) {
+	node, err := yamlbound.Parse(b)
+	if err != nil {
+		return nil, fmt.Errorf("compose: %w", err)
+	}
 	var doc map[string]any
-	if err := yaml.Unmarshal(b, &doc); err != nil {
+	if err := node.Decode(&doc); err != nil {
 		return nil, fmt.Errorf("compose: %w", err)
 	}
 	if doc == nil {
@@ -176,4 +317,15 @@ func (p *Project) NamedVolumes() map[string][]string {
 		sort.Strings(out[name])
 	}
 	return out
+}
+
+// inside runs fn on dir opened as an os.Root, so no path step leaves dir.
+func inside[T any](dir string, fn func(*os.Root) (T, error)) (T, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	defer func() { _ = root.Close() }()
+	return fn(root)
 }

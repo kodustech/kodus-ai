@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { CellConnection } from '../gateway/cell-connections';
-import { InMemoryHubStore } from '../hub-store';
 import { StepDispatcher } from './step-dispatcher';
+import { InMemoryHubStore } from '../testing';
 
 function fixture(
     metadata: any,
@@ -27,7 +27,7 @@ function fixture(
     const initial = connection();
     let current = initial;
     const frames: any[] = [];
-    let dispatcher: StepDispatcher;
+    const logs: Array<Record<string, unknown>> = [];
     const registry = {
         ack: () => {},
         get: () => current,
@@ -68,7 +68,7 @@ function fixture(
             return true;
         },
     };
-    dispatcher = new StepDispatcher(
+    const dispatcher: StepDispatcher = new StepDispatcher(
         {
             findActiveClaim: async () => claim,
             scoped: async () => claim,
@@ -81,9 +81,10 @@ function fixture(
         },
         { recordProtocolViolation: () => {} } as any,
         { step: () => {} } as any,
-        () => {},
+        (level, msg, fields) => logs.push({ level, msg, ...fields }),
         async () => {
             if (replaceOnLookup) current = connection();
+            if (metadata === 'unreadable') throw new Error('session store unavailable');
             return metadata === null
                 ? null
                 : { sessionEpoch: initial.sessionEpoch, ...metadata };
@@ -91,6 +92,7 @@ function fixture(
     );
     return {
         frames,
+        logs,
         run: () =>
             dispatcher.exec(
                 { claimId: 'claim-a', organizationId: 'org-a' },
@@ -121,6 +123,14 @@ describe('workload-only internal validation dispatch', () => {
             expect(f.frames).toEqual([]);
         },
     );
+    it('refuses a workload exec whose cell session cannot be read, and logs the failed read', async () => {
+        const f = fixture('unreadable');
+        expect(await f.run()).toMatchObject({ code: 'workload_exec_unavailable' });
+        expect(f.frames).toEqual([]);
+        expect(f.logs.filter((l) => l.msg === 'step.session_unreadable')).toEqual([
+            { level: 'warn', msg: 'step.session_unreadable', cellId: 'cell-a', purpose: 'workload_exec', error: 'session store unavailable' },
+        ]);
+    });
     it('fences a reconnect before execution, including a potential driver downgrade', async () => {
         const f = fixture(
             { driver: 'docker-gvisor', isolation: 'sandboxed-container' },

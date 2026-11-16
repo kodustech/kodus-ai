@@ -180,6 +180,22 @@ describe('ApplyBlockerFixUseCase', () => {
         expect(err.message).not.toContain('Bad credentials');
     });
 
+    // The build's full-access fix is an owner's passthrough approval by what it is, never a reads-only one.
+    it("gives the build full access when that is the fix applied", async () => {
+        const rec = setupRecord();
+        rec.failureBundle!.deniedEgress = [{ host: 'github.com', port: 443, at: '2026-11-03T12:00:00.000Z' }];
+        rec.failureBundle!.services = [
+            {
+                name: 'kodus-boot',
+                state: 'exited',
+                logTail: ['#9 [api 4/8] RUN curl -fsSL https://github.com/o/r/releases/download/v1/x.tgz', '#9 ERROR: process "/bin/sh -c curl" did not complete successfully: exit code: 7'],
+            },
+        ];
+        const t = make(rec);
+        await t.useCase.execute({ user, environmentId: 'env-1', signature: 'external_service:build_egress:github.com', fixId: 'approve_full:github.com' });
+        expect(t.approveEgress.execute).toHaveBeenCalledWith(expect.objectContaining({ host: 'github.com', mode: 'passthrough' }));
+    });
+
     it('approves a denied host and sets up again in one click', async () => {
         const rec = setupRecord();
         rec.failureBundle!.deniedEgress = [
@@ -201,12 +217,19 @@ describe('ApplyBlockerFixUseCase', () => {
             host: 'api.segment.io',
             setupRequested: true,
         });
+        // One click allows reads only (docs/runtime/egress-allowlist.md §9), and the audit names the blocker and setup.
         expect(t.approveEgress.execute).toHaveBeenCalledWith({
             user,
             environmentId: 'env-1',
             host: 'api.segment.io',
+            mode: 'inspected',
+            source: 'blocker',
+            sourceRef: 'external_service:egress:api.segment.io@k',
         });
         expect(t.setups.request).toHaveBeenCalledWith(product, user);
+        // Full access is the card's second step, asked for.
+        await t.useCase.execute({ user, environmentId: 'env-1', signature: 'external_service:egress:api.segment.io', fixId: 'approve_host:api.segment.io', mode: 'passthrough' });
+        expect(t.approveEgress.execute).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'passthrough' }));
     });
 
     it('retries the setup for a failure on the Kodus side', async () => {

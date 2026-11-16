@@ -7,6 +7,7 @@ import type { RuntimeRunProjection } from '@libs/runtime/run';
 
 import { RUNTIME_RUN_PROJECTION_STORE, type RunProjectionReader } from '../../domain/ports';
 import type { RuntimeRunCost } from '../../domain/run-cost';
+import { RuntimeEnvironmentMembers } from '../environment-members.service';
 import { RuntimeRunCostService } from '../run-cost.service';
 import type { RuntimeAuthorization } from '../run-access.service';
 import { publicRunCheck } from '../run-public-view';
@@ -59,7 +60,23 @@ export class ListRuntimeRunsUseCase {
         @Inject(AuthorizationService)
         private readonly authorization: RuntimeAuthorization,
         private readonly costs: RuntimeRunCostService,
+        // Required by Nest; made without it (the older tests), a Run is read by its own repository only.
+        @Inject(RuntimeEnvironmentMembers)
+        private readonly members?: RuntimeEnvironmentMembers,
     ) {}
+
+    /**
+     * The Runs whose every repository the caller may read: a Run of an
+     * environment of several repositories ran with all their code.
+     */
+    private async readable(organizationId: string, runs: RuntimeRunProjection[], scope: string[] | null): Promise<RuntimeRunProjection[]> {
+        if (scope === null || !this.members) return runs;
+        const byEnvironment = new Map<string, string[]>();
+        for (const environmentId of new Set(runs.map((r) => r.environmentId))) {
+            byEnvironment.set(environmentId, await this.members.repositoryIdsOfEnvironment(organizationId, environmentId, []));
+        }
+        return runs.filter((r) => [r.repositoryId, ...(byEnvironment.get(r.environmentId) ?? [])].every((id) => scope.includes(id)));
+    }
 
     private async withCost(runs: RuntimeRunProjection[]): Promise<RuntimeRunSummary[]> {
         const costs = await this.costs.forRuns(runs);
@@ -87,7 +104,8 @@ export class ListRuntimeRunsUseCase {
                 repoIds: [input.repositoryId],
             });
             const runs = await this.runs.list({ organizationId, repositoryId: input.repositoryId, prNumber, limit });
-            return this.withCost(runs);
+            const scope = this.members ? await this.authorization.getRepositoryScope({ user: input.user, action: Action.Read, resource: ResourceType.RuntimeRun }) : null;
+            return this.withCost(await this.readable(organizationId, runs, scope));
         }
 
         const scope = await this.authorization.getRepositoryScope({
@@ -98,6 +116,6 @@ export class ListRuntimeRunsUseCase {
         if (scope !== null && scope.length === 0) return [];
         // The repository scope goes into the query: cutting the org's latest Runs would hide a scoped user's own.
         const runs = await this.runs.list({ organizationId, limit, ...(scope === null ? {} : { repositoryIds: scope }) });
-        return this.withCost(runs);
+        return this.withCost(await this.readable(organizationId, runs, scope));
     }
 }

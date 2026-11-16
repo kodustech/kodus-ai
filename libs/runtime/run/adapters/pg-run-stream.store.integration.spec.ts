@@ -6,8 +6,11 @@ import { ensureRuntimeSchema } from '../../../../apps/runtime/src/shared/persist
 
 import type { RunStreamEvent } from '../run-stream';
 import { decodePgStreamOffset, PgRunStreamStore } from './pg-run-stream.store';
+import { isolatedDatabase } from '../../../../apps/runtime/src/testing/isolated-database';
 
-const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
+// A database of its own: suites in parallel never read each other's rows (isolated-database.ts).
+const database = isolatedDatabase(process.env.RUNTIME_IT_DATABASE_URL ?? '', 'run_stream');
+const url = database.url;
 const skip = !url || process.env.SKIP_INTEGRATION === 'true';
 const event = (label: string): RunStreamEvent => ({ type: 'phase', at: '2026-11-07T00:00:00.000Z', data: { label } });
 
@@ -20,17 +23,14 @@ const event = (label: string): RunStreamEvent => ({ type: 'phase', at: '2026-11-
     };
 
     beforeAll(async () => {
+        await database.create();
         pool = new Pool({ connectionString: url, max: 6 });
         await ensureRuntimeSchema(pool);
     });
 
     afterAll(async () => {
-        if (!pool) return;
-        try {
-            await pool.query('DELETE FROM runtime.runtime_run_events WHERE (org_id, run_id) IN (SELECT * FROM unnest($1::text[], $2::text[]))', [streams.map(([org]) => org), streams.map(([, run]) => run)]);
-        } finally {
-            await pool.end();
-        }
+        await pool?.end();
+        await database.drop();
     });
 
     /** Observe the submitted insert, not the client's preceding idle PID query. */

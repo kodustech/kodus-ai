@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
 
@@ -320,7 +320,7 @@ func goldenSum(composeFile []byte, projectDir, seedSQL string, binds []string) (
 	if err != nil {
 		return "", err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	h := sha256.New()
 	fmt.Fprintf(h, "compose %d\n", len(composeFile))
 	h.Write(composeFile)
@@ -348,7 +348,7 @@ func goldenSum(composeFile []byte, projectDir, seedSQL string, binds []string) (
 				if err != nil {
 					return err
 				}
-				defer f.Close()
+				defer func() { _ = f.Close() }()
 				fi, err := f.Stat()
 				if err != nil {
 					return err
@@ -443,11 +443,12 @@ func (d *Driver) takeGolden(ctx context.Context, ref driver.MachineRef, project 
 		return nil, false, err
 	}
 	byService := map[string]dockercli.Container{}
-	for _, c := range cs {
+	for i := range cs {
+		c := &cs[i]
 		if c.Labels[dockercli.LabelFromTag(driver.TagCell)] != d.cfg.CellID {
 			return nil, false, fmt.Errorf("%w: container %s", driver.ErrNotOwned, c.Name)
 		}
-		byService[c.Labels["com.docker.compose.service"]] = c
+		byService[c.Labels["com.docker.compose.service"]] = *c
 	}
 	wait := recipe.DefaultHealthTimeout
 	if rec != nil {
@@ -575,7 +576,7 @@ func (r *Reaper) orphanGolden(ctx context.Context, live map[string]bool) ([]driv
 		if live[m] || !machineNamePattern.MatchString(m) {
 			continue
 		}
-		h := driver.ParseExpiry(map[string]string{driver.TagHardExpires: v.Labels[dockercli.LabelFromTag(driver.TagHardExpires)]}, driver.TagHardExpires)
+		h, _ := driver.Ceiling(dockercli.CeilingTags(v.Labels))
 		if prev, ok := hard[m]; !ok || h.Before(prev) {
 			hard[m] = h
 			tags[m] = map[string]string{driver.TagCell: r.cfg.CellID, driver.TagClaim: v.Labels[dockercli.LabelFromTag(driver.TagClaim)], driver.TagOrg: v.Labels[dockercli.LabelFromTag(driver.TagOrg)]}
@@ -589,7 +590,9 @@ func (r *Reaper) orphanGolden(ctx context.Context, live map[string]bool) ([]driv
 	out := make([]driver.MachineRef, 0, len(names))
 	for _, m := range names {
 		t := tags[m]
-		t[driver.TagHardExpires] = driver.FormatTime(hard[m])
+		if !hard[m].IsZero() {
+			t[driver.TagHardExpires] = driver.FormatTime(hard[m])
+		}
 		out = append(out, driver.MachineRef{MachineID: m, Tags: t})
 	}
 	return out, nil

@@ -93,3 +93,31 @@ func TestLoopReportsAFailedPass(t *testing.T) {
 		t.Fatalf("no log of the failed pass: %s", logs.String())
 	}
 }
+
+// orphanDriver is a driver with an orphan pass (the microvm reaper's).
+type orphanDriver struct {
+	*fake.Driver
+	reaped int
+}
+
+func (o *orphanDriver) ReapOrphans(context.Context) ([]string, error) {
+	o.reaped++
+	return []string{"tap kft0001", "cgroup kfc-0001"}, nil
+}
+
+// A driver that can end what no record names gets that pass on every run,
+// after the hard-expiry one, and what it removed is reported and counted.
+func TestTheReaperRunsTheDriversOrphanPass(t *testing.T) {
+	o := &orphanDriver{Driver: fake.New()}
+	reg := metrics.NewRegistry()
+	r := &Reaper{CellID: "cell-1", Driver: o, Orphans: o, Metrics: reg}
+	rep, err := r.Run(context.Background())
+	if err != nil || o.reaped != 1 || len(rep.Orphans) != 2 {
+		t.Fatalf("%+v %v (passes %d)", rep, err, o.reaped)
+	}
+	var b bytes.Buffer
+	_ = reg.WriteText(&b)
+	if !strings.Contains(b.String(), "cell_reaper_orphans_total 2") {
+		t.Fatalf("metrics:\n%s", b.String())
+	}
+}

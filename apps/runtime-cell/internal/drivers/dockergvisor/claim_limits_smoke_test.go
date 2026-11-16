@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/claimlimits"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 )
 
 // TestSmokeClaimLimitsDockerAttachment only targets an explicitly identified,
@@ -58,7 +58,7 @@ func TestSmokeClaimLimitsDockerAttachment(t *testing.T) {
 	// Holder-only fixtures do not boot compose, but production Destroy invokes
 	// compose down. Supply its own inert config rather than discover repo files.
 	compose := filepath.Join(work, "compose.yaml")
-	if err := os.WriteFile(compose, []byte("services:\n  inert:\n    image: "+image+"\n    command: ['true']\n"), 0600); err != nil {
+	if err := os.WriteFile(compose, []byte("services:\n  inert:\n    image: "+image+"\n    command: ['true']\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	env := append(dockercli.MinimalEnv(), "COMPOSE_FILE="+compose)

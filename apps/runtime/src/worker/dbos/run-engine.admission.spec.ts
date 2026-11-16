@@ -5,13 +5,12 @@ import type { RuntimeRunRequested } from '@libs/runtime/run';
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryAdmissionStore } from '../../shared/admission/admission-store';
 import type { AdmissionRef, PhysicalAdmissionClient, PhysicalAdmissionTicket } from '../../shared/admission/admission-contract';
-import { InMemoryDistributedLocks } from '../../shared/persistence/locks';
-import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
 import { AdmissionCoordinator } from './admission-coordinator';
 import { RunEngineService } from './run-engine.service';
-import { inMemoryRunDeps } from '../run/in-memory-deps';
+import { inMemoryRunDeps } from '../run/testing';
+import { InMemoryAdmissionStore } from '../../shared/admission/testing';
+import { InMemoryCommandStore, InMemoryDistributedLocks } from '../../shared/persistence/testing';
 
 const LIMITS = { globalWaiting: 100, perOrgWaiting: 10, globalExecuting: 2, perOrgExecuting: 2, maxAttempts: 360, leaseMs: 30_000, retryMs: 5_000, attemptConcurrency: 4, attemptPerOrg: 1 };
 
@@ -256,7 +255,7 @@ describe('native DBOS workflow identity during admission', () => {
         const dependencies = h.factory.forRun(h.req);
         jest.mocked(DBOS.runStep).mockImplementation(async (callback, options) => {
             // Ownership can be lost after both claims boot, at a public SDK step boundary.
-            if (options?.name === 'agent:plan') return (async () => { throw conflict; })();
+            if (options?.name === 'agent:plan' || options?.name === 'agent:plan:early') return (async () => { throw conflict; })();
             return callback();
         });
         const release = jest.spyOn(dependencies.env, 'release');

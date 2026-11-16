@@ -8,10 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver/drivertest"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/buildstate"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/reaper"
 )
 
@@ -84,8 +85,10 @@ func newReapFixture(t *testing.T) (*Driver, reapFixture) {
 	}
 	// Another cell on the same daemon, long past its ceiling.
 	f.foreign, f.foreignN = "kodus-claim-9-workload", networkName("claim-9")
-	foreignLabels := map[string]string{dockercli.LabelFromTag(driver.TagCell): "cell-2", dockercli.LabelFromTag(driver.TagClaim): "claim-9",
-		dockercli.LabelFromTag(driver.TagHardExpires): driver.FormatTime(reapNow.Add(-24 * time.Hour))}
+	foreignLabels := map[string]string{
+		dockercli.LabelFromTag(driver.TagCell): "cell-2", dockercli.LabelFromTag(driver.TagClaim): "claim-9",
+		dockercli.LabelFromTag(driver.TagHardExpires): driver.FormatTime(reapNow.Add(-24 * time.Hour)),
+	}
 	_ = docker.NetworkCreate(ctx, dockercli.NetworkSpec{Name: f.foreignN, Labels: foreignLabels})
 	holder := map[string]string{labelMachine: f.foreign}
 	for k, v := range foreignLabels {
@@ -177,6 +180,41 @@ func TestS08ReaperDestroysEverythingOfAMachinePastItsCeiling(t *testing.T) {
 	}
 }
 
+// ownMachines is a backend that keeps its machines itself, as a microVM
+// backend keeps VMs that are no Docker container.
+type ownMachines struct{ live map[string]bool }
+
+func (b *ownMachines) Destroy(_ context.Context, name string, _ isolation.DestroyOptions) error {
+	delete(b.live, name)
+	return nil
+}
+
+// The reaper ends a machine through the isolation backend that holds it,
+// not by removing Docker containers itself: it used to compose down and rm
+// directly, so a machine a backend keeps outside Docker would outlive its
+// ceiling.
+func TestReaperEndsAnExpiredMachineInItsBackend(t *testing.T) {
+	_, f := newReapFixture(t)
+	rp := newTestReaper(t, f)
+	backend := &ownMachines{live: map[string]bool{f.live.MachineID: true}}
+	for _, ref := range f.expired {
+		backend.live[ref.MachineID] = true
+	}
+	rp.ender = backend
+	r := &reaper.Reaper{CellID: "cell-1", Driver: rp, Orphans: rp, Now: func() time.Time { return reapNow }}
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, ref := range f.expired {
+		if backend.live[ref.MachineID] {
+			t.Fatalf("expired machine %s still in the backend", ref.MachineID)
+		}
+	}
+	if !backend.live[f.live.MachineID] {
+		t.Fatal("live machine ended")
+	}
+}
+
 // The reaper reads the owner from Docker, never from the ref: another
 // cell's machine, or a machine whose project holds another cell's
 // container, is refused whole.
@@ -213,7 +251,7 @@ func TestReaperLeavesAMountedBuildState(t *testing.T) {
 	rp.mounted = func(under string) ([]buildstate.OverlayMount, error) {
 		return []buildstate.OverlayMount{{Target: filepath.Join(under, "app", "merged")}}, nil
 	}
-	r := &reaper.Reaper{CellID: "cell-1", Driver: rp, Now: func() time.Time { return reapNow }}
+	r := &reaper.Reaper{CellID: "cell-1", Driver: rp, Orphans: rp, Now: func() time.Time { return reapNow }}
 	if _, err := r.Run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -267,5 +305,38 @@ func TestNewForReaperNeedsTheCellAndItsWorkDir(t *testing.T) {
 	}
 	if _, err := NewForReaper(newMemDocker(), ReaperConfig{CellID: "cell-1"}); err == nil {
 		t.Fatal("no work dir accepted")
+	}
+}
+
+// A machine whose containers are gone but whose build directories a dead
+// cell left is the reaper's orphan pass's: its directories go once they are
+// older than the grace, and a live machine's or a fresh one's stay.
+func TestTheOrphanPassRemovesTheDirectoriesOfAMachineWithNoContainer(t *testing.T) {
+	_, f := newReapFixture(t)
+	rp := newTestReaper(t, f)
+	live := f.expired[0].MachineID
+	mk := func(machine string, age time.Duration) string {
+		d := filepath.Join(f.work, "builds", machine)
+		if err := os.MkdirAll(filepath.Join(d, "app"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		at := time.Now().Add(-age)
+		if err := os.Chtimes(d, at, at); err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	orphan, fresh, held := mk("kodus-gone-workload", time.Hour), mk("kodus-new-workload", time.Second), mk(live, time.Hour)
+	gone, err := rp.ReapOrphans(context.Background())
+	if err != nil || len(gone) != 1 || gone[0] != "directories kodus-gone-workload" {
+		t.Fatalf("%v %v", gone, err)
+	}
+	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
+		t.Fatal("the orphan's directories stay")
+	}
+	for _, d := range []string{fresh, held} {
+		if _, err := os.Stat(d); err != nil {
+			t.Fatalf("%s: %v", d, err)
+		}
 	}
 }

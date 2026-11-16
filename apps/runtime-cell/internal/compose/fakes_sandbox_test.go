@@ -5,10 +5,11 @@ import (
 	"net/netip"
 	"testing"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
-	"go.yaml.in/yaml/v3"
 )
 
 // Generated fake services still pass through exactly the application sandbox

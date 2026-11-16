@@ -57,7 +57,8 @@ func (m *mockEC2) group(id, cell, claim string) {
 		m.sgs = map[string]*types.SecurityGroup{}
 	}
 	m.sgs[id] = &types.SecurityGroup{GroupId: aws.String(id), VpcId: aws.String("vpc-1"), Tags: []types.Tag{
-		{Key: aws.String("kodus:org"), Value: aws.String("org-a")}, {Key: aws.String("kodus:cell"), Value: aws.String(cell)}, {Key: aws.String("kodus:claim"), Value: aws.String(claim)}}}
+		{Key: aws.String("kodus:org"), Value: aws.String("org-a")}, {Key: aws.String("kodus:cell"), Value: aws.String(cell)}, {Key: aws.String("kodus:claim"), Value: aws.String(claim)},
+	}}
 }
 
 func references(g *types.SecurityGroup, id string) bool {
@@ -278,8 +279,10 @@ func (m *mockEC2) CreateSecurityGroup(_ context.Context, in *ec2.CreateSecurityG
 	if m.sgs == nil {
 		m.sgs = map[string]*types.SecurityGroup{}
 	}
-	m.sgs[id] = &types.SecurityGroup{GroupId: aws.String(id), VpcId: in.VpcId, Tags: in.TagSpecifications[0].Tags,
-		IpPermissionsEgress: []types.IpPermission{{IpProtocol: aws.String("-1"), IpRanges: []types.IpRange{{CidrIp: aws.String("0.0.0.0/0")}}}}}
+	m.sgs[id] = &types.SecurityGroup{
+		GroupId: aws.String(id), VpcId: in.VpcId, Tags: in.TagSpecifications[0].Tags,
+		IpPermissionsEgress: []types.IpPermission{{IpProtocol: aws.String("-1"), IpRanges: []types.IpRange{{CidrIp: aws.String("0.0.0.0/0")}}}},
+	}
 	return &ec2.CreateSecurityGroupOutput{GroupId: aws.String(id)}, nil
 }
 
@@ -343,6 +346,7 @@ func (m *mockEC2) CreateReplaceRootVolumeTask(_ context.Context, in *ec2.CreateR
 	m.tasks[aws.ToString(task.ReplaceRootVolumeTaskId)] = task
 	return &ec2.CreateReplaceRootVolumeTaskOutput{ReplaceRootVolumeTask: &task}, nil
 }
+
 func (m *mockEC2) DescribeReplaceRootVolumeTasks(_ context.Context, in *ec2.DescribeReplaceRootVolumeTasksInput, _ ...func(*ec2.Options)) (*ec2.DescribeReplaceRootVolumeTasksOutput, error) {
 	if err := m.note("DescribeReplaceRootVolumeTasks"); err != nil {
 		return nil, err

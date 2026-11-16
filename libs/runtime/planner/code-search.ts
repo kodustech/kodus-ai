@@ -1,8 +1,6 @@
 import { posix } from 'path';
 
-import { redactPatterns } from '@libs/runtime/redaction';
-
-import { isSecretFile, type RepoReader, repoPath } from './repo-reader';
+import { isSecretFile, redactForModel, type RepoReader, repoPath } from './repo-reader';
 
 // search_code of the test planner (ADR-069): a bounded, literal grep over the
 // repository at one commit, read through the RepoReader (the Git API in
@@ -110,7 +108,7 @@ export async function searchCode(reader: RepoReader, query: SearchQuery, changed
                 if (matches.length >= SEARCH_LIMITS.matches) break;
                 if ((query.ignoreCase ? line.toLowerCase() : line).includes(needle)) {
                     // Each line shown is redacted like a read (S-51).
-                    matches.push(`${batch[j]}:${n + 1}: ${redactPatterns(line.trim().slice(0, SEARCH_LIMITS.lineChars)).text}`);
+                    matches.push(`${batch[j]}:${n + 1}: ${redactForModel(batch[j], line.trim().slice(0, SEARCH_LIMITS.lineChars))}`);
                 }
             }
         }

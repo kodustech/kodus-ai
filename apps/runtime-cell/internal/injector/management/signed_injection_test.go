@@ -66,11 +66,11 @@ func TestOwnerProvisioningSignedPolicyInjectionAndRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(base, "vault")
-	if err = os.Mkdir(dir, 0700); err != nil {
+	if err = os.Mkdir(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	key := filepath.Join(base, "owner.key")
-	if err = os.WriteFile(key, bytes.Repeat([]byte{19}, 32), 0600); err != nil {
+	if err = os.WriteFile(key, bytes.Repeat([]byte{19}, 32), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	vault, err := injector.OpenConfiguredVault(injector.VaultConfig{Directory: dir, KeyFile: key, CellID: "cell-a", Claims: injector.PolicyClaimAuthorizer{Policies: store}})
@@ -112,18 +112,22 @@ func TestOwnerProvisioningSignedPolicyInjectionAndRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	silent := slog.New(slog.NewTextHandler(io.Discard, nil))
-	in := &injector.Injector{Policies: store, Vault: vault, CA: ca.Cert, CAKey: ca.Key, TrustedProxies: []string{"127.0.0.1"}, UpstreamRoots: ca.Pool(), InternalCIDRs: loopback, Log: silent,
+	in := &injector.Injector{
+		Policies: store, Vault: vault, CA: ca.Cert, CAKey: ca.Key, TrustedProxies: []string{"127.0.0.1"}, UpstreamRoots: ca.Pool(), InternalCIDRs: loopback, Log: silent,
 		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
 			return (&net.Dialer{Timeout: time.Second}).DialContext(ctx, network, strings.TrimPrefix(upstream.URL, "https://"))
-		}}
+		},
+	}
 	il, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer il.Close()
 	go func() { _ = in.Serve(ctx, il) }()
-	proxy := &egress.Proxy{Policies: store, Events: egress.NewEvents(10), InjectorAddr: il.Addr().String(), InternalCIDRs: loopback, Log: silent,
-		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("127.0.0.1")}, nil }}
+	proxy := &egress.Proxy{
+		Policies: store, Events: egress.NewEvents(10), InjectorAddr: il.Addr().String(), InternalCIDRs: loopback, Log: silent,
+		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("127.0.0.1")}, nil },
+	}
 	pl, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

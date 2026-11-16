@@ -14,8 +14,10 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/injector"
 )
 
-const MaxBodyBytes = 16 << 10
-const MaxResponseBytes = 256 << 10
+const (
+	MaxBodyBytes     = 16 << 10
+	MaxResponseBytes = 256 << 10
+)
 
 // Error intentionally carries only a closed code and HTTP status, never input,
 // socket paths, provider errors or a credential's value.
@@ -61,6 +63,7 @@ func decoder(raw []byte) (*json.Decoder, error) {
 	d.UseNumber()
 	return d, nil
 }
+
 func flat(d *json.Decoder, allowed []string) (map[string]any, error) {
 	t, e := d.Token()
 	if e != nil || t != json.Delim('{') {
@@ -111,6 +114,7 @@ func stringField(m map[string]any, key string) (string, error) {
 	}
 	return s, nil
 }
+
 func uintField(m map[string]any, key string) (uint64, error) {
 	n, ok := m[key].(json.Number)
 	if !ok {
@@ -128,6 +132,7 @@ func uintField(m map[string]any, key string) (uint64, error) {
 	}
 	return v, nil
 }
+
 func parseRequest(operation string, raw []byte) (request, error) {
 	var r request
 	a, ok := fields[operation]
@@ -164,9 +169,11 @@ func parseRequest(operation string, raw []byte) (request, error) {
 	}
 	return r, nil
 }
+
 func (r request) scope() injector.SecretScope {
 	return injector.SecretScope{OrganizationID: r.org, EnvironmentID: r.env}
 }
+
 func (r request) claimScope() injector.ClaimScope {
 	return injector.ClaimScope{SecretScope: r.scope(), ClaimID: r.claim}
 }
@@ -244,12 +251,13 @@ func sanitizeList(raw []byte, scope injector.SecretScope) ([]byte, error) {
 		Versions []VersionInfo `json:"versions"`
 	}{rows})
 }
+
 func validID(s string) bool {
 	if len(s) < 1 || len(s) > 96 {
 		return false
 	}
 	for i, c := range s {
-		if c > 127 || !(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || i > 0 && (c == '_' || c == '.' || c == ':' || c == '-')) {
+		if c > 127 || (c < 'A' || c > 'Z') && (c < 'a' || c > 'z') && (c < '0' || c > '9') && (i == 0 || c != '_' && c != '.' && c != ':' && c != '-') {
 			return false
 		}
 	}

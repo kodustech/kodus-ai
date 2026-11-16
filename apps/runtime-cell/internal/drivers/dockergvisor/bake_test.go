@@ -37,7 +37,7 @@ func machine(claim, env string) driver.MachineRef {
 // boot runs the machine's builds as Up does.
 func boot(t *testing.T, d *Driver, ref driver.MachineRef, builds ...sandbox.Build) map[string]string {
 	t.Helper()
-	built, _, err := d.build(context.Background(), ref, builds, "net", "resolv", bakeSubnet)
+	built, _, err := d.build(context.Background(), ref, builds, "net", "resolv", bakeSubnet, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestBakeKeepsTheSetupMachinesImagesPastItsRelease(t *testing.T) {
 	setup := machine("claim-setup", bakeEnv)
 	built := boot(t, d, setup, sandbox.Build{Service: "api", Context: dir, Dockerfile: "Dockerfile"})
 
-	if err := d.PinBakeSource(setup); err != nil {
+	if err := d.PinBakeSource(t.Context(), setup); err != nil {
 		t.Fatal(err)
 	}
 	// The worker releases the setup claim as soon as the bake is acked.
@@ -115,7 +115,7 @@ func TestABuildMatchingTheBakeIsNotBuiltAgain(t *testing.T) {
 	dir := project(t)
 	setup := machine("claim-setup", bakeEnv)
 	boot(t, d, setup, sandbox.Build{Service: "api", Context: dir, Dockerfile: "Dockerfile"})
-	if err := d.PinBakeSource(setup); err != nil {
+	if err := d.PinBakeSource(t.Context(), setup); err != nil {
 		t.Fatal(err)
 	}
 	image, err := d.Bake(ctx, bakeSpec(setup))
@@ -155,8 +155,8 @@ func TestANewBakeReplacesTheOldOneWithoutTakingAClaimsImage(t *testing.T) {
 	bakeFrom := func(claim, env, dir string) {
 		t.Helper()
 		ref := machine(claim, env)
-		boot(t, d, ref, sandbox.Build{Service: "api", Context: dir, Dockerfile: "Dockerfile"})
-		if err := d.PinBakeSource(ref); err != nil {
+		boot(t, d, ref, sandbox.Build{Service: "api", Context: dir, Dockerfile: "Dockerfile"}) //nolint:contextcheck // boot is a test helper with its own context, as at every other call
+		if err := d.PinBakeSource(ctx, ref); err != nil {
 			t.Fatal(err)
 		}
 		spec := bakeSpec(ref)
@@ -195,7 +195,7 @@ func TestANewBakeReplacesTheOldOneWithoutTakingAClaimsImage(t *testing.T) {
 func TestBakeTakesOnlyAPinnedMachineOfItsEnvironment(t *testing.T) {
 	d, docker := bakeDriver(t)
 	ctx := context.Background()
-	if err := d.PinBakeSource(machine("claim-never", bakeEnv)); !errors.Is(err, ErrBakeSource) {
+	if err := d.PinBakeSource(t.Context(), machine("claim-never", bakeEnv)); !errors.Is(err, ErrBakeSource) {
 		t.Fatalf("pin of a machine that never booted: %v", err)
 	}
 	setup := machine("claim-setup", bakeEnv)
@@ -203,10 +203,10 @@ func TestBakeTakesOnlyAPinnedMachineOfItsEnvironment(t *testing.T) {
 	if _, err := d.Bake(ctx, bakeSpec(setup)); !errors.Is(err, ErrBakeSource) {
 		t.Fatalf("bake without a pin: %v", err)
 	}
-	if err := d.PinBakeSource(setup); err != nil {
+	if err := d.PinBakeSource(t.Context(), setup); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.PinBakeSource(setup); !errors.Is(err, ErrBakeSource) {
+	if err := d.PinBakeSource(t.Context(), setup); !errors.Is(err, ErrBakeSource) {
 		t.Fatalf("second pin: %v", err)
 	}
 	spec := bakeSpec(setup)
@@ -229,13 +229,13 @@ func TestABakeOfNothingDropsTheOldBake(t *testing.T) {
 	ctx := context.Background()
 	first := machine("claim-s1", bakeEnv)
 	boot(t, d, first, sandbox.Build{Service: "api", Context: project(t), Dockerfile: "Dockerfile"})
-	_ = d.PinBakeSource(first)
+	_ = d.PinBakeSource(t.Context(), first)
 	if _, err := d.Bake(ctx, bakeSpec(first)); err != nil {
 		t.Fatal(err)
 	}
 	second := machine("claim-s2", bakeEnv)
 	boot(t, d, second)
-	if err := d.PinBakeSource(second); err != nil {
+	if err := d.PinBakeSource(t.Context(), second); err != nil {
 		t.Fatal(err)
 	}
 	img, err := d.Bake(ctx, bakeSpec(second))

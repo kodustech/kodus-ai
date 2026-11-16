@@ -1,5 +1,5 @@
 import {
-    checkFor,
+    checkConclusionFor,
     type CheckOutcome,
     type CommentPhase,
     type Observed,
@@ -10,6 +10,10 @@ import {
     type Uncovered,
 } from '@libs/runtime/run';
 import { VISUAL_CHANGE_ONLY_REASON } from '@libs/runtime/contracts/enums';
+import { REPOSITORY_ALIAS_PATTERN } from '@libs/runtime/contracts/workspace';
+import type { BootBlockerCause } from '@libs/runtime/run/run-report';
+
+import type { RunTargetWorkspaceRef } from './run-target';
 
 // The product's wording of a Kody Runtime result (product screens 6, 7 and 9).
 // Built only from the structured fields of RuntimePublishRequested (ADR-052):
@@ -23,6 +27,54 @@ export interface RuntimeLinks {
     run?: string;
     /** The repository's Runtime settings (set up an environment, add a key). */
     settings?: string;
+    /** Preview URLs, when the org has them on (previewLinks): the app's preview pages, never a preview host. */
+    preview?: PreviewLinks;
+}
+
+/** The comment's preview line (docs/runtime/preview-urls.md §8.1): two pages of the dashboard that open each side. */
+export interface PreviewLinks {
+    /** Absent: the PR side does not open (a fork's, with fork previews off); `prOff` says why. */
+    pr?: string;
+    base: string;
+    prOff?: string;
+    idleMinutes: number;
+}
+
+/** What the product decided about previews for this Run: on with these minutes, and whether its PR side opens. */
+export interface PreviewOffer {
+    idleMinutes: number;
+    /** The PR side's reason not to open (a fork's PR with fork previews off); absent: it opens. */
+    prOff?: string;
+}
+
+/** The dashboard's preview pages of a Run, from its base URL; nothing from a missing or odd one. */
+export function previewLinks(baseUrl: string | undefined, runId: string, offer: PreviewOffer): PreviewLinks | undefined {
+    const base = baseUrl?.trim().replace(/\/+$/, '');
+    if (!base || !/^https?:\/\/[^\s]+$/.test(base)) return undefined;
+    const page = (side: 'pr' | 'base') => `${base}/runtime/runs/${encodeURIComponent(runId)}/preview?side=${side}`;
+    return { ...(offer.prOff ? { prOff: offer.prOff } : { pr: page('pr') }), base: page('base'), idleMinutes: offer.idleMinutes };
+}
+
+/** The links with the preview pages added when the product offers a preview. */
+export function withPreview(links: RuntimeLinks, baseUrl: string | undefined, runId: string, offer: PreviewOffer | undefined): RuntimeLinks {
+    const preview = offer ? previewLinks(baseUrl, runId, offer) : undefined;
+    return preview ? { ...links, preview } : links;
+}
+
+/** A Run that tested something: the only kind with a preview to offer (a halted Run never has one). */
+const PREVIEW_STATES = new Set(['no_regressions', 'regression', 'partly_tested']);
+const offersPreview = (report: RuntimeRunReport, links: RuntimeLinks, ran: RanWith): links is RuntimeLinks & { preview: PreviewLinks } =>
+    !!links.preview && PREVIEW_STATES.has(report.state) && !ran.workspace?.length;
+
+/** The comment's preview line: links to the dashboard, who may open it, how long it takes and when it stops. */
+function previewLine(p: PreviewLinks): string {
+    return [
+        '**Preview**',
+        ...(p.pr ? [link('Open the PR version', p.pr)] : []),
+        link('Open the base version', p.base),
+        ...(p.prOff ? [p.prOff] : []),
+        `Signed-in members of the organization with access to this repository only. Starts in about a minute, stops after ${p.idleMinutes} idle minutes.`,
+    ].join(' · ');
 }
 
 export function runtimeLinks(
@@ -45,14 +97,14 @@ const MAX_CODE = 120;
  */
 export const RUNTIME_COMMENT_MARKER = '<!-- kody-runtime:comment -->';
 
-export function withCommentMarker(body: string): string {
-    return body.includes(RUNTIME_COMMENT_MARKER)
-        ? body
-        : `${body}\n\n${RUNTIME_COMMENT_MARKER}`;
+/** `marker`: the environment's (publish-environment.ts commentMarkerOf); the legacy one by default. */
+export function withCommentMarker(body: string, marker: string = RUNTIME_COMMENT_MARKER): string {
+    return body.includes(marker) ? body : `${body}\n\n${marker}`;
 }
 
-export function hasCommentMarker(body: unknown): boolean {
-    return typeof body === 'string' && body.includes(RUNTIME_COMMENT_MARKER);
+/** The legacy marker is no substring of an environment's (`<!-- kody-runtime:comment env=… -->`): each finds only its own. */
+export function hasCommentMarker(body: unknown, marker: string = RUNTIME_COMMENT_MARKER): boolean {
+    return typeof body === 'string' && body.includes(marker);
 }
 
 /** No approval path exists yet (no verified Git identity, no approve command): say so, promise nothing. */
@@ -116,6 +168,46 @@ export function formatObserved(o: Observed | undefined): string {
     return 'n/a';
 }
 
+/**
+ * One repository of a multi-repository Run as the comment names it: the
+ * refs the product pinned when it enqueued the Run (its stored target), and
+ * the branch a default-branch repository ran from, once the refs carry it.
+ */
+export type WorkspaceRefLine = Pick<RunTargetWorkspaceRef, 'alias' | 'baseSha' | 'headSha' | 'source' | 'pairedPrNumber' | 'branch'>;
+
+/** A branch name that is plain text in Markdown (no emphasis, link or HTML character); any other goes in a code span. */
+const PLAIN_BRANCH = /^[A-Za-z0-9][A-Za-z0-9./-]{0,99}$/;
+const branchText = (branch: string) => (PLAIN_BRANCH.test(branch) ? branch : code(branch));
+
+/** What the Run ran with besides the pull request (its stored target's workspace). */
+export interface RanWith {
+    workspace?: readonly WorkspaceRefLine[];
+}
+
+const SHA = /^[0-9a-f]{40}$/;
+
+/**
+ * The other repositories a multi-repository Run booted, in one line: "Ran
+ * with billing @ a1b2c3d (main)" for a repository at its default-branch head
+ * (the same commit on both sides), "paired with billing #42" for one whose
+ * open pull request of the same branch name ran on the two sides. Undefined
+ * for a Run of one repository. The PR's own repository is the comment itself.
+ */
+export function workspaceLine(refs: readonly WorkspaceRefLine[] | undefined): string | undefined {
+    const shown = (refs ?? []).filter((r) => r.source !== 'pull_request' && REPOSITORY_ALIAS_PATTERN.test(r.alias) && SHA.test(r.headSha));
+    const atHead = shown
+        .filter((r) => r.source === 'default_branch')
+        .map((r) => `${r.alias} @ \`${r.headSha.slice(0, 7)}\` (${r.branch ? branchText(r.branch) : 'default branch'})`);
+    const paired = shown
+        .filter((r) => r.source === 'paired' && Number.isInteger(r.pairedPrNumber) && r.pairedPrNumber! > 0)
+        .map((r) => `${r.alias} #${r.pairedPrNumber}`);
+    const parts = [
+        atHead.length ? `Ran with ${atHead.join(', ')}` : undefined,
+        paired.length ? `${atHead.length ? 'paired' : 'Paired'} with ${paired.join(', ')}` : undefined,
+    ].filter(Boolean);
+    return parts.length ? parts.join('; ') : undefined;
+}
+
 const TRIGGER: Record<NonNullable<RuntimeRunReport['trigger']>, string> = {
     pull_request: 'this pull request was opened or updated',
     comment: 'someone commented `@kody runtime`',
@@ -139,12 +231,43 @@ const BLOCKER_LABEL: Record<
     recipe_outdated: 'the recipe is outdated',
     unknown: 'the cause is not known yet',
     security_violation: 'the code under test tried to send a credential out of the machine',
+    capacity: 'no cell gives the isolation it needs',
 };
+
+/**
+ * A boot blocker's cause past its kind (run-report.ts BOOT_BLOCKER_CAUSES): a
+ * boot_timeout is kind resources, and "the machine ran out of resources"
+ * sent the owner after memory on kr-calcom#2 when the build had run cold.
+ */
+const BOOT_CAUSE_LABEL: Record<BootBlockerCause, string> = {
+    boot_timeout: 'the boot did not finish within its wait',
+    build_state_evicted: 'the boot did not finish within its wait: it built with no cache, because the build cache of this environment was removed to free disk',
+};
+
+/** The words for a boot blocker's paths: its cause when the report names one, else its kind. */
+const bootBlockerWords = (b: { kind: keyof typeof BLOCKER_LABEL; cause?: BootBlockerCause }) => (b.cause ? BOOT_CAUSE_LABEL[b.cause] : BLOCKER_LABEL[b.kind]);
+
+/** The comment's line for a side that built cold because the cell evicted the environment's build state. */
+export function coldBuildLine(report: Pick<RuntimeRunReport, 'coldBuild'>, links: Pick<RuntimeLinks, 'settings'>): string | undefined {
+    const c = report.coldBuild;
+    if (!c) return undefined;
+    const side = c.side === 'pr' ? 'this PR' : 'main';
+    const when = formatEvictedAt(c.evictedAt);
+    return `The build of ${side} ran with no cache: the build cache of this environment was removed to free disk${when ? ` (${when})` : ''}; a new setup restores it. ${link('Set it up again', links.settings)}. This is not a bug in the pull request.`;
+}
+
+/** An eviction time as the comment says it: the UTC day and minute. */
+function formatEvictedAt(at: string): string | undefined {
+    const t = Date.parse(at);
+    if (Number.isNaN(t)) return undefined;
+    return `${new Date(t).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+}
 
 /** What a security_violation signature (the cell's alert kind) means, in words; never the host or the value. */
 const VIOLATION_LABEL: Record<string, string> = {
     credential_exfiltration: 'its test credential',
     bait_exfiltration: 'a decoy secret the cell planted',
+    placeholder_leak: "one of the organization's secrets (as its placeholder, over plain HTTP)",
 };
 
 const SKIP_LABEL: Record<SkipReason, string> = {
@@ -171,9 +294,14 @@ const UNCOVERED_LABEL: Record<RuntimeRunReport['uncovered'][number]['reason'], s
  * base's (ADR-012); true whether or not the Run booted at all. Template text;
  * the only Runtime values are the recipe paths.
  */
-export function recipeChangedLine(report: Pick<RuntimeRunReport, 'recipeChangedInPr'>): string | undefined {
+export function recipeChangedLine(report: Pick<RuntimeRunReport, 'recipeChangedInPr' | 'recipeChangedInMember'>): string | undefined {
     const files = report.recipeChangedInPr;
     if (!files?.length) return undefined;
+    // A PR in a member repository of a multi-repository environment: the cell applies only the primary's `.kodus/`.
+    const member = report.recipeChangedInMember;
+    if (member && REPOSITORY_ALIAS_PATTERN.test(member)) {
+        return `This pull request changes ${files.map(code).join(', ')} in ${member}, a member repository of this environment. Only the primary repository's recipe is applied, so these changes were not applied.`;
+    }
     return `This pull request changes the Runtime recipe (${files.map(code).join(', ')}). Kody boots every pull request with the recipe from the base branch, so the new recipe was not tested.`;
 }
 
@@ -280,14 +408,27 @@ export function renderProgressComment(
 // Screens 7 and 9: the result, the check and the replies
 // ---------------------------------------------------------------------------
 
-const isRegression = (p: ReportPath) =>
+/** A finding that fails the check: a regression against main, or an error on a route the PR adds. */
+const isFailing = (p: ReportPath) =>
     p.verdict === 'finding' && p.intent !== 'intended';
+const isRegression = (p: ReportPath) =>
+    isFailing(p) && p.findingKind !== 'new_endpoint_error';
+/** A route the PR adds that answers 5xx: a finding on the new code, never called a regression (main has no such route). */
+const isNewEndpointError = (p: ReportPath) =>
+    isFailing(p) && p.findingKind === 'new_endpoint_error';
 const isIntended = (p: ReportPath) =>
     p.verdict === 'finding' && p.intent === 'intended';
+/** Why Kody reads a finding as intended: never page text, only which evidence holds. */
+const INTENDED_BY_TEXT: Record<NonNullable<ReportPath['intendedBy']>, string> = {
+    diff: "What differs is what this PR's diff changes: main shows what a changed line removes, this PR what it adds.",
+    test: 'A test that already existed on main expects it.',
+};
+/** A route the PR adds, absent on main and answered on the PR: new behavior, informational. */
+const isNewEndpoint = (p: ReportPath) => p.verdict === 'new_endpoint';
 
 /** The check of the §3 table, computed by the product from the structured fields. */
 export function checkOf(report: RuntimeRunReport): CheckOutcome {
-    const findings = report.paths.filter(isRegression);
+    const findings = report.paths.filter(isFailing);
     const intended = report.paths.filter(isIntended);
     const forcedNeutral: string[] = [];
     if (report.blockedOutbound.length) {
@@ -306,6 +447,7 @@ export function checkOf(report: RuntimeRunReport): CheckOutcome {
                     verdictState: report.verdictState,
                     findings: findings as any[],
                     intendedFindings: intended as any[],
+                    newEndpoints: report.paths.filter(isNewEndpoint) as any[],
                     forcedNeutral,
                 }
               : undefined;
@@ -313,7 +455,7 @@ export function checkOf(report: RuntimeRunReport): CheckOutcome {
         report.state === 'skipped' && report.skipReason
             ? 'Skipped'
             : undefined;
-    return checkFor(report.state, verdict as any, reason, { securityViolation: !!report.securityViolation });
+    return checkConclusionFor(report.state, verdict as any, reason, { securityViolation: !!report.securityViolation });
 }
 
 /** The coverage id of a probe that reached none of the diff's entry points (S-32). */
@@ -330,6 +472,9 @@ const shownPath = (p: ReportPath, wrap: (value: string) => string = code) => {
     if (p.entryPoint !== OUTSIDE_DIFF) return p.via ? `${wrap(p.entryPoint)} (reaches ${wrap(p.via)})` : wrap(p.entryPoint);
     return p.exercised ? `${wrap(p.exercised)} (${OUTSIDE_DIFF_MARKER})` : `A path ${OUTSIDE_DIFF_MARKER}`;
 };
+
+/** Another probe of the report shows the same route: its row names the case (the planner's probe id) so the two read apart. */
+const sharesRoute = (p: ReportPath, all: readonly ReportPath[]) => all.some((q) => q !== p && shownPath(q) === shownPath(p));
 
 /** A browser probe's path (ADR-071): its evidence on the Run page is screenshots and video, not a command. */
 const isBrowserPath = (p: ReportPath) =>
@@ -387,18 +532,23 @@ const browserPathLine = (p: ReportPath, links: RuntimeLinks) => {
     return `${shownPath(p)}: ${parts.join('; ')}${differs}. ${evidenceLink(p, links)}`;
 };
 
-const pathLine = (p: ReportPath, links: RuntimeLinks) => {
+const pathLine = (p: ReportPath, links: RuntimeLinks, all: readonly ReportPath[] = []) => {
+    // Two probes of one route read apart by their case, as in the outcomes table.
+    const where = `${shownPath(p)}${sharesRoute(p, all) ? ` · ${code(p.probeId)}` : ''}`;
     const base = formatObserved(p.base);
     const pr = formatObserved(p.pr);
     if (p.findingKind === 'pr_destabilizes_machine') {
-        return `${shownPath(p)}: the machine fails on this PR (${pr}) and stays up on main. ${evidenceLink(p, links)}`;
+        return `${where}: the machine fails on this PR (${pr}) and stays up on main. ${evidenceLink(p, links)}`;
+    }
+    if (isNewEndpointError(p) || isNewEndpoint(p)) {
+        return `${where}: no such route on main (${base}), ${pr} on this PR. ${link('Command and output', links.run)}`;
     }
     if (isBrowserPath(p)) return browserPathLine(p, links);
     const differs =
         p.differingFields?.length && base === pr
             ? `, differs in ${p.differingFields.map(code).join(', ')}`
             : '';
-    return `${shownPath(p)}: ${base} on main, ${pr} on this PR${differs}. ${link('Command and output', links.run)}`;
+    return `${where}: ${base} on main, ${pr} on this PR${differs}. ${link('Command and output', links.run)}`;
 };
 
 /** Existing typed fields suffice; no page text or agent claim becomes a question. */
@@ -410,8 +560,11 @@ const isVisualChange = (p: ReportPath): boolean =>
 const resultLabel = (p: ReportPath) => {
     if (isVisualChange(p)) return 'Visual change';
     if (isRegression(p)) return 'Regression';
+    if (isNewEndpointError(p)) return 'Error on a new endpoint';
     if (isIntended(p)) return 'Intended change';
     switch (p.verdict) {
+        case 'new_endpoint':
+            return 'New endpoint';
         case 'not_reproduced':
             return 'Same on main and PR';
         case 'pre_existing':
@@ -440,14 +593,20 @@ function bootErrorLine(report: RuntimeRunReport): string | undefined {
 const bootRegression = (report: RuntimeRunReport) =>
     report.bootError?.side === 'pr' && report.paths.some((p) => isRegression(p) && p.findingKind === 'pr_destabilizes_machine');
 
+/** A member of the environment the recipe does not boot: why its paths were not tested, and the fix. */
+const memberNotBootedWords = (alias: string) =>
+    `the recipe does not boot ${code(alias)}. Add ${code(alias)} to \`services.needs\` in \`.kodus/workspace.yaml\` on the default branch.`;
+
 /** What could not be tested: blockers first (with what to add), then blocked hosts. */
 function couldNotTest(report: RuntimeRunReport, links: RuntimeLinks): string[] {
     const lines: string[] = [];
     for (const u of report.uncovered.filter((x) => x.reason === 'blocker')) {
         const what = u.blocker?.name
             ? `missing ${code(u.blocker.name)}. ${link('Add it', links.settings)}`
-            : u.blocker
-              ? `${BLOCKER_LABEL[u.blocker.kind]}.`
+            : u.blocker?.alias
+              ? memberNotBootedWords(u.blocker.alias)
+              : u.blocker
+              ? `${bootBlockerWords(u.blocker)}.`
               : 'the environment blocked it.';
         // The file, not the coverage id (`unmapped:pkg/x.go` reads as `pkg/x.go`).
         lines.push(`- ${entryPointLabel(u.entryPoint)}: ${what}`);
@@ -591,8 +750,14 @@ function footer(report: RuntimeRunReport, links: RuntimeLinks): string {
 function stateLine(report: RuntimeRunReport, links: RuntimeLinks): string | undefined {
     switch (report.state) {
         case 'could_not_boot': {
+            if (report.bootFailure?.needsSetup) {
+                return `The cell that ran this has no prepared image of the environment, so nothing was tested. ${link('Set it up again', links.settings)} and run this again. This is not a bug in the pull request. The review is not affected.`;
+            }
             const kind = report.bootFailure?.kind;
-            const cause = kind ? `: ${BLOCKER_LABEL[kind]}` : '';
+            // In a multi-repository environment, the repository that did not boot.
+            const alias = report.bootFailure?.alias;
+            const where = alias && REPOSITORY_ALIAS_PATTERN.test(alias) ? ` in ${alias}` : '';
+            const cause = kind ? `: ${BLOCKER_LABEL[kind]}${where}` : '';
             return report.bootFailure?.failsOnBase === false
                 ? `The environment did not boot${cause}. This is not a bug in the pull request. The review is not affected.`
                 : `Fails on main too${cause}. This is not a bug in the pull request. The review is not affected.`;
@@ -604,6 +769,13 @@ function stateLine(report: RuntimeRunReport, links: RuntimeLinks): string | unde
             return report.skipReason === 'no_environment'
                 ? `${reason} ${link('Set it up', links.settings)}`
                 : reason;
+        }
+        case 'nothing_to_test': {
+            const files = report.noRuntimeEffect ?? [];
+            const shown = files.slice(0, 5).map(code).join(', ');
+            const more = files.length > 5 ? ` and ${plural(files.length - 5, 'more file')}` : '';
+            const which = files.length ? ` Kody read ${shown}${more} with a parser and found only comments, blank lines, layout or documentation.` : '';
+            return `This pull request does not change what the app does at runtime.${which} Nothing was booted and no request was sent. The review is not affected.`;
         }
         case 'awaiting_approval':
             return FORK_WAITING_LINE;
@@ -622,10 +794,13 @@ function stateLine(report: RuntimeRunReport, links: RuntimeLinks): string | unde
 export function renderReportComment(
     report: RuntimeRunReport,
     links: RuntimeLinks,
+    ran: RanWith = {},
 ): string {
     const check = checkOf(report);
     const regressions = report.paths.filter(isRegression);
+    const newEndpointErrors = report.paths.filter(isNewEndpointError);
     const intended = report.paths.filter(isIntended);
+    const newEndpoints = report.paths.filter(isNewEndpoint);
     const lines: string[] = [`### Kody Runtime · ${check.title}`, ''];
 
     const summary = [
@@ -636,15 +811,21 @@ export function renderReportComment(
             ? plural(report.paths.length, 'probe outcome')
             : undefined,
         report.paths.length ? plural(regressions.length, 'regression') : undefined,
+        newEndpointErrors.length ? plural(newEndpointErrors.length, 'error on a new endpoint', 'errors on new endpoints') : undefined,
+        newEndpoints.length ? plural(newEndpoints.length, 'new endpoint') : undefined,
     ].filter(Boolean);
     if (summary.length) lines.push(summary.join(' · '));
     if (report.trigger) lines.push(`Ran because: ${TRIGGER[report.trigger]}`);
+    const workspace = workspaceLine(ran.workspace);
+    if (workspace) lines.push(workspace);
     const extra = stateLine(report, links);
     if (extra) lines.push('', extra);
     const why = partlyTestedReasons(report, links);
     if (why.length) lines.push('', '**Why partly tested**', '', ...why.map((w) => `- ${w}`));
     const recipe = recipeChangedLine(report);
     if (recipe) lines.push('', `**Recipe changed**: ${recipe}`);
+    const cold = coldBuildLine(report, links);
+    if (cold) lines.push('', `**Built with no cache**: ${cold}`);
     if (report.securityViolation) {
         const what = VIOLATION_LABEL[report.securityViolation.signature] ?? 'a secret';
         const side = report.securityViolation.side === 'pr' ? "this pull request's code" : "the base branch's code";
@@ -659,7 +840,7 @@ export function renderReportComment(
         );
     }
 
-    if (regressions.length || intended.length) {
+    if (regressions.length || newEndpointErrors.length || intended.length) {
         lines.push('', '**Findings**', '');
         const confirmed = regressions.filter((p) => p.suggestionId);
         if (confirmed.length) {
@@ -669,14 +850,23 @@ export function renderReportComment(
         }
         const boot = bootRegression(report) ? bootErrorLine(report) : undefined;
         for (const p of regressions) {
-            lines.push(`- **Regression** ${pathLine(p, links)}`);
+            lines.push(`- **Regression** ${pathLine(p, links, report.paths)}`);
             if (boot && p.findingKind === 'pr_destabilizes_machine') lines.push(`  - ${boot}`);
+        }
+        for (const p of newEndpointErrors) {
+            lines.push(`- **Error on a new endpoint** ${pathLine(p, links, report.paths)} The route this PR adds fails; main has no such route to compare with.`);
         }
         for (const p of intended) {
             lines.push(
-                `- **Intended change** ${pathLine(p, links)} A test that already existed on main expects it.`,
+                `- **Intended change** ${pathLine(p, links, report.paths)} ${INTENDED_BY_TEXT[p.intendedBy ?? 'test']}`,
             );
         }
+    }
+
+    if (newEndpoints.length) {
+        lines.push('', '**New endpoints**', '', ...newEndpoints.map((p) =>
+            `- **New endpoint** ${pathLine(p, links, report.paths)} New behavior this PR adds, not a regression.`,
+        ));
     }
 
     const blocked = couldNotTest(report, links);
@@ -698,7 +888,7 @@ export function renderReportComment(
             '|---|---|---|---|',
             ...report.paths.map(
                 (p) =>
-                    `| ${shownPath(p, cell)} | ${formatObserved(p.base)} | ${formatObserved(p.pr)} | ${resultLabel(p)} |`,
+                    `| ${shownPath(p, cell)}${sharesRoute(p, report.paths) ? ` · ${cell(p.probeId)}` : ''} | ${formatObserved(p.base)} | ${formatObserved(p.pr)} | ${resultLabel(p)} |`,
             ),
             '',
             '</details>',
@@ -718,6 +908,7 @@ export function renderReportComment(
         );
     }
 
+    if (offersPreview(report, links, ran)) lines.push('', previewLine(links.preview));
     lines.push('', '---', footer(report, links));
     return lines.join('\n');
 }
@@ -777,36 +968,54 @@ export function renderSuggestionReply(
 export function renderCheckOutput(
     report: RuntimeRunReport,
     links: RuntimeLinks,
+    ran: RanWith = {},
 ): CheckOutcome & { summary: string } {
     const check = checkOf(report);
     const regressions = report.paths.filter(isRegression).length;
+    const errors = report.paths.filter(isNewEndpointError).length;
+    const newEndpoints = report.paths.filter(isNewEndpoint).length;
     const blockers = report.uncovered.filter((u) => u.reason === 'blocker');
     const view = link('View run', links.run);
+    // "1 regression and 1 error on a new endpoint reproduced": a new route's error is not called a regression.
+    const reproduced = [
+        ...(regressions || !errors ? [plural(regressions, 'regression')] : []),
+        ...(errors ? [plural(errors, 'error on a new endpoint', 'errors on new endpoints')] : []),
+    ].join(' and ');
+    const added = newEndpoints ? ` ${plural(newEndpoints, 'new endpoint')} this PR adds answered on the PR.` : '';
     let line: string;
     switch (report.state) {
         case 'no_regressions':
-            line = `${plural(report.paths.length, 'probe outcome')}, same result on main and on this PR.`;
+            line = newEndpoints
+                ? `${plural(report.paths.length, 'probe outcome')}, no regression.${added}`
+                : `${plural(report.paths.length, 'probe outcome')}, same result on main and on this PR.`;
             break;
         case 'regression':
-            line = `${plural(regressions, 'regression')} reproduced out of ${plural(report.paths.length, 'probe outcome')}.`;
+            line = `${reproduced} reproduced out of ${plural(report.paths.length, 'probe outcome')}.${added}`;
             break;
         case 'halted':
-            line = `${report.securityViolation ? 'Security violation' : 'Security event'}: the Run stopped. ${plural(regressions, 'regression')} reproduced out of ${plural(report.paths.length, 'probe outcome')}.`;
+            line = `${report.securityViolation ? 'Security violation' : 'Security event'}: the Run stopped. ${reproduced} reproduced out of ${plural(report.paths.length, 'probe outcome')}.`;
             break;
         case 'partly_tested': {
             const missing = blockers.find((b) => b.blocker?.name);
+            const member = blockers.find((b) => b.blocker?.alias)?.blocker?.alias;
             line = missing
                 ? `${plural(blockers.length, 'path')} skipped: missing ${code(missing.blocker!.name!)}. ${link('Add it', links.settings)}`
-                : partlyTestedCheckLine(report);
+                : member
+                  ? `${plural(blockers.length, 'path')} not tested: ${memberNotBootedWords(member)}`
+                  : partlyTestedCheckLine(report);
             break;
         }
         default:
             line = stateLine(report, links) ?? check.title;
     }
+    const preview = offersPreview(report, links, ran) ? (links.preview.pr ? link('Preview the PR version', links.preview.pr) : link('Preview the base version', links.preview.base)) : undefined;
     const summary = [
         line,
+        workspaceLine(ran.workspace),
         recipeChangedLine(report),
+        report.coldBuild ? `Built with no cache: this environment's build cache was removed to free disk; ${link('set it up again', links.settings)}` : undefined,
         view === 'View run' ? undefined : view,
+        preview,
     ]
         .filter(Boolean)
         .join(' · ');

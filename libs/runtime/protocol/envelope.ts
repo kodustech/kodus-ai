@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { TraceparentSchema } from '@libs/runtime/contracts/trace-context';
+
 import { MESSAGE_TYPES, MessageBody, MessageBodySchemas, MessageType } from './messages';
 import { parseStrictJson, StrictJsonError } from './strict-json';
 
@@ -14,6 +16,13 @@ export const EnvelopeSchema = z.strictObject({
     re: z.uuid().optional(),
     cellId: z.string().min(1).max(128),
     claimId: z.string().min(1).max(128).optional(),
+    /**
+     * W3C trace context of the work the frame is part of (the hub's span that
+     * sent it). Sent only to a cell whose hello names the feature traceContext,
+     * and by the cell only to its guest agent: an older strict decoder refuses
+     * the field. Never chooses anything but the span's parent.
+     */
+    traceparent: TraceparentSchema.optional(),
     type: z.enum(MESSAGE_TYPES as [MessageType, ...MessageType[]]),
     body: z.unknown(),
 });
@@ -24,6 +33,7 @@ export type Envelope<T extends MessageType = MessageType> = {
     re?: string;
     cellId: string;
     claimId?: string;
+    traceparent?: string;
     type: T;
     body: MessageBody<T>;
 };
@@ -45,6 +55,11 @@ export const CLAIM_SCOPED_TYPES: ReadonlySet<MessageType> = new Set<MessageType>
     'step.stream',
     'egress.policy',
     'claim.progress',
+    'sandbox.acquire',
+    'sandbox.op',
+    'preview.route',
+    'preview.unroute',
+    'claim.snapshot',
 ]);
 
 /** Types that answer another message: the envelope must name it (re). */

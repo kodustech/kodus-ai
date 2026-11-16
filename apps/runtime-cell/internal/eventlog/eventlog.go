@@ -31,11 +31,11 @@ type Log[T any] struct {
 	epoch string
 }
 
-func New[T any](max int) *Log[T] {
-	if max < 1 {
-		max = 1
+func New[T any](limit int) *Log[T] {
+	if limit < 1 {
+		limit = 1
 	}
-	return &Log[T]{max: max, wake: make(chan struct{}), epoch: rand.Text()}
+	return &Log[T]{max: limit, wake: make(chan struct{}), epoch: rand.Text()}
 }
 
 // Add appends the entry build makes with its sequence number.

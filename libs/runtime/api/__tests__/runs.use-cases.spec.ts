@@ -2,7 +2,7 @@ import { ConflictException, ForbiddenException, NotFoundException, BadRequestExc
 
 import { Action, Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { loadS3EvidenceConfig } from '@libs/runtime/contracts/evidence-s3';
-import { InMemoryRunStreamStore, RuntimeRunRequestedSchema } from '@libs/runtime/run';
+import { RuntimeRunRequestedSchema } from '@libs/runtime/run';
 
 import { RuntimeRunAccessService, type RuntimePrincipal } from '../application/run-access.service';
 import { ApproveForkRunUseCase } from '../application/use-cases/approve-fork-run.use-case';
@@ -14,10 +14,9 @@ import { ReadRuntimeRunStreamUseCase } from '../application/use-cases/read-run-s
 import { RunRuntimeAgainUseCase } from '../application/use-cases/run-again.use-case';
 import { RuntimeRunRequestBuilder } from '../application/run-request-builder.service';
 import { RuntimeRunEnqueuer, runTargetOf } from '../application/runtime-run-enqueuer.service';
-import { InMemoryRunTargetStore } from '@libs/runtime-publish/domain/run-target';
-import { InMemoryPublicationStore } from '@libs/runtime-publish/domain/runtime-publication';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { verifyRunToken } from '../domain/run-token';
+import { COMMENT_RUNS_PER_PULL_REQUEST_PER_DAY } from '../domain/trigger-rules';
 import { RuntimeForkApprovedSchema } from '@libs/runtime/contracts/runtime-commands';
 import type { GitIdentity, PullRequestHead, RuntimeGitPort } from '../domain/ports';
 import {
@@ -25,7 +24,8 @@ import {
     clock,
     config,
     FakeOutbox,
-    InMemoryLlmUsage,
+    InMemoryLlmSpend,
+    spendRow,
     NOW,
     ORG,
     OTHER_ORG,
@@ -38,6 +38,8 @@ import {
     storeWith,
     TEAM,
     user, openSealed } from './fixtures';
+import { InMemoryPublicationStore, InMemoryRunTargetStore } from '@libs/runtime-publish/testing';
+import { InMemoryRunStreamStore } from '@libs/runtime/run/testing';
 
 const owner = user(Role.OWNER);
 const repoAdmin = user(Role.REPO_ADMIN);
@@ -125,7 +127,7 @@ describe('List and get Runs', () => {
         const a = run({ requestedAt: '2026-10-29T10:00:00.000Z' });
         const b = run({ requestedAt: '2026-10-29T11:00:00.000Z', repositoryId: OTHER_REPO });
         const c = run({ organizationId: OTHER_ORG });
-        const list = new ListRuntimeRunsUseCase(await storeWith(a, b, c), realAuthorization(), new RuntimeRunCostService(new InMemoryLlmUsage(), clock));
+        const list = new ListRuntimeRunsUseCase(await storeWith(a, b, c), realAuthorization(), new RuntimeRunCostService(clock, new InMemoryLlmSpend()));
         expect((await list.execute({ user: owner })).map((r) => r.runId)).toEqual([b.runId, a.runId]);
         expect((await list.execute({ user: owner, repositoryId: REPO })).map((r) => r.runId)).toEqual([a.runId]);
         const [summary] = await list.execute({ user: owner, repositoryId: REPO });
@@ -138,16 +140,15 @@ describe('List and get Runs', () => {
         const mine = run({ requestedAt: '2026-10-01T00:00:00.000Z' });
         const others = Array.from({ length: 210 }, (_, i) => run({ repositoryId: OTHER_REPO, requestedAt: `2026-10-29T${String(10 + (i % 10)).padStart(2, '0')}:00:00.000Z` }));
         const scoped = { ensure: async () => undefined, getRepositoryScope: async () => [REPO] };
-        const list = new ListRuntimeRunsUseCase(await storeWith(mine, ...others), scoped as any, new RuntimeRunCostService(new InMemoryLlmUsage(), clock));
+        const list = new ListRuntimeRunsUseCase(await storeWith(mine, ...others), scoped as any, new RuntimeRunCostService(clock, new InMemoryLlmSpend()));
         expect((await list.execute({ user: repoAdmin })).map((r) => r.runId)).toEqual([mine.runId]);
     });
 
     it('returns the detail with its LLM cost and without the internal correlation id', async () => {
         const r = run({ findings: [] });
-        const usage = new InMemoryLlmUsage();
-        await usage.record({ runId: r.runId, organizationId: ORG, repositoryId: REPO, prNumber: 7, task: 'runtime.plan', inputTokens: 30, outputTokens: 12, at: NOW });
+        const spend = new InMemoryLlmSpend([spendRow({ runId: r.runId, inputTokens: 30, outputTokens: 12, totalTokens: 42, usd: null })]);
         const store = await storeWith(r);
-        const get = new GetRuntimeRunUseCase(new RuntimeRunAccessService(store, realAuthorization()), new RuntimeRunCostService(usage, clock));
+        const get = new GetRuntimeRunUseCase(new RuntimeRunAccessService(store, realAuthorization()), new RuntimeRunCostService(clock, spend));
         const detail = await get.execute({ principal: asUser(contributor), runId: r.runId });
         expect(detail.cost).toMatchObject({ estimate: true, llmTokens: 42, llm: { tokens: 42, usd: null } });
         expect(detail).not.toHaveProperty('correlationId');
@@ -165,7 +166,7 @@ describe('List and get Runs', () => {
             diffRef: { file: 'src/branches.ts', line: 12 },
         };
         const r = run({ findings: [finding], probes: [finding], bootFailure });
-        const get = new GetRuntimeRunUseCase(new RuntimeRunAccessService(await storeWith(r), realAuthorization()), new RuntimeRunCostService(new InMemoryLlmUsage(), clock));
+        const get = new GetRuntimeRunUseCase(new RuntimeRunAccessService(await storeWith(r), realAuthorization()), new RuntimeRunCostService(clock, new InMemoryLlmSpend()));
         const detail = await get.execute({ principal: asUser(contributor), runId: r.runId });
         expect(detail.bootFailure).toEqual(bootFailure);
         expect(detail.findings![0]).toMatchObject({ responseDiff: finding.responseDiff, diffRef: finding.diffRef });
@@ -207,7 +208,7 @@ describe('List and get Runs', () => {
             for (const row of opts.rows ?? []) publications.rows.set(row.key, row);
             const get = new GetRuntimeRunUseCase(
                 new RuntimeRunAccessService(await storeWith(r), realAuthorization()),
-                new RuntimeRunCostService(new InMemoryLlmUsage(), clock),
+                new RuntimeRunCostService(clock, new InMemoryLlmSpend()),
                 undefined,
                 publications,
                 targets,
@@ -387,8 +388,10 @@ describe('Run again', () => {
             config(),
             clock,
         );
-        const uc = new RunRuntimeAgainUseCase(new RuntimeRunAccessService(store, realAuthorization()), store, git, builder, enqueuer, config());
-        return { store, git, outbox, targets, order, repoTokens, uc };
+        const environment: { forkPullRequests?: 'skip' | 'require_approval' | 'run' } = {};
+        const environments = { get: async (org: string, id: string) => (org === ORG && id === 'env-1' ? ({ environmentId: id, organizationId: org, ...environment } as any) : null) };
+        const uc = new RunRuntimeAgainUseCase(new RuntimeRunAccessService(store, realAuthorization()), store, git, builder, enqueuer, config(), environments);
+        return { store, git, outbox, targets, order, repoTokens, uc, environment };
     };
 
     it('stores the publish target in the product before the outbox row, and asks the token for the stored repo', async () => {
@@ -444,6 +447,41 @@ describe('Run again', () => {
         expect(verifyRunToken(openSealed(request.runToken, res.runId), SECRET, NOW)).toMatchObject({ runId: res.runId, attempt: 3, organizationId: ORG, prNumber: 7 });
     });
 
+    it("follows the environment's fork policy as it is now: skip refuses, run starts without a maintainer, the default holds", async () => {
+        const prev = run();
+        const skip = await setup(prev);
+        skip.environment.forkPullRequests = 'skip';
+        await expect(skip.uc.execute({ user: owner, runId: prev.runId })).rejects.toThrow('fork policy skips');
+        expect(skip.outbox.rows).toHaveLength(0);
+
+        const open = await setup(prev);
+        open.environment.forkPullRequests = 'run';
+        await open.uc.execute({ user: owner, runId: prev.runId });
+        expect(open.outbox.rows[0].payload.payload).toMatchObject({ pullRequest: { fork: true, forkApprovalRequired: false } });
+
+        const held = await setup(prev);
+        await held.uc.execute({ user: owner, runId: prev.runId });
+        expect(held.outbox.rows[0].payload.payload.pullRequest.forkApprovalRequired).toBeUndefined();
+
+        // A PR from the repository itself ignores the fork policy.
+        const own = await setup(prev);
+        own.environment.forkPullRequests = 'skip';
+        own.git.head = { ...own.git.head!, fork: false };
+        await expect(own.uc.execute({ user: owner, runId: prev.runId })).resolves.toMatchObject({ state: 'queued' });
+    });
+
+    it('Run again stops at the daily count of Runs asked by hand on that pull request, the one @kody runtime counts too', async () => {
+        const prev = run();
+        const recent = new Date().toISOString();
+        const sha = (i: number) => i.toString(16).padStart(40, 'd');
+        const asked = Array.from({ length: COMMENT_RUNS_PER_PULL_REQUEST_PER_DAY }, (_, i) => run({ trigger: i % 2 ? 'comment' : 'run_again', headSha: sha(i), requestedAt: recent }));
+        const s = await setup(prev, ...asked);
+        const refused = await s.uc.execute({ user: owner, runId: prev.runId }).catch((e: any) => e);
+        expect(refused.getStatus()).toBe(429);
+        expect(refused.message).toContain(`${COMMENT_RUNS_PER_PULL_REQUEST_PER_DAY} Runs asked by hand`);
+        expect(s.outbox.rows).toHaveLength(0);
+    });
+
     it('two clicks on "Run again" make one Run: the runId is derived from the previous Run and the attempt', async () => {
         const prev = run();
         const s = await setup(prev);
@@ -457,9 +495,15 @@ describe('Run again', () => {
         const s = await setup(prev);
         const builder = new RuntimeRunRequestBuilder(s.git, s.repoTokens, { get: async () => ({ environmentId: 'env-1', organizationId: ORG, teamId: TEAM, repositoryId: REPO, imageId: 'img-2' }) }, config({ secretSealKey: undefined }), clock);
         const enqueuer = new RuntimeRunEnqueuer(s.targets, s.outbox as any, { getTypeIntegration: async () => PlatformType.GITHUB });
-        const uc = new RunRuntimeAgainUseCase(new RuntimeRunAccessService(s.store, realAuthorization()), s.store, s.git, builder, enqueuer, config());
+        const uc = new RunRuntimeAgainUseCase(new RuntimeRunAccessService(s.store, realAuthorization()), s.store, s.git, builder, enqueuer, config(), { get: async () => null });
         await expect(uc.execute({ user: owner, runId: prev.runId })).rejects.toBeInstanceOf(ServiceUnavailableException);
         expect(s.outbox.rows).toHaveLength(0);
+    });
+
+    it('a live Run of the same commit in another environment does not hold back Run again in this one', async () => {
+        const done = run();
+        const elsewhere = run({ state: 'queued', environmentId: 'env-2', attempt: 3 });
+        await expect((await setup(done, elsewhere)).uc.execute({ user: owner, runId: done.runId })).resolves.toMatchObject({ attempt: 2, state: 'queued' });
     });
 
     it('refuses while the previous Run is live, when another Run of that SHA is live, or the head moved', async () => {
@@ -486,7 +530,7 @@ describe('Run again', () => {
 });
 
 describe('Fork approval', () => {
-    const setup = async (patch = {}) => {
+    const setup = async (patch = {}, environment: { forkPullRequests?: 'skip' | 'require_approval' | 'run' } = {}) => {
         const r = run({ state: 'awaiting_approval', ...patch });
         const git = new FakeGit();
         const outbox = new FakeOutbox();
@@ -498,7 +542,8 @@ describe('Fork approval', () => {
             config({ runTokenSecret: SECRET }),
             clock,
         );
-        const uc = new ApproveForkRunUseCase(new RuntimeRunAccessService(await storeWith(r), realAuthorization()), git, outbox as any, clock, builder);
+        const environments = { get: async (org: string, id: string) => (org === ORG && id === 'env-1' ? ({ environmentId: id, organizationId: org, ...environment } as any) : null) };
+        const uc = new ApproveForkRunUseCase(new RuntimeRunAccessService(await storeWith(r), realAuthorization()), git, outbox as any, clock, builder, undefined, environments);
         return { r, git, outbox, uc, issued };
     };
 
@@ -561,6 +606,22 @@ describe('Fork approval', () => {
         const s = await setup();
         s.git.identity = null;
         await expect(s.uc.execute({ user: owner, runId: s.r.runId })).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('an approval starts nothing once the environment skips forks, or once the pull request is no longer open', async () => {
+        const skipped = await setup({}, { forkPullRequests: 'skip' });
+        await expect(skipped.uc.execute({ user: owner, runId: skipped.r.runId })).rejects.toThrow(new ConflictException("This environment's fork policy now skips pull requests from forks"));
+        expect(skipped.outbox.rows).toHaveLength(0);
+        expect(skipped.issued).toHaveLength(0);
+
+        const closed = await setup();
+        closed.git.head = { ...closed.git.head!, state: 'closed' };
+        await expect(closed.uc.execute({ user: owner, runId: closed.r.runId })).rejects.toThrow(new ConflictException('The pull request is not open'));
+        expect(closed.outbox.rows).toHaveLength(0);
+
+        // Still waiting for a maintainer under the policy as it is now: approved.
+        const held = await setup({}, { forkPullRequests: 'require_approval' });
+        await expect(held.uc.execute({ user: owner, runId: held.r.runId })).resolves.toMatchObject({ headSha: SHA });
     });
 
     it('binds to the head: a new push asks again, and only awaiting Runs can be approved', async () => {

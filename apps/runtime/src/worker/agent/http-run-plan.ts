@@ -4,6 +4,7 @@ import { type CanaryVault, CanaryLeakError, containsCanary } from '../canary/can
 import type { SecretOpener } from '../secrets/sealed-tokens';
 import type { FetchLike } from './http-llm-gateway';
 import { LlmBudgetExceededError, LlmUnavailableError } from './llm-gateway';
+import { failureName, postToProduct, unwrapProductBody } from './product-call';
 
 export interface RunPlanCall {
     runId: string;
@@ -32,7 +33,7 @@ export class HttpRunPlanClient implements RunPlanClient {
 
     constructor(
         baseUrl: string,
-        private readonly opts: { secrets: SecretOpener; fetch?: FetchLike; timeoutMs?: number },
+        private readonly opts: { secrets: SecretOpener; fetch?: FetchLike; timeoutMs?: number; connectRetryDelaysMs?: readonly number[]; sleep?: (ms: number) => Promise<void> },
     ) {
         this.url = `${baseUrl.replace(/\/+$/, '')}/${RUN_PLAN_PATH}`;
     }
@@ -46,23 +47,22 @@ export class HttpRunPlanClient implements RunPlanClient {
             throw new LlmUnavailableError('the run token does not open for this Run');
         }
         const doFetch = this.opts.fetch ?? (globalThis.fetch as unknown as FetchLike);
-        let res: Awaited<ReturnType<FetchLike>>;
+        // A round the product never received (it was restarting) is sent again after a pause; one that may
+        // have reached it is not: the product does not deduplicate rounds, and may have run the planner's turn.
+        let answer: Awaited<ReturnType<typeof postToProduct>>;
         try {
-            res = await doFetch(this.url, {
-                method: 'POST',
-                headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-                body: JSON.stringify(call.body),
-                signal: AbortSignal.timeout(this.opts.timeoutMs ?? 300_000),
+            answer = await postToProduct(doFetch, this.url, token, call.body, {
+                timeoutMs: this.opts.timeoutMs ?? 300_000,
+                connectRetryDelaysMs: this.opts.connectRetryDelaysMs,
+                sleep: this.opts.sleep,
             });
         } catch (e) {
-            throw new LlmUnavailableError(`the test planner did not answer (${e instanceof Error ? e.name : 'error'})`);
+            throw new LlmUnavailableError(`the test planner did not answer (${failureName(e)})`);
         }
-        const body = await res.json().catch(() => undefined);
+        const { res, body } = answer;
         if (res.status === 429 && body?.code === 'llm_budget_exceeded') throw new LlmBudgetExceededError(`run ${call.runId} exhausted the ${body?.scope ?? 'run'} LLM budget`);
         if (!res.ok) throw new LlmUnavailableError(`the test planner answered ${res.status}`);
-        // apps/api's TransformInterceptor wraps every success as { statusCode, type, data }.
-        const out = body && typeof body === 'object' && 'data' in body && typeof body.data === 'object' ? body.data : body;
-        const parsed = RunPlanResponseSchema.safeParse(out);
+        const parsed = RunPlanResponseSchema.safeParse(unwrapProductBody(body));
         if (!parsed.success) throw new LlmUnavailableError('the test planner answered something that is not a plan');
         return parsed.data;
     }

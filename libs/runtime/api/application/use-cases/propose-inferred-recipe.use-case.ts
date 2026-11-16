@@ -6,9 +6,10 @@ import { AuthorizationService } from '@libs/identity/infrastructure/adapters/ser
 import { applyRecipeChange } from '@libs/runtime/blockers/recipe-edit';
 import { recipeDigest } from '@libs/runtime/run/recipe';
 
-import { RUNTIME_RECIPE_MAX_BYTES, RUNTIME_RECIPE_PATH, RUNTIME_RECIPE_PATHS } from '../../domain/runtime-commands';
+import { RUNTIME_RECIPE_MAX_BYTES, RUNTIME_RECIPE_PATH, RUNTIME_RECIPE_PATHS } from '@libs/runtime/contracts/runtime-commands';
 import { type ProductEnvironmentStore, RUNTIME_GIT_PORT, RUNTIME_PRODUCT_ENVIRONMENT_STORE, type RuntimeGitPort } from '../../domain/ports';
 import { inferRecipeAtCommit } from '../recipe-inference.reader';
+import { environmentRepositoryIds, RuntimeEnvironmentMembers } from '../environment-members.service';
 import type { RuntimeAuthorization } from '../run-access.service';
 import { gitCall, KODY_FIX_ORIGIN } from './apply-blocker-fix.use-case';
 import { GetRuntimeEnvironmentUseCase } from './environments.use-cases';
@@ -40,6 +41,9 @@ export class ProposeInferredRecipeUseCase {
         private readonly authorization: RuntimeAuthorization,
         @Inject(RUNTIME_GIT_PORT)
         private readonly git: RuntimeGitPort,
+        // Required by Nest; made without it (the older tests), only the environment's own repository is checked.
+        @Inject(RuntimeEnvironmentMembers)
+        private readonly members?: RuntimeEnvironmentMembers,
     ) {}
 
     async execute(input: { user: Partial<IUser>; environmentId: string }): Promise<ProposedRecipe> {
@@ -50,7 +54,7 @@ export class ProposeInferredRecipeUseCase {
             user: input.user,
             action: Action.Update,
             resource: ResourceType.RuntimeEnvironment,
-            repoIds: [product.repositoryId],
+            repoIds: await environmentRepositoryIds(this.members, product),
         });
 
         const setup = await this.environment.setup(env);

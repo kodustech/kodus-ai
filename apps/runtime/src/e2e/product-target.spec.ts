@@ -1,7 +1,7 @@
-import { InMemoryRunTargetStore } from '@libs/runtime-publish/domain/run-target';
 
 import { shopRunRequest } from './fixtures';
 import { productPgConfig, recordProductTarget } from './product-target';
+import { InMemoryRunTargetStore } from '@libs/runtime-publish/testing';
 
 
 // ProcessEnv declares NODE_ENV as required; these are partial envs.
@@ -22,6 +22,8 @@ describe('e2e product target', () => {
             platform: 'GITHUB',
             pullRequestNumber: req.pullRequest.number,
             headSha: req.pullRequest.headSha,
+            // Whether the PR is from a fork: the preview settings read it (runTargetOf).
+            fork: req.pullRequest.fork,
         });
     });
 

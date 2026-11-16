@@ -1,73 +1,18 @@
 import { isIP } from 'net';
 
+import { KODUS_EGRESS_DENY_PATTERNS, matchesEgressPattern } from '@libs/runtime/protocol/egress-catalog';
+
 // Egress approvals (§4 proxy, §7): the org admin approves one domain for one
 // environment, outside the recipe. The Kodus denylist wins over everything,
 // including an approval, so an approval for a denied host is refused here.
 
 /**
  * §4 "Allowlist padrão": generic storage, paste/share and request bins,
- * tunnels and LLM APIs; plus metadata and local names. A guardrail on what an
- * admin may approve, not a perimeter: the cell proxy denies by default.
+ * tunnels and LLM APIs; plus metadata and local names. One list with the
+ * cell (libs/runtime/protocol/egress-lists.json, G2): the API refuses
+ * approving a denied host and the cell refuses it from every source.
  */
-export const DEFAULT_EGRESS_DENYLIST: readonly string[] = [
-    // generic storage (the cell's own bucket is reached through the VPC endpoint, never by approval)
-    '*.s3.amazonaws.com',
-    's3.amazonaws.com',
-    's3.*.amazonaws.com',
-    '*.s3.*.amazonaws.com',
-    'storage.googleapis.com',
-    '*.blob.core.windows.net',
-    // paste and file sharing
-    'pastebin.com',
-    '*.pastebin.com',
-    'transfer.sh',
-    '*.transfer.sh',
-    'file.io',
-    '*.file.io',
-    'webhook.site',
-    '*.webhook.site',
-    'requestbin.com',
-    '*.requestbin.com',
-    '*.pipedream.net',
-    'raw.githubusercontent.com',
-    'gist.githubusercontent.com',
-    'gist.github.com',
-    '*.r2.dev',
-    '*.workers.dev',
-    'discord.com',
-    '*.discord.com',
-    // tunnels
-    'ngrok.io',
-    '*.ngrok.io',
-    '*.ngrok.app',
-    '*.ngrok.dev',
-    '*.ngrok-free.app',
-    '*.ngrok-free.dev',
-    '*.trycloudflare.com',
-    '*.loca.lt',
-    '*.localtunnel.me',
-    'serveo.net',
-    '*.serveo.net',
-    // LLM APIs (the agent goes through the product gateway, the app under test never does)
-    'api.openai.com',
-    '*.openai.azure.com',
-    'api.anthropic.com',
-    'generativelanguage.googleapis.com',
-    'openrouter.ai',
-    'api.groq.com',
-    'api.mistral.ai',
-    'api.deepseek.com',
-    'api.together.xyz',
-    'api.fireworks.ai',
-    'bedrock-runtime.*.amazonaws.com',
-    // metadata and local names
-    'metadata.google.internal',
-    'metadata',
-    'localhost',
-    '*.localhost',
-    '*.internal',
-    '*.local',
-];
+export const DEFAULT_EGRESS_DENYLIST: readonly string[] = KODUS_EGRESS_DENY_PATTERNS;
 
 export class InvalidEgressHostError extends Error {}
 
@@ -86,20 +31,9 @@ export function normalizeEgressHost(raw: string): string {
     return host;
 }
 
-/** `*` stands for one or more labels; everything else matches literally. */
-function matches(host: string, pattern: string): boolean {
-    const p = pattern.trim().toLowerCase().replace(/\.$/, '');
-    if (!p) return false;
-    const source = p
-        .split('*')
-        .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
-        .join('[a-z0-9-]+(?:\\.[a-z0-9-]+)*');
-    return new RegExp(`^${source}$`).test(host);
-}
-
 /** The denylist entry that blocks `host`, or undefined. */
 export function deniedBy(host: string, denylist: readonly string[]): string | undefined {
-    return denylist.find((pattern) => matches(host, pattern));
+    return denylist.find((pattern) => matchesEgressPattern(host, pattern));
 }
 
 export function parseDenylist(env: string | undefined): string[] {

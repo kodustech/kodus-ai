@@ -91,7 +91,7 @@ describe('RuntimePoolController', () => {
         }
         expect(s.env().poolUsage!.machineMinutes).toBe(120);
         expect(s.asked()).toEqual([2, 0]);
-        expect(s.pool.status(s.env())).toMatchObject({ size: 0, reason: 'budget', spentUsd: 0.81 });
+        expect(s.pool.status(s.env())).toMatchObject({ size: 0, reason: 'budget', spentUsd: 0.4 });
     });
 
     it('without a policy the size holds, and the estimate is the whole month', async () => {

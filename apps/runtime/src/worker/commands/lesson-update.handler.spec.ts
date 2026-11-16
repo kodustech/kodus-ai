@@ -1,7 +1,7 @@
 import { deriveLessons } from '@libs/runtime/blockers/lessons';
 
-import { InMemoryLessonStore } from '../setup/lesson.store';
 import { LessonUpdateRequestedHandler } from './command-handlers';
+import { InMemoryLessonStore } from '../setup/testing';
 
 const AT = '2026-11-04T10:00:00.000Z';
 const [LESSON] = deriveLessons({

@@ -20,7 +20,7 @@ const fakeFetch = (status: number, body: unknown) => {
 describe('HttpLlmGateway', () => {
     it('posts the turn with the Run token and maps text + usage', async () => {
         const f = fakeFetch(200, { text: 'plan', usage: { inputTokens: 10, outputTokens: 5 }, budget: { remaining: 85 } });
-        const metrics = { recordLlmBudget: jest.fn() } as any;
+        const metrics = { recordLlmBudget: jest.fn(), recordLlmTokens: jest.fn() } as any;
         const res = await new HttpLlmGateway('http://api.test/', { secrets, fetch: f.fn, metrics, maxOutputTokens: 900 }).complete({ ...req, task: 'runtime.intent' });
 
         expect(res).toEqual({ text: 'plan', usage: { inputTokens: 10, outputTokens: 5 } });
@@ -29,6 +29,8 @@ describe('HttpLlmGateway', () => {
         expect(JSON.parse(f.calls[0].init.body)).toEqual({ runId: 'run-1', task: 'runtime.intent', messages: req.messages, maxOutputTokens: 900 });
         expect(metrics.recordLlmBudget.mock.calls[0][0]).toBeCloseTo(0.15);
         expect(metrics.recordLlmBudget.mock.calls[0][1]).toEqual({ orgId: 'org-1', state: 'ok' });
+        // The tokens of the answer, by the task the worker asked for (runtime.llm.tokens).
+        expect(metrics.recordLlmTokens).toHaveBeenCalledWith({ inputTokens: 10, outputTokens: 5 }, { orgId: 'org-1', task: 'runtime.intent' });
     });
 
     it('maps 429 llm_budget_exceeded to LlmBudgetExceededError', async () => {
@@ -70,5 +72,29 @@ describe('HttpLlmGateway', () => {
         const f = fakeFetch(200, { statusCode: 200, type: 'Object', data: { text: 'plan', usage: { inputTokens: 3, outputTokens: 2 } } });
         const res = await new HttpLlmGateway("http://api.test", { secrets, fetch: f.fn }).complete(req);
         expect(res).toEqual({ text: 'plan', usage: { inputTokens: 3, outputTokens: 2 } });
+    });
+
+    it('sends again a turn the product never received (it was restarting), never one that may have reached it', async () => {
+        const net = (code: string) => new TypeError('fetch failed', { cause: Object.assign(new Error(code), { code }) });
+        let calls = 0;
+        const restarting: FetchLike = async (...a) => {
+            if (++calls < 3) throw net('ECONNREFUSED');
+            return fakeFetch(200, { text: 'plan', usage: { inputTokens: 1, outputTokens: 1 } }).fn(...a);
+        };
+        const slept: number[] = [];
+        const sleep = async (ms: number) => void slept.push(ms);
+        await expect(new HttpLlmGateway('http://api.test', { secrets, fetch: restarting, sleep, connectRetryDelaysMs: [1, 2, 3] }).complete(req)).resolves.toMatchObject({ text: 'plan' });
+        expect(slept).toEqual([1, 2]);
+
+        // The product may have run (and billed) the turn: it is not deduplicated, so it is not sent again.
+        let sent = 0;
+        const reset: FetchLike = async () => {
+            sent++;
+            throw net('ECONNRESET');
+        };
+        const err = await new HttpLlmGateway('http://api.test', { secrets, fetch: reset, sleep, connectRetryDelaysMs: [1, 2, 3] }).complete(req).catch((e) => e);
+        expect(err).toBeInstanceOf(LlmUnavailableError);
+        expect(err.message).toBe('LLM gateway unreachable (TypeError: ECONNRESET)');
+        expect(sent).toBe(1);
     });
 });

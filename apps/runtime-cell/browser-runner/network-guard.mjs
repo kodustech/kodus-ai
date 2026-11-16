@@ -4,6 +4,11 @@ import {JobError} from './steps.mjs';
 export class NetworkPolicyError extends JobError {
     constructor(){super('browser network policy refused');}
 }
+const SOCKET_SCHEME={'http:':'ws:','https:':'wss:'};
+export function sameOriginSocket(raw,app){
+    let url;try{url=new URL(raw);}catch{return false;}
+    return url.protocol===SOCKET_SCHEME[app.protocol]&&url.host===app.host&&!url.username&&!url.password;
+}
 export async function installNetworkGuard(context,{origin,remaining,onDenied=()=>{},setTimer=setTimeout,clearTimer=clearTimeout}){
     const app=new URL(origin);
     if(app.protocol!=='http:'||app.origin!==origin)throw new NetworkPolicyError();
@@ -11,7 +16,14 @@ export async function installNetworkGuard(context,{origin,remaining,onDenied=()=
     const deny=()=>{if(!denied){denied=true;onDenied();}};
     const check=()=>{if(denied)throw new NetworkPolicyError();};
     const abort=async route=>{try{await route.abort('blockedbyclient');}catch{}};
-    await context.routeWebSocket('**/*',async socket=>{deny();try{await socket.close();}catch{}});
+    // A WebSocket to the app's own origin (ws for http, wss for https, same
+    // host and port) reaches the app, as a dev server's reload channel does;
+    // its frames are passed through, never measured or compared. Any other
+    // socket, or one before the page is bound or after the fence, is terminal.
+    await context.routeWebSocket('**/*',async socket=>{
+        if(!denied&&!fenced&&owned&&sameOriginSocket(socket.url?.(),app)){try{socket.connectToServer();return;}catch{}}
+        deny();try{await socket.close();}catch{}
+    });
     const handle=async route=>{
         let response;
         try{

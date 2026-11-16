@@ -32,11 +32,11 @@ type Extractor interface {
 type InProcessExtractor struct{ Limits Limits }
 
 func (p InProcessExtractor) Extract(_ context.Context, tarPath, dest string) (Stats, error) {
-	f, err := os.Open(tarPath)
+	f, err := os.Open(tarPath) //nolint:gosec // G304: tarPath is the cell's own download in its work dir
 	if err != nil {
 		return Stats{}, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return Extract(f, dest, p.Limits)
 }
 
@@ -54,7 +54,7 @@ func (i NetNSExtractor) Extract(ctx context.Context, tarPath, dest string) (Stat
 		return Stats{}, errors.New("tarball: isolated extractor without a command")
 	}
 	args := append(append([]string{}, i.Command[1:]...), "--src", tarPath, "--dest", dest)
-	cmd := exec.CommandContext(ctx, i.Command[0], args...)
+	cmd := exec.CommandContext(ctx, i.Command[0], args...) //nolint:gosec // G204: the extractor argv is the cell's own wiring; the tarball paths are passed as arguments, never through a shell
 	cmd.Env = []string{"PATH=/usr/bin:/bin"}
 	if err := isolate(cmd, i.AllowWithoutNetNS); err != nil {
 		return Stats{}, err
@@ -62,7 +62,12 @@ func (i NetNSExtractor) Extract(ctx context.Context, tarPath, dest string) (Stat
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
-		return Stats{}, fmt.Errorf("tarball: extractor: %v: %s", err, strings.TrimSpace(stderr.String()))
+		var exit *exec.ExitError
+		var refused RefusedError
+		if errors.As(err, &exit) && exit.ExitCode() == exitRefused && json.Unmarshal(stdout.Bytes(), &refused) == nil {
+			return Stats{}, fmt.Errorf("tarball: extractor: %w", &refused)
+		}
+		return Stats{}, fmt.Errorf("tarball: extractor: %w: %s", err, strings.TrimSpace(stderr.String()))
 	}
 	var st Stats
 	if err := json.Unmarshal(stdout.Bytes(), &st); err != nil {
@@ -70,6 +75,10 @@ func (i NetNSExtractor) Extract(ctx context.Context, tarPath, dest string) (Stat
 	}
 	return st, nil
 }
+
+// exitRefused is the child's status for a refused archive; its stdout then
+// holds the RefusedError as JSON, so the parent gets the type back.
+const exitRefused = 3
 
 // RunExtractChild is the extractor process: cell extract --src x --dest y.
 func RunExtractChild(args []string, stdout, stderr io.Writer) int {
@@ -84,6 +93,11 @@ func RunExtractChild(args []string, stdout, stderr io.Writer) int {
 	st, err := InProcessExtractor{}.Extract(context.Background(), *src, *dest)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
+		var refused *RefusedError
+		if errors.As(err, &refused) {
+			_ = json.NewEncoder(stdout).Encode(refused)
+			return exitRefused
+		}
 		return 1
 	}
 	_ = json.NewEncoder(stdout).Encode(st)
@@ -110,24 +124,32 @@ var (
 	revokeBackoff  = time.Second
 )
 
+// Revoke invalidates a download token the cell will not use (or used), with
+// the tries FetchExtractRevoke gives its own: a claim of several
+// repositories that stops before fetching one still revokes its token. It
+// runs past ctx's end, never past ten seconds a try.
+func Revoke(ctx context.Context, r Revoker, token string) error {
+	var rerr error
+	for i := 0; i < revokeAttempts; i++ {
+		if i > 0 {
+			time.Sleep(revokeBackoff << (i - 1))
+		}
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		rerr = r.Revoke(rctx, token)
+		cancel()
+		if rerr == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("token revocation (%d tries): %w", revokeAttempts, rerr)
+}
+
 // FetchExtractRevoke downloads, extracts and revokes. The token is revoked
 // on every path, including a refused archive or a failed download.
 func FetchExtractRevoke(ctx context.Context, o FetchOptions) (st Stats, err error) {
 	defer func() {
-		var rerr error
-		for i := 0; i < revokeAttempts; i++ {
-			if i > 0 {
-				time.Sleep(revokeBackoff << (i - 1))
-			}
-			rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-			rerr = o.Revoker.Revoke(rctx, o.Token)
-			cancel()
-			if rerr == nil {
-				break
-			}
-		}
-		if rerr != nil {
-			err = errors.Join(err, fmt.Errorf("token revocation (%d tries): %w", revokeAttempts, rerr))
+		if rerr := Revoke(ctx, o.Revoker, o.Token); rerr != nil {
+			err = errors.Join(err, rerr)
 		}
 	}()
 	if o.MaxBytes == 0 {
@@ -146,7 +168,7 @@ func FetchExtractRevoke(ctx context.Context, o FetchOptions) (st Stats, err erro
 	if err != nil {
 		return st, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return st, fmt.Errorf("tarball: download status %d", resp.StatusCode)
 	}
@@ -154,7 +176,7 @@ func FetchExtractRevoke(ctx context.Context, o FetchOptions) (st Stats, err erro
 	if err != nil {
 		return st, err
 	}
-	defer os.Remove(tmp.Name())
+	defer func() { _ = os.Remove(tmp.Name()) }()
 	n, err := io.Copy(tmp, io.LimitReader(resp.Body, o.MaxBytes+1))
 	if cerr := tmp.Close(); err == nil {
 		err = cerr
@@ -165,7 +187,7 @@ func FetchExtractRevoke(ctx context.Context, o FetchOptions) (st Stats, err erro
 	if n > o.MaxBytes {
 		return st, fmt.Errorf("tarball: download larger than %d bytes", o.MaxBytes)
 	}
-	if err := os.MkdirAll(o.Dest, 0o755); err != nil {
+	if err := os.MkdirAll(o.Dest, 0o755); err != nil { //nolint:gosec // G301: keeps today's mode; the checkout is read by the build and service users, not only the cell's
 		return st, err
 	}
 	dest, _ := filepath.Abs(o.Dest)

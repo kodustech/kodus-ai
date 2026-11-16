@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { createHash } from 'crypto';
+import { lockKey, lockStatement } from '@libs/runtime/run/adapters/advisory-lock';
 
 import type { Pool, PoolClient } from 'pg';
 
@@ -12,12 +12,6 @@ export interface DistributedLocks {
     withLock<T>(key: string, fn: () => Promise<T>): Promise<T>;
     /** Runs fn only if the lock is free right now; undefined when another holder has it. */
     tryWithLock<T>(key: string, fn: () => Promise<T>): Promise<T | undefined>;
-}
-
-/** Two int4 keys from the lock name (pg_advisory_lock(int, int)). */
-function keys(name: string): [number, number] {
-    const h = createHash('sha256').update(`kody-runtime/lock\0${name}`).digest();
-    return [h.readInt32BE(0), h.readInt32BE(4)];
 }
 
 export class PgDistributedLocks implements DistributedLocks {
@@ -45,13 +39,15 @@ export class PgDistributedLocks implements DistributedLocks {
 
     async withLock<T>(name: string, fn: () => Promise<T>): Promise<T> {
         const client = await this.pool.connect();
-        const [a, b] = keys(name);
+        const key = lockKey('named', name);
+        const unlock = lockStatement('pg_advisory_unlock', key);
         try {
-            await client.query('SELECT pg_advisory_lock($1, $2)', [a, b]);
+            const lock = lockStatement('pg_advisory_lock', key);
+            await client.query(lock.text, lock.values);
             try {
                 return await this.inContext(client, fn);
             } finally {
-                await client.query('SELECT pg_advisory_unlock($1, $2)', [a, b]);
+                await client.query(unlock.text, unlock.values);
             }
         } finally {
             client.release();
@@ -60,14 +56,16 @@ export class PgDistributedLocks implements DistributedLocks {
 
     async tryWithLock<T>(name: string, fn: () => Promise<T>): Promise<T | undefined> {
         const client = await this.pool.connect();
-        const [a, b] = keys(name);
+        const key = lockKey('named', name);
+        const unlock = lockStatement('pg_advisory_unlock', key);
         try {
-            const got = (await client.query('SELECT pg_try_advisory_lock($1, $2) AS ok', [a, b])).rows[0]?.ok === true;
+            const attempt = lockStatement('pg_try_advisory_lock', key);
+            const got = (await client.query(attempt.text, attempt.values)).rows[0]?.acquired === true;
             if (!got) return undefined;
             try {
                 return await this.inContext(client, fn);
             } finally {
-                await client.query('SELECT pg_advisory_unlock($1, $2)', [a, b]);
+                await client.query(unlock.text, unlock.values);
             }
         } finally {
             client.release();
@@ -75,27 +73,3 @@ export class PgDistributedLocks implements DistributedLocks {
     }
 }
 
-/** One process: a promise chain per key (unit tests, the in-memory stack). */
-export class InMemoryDistributedLocks implements DistributedLocks {
-    private readonly chains = new Map<string, Promise<unknown>>();
-    private readonly held = new Set<string>();
-
-    async withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-        const prev = this.chains.get(key) ?? Promise.resolve();
-        const run = prev.catch(() => undefined).then(async () => {
-            this.held.add(key);
-            try {
-                return await fn();
-            } finally {
-                this.held.delete(key);
-            }
-        });
-        this.chains.set(key, run.catch(() => undefined));
-        return run;
-    }
-
-    async tryWithLock<T>(key: string, fn: () => Promise<T>): Promise<T | undefined> {
-        if (this.held.has(key)) return undefined;
-        return this.withLock(key, fn);
-    }
-}

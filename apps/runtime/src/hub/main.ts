@@ -8,7 +8,7 @@ import { createRuntimeHubApp, listenRuntimeHub } from './hub-app';
 async function bootstrap() {
     const config = loadRuntimeConfig();
     const logger = new RuntimeLogger('runtime-hub');
-    const shutdownOtel = await setupRuntimeOtel('runtime-hub', config.metricsPort);
+    const shutdownOtel = await setupRuntimeOtel({ serviceName: 'runtime-hub', serviceInstanceId: config.replicaId }, config.metricsPort);
     const { app, mtls } = await createRuntimeHubApp(config, logger);
     app.enableShutdownHooks();
     const listeners = await listenRuntimeHub(app, config);

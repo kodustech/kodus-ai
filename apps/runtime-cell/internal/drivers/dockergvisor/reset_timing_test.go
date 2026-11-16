@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/clock"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 )
 
 // db and app (app depends on db being healthy), both with a healthcheck at
@@ -36,7 +37,7 @@ const dbAndApp = `services:
 
 func canonicalDBAndApp() string {
 	svc := func(ip, mac string) string {
-		return `{"image":"x","runtime":"runsc","security_opt":["no-new-privileges:true"],"networks":{"kodus-claim":{"ipv4_address":"` + ip + `","mac_address":"` + mac + `"}},"extra_hosts":["app=10.213.5.10","db=10.213.5.11"],
+		return `{"image":"x","runtime":"runsc","logging":{"driver":"local","options":{"max-size":"10m","max-file":"3"}},"security_opt":["no-new-privileges:true"],"cap_drop":["ALL"],"pids_limit":2048,"mem_limit":"4294967296","cpus":2,"networks":{"kodus-claim":{"ipv4_address":"` + ip + `","mac_address":"` + mac + `"}},"extra_hosts":["app=10.213.5.10","db=10.213.5.11"],
 "labels":{"kodus.cell":"cell-1","kodus.org":"","kodus.claim":"claim-1","kodus.role":"","kodus.hard-expires":"2026-10-29T13:00:00Z"}}`
 	}
 	return `{"services":{"app":` + svc("10.213.5.10", "02:42:0a:d5:05:0a") + `,"db":` + svc("10.213.5.11", "02:42:0a:d5:05:0b") + `},
@@ -93,7 +94,7 @@ func TestAResetReportsItsDownUpSeedAndReady(t *testing.T) {
 	dir := t.TempDir()
 	r.answers["compose config"] = canonicalDBAndApp()
 	r.answers["ps"] = "s1\ns2\n"
-	if _, err := d.Up(context.Background(), ref, []byte(dbAndApp), dir); err != nil {
+	if _, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte(dbAndApp), ProjectDir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	claim := ref.Tags[driver.TagClaim]
@@ -112,16 +113,21 @@ func TestAResetReportsItsDownUpSeedAndReady(t *testing.T) {
 	if tm, _ := d.BootTiming(claim); tm.Kind != "boot" {
 		t.Fatalf("a reset not up yet already reported: %+v", tm)
 	}
-	if _, err := d.Up(context.Background(), ref, []byte(dbAndApp), dir); err != nil {
+	if _, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte(dbAndApp), ProjectDir: dir}); err != nil {
 		t.Fatal(err)
 	}
-	want := driver.BootTiming{Kind: "reset", At: resetAt, TotalMs: 8600, DownMs: 600, UpMs: 500, SeedMs: 5000, ReadyMs: 2500}
-	if tm, ok := d.BootTiming(claim); !ok || tm != want {
+	// In words too: compose up until the last service started, its first
+	// healthy answer, and the reset's down, slowest first.
+	want := driver.BootTiming{
+		Kind: "reset", At: resetAt, TotalMs: 8600, DownMs: 600, UpMs: 500, SeedMs: 5000, ReadyMs: 2500,
+		Phases: []driver.BootPhase{{Name: "compose up", Ms: 5500}, {Name: "first healthy", Ms: 2500}, {Name: "compose down", Ms: 600}},
+	}
+	if tm, ok := d.BootTiming(claim); !ok || !reflect.DeepEqual(tm, want) {
 		t.Fatalf("reset timing %+v, want %+v", tm, want)
 	}
 
 	// The next Up with no reset before it is a boot again.
-	if _, err := d.Up(context.Background(), ref, []byte(dbAndApp), dir); err != nil {
+	if _, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte(dbAndApp), ProjectDir: dir}); err != nil {
 		t.Fatal(err)
 	}
 	if tm, _ := d.BootTiming(claim); tm.Kind != "boot" || tm.DownMs != 0 {

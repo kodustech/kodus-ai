@@ -200,10 +200,10 @@ func (e *Collector) serviceLogs(ctx context.Context, c Claim, req *protocol.Evid
 // keeps only the per-table counts in the result.
 func (e *Collector) dbEffects(ctx context.Context, c Claim, req *protocol.EvidenceRequest, ev *protocol.ProbeEvidence, r *redact.Redactor, fx *protocol.DBEffects) *protocol.DBEffects {
 	var redactions int64
-	red := func(s string, max int) string {
+	red := func(s string, limit int) string {
 		out, n := r.String(s)
 		redactions += int64(n)
-		out, _ = redact.Clip(out, max)
+		out, _ = redact.Clip(out, limit)
 		return out
 	}
 	fx.Service = red(fx.Service, 128)
@@ -378,7 +378,7 @@ func (e *Collector) put(ctx context.Context, g *protocol.UploadGrant, ct protoco
 		// The error names the URL, which carries the grant's signature.
 		return fmt.Errorf("%w: request failed", errUpload)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("%w: store answered %d", errUpload, resp.StatusCode)
 	}

@@ -20,7 +20,8 @@ type composer struct {
 	files [][]byte
 }
 
-func (c *composer) Up(_ context.Context, _ driver.MachineRef, file []byte, _ string) ([]string, error) {
+func (c *composer) Up(_ context.Context, req driver.UpRequest) ([]string, error) {
+	file := req.Compose
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.files = append(c.files, file)
@@ -44,7 +45,7 @@ func (r *recEgress) lastSources() []string {
 // addresses are in the claim's egress policy, again after a reset.
 func TestComposeContainersAreSourcesOfTheClaimPolicy(t *testing.T) {
 	cp := &composer{ips: [][]string{{"172.30.0.2", "172.30.0.3"}, {"172.30.0.7"}}}
-	h := newHarness(t, func(c *Config) { c.Composer = cp })
+	h := newHarness(t, func(c *Config) { c.Parts.Composer = cp })
 	b := h.acquireBody()
 	b.Expose = []protocol.Expose{{Service: "api", Port: 3000, Kind: protocol.ExposeKindHTTP}}
 	if err := h.handle("claim-1", protocol.MessageTypeClaimAcquire, b); err != nil {
@@ -102,7 +103,7 @@ func TestExfiltrationAlertBlocksTheClaim(t *testing.T) {
 	<-started
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	go func() { defer close(done); h.a.watchAlerts(ctx) }()
+	go func() { defer close(done); h.a.watchAlerts(ctx, 0) }()
 	feed.ch <- []Alert{{Seq: 1, ClaimID: "claim-1", Host: "evil.example", Kind: "credential_exfiltration", At: time.Now()}}
 	bl := h.conn.next(t, func(f any) bool { _, ok := f.(*protocol.BlockedBody); return ok }).(*protocol.BlockedBody)
 	cancel()
@@ -123,8 +124,7 @@ func TestExfiltrationAlertBlocksTheClaim(t *testing.T) {
 // to be acked and fail in the background, so the setup recorded "image.bake
 // accepted" for an image that was never made.
 func TestBakeOnADriverThatCannotBakeIsRefusedAtOnce(t *testing.T) {
-	h := newHarness(t)
-	h.drv.CannotBake = true
+	h := newHarness(t, func(c *Config) { c.Parts.Baker = nil })
 	err := h.handle("", protocol.MessageTypeImageBake, &protocol.ImageBakeBody{OrgID: "org-a", EnvironmentID: "env-1", Sha: testSHA, RecipeSha: "r"})
 	if code := nackCode(err); code != "bake_unsupported" {
 		t.Fatalf("image.bake = %v (code %q), want bake_unsupported", err, code)
@@ -161,21 +161,21 @@ type upSeesPolicy struct {
 	sources []string
 }
 
-func (u *upSeesPolicy) Up(ctx context.Context, ref driver.MachineRef, file []byte, dir string) ([]string, error) {
+func (u *upSeesPolicy) Up(ctx context.Context, req driver.UpRequest) ([]string, error) {
 	u.egress.mu.Lock()
 	u.atUp = len(u.egress.applied)
 	if u.atUp > 0 {
 		u.sources = u.egress.applied[u.atUp-1].Sources
 	}
 	u.egress.mu.Unlock()
-	return u.composer.Up(ctx, ref, file, dir)
+	return u.composer.Up(ctx, req)
 }
 
 // The claim's policy is in place before its project comes up (the builder
 // fetches through it during Up), and again after with the containers.
 func TestTheEgressPolicyIsInPlaceBeforeTheProjectBuilds(t *testing.T) {
 	up := &upSeesPolicy{composer: composer{ips: [][]string{{"172.30.0.2"}}}}
-	h := newHarness(t, func(c *Config) { c.Composer = up })
+	h := newHarness(t, func(c *Config) { c.Parts.Composer = up })
 	up.egress = h.egress
 	if err := h.handle("claim-1", protocol.MessageTypeClaimAcquire, h.acquireBody()); err != nil {
 		t.Fatal(err)

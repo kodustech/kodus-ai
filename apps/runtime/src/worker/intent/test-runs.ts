@@ -36,6 +36,8 @@ export async function runPlannedTests(args: {
     env: EnvironmentRuntime;
     /** The concrete image shared by the Run's acquired claims. */
     pinnedImageId?: string;
+    /** Each side's round snapshot: a test's reset restores it instead of the compose volumes. */
+    rounds?: { base?: string; pr?: string };
     step: StepRunner;
     securityOf?: (claimId: string) => Promise<string | undefined>;
     /** The Run's canaries: one in a test's output stops the Run (ADR-043). */
@@ -59,7 +61,8 @@ export async function runPlannedTests(args: {
                 const claimFailure = await checkClaimLease(env, args.claims[s], 'runtime', { side: s, securityOf: args.securityOf });
                 if (claimFailure) return { claimFailure };
                 // Same start state on both sides, like a probe round.
-                const reset = await env.reset(args.claims[s], args.pinnedImageId);
+                const snapshotId = args.rounds?.[s];
+                const reset = await (snapshotId ? env.reset(args.claims[s], args.pinnedImageId, snapshotId) : env.reset(args.claims[s], args.pinnedImageId));
                 if (isSecurityViolation(reset)) return { outcome: 'not_run', leaked: false, violation: reset.signature };
                 if (reset && 'code' in reset) return { outcome: 'not_run', leaked: false };
                 // The grant is signed right before the exec, so it lives the test's timeout and not the reset's.

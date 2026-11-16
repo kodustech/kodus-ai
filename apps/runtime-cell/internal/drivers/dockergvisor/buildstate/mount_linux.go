@@ -32,7 +32,7 @@ func (overlayMounter) Mounted(under string) ([]OverlayMount, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return parseOverlayMounts(f, under)
 }
 
@@ -43,5 +43,5 @@ func FreeBytes(path string) (int64, error) {
 	if err := syscall.Statfs(path, &st); err != nil {
 		return 0, err
 	}
-	return int64(st.Bavail) * int64(st.Bsize), nil
+	return int64(st.Bavail) * int64(st.Bsize), nil //nolint:gosec // G115: a block count from statfs fits in int64 on any real disk
 }

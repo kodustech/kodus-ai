@@ -1,4 +1,4 @@
-import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
+import { consumerWith } from './testing';
 import { randomBytes, randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -24,9 +24,10 @@ import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { RuntimeCommandName } from '@libs/runtime/contracts/runtime-commands';
 import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from '@libs/core/workflow/infrastructure/workflow-queue-arguments';
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
 import { RuntimeCommandConsumer } from './run-request.consumer';
 import { RuntimeRunRetry } from './runtime-run-retry';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/testing';
+import { InMemoryCommandStore } from '../../shared/persistence/testing';
 
 const adminURL = process.env.RUNTIME_RETRY_IT_ADMIN_URL;
 const managementURL = process.env.RUNTIME_RETRY_IT_MANAGEMENT_URL;
@@ -341,19 +342,7 @@ describe('Runtime retry source permission boundary', () => {
                 stop: async () => undefined,
                 approve: async () => undefined,
             };
-            const consumer = new RuntimeCommandConsumer(
-                engine as any,
-                new InMemoryRunProjectionStore(),
-                new InMemoryCommandStore(), new InMemoryPrAdmissionStore(),
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                retry,
-            );
+            const consumer = consumerWith({ engine: engine as any, projection: new InMemoryRunProjectionStore(), commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore() }, retry);
             const sub = await user();
             const ack = sub.ack.bind(sub);
             sub.ack = (m, all) => {

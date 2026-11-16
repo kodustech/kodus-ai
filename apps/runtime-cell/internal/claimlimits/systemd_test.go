@@ -41,6 +41,7 @@ func (b *fakeSystemdBus) Unit(_ context.Context, n string) (systemdUnit, error) 
 	}
 	return u, nil
 }
+
 func (b *fakeSystemdBus) List(_ context.Context, _ string) ([]string, error) {
 	if b.listErr != nil {
 		return nil, b.listErr
@@ -51,6 +52,7 @@ func (b *fakeSystemdBus) List(_ context.Context, _ string) ([]string, error) {
 	}
 	return out, nil
 }
+
 func (b *fakeSystemdBus) Start(_ context.Context, u systemdUnit) error {
 	b.starts = append(b.starts, u.Name)
 	if b.startErr != nil {
@@ -62,7 +64,7 @@ func (b *fakeSystemdBus) Start(_ context.Context, u systemdUnit) error {
 	b.units[u.Name] = u
 	g := fakeRoot()
 	g.files["cgroup.events"] = "populated 0\n"
-	l := Limits{MemoryBytes: int64(u.MemoryMax), CPUQuota: int64(u.CPUQuotaPerSecUSec) * int64(u.CPUQuotaPeriodUSec) / 1000000, CPUPeriod: int64(u.CPUQuotaPeriodUSec), Pids: int64(u.TasksMax)}
+	l := Limits{MemoryBytes: int64(u.MemoryMax), CPUQuota: int64(u.CPUQuotaPerSecUSec) * int64(u.CPUQuotaPeriodUSec) / 1000000, CPUPeriod: int64(u.CPUQuotaPeriodUSec), Pids: int64(u.TasksMax)} //nolint:gosec // G115: fixture values are small positive ceilings
 	vals, _ := l.values()
 	for k, v := range vals {
 		g.files[k] = v
@@ -70,6 +72,7 @@ func (b *fakeSystemdBus) Start(_ context.Context, u systemdUnit) error {
 	b.root.dirs[u.Name] = g
 	return nil
 }
+
 func (b *fakeSystemdBus) Stop(_ context.Context, n string) error {
 	b.stops = append(b.stops, n)
 	if b.stopErr != nil {
@@ -116,6 +119,7 @@ func TestSystemdCreatesOwnedSliceAndVerifiesKernelWithoutFilesystemWrites(t *tes
 		t.Fatalf("close=%v", err)
 	}
 }
+
 func TestSystemdRefusesChangedCeilingsAndForeignUnitsBeforeMutation(t *testing.T) {
 	changes := []func(*systemdUnit){func(u *systemdUnit) { u.Description = "foreign" }, func(u *systemdUnit) { u.Slice = "system.slice" }, func(u *systemdUnit) { u.MemoryMax++ }, func(u *systemdUnit) { u.MemorySwapMax = 1 }, func(u *systemdUnit) { u.TasksMax++ }, func(u *systemdUnit) { u.CPUQuotaPerSecUSec++ }, func(u *systemdUnit) { u.CPUQuotaPeriodUSec++ }, func(u *systemdUnit) { u.Transient = false }, func(u *systemdUnit) { u.Delegate = true }, func(u *systemdUnit) { u.MemoryAccounting = false }, func(u *systemdUnit) { u.StopWhenUnneeded = true }, func(u *systemdUnit) { u.ControlGroup = "/foreign" }}
 	for i, change := range changes {
@@ -141,6 +145,7 @@ func TestSystemdRefusesChangedCeilingsAndForeignUnitsBeforeMutation(t *testing.T
 		})
 	}
 }
+
 func TestSystemdReadbackRootAndPopulatedRemovalFailClosed(t *testing.T) {
 	m, b, r := fakeSystemd(t)
 	name, err := m.Ensure(testKey, testLimits)
@@ -163,6 +168,7 @@ func TestSystemdReadbackRootAndPopulatedRemovalFailClosed(t *testing.T) {
 		t.Fatal("root replacement accepted")
 	}
 }
+
 func TestSystemdFailureAndPruningRemainScoped(t *testing.T) {
 	m, b, r := fakeSystemd(t)
 	b.startErr = errors.New("bus denied")
@@ -188,6 +194,7 @@ func TestSystemdFailureAndPruningRemainScoped(t *testing.T) {
 		t.Fatal("direct resource writes")
 	}
 }
+
 func TestDockerParentAllowsOnlyGeneratedSystemdNames(t *testing.T) {
 	for _, n := range []string{"", "/delegated/cell/abc", strings.TrimSuffix(RootSliceName("cell-1"), ".slice") + "-" + testKey + ".slice"} {
 		if err := ValidateDockerParent(n); err != nil {

@@ -2,6 +2,7 @@ import * as yaml from 'js-yaml';
 
 import { parseRecipe, type Recipe, RECIPE_TEST_VALUES } from '@libs/runtime/protocol/recipe';
 import { SECRET_NAME } from '@libs/runtime/run/recipe-inference';
+import { UNTRUSTED_YAML } from '@libs/runtime/protocol/yaml-limits';
 
 /**
  * The rules a recipe Kody wrote must pass on top of every rule a recipe in the
@@ -12,12 +13,17 @@ import { SECRET_NAME } from '@libs/runtime/run/recipe-inference';
  * known tool. Reproduction exports recorded data, never commands for the developer's host.
  */
 
+/** The files docker compose looks for, in its order: what the cell boots when a recipe names none (compose.DefaultFiles). */
+export const DEFAULT_COMPOSE_FILES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'] as const;
+
 /** The only fields an authored recipe may set. */
 const ALLOWED = {
     top: new Set(['version', 'services', 'data']),
     services: new Set(['compose', 'expose']),
     compose: new Set(['files', 'profiles', 'public', 'health', 'health_timeout', 'env']),
     data: new Set(['migrate', 'seed', 'reset']),
+    /** A multi-repository environment's recipe also names the other repositories it boots. */
+    workspaceServices: new Set(['compose', 'expose', 'needs']),
 } as const;
 
 /** The first word of a migrate or seed command; `npx` only with a migration tool it names. */
@@ -100,8 +106,9 @@ async function publicServiceOf(files: string[], name: string, read: (path: strin
         let doc: unknown;
         try {
             // The default schema: compose files merge anchors with `<<`, which the core schema leaves unmerged.
-            doc = yaml.load(text);
+            doc = yaml.load(text, UNTRUSTED_YAML);
         } catch {
+            // A compose file that does not parse names no service here; an authored one is refused by the compose check.
             continue;
         }
         const svc = isMap(doc) && isMap(doc.services) ? doc.services[name] : undefined;
@@ -114,25 +121,42 @@ export async function checkAuthoredRecipe(
     text: string,
     exists: (path: string) => Promise<boolean>,
     read?: (path: string) => Promise<string | null>,
+    /** `needs`: the environment has other repositories, so services.needs is a field Kody writes (authored-files-policy checks it against them). */
+    opts: { needs?: boolean } = {},
 ): Promise<AuthoredRecipeCheck> {
     const errors: string[] = [];
     const parsed = parseRecipe(text);
     if ('error' in parsed) {
         // Authoring never gains resource or network authority, even when a forbidden value is malformed.
-        try { unknownKeys(errors, '', yaml.load(text, { schema: yaml.CORE_SCHEMA }), ALLOWED.top); } catch { /* The recipe parser already reported malformed YAML. */ }
+        try { unknownKeys(errors, '', yaml.load(text, { ...UNTRUSTED_YAML, schema: yaml.CORE_SCHEMA }), ALLOWED.top); } catch { /* The recipe parser already reported malformed YAML. */ }
         return { ok: false, errors: errors.length ? errors : [parsed.error] };
     }
     const recipe = parsed.recipe;
 
-    const doc = yaml.load(text, { schema: yaml.CORE_SCHEMA }) as Record<string, unknown>;
+    const doc = yaml.load(text, { ...UNTRUSTED_YAML, schema: yaml.CORE_SCHEMA }) as Record<string, unknown>;
     unknownKeys(errors, '', doc, ALLOWED.top);
-    unknownKeys(errors, 'services.', doc.services, ALLOWED.services);
+    unknownKeys(errors, 'services.', doc.services, opts.needs ? ALLOWED.workspaceServices : ALLOWED.services);
     unknownKeys(errors, 'services.compose.', isMap(doc.services) ? doc.services.compose : undefined, ALLOWED.compose);
     unknownKeys(errors, 'data.', doc.data, ALLOWED.data);
 
     if (recipe.composeFiles.length === 0) {
+        // With no file named, the cell boots the repository's default compose file when it has one
+        // (compose.Load, in docker compose's order), and only without one builds the root Dockerfile.
+        // A recipe that meant the Dockerfile would boot that file instead: kr-directus has a
+        // docker-compose.yml of test databases, and the setup was refused on it in 5 s.
+        let found: string | undefined;
+        for (const f of DEFAULT_COMPOSE_FILES) {
+            if (await exists(f)) {
+                found = f;
+                break;
+            }
+        }
+        if (found)
+            errors.push(
+                `services.compose.files: the repository has ${found}, which the cell boots when the recipe names no compose file; name the file(s) to boot there, ${found} if it runs the app, or your own .kodus/compose.yaml that builds it`,
+            );
         // No compose file: the cell builds the root Dockerfile as one service it names `app`.
-        if (!(await exists('Dockerfile')))
+        else if (!(await exists('Dockerfile')))
             errors.push('services.compose.files: name the compose file(s) of the repository to boot; there is no root Dockerfile to build instead');
         else if (recipe.public.length !== 1 || recipe.public[0] !== 'app')
             errors.push('services.compose.public: a recipe without compose files boots the root Dockerfile as the one service `app`; set public: app');

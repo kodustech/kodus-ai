@@ -28,7 +28,14 @@ func isDockerfile(name string) bool {
 func DockerfileImagePins(repo string) ([]string, error) {
 	set := map[string]bool{}
 	files := 0
-	err := filepath.WalkDir(repo, func(path string, d fs.DirEntry, err error) error {
+	// Read through a root on the checkout: a file swapped for a link
+	// between the walk and the read never reads outside it.
+	root, err := os.OpenRoot(repo)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	err = filepath.WalkDir(repo, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -46,9 +53,13 @@ func DockerfileImagePins(repo string) ([]string, error) {
 		}
 		fi, err := d.Info()
 		if err != nil || fi.Size() > maxDockerfileBytes {
-			return nil
+			return nil //nolint:nilerr // a Dockerfile gone since the walk listed it, or over the bound, is skipped, not a failed walk
 		}
-		data, err := os.ReadFile(path)
+		rel, err := filepath.Rel(repo, path)
+		if err != nil {
+			return err
+		}
+		data, err := root.ReadFile(rel)
 		if err != nil {
 			return err
 		}

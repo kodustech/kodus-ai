@@ -13,6 +13,7 @@ import {
     renderReportComment,
     renderSuggestionReply,
     renderUndeliveredReportComment,
+    previewLinks,
     runtimeLinks,
     RUNTIME_COMMENT_MARKER,
     usualDuration,
@@ -278,6 +279,37 @@ describe('renderReportComment (screen 7)', () => {
         expect(body).not.toContain('unmapped:');
     });
 
+    // kr-calcom#2 (Run b8efd73b): the PR side built cold for 30 min because the cell had evicted the environment's
+    // build state, and the comment said "the machine ran out of resources" with nothing about a setup.
+    it('a boot that outlived its wait says so, and one that built cold on an evicted cache says a new setup restores it', () => {
+        const timedOut = renderReportComment(
+            report({
+                state: 'partly_tested',
+                verdictState: 'partly_tested',
+                paths: [],
+                uncovered: [{ entryPoint: 'GET /api/me', reason: 'blocker', blocker: { kind: 'resources', cause: 'boot_timeout' } }],
+            }),
+            links,
+        );
+        expect(timedOut).toContain('- `GET /api/me`: the boot did not finish within its wait.');
+        expect(timedOut).not.toContain('ran out of resources');
+
+        const cold = report({
+            state: 'partly_tested',
+            verdictState: 'partly_tested',
+            paths: [],
+            uncovered: [{ entryPoint: 'GET /api/me', reason: 'blocker', blocker: { kind: 'resources', cause: 'build_state_evicted' } }],
+            coldBuild: { side: 'pr', cause: 'build_state_evicted', evictedAt: '2026-11-13T07:31:31.000Z' },
+        });
+        const body = renderReportComment(cold, links);
+        expect(body).not.toContain('ran out of resources');
+        expect(body).toContain('because the build cache of this environment was removed to free disk.');
+        expect(body).toContain(
+            `**Built with no cache**: The build of this PR ran with no cache: the build cache of this environment was removed to free disk (2026-11-13 07:31 UTC); a new setup restores it. [Set it up again](${links.settings}).`,
+        );
+        expect(renderCheckOutput(cold, links).summary).toContain("this environment's build cache was removed to free disk");
+    });
+
     it('names the changed file a route reaches when Kody mapped the file to that route', () => {
         const body = renderReportComment(
             report({
@@ -334,6 +366,15 @@ describe('renderReportComment (screen 7)', () => {
         expect(body.split('\n')[0]).toBe('### Kody Runtime · Partly tested · 1 intended change');
         expect(body).toContain('- **Intended change** `POST /orders`');
         expect(renderCheckOutput(r, links).conclusion).toBe('neutral');
+        expect(body).toContain('A test that already existed on main expects it.');
+    });
+
+    it("says an intended change the diff spells out comes from the diff, not from a test", () => {
+        const intended = { ...report().paths[0], intent: 'intended' as const, intendedBy: 'diff' as const, suggestionId: undefined };
+        const r = RuntimeRunReportSchema.parse(report({ state: 'partly_tested', verdictState: 'partly_tested', paths: [intended], uncovered: [] }));
+        const body = renderReportComment(r, links);
+        expect(body).toContain("What differs is what this PR's diff changes: main shows what a changed line removes, this PR what it adds.");
+        expect(body).not.toContain('A test that already existed on main expects it.');
     });
 
     it('blocked outbound requests and an untested dependency change force neutral and are listed', () => {
@@ -371,6 +412,13 @@ describe('renderReportComment (screen 7)', () => {
         expect(body.split('\n')[0]).toBe('### Kody Runtime · Security violation · 1 regression');
         expect(body).toContain('**Security violation**');
         expect(body).toContain('its test credential');
+        expect(checkOf(r).conclusion).toBe('failure');
+    });
+
+    it('a secret placeholder refused over plain HTTP is said as the organization secret it stands for, never the host', () => {
+        const r = report({ state: 'halted', securityViolation: { side: 'pr', signature: 'placeholder_leak' } });
+        const body = renderReportComment(r, links);
+        expect(body).toContain("sent one of the organization's secrets (as its placeholder, over plain HTTP) to a host it was not issued for");
         expect(checkOf(r).conclusion).toBe('failure');
     });
 
@@ -622,6 +670,79 @@ describe('renderCheckOutput (screen 9: the check is never mute)', () => {
     });
 });
 
+describe('routes the PR adds (Run 371c8255, kr-shop#4)', () => {
+    // POST /orders/preview does not exist on main: two probes, 404 on main, 200 and 400 on the PR.
+    const preview = (probeId: string, prStatus: number, over: Partial<ReportPath> = {}): ReportPath => ({
+        entryPoint: 'POST /orders/preview',
+        probeId,
+        verdict: 'new_endpoint',
+        base: { status: 404 },
+        pr: { status: prStatus },
+        differingFields: ['status', 'json'],
+        ...over,
+    });
+    const listOrders = report().paths[1];
+    const kr4 = report({ state: 'no_regressions', verdictState: 'no_regressions', paths: [preview('preview-total', 200), preview('preview-empty', 400), listOrders], uncovered: [] });
+
+    it('a route the PR adds is reported as a new endpoint, not a regression', () => {
+        expect(RuntimeRunReportSchema.parse(kr4)).toBeTruthy();
+        const check = renderCheckOutput(kr4, links);
+        expect(check).toMatchObject({ conclusion: 'success', title: 'No regressions in what was tested · 2 new endpoints' });
+        expect(check.summary).toBe(`3 probe outcomes, no regression. 2 new endpoints this PR adds answered on the PR. · [View run](${RUN_URL})`);
+        const body = renderReportComment(kr4, links);
+        expect(body).not.toContain('**Regression**');
+        expect(body).not.toContain('**Findings**');
+        expect(body).toContain('**New endpoints**');
+        expect(body).toContain('- **New endpoint** `POST /orders/preview` · `preview-total`: no such route on main (404), 200 on this PR.');
+        expect(body).toContain('- **New endpoint** `POST /orders/preview` · `preview-empty`: no such route on main (404), 400 on this PR.');
+        expect(body).toContain('| `POST /orders/preview` · `preview-total` | 404 | 200 | New endpoint |');
+        expect(body).toContain('3 probe outcomes · 0 regressions · 2 new endpoints');
+    });
+
+    it('a new route that errors in the PR is reported as a finding on the new code', () => {
+        const failing = report({
+            state: 'regression',
+            verdictState: 'regression',
+            paths: [preview('preview-total', 502, { verdict: 'finding', findingKind: 'new_endpoint_error', intent: 'unintended' }), preview('preview-empty', 400), listOrders],
+            uncovered: [],
+        });
+        const check = renderCheckOutput(failing, links);
+        expect(check).toMatchObject({ conclusion: 'failure', title: '1 error on a new endpoint · 1 new endpoint' });
+        expect(check.summary).toContain('1 error on a new endpoint reproduced out of 3 probe outcomes.');
+        const body = renderReportComment(failing, links);
+        expect(body).not.toContain('**Regression**');
+        expect(body).toContain('- **Error on a new endpoint** `POST /orders/preview` · `preview-total`: no such route on main (404), 502 on this PR.');
+        expect(body).toContain('| `POST /orders/preview` · `preview-total` | 404 | 502 | Error on a new endpoint |');
+    });
+
+    it('a route the PR removes still fails as a regression', () => {
+        const removed = report({
+            paths: [preview('preview', 404, { verdict: 'finding', findingKind: 'behavior_change', intent: 'unintended', base: { status: 200 } })],
+            uncovered: [],
+        });
+        expect(renderCheckOutput(removed, links)).toMatchObject({ conclusion: 'failure', title: '1 regression' });
+        expect(renderReportComment(removed, links)).toContain('- **Regression** `POST /orders/preview`: 200 on main, 404 on this PR.');
+    });
+});
+
+describe('a member the recipe does not boot (kr-shop-billing, 2026-11-13)', () => {
+    const notBooted = report({
+        state: 'partly_tested',
+        verdictState: 'partly_tested',
+        paths: [],
+        uncovered: [{ entryPoint: 'POST /invoices/preview', reason: 'blocker', blocker: { kind: 'other_repo', alias: 'billing' } }],
+    });
+
+    it('says the recipe does not boot the member and how to boot it, never "the same failure on both versions"', () => {
+        expect(RuntimeRunReportSchema.parse(notBooted)).toBeTruthy();
+        const body = renderReportComment(notBooted, links);
+        expect(body).toContain('the recipe does not boot `billing`. Add `billing` to `services.needs` in `.kodus/workspace.yaml` on the default branch.');
+        expect(body).not.toContain('same failure was observed on both versions');
+        const check = renderCheckOutput(notBooted, links);
+        expect(check.summary.startsWith('1 path not tested: the recipe does not boot `billing`.')).toBe(true);
+    });
+});
+
 describe('renderBareCheckOutput (a check without a report)', () => {
     it('words the phase from the product table, with a link to the Run only', () => {
         expect(renderBareCheckOutput({ status: 'in_progress' }, links)).toEqual({
@@ -779,3 +900,91 @@ describe('renderUndeliveredReportComment (the report could not be posted)', () =
         expect(body).not.toContain('](');
     });
 });
+
+describe('the preview line (docs/runtime/preview-urls.md §8.1)', () => {
+    const withPreview = (prOff?: string) => ({ ...links, preview: previewLinks('https://app.kodus.test', RUN, { idleMinutes: 15, ...(prOff ? { prOff } : {}) }) });
+
+    it('offers both sides on the dashboard, never a preview host, with who may open it and when it stops', () => {
+        const body = renderReportComment(report(), withPreview());
+        const line = body.split('\n').find((l) => l.startsWith('**Preview**'))!;
+        expect(line).toContain(`[Open the PR version](${RUN_URL}/preview?side=pr)`);
+        expect(line).toContain(`[Open the base version](${RUN_URL}/preview?side=base)`);
+        expect(line).toContain('stops after 15 idle minutes');
+        expect(line).toContain('members of the organization');
+        expect(renderCheckOutput(report(), withPreview()).summary).toContain(`[Preview the PR version](${RUN_URL}/preview?side=pr)`);
+    });
+
+    it("says why a fork's PR version does not open, and still offers the base", () => {
+        const line = renderReportComment(report(), withPreview('Preview is off for pull requests from forks.')).split('\n').find((l) => l.startsWith('**Preview**'))!;
+        expect(line).not.toContain('side=pr');
+        expect(line).toContain('Preview is off for pull requests from forks.');
+        expect(line).toContain('side=base');
+    });
+
+    it('is absent when previews are off, for a Run that tested nothing or halted, and for a multi-repository Run', () => {
+        expect(renderReportComment(report(), links)).not.toContain('**Preview**');
+        for (const state of ['halted', 'could_not_boot', 'skipped', 'errored'] as const) {
+            expect(renderReportComment(report({ state }), withPreview())).not.toContain('**Preview**');
+            expect(renderCheckOutput(report({ state }), withPreview()).summary).not.toContain('Preview the');
+        }
+        const workspace = [{ alias: 'api', baseSha: 'a'.repeat(40), headSha: 'b'.repeat(40), source: 'pull_request' as const }];
+        expect(renderReportComment(report(), withPreview(), { workspace } as never)).not.toContain('**Preview**');
+    });
+});
+
+describe('nothing to test at runtime (planner-eval.md fix 1)', () => {
+    const nothing = report({
+        state: 'nothing_to_test',
+        verdictState: 'nothing_to_test',
+        bootMs: undefined,
+        paths: [],
+        uncovered: [],
+        noRuntimeEffect: ['server/src/controllers/server.controller.ts'],
+    });
+
+    it('the report is valid, and the comment says the PR does not change what runs and which files were read so', () => {
+        expect(RuntimeRunReportSchema.safeParse(nothing).success).toBe(true);
+        const body = renderReportComment(nothing, links);
+        expect(body).toContain('### Kody Runtime · Nothing to test at runtime');
+        expect(body).toContain('does not change what the app does at runtime');
+        expect(body).toContain(code('server/src/controllers/server.controller.ts'));
+        expect(body).not.toContain('Why partly tested');
+    });
+
+    it('the check is neutral, never green and never partly tested', () => {
+        expect(checkOf(nothing)).toEqual({ conclusion: 'neutral', title: 'Nothing to test at runtime' });
+        expect(renderCheckOutput(nothing, links).summary).toContain('does not change what the app does at runtime');
+    });
+});
+
+// kr-kodus-ai#1: two probes of POST /auth/signUp (an invalid email, a password
+// with no symbol) showed as two identical rows; the developer could not tell
+// which case answered what.
+describe('two probes of one route', () => {
+    it('name their case in the outcomes table; a route probed once stays as it was', () => {
+        const signUp = (probeId: string, pr: number) => ({
+            entryPoint: 'POST /auth/signUp',
+            via: 'libs/identity/dtos/create-user-organization.dto.ts',
+            probeId,
+            verdict: 'inconclusive' as const,
+            base: { status: 400 },
+            pr: { status: pr },
+        });
+        const body = renderReportComment(
+            report({ state: 'partly_tested', verdictState: 'partly_tested', paths: [signUp('signup-invalid-email', 201), signUp('signup-password-no-symbol', 201), { entryPoint: 'GET /health', probeId: 'health', verdict: 'not_reproduced', base: { status: 200 }, pr: { status: 200 } }], uncovered: [] }),
+            links,
+        );
+        expect(body).toContain('· `signup-invalid-email` |');
+        expect(body).toContain('· `signup-password-no-symbol` |');
+        expect(body).toContain('| `GET /health` | 200 | 200 |');
+    });
+
+    // Run 5f89c3ec: both findings read "Regression `POST /auth/signUp` …: 400 on main, 201 on this PR".
+    it('name their case in the findings too', () => {
+        const signUp = (probeId: string) => ({ entryPoint: 'POST /auth/signUp', probeId, verdict: 'finding' as const, findingKind: 'behavior_change' as const, intent: 'unintended' as const, base: { status: 400 }, pr: { status: 201 } });
+        const body = renderReportComment(report({ paths: [signUp('signup-invalid-email'), signUp('signup-password-no-symbol')], uncovered: [] }), links);
+        expect(body).toContain('- **Regression** `POST /auth/signUp` · `signup-invalid-email`: 400 on main, 201 on this PR.');
+        expect(body).toContain('- **Regression** `POST /auth/signUp` · `signup-password-no-symbol`: 400 on main, 201 on this PR.');
+    });
+});
+

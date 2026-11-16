@@ -1,5 +1,5 @@
 import { describeMachineSize, fitsWithin } from '@libs/runtime/contracts/machine-size';
-import type { Blocked } from '@libs/runtime/environment';
+import type { Blocked, Blocker } from '@libs/runtime/environment';
 import { type CellFeature, knownCellFeatures, type MachineSize, type MessageBody, requiredRecipeFeatures } from '@libs/runtime/protocol';
 
 // What a cell said in its hello it may be asked (protocol CELL_FEATURES):
@@ -18,15 +18,35 @@ export interface CellCapabilities {
      * directory's routing relies on this, shared/cell-directory.ts).
      */
     maxClaimSize: MachineSize | null;
+    /**
+     * The size a claim that asks none runs at (hello capabilities.defaultSize);
+     * null when the cell does not say. Only metering reads it: the vCPUs of
+     * such a claim, for the usage report.
+     */
+    defaultClaimSize: MachineSize | null;
+    /**
+     * The size a code sandbox that asks none runs at and is counted at
+     * (hello capabilities.sandboxSize); null when the cell does not say (it
+     * runs no sandboxes, or is older than it): the hub then admits such a
+     * sandbox at its own RUNTIME_SANDBOX_MEMORY_MB.
+     */
+    sandboxClaimSize: MachineSize | null;
 }
 
 /** A cell older than the negotiation: its hello names nothing. */
-export const NO_CAPABILITIES: CellCapabilities = { features: [], maxClaimSize: null };
+export const NO_CAPABILITIES: CellCapabilities = { features: [], maxClaimSize: null, defaultClaimSize: null, sandboxClaimSize: null };
 
 export function capabilitiesOfHello(hello: MessageBody<'hello'>): CellCapabilities {
     const features = knownCellFeatures(hello.features);
     const maxClaimSize = features.includes('claimSize') && hello.maxClaimSize ? { memoryMb: hello.maxClaimSize.memoryMb, cpus: hello.maxClaimSize.cpus } : null;
-    return { features, maxClaimSize };
+    const d = hello.capabilities?.defaultSize;
+    const sb = features.includes('sandbox') ? hello.capabilities?.sandboxSize : undefined;
+    return {
+        features,
+        maxClaimSize,
+        defaultClaimSize: d ? { memoryMb: d.memoryMb, cpus: d.cpus } : null,
+        sandboxClaimSize: sb ? { memoryMb: sb.memoryMb, cpus: sb.cpus } : null,
+    };
 }
 
 /** Whether the cell decodes the claim.acquire field of `feature`; a session that names no features supports none. */
@@ -53,6 +73,22 @@ export function authoredFilesUnsupported(): Blocked {
 
 /** The signature of authoredFilesUnsupported (the blocker catalog's card). */
 export const AUTHORED_FILES_UNSUPPORTED = 'authored_files_unsupported';
+
+/**
+ * The blockers of a claim that boots other repositories beside its own, for
+ * a cell that cannot fetch them (its hello names no workspace): the cell's
+ * own refusal of services.needs (other_repo/recipe_needs), one per
+ * repository, each naming its alias. Nothing is sent and nothing boots.
+ */
+export function workspaceUnsupported(aliases: readonly string[]): Blocked {
+    const blockers = aliases.map((alias): Blocker => ({
+        kind: 'other_repo',
+        signature: 'recipe_needs',
+        message: `this cell's build does not fetch other repositories (its hello names no workspace), so ${alias} cannot boot beside this repository; upgrade the cell or use one that does; the claim was not started`,
+        alias,
+    }));
+    return { status: 'blocked', blockers };
+}
 
 /** Whether the cell grants `size` to one claim. */
 export const grantsSize = (caps: Partial<CellCapabilities>, size: MachineSize): boolean =>

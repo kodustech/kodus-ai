@@ -36,6 +36,9 @@ type contractVerdict struct {
 	Size        *ResourceSize `json:"size"`
 	EgressAllow []string      `json:"egressAllow"`
 	Fakes       []FakeService `json:"fakes"`
+	// Needs is services.needs with every alias resolved; the worker's
+	// recipe.needs is the same.
+	Needs []Need `json:"needs"`
 }
 
 func TestRecipeContract(t *testing.T) {
@@ -74,6 +77,8 @@ func TestRecipeContract(t *testing.T) {
 			t.Errorf("%s: health timeout %s, want %ds", path, r.HealthTimeout(), *v.HealthTimeoutSeconds)
 		case want == "accept" && v.HealthTimeoutDefault && (r.Services.Compose.HealthTimeout != 0 || r.HealthTimeout() != DefaultHealthTimeout):
 			t.Errorf("%s: health timeout %s set by the recipe, want the default %s", path, r.HealthTimeout(), DefaultHealthTimeout)
+		case want == "accept" && !slices.Equal(r.Services.Needs, v.Needs):
+			t.Errorf("%s: needs %v, want %v", path, r.Services.Needs, v.Needs)
 		case want == "accept" && !slices.Equal(r.Unapplied(), v.Unapplied):
 			t.Errorf("%s: unapplied %v, want %v", path, r.Unapplied(), v.Unapplied)
 		case strings.HasPrefix(want, "refuse: ") && err == nil:

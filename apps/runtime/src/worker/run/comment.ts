@@ -16,12 +16,16 @@ export function buildComment(args: {
     securityEvent?: boolean;
     /** Recipe files the PR changes whose PR copy the Run never boots (S-19): fixed paths, never repo text. */
     recipeChangedInPr?: string[];
+    /** The member repository the PR is in: its `.kodus/` changes were not applied. */
+    recipeChangedInMember?: string;
 }): string {
     const lines = [`### Kody Runtime · ${esc(args.check.title)}`, '', `Tested at \`${args.headSha.slice(0, 12)}\`, base and PR replayed on the same image.`, ''];
     if (args.securityEvent) {
         lines.push('**Security event**: a decoy credential planted in the machine crossed a boundary, so the Run stopped. Entry points without a verdict were not verified.', '');
     }
-    if (args.recipeChangedInPr?.length) {
+    if (args.recipeChangedInPr?.length && args.recipeChangedInMember) {
+        lines.push(`**Recipe changed**: this PR changes ${args.recipeChangedInPr.map((p) => `\`${esc(p)}\``).join(', ')} in \`${esc(args.recipeChangedInMember)}\`, a member repository of this environment. Only the primary repository's recipe is applied, so these changes were not applied.`, '');
+    } else if (args.recipeChangedInPr?.length) {
         lines.push(`**Recipe changed**: this PR changes ${args.recipeChangedInPr.map((p) => `\`${esc(p)}\``).join(', ')}. Kody boots every pull request with the recipe from the base branch, so the PR's copy was not tested.`, '');
     }
     if (args.findings.length) {

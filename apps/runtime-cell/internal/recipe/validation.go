@@ -8,7 +8,7 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// ValidationChecks are named, explicit internal commands; never boot steps.
+// ValidationCheck is a named, explicit internal command; never a boot step.
 // Bounds mirror contracts/recipe-validation.ts (ENV-08, ADR-053).
 type ValidationCheck struct {
 	Name string `yaml:"name"`

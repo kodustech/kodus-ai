@@ -52,6 +52,7 @@ func newBrowserTelemetry(t *testing.T) *browserTelemetry {
 	c := claims.New("claim-fixture", protocol.ClaimAcquireBody{Expose: []protocol.Expose{{Service: "app", Port: 3000, Kind: protocol.ExposeKindHTTP}}}, a.log.With("claim", "claim-fixture", "run", "run-fixture"), clk.Now())
 	return &browserTelemetry{a, c, logs, reg, clk, conn}
 }
+
 func (f *browserTelemetry) completion(t *testing.T) map[string]any {
 	t.Helper()
 	var found map[string]any
@@ -69,9 +70,11 @@ func (f *browserTelemetry) completion(t *testing.T) map[string]any {
 	}
 	return found
 }
+
 func (f *browserTelemetry) count(outcome string) float64 {
 	return f.reg.Counter("cell_browser_explorations_total", "fixture", "outcome").Value(outcome)
 }
+
 func telemetryResult(status protocol.BrowserExploreStatus) *protocol.StepResultBody {
 	return &protocol.StepResultBody{StepID: step1, Executor: protocol.ExecutorObserver, ImageID: "image-fixture", VMHealth: protocol.VMHealthOk, BrowserExploration: &protocol.BrowserExploreResult{Status: status, DurationMs: 123, CliCalls: 2, ActionsCompleted: 1, Truncated: true, Snapshot: "PRIVATE_SNAPSHOT", Candidates: []protocol.BrowserExploreCandidate{{Ref: "e1", Selector: "PRIVATE_SELECTOR"}}}}
 }
@@ -99,6 +102,7 @@ func TestBrowserTelemetryKeepsDistinctOutcomesCountsAndSafeIDs(t *testing.T) {
 		t.Fatal("page content reached logs")
 	}
 }
+
 func TestBrowserTelemetryCannotCreateUnboundedStatusLabels(t *testing.T) {
 	f := newBrowserTelemetry(t)
 	f.a.sendStepResult(context.Background(), f.c, "browser.explore", telemetryResult("PRIVATE_STATUS"))
@@ -118,6 +122,7 @@ type telemetryFailureRunner func(context.Context, browser.RunSpec, []byte, io.Wr
 func (f telemetryFailureRunner) Run(ctx context.Context, spec browser.RunSpec, job []byte, w io.Writer) error {
 	return f(ctx, spec, job, w)
 }
+
 func TestBrowserTelemetryErrorsHaveOnlyClosedReasonAndMeasuredLocalDuration(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
@@ -148,6 +153,7 @@ func TestBrowserTelemetryErrorsHaveOnlyClosedReasonAndMeasuredLocalDuration(t *t
 		})
 	}
 }
+
 func TestBrowserTelemetryMissingTargetHasSafeReason(t *testing.T) {
 	f := newBrowserTelemetry(t)
 	f.c.Acquire.Expose = nil
@@ -180,6 +186,7 @@ func TestBrowserTelemetryCancelledExplorerDoesNotLogItsRawErrorOrCountCompletion
 		t.Fatal("cancelled operation counted as completion")
 	}
 }
+
 func TestBrowserTelemetryReasonFieldsStayClosed(t *testing.T) {
 	f := newBrowserTelemetry(t)
 	f.a.sendStepResult(context.Background(), f.c, "browser.explore", telemetryResult(protocol.BrowserExploreStatusFailed), browserExploreDiagnostic{durationMs: 12, reason: "PRIVATE_REASON"})

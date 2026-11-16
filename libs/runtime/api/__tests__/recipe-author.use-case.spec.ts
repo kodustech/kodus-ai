@@ -2,6 +2,8 @@
 // resolveModelConfig: mock it to inject a scripted model (no key, no network).
 jest.mock('@libs/llm/model-invocation', () => ({ resolveModelConfig: jest.fn() }));
 
+import { RECIPE_AUTHOR_VERSION, recipeAuthorRevision } from '@libs/runtime/run/recipe-author-version';
+import { declareMirrorBuildArgs } from '../application/recipe-author/authored-dockerfile-mirror';
 import { BadGatewayException, ConflictException, ForbiddenException, HttpException, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { MockLanguageModelV3 } from 'ai/test';
 
@@ -13,11 +15,13 @@ import { type EnvironmentSetupRecord, setupLearnScopeId } from '@libs/runtime/ru
 import * as policy from '../application/recipe-author/authored-files-policy';
 import { GitRepoReader } from '../application/recipe-author/git-repo-reader';
 import { RECIPE_AUTHOR_LIMITS, SUBMIT_RECIPE_TOOL } from '../application/recipe-author/recipe-author.agent';
-import { RECIPE_AUTHOR_TASK, RuntimeRecipeAuthorUseCase } from '../application/use-cases/recipe-author.use-case';
+import { RECIPE_AUTHOR_LEASE_MS, RECIPE_AUTHOR_TASK, RuntimeRecipeAuthorUseCase } from '../application/use-cases/recipe-author.use-case';
 import { signRunToken, signSetupToken } from '../domain/run-token';
 import type { ProductEnvironment, RuntimeAgentRunnerFactory, RuntimeGitPort } from '../domain/ports';
+import type { RecipeAuthorClaim, RecipeAuthorOutcome, RecipeAuthorReceipts, RecipeAuthorReservation } from '../domain/setup-calls';
 import { ByokRuntimeAgentRunnerFactory } from '../infrastructure/byok-runtime-llm.provider';
-import { clock, config, InMemoryLlmUsage, NOW, ORG, REPO, SECRET, TEAM } from './fixtures';
+import { RuntimeEnvironmentMembers } from '../application/environment-members.service';
+import { clock, config, InMemoryEnvironmentRepositories, InMemoryLlmUsage, NOW, ORG, OTHER_ORG, REPO, SECRET, TEAM } from './fixtures';
 
 // Kody writes a setup's recipe, product side (docs RECIPE-AGENT-TEST-PLAN,
 // "Ligar ao produto"): the setup token, the setup it names, the commit read
@@ -124,8 +128,21 @@ function scripted(turns: Turn[]) {
     return prompts;
 }
 
-function make(opts: { setup?: EnvironmentSetupRecord | null; files?: Record<string, string>; runners?: RuntimeAgentRunnerFactory; budget?: typeof BUDGET } = {}) {
-    const usage = new InMemoryLlmUsage();
+function make(
+    opts: {
+        setup?: EnvironmentSetupRecord | null;
+        files?: Record<string, string>;
+        runners?: RuntimeAgentRunnerFactory;
+        budget?: typeof BUDGET;
+        /** The product's memory of each attempt, shared by the instances of one test as by the API's across a restart. */
+        receipts?: RecipeAuthorReceipts;
+        /** The org's Outbound access switch for the recommended list. */
+        recommendedEnabled?: boolean;
+        usage?: InMemoryLlmUsage;
+        now?: () => Date;
+    } = {},
+) {
+    const usage = opts.usage ?? new InMemoryLlmUsage();
     const { git, calls } = fakeGit(opts.files);
     const record = opts.setup === undefined ? setup() : opts.setup;
     const setups = { get: jest.fn(async (org: string, env: string) => (record && record.organizationId === org && record.environmentId === env ? record : null)) };
@@ -137,7 +154,19 @@ function make(opts: { setup?: EnvironmentSetupRecord | null; files?: Record<stri
             return { runner: new AiSdkAgentRunner(undefined), model: 'mock-model' };
         },
     };
-    const uc = new RuntimeRecipeAuthorUseCase(config({ llmBudget: opts.budget ?? BUDGET }), clock, usage, git as RuntimeGitPort, products, runners, setups);
+    const uc = new RuntimeRecipeAuthorUseCase(
+        config({ llmBudget: opts.budget ?? BUDGET }),
+        opts.now ?? clock,
+        usage,
+        git as RuntimeGitPort,
+        products,
+        runners,
+        setups,
+        undefined,
+        undefined,
+        opts.receipts,
+        opts.recommendedEnabled === undefined ? undefined : { settings: async () => ({ recommendedEnabled: opts.recommendedEnabled!, whoMayAdd: 'owners' as const }) },
+    );
     return { uc, usage, calls, runnerCalls };
 }
 
@@ -257,7 +286,10 @@ describe('POST /internal/runtime/recipe-author', () => {
         try {
             await expect(t.uc.execute({ authorization: bearer(), body: { sha: SHA } })).rejects.toBeInstanceOf(BadGatewayException);
         } finally {
-            spy.mockClear();
+            // The agent's own listing may fail first (502 before any submission), leaving the scripted answer
+            // queued: drop it, so the next case runs the real check.
+            spy.mockReset();
+            spy.mockImplementation(jest.requireActual('../application/recipe-author/authored-files-policy').checkAuthoredSubmission);
         }
         // A read that fails (rate limit, 5xx) is no "not there" either.
         scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
@@ -276,7 +308,7 @@ describe('POST /internal/runtime/recipe-author', () => {
         scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
         const t = make();
         t.usage.settle = async () => {
-            throw new Error('mongo down');
+            throw new Error('database down');
         };
         const out = await t.uc.execute({ authorization: bearer(), body: { sha: SHA } });
         expect(out).toMatchObject({ status: 'submitted', recipe: GOOD });
@@ -314,6 +346,11 @@ describe('POST /internal/runtime/recipe-author', () => {
         }
         await expect(make().uc.execute({ authorization: bearer(), body: { sha: SHA, extra: 1 } })).rejects.toThrow(/Unrecognized key/);
         await expect(make().uc.execute({ authorization: bearer({ environmentId: 'env-2' }), body: { sha: SHA } })).rejects.toBeInstanceOf(NotFoundException);
+        // A setup token of another org never reaches this org's setup, even for the same environment id.
+        const other = make();
+        await expect(other.uc.execute({ authorization: bearer({ organizationId: OTHER_ORG }), body: { sha: SHA } })).rejects.toBeInstanceOf(NotFoundException);
+        expect(other.calls).toEqual([]);
+        expect(other.usage.rows).toEqual([]);
     });
 
     it('503 when the org has no LLM for the Runtime; 429 when the setup budget cannot hold a run', async () => {
@@ -397,14 +434,16 @@ describe('POST /internal/runtime/recipe-author', () => {
         expect(await t.uc.execute({ authorization: bearer(), body: { sha: SHA } })).toMatchObject({ status: 'no_recipe', reason: `the checks refused ${RECIPE_AUTHOR_LIMITS.maxRejected} recipes` });
     });
 
-    it('a settle that fails after a failed run keeps the run error in the log and still answers 502', async () => {
+    it("a settle that fails after a failed run still answers 502, carrying the run's error and the settle's for the exception filter's one line, and logs nothing itself", async () => {
         const boom = new Error('provider exploded');
         const t = make({ runners: { forOrganization: async () => ({ runner: { run: async () => Promise.reject(boom) } as any }) } });
-        t.usage.settle = async () => Promise.reject(new Error('mongo down'));
+        t.usage.settle = async () => Promise.reject(new Error('database down'));
         const logger = { error: jest.fn(), warn: jest.fn(), log: jest.fn() };
         (t.uc as any).logger = logger;
-        await expect(t.uc.execute({ authorization: bearer(), body: { sha: SHA } })).rejects.toBeInstanceOf(BadGatewayException);
-        expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ error: boom, metadata: expect.objectContaining({ settleError: 'mongo down' }) }));
+        const err = await t.uc.execute({ authorization: bearer(), body: { sha: SHA } }).catch((e) => e);
+        expect(err).toBeInstanceOf(BadGatewayException);
+        expect(err).toMatchObject({ cause: boom, settleError: 'database down', failure: 'run' });
+        expect(logger.error).not.toHaveBeenCalled();
     });
 
     it("names the org's day when it is the budget too tight for a run, not the setup's", async () => {
@@ -416,6 +455,102 @@ describe('POST /internal/runtime/recipe-author', () => {
         // The setup's own ceiling, when it is the tight one, is still the run's.
         const run = await make().uc.execute({ authorization: bearer({ maxTokens: 5_000 }), body: { sha: SHA } }).catch((e) => e);
         expect(run.getResponse()).toMatchObject({ scope: 'run', limit: 5_000 });
+    });
+});
+
+describe('POST /internal/runtime/recipe-author with the last setup\'s recipe (RepoLaunch reuse)', () => {
+    const KODY_DOCKERFILE = 'FROM node:22-bookworm-slim\nWORKDIR /app\nCOPY package.json ./\nRUN npm install\nCOPY . .\nCMD ["node", "src/server.js"]\n';
+    const KODY_COMPOSE = 'services:\n  app:\n    build: { context: ., dockerfile: .kodus/Dockerfile }\n';
+    const KODY_RECIPE = GOOD.replace('files: [docker-compose.yml]', 'files: [.kodus/compose.yaml]');
+    const last = (over: Record<string, unknown> = {}) => ({
+        recipe: KODY_RECIPE,
+        files: [
+            { path: '.kodus/Dockerfile', content: KODY_DOCKERFILE },
+            { path: '.kodus/compose.yaml', content: KODY_COMPOSE },
+        ],
+        notes: 'Kody wrote a Dockerfile; the repository has none.',
+        ...over,
+    });
+    const repo = { 'package.json': FILES['package.json'], 'src/server.js': FILES['src/server.js'] };
+
+    it('answers the recipe that booted as is when it passes the checks at this commit: no runner, no model, no budget', async () => {
+        const prompts = scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        const runners: RuntimeAgentRunnerFactory = { forOrganization: jest.fn(async () => null) };
+        const t = make({ files: repo, runners });
+        const out = await t.uc.execute({ authorization: bearer(), body: { sha: SHA, last: last() } });
+        // Reused as is, but for the mirror's build args its Dockerfile now declares (G1: a build installs only through the mirror).
+        const mirrored = last().files.map((f: { path: string; content: string }) => (f.path.endsWith('Dockerfile') ? { ...f, content: declareMirrorBuildArgs(f.path, f.content).content } : f));
+        expect(out).toEqual({
+            status: 'submitted', recipe: KODY_RECIPE, files: mirrored, notes: last().notes, reused: true, usage: { inputTokens: 0, outputTokens: 0 },
+            adjusted: [expect.stringContaining("installs only through the cell's read-only mirror")],
+        });
+        expect(prompts).toEqual([]);
+        expect(runners.forOrganization).not.toHaveBeenCalled();
+        expect(t.usage.rows).toEqual([]);
+        // Read at the setup's commit, like any submission.
+        expect(t.calls.every((c) => c.endsWith(`@${SHA.slice(0, 4)}`))).toBe(true);
+    });
+
+    // The author's font rule follows the org's Outbound access switch: Google Fonts reaches a build only through the
+    // recommended list (egress-lists.json v2).
+    it("tells Kody when the organization turned the recommended egress list off, and only then", async () => {
+        const files = { ...repo, 'app/layout.tsx': "import { Inter } from 'next/font/google';", 'package.json': '{"dependencies":{"next":"15.0.0"}}' };
+        let prompts = scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: KODY_RECIPE, files: last().files } }]);
+        await make({ files, recommendedEnabled: false }).uc.execute({ authorization: bearer(), body: { sha: SHA } });
+        expect(prompts[0]).toContain('this organization turned the Kodus recommended egress list off');
+        prompts = scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: KODY_RECIPE, files: last().files } }]);
+        await make({ files, recommendedEnabled: true }).uc.execute({ authorization: bearer(), body: { sha: SHA } });
+        expect(prompts[0]).not.toContain('recommended egress list off');
+    });
+
+    // kr-nextjs kept its next dev recipe after the author's instructions changed: a booted recipe was answered as is.
+    it('a recipe that predates a revision recipes must get is written again by Kody, from it, and may stay the same', async () => {
+        const prompts = scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: KODY_RECIPE, files: last().files } }]);
+        const t = make({ files: repo });
+        const out = await t.uc.execute({ authorization: bearer(), body: { sha: SHA, last: last(), reauthor: { from: 1, to: RECIPE_AUTHOR_VERSION } } });
+        expect(out).toMatchObject({ status: 'submitted', recipe: KODY_RECIPE, authorVersion: RECIPE_AUTHOR_VERSION });
+        expect(out.status === 'submitted' && out.reused).toBeUndefined();
+        expect(prompts[0]).toContain('written under older instructions than the ones above');
+        expect(prompts[0]).toContain(recipeAuthorRevision(RECIPE_AUTHOR_VERSION)!.reason);
+        // The model ran, on the setup's budget.
+        expect(t.usage.rows.length).toBeGreaterThan(0);
+    });
+
+    it("when the checks refuse it at this commit, Kody starts from it and their errors, and never resubmits it", async () => {
+        // At this commit package.json is gone: the Dockerfile's COPY reads a file that is not there.
+        const prompts = scripted([
+            { tool: SUBMIT_RECIPE_TOOL, input: { recipe: KODY_RECIPE, files: last().files } },
+            { tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } },
+        ]);
+        const { 'package.json': _gone, ...withoutManifest } = FILES;
+        const t = make({ files: withoutManifest });
+        const out = await t.uc.execute({ authorization: bearer(), body: { sha: SHA, last: last() } });
+        expect(out).toMatchObject({ status: 'submitted', recipe: GOOD });
+        expect(out.status === 'submitted' && out.reused).toBeUndefined();
+        // Kody starts from what the checks say now.
+        expect(prompts[0]).toContain('package.json is not in the repository at this commit');
+    });
+
+    it("with the failure of its last boot, Kody is asked at once, from that recipe and its blocker", async () => {
+        const prompts = scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        const t = make();
+        const failure = { signature: 'setup:not_ready:app:3000/health', title: 'The app never answered its health check', evidence: ['GET /health on app:3000 answered 404'] };
+        const out = await t.uc.execute({ authorization: bearer(), body: { sha: SHA, last: last({ failure }) } });
+        expect(out).toMatchObject({ status: 'submitted', recipe: GOOD });
+        expect(prompts[0]).toContain('GET /health on app:3000 answered 404');
+        expect(t.usage.rows).toHaveLength(1);
+    });
+
+    it('refuses a last recipe out of its bounds before anything runs', async () => {
+        await expect(make().uc.execute({ authorization: bearer(), body: { sha: SHA, last: { recipe: '' } } })).rejects.toThrow();
+        await expect(make().uc.execute({ authorization: bearer(), body: { sha: SHA, last: last({ files: [{ path: '../x', content: '' }] }) } })).rejects.toThrow();
+    });
+
+    it('says what Kodus rewrote in the compose file of an answer', async () => {
+        scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: KODY_RECIPE, files: [last().files[0], { path: '.kodus/compose.yaml', content: `${KODY_COMPOSE}    container_name: shop\n` }] } }]);
+        const out = await make({ files: repo }).uc.execute({ authorization: bearer(), body: { sha: SHA } });
+        expect(out).toMatchObject({ status: 'submitted', adjusted: expect.arrayContaining([expect.stringContaining('container_name: dropped')]) });
+        expect(out.status === 'submitted' && out.files?.[1].content).not.toContain('container_name');
     });
 });
 
@@ -477,5 +612,236 @@ describe('ByokRuntimeAgentRunnerFactory', () => {
         expect(out?.model).toBe('fake-model');
         expect(await new ByokRuntimeAgentRunnerFactory({ resolveTaskSlot: async () => null }, () => false).forOrganization({ organizationId: ORG, teamId: TEAM })).toBeNull();
         expect(await new ByokRuntimeAgentRunnerFactory({ resolveTaskSlot: async () => null }, () => true).forOrganization({ organizationId: ORG, teamId: TEAM })).not.toBeNull();
+    });
+});
+
+describe('POST /internal/runtime/recipe-author in an environment of several repositories', () => {
+    const MEMBER_SHA = 'e'.repeat(40);
+    const BILLING = 'repo-billing';
+    const COMPOSE = 'services:\n  app:\n    build: { context: ., dockerfile: .kodus/Dockerfile }\n  billing:\n    build: { context: ../billing }\n';
+    const DOCKERFILE = 'FROM node:22-bookworm-slim\nWORKDIR /app\nCOPY package.json ./\nRUN npm install\nCOPY . .\nCMD ["node", "src/server.js"]\n';
+    const RECIPE = GOOD.replace('files: [docker-compose.yml]', 'files: [.kodus/compose.yaml]').replace(
+        '  expose:',
+        '  needs:\n    - { repo: acme/billing, alias: billing }\n  expose:',
+    );
+    const last = { recipe: RECIPE, files: [{ path: '.kodus/Dockerfile', content: DOCKERFILE }, { path: '.kodus/compose.yaml', content: COMPOSE }] };
+    const trees: Record<string, Record<string, string>> = {
+        [`acme/shop@${SHA}`]: { 'package.json': FILES['package.json'], 'src/server.js': FILES['src/server.js'] },
+        [`acme/billing@${MEMBER_SHA}`]: { Dockerfile: 'FROM golang:1.23\nCMD ["/billing"]\n', 'main.go': 'package main' },
+    };
+    const git: Pick<RuntimeGitPort, 'readFileAtCommit' | 'listFilesAtCommit'> & { calls: string[] } = {
+        calls: [],
+        listFilesAtCommit: async (i) => {
+            git.calls.push(`list ${i.repositoryName}@${i.sha.slice(0, 4)}`);
+            return Object.keys(trees[`${i.repositoryName}@${i.sha}`] ?? {});
+        },
+        readFileAtCommit: async (i) => {
+            git.calls.push(`read ${i.repositoryName}:${i.path}@${i.sha.slice(0, 4)}`);
+            return trees[`${i.repositoryName}@${i.sha}`]?.[i.path] ?? null;
+        },
+    };
+    const record = setup({
+        workspace: [
+            { repositoryId: REPO, alias: 'shop', role: 'primary', sha: SHA, branch: 'main' },
+            { repositoryId: BILLING, alias: 'billing', role: 'member', sha: MEMBER_SHA, branch: 'main' },
+        ],
+    });
+
+    const make2 = (withMembers: boolean) => {
+        const runners: RuntimeAgentRunnerFactory = { forOrganization: jest.fn(async () => null) };
+        const products = { get: async (org: string, env: string) => (org === ORG && env === 'env-1' ? product : null), findByRepository: async () => null };
+        const rows = new InMemoryEnvironmentRepositories([{ environmentId: 'env-1', organizationId: ORG }]);
+        const members = new RuntimeEnvironmentMembers(products, rows);
+        const uc = new RuntimeRecipeAuthorUseCase(
+            config({ llmBudget: BUDGET }),
+            clock,
+            new InMemoryLlmUsage(),
+            git as unknown as RuntimeGitPort,
+            products,
+            runners,
+            { get: async () => record },
+            undefined,
+            withMembers ? members : undefined,
+        );
+        return { uc, rows, runners };
+    };
+
+    it("checks a reused recipe against the whole workspace: services.needs and ../billing pass, each repository read at its own commit", async () => {
+        const t = make2(true);
+        await t.rows.add({ environmentId: 'env-1', organizationId: ORG, repositoryId: REPO, repositoryName: 'acme/shop', fullName: 'acme/shop', role: 'primary', alias: 'shop', triggers: true, pairBranches: false });
+        await t.rows.add({ environmentId: 'env-1', organizationId: ORG, repositoryId: BILLING, repositoryName: 'acme/billing', fullName: 'acme/billing', role: 'member', alias: 'billing', triggers: true, pairBranches: false });
+        git.calls = [];
+        const out = await t.uc.execute({ authorization: bearer(), body: { sha: SHA, last } });
+        expect(out).toMatchObject({ status: 'submitted', recipe: RECIPE, reused: true });
+        expect(t.runners.forOrganization).not.toHaveBeenCalled();
+        // The member is read through its own repository, at the commit the setup boots it at.
+        expect(git.calls.filter((c) => c.includes('acme/billing')).every((c) => c.endsWith(`@${MEMBER_SHA.slice(0, 4)}`))).toBe(true);
+        expect(git.calls.some((c) => c.includes('acme/billing'))).toBe(true);
+    });
+
+    it('the same recipe checked as one repository fails on services.needs, and Kody is asked for another', async () => {
+        const t = make2(false);
+        await expect(t.uc.execute({ authorization: bearer(), body: { sha: SHA, last } })).rejects.toBeInstanceOf(ServiceUnavailableException);
+        expect(t.runners.forOrganization).toHaveBeenCalled();
+    });
+});
+
+/** The product's receipts of each (setupKey, attempt) in memory, with the semantics of TypeOrmRecipeAuthorReceipts (its integration suite holds Postgres to them). */
+class InMemoryReceipts implements RecipeAuthorReceipts {
+    readonly docs = new Map<string, { fingerprint: string; owner: string; leaseUntil: Date; reservation?: RecipeAuthorReservation; outcome?: RecipeAuthorOutcome }>();
+    async claim(i: Parameters<RecipeAuthorReceipts['claim']>[0]): Promise<RecipeAuthorClaim> {
+        const doc = this.docs.get(i.key);
+        if (!doc) {
+            this.docs.set(i.key, { fingerprint: i.fingerprint, owner: i.owner, leaseUntil: i.leaseUntil });
+            return { state: 'fresh' };
+        }
+        if (doc.fingerprint !== i.fingerprint) return { state: 'conflict' };
+        if (doc.outcome) return { state: 'done', outcome: doc.outcome };
+        if (doc.leaseUntil > i.now) return { state: 'running' };
+        Object.assign(doc, { owner: i.owner, leaseUntil: i.leaseUntil });
+        return { state: 'taken_over', ...(doc.reservation ? { reservation: doc.reservation } : {}) };
+    }
+    async reserved(key: string, owner: string, reservation: RecipeAuthorReservation) {
+        const doc = this.docs.get(key);
+        if (doc?.owner === owner) doc.reservation = reservation;
+    }
+    async settled(key: string, owner: string) {
+        const doc = this.docs.get(key);
+        if (doc?.owner === owner) delete doc.reservation;
+    }
+    async complete(key: string, owner: string, outcome: RecipeAuthorOutcome) {
+        const doc = this.docs.get(key);
+        if (doc?.owner === owner && !doc.outcome) doc.outcome = outcome;
+    }
+    async release(key: string, owner: string) {
+        if (this.docs.get(key)?.owner === owner && !this.docs.get(key)?.outcome) this.docs.delete(key);
+    }
+}
+
+describe('POST /internal/runtime/recipe-author asked again for the same attempt', () => {
+    const failed = { recipe: GOOD, failure: { signature: 'compose:exit', title: 'the app exited', evidence: ['exit 1'] } };
+    /** A runner that waits for `open()` before Kody's run starts, counting the runs. */
+    const gated = () => {
+        let open!: () => void;
+        const gate = new Promise<void>((r) => (open = r));
+        const real = new AiSdkAgentRunner(undefined);
+        const runs = { n: 0 };
+        const runners: RuntimeAgentRunnerFactory = {
+            forOrganization: async () => ({ runner: { run: async (...a: Parameters<AiSdkAgentRunner['run']>) => (runs.n++, await gate, real.run(...a)) }, model: 'mock-model' }),
+        };
+        return { runners, open, runs };
+    };
+
+    it("after Kody answered, even through another API instance, it returns that answer with no new run and no new budget", async () => {
+        const prompts = scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        const receipts = new InMemoryReceipts();
+        const usage = new InMemoryLlmUsage();
+        const body = { sha: SHA, attempt: 'repair-1', last: failed };
+        const first = await make({ receipts, usage }).uc.execute({ authorization: bearer(), body });
+        const asked = prompts.length;
+        const again = await make({ receipts, usage }).uc.execute({ authorization: bearer(), body });
+        expect(again).toEqual(first);
+        expect(prompts).toHaveLength(asked);
+        expect(usage.rows).toHaveLength(1);
+    });
+
+    it('while the same attempt is still being written it answers author_in_progress (409); once written, the answer', async () => {
+        scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        const receipts = new InMemoryReceipts();
+        const g = gated();
+        const t = make({ receipts, runners: g.runners });
+        const running = t.uc.execute({ authorization: bearer(), body: { sha: SHA } });
+        while (g.runs.n === 0) await new Promise((r) => setImmediate(r));
+        const busy = await t.uc.execute({ authorization: bearer(), body: { sha: SHA } }).catch((e) => e);
+        expect(busy.getStatus()).toBe(409);
+        expect(busy.getResponse()).toMatchObject({ code: 'author_in_progress' });
+        g.open();
+        const answer = await running;
+        expect(await t.uc.execute({ authorization: bearer(), body: { sha: SHA, attempt: 'author-0' } })).toEqual(answer);
+        expect(g.runs.n).toBe(1);
+    });
+
+    it('after the API restarted mid-run, asking again runs Kody once more on the budget the lost run reserved', async () => {
+        scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        const receipts = new InMemoryReceipts();
+        const usage = new InMemoryLlmUsage();
+        let now = NOW;
+        // The instance that dies: its run never ends.
+        const lost = gated();
+        void make({ receipts, usage, runners: lost.runners, now: () => now }).uc.execute({ authorization: bearer(), body: { sha: SHA } });
+        while (lost.runs.n === 0) await new Promise((r) => setImmediate(r));
+        expect(usage.rows).toEqual([expect.objectContaining({ pending: true })]);
+
+        const restarted = () => make({ receipts, usage, now: () => now }).uc.execute({ authorization: bearer(), body: { sha: SHA } });
+        await expect(restarted()).rejects.toMatchObject({ response: { code: 'author_in_progress' } });
+        now = new Date(NOW.getTime() + RECIPE_AUTHOR_LEASE_MS + 1);
+        expect(await restarted()).toMatchObject({ status: 'submitted', recipe: GOOD });
+        // One reservation for the attempt, settled by the run that answered.
+        expect(usage.rows).toEqual([expect.objectContaining({ pending: false, task: RECIPE_AUTHOR_TASK })]);
+    });
+
+    it("a run that failed after reserving answers the same failure when asked again, never a second run on the budget", async () => {
+        const runs = { n: 0 };
+        const receipts = new InMemoryReceipts();
+        const usage = new InMemoryLlmUsage();
+        const runners: RuntimeAgentRunnerFactory = { forOrganization: async () => ({ runner: { run: async () => (runs.n++, Promise.reject(new Error('provider down'))) } as any }) };
+        for (let i = 0; i < 2; i++) {
+            const e = await make({ receipts, usage, runners }).uc.execute({ authorization: bearer(), body: { sha: SHA } }).catch((x) => x);
+            expect(e).toBeInstanceOf(HttpException);
+            expect(e.getStatus()).toBe(502);
+            expect(e.getResponse()).toMatchObject({ code: 'llm_unavailable' });
+        }
+        expect(runs.n).toBe(1);
+        expect(usage.rows).toHaveLength(1);
+    });
+
+    it('a refusal that spent nothing is not remembered: asked again once the budget holds a run, Kody writes', async () => {
+        scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        const receipts = new InMemoryReceipts();
+        const t = make({ receipts });
+        const refused = await t.uc.execute({ authorization: bearer({ maxTokens: 5_000 }), body: { sha: SHA } }).catch((e) => e);
+        expect(refused.getStatus()).toBe(429);
+        expect(await t.uc.execute({ authorization: bearer(), body: { sha: SHA } })).toMatchObject({ status: 'submitted' });
+    });
+
+    it('the same attempt asked with another body is refused as attempt_conflict (409)', async () => {
+        scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        const t = make({ receipts: new InMemoryReceipts() });
+        await t.uc.execute({ authorization: bearer(), body: { sha: SHA, attempt: 'repair-1', last: failed } });
+        const e = await t.uc.execute({ authorization: bearer(), body: { sha: SHA, attempt: 'repair-1', last: { ...failed, failure: { ...failed.failure, title: 'another' } } } }).catch((x) => x);
+        expect(e.getStatus()).toBe(409);
+        expect(e.getResponse()).toMatchObject({ code: 'attempt_conflict' });
+    });
+
+    it('a worker that names no attempt still gets a new rewrite for each of its repairs', async () => {
+        const rewrite = GOOD.replace('health: /health', 'health: /ready');
+        scripted([
+            { tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } },
+            { tool: SUBMIT_RECIPE_TOOL, input: { recipe: rewrite } },
+        ]);
+        const t = make({ receipts: new InMemoryReceipts() });
+        expect(await t.uc.execute({ authorization: bearer(), body: { sha: SHA } })).toMatchObject({ recipe: GOOD });
+        expect(await t.uc.execute({ authorization: bearer(), body: { sha: SHA, last: failed } })).toMatchObject({ status: 'submitted', recipe: rewrite });
+    });
+
+    it("a caller that leaves does not stop Kody: the run ends and asking again returns what Kody wrote", async () => {
+        scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        const real = new AiSdkAgentRunner(undefined);
+        const runs = { n: 0 };
+        // Like a provider call, the run stops on an aborted signal.
+        const runner = {
+            run: async (...a: Parameters<AiSdkAgentRunner['run']>) => {
+                runs.n++;
+                if ((a[2] as { signal?: AbortSignal } | undefined)?.signal?.aborted) throw new Error('aborted');
+                return real.run(...a);
+            },
+        };
+        const t = make({ receipts: new InMemoryReceipts(), runners: { forOrganization: async () => ({ runner }) } });
+        const gone = new AbortController();
+        gone.abort();
+        const first = await t.uc.execute({ authorization: bearer(), body: { sha: SHA }, signal: gone.signal });
+        expect(first).toMatchObject({ status: 'submitted', recipe: GOOD });
+        expect(await t.uc.execute({ authorization: bearer(), body: { sha: SHA } })).toEqual(first);
+        expect(runs.n).toBe(1);
     });
 });

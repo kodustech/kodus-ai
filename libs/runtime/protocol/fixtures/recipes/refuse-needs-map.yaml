@@ -1,0 +1,10 @@
+# Runo's map form of needs is not the list a cell reads.
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+    public: api
+  expose:
+    - { service: api, port: 3000, kind: http }
+  needs:
+    billing: { repo: acme/billing-service }

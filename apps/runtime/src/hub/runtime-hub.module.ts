@@ -14,12 +14,18 @@ import { PgRunStreamStore } from '../shared/persistence/pg-run-stream-store';
 import { ensureDatabase, ensureRuntimeSchema } from '../shared/persistence/runtime-schema';
 import { createCa } from './ca/x509';
 import { CellGatewayService } from './cell-gateway.service';
+import { PgPreviewStore } from '../shared/persistence/preview-store';
 import { CellHub } from './cell-hub';
 import { CELL_CERT_HOURS } from './enrollment/cell-identity.service';
 import { PgHubStore } from './hub-store';
 import { InternalController } from './http/internal.controller';
 import { PublicCellController } from './http/public-cell.controller';
 import { TraceContextInterceptor } from './http/trace-context.interceptor';
+import { PgMachineMinuteStore } from './claims/pg-machine-minutes.store';
+import { PgOrgSecretRefs } from './claims/org-secret-refs';
+
+/** The product Postgres the org secrets' references are read from (names and hosts only), when configured. */
+export const PRODUCT_SECRETS_POOL = Symbol('PRODUCT_SECRETS_POOL');
 
 /** The CA from config; an ephemeral one only in the test-only plaintext mode (no cell can then use mTLS). */
 function hubCa(c: RuntimeConfig) {
@@ -46,9 +52,14 @@ export const HUB_LOGGER = Symbol('HUB_LOGGER');
             },
         },
         {
+            provide: PRODUCT_SECRETS_POOL,
+            inject: [RUNTIME_CONFIG],
+            useFactory: (c: RuntimeConfig) => (c.productSecretsReadUrl ? new Pool({ connectionString: c.productSecretsReadUrl, max: 2, connectionTimeoutMillis: 5000 }) : null),
+        },
+        {
             provide: CellHub,
-            inject: [RUNTIME_CONFIG, RUNTIME_PG_POOL, HUB_LOGGER],
-            useFactory: async (c: RuntimeConfig, pool: Pool, logger: RuntimeLogger) => {
+            inject: [RUNTIME_CONFIG, RUNTIME_PG_POOL, HUB_LOGGER, PRODUCT_SECRETS_POOL],
+            useFactory: async (c: RuntimeConfig, pool: Pool, logger: RuntimeLogger, secretsPool: Pool | null) => {
                 const streams = c.streamStore === 'postgres' ? new PgRunStreamStore(pool) : new FileRunStreamStore(c.streamDir);
                 const hub = new CellHub(new PgHubStore(pool), streams, new RuntimeMetrics(), {
                     replicaId: c.replicaId,
@@ -56,6 +67,10 @@ export const HUB_LOGGER = Symbol('HUB_LOGGER');
                     ca: hubCa(c),
                     allowInsecureCells: c.allowInsecureCells,
                     logger: logger.child('CellHub'),
+                    machineMinutes: { store: new PgMachineMinuteStore(pool), limitMinutes: c.machineMinutesPerOrgDay },
+                    sandboxMemoryMb: c.sandboxMemoryMb,
+                    ...(c.previewTunnelUrl ? { preview: { tunnelUrl: c.previewTunnelUrl, tickets: new PgPreviewStore(pool) } } : {}),
+                    ...(secretsPool ? { secrets: new PgOrgSecretRefs(secretsPool) } : {}),
                     ...(c.durableAdmission ? { admission: {
                         ownership: new PgAdmissionStore(pool),
                         directory: new PgPhysicalAdmissionDirectory(pool, { sharedClaimCap: c.orgSharedClaimCap, inTransaction: pgTransaction(pool) }),
@@ -75,9 +90,14 @@ export const HUB_LOGGER = Symbol('HUB_LOGGER');
     ],
 })
 export class RuntimeHubModule implements OnApplicationShutdown {
-    constructor(@Inject(RUNTIME_PG_POOL) private readonly pool: Pool) {}
+    constructor(
+        @Inject(RUNTIME_PG_POOL) private readonly pool: Pool,
+        @Inject(PRODUCT_SECRETS_POOL) private readonly secretsPool: Pool | null,
+    ) {}
 
     async onApplicationShutdown() {
+        // Pool end on shutdown: a connection that fails to close goes with the process, and the second pool still ends.
         await this.pool.end().catch(() => undefined);
+        await this.secretsPool?.end().catch(() => undefined);
     }
 }

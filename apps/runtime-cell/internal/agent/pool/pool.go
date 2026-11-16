@@ -185,12 +185,13 @@ func (mg *Manager) refill(k key) {
 		return
 	}
 	var keep, drop []driver.PoolMachine
-	for _, m := range p.ready {
+	for i := range p.ready {
+		m := &p.ready[i]
 		switch {
 		case p.imageID == "", m.ImageID != p.imageID, m.ClaimSize != p.claimSize, m.HardExpiresAt.Sub(now) < mg.cfg.TTL/2, len(keep) >= p.size:
-			drop = append(drop, m)
+			drop = append(drop, *m)
 		default:
-			keep = append(keep, m)
+			keep = append(keep, *m)
 		}
 	}
 	p.ready = keep
@@ -205,8 +206,8 @@ func (mg *Manager) refill(k key) {
 	imageID, claimSize := p.imageID, p.claimSize
 	mg.mu.Unlock()
 
-	for _, m := range drop {
-		mg.Discard(m, "stale")
+	for i := range drop {
+		mg.Discard(drop[i], "stale")
 	}
 	key, err := mg.cfg.OrgKey(k.orgID)
 	if err != nil && need > 0 {
@@ -269,13 +270,15 @@ func (mg *Manager) machine(r Request, take bool) (driver.PoolMachine, bool) {
 	if p == nil {
 		return driver.PoolMachine{}, false
 	}
-	for i, m := range p.ready {
+	for i := range p.ready {
+		m := &p.ready[i]
 		image := r.ImageID == "" || r.ImageID == m.ImageID
 		if m.OrgID == r.OrgID && m.EnvironmentID == r.EnvironmentID && image && m.ClaimSize == r.Size && !m.HardExpiresAt.Before(r.HardExpiresAt) {
+			found := *m // copied before take rebuilds p.ready
 			if take {
 				p.ready = append(p.ready[:i:i], p.ready[i+1:]...)
 			}
-			return m, true
+			return found, true
 		}
 	}
 	return driver.PoolMachine{}, false

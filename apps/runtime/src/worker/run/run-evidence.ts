@@ -10,7 +10,7 @@ import {
     type EvidenceUploadType,
     signEvidenceUrl,
     signUploadGrant,
-} from '@libs/runtime/api/domain/evidence';
+} from '@libs/runtime/contracts/evidence';
 import type { EnvError, StepResult } from '@libs/runtime/environment';
 import type { EvidenceRef, Probe } from '@libs/runtime/probe';
 import type { BaselineScreenshot, EvidenceRequest } from '@libs/runtime/protocol';

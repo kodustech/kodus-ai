@@ -9,7 +9,10 @@ package resolver
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"strings"
 	"sync"
@@ -54,7 +57,8 @@ func NewQueryLog(maxPerClaim int) *QueryLog {
 func (l *QueryLog) add(e QueryRecord) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	q := append(l.byClaim[e.ClaimID], e)
+	q := l.byClaim[e.ClaimID]
+	q = append(q, e)
 	if len(q) > l.maxPerClaim {
 		q = append([]QueryRecord(nil), q[len(q)-l.maxPerClaim:]...)
 	}
@@ -241,7 +245,11 @@ func copyRRs(rrs []dns.RR, left time.Duration) []dns.RR {
 	out := make([]dns.RR, len(rrs))
 	for i, rr := range rrs {
 		c := dns.Copy(rr)
-		c.Header().Ttl = uint32(max(left/time.Second, 1))
+		ttl := max(left/time.Second, 1)
+		if ttl > math.MaxUint32 {
+			ttl = math.MaxUint32
+		}
+		c.Header().Ttl = uint32(ttl)
 		out[i] = c
 	}
 	return out
@@ -371,3 +379,29 @@ func (s *Server) LookupA(ctx context.Context, host string) ([]net.IP, error) {
 // ForgetClaim drops a removed claim's answers; its query log stays until
 // Prune, so the agent can still read it.
 func (s *Server) ForgetClaim(claimID string) { s.Answers.ForgetClaim(claimID) }
+
+// UpstreamSystem is the -upstream-dns value that means "the nameserver of
+// this process's resolv.conf": in a Kubernetes pod, the cluster's DNS,
+// whose address the chart cannot know.
+const UpstreamSystem = "resolv.conf"
+
+// UpstreamAddr is the upstream resolver's host:port: value as given, or
+// for UpstreamSystem the first nameserver of resolvConf on port 53.
+func UpstreamAddr(value string, resolvConf func() ([]byte, error)) (string, error) {
+	if value != UpstreamSystem {
+		return value, nil
+	}
+	b, err := resolvConf()
+	if err != nil {
+		return "", fmt.Errorf("resolver: upstream from resolv.conf: %w", err)
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) >= 2 && f[0] == "nameserver" {
+			if ip := net.ParseIP(f[1]); ip != nil {
+				return net.JoinHostPort(ip.String(), "53"), nil
+			}
+		}
+	}
+	return "", errors.New("resolver: resolv.conf names no nameserver")
+}

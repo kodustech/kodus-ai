@@ -102,6 +102,7 @@ func (s DeadManState) String() string {
 		return "lost"
 	case Abandoned:
 		return "abandoned"
+	case Healthy:
 	}
 	return "healthy"
 }
@@ -130,6 +131,8 @@ func (d *DeadMan) Tick(ctx context.Context) DeadManState {
 		if n, err := d.leases.DestroyAll(ctx); n > 0 || err != nil || changed {
 			d.log.Warn("deadman.abandoned", "destroyed", n, "err", err)
 		}
+	case Healthy:
+		// Never acted on: act is false while healthy.
 	}
 	return state
 }

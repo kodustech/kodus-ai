@@ -94,7 +94,7 @@ func (r DeniedReader) get(ctx context.Context, u string, into any) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("control: GET %s: %s", req.URL.Path, resp.Status)
 	}

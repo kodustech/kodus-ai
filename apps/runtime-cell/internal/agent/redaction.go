@@ -7,29 +7,34 @@ import (
 )
 
 // claimRedactor builds the claim's redactor from every value the cell knows
-// (S-51): the download token, the transport's keys, the configured secret
-// sources.
+// (S-51): the download tokens (the claim's own and every other
+// repository's), the transport's keys, the configured secret sources.
 func (a *Agent) claimRedactor(c *claims.Claim) *redact.Redactor {
 	known := []redact.Known{{Label: "download-token", Value: c.Acquire.RepoToken}}
+	for _, r := range c.Acquire.Repos {
+		known = append(known, redact.Known{Label: "download-token", Value: r.RepoToken})
+	}
 	for _, s := range a.cfg.Secrets {
 		known = append(known, s.ClaimSecrets(c.ID)...)
 	}
 	if a.cfg.ClaimSecrets != nil {
 		known = append(known, a.cfg.ClaimSecrets(info(c))...)
 	}
-	if a.cfg.SQLObservers != nil {
-		for _, value := range a.cfg.SQLObservers.ObserverSQLSecrets(c.Machines().Workload.MachineID) {
+	if a.cfg.Parts.SQLObservers != nil {
+		for _, value := range a.cfg.Parts.SQLObservers.ObserverSQLSecrets(c.Machines().Workload.MachineID) {
 			known = append(known, redact.Known{Label: "observer-sql", Value: value})
 		}
 	}
 	return redact.New(known...)
 }
 
-// redactOutbound is the last pass before a frame leaves the cell (S-51).
+// redactOutbound is the last pass before a frame leaves the cell (S-51),
+// with the claim's redactor, or before it is set (the preparation) one of
+// the values the claim's sources give now.
 func (a *Agent) redactOutbound(c *claims.Claim, body any) {
 	r := c.Redactor()
 	if r == nil {
-		r = redact.New() // token patterns only
+		r = a.claimRedactor(c)
 	}
 	switch b := body.(type) {
 	case *protocol.StepResultBody:
@@ -44,5 +49,23 @@ func (a *Agent) redactOutbound(c *claims.Claim, body any) {
 	case *protocol.BlockedBody:
 		b.Message, _ = r.String(b.Message)
 		b.Message, _ = redact.Clip(b.Message, redact.MaxBlockMessage)
+	case *protocol.ClaimProgressBody:
+		b.Lines = redactLines(r, b.Lines)
+		b.Phases = redactPhases(r, b.Phases)
 	}
+}
+
+// redactLines are a step's last lines as they leave the cell: redacted with
+// the claim's values, each bounded; nil for none.
+func redactLines(r *redact.Redactor, lines []string) []string {
+	if len(lines) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		clean, _ := r.String(l)
+		clean, _ = redact.Clip(clean, redact.MaxBundleLine)
+		out = append(out, clean)
+	}
+	return out
 }

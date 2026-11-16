@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -18,10 +19,18 @@ import (
 func TestObservedKeepsTheContract(t *testing.T) {
 	drivertest.Run(t, func(t *testing.T) drivertest.Subject {
 		f := fake.NewForCell("cell-1")
+		d, parts := driver.Observed(f, f.Parts(), metrics.NewRegistry(), slog.New(slog.DiscardHandler))
 		return drivertest.Subject{
-			Driver: driver.Observed(f, metrics.NewRegistry(), slog.New(slog.DiscardHandler)), CellID: "cell-1", Lifecycle: true,
+			Driver: d, Parts: parts, CellID: "cell-1", Lifecycle: true,
 			ForeignMachine: func(*testing.T) driver.MachineRef { return f.Plant("cell-2", "claim-9") },
 			ForeignNetwork: func(*testing.T) driver.ClaimNetwork { return f.PlantNetwork("cell-2", "claim-9") },
+			UndatedMachine: func(_ *testing.T, ceiling string) string {
+				tags := map[string]string{driver.TagCell: "cell-1", driver.TagClaim: "undated", driver.TagRole: string(driver.RoleWorkload)}
+				if ceiling != "" {
+					tags[driver.TagHardExpires] = ceiling
+				}
+				return f.PlantTags(tags).MachineID
+			},
 		}
 	})
 }
@@ -32,7 +41,7 @@ func TestObservedCountsAndLogsARefusal(t *testing.T) {
 	f := fake.NewForCell("cell-1")
 	reg := metrics.NewRegistry()
 	var logs bytes.Buffer
-	d := driver.Observed(f, reg, slog.New(slog.NewJSONHandler(&logs, nil)))
+	d, _ := driver.Observed(f, f.Parts(), reg, slog.New(slog.NewJSONHandler(&logs, nil)))
 	ctx := context.Background()
 
 	if _, err := d.List(ctx, nil); err != nil {
@@ -72,25 +81,90 @@ func TestOutcomeNamesWhatAnErrorMeans(t *testing.T) {
 	}
 }
 
-// budgeted is a driver that sizes claims (MemoryBudget), like docker-gvisor.
-type budgeted struct{ *fake.Driver }
+// everyPart is a value of every part's interface, so a Parts can be filled
+// whole: a new field it does not implement makes the test below panic,
+// asking for the field here.
+type everyPart struct {
+	driver.Baker
+	driver.BakeSourcePinner
+	driver.BakeCatalog
+	driver.MachineResetter
+	driver.ComposeBooter
+	driver.RecipeRunner
+	driver.Pooler
+	driver.Sandboxer
+	driver.Snapshotter
+	driver.SessionForgetter
+	driver.MemoryBudget
+	driver.SandboxBudget
+	driver.Diagnoser
+	driver.ServiceLogReader
+	driver.HealthReader
+	driver.BootTimer
+	driver.BootPhaser
+	driver.BuildStateReporter
+	driver.SQLObserverProvisioner
+	driver.Sweeper
+}
 
-func (budgeted) ClaimMemory(driver.ClaimSize) driver.ClaimMemory {
+// The cell wraps its driver before the agent reads its parts: every part the
+// driver has must come back out of the wrapper, or a capability (memory
+// admission on cell-dev-1) turns off without a word.
+func TestObservedHandsBackEveryPart(t *testing.T) {
+	var in driver.Parts
+	v := reflect.ValueOf(&in).Elem()
+	for i := range v.NumField() {
+		v.Field(i).Set(reflect.ValueOf(everyPart{}))
+	}
+	_, out := driver.Observed(fake.NewForCell("cell-1"), in, metrics.NewRegistry(), slog.New(slog.DiscardHandler))
+	got := reflect.ValueOf(out)
+	for i := range got.NumField() {
+		if got.Field(i).IsNil() {
+			t.Errorf("Observed dropped the %s part", got.Type().Field(i).Name)
+		}
+	}
+	if _, none := driver.Observed(fake.NewForCell("cell-1"), driver.Parts{}, metrics.NewRegistry(), slog.New(slog.DiscardHandler)); none != (driver.Parts{}) {
+		t.Errorf("Observed gave a driver with no parts some: %+v", none)
+	}
+}
+
+// budget is a driver's memory budget, like docker-gvisor's.
+type budget struct{}
+
+func (budget) ClaimMemory(driver.ClaimSize) driver.ClaimMemory {
 	return driver.ClaimMemory{BootMB: 12288, ReadyMB: 2048}
 }
 
-// The cell wraps its driver before it asks for the memory budget: the
-// wrapper must not hide it, or memory admission turns off without a word.
-func TestMemoryBudgetIsFoundThroughTheObservedWrapper(t *testing.T) {
-	wrapped := driver.Observed(budgeted{fake.NewForCell("cell-1")}, metrics.NewRegistry(), slog.New(slog.DiscardHandler))
-	if _, ok := wrapped.(driver.MemoryBudget); ok {
-		t.Fatal("the wrapper itself is not expected to be a MemoryBudget")
+// A wrapped driver's budget is the one it had: admission counts the same.
+func TestObservedKeepsTheMemoryBudget(t *testing.T) {
+	_, parts := driver.Observed(fake.NewForCell("cell-1"), driver.Parts{Memory: budget{}}, metrics.NewRegistry(), slog.New(slog.DiscardHandler))
+	if parts.Memory == nil || parts.Memory.ClaimMemory(driver.ClaimSize{}).BootMB != 12288 {
+		t.Fatalf("memory budget through Observed: %v", parts.Memory)
 	}
-	b, ok := driver.MemoryBudgetOf(wrapped)
-	if !ok || b.ClaimMemory(driver.ClaimSize{}).BootMB != 12288 {
-		t.Fatalf("MemoryBudgetOf through Observed: ok=%v", ok)
+}
+
+// A bake and a reset are calls of the driver too: the wrapper counts them.
+func TestObservedCountsBakesAndResets(t *testing.T) {
+	f := fake.NewForCell("cell-1")
+	reg := metrics.NewRegistry()
+	_, parts := driver.Observed(f, f.Parts(), reg, slog.New(slog.DiscardHandler))
+	ctx := context.Background()
+	if _, err := parts.Baker.Bake(ctx, driver.BakeSpec{CellID: "cell-1", OrgID: "org-a", EnvironmentID: "env-1", KMSKeyRef: "k"}); err != nil {
+		t.Fatal(err)
 	}
-	if _, ok := driver.MemoryBudgetOf(driver.Observed(fake.NewForCell("cell-1"), metrics.NewRegistry(), slog.New(slog.DiscardHandler))); ok {
-		t.Fatal("a driver without a budget has none")
+	if err := parts.Resetter.Reset(ctx, driver.MachineRef{MachineID: "gone"}, driver.SnapshotRef{Kind: "disk"}); err == nil {
+		t.Fatal("a reset of no machine succeeded")
+	}
+	var text strings.Builder
+	if err := reg.WriteText(&text); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`cell_driver_calls_total{op="bake",outcome="ok"} 1`,
+		`cell_driver_calls_total{op="reset",outcome="error"} 1`,
+	} {
+		if !strings.Contains(text.String(), want) {
+			t.Errorf("metrics lack %s:\n%s", want, text.String())
+		}
 	}
 }

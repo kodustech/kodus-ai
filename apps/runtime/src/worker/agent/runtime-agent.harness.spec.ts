@@ -50,10 +50,19 @@ function planner(answers: RunPlanResponse[]) {
     return { client, calls };
 }
 
-function env(stdout = 'bin\nconf\npublic') {
+/** What base answers to a probe sent before the replay (the reconnaissance pass): a JSON 200 by default. */
+type Answer = { status: number; contentType?: string; body: string };
+function env(stdout = 'bin\nconf\npublic', answer: (path: string) => Answer = () => ({ status: 200, contentType: 'application/json', body: '{"ok":true}' })) {
     const execs: { claimId: string; stepId: string; command: string }[] = [];
+    const probes: { claimId: string; stepId: string; path: string }[] = [];
     return {
         execs,
+        probes,
+        probe: async (claimId: string, p: any, stepId: string) => {
+            probes.push({ claimId, stepId, path: p.spec.path });
+            const a = answer(p.spec.path);
+            return { stepId, executor: 'observer', imageId: 'img', transport: 'ok', vmHealth: 'ok', http: { status: a.status, headers: a.contentType ? { 'Content-Type': a.contentType } : {}, body: a.body } };
+        },
         exec: async (claimId: string, req: { stepId: string; command: string }) => {
             execs.push({ claimId, stepId: req.stepId, command: req.command });
             return { stepId: req.stepId, exitCode: 0, stdout, stderr: '', durationMs: 5, transport: 'ok' };
@@ -268,5 +277,65 @@ describe('HttpRunPlanClient', () => {
     it('maps a spent budget to LlmBudgetExceededError', async () => {
         const fetch = async () => ({ status: 429, ok: false, json: async () => ({ code: 'llm_budget_exceeded', scope: 'run' }) });
         await expect(new HttpRunPlanClient('http://api.test', { secrets, fetch }).plan(call)).rejects.toBeInstanceOf(LlmBudgetExceededError);
+    });
+});
+
+describe('RuntimeAgent: the reconnaissance pass before the replay (planner-eval.md fix 2)', () => {
+    const planned = (path: string, status = 200): RunPlanResponse => ({
+        status: 'planned',
+        plan: {
+            probes: [{ entryPoint: 'GET /api/health', via: 'pkg/api/health.go', assertions: { kind: 'http', status }, probe: probe({ spec: { kind: 'http', target: { service: 'grafana', port: 3000 }, method: 'GET', path, timeoutMs: 30_000 } }) }],
+            tests: [],
+            claims: [],
+            cannotProve: [],
+        },
+        rejected: [],
+        usage,
+        steps: 2,
+    });
+
+    it('sends each http probe to base before the replay and keeps a plan with no doubt as it is, with no other round', async () => {
+        const p = planner([planned('/api/health')]);
+        const e = env();
+        const plan = await new RuntimeAgent(noLlm, e, p.client).plan(input);
+        // A GET goes twice, to see whether the body varies; both on the base claim, with stable step ids.
+        expect(e.probes).toEqual([0, 1].map((n) => ({ claimId: 'base', stepId: stableStepId(RUN_ID, 1, `agent:plan:recon:0:0:${n}`), path: '/api/health' })));
+        expect(p.calls).toHaveLength(1);
+        expect(plan.recon).toEqual({ probes: 1, doubts: 0, revised: false });
+    });
+
+    it('a path the app does not serve (the web app answers its HTML page) gets one revision round, with what base answered and no exploration left', async () => {
+        const p = planner([planned('/server/ping'), planned('/api/server/ping', 401)]);
+        const e = env('', (path) => (path.startsWith('/api/') ? { status: 200, contentType: 'application/json', body: '{"res":"pong"}' } : { status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Immich</title>' }));
+        const plan = await new RuntimeAgent(noLlm, e, p.client).plan(input);
+        expect(p.calls).toHaveLength(2);
+        const second = RunPlanRequestSchema.parse(p.calls[1].body);
+        expect(second).toMatchObject({ round: 1, execLeft: 0 });
+        expect(second.recon!.answers).toEqual([
+            expect.objectContaining({ probeId: 'health', request: 'GET /server/ping', status: 200, contentType: 'text/html; charset=utf-8', doubts: [expect.stringContaining('HTML page')] }),
+        ]);
+        expect(plan.probes.map((x) => x.probe.spec.kind === 'http' && x.probe.spec.path)).toEqual(['/api/server/ping']);
+        // The revision moved the path; the status stays the one first predicted, never base's.
+        expect(plan.probes[0].assertions).toEqual({ kind: 'http', status: 200 });
+        expect(plan.recon).toEqual({ probes: 1, doubts: 1, revised: true });
+        expect(plan.usage).toEqual({ inputTokens: 20, outputTokens: 4 });
+    });
+
+    it('a revision round that does not plan leaves the first plan', async () => {
+        const p = planner([planned('/missing'), { status: 'no_plan', reason: 'the token budget ran out', rejected: [], usage, steps: 3 }]);
+        const e = env('', () => ({ status: 404, contentType: 'text/plain', body: 'Not Found' }));
+        const plan = await new RuntimeAgent(noLlm, e, p.client).plan(input);
+        expect(plan.probes.map((x) => x.probe.spec.kind === 'http' && x.probe.spec.path)).toEqual(['/missing']);
+        expect(plan.rejected).toEqual([]);
+        expect(plan.recon).toEqual({ probes: 1, doubts: 1, revised: false });
+    });
+
+    it("a canary in base's answer stops the plan, as it would stop a replay (ADR-043)", async () => {
+        const vault = new HmacCanaryVault(Buffer.alloc(32, 1));
+        const canaries = vault.forRun({ runId: RUN_ID, runToken: input.runToken });
+        const p = planner([planned('/api/health')]);
+        const e = env('', () => ({ status: 200, contentType: 'application/json', body: `{"t":"${canaries[1].value}"}` }));
+        await expect(new RuntimeAgent(noLlm, e, p.client).plan({ ...input, canaries } as any)).rejects.toBeInstanceOf(CanaryLeakError);
+        expect(p.calls).toHaveLength(1);
     });
 });

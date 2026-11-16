@@ -24,10 +24,10 @@ func claim() Claim {
 	return Claim{ID: "claim-1", Log: slog.New(slog.DiscardHandler), Redactor: redact.New()}
 }
 
-func request(url string, max int64, expires time.Time) *protocol.EvidenceRequest {
+func request(url string, maxBytes int64, expires time.Time) *protocol.EvidenceRequest {
 	return &protocol.EvidenceRequest{
 		Capture: []protocol.EvidenceCapture{protocol.EvidenceCaptureCast},
-		Uploads: []protocol.UploadGrant{{Type: protocol.EvidenceUploadTypeCast, URL: url, ContentType: protocol.EvidenceContentTypeTextPlain, MaxBytes: max, ExpiresAt: protocol.FormatTime(expires)}},
+		Uploads: []protocol.UploadGrant{{Type: protocol.EvidenceUploadTypeCast, URL: url, ContentType: protocol.EvidenceContentTypeTextPlain, MaxBytes: maxBytes, ExpiresAt: protocol.FormatTime(expires)}},
 	}
 }
 

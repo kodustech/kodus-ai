@@ -4,12 +4,26 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/claims"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/redact"
 )
 
 // readyBody is claim.ready: the claim is bound on the hub only once it
 // reads this. The manifest is the driver's (Config.Manifests) when it knows
-// what it booted, else the one claim.acquire implies.
+// what it booted, else the one claim.acquire implies. start (cold, pool or
+// bake) goes only to a hub that accepts it: an older hub's strict decoder
+// refuses the field.
 func (a *Agent) readyBody(c *claims.Claim) *protocol.ClaimReadyBody {
+	if isSandbox(c) {
+		return a.sandboxReadyBody(c)
+	}
+	body := a.workloadReadyBody(c)
+	if start := protocol.ClaimReadyBodyStart(c.Start()); start != "" && a.hubAccepts(protocol.FeatureReadyStart) {
+		body.Start = &start
+	}
+	return body
+}
+
+func (a *Agent) workloadReadyBody(c *claims.Claim) *protocol.ClaimReadyBody {
 	m := c.Machines()
 	observer := protocol.ObserverState{ID: m.Observer.MachineID, State: protocol.ObserverPhaseReady}
 	if a.cfg.Manifests != nil {
@@ -58,7 +72,7 @@ func (a *Agent) readyBody(c *claims.Claim) *protocol.ClaimReadyBody {
 }
 
 // readyTiming is claim.ready.timing: the agent's prepare time, plus the
-// driver's boot phases when it measures them (Config.BootTimes).
+// driver's boot phases when it measures them (Config.Parts.BootTimes).
 func (a *Agent) readyTiming(c *claims.Claim) *protocol.ReadyTiming {
 	end := c.BoundAt()
 	if end.IsZero() {
@@ -68,8 +82,9 @@ func (a *Agent) readyTiming(c *claims.Claim) *protocol.ReadyTiming {
 	if !c.AcquiredAt.IsZero() && end.After(c.AcquiredAt) {
 		t.PrepareMs = end.Sub(c.AcquiredAt).Milliseconds()
 	}
-	if a.cfg.BootTimes != nil {
-		if b, ok := a.cfg.BootTimes.BootTiming(c.ID); ok {
+	t.Phases = a.bootPhases(c)
+	if a.cfg.Parts.BootTimes != nil {
+		if b, ok := a.cfg.Parts.BootTimes.BootTiming(c.ID); ok {
 			t.BootMs, t.BuildMs, t.UpMs, t.SeedMs, t.ReadyMs = &b.TotalMs, &b.BuildMs, &b.UpMs, &b.SeedMs, &b.ReadyMs
 			if b.SnapshotMs > 0 {
 				t.SnapshotMs = &b.SnapshotMs // only when the boot took one: absent is "no snapshot", not 0 ms
@@ -102,3 +117,82 @@ func readyBuildSteps(s driver.BuildSteps) *protocol.ReadyTimingBuildSteps {
 	}
 	return out
 }
+
+// bootPhases is where the claim's boot spent its time, in words, for a hub
+// that accepts it (claim.ready timing.phases, claim.failed phases): the
+// driver's phases of the boot (its builds, moving the image into Docker,
+// compose up, the first healthy answer) and the agent's own (fetch, upload,
+// the recipe's steps), slowest first, at most driver.MaxPhases. The agent's
+// compose phase is the driver's boot whole: left out when the driver split it.
+func (a *Agent) bootPhases(c *claims.Claim) []protocol.BootPhase {
+	if !a.hubAccepts(protocol.FeatureBootPhases) {
+		return nil
+	}
+	var booted []driver.BootPhase
+	if p := a.cfg.Parts.BootPhases; p != nil {
+		booted, _ = p.BootPhases(c.ID)
+	}
+	var own []driver.BootPhase
+	for _, ph := range c.PrepPhases() {
+		if ph.Name == "compose" && len(booted) > 0 {
+			continue
+		}
+		if label, ok := prepPhaseLabels[ph.Name]; ok {
+			ph.Name = label
+		}
+		own = append(own, ph)
+	}
+	return protocolPhases(driver.MergePhases(driver.MaxPhases, booted, own), a.claimRedactor(c))
+}
+
+// protocolPhases are phases as the protocol carries them, within its bounds.
+// A name comes from what a build printed (BuildKit names a step with the
+// build's arguments in it), so it is redacted with the claim's own values
+// (r) before it is cut, as every line the claim sends is.
+func protocolPhases(merged []driver.BootPhase, r *redact.Redactor) []protocol.BootPhase {
+	return redactPhases(r, bootPhasesToProtocol(merged))
+}
+
+// bootPhasesToProtocol is the phases as a frame carries them, not yet
+// redacted.
+func bootPhasesToProtocol(merged []driver.BootPhase) []protocol.BootPhase {
+	if len(merged) == 0 {
+		return nil
+	}
+	out := make([]protocol.BootPhase, 0, len(merged))
+	for _, ph := range merged {
+		bp := protocol.BootPhase{Name: ph.Name, Ms: ph.Ms}
+		if ph.Running {
+			bp.Running = new(true)
+		}
+		out = append(out, bp)
+	}
+	return out
+}
+
+// redactPhases masks and bounds each phase's name (BuildKit's step names
+// carry the build's arguments); a phase left with no name is dropped.
+func redactPhases(r *redact.Redactor, phases []protocol.BootPhase) []protocol.BootPhase {
+	if len(phases) == 0 {
+		return nil
+	}
+	out := make([]protocol.BootPhase, 0, len(phases))
+	for _, ph := range phases {
+		ph.Name, _ = r.String(ph.Name)
+		ph.Name, _ = redact.Clip(ph.Name, maxPhaseName)
+		if ph.Name == "" {
+			continue
+		}
+		out = append(out, ph)
+	}
+	return out
+}
+
+// prepPhaseLabels name the agent's phases as the product shows them.
+var prepPhaseLabels = map[string]string{
+	"network": "claim network", "machines": "start machines", "fetch": "fetch code", "upload": "upload code",
+	"compose": "boot", "egress": "egress policy", "recipe": "recipe steps", "sql_observer": "observer database",
+}
+
+// maxPhaseName is the protocol's bound on a phase's name (BootPhasesSchema).
+const maxPhaseName = 48

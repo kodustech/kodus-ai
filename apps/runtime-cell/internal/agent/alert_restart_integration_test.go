@@ -57,7 +57,7 @@ func TestAlertRestartRealFeedStopsTheUnobservedClaim(t *testing.T) {
 		return out, err
 	})
 	h = newHarness(t, func(c *Config) { c.Alerts = feed })
-	h.a.watchAlerts(ctx)
+	h.a.watchAlerts(ctx, 0)
 	h.a.Wait()
 	if polls != 2 || h.a.claims.Len() != 0 || h.a.Heartbeat().FreeSlots != 0 {
 		t.Fatal("restarted feed silently left a claim or reopened admission")

@@ -5,14 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
 )
 
@@ -48,6 +50,13 @@ type memDocker struct {
 	inputErr error
 	// securityOptions are what docker info lists (none: no user namespace).
 	securityOptions []string
+	// registries are the registry containers run, in order; pushed the
+	// digest each pushed build reported, by digest; pulls every pull.
+	registries []dockercli.RegistrySpec
+	pushed     map[string]string
+	pulls      []string
+	// pushBytes, when set, is what every push adds to the registry's storage.
+	pushBytes int
 }
 
 type memVolume struct {
@@ -60,14 +69,14 @@ func (m *memDocker) CopyVolumeGeneration(ctx context.Context, runtime, helper, f
 	return m.copyGeneration(from, to, expected, write, func() error { return m.CopyVolumeBound(ctx, runtime, helper, from, to, labels, parent) })
 }
 
-func (m *memDocker) copyGeneration(from, to, expected, write string, copy func() error) error {
+func (m *memDocker) copyGeneration(from, to, expected, write string, copyFn func() error) error {
 	if expected != "" {
 		v, ok := m.volume(from)
 		if !ok || v.marker != expected {
 			return errors.New("generation marker missing")
 		}
 	}
-	if err := copy(); err != nil {
+	if err := copyFn(); err != nil {
 		return err
 	}
 	if write != "" {
@@ -119,8 +128,10 @@ func (m *memDocker) RunHolder(_ context.Context, h dockercli.HolderSpec) (docker
 		return dockercli.Container{}, fmt.Errorf("conflict: container %s exists", h.Name)
 	}
 	m.seq++
-	c := dockercli.Container{CgroupParent: h.CgroupParent, PID: 1000 + m.seq, ID: fmt.Sprintf("c%04d", m.seq), Name: h.Name, Image: h.Image, Labels: maps.Clone(h.Labels),
-		Networks: map[string]string{h.Network: fmt.Sprintf("172.30.0.%d", m.seq+1)}}
+	c := dockercli.Container{
+		CgroupParent: h.CgroupParent, PID: 1000 + m.seq, ID: fmt.Sprintf("c%04d", m.seq), Name: h.Name, Image: h.Image, Labels: maps.Clone(h.Labels),
+		Networks: map[string]string{h.Network: fmt.Sprintf("172.30.0.%d", m.seq+1)},
+	}
 	m.containers[h.Name] = c
 	return c, nil
 }
@@ -352,7 +363,7 @@ func (m *memDocker) RunBuild(ctx context.Context, b dockercli.BuildRun) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.builds = append(m.builds, b)
-	if sink := driver.OutputFrom(ctx); sink != nil {
+	if sink := dockercli.OutputFrom(ctx); sink != nil {
 		for _, l := range m.buildOutput {
 			sink(l)
 		}
@@ -368,11 +379,68 @@ func (m *memDocker) RunBuild(ctx context.Context, b dockercli.BuildRun) error {
 			return err
 		}
 	}
+	if b.Push != nil {
+		// A registry build: the digest in the metadata file, the layers in the
+		// registry's storage.
+		m.seq++
+		digest := fmt.Sprintf("sha256:%064x", m.seq)
+		if m.pushed == nil {
+			m.pushed = map[string]string{}
+		}
+		m.pushed[digest] = b.Push.Repo
+		if m.pushBytes > 0 && len(m.registries) > 0 {
+			blob := filepath.Join(m.registries[len(m.registries)-1].StorageDir, "pushed-"+strconv.Itoa(m.seq))
+			if err := os.WriteFile(blob, make([]byte, m.pushBytes), 0o600); err != nil {
+				return err
+			}
+		}
+		return os.WriteFile(filepath.Join(b.Out, dockercli.BuildMetadata), []byte(`{"containerimage.digest":"`+digest+`"}`), 0o644)
+	}
 	return os.WriteFile(filepath.Join(b.Out, dockercli.BuildTarball), []byte(b.Tag), 0o644)
 }
 
-func (m *memDocker) LoadImage(_ context.Context, tarball string) error {
-	tag, err := os.ReadFile(tarball)
+func (m *memDocker) RunRegistry(_ context.Context, s dockercli.RegistrySpec) (dockercli.Container, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.registries = append(m.registries, s)
+	c := dockercli.Container{ID: s.Name, Name: s.Name, Image: s.Image, Labels: s.Labels, Networks: map[string]string{s.Network: "10.250.0.2", s.ClaimNetwork: s.ClaimIP}}
+	m.containers[s.Name] = c
+	return c, nil
+}
+
+// PullImage fetches the manifest through the address it is given (the
+// cell's loopback forward), as Docker's pull does, and keeps the image.
+func (m *memDocker) PullImage(ctx context.Context, ref string) error {
+	host, rest, _ := strings.Cut(ref, "/")
+	repo, digest, _ := strings.Cut(rest, "@")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+host+"/v2/"+repo+"/manifests/"+digest, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("pull %s: %d", ref, resp.StatusCode)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.pulls = append(m.pulls, ref)
+	m.images[ref] = true
+	return nil
+}
+
+func (m *memDocker) UntagImage(_ context.Context, ref string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.images, ref)
+	return nil
+}
+
+func (m *memDocker) LoadImage(_ context.Context, l dockercli.ImageLoad) error {
+	tag, err := os.ReadFile(l.Tarball)
 	if err != nil {
 		return err
 	}
@@ -457,4 +525,24 @@ func (m *memDocker) DaemonEndpoint(context.Context) (string, error) {
 	return "unix:///var/run/docker.sock", nil
 }
 
-func (m *memDocker) ImageLabels(context.Context, string) (map[string]string, error) { return nil, nil }
+func (m *memDocker) ImageLabels(context.Context, string) (map[string]string, error) {
+	return map[string]string{}, nil
+}
+
+// ComposePs, ComposeLogs and ComposeLogsWindow: the in-memory daemon runs
+// no compose services, so a project lists none and logs nothing.
+func (m *memDocker) ComposePs(context.Context, string) ([]byte, error) { return nil, nil }
+
+func (m *memDocker) ComposeLogs(context.Context, string, string, int) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *memDocker) ComposeLogsWindow(context.Context, string, string, time.Time, time.Time, int) ([]byte, error) {
+	return nil, nil
+}
+
+// DataRoot: the in-memory daemon has no data root on a disk, so no
+// machine's writes are bound to one.
+func (m *memDocker) DataRoot(context.Context) (string, error) {
+	return "", errors.New("memdocker: no data root")
+}

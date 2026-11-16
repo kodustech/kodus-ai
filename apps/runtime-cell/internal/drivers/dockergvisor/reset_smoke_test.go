@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 )
 
 // A round's reset of the sample app (Express + pgvector, seeded through
@@ -202,8 +202,10 @@ func newSmokeMachine(t *testing.T, appDir string, file []byte, noGolden bool, st
 	// KGR_HEALTH_START: the fast start's cadence ("200ms"), "-1ns" off.
 	health, _ := time.ParseDuration(os.Getenv("KGR_HEALTH_START"))
 	cell := fmt.Sprintf("smoke-%d", time.Now().UnixNano()%1_000_000)
-	d, err := New(ctx, dockercli.CLI{}, Config{CellID: cell, HolderImage: "alpine:3.20", WorkDir: t.TempDir(), MemLimit: "2g", CPUs: "2", HealthStartInterval: health, NoGoldenData: noGolden,
-		Log: slog.New(slog.NewTextHandler(smokeLog{t}, &slog.HandlerOptions{Level: slog.LevelInfo}))})
+	d, err := New(ctx, dockercli.CLI{}, Config{
+		CellID: cell, HolderImage: "alpine:3.20", WorkDir: t.TempDir(), MemLimit: "2g", CPUs: "2", HealthStartInterval: health, NoGoldenData: noGolden,
+		Log: slog.New(slog.NewTextHandler(smokeLog{t}, &slog.HandlerOptions{Level: slog.LevelInfo})),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,8 +215,10 @@ func newSmokeMachine(t *testing.T, appDir string, file []byte, noGolden bool, st
 		t.Fatal(err)
 	}
 	now := time.Now()
-	ref, err := d.Create(ctx, driver.MachineSpec{CellID: cell, EnvironmentID: "env", Role: driver.RoleWorkload, OrgID: "org-smoke", ClaimID: claim,
-		ImageID: "img", ClaimGroupID: n.WorkloadGroupID, KMSKeyRef: "local", ExpiresAt: now.Add(time.Hour), HardExpiresAt: now.Add(2 * time.Hour)})
+	ref, err := d.Create(ctx, driver.MachineSpec{
+		CellID: cell, EnvironmentID: "env", Role: driver.RoleWorkload, OrgID: "org-smoke", ClaimID: claim,
+		ImageID: "img", ClaimGroupID: n.WorkloadGroupID, KMSKeyRef: "local", ExpiresAt: now.Add(time.Hour), HardExpiresAt: now.Add(2 * time.Hour),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,11 +249,11 @@ func newSmokeMachine(t *testing.T, appDir string, file []byte, noGolden bool, st
 func (m *smokeMachine) up(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := m.d.Up(ctx, m.ref, m.file, m.dir); err != nil {
+	if _, err := m.d.Up(ctx, driver.UpRequest{Ref: m.ref, Compose: m.file, ProjectDir: m.dir}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Now()
-	if err := m.d.RunRecipe(ctx, m.ref, m.dir); err != nil {
+	if err := m.d.RunRecipe(ctx, m.ref, m.dir, nil); err != nil {
 		t.Fatal(err)
 	}
 	m.recipeMs = time.Since(at).Milliseconds()

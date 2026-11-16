@@ -20,6 +20,14 @@ export class LocalGitRepoReader implements RepoReader {
         if (!SHA.test(sha)) throw new Error('LocalGitRepoReader needs a 40-hex commit');
     }
 
+    /** Every file path at the commit, in one `ls-tree -r`; a failure throws, so it is never read as an empty tree. */
+    async paths(): Promise<string[]> {
+        const { stdout } = await run('git', ['-C', this.dir, 'ls-tree', '-r', '-z', '--name-only', this.sha], {
+            maxBuffer: 64 * 1024 * 1024,
+        });
+        return stdout.split('\0').filter(Boolean).sort();
+    }
+
     async list(dir: string): Promise<string[]> {
         try {
             const { stdout } = await run('git', ['-C', this.dir, 'ls-tree', '-z', this.sha, dir ? `${dir}/` : ''].filter(Boolean), {
@@ -35,6 +43,7 @@ export class LocalGitRepoReader implements RepoReader {
                 })
                 .sort();
         } catch {
+            // Eval and dev stub only: git exits non-zero for a directory not at the commit.
             return [];
         }
     }
@@ -49,6 +58,7 @@ export class LocalGitRepoReader implements RepoReader {
             const buf = stdout as unknown as Buffer;
             return buf.subarray(0, maxBytes).toString('utf8');
         } catch {
+            // Eval and dev stub only: git exits non-zero for a path not at the commit.
             return null;
         }
     }

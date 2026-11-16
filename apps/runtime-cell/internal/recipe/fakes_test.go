@@ -6,8 +6,10 @@ import (
 	"testing"
 )
 
-const fixtureStripePin = "stripe/stripe-mock@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-const fixtureMailPin = "axllent/mailpit@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+const (
+	fixtureStripePin = "stripe/stripe-mock@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	fixtureMailPin   = "axllent/mailpit@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+)
 
 func TestFakeDeclarationsAreClosedAndReproducible(t *testing.T) {
 	rec, err := Parse([]byte("version: 1\nfakes:\n  stripe: { image: " + fixtureStripePin + ", env: { STRIPE_API_BASE: 'http://stripe-mock:12111' } }\n  email: { image: " + fixtureMailPin + " }\n"))
@@ -31,6 +33,7 @@ func TestFakeDeclarationsAreClosedAndReproducible(t *testing.T) {
 		}
 	}
 }
+
 func TestLegacyFakeAliasRequiresExplicitPinAtExecution(t *testing.T) {
 	rec, err := Parse([]byte("version: 1\nfakes: { stripe: True, email: { image: mailpit } }\n"))
 	if err != nil {
@@ -41,6 +44,7 @@ func TestLegacyFakeAliasRequiresExplicitPinAtExecution(t *testing.T) {
 		t.Fatal("legacy alias authorized a mutable image")
 	}
 }
+
 func TestUnsafeFakeDeclarationsAreRefused(t *testing.T) {
 	for _, body := range []string{
 		"fakes: { arbitrary: { image: alpine } }",

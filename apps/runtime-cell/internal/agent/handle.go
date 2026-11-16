@@ -4,13 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path"
 	"strings"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/telemetry"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/claims"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/hubclient"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/lease"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/transport"
 )
 
@@ -18,7 +22,7 @@ import (
 // it validates, answers ack or nack at once, and starts the work in the
 // background. Anything that needs I/O before the answer (claim.renew moves
 // cloud tags) answers through hubclient.Later.
-func (a *Agent) Handle(_ context.Context, m *protocol.Message) error {
+func (a *Agent) Handle(ctx context.Context, m *protocol.Message) error {
 	a.deadman.Contact()
 	claimID := ""
 	if m.Envelope.ClaimID != nil {
@@ -27,28 +31,64 @@ func (a *Agent) Handle(_ context.Context, m *protocol.Message) error {
 	if claimID != "" && !claims.ValidID(claimID) {
 		return nack("invalid_envelope", "claimId is not a valid claim id")
 	}
+	// The hub's span that sent the frame (feature traceContext): this frame's spans are its children.
+	tctx := telemetry.Remote(context.WithoutCancel(ctx), m.Envelope.Traceparent)
 	switch b := m.Body.(type) {
 	case *protocol.ClaimAcquireBody:
-		return a.acquire(claimID, *b)
+		if b.Consumer == protocol.ConsumerSandbox {
+			return nack("invalid_body", "a sandbox claim comes in sandbox.acquire")
+		}
+		return a.acquire(tctx, claimID, *b)
+	case *protocol.SandboxAcquireBody:
+		return a.sandboxAcquire(tctx, claimID, *b)
+	case *protocol.SandboxOpBody:
+		return a.sandboxOpFrame(tctx, claimID, b)
 	case *protocol.ClaimRenewBody:
 		return a.renew(claimID, b)
 	case *protocol.ClaimReleaseBody:
 		return a.releaseFrame(claimID)
 	case *protocol.BrowserExploreBody:
-		return a.browserExploreFrame(claimID, b)
+		if err := a.refusedOnSandbox(claimID, m.Envelope.Type); err != nil {
+			return err
+		}
+		return a.browserExploreFrame(tctx, claimID, b)
 	case *protocol.ProbeRunBody:
+		if err := a.refusedOnSandbox(claimID, m.Envelope.Type); err != nil {
+			return err
+		}
 		canon, _ := json.Marshal(b.Probe)
-		return a.admitStep(stepAdmission{kind: m.Envelope.Type, claimID: claimID, stepID: b.StepID, canon: append([]byte("probe.run\x00"), canon...)},
+		return a.admitStep(stepAdmission{trace: tctx, kind: m.Envelope.Type, claimID: claimID, stepID: b.StepID, canon: append([]byte("probe.run\x00"), canon...)},
 			func(ctx context.Context, c *claims.Claim) { a.runProbe(ctx, m.Envelope.ID, c, b) })
 	case *protocol.ExecBody:
+		if err := a.refusedOnSandbox(claimID, m.Envelope.Type); err != nil {
+			return err
+		}
 		cwd, err := execCwd(b.Cwd)
 		if err != nil {
 			return nack("invalid_body", "cwd: %v", err)
 		}
-		return a.admitStep(stepAdmission{kind: m.Envelope.Type, claimID: claimID, stepID: b.StepID, canon: []byte("exec\x00" + b.Command + "\x00" + cwd), allowHeld: true},
-			func(ctx context.Context, c *claims.Claim) { a.runExec(ctx, c, b, cwd) })
+		repo, err := a.execRepository(claimID, b.Repository)
+		if err != nil {
+			return nack("invalid_body", "repository: %v", err)
+		}
+		canon := "exec\x00" + b.Command + "\x00" + cwd
+		if repo != "" {
+			canon += "\x00repository:" + repo
+		}
+		return a.admitStep(stepAdmission{trace: tctx, kind: m.Envelope.Type, claimID: claimID, stepID: b.StepID, canon: []byte(canon), allowHeld: true},
+			func(ctx context.Context, c *claims.Claim) { a.runExec(ctx, c, b, cwd, repo) })
+	case *protocol.ClaimSnapshotBody:
+		return a.claimSnapshot(tctx, claimID, b)
 	case *protocol.MachineResetBody:
-		return a.admitStep(stepAdmission{kind: m.Envelope.Type, claimID: claimID, stepID: b.StepID, canon: []byte("machine.reset\x00" + string(b.Snapshot.Kind) + "\x00" + b.Snapshot.Ref)},
+		// A sandbox claim resets only to its own round snapshot.
+		if b.Snapshot.Kind != protocol.SnapshotKindMemory {
+			if err := a.refusedOnSandbox(claimID, m.Envelope.Type); err != nil {
+				return err
+			}
+		} else if a.cfg.Parts.Snapshots == nil {
+			return nack("snapshot_unsupported", "this cell's %s driver keeps no memory snapshot", a.cfg.Driver.Kind())
+		}
+		return a.admitStep(stepAdmission{trace: tctx, kind: m.Envelope.Type, claimID: claimID, stepID: b.StepID, canon: []byte("machine.reset\x00" + string(b.Snapshot.Kind) + "\x00" + b.Snapshot.Ref)},
 			func(ctx context.Context, c *claims.Claim) { a.runReset(ctx, c, b) })
 	case *protocol.EgressPolicyBody:
 		return a.egressPolicy(claimID, b)
@@ -64,9 +104,17 @@ func (a *Agent) Handle(_ context.Context, m *protocol.Message) error {
 	case *protocol.UploadBody:
 		return nack("not_implemented", "upload needs the evidence store (contentRef)")
 	case *protocol.ImageBakeBody:
-		return a.bake(claimID, *b)
+		return a.bake(tctx, claimID, *b)
 	case *protocol.PoolTargetBody:
 		return a.poolTarget(claimID, *b)
+	case *protocol.PreviewTunnelBody:
+		return a.previewTunnel(b)
+	case *protocol.PreviewRouteBody:
+		return a.previewRoute(claimID, b)
+	case *protocol.PreviewUnrouteBody:
+		return a.previewUnroute(claimID, b)
+	case *protocol.SnapshotForgetBody:
+		return a.forgetSessions(ctx, *b)
 	case *protocol.CellRevokedBody:
 		a.deadman.Revoke()
 		a.log.Error("cell.revoked", "alarm", true, "reason", b.Reason)
@@ -100,6 +148,32 @@ func (a *Agent) renew(claimID string, b *protocol.ClaimRenewBody) error {
 		c.Log.Warn("claim.renew.failed", "err", err)
 		return nack("renew_failed", "kodus:expires not moved; retry")
 	})
+}
+
+// execRepository is the other repository of the claim an exec runs on
+// (exec.repository): one of claim.acquire repos on a cell that lays
+// workspaces out. The claim's own alias, or none, is "": the command runs
+// where every command of the claim runs.
+func (a *Agent) execRepository(claimID string, repository *string) (string, error) {
+	if repository == nil || *repository == "" {
+		return "", nil
+	}
+	c, ok := a.claims.Get(claimID)
+	if !ok {
+		return "", nil // admitStep answers the unknown claim
+	}
+	if recipe.AliasOf(c.Acquire.Repo.FullName) == *repository {
+		return "", nil
+	}
+	if !a.laysOutWorkspaces() {
+		return "", errors.New("this cell does not lay out repositories side by side")
+	}
+	for _, r := range c.Acquire.Repos {
+		if r.Alias == *repository {
+			return r.Alias, nil
+		}
+	}
+	return "", fmt.Errorf("%s is not a repository of this claim", *repository)
 }
 
 // execCwd confines exec.cwd to the workspace: a relative path of plain

@@ -25,7 +25,7 @@ func TestAlertClientDetectsRestartRetentionAndLegacy(t *testing.T) {
 			c := AlertClient{URL: "http://feed.invalid", Wait: time.Nanosecond, HTTP: &http.Client{Transport: feedTransport(func(r *http.Request) (*http.Response, error) {
 				w := httptest.NewRecorder()
 				if l == nil {
-					w.WriteString("[]")
+					_, _ = w.WriteString("[]")
 				} else {
 					l.Handler()(w, r)
 				}
@@ -76,11 +76,12 @@ func TestAlertClientSerializesConcurrentCursorProgress(t *testing.T) {
 	close(outcomes)
 	passed, stale := 0, 0
 	for err := range outcomes {
-		if err == nil {
+		switch {
+		case err == nil:
 			passed++
-		} else if eventlog.FailureReason(err) == eventlog.ReasonCursorInvalid {
+		case eventlog.FailureReason(err) == eventlog.ReasonCursorInvalid:
 			stale++
-		} else {
+		default:
 			t.Fatal(err)
 		}
 	}

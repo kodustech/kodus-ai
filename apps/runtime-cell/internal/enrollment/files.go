@@ -69,7 +69,7 @@ func LoadIdentity(certFile, keyFile string) (tls.Certificate, error) {
 	if err == nil {
 		return pair, nil
 	}
-	b, rerr := os.ReadFile(keyFile)
+	b, rerr := os.ReadFile(keyFile) //nolint:gosec // G304: keyFile is the cell's identity path from its own config
 	if rerr != nil {
 		return tls.Certificate{}, err
 	}
@@ -80,15 +80,21 @@ func LoadIdentity(certFile, keyFile string) (tls.Certificate, error) {
 	return bundled, nil
 }
 
+// ErrNoIssuer means a renewal has no pinned issuer to check the hub's answer
+// against. Trusting the CA the answer carries would let whoever answers the
+// renewal pick the cell's issuer, so the renewal fails; the cell registers
+// again instead.
+var ErrNoIssuer = errors.New("enrollment: no pinned issuer (issuer.pem): register the cell again")
+
+// readIssuer is the issuer pinned at register. A renewal never goes on
+// without one.
 func (p Paths) readIssuer() (*x509.Certificate, error) {
 	if p.Issuer == "" {
-		return nil, nil
+		return nil, ErrNoIssuer
 	}
 	b, err := os.ReadFile(p.Issuer)
 	if errors.Is(err, fs.ErrNotExist) {
-		// A cell registered before the issuer was kept: the answer's CA is
-		// checked against itself, as at register.
-		return nil, nil
+		return nil, fmt.Errorf("%w: %s is missing", ErrNoIssuer, p.Issuer)
 	}
 	if err != nil {
 		return nil, err
@@ -113,16 +119,16 @@ func replaceFile(name string, data []byte, mode os.FileMode) error {
 	serr := tmp.Sync()
 	cerr := tmp.Close()
 	if err := errors.Join(werr, serr, cerr, os.Chmod(tmp.Name(), mode)); err != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name())
 		return err
 	}
 	if err := os.Rename(tmp.Name(), name); err != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name())
 		return err
 	}
-	if d, err := os.Open(dir); err == nil {
+	if d, err := os.Open(dir); err == nil { //nolint:gosec // G304: dir is the parent of the cell's own identity file, opened to fsync it
 		_ = d.Sync()
-		d.Close()
+		_ = d.Close()
 	}
 	return nil
 }

@@ -40,19 +40,25 @@ func TestSmokeRealDocker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	state := t.TempDir()
-	d, err := New(ctx, CLI{}, Config{CellID: "cell-smoke", StateDir: state, MachinesDir: filepath.Join(state, "machines"),
-		DevInsecure: true, Getenv: func(string) string { return "1" }})
+	d, err := New(ctx, CLI{}, Config{
+		CellID: "cell-smoke", StateDir: state, MachinesDir: filepath.Join(state, "machines"),
+		DevInsecure: true, Getenv: func(string) string { return "1" },
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	claim := "smoke-" + time.Now().UTC().Format("150405")
-	if _, err := d.PrepareClaim(ctx, driver.ClaimNetworkSpec{CellID: "cell-smoke", OrgID: "org", ClaimID: claim,
-		Expose: []driver.ExposePort{{Service: "web", Port: 8080, Kind: "http"}}}); err != nil {
+	if _, err := d.PrepareClaim(ctx, driver.ClaimNetworkSpec{
+		CellID: "cell-smoke", OrgID: "org", ClaimID: claim,
+		Expose: []driver.ExposePort{{Service: "web", Port: 8080, Kind: "http"}},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	ref, err := d.Create(ctx, driver.MachineSpec{CellID: "cell-smoke", EnvironmentID: "env", Role: driver.RoleWorkload, OrgID: "org", ClaimID: claim,
-		ImageID: "local", ClaimGroupID: "kodus-" + claim, KMSKeyRef: "local", ExpiresAt: now.Add(5 * time.Minute), HardExpiresAt: now.Add(10 * time.Minute)})
+	ref, err := d.Create(ctx, driver.MachineSpec{
+		CellID: "cell-smoke", EnvironmentID: "env", Role: driver.RoleWorkload, OrgID: "org", ClaimID: claim,
+		ImageID: "local", ClaimGroupID: "kodus-" + claim, KMSKeyRef: "local", ExpiresAt: now.Add(5 * time.Minute), HardExpiresAt: now.Add(10 * time.Minute),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +79,7 @@ func TestSmokeRealDocker(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repo, "compose.yaml"), []byte(compose), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.Transport().Upload(ctx, ref, repo, "workspace"); err != nil {
+	if err := d.Transport().Upload(ctx, ref, repo, "workspace", nil); err != nil {
 		t.Fatal("boot:", err)
 	}
 	addr, ok := d.HostAddress(claim, "web", 8080)
@@ -91,7 +97,7 @@ func TestSmokeRealDocker(t *testing.T) {
 			resp.Body.Close()
 			body = strings.TrimSpace(string(b))
 			t.Logf("GET http://%s/ -> %d %q", addr, resp.StatusCode, body)
-			if resp.StatusCode == 200 {
+			if resp.StatusCode == http.StatusOK {
 				break
 			}
 		}
@@ -143,8 +149,10 @@ func TestSmokeRecipe(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	state := t.TempDir()
-	d, err := New(ctx, CLI{}, Config{CellID: "cell-smoke", StateDir: state, MachinesDir: filepath.Join(state, "machines"),
-		DevInsecure: true, Getenv: func(string) string { return "1" }, Out: io.Discard})
+	d, err := New(ctx, CLI{}, Config{
+		CellID: "cell-smoke", StateDir: state, MachinesDir: filepath.Join(state, "machines"),
+		DevInsecure: true, Getenv: func(string) string { return "1" }, Out: io.Discard,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,8 +161,10 @@ func TestSmokeRecipe(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	ref, err := d.Create(ctx, driver.MachineSpec{CellID: "cell-smoke", EnvironmentID: "env", Role: driver.RoleWorkload, OrgID: "org", ClaimID: claim,
-		ImageID: "local", ClaimGroupID: "kodus-" + claim, KMSKeyRef: "local", ExpiresAt: now.Add(5 * time.Minute), HardExpiresAt: now.Add(10 * time.Minute)})
+	ref, err := d.Create(ctx, driver.MachineSpec{
+		CellID: "cell-smoke", EnvironmentID: "env", Role: driver.RoleWorkload, OrgID: "org", ClaimID: claim,
+		ImageID: "local", ClaimGroupID: "kodus-" + claim, KMSKeyRef: "local", ExpiresAt: now.Add(5 * time.Minute), HardExpiresAt: now.Add(10 * time.Minute),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +174,7 @@ func TestSmokeRecipe(t *testing.T) {
 			_ = d.Destroy(context.Background(), ref)
 		}
 	})
-	if err := d.Transport().Upload(ctx, ref, "testdata/recipe-app", "workspace"); err != nil {
+	if err := d.Transport().Upload(ctx, ref, "testdata/recipe-app", "workspace", nil); err != nil {
 		t.Fatal("boot:", err)
 	}
 	rep, _ := d.LastBoot(claim)
@@ -184,7 +194,7 @@ func TestSmokeRecipe(t *testing.T) {
 	b, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	t.Logf("GET http://%s/ -> %d %q; postgres published on %s", web, resp.StatusCode, strings.TrimSpace(string(b)), db)
-	if resp.StatusCode != 200 || strings.TrimSpace(string(b)) != "kody-smoke-ok" {
+	if resp.StatusCode != http.StatusOK || strings.TrimSpace(string(b)) != "kody-smoke-ok" {
 		t.Fatal("web did not answer")
 	}
 	psql := func(sql string) string {
@@ -246,8 +256,10 @@ func TestSmokeCheckout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Minute)
 	defer cancel()
 	state := t.TempDir()
-	d, err := New(ctx, CLI{}, Config{CellID: "cell-smoke", StateDir: state, MachinesDir: filepath.Join(state, "machines"),
-		DevInsecure: true, Getenv: func(string) string { return "1" }})
+	d, err := New(ctx, CLI{}, Config{
+		CellID: "cell-smoke", StateDir: state, MachinesDir: filepath.Join(state, "machines"),
+		DevInsecure: true, Getenv: func(string) string { return "1" },
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,8 +268,10 @@ func TestSmokeCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	ref, err := d.Create(ctx, driver.MachineSpec{CellID: "cell-smoke", EnvironmentID: "env", Role: driver.RoleWorkload, OrgID: "org", ClaimID: claim,
-		ImageID: "local", ClaimGroupID: "kodus-" + claim, KMSKeyRef: "local", ExpiresAt: now.Add(time.Hour), HardExpiresAt: now.Add(2 * time.Hour)})
+	ref, err := d.Create(ctx, driver.MachineSpec{
+		CellID: "cell-smoke", EnvironmentID: "env", Role: driver.RoleWorkload, OrgID: "org", ClaimID: claim,
+		ImageID: "local", ClaimGroupID: "kodus-" + claim, KMSKeyRef: "local", ExpiresAt: now.Add(time.Hour), HardExpiresAt: now.Add(2 * time.Hour),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,7 +307,7 @@ func TestSmokeCheckout(t *testing.T) {
 			t.Logf("service logs in %s", f)
 		}
 	}
-	if err := d.Transport().Upload(ctx, ref, repo, "workspace"); err != nil {
+	if err := d.Transport().Upload(ctx, ref, repo, "workspace", nil); err != nil {
 		logs()
 		t.Fatal("boot:", err)
 	}

@@ -16,13 +16,15 @@ type fakeDB struct {
 	queries  []string
 }
 
-type fakeConn struct{ db *fakeDB }
-type fakeTx struct{}
-type fakeRows struct {
-	cols []string
-	data [][]driver.Value
-	i    int
-}
+type (
+	fakeConn struct{ db *fakeDB }
+	fakeTx   struct{}
+	fakeRows struct {
+		cols []string
+		data [][]driver.Value
+		i    int
+	}
+)
 
 func (d *fakeDB) Open(string) (driver.Conn, error) { return &fakeConn{d}, nil }
 func (c *fakeConn) Prepare(string) (driver.Stmt, error) {
@@ -36,12 +38,14 @@ func (c *fakeConn) BeginTx(_ context.Context, o driver.TxOptions) (driver.Tx, er
 	c.db.mu.Unlock()
 	return fakeTx{}, nil
 }
+
 func (c *fakeConn) ExecContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Result, error) {
 	c.db.mu.Lock()
 	c.db.queries = append(c.db.queries, q)
 	c.db.mu.Unlock()
 	return driver.RowsAffected(0), nil
 }
+
 func (c *fakeConn) QueryContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Rows, error) {
 	c.db.mu.Lock()
 	c.db.queries = append(c.db.queries, q)
@@ -61,8 +65,10 @@ func (r *fakeRows) Next(dest []driver.Value) error {
 	return nil
 }
 
-var registerOnce sync.Once
-var shared = &fakeDB{}
+var (
+	registerOnce sync.Once
+	shared       = &fakeDB{}
+)
 
 func openFake(Target) (*sql.DB, error) {
 	registerOnce.Do(func() { sql.Register("observer-fake", shared) })

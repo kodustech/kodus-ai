@@ -2,7 +2,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 
-import { aggregateVerdicts, assertTransition, canTransition, checkConclusionFor, checkFor, decideRunVerdict, isTerminal } from './run-state';
+import { assertTransition, canTransition, checkConclusionFor, decideRunVerdict, isTerminal } from './run-state';
 import { InvalidStreamOffsetError } from './run-stream';
 import { FileRunStreamStore } from './adapters/file-run-stream.store';
 import { InMemoryRunStreamStore } from './testing';
@@ -30,11 +30,11 @@ describe('Run state machine', () => {
     });
 });
 
-describe('aggregateVerdicts and checkFor', () => {
+describe('decideRunVerdict and checkConclusionFor', () => {
     it('success needs not_reproduced on every entry point', () => {
-        const v = aggregateVerdicts({ entryPoints: ['POST /orders', 'GET /cart'], probes: [nr('POST /orders'), nr('GET /cart')] });
+        const v = decideRunVerdict({ entryPoints: ['POST /orders', 'GET /cart'], probes: [nr('POST /orders'), nr('GET /cart')] });
         expect(v.verdictState).toBe('no_regressions');
-        expect(checkFor('no_regressions', v)).toEqual({ conclusion: 'success', title: 'No regressions in what was tested' });
+        expect(checkConclusionFor('no_regressions', v)).toEqual({ conclusion: 'success', title: 'No regressions in what was tested' });
     });
 
     it('a pre-existing failure alone does not satisfy the not_reproduced requirement', () => {
@@ -45,7 +45,7 @@ describe('aggregateVerdicts and checkFor', () => {
         });
         expect(v.verdictState).toBe('partly_tested');
         expect(v.uncoveredEntryPoints).toEqual(['GET /cart']);
-        expect(checkFor(v.verdictState, v).conclusion).toBe('neutral');
+        expect(checkConclusionFor(v.verdictState, v).conclusion).toBe('neutral');
     });
 
     it('requires not_reproduced separately on each changed entry point', () => {
@@ -55,7 +55,7 @@ describe('aggregateVerdicts and checkFor', () => {
         });
         expect(v.verdictState).toBe('partly_tested');
         expect(v.uncoveredEntryPoints).toEqual(['GET /cart']);
-        expect(checkFor(v.verdictState, v).conclusion).toBe('neutral');
+        expect(checkConclusionFor(v.verdictState, v).conclusion).toBe('neutral');
     });
 
     it('pre_existing does not prevent success when the same entry point also has not_reproduced', () => {
@@ -65,44 +65,44 @@ describe('aggregateVerdicts and checkFor', () => {
         });
         expect(v.verdictState).toBe('no_regressions');
         expect(v.uncoveredEntryPoints).toEqual([]);
-        expect(checkFor(v.verdictState, v).conclusion).toBe('success');
+        expect(checkConclusionFor(v.verdictState, v).conclusion).toBe('success');
     });
 
     it('an uncovered entry point is partly_tested and neutral', () => {
-        const v = aggregateVerdicts({ entryPoints: ['POST /orders', 'GET /cart'], probes: [nr('POST /orders')] });
+        const v = decideRunVerdict({ entryPoints: ['POST /orders', 'GET /cart'], probes: [nr('POST /orders')] });
         expect(v.verdictState).toBe('partly_tested');
         expect(v.uncoveredEntryPoints).toEqual(['GET /cart']);
-        expect(checkFor('partly_tested', v).conclusion).toBe('neutral');
+        expect(checkConclusionFor('partly_tested', v).conclusion).toBe('neutral');
     });
 
     it('regression wins over partly_tested', () => {
-        const v = aggregateVerdicts({
+        const v = decideRunVerdict({
             entryPoints: ['POST /orders', 'GET /cart'],
             probes: [{ probeId: 'a', entryPoint: 'POST /orders', verdict: 'finding', reason: 'differs' }],
         });
         expect(v.verdictState).toBe('regression');
-        expect(checkFor('regression', v)).toEqual({ conclusion: 'failure', title: '1 regression' });
+        expect(checkConclusionFor('regression', v)).toEqual({ conclusion: 'failure', title: '1 regression' });
     });
 
     it('an intended finding never leads to success', () => {
-        const v = aggregateVerdicts({
+        const v = decideRunVerdict({
             entryPoints: ['POST /orders'],
             probes: [{ probeId: 'a', entryPoint: 'POST /orders', verdict: 'finding', intent: 'intended', reason: 'differs' }],
         });
-        expect(checkFor('partly_tested', v)).toEqual({ conclusion: 'neutral', title: 'Partly tested · 1 intended change' });
+        expect(checkConclusionFor('partly_tested', v)).toEqual({ conclusion: 'neutral', title: 'Partly tested · 1 intended change' });
     });
 
     it('a blocked outbound request forces neutral', () => {
-        const v = aggregateVerdicts({ entryPoints: ['GET /cart'], probes: [nr('GET /cart')], blockedOutbound: 1 });
-        expect(checkFor('no_regressions', v)).toEqual({
+        const v = decideRunVerdict({ entryPoints: ['GET /cart'], probes: [nr('GET /cart')], blockedOutbound: 1 });
+        expect(checkConclusionFor('no_regressions', v)).toEqual({
             conclusion: 'neutral',
             title: 'No regressions in what was tested · 1 blocked outbound request',
         });
     });
 
     it('halted keeps the computed verdict and adds the security event', () => {
-        const v = aggregateVerdicts({ entryPoints: ['GET /cart'], probes: [{ probeId: 'a', entryPoint: 'GET /cart', verdict: 'finding', reason: 'x' }] });
-        expect(checkFor('halted', v)).toEqual({ conclusion: 'failure', title: '1 regression · security event' });
+        const v = decideRunVerdict({ entryPoints: ['GET /cart'], probes: [{ probeId: 'a', entryPoint: 'GET /cart', verdict: 'finding', reason: 'x' }] });
+        expect(checkConclusionFor('halted', v)).toEqual({ conclusion: 'failure', title: '1 regression · security event' });
     });
 
     it('a security violation the cell saw halts as a failure that needs attention, whatever the verdict', () => {
@@ -133,17 +133,48 @@ describe('aggregateVerdicts and checkFor', () => {
         expect(v.forcedNeutral).toContain('diff too large to test whole');
     });
 
+    // Run 371c8255 (kr-shop#4): two probes of POST /orders/preview, 404 on main (no such route), 200 and 400 on the PR.
+    const newEndpoint = (probeId: string) => ({ probeId, entryPoint: 'POST /orders/preview', verdict: 'new_endpoint' as const, reason: 'main has no such route (404)' });
+
+    it('a route the PR adds is reported as a new endpoint, not a regression', () => {
+        const v = decideRunVerdict({ entryPoints: ['POST /orders/preview', 'GET /orders'], probes: [newEndpoint('preview-total'), newEndpoint('preview-empty'), nr('GET /orders')] });
+        expect(v).toMatchObject({ verdictState: 'no_regressions', findings: [], uncoveredEntryPoints: [] });
+        expect(v.newEndpoints.map((p) => p.probeId)).toEqual(['preview-total', 'preview-empty']);
+        expect(checkConclusionFor('no_regressions', v)).toEqual({ conclusion: 'success', title: 'No regressions in what was tested · 2 new endpoints' });
+    });
+
+    it('a route the PR removes still fails as a regression', () => {
+        const removed = { probeId: 'preview', entryPoint: 'POST /orders/preview', verdict: 'finding' as const, findingKind: 'behavior_change' as const, reason: 'differs' };
+        const v = decideRunVerdict({ entryPoints: ['POST /orders/preview'], probes: [removed] });
+        expect(checkConclusionFor(v.verdictState, v)).toEqual({ conclusion: 'failure', title: '1 regression' });
+    });
+
+    it('a new route that errors in the PR is reported as a finding on the new code', () => {
+        const error = { probeId: 'preview', entryPoint: 'POST /orders/preview', verdict: 'finding' as const, findingKind: 'new_endpoint_error' as const, reason: 'answers 502' };
+        const v = decideRunVerdict({ entryPoints: ['POST /orders/preview', 'GET /orders'], probes: [error, newEndpoint('preview-empty'), nr('GET /orders')] });
+        expect(v.verdictState).toBe('regression');
+        expect(checkConclusionFor(v.verdictState, v)).toEqual({ conclusion: 'failure', title: '1 error on a new endpoint · 1 new endpoint' });
+        const both = decideRunVerdict({ entryPoints: ['POST /orders/preview', 'GET /orders'], probes: [error, { ...error, probeId: 'orders', entryPoint: 'GET /orders', findingKind: 'behavior_change' as const }] });
+        expect(checkConclusionFor(both.verdictState, both).title).toBe('1 regression · 1 error on a new endpoint');
+    });
+
+    it('a new endpoint next to an undecided probe of the same route leaves it uncovered', () => {
+        const v = decideRunVerdict({ entryPoints: ['POST /orders/preview'], probes: [newEndpoint('a'), { probeId: 'b', entryPoint: 'POST /orders/preview', verdict: 'inconclusive', reason: 'flaky' }] });
+        expect(v).toMatchObject({ verdictState: 'partly_tested', uncoveredEntryPoints: ['POST /orders/preview'] });
+        expect(checkConclusionFor('partly_tested', v).title).toBe('Partly tested · 1 new endpoint');
+    });
+
     it('a Run waiting for approval can time out, and a boot can halt', () => {
         expect(canTransition('awaiting_approval', 'timed_out')).toBe(true);
         expect(canTransition('booting', 'halted')).toBe(true);
     });
 
     it('maps the non-verdict states', () => {
-        expect(checkFor('awaiting_approval').conclusion).toBe('action_required');
-        expect(checkFor('superseded').conclusion).toBe('cancelled');
-        expect(checkFor('timed_out').conclusion).toBe('timed_out');
-        expect(checkFor('errored')).toEqual({ conclusion: 'neutral', title: 'Could not finish' });
-        expect(checkFor('could_not_boot', { verdictState: 'could_not_boot' })).toEqual({ conclusion: 'neutral', title: 'Could not boot' });
+        expect(checkConclusionFor('awaiting_approval').conclusion).toBe('action_required');
+        expect(checkConclusionFor('superseded').conclusion).toBe('cancelled');
+        expect(checkConclusionFor('timed_out').conclusion).toBe('timed_out');
+        expect(checkConclusionFor('errored')).toEqual({ conclusion: 'neutral', title: 'Could not finish' });
+        expect(checkConclusionFor('could_not_boot', { verdictState: 'could_not_boot' })).toEqual({ conclusion: 'neutral', title: 'Could not boot' });
     });
 });
 
@@ -229,5 +260,14 @@ describe('FileRunStreamStore offsets', () => {
         await s.append('org-1', 'run-1', { type: 'state', at: 't', data: { a: 2 } });
         const mid = Buffer.from('o5').toString('base64url');
         await expect(s.read('org-1', 'run-1', mid)).rejects.toBeInstanceOf(InvalidStreamOffsetError);
+    });
+});
+
+describe('nothing_to_test (planner-eval.md fix 1)', () => {
+    it('comes straight from the queue, ends the Run and is a neutral check of its own', () => {
+        expect(canTransition('queued', 'nothing_to_test')).toBe(true);
+        expect(canTransition('testing', 'nothing_to_test')).toBe(false);
+        expect(isTerminal('nothing_to_test')).toBe(true);
+        expect(checkConclusionFor('nothing_to_test')).toEqual({ conclusion: 'neutral', title: 'Nothing to test at runtime' });
     });
 });

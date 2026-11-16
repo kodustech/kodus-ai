@@ -22,7 +22,7 @@ func generationID(cell, org, env, sha, nonce string) string {
 }
 
 func generationVolume(g bakecatalog.Generation, key string) string {
-	return bakeVolume(g.Cell, g.Org, g.Environment, key, g.SHA+"."+g.Nonce)
+	return bakeVolume(g.Cell, g.Org, g.Environment, key, g.Key()+"."+g.Nonce)
 }
 
 func generationImage(g bakecatalog.Generation, fp string) string {
@@ -32,7 +32,7 @@ func generationImage(g bakecatalog.Generation, fp string) string {
 
 func validGeneration(g bakecatalog.Generation, cell string) bool {
 	_, scope := bakeRepo(g.Cell, g.Org, g.Environment)
-	if !scope || g.Cell != cell || !bakecatalog.IsHex(g.SHA, 40) || !bakecatalog.IsHex(g.Nonce, 24) || g.ID != generationID(g.Cell, g.Org, g.Environment, g.SHA, g.Nonce) || len(g.RecipeSHA) == 0 || len(g.RecipeSHA) > 128 || len(g.Images) > maxBakeArtifacts || len(g.Volumes) > maxBakeArtifacts {
+	if !scope || g.Cell != cell || !bakecatalog.IsHex(g.SHA, 40) || !bakecatalog.IsHex(g.Nonce, 24) || g.ID != generationID(g.Cell, g.Org, g.Environment, g.SHA, g.Nonce) || len(g.RecipeSHA) == 0 || len(g.RecipeSHA) > 128 || g.RefsDigest != "" && !bakecatalog.IsRefsDigest(g.RefsDigest) || len(g.Images) > maxBakeArtifacts || len(g.Volumes) > maxBakeArtifacts {
 		return false
 	}
 	for fp, ref := range g.Images {
@@ -74,8 +74,8 @@ func (d *Driver) catalogFor(ctx context.Context) (*bakecatalog.Catalog, error) {
 		Valid: func(g bakecatalog.Generation) bool { return validGeneration(g, d.cfg.CellID) },
 		// Read at each commit: a test makes one fail after the catalog opened.
 		SyncDir: func(dir *os.File) error {
-			if d.syncCatalogDir != nil {
-				return d.syncCatalogDir(dir)
+			if d.hooks != nil && d.hooks.syncCatalogDir != nil {
+				return d.hooks.syncCatalogDir(dir)
 			}
 			return dir.Sync()
 		},
@@ -242,7 +242,8 @@ func (d *Driver) stageGeneration(ctx context.Context, g bakecatalog.Generation) 
 	return c.Stage(g)
 }
 
-func (d *Driver) Close() error {
+// closeCatalog closes the bake catalog (Shutdown's last step).
+func (d *Driver) closeCatalog() error {
 	d.catalogMu.Lock()
 	defer d.catalogMu.Unlock()
 	if d.catalog == nil {

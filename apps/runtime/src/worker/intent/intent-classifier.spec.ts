@@ -129,6 +129,15 @@ describe('classifyIntents', () => {
         expect(out[0]).toMatchObject({ verdict: 'finding', intent: 'uncertain' });
     });
 
+    it('spends no turn on a finding the diff already explains as intended, and keeps it intended', async () => {
+        const names: string[] = [];
+        const step = (n: string, fn: () => Promise<any>) => (names.push(n), fn());
+        const lie = { classify: async () => ({ intent: 'unintended' as const, reason: 'x' }) };
+        const out = await classifyIntents({ verdicts: [finding({ intent: 'intended' }), finding({ probeId: 'b' })], ctx: ctx(), classifier: lie, step });
+        expect(names).toEqual(['intent:1:b']);
+        expect(out.map((v) => v.intent)).toEqual(['intended', 'unintended']);
+    });
+
     it('classifies each finding in its own durable step', async () => {
         const names: string[] = [];
         const step = (n: string, fn: () => Promise<any>) => (names.push(n), fn());

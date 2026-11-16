@@ -3,10 +3,11 @@
 package management
 
 import (
-	"golang.org/x/sys/unix"
 	"net"
 	"os"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 func peerUID(c *net.UnixConn) (uint32, error) {
@@ -28,6 +29,7 @@ func peerUID(c *net.UnixConn) (uint32, error) {
 	}
 	return uid, socketErr
 }
+
 func fileUID(info os.FileInfo) (uint32, bool) {
 	s, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {

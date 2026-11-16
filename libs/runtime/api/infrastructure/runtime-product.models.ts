@@ -1,7 +1,8 @@
-import { Column, Entity, Index } from 'typeorm';
+import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
-import type { ForkPullRequestPolicy } from '@libs/runtime/contracts/enums';
+import type { EnvironmentRepositoryRole, ForkPullRequestPolicy } from '@libs/runtime/contracts/enums';
 import type { MachineSizePreset } from '@libs/runtime/contracts/machine-size';
+import type { PreviewSecrets } from '@libs/runtime/contracts/preview';
 
 import type { PoolPolicy, PoolUsage } from '../domain/pool';
 
@@ -62,6 +63,67 @@ export class RuntimeEnvironmentModel extends CoreModel {
     /** This month's estimated machine-minutes kept ready. */
     @Column({ name: 'pool_usage', type: 'jsonb', nullable: true })
     poolUsage: PoolUsage | null;
+
+    /** The org's secrets in this environment's previews (contracts/preview.ts PREVIEW_SECRETS): none, or the same as its Runs. */
+    @Column({ name: 'preview_secrets', type: 'varchar', length: 8, default: 'none' })
+    previewSecrets: PreviewSecrets;
+}
+
+/**
+ * A repository of an environment: its `primary` (the environment's own
+ * repository, which holds the recipe) or a `member` booted beside it. A
+ * repository may be a member of several environments.
+ */
+@Entity('runtime_environment_repositories')
+@Index('UQ_runtime_environment_repositories_env_repo', ['environmentId', 'repositoryId'], { unique: true })
+@Index('UQ_runtime_environment_repositories_env_alias', ['environmentId', 'alias'], { unique: true })
+@Index('UQ_runtime_environment_repositories_primary', ['environmentId'], { unique: true, where: `"role" = 'primary'` })
+@Index('IDX_runtime_environment_repositories_org_repo', ['organizationId', 'repositoryId'])
+@Check('CHK_runtime_environment_repositories_role', `"role" IN ('primary', 'member')`)
+@Check('CHK_runtime_environment_repositories_alias', `"alias" ~ '^[a-z0-9][a-z0-9._-]{0,62}$'`)
+export class RuntimeEnvironmentRepositoryModel {
+    @PrimaryGeneratedColumn('uuid')
+    uuid: string;
+
+    @Column({ name: 'environment_id', type: 'uuid' })
+    environmentId: string;
+
+    @ManyToOne(() => RuntimeEnvironmentModel, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'environment_id', foreignKeyConstraintName: 'FK_runtime_environment_repositories_environment' })
+    environment?: RuntimeEnvironmentModel;
+
+    @Column({ name: 'organization_id', type: 'varchar', length: 128 })
+    organizationId: string;
+
+    @Column({ name: 'repository_id', type: 'varchar', length: 128 })
+    repositoryId: string;
+
+    @Column({ name: 'repository_name', type: 'varchar', length: 512 })
+    repositoryName: string;
+
+    @Column({ name: 'full_name', type: 'varchar', length: 512 })
+    fullName: string;
+
+    @Column({ type: 'varchar', length: 16 })
+    role: EnvironmentRepositoryRole;
+
+    /** The repository's directory in the workspace (contracts/workspace.ts REPOSITORY_ALIAS_PATTERN). */
+    @Column({ type: 'varchar', length: 63 })
+    alias: string;
+
+    /** A pull request of this repository starts a Run of this environment. */
+    @Column({ type: 'boolean', default: true })
+    triggers: boolean;
+
+    /** A Run boots this repository's open pull request of the same branch name instead of its default branch. */
+    @Column({ name: 'pair_branches', type: 'boolean', default: false })
+    pairBranches: boolean;
+
+    @CreateDateColumn({ name: 'created_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP(6)' })
+    createdAt: Date;
+
+    @UpdateDateColumn({ name: 'updated_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP(6)', onUpdate: 'CURRENT_TIMESTAMP(6)' })
+    updatedAt: Date;
 }
 
 /** Org-level Runtime settings. */
@@ -73,6 +135,10 @@ export class RuntimeSettingsModel extends CoreModel {
 
     @Column({ name: 'token_budget_per_day', type: 'bigint', nullable: true })
     tokenBudgetPerDay: string | null;
+
+    /** Preview URLs (contracts/preview.ts PreviewSettingsSchema); null: the defaults. */
+    @Column({ type: 'jsonb', nullable: true })
+    preview: unknown;
 }
 
 /** Per-repo Runtime settings: pilot and who may ask `@kody runtime`. */

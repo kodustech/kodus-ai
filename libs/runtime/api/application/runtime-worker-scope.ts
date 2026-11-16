@@ -1,11 +1,8 @@
 import {
-    ConflictException,
     ForbiddenException,
-    NotFoundException,
     ServiceUnavailableException,
     UnauthorizedException,
 } from '@nestjs/common';
-import { isTerminal } from '@libs/runtime/run';
 import {
     InvalidRunTokenError,
     isSetupToken,
@@ -16,6 +13,9 @@ import type {
     RunProjectionReader,
     RuntimeApiConfig,
 } from '../domain/ports';
+import { liveRunFor } from './llm-run-budget';
+
+const SCOPE_MISMATCH = 'Run token scope mismatch';
 
 export function verifyRuntimeWorkerToken(
     config: RuntimeApiConfig,
@@ -52,20 +52,10 @@ export async function runtimeWorkerScope(
         authorization,
     );
     if (scope.runId !== claims.runId || scope.attempt !== claims.attempt)
-        throw new ForbiddenException('Run token scope mismatch');
-    const run = await deps.runs.get(claims.runId, {
-        organizationId: claims.organizationId,
+        throw new ForbiddenException(SCOPE_MISMATCH);
+    const run = await liveRunFor(deps.runs, claims, claims.runId, {
+        mismatch: SCOPE_MISMATCH,
+        sameAs: ['repositoryId', 'prNumber', 'teamId'],
     });
-    if (!run || run.organizationId !== claims.organizationId)
-        throw new NotFoundException('Run not found');
-    if (
-        run.attempt !== claims.attempt ||
-        run.repositoryId !== claims.repositoryId ||
-        run.prNumber !== claims.prNumber ||
-        run.teamId !== claims.teamId
-    )
-        throw new ForbiddenException('Run token scope mismatch');
-    if (isTerminal(run.state))
-        throw new ConflictException('The Run has finished');
     return { claims, run, token };
 }

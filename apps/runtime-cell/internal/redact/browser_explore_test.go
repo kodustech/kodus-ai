@@ -1,9 +1,10 @@
 package redact
 
 import (
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 	"strings"
 	"testing"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 )
 
 func TestExplorationLastBarrierRedactsClipsAndDropsSecretSelector(t *testing.T) {
@@ -22,6 +23,7 @@ func TestExplorationLastBarrierRedactsClipsAndDropsSecretSelector(t *testing.T) 
 		t.Fatal("missing count")
 	}
 }
+
 func TestExplorationPreservesLocallyRecordedRedactionsAndCanaryData(t *testing.T) {
 	prior := int64(5)
 	b := &protocol.StepResultBody{Redactions: &prior, BrowserExploration: &protocol.BrowserExploreResult{Snapshot: "unique-canary-data", Candidates: []protocol.BrowserExploreCandidate{}}}

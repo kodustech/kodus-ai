@@ -14,5 +14,5 @@ func diskOf(path string) (driver.DiskDiagnostics, bool) {
 		return driver.DiskDiagnostics{}, false
 	}
 	bs := int64(st.Bsize)
-	return driver.DiskDiagnostics{Path: path, TotalBytes: int64(st.Blocks) * bs, FreeBytes: int64(st.Bavail) * bs}, true
+	return driver.DiskDiagnostics{Path: path, TotalBytes: int64(st.Blocks) * bs, FreeBytes: int64(st.Bavail) * bs}, true //nolint:gosec // G115: block counts from statfs fit in int64 on any real disk
 }

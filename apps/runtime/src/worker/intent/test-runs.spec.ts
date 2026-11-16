@@ -1,11 +1,11 @@
-import { evidenceKey, verifyUploadGrant } from '@libs/runtime/api/domain/evidence';
+import { evidenceKey, verifyUploadGrant } from '@libs/runtime/contracts/evidence';
 import { FakeEnvironmentRuntime, type ExecRequest } from '@libs/runtime/environment';
 
 import { SCENARIOS } from '../../fake-cell/scenarios';
-import { InMemoryEvidenceStore } from '../../shared/evidence/file-evidence-store';
 import { HmacCanaryVault } from '../canary/canary';
 import type { StepRunner } from '../run/ports';
 import { runPlannedTests } from './test-runs';
+import { InMemoryEvidenceStore } from '../../shared/evidence/testing';
 
 const RUN = { runId: '7d0f3c1e-5b8a-4c2e-9f1d-2a3b4c5d6e7f', attempt: 1 };
 const SECRET = 'dev-only-runtime-evidence-signing-secret-000000';

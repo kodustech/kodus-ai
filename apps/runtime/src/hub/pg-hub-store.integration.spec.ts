@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 
 import { Pool, type PoolClient } from 'pg';
 
-import { generateCellRegistrationToken } from '@libs/runtime/api/domain/cell-token';
+import { generateCellRegistrationToken } from '@libs/runtime/contracts/cell-token';
 
 import { type CellLocation, type CellRefusal, type InTransaction, PgCellDirectory, pgTransaction } from '../shared/persistence/cell-directory';
 import { PgDistributedLocks } from '../shared/persistence/locks';
@@ -12,12 +12,18 @@ import { PgRunStreamStore } from '../shared/persistence/pg-run-stream-store';
 import { applyRetention, ensureRuntimeSchema } from '../shared/persistence/runtime-schema';
 import { PgRuntimeRunStreamReader } from '@libs/runtime/api/infrastructure/pg-runtime-run-stream.reader';
 import { PgRuntimeClaimUsageReader } from '@libs/runtime/api/infrastructure/pg-runtime-claim-usage.reader';
-import { PgHubStore, type ClaimState } from './hub-store';
+import { RuntimeReadDb } from '@libs/runtime/api/infrastructure/runtime-read-db';
+import { type ClaimState, InvalidClaimTransitionError } from '@libs/runtime/contracts/enums';
+
+import { PgHubStore } from './hub-store';
+import { isolatedDatabase } from '../testing/isolated-database';
 
 // Opt-in: runs against the Postgres RUNTIME_IT_DATABASE_URL names (locally
 // postgres://runtime:runtime@localhost:5442/kodus_runtime_it), and skips when
 // none is named, as in the backend CI suite, which starts no such database.
-const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
+// A database of its own: suites in parallel never read each other's rows (isolated-database.ts).
+const database = isolatedDatabase(process.env.RUNTIME_IT_DATABASE_URL ?? '', 'hub_store');
+const url = database.url;
 const skip = !url || process.env.SKIP_INTEGRATION === 'true';
 
 (skip ? describe.skip : describe)('Runtime Postgres stores (integration, real Postgres)', () => {
@@ -53,17 +59,15 @@ const skip = !url || process.env.SKIP_INTEGRATION === 'true';
         };
 
     beforeAll(async () => {
+        await database.create();
         pool = new Pool({ connectionString: url, max: 4 });
         await ensureRuntimeSchema(pool);
         store = new PgHubStore(pool);
     });
 
     afterAll(async () => {
-        await pool?.query(`DELETE FROM runtime.runtime_steps_index WHERE step_id = ANY($1)`, [stepIds]);
-        await pool?.query(`DELETE FROM runtime.runtime_claims WHERE claim_id = ANY($1) OR cell_id = ANY($2)`, [ids, cells]);
-        await pool?.query(`DELETE FROM runtime.runtime_cell_sessions WHERE cell_id = ANY($1)`, [cells]);
-        await pool?.query(`DELETE FROM runtime.runtime_cells WHERE cell_id = ANY($1)`, [cells]);
         await pool?.end();
+        await database.drop();
     });
 
     it('applies each migration once, also when it runs again', async () => {
@@ -107,11 +111,27 @@ const skip = !url || process.env.SKIP_INTEGRATION === 'true';
 
     it('keeps what a cell named in its hello, and a reconnect that names less forgets the rest', async () => {
         const id = cellId();
-        await store.upsertSession({ cellId: id, replicaId: 'r', replicaUrl: 'u', owner: 'kodus', driver: 'fake', features: ['seedsCache', 'claimSize'], maxClaimSize: { memoryMb: 16_384, cpus: 8 } });
-        expect(await store.session(id)).toMatchObject({ features: ['seedsCache', 'claimSize'], maxClaimSize: { memoryMb: 16_384, cpus: 8 } });
+        await store.upsertSession({
+            cellId: id, replicaId: 'r', replicaUrl: 'u', owner: 'kodus', driver: 'fake', features: ['seedsCache', 'claimSize'],
+            maxClaimSize: { memoryMb: 16_384, cpus: 8 }, defaultClaimSize: { memoryMb: 4_096, cpus: 2 }, sandboxClaimSize: { memoryMb: 2_048, cpus: 2 },
+        });
+        expect(await store.session(id)).toMatchObject({
+            features: ['seedsCache', 'claimSize'], maxClaimSize: { memoryMb: 16_384, cpus: 8 }, defaultClaimSize: { memoryMb: 4_096, cpus: 2 }, sandboxClaimSize: { memoryMb: 2_048, cpus: 2 },
+        });
         // The cell came back downgraded (an older build): its hello names nothing.
         await store.upsertSession({ cellId: id, replicaId: 'r', replicaUrl: 'u', owner: 'kodus', driver: 'fake' });
-        expect(await store.session(id)).toMatchObject({ features: [], maxClaimSize: null });
+        expect(await store.session(id)).toMatchObject({ features: [], maxClaimSize: null, defaultClaimSize: null, sandboxClaimSize: null });
+    });
+
+    it('keeps whether a claim is the PR side of a fork, through a rebind; a claim that says nothing is not', async () => {
+        const fork = { ...claim(), side: 'pr', forkPullRequest: true };
+        const own = claim();
+        await store.insertClaim(fork);
+        await store.insertClaim(own);
+        expect((await store.claim(fork.claimId))!.forkPullRequest).toBe(true);
+        expect((await store.claim(own.claimId))!.forkPullRequest).toBe(false);
+        expect(await store.rebindClaim(fork.claimId, { cellId: 'cell-b', leaseExpiresAt: fork.leaseExpiresAt, hardExpiresAt: fork.hardExpiresAt })).toBe(true);
+        expect((await store.claim(fork.claimId))!.forkPullRequest).toBe(true);
     });
 
     it('rebinds an open claim to the cell of the retry, pending again, and leaves a released one alone', async () => {
@@ -131,38 +151,57 @@ const skip = !url || process.env.SKIP_INTEGRATION === 'true';
         expect(await store.claim(r.claimId)).toMatchObject({ cellId: 'cell-a', state: 'released' });
     });
 
+    it('never rebinds a compromised claim: it keeps its cell and its violation', async () => {
+        const c = claim('bound');
+        await store.insertClaim(c);
+        expect(await store.transitionClaim(c.claimId, ['bound'], 'compromised', { reason: 'security_violation', detail: 'bait_exfiltration' })).toBe(true);
+        const hard = new Date(Date.now() + 600_000).toISOString();
+        expect(await store.rebindClaim(c.claimId, { cellId: 'cell-c', leaseExpiresAt: hard, hardExpiresAt: hard })).toBe(false);
+        expect(await store.claim(c.claimId)).toMatchObject({ cellId: 'cell-a', state: 'compromised', reason: 'security_violation', reasonDetail: 'bait_exfiltration' });
+    });
+
+    it('refuses a move the claim transition table does not allow, before touching the row', async () => {
+        const c = claim('bound');
+        await store.insertClaim(c);
+        await expect(store.transitionClaim(c.claimId, ['bound'], 'failed', { reason: 'not_ready' })).rejects.toThrow(InvalidClaimTransitionError);
+        expect(await store.claim(c.claimId)).toMatchObject({ state: 'bound' });
+    });
+
     it('records what each round held once per transition, and the API reads it org-scoped inside a read-only transaction', async () => {
         const c = { ...claim(), runId: `it-run-${randomUUID()}` };
-        await store.insertClaim({ ...c, metering: { driver: 'docker-gvisor', bootMb: 12_288, readyMb: 2_048, allocatableMb: 14_745 } });
+        await store.insertClaim({ ...c, metering: { driver: 'docker-gvisor', bootMb: 12_288, readyMb: 2_048, allocatableMb: 14_745, cpus: 4 } });
         const admitted = (await store.claim(c.claimId))!;
-        expect(admitted).toMatchObject({ metering: { driver: 'docker-gvisor', bootMb: 12_288, readyMb: 2_048, allocatableMb: 14_745 }, readyAt: null, releasedAt: null });
+        expect(admitted).toMatchObject({ metering: { driver: 'docker-gvisor', bootMb: 12_288, readyMb: 2_048, allocatableMb: 14_745, cpus: 4 }, readyAt: null, releasedAt: null });
         expect(admitted.admittedAt).not.toBeNull();
-        await store.transitionClaim(c.claimId, ['pending'], 'bound', { reason: 'ready' });
+        await store.transitionClaim(c.claimId, ['pending'], 'bound', { reason: 'ready', start: 'bake' });
         const ready = (await store.claim(c.claimId))!;
         expect(ready.readyAt).not.toBeNull();
+        expect(ready.start).toBe('bake');
         await store.transitionClaim(c.claimId, ['bound'], 'released', { reason: 'released' });
         const released = (await store.claim(c.claimId))!;
-        expect(released).toMatchObject({ readyAt: ready.readyAt, admittedAt: admitted.admittedAt });
+        expect(released).toMatchObject({ readyAt: ready.readyAt, admittedAt: admitted.admittedAt, start: 'bake' });
         expect(released.releasedAt).not.toBeNull();
 
-        const reader = new PgRuntimeClaimUsageReader(url);
+        const readDb = new RuntimeReadDb(url);
+        const reader = new PgRuntimeClaimUsageReader(readDb);
         try {
             const rows = await reader.claimsOfRuns('org-a', [c.runId]);
             expect(rows.get(c.runId)).toEqual([
-                expect.objectContaining({ claimId: c.claimId, driver: 'docker-gvisor', bootMb: 12_288, readyMb: 2_048, allocatableMb: 14_745, readyAt: ready.readyAt, releasedAt: released.releasedAt }),
+                expect.objectContaining({ claimId: c.claimId, driver: 'docker-gvisor', bootMb: 12_288, readyMb: 2_048, allocatableMb: 14_745, cpus: 4, readyAt: ready.readyAt, releasedAt: released.releasedAt }),
             ]);
             expect((await reader.claimsOfRuns('org-b', [c.runId])).size).toBe(0);
         } finally {
-            await reader.onModuleDestroy();
+            await readDb.onModuleDestroy();
         }
 
         // A new round on another cell (no memory reported there) is admitted again: not ready, its own metering.
         const r = claim();
         await store.insertClaim({ ...r, metering: { driver: 'docker-gvisor', bootMb: 12_288, readyMb: 2_048, allocatableMb: 14_745 } });
-        await store.transitionClaim(r.claimId, ['pending'], 'bound', { reason: 'ready' });
+        await store.transitionClaim(r.claimId, ['pending'], 'bound', { reason: 'ready', start: 'pool' });
         const hard = new Date(Date.now() + 600_000).toISOString();
         await store.rebindClaim(r.claimId, { cellId: 'cell-c', leaseExpiresAt: hard, hardExpiresAt: hard, metering: { driver: 'aws-ec2', bootMb: null, readyMb: null, allocatableMb: null } });
-        expect(await store.claim(r.claimId)).toMatchObject({ metering: { driver: 'aws-ec2', bootMb: null }, readyAt: null });
+        expect(await store.claim(r.claimId)).toMatchObject({ metering: { driver: 'aws-ec2', bootMb: null }, readyAt: null, start: null });
+        expect((await store.claim(r.claimId))!.metering?.cpus).toBeUndefined();
     });
 
     it('a claim keeps why it is in its state and since when, through every write path', async () => {
@@ -441,6 +480,68 @@ const skip = !url || process.env.SKIP_INTEGRATION === 'true';
             expect(await cells.reserveCell(org, { size: medium })).toEqual({ refused: 'size_unavailable', size: medium, largest: null });
         }));
 
+    it('a claim goes only to a cell that satisfies its isolation minimum; none connected that does is isolation_unavailable, never a lower cell', () =>
+        isolated(async (db, s) => {
+            const org = `org-${randomUUID()}`;
+            const at = async (isolation: string, slots: number) => {
+                const id = await connect(s, 'kodus', slots);
+                await db.query('UPDATE runtime.runtime_cell_sessions SET isolation = $2 WHERE cell_id = $1', [id, isolation]);
+                return id;
+            };
+            const gvisor = await at('sandboxed-container', 9);
+            const dev = await at('none', 9);
+            const cells = new PgCellDirectory(db, { sharedClaimCap: 100, inTransaction: savepoint(db) });
+
+            // No minimum (and 'any') takes the cell with the most free slots, whatever its isolation.
+            expect([gvisor, dev]).toContain(cellOf(await cells.reserveCell(org)));
+            expect([gvisor, dev]).toContain(cellOf(await cells.reserveCell(org, { isolation: 'any' })));
+            // 'kernel' never takes the dev cell, even preferred.
+            expect(cellOf(await cells.reserveCell(org, { isolation: 'kernel', prefer: dev }))).toBe(gvisor);
+            // 'vm' with only gVisor and dev cells connected: refused, nothing reserved on either.
+            const before = [await freeSlots(db, gvisor), await freeSlots(db, dev)];
+            expect(await cells.reserveCell(org, { isolation: 'vm' })).toEqual({ refused: 'isolation_unavailable', isolation: 'vm' });
+            expect([await freeSlots(db, gvisor), await freeSlots(db, dev)]).toEqual(before);
+            // A microVM cell connects: the vm claim goes there; once it is full, it waits (no capacity), never lower.
+            const microvm = await at('microvm', 1);
+            expect(cellOf(await cells.reserveCell(org, { isolation: 'vm', prefer: gvisor }))).toBe(microvm);
+            expect(await cells.reserveCell(org, { isolation: 'vm' })).toEqual({ refused: 'no_capacity' });
+        }));
+
+    it("a Run's second side goes only to a cell of the backend its first side is on, even preferred elsewhere; none connected is backend_unavailable", () =>
+        isolated(async (db, s, live) => {
+            const org = `org-${randomUUID()}`;
+            const at = async (driver: string, isolation: string, slots: number) => {
+                const id = await connect(s, 'kodus', slots);
+                await db.query('UPDATE runtime.runtime_cell_sessions SET driver = $2, isolation = $3 WHERE cell_id = $1', [id, driver, isolation]);
+                return id;
+            };
+            const gvisor = await at('gvisor', 'sandboxed-container', 9);
+            const microvm = await at('microvm', 'microvm', 9);
+            const cells = new PgCellDirectory(db, { sharedClaimCap: 100, inTransaction: savepoint(db) });
+            const [base, pr] = [`it-claim-${randomUUID()}`, `it-claim-${randomUUID()}`];
+
+            // No other side placed yet: any eligible cell, as before.
+            expect(cellOf(await cells.reserveCell(org, { claimId: base, prefer: gvisor, sameBackendAs: [pr] }))).toBe(gvisor);
+            // The base side is reserved on gVisor: the PR side follows it there, the preferred microVM cell is not eligible.
+            expect(cellOf(await cells.reserveCell(org, { claimId: pr, prefer: microvm, sameBackendAs: [base] }))).toBe(gvisor);
+            // A released claim of the other side still fixes the backend.
+            const released = await live(org, microvm);
+            await s.transitionClaim(released, ['bound'], 'released', { reason: 'released' });
+            expect(cellOf(await cells.reserveCell(org, { claimId: `it-claim-${randomUUID()}`, prefer: gvisor, sameBackendAs: [released] }))).toBe(microvm);
+            // The other side's backend is full: a capacity wait, never the other backend.
+            await db.query('UPDATE runtime.runtime_cell_sessions SET free_slots = 0 WHERE cell_id = $1', [gvisor]);
+            expect(await cells.reserveCell(org, { claimId: `it-claim-${randomUUID()}`, sameBackendAs: [base] })).toEqual({ refused: 'no_capacity' });
+            // No cell of that backend connected any more: refused with the backend named, nothing taken on the other one.
+            await db.query('UPDATE runtime.runtime_cell_sessions SET disconnected_at = now() WHERE cell_id = $1', [gvisor]);
+            const before = await freeSlots(db, microvm);
+            expect(await cells.reserveCell(org, { claimId: `it-claim-${randomUUID()}`, sameBackendAs: [base] })).toEqual({
+                refused: 'backend_unavailable',
+                driver: 'gvisor',
+                isolation: 'sandboxed-container',
+            });
+            expect(await freeSlots(db, microvm)).toBe(before);
+        }));
+
     it('registration commits the token and the cell together; a failed insert keeps the token', async () => {
         const commands = new PgCommandStore(pool);
         const { token, tokenHash } = generateCellRegistrationToken();
@@ -455,6 +556,31 @@ const skip = !url || process.env.SKIP_INTEGRATION === 'true';
         const r = await store.redeemAndRegister(token, 'hybrid', () => ({ cellId: fresh, organizationId: 'org-a', owner: 'customer', topology: 'hybrid', status: 'disconnected', certificateSerial: 'CC', certificateExpiresAt: new Date().toISOString() }));
         expect(r).toMatchObject({ ok: true, organizationId: 'org-a' });
         expect(await store.registeredCell(fresh)).toMatchObject({ certificateSerial: 'CC' });
+    });
+
+    it("a revoked token registers nothing; a revoke and a redemption of one token never both win", async () => {
+        const commands = new PgCommandStore(pool);
+        const issue = async () => {
+            const t = generateCellRegistrationToken();
+            await commands.recordCellToken({ tokenHash: t.tokenHash, organizationId: 'org-a', topology: 'self_hosted', expiresAt: new Date(Date.now() + 60_000).toISOString(), issuedBy: 'it' });
+            return t;
+        };
+        const row = (organizationId: string) => () => ({ cellId: cellId(), organizationId, owner: 'customer' as const, topology: 'self_hosted', status: 'disconnected' as const, certificateSerial: 'DD', certificateExpiresAt: new Date().toISOString() });
+
+        const revoked = await issue();
+        expect(await commands.revokeCellToken({ tokenHash: revoked.tokenHash, organizationId: 'org-b', revokedAt: new Date().toISOString(), revokedBy: 'it' })).toBe(false);
+        expect(await commands.revokeCellToken({ tokenHash: revoked.tokenHash, organizationId: 'org-a', revokedAt: new Date().toISOString(), revokedBy: 'it' })).toBe(true);
+        expect(await store.redeemAndRegister(revoked.token, undefined, row('org-a'))).toEqual({ ok: false, reason: 'unknown_or_used' });
+
+        for (let i = 0; i < 5; i++) {
+            const t = await issue();
+            const [revoke, reg] = await Promise.all([
+                commands.revokeCellToken({ tokenHash: t.tokenHash, organizationId: 'org-a', revokedAt: new Date().toISOString(), revokedBy: 'it' }),
+                store.redeemAndRegister(t.token, undefined, row('org-a')),
+            ]);
+            expect([revoke, reg.ok]).not.toEqual([true, true]);
+            expect(revoke || reg.ok).toBe(true);
+        }
     });
 
     it('revoking a cell terminates its live claims in the same transaction', async () => {
@@ -482,6 +608,30 @@ const skip = !url || process.env.SKIP_INTEGRATION === 'true';
         await pool.query('DELETE FROM runtime.runtime_claim_blockers WHERE claim_id = $1', [c.claimId]);
     });
 
+    it("keeps each cell's evicted build states as exactly its last list, and one cell's never another's", async () => {
+        const cell = `it-cell-${randomUUID()}`;
+        const other = `it-cell-${randomUUID()}`;
+        const at = '2026-11-13T07:31:31.000Z';
+        await store.syncEvictedBuildStates(cell, [{ orgId: 'org-a', environmentId: 'env-1', evictedAt: at }, { orgId: 'org-a', environmentId: 'env-2', evictedAt: at }]);
+        await store.syncEvictedBuildStates(other, [{ orgId: 'org-b', environmentId: 'env-1', evictedAt: at }]);
+        expect(await store.evictedBuildStateAt(cell, 'org-a', 'env-1')).toBe(at);
+        expect(await store.evictedBuildStateAt(cell, 'org-b', 'env-1')).toBeNull();
+        await store.syncEvictedBuildStates(cell, [{ orgId: 'org-a', environmentId: 'env-2', evictedAt: at }]);
+        expect(await store.evictedBuildStateAt(cell, 'org-a', 'env-1')).toBeNull();
+        expect(await store.evictedBuildStateAt(cell, 'org-a', 'env-2')).toBe(at);
+        await store.syncEvictedBuildStates(cell, []);
+        expect(await store.evictedBuildStateAt(cell, 'org-a', 'env-2')).toBeNull();
+        expect(await store.evictedBuildStateAt(other, 'org-b', 'env-1')).toBe(at);
+        await store.syncEvictedBuildStates(other, []);
+        // What the state cost to make is kept with its row, and replaced by the cell's next list.
+        await store.syncEvictedBuildStates(cell, [{ orgId: 'org-a', environmentId: 'env-3', evictedAt: at, rebuildSeconds: 1_802 }]);
+        expect(await store.evictedBuildState(cell, 'org-a', 'env-3')).toEqual({ orgId: 'org-a', environmentId: 'env-3', evictedAt: at, rebuildSeconds: 1_802 });
+        await store.syncEvictedBuildStates(cell, [{ orgId: 'org-a', environmentId: 'env-3', evictedAt: at }]);
+        expect(await store.evictedBuildState(cell, 'org-a', 'env-3')).toEqual({ orgId: 'org-a', environmentId: 'env-3', evictedAt: at });
+        expect(await store.evictedBuildState(cell, 'org-b', 'env-3')).toBeNull();
+        await store.syncEvictedBuildStates(cell, []);
+    });
+
     it('a keyed Run event is written once; reads resume from the offset', async () => {
         const streams = new PgRunStreamStore(pool);
         const runId = `it-run-${randomUUID()}`;
@@ -501,13 +651,14 @@ const skip = !url || process.env.SKIP_INTEGRATION === 'true';
     it('the API reads the Postgres stream inside a read-only transaction, org-scoped', async () => {
         const runId = `it-run-${randomUUID()}`;
         await new PgRunStreamStore(pool).append('org-a', runId, { type: 'phase', at: new Date().toISOString(), data: { phase: 'boot' } }, `step:${randomUUID()}:started`);
-        const reader = new PgRuntimeRunStreamReader(url);
+        const readDb = new RuntimeReadDb(url);
+        const reader = new PgRuntimeRunStreamReader(readDb);
         try {
             expect((await reader.read('org-a', runId))!.events.map((e) => e.data.phase)).toEqual(['boot']);
             expect(await reader.read('org-b', runId)).toBeNull();
             await expect(reader.append('org-a', runId, { type: 'phase', at: '', data: {} })).rejects.toThrow('does not write');
         } finally {
-            await reader.onModuleDestroy();
+            await readDb.onModuleDestroy();
             await pool.query('DELETE FROM runtime.runtime_run_events WHERE run_id = $1', [runId]);
         }
     });

@@ -14,8 +14,9 @@ import (
 // Call connects only to a checked local Unix socket. It authenticates the peer
 // in the kernel and returns canonical metadata, never arbitrary server output.
 func Call(ctx context.Context, path, operation string, body []byte) ([]byte, error) {
-	return call(ctx, path, operation, body, func(c *net.UnixConn) error { return samePeer(c, uint32(os.Geteuid())) })
+	return call(ctx, path, operation, body, func(c *net.UnixConn) error { return samePeer(c, effectiveUID()) })
 }
+
 func call(ctx context.Context, path, operation string, input []byte, checkPeer func(*net.UnixConn) error) ([]byte, error) {
 	if len(input) > MaxBodyBytes {
 		return nil, failure("too_large", 413)
@@ -79,7 +80,7 @@ func call(ctx context.Context, path, operation string, input []byte, checkPeer f
 		}
 		return nil, failure("unavailable", 503)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusNoContent && operation != "list" {
 		return nil, nil
 	}
@@ -95,6 +96,7 @@ func call(ctx context.Context, path, operation string, input []byte, checkPeer f
 	}
 	return sanitizeList(raw, req.scope())
 }
+
 func statusFailure(status int) error {
 	switch status {
 	case 400:

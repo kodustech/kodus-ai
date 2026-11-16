@@ -37,9 +37,11 @@ type dockerRunner struct{ image, network, runtime, ip string }
 
 func (d dockerRunner) Run(ctx context.Context, spec RunSpec, job []byte, out io.Writer) error {
 	name := fmt.Sprintf("kbr-runner-%d", time.Now().UnixNano())
-	args := []string{"run", "--rm", "-i", "--name", name, "--network", d.network, "--add-host", AppHost + ":" + d.ip,
+	args := []string{
+		"run", "--rm", "-i", "--name", name, "--network", d.network, "--add-host", AppHost + ":" + d.ip,
 		"--read-only", "--tmpfs", "/tmp:rw,nosuid,nodev,size=1g", "--user", "10001:10001", "--cap-drop", "ALL",
-		"--security-opt", "no-new-privileges:true", "--pids-limit", "512", "--memory", "1g", "--memory-swap", "1g", "--cpus", "1", "--log-driver", "none"}
+		"--security-opt", "no-new-privileges:true", "--pids-limit", "512", "--memory", "1g", "--memory-swap", "1g", "--cpus", "1", "--log-driver", "none",
+	}
 	if d.runtime != "" {
 		args = append(args, "--runtime", d.runtime)
 	}
@@ -118,8 +120,10 @@ func TestSmokeOrdersPage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", side, err)
 		}
-		res := protocol.ProbeResult{StepID: "0b9c8d7e-6f50-4a1b-9c2d-3e4f5a6b7c8d", Executor: "observer", ImageID: "sample-app", Transport: protocol.ProbeResultTransportOk,
-			Browser: o.Browser, Requests: o.Requests, DurationMs: time.Since(t0).Milliseconds()}
+		res := protocol.ProbeResult{
+			StepID: "0b9c8d7e-6f50-4a1b-9c2d-3e4f5a6b7c8d", Executor: "observer", ImageID: "sample-app", Transport: protocol.ProbeResultTransportOk,
+			Browser: o.Browser, Requests: o.Requests, DurationMs: time.Since(t0).Milliseconds(),
+		}
 		for _, d := range o.Dropped {
 			t.Logf("%s dropped: %s", side, d)
 		}

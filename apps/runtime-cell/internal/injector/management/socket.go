@@ -1,11 +1,23 @@
 package management
 
 import (
+	"math"
 	"net"
 	"os"
 	"path/filepath"
 	"sync"
 )
+
+// effectiveUID is this process's effective uid as the kernel compares it
+// (uid_t is 32 bits). Geteuid's -1 (no uid on this platform) stays the
+// all-ones uid it always converted to, which no file or peer owns.
+func effectiveUID() uint32 {
+	uid := os.Geteuid()
+	if uid < 0 || uid > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(uid)
+}
 
 func privateParent(path string) (os.FileInfo, error) {
 	if path == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path {
@@ -17,30 +29,32 @@ func privateParent(path string) (os.FileInfo, error) {
 		return nil, failure("unsafe_socket", 503)
 	}
 	info, e := os.Lstat(parent)
-	if e != nil || !info.IsDir() || info.Mode()&(os.ModePerm|os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0700 || info.Mode()&os.ModeSymlink != 0 {
+	if e != nil || !info.IsDir() || info.Mode()&(os.ModePerm|os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0o700 || info.Mode()&os.ModeSymlink != 0 {
 		return nil, failure("unsafe_socket", 503)
 	}
 	uid, ok := fileUID(info)
-	if !ok || uid != uint32(os.Geteuid()) {
+	if !ok || uid != effectiveUID() {
 		return nil, failure("unsafe_socket", 503)
 	}
 	return info, nil
 }
+
 func privateSocket(path string, parent os.FileInfo) (os.FileInfo, error) {
 	now, e := privateParent(path)
 	if e != nil || !os.SameFile(parent, now) {
 		return nil, failure("unsafe_socket", 503)
 	}
 	info, e := os.Lstat(path)
-	if e != nil || info.Mode()&os.ModeSocket == 0 || info.Mode()&(os.ModePerm|os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0600 {
+	if e != nil || info.Mode()&os.ModeSocket == 0 || info.Mode()&(os.ModePerm|os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0o600 {
 		return nil, failure("unsafe_socket", 503)
 	}
 	uid, ok := fileUID(info)
-	if !ok || uid != uint32(os.Geteuid()) {
+	if !ok || uid != effectiveUID() {
 		return nil, failure("unsafe_socket", 503)
 	}
 	return info, nil
 }
+
 func samePeer(c *net.UnixConn, uid uint32) error {
 	got, e := peerUID(c)
 	if e != nil || got != uid {
@@ -61,6 +75,7 @@ type ownedListener struct {
 func listenPrivate(path string) (*ownedListener, error) {
 	return listenValidated(path, privateSocket)
 }
+
 func listenValidated(path string, validate func(string, os.FileInfo) (os.FileInfo, error)) (*ownedListener, error) {
 	parent, e := privateParent(path)
 	if e != nil {
@@ -87,7 +102,7 @@ func listenValidated(path string, validate func(string, os.FileInfo) (os.FileInf
 			_ = os.Remove(path)
 		}
 	}
-	if e = os.Chmod(path, 0600); e != nil {
+	if e = os.Chmod(path, 0o600); e != nil {
 		cleanup()
 		return nil, failure("unsafe_socket", 503)
 	}
@@ -96,8 +111,9 @@ func listenValidated(path string, validate func(string, os.FileInfo) (os.FileInf
 		cleanup()
 		return nil, e
 	}
-	return &ownedListener{UnixListener: l, path: path, parent: parent, socket: info, slots: make(chan struct{}, 8), check: func(c *net.UnixConn) error { return samePeer(c, uint32(os.Geteuid())) }}, nil
+	return &ownedListener{UnixListener: l, path: path, parent: parent, socket: info, slots: make(chan struct{}, 8), check: func(c *net.UnixConn) error { return samePeer(c, effectiveUID()) }}, nil
 }
+
 func (l *ownedListener) Accept() (net.Conn, error) {
 	for {
 		c, e := l.AcceptUnix()
@@ -116,6 +132,7 @@ func (l *ownedListener) Accept() (net.Conn, error) {
 		}
 	}
 }
+
 func (l *ownedListener) Close() error {
 	e := l.UnixListener.Close()
 	l.once.Do(func() {

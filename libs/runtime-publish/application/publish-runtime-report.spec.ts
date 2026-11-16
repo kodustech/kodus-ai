@@ -10,19 +10,17 @@ import {
     type RuntimeRunReport,
 } from '@libs/runtime/run';
 
-import { InMemoryCommentSlotStore } from '../domain/pull-request-comment-slot';
-import { InMemoryRunTargetStore } from '../domain/run-target';
-import { InMemoryPublicationStore } from '../domain/runtime-publication';
 import type {
     CodeManagementPort,
     SuggestionResolver,
 } from '../domain/runtime-publish.ports';
 import { toPublishRepository } from '../infrastructure/integration-config-repository.resolver';
-import {
-    commentOrderOf,
-    PublicationFailedError,
-    PublishRuntimeRequestUseCase,
-} from './publish-runtime-request.use-case';
+import { commentOrderOf } from './comment-publisher';
+import { PublicationFailedError } from './publication-outcome';
+import { ProductPreviewOfferReader } from '../infrastructure/product-preview-offer.reader';
+import type { PreviewOfferReader } from '../domain/runtime-publish.ports';
+import { PublishRuntimeRequestUseCase } from './publish-runtime-request.use-case';
+import { InMemoryCommentSlotStore, InMemoryPublicationStore, InMemoryRunTargetStore } from '../testing';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({ log: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
@@ -75,10 +73,17 @@ const final = (r: RuntimeRunReport = report(), runId = RUN_ID): RuntimePublishRe
     report: r,
 });
 
-async function setup(platform = PlatformType.GITHUB) {
+/** NEXT_RUN in another environment, where widgets is a member of kr-shop's: the workspace lists that primary first. */
+const IN_KR_SHOP = [
+    { repositoryId: 'repo-shop', alias: 'kr-shop', baseSha: 'f'.repeat(40), headSha: 'f'.repeat(40), source: 'default_branch' as const },
+    { repositoryId: 'repo-1', alias: 'widgets', baseSha: 'b'.repeat(40), headSha: HEAD, source: 'pull_request' as const },
+];
+
+async function setup(platform = PlatformType.GITHUB, opts: { nextRunWorkspace?: typeof IN_KR_SHOP; previews?: PreviewOfferReader; fork?: boolean } = {}) {
     const targets = new InMemoryRunTargetStore();
     for (const runId of [RUN_ID, NEXT_RUN]) {
         await targets.record({
+            ...(runId === NEXT_RUN && opts.nextRunWorkspace ? { workspace: opts.nextRunWorkspace } : {}),
             runId,
             attempt: 1,
             organizationId: 'org-a',
@@ -88,6 +93,7 @@ async function setup(platform = PlatformType.GITHUB) {
             platform,
             pullRequestNumber: 42,
             headSha: HEAD,
+            ...(opts.fork !== undefined ? { fork: opts.fork } : {}),
         });
     }
     const publications = new InMemoryPublicationStore();
@@ -116,9 +122,58 @@ async function setup(platform = PlatformType.GITHUB) {
         { getAdapter: () => adapter },
         suggestions,
         DASHBOARD,
+        undefined,
+        undefined,
+        opts.previews,
     );
     return { useCase, codeManagement, adapter, suggestions, publications };
 }
+
+describe('a PR that runs in two environments', () => {
+    const checkOf = (runId: string, r: RuntimeRunReport): RuntimePublishRequested => ({
+        runId,
+        attempt: 1,
+        kind: 'check',
+        key: publishKey(runId, 1, 'check'),
+        correlationId: 'corr-1',
+        check: { status: 'completed', conclusion: 'failure', title: 't', summary: 's' },
+        report: r,
+    });
+
+    it("keeps one comment and one check per environment: a later success in one never hides the other's failure", async () => {
+        // kr-shop-billing #2 on 2026-11-13: "Partly tested · 0 regressions" from one environment overwrote "2 regressions" from the other.
+        const t = await setup(PlatformType.GITHUB, { nextRunWorkspace: IN_KR_SHOP });
+        const later = new Date(Date.parse(REQUESTED) + 60_000).toISOString();
+        const clean = report({ state: 'partly_tested', verdictState: 'partly_tested', requestedAt: later, paths: [] });
+        await t.useCase.execute(final());
+        await t.useCase.execute(progress('booting', NEXT_RUN, later));
+        // The other environment's later result edits its own comment, not the failure's.
+        await t.useCase.execute(final(clean, NEXT_RUN));
+        const [own, shop] = t.codeManagement.createIssueComment.mock.calls.map((c) => c[0].body as string);
+        expect(t.codeManagement.createIssueComment).toHaveBeenCalledTimes(2);
+        expect(own.startsWith('### Kody Runtime · 1 regression')).toBe(true);
+        expect(own).toContain('<!-- kody-runtime:comment -->');
+        expect(shop).toMatch(/<!-- kody-runtime:comment env=[0-9a-f]{16} -->/);
+        expect(shop).not.toContain('<!-- kody-runtime:comment -->');
+        expect(t.codeManagement.updateIssueComment.mock.calls.map((c) => c[0].commentId)).toEqual([1002]);
+
+        await t.useCase.execute(checkOf(RUN_ID, report()));
+        await t.useCase.execute(checkOf(NEXT_RUN, clean));
+        expect(t.adapter.createCheckRun.mock.calls.map((c) => c[0].name)).toEqual(['Kody Runtime', 'Kody Runtime (kr-shop)']);
+        expect(t.adapter.findCheckRun.mock.calls.map((c) => c[0].name)).toEqual(['Kody Runtime', 'Kody Runtime (kr-shop)']);
+    });
+
+    it('a crash after creating one environment\'s comment adopts that one, never the other environment\'s', async () => {
+        const t = await setup(PlatformType.GITHUB, { nextRunWorkspace: IN_KR_SHOP });
+        t.codeManagement.getAllCommentsInPullRequest.mockResolvedValue([{ id: 1, body: 'own\n\n<!-- kody-runtime:comment -->' }]);
+        t.codeManagement.createIssueComment.mockRejectedValueOnce(new Error('socket hang up'));
+        await expect(t.useCase.execute(final(report(), NEXT_RUN))).rejects.toThrow();
+        await t.useCase.execute(final(report(), NEXT_RUN));
+        // The marked comment on the PR is the repository's own environment's: kr-shop's creates its own.
+        expect(t.codeManagement.updateIssueComment).not.toHaveBeenCalled();
+        expect(t.codeManagement.createIssueComment).toHaveBeenCalledTimes(2);
+    });
+});
 
 describe('Runtime comment edited per phase (screen 6)', () => {
     it('creates the comment at the first phase and edits the same comment at every later phase and at the result', async () => {
@@ -210,6 +265,17 @@ describe('Reply on the confirmed review suggestion (screen 7)', () => {
         expect(t.publications.rows.get(`${RUN_ID}:1:reply:unknown`)?.reason).toBe('suggestion_not_found');
     });
 
+    it('retries a reply whose suggestion lookup failed instead of skipping it as not found', async () => {
+        const t = await setup();
+        t.suggestions.resolve.mockRejectedValueOnce(new Error('mongo down'));
+        await expect(t.useCase.execute(final())).rejects.toBeInstanceOf(PublicationFailedError);
+        expect(t.publications.rows.get(`${RUN_ID}:1:reply:sug-1`)?.status).not.toBe('skipped');
+
+        await t.useCase.execute(final());
+        expect(t.codeManagement.createResponseToComment).toHaveBeenCalledTimes(1);
+        expect(t.publications.rows.get(`${RUN_ID}:1:reply:sug-1`)?.status).toBe('published');
+    });
+
     it('does not reply off GitHub', async () => {
         const t = await setup(PlatformType.GITLAB);
         await t.useCase.execute(final());
@@ -252,5 +318,62 @@ describe('Check from the report (screen 9)', () => {
                 },
             }),
         );
+    });
+
+    // kr-shop #2 on cell-dev-1: both sides booted, the cell held no bake of the environment.
+    it('says to set the environment up again when the cell had no prepared image, never that main fails', async () => {
+        const t = await setup();
+        await t.useCase.execute({
+            runId: RUN_ID,
+            attempt: 1,
+            kind: 'check',
+            key: publishKey(RUN_ID, 1, 'check'),
+            correlationId: 'corr-1',
+            check: { status: 'completed', conclusion: 'neutral', title: 'Could not boot', summary: '' },
+            report: report({ state: 'could_not_boot', verdictState: 'could_not_boot', paths: [], bootFailure: { failsOnBase: false, kind: 'platform', needsSetup: true } }),
+        });
+        const summary = (t.adapter.updateCheckRun as jest.Mock).mock.calls.at(-1)![0].output.summary as string;
+        expect(summary).toContain('The cell that ran this has no prepared image of the environment, so nothing was tested.');
+        expect(summary).toContain('Set it up again');
+        expect(summary).not.toContain('Fails on main too');
+        expect(summary).not.toContain('the platform failed');
+    });
+});
+
+describe('the preview line of the result (docs/runtime/preview-urls.md §8.1)', () => {
+    /** The product Postgres as the reader sees it: one org's stored settings. */
+    const reader = (stored: unknown, domain: string | null = 'kodus-preview.example') =>
+        new ProductPreviewOfferReader({ query: async (_sql: string, values?: unknown[]) => ({ rows: values?.[0] === 'org-a' && stored !== undefined ? [{ preview: stored }] : [], rowCount: 0 }) }, domain ?? undefined);
+    const bodyOf = async (t: Awaited<ReturnType<typeof setup>>) => {
+        await t.useCase.execute(final());
+        return t.codeManagement.createIssueComment.mock.calls[0][0].body as string;
+    };
+
+    it('offers both sides on the dashboard where the deployment has a preview domain and the org has previews on (the default)', async () => {
+        const body = await bodyOf(await setup(PlatformType.GITHUB, { previews: reader(undefined), fork: false }));
+        expect(body).toContain(`[Open the PR version](${DASHBOARD}/runtime/runs/${RUN_ID}/preview?side=pr)`);
+        expect(body).toContain('stops after 15 idle minutes');
+        expect(body).not.toContain('kodus-preview.example');
+    });
+
+    it("says a fork's PR version is off unless the org allows fork previews", async () => {
+        const off = await bodyOf(await setup(PlatformType.GITHUB, { previews: reader({ forks: 'off' }), fork: true }));
+        expect(off).toContain('Preview is off for pull requests from forks.');
+        expect(off).not.toContain('side=pr');
+        const on = await bodyOf(await setup(PlatformType.GITHUB, { previews: reader({ forks: 'members', idleMinutes: 30 }), fork: true }));
+        expect(on).toContain('side=pr');
+        expect(on).toContain('stops after 30 idle minutes');
+    });
+
+    it('is absent where the deployment has no preview domain, or the org turned previews off', async () => {
+        expect(await bodyOf(await setup(PlatformType.GITHUB, { previews: reader(undefined, null) }))).not.toContain('**Preview**');
+        expect(await bodyOf(await setup(PlatformType.GITHUB, { previews: reader({ enabled: false }) }))).not.toContain('**Preview**');
+    });
+
+    it('still posts the result, without the preview line, when the preview settings cannot be read', async () => {
+        const down = new ProductPreviewOfferReader({ query: async () => Promise.reject(new Error('connection refused')) }, 'kodus-preview.example');
+        const body = await bodyOf(await setup(PlatformType.GITHUB, { previews: down }));
+        expect(body).toContain('**Regression** `POST /orders`');
+        expect(body).not.toContain('**Preview**');
     });
 });

@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
@@ -51,7 +51,7 @@ volumes:
   pgdata: {}
 `)
 	backend := dockercli.CLI{}
-	cfg := dockergvisor.Config{CellID: cell, WorkDir: filepath.Join(root, "work"), BakeStateDir: filepath.Join(root, "state"), HolderImage: "alpine:3.20", HelperImage: "alpine:3.20", MemLimit: "256m", MemReady: "128m", CPUs: "1"}
+	cfg := dockergvisor.Config{CellID: cell, WorkDir: filepath.Join(root, "work"), BakeStateDir: filepath.Join(root, "state"), HolderImage: "alpine:3.20", MemLimit: "256m", MemReady: "128m", CPUs: "1"}
 	if err := os.MkdirAll(cfg.WorkDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ volumes:
 			t.Fatal(err)
 		}
 		refs = append(refs, ref)
-		if _, err := d.Up(ctx, ref, compose, project); err != nil {
+		if _, err := d.Up(ctx, driver.UpRequest{Ref: ref, Compose: compose, ProjectDir: project}); err != nil {
 			t.Fatal(err)
 		}
 		return ref
@@ -138,7 +138,7 @@ volumes:
 	}
 	bake := func(ref driver.MachineRef) driver.ImageRef {
 		t.Helper()
-		if err := d.PinBakeSource(ref); err != nil {
+		if err := d.PinBakeSource(ctx, ref); err != nil {
 			t.Fatal(err)
 		}
 		if err := d.Destroy(ctx, ref); err != nil {
@@ -172,7 +172,7 @@ volumes:
 	if err := d.Reset(ctx, old, driver.SnapshotRef{Kind: "compose_volumes"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Up(ctx, old, compose, project); err != nil {
+	if _, err := d.Up(ctx, driver.UpRequest{Ref: old, Compose: compose, ProjectDir: project}); err != nil {
 		t.Fatal(err)
 	}
 	if got := seed(old); got != seedOne {

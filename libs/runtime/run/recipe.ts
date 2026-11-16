@@ -3,7 +3,7 @@ import { createHash } from 'crypto';
 import type { AuthoredFile } from '@libs/runtime/contracts/authored-files';
 import { type Expose, ExposeSchema } from '@libs/runtime/contracts/enums';
 import type { RecipeFake } from '@libs/runtime/protocol/recipe-fakes';
-import { parseRecipe, type RecipeSize } from '@libs/runtime/protocol/recipe';
+import { parseRecipe, type RecipeNeed, type RecipeSize } from '@libs/runtime/protocol/recipe';
 
 // The part of `.kodus/workspace.yaml` (docs §6) the control plane needs: what
 // the environment exposes and where its ready check is. The recipe itself,
@@ -27,6 +27,8 @@ export interface RecipeSummary {
     size?: RecipeSize;
     egressAllow?: string[];
     fakes?: RecipeFake[];
+    /** services.needs, every alias resolved: the other repositories the recipe boots beside its own. */
+    needs?: RecipeNeed[];
 }
 
 export type RecipeParse = { ok: true; recipe: RecipeSummary } | { ok: false; error: string };
@@ -63,6 +65,7 @@ export function parseRecipeSummary(text: string): RecipeParse {
             ...(r.size ? { size: r.size } : {}),
             ...(r.egressAllow ? { egressAllow: r.egressAllow } : {}),
             ...(r.fakes ? { fakes: r.fakes } : {}),
+            ...(r.needs?.length ? { needs: r.needs } : {}),
         },
     };
 }

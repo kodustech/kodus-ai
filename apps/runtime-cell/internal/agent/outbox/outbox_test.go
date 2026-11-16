@@ -82,3 +82,14 @@ func TestDeliverStopsAtAFrameTheProtocolRefuses(t *testing.T) {
 		t.Fatalf("%v after %d sends, clock %s", err, s.sent, clk.Now())
 	}
 }
+
+// A frame sent once (claim.progress, which the next one replaces) is never
+// retried: the failure is returned at once, with no backoff.
+func TestDeliverOnceSendsASingleTime(t *testing.T) {
+	clk := clock.NewFake(time.Unix(0, 0))
+	s := &scripted{script: []error{hubclient.ErrAckTimeout}}
+	err := box(func() hubclient.Sender { return s }, clk).Deliver(context.Background(), Frame{Kind: "claim.progress", Once: true})
+	if !errors.Is(err, hubclient.ErrAckTimeout) || s.sent != 1 || clk.Now() != time.Unix(0, 0) {
+		t.Fatalf("err %v after %d sends, clock %s", err, s.sent, clk.Now())
+	}
+}

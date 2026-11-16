@@ -1,17 +1,19 @@
 import { RUNTIME_CONTROL_ROUTING_KEY } from '@libs/runtime/run';
 
-import { decideBudget, startOfUtcDay } from '../domain/budget';
+import { decideBudget, setupBudgetLimits, startOfUtcDay, withOrgBudget } from '../domain/budget';
+import { loadRuntimeApiConfig } from '../infrastructure/runtime-api.config';
 import {
     CELL_TOKEN_TTL_MS,
     CellTokenLedger,
+    cellTokenState,
     generateCellRegistrationToken,
     hashCellRegistrationToken,
-    InMemoryCellTokenStore,
-} from '../domain/cell-token';
+} from '@libs/runtime/contracts/cell-token';
+import { InMemoryCellTokenStore } from '@libs/runtime/contracts/testing';
 import { DEFAULT_EGRESS_DENYLIST, deniedBy, InvalidEgressHostError, normalizeEgressHost } from '../domain/egress';
-import { evidenceKey, InvalidEvidenceKeyError, signEvidenceUrl, verifyEvidenceSignature } from '../domain/evidence';
+import { evidenceKey, InvalidEvidenceKeyError, signEvidenceUrl, verifyEvidenceSignature } from '@libs/runtime/contracts/evidence';
 import { InvalidRunTokenError, signRunToken, verifyRunToken } from '../domain/run-token';
-import { RuntimeCommandName, runtimeCommandOutboxMessage } from '../domain/runtime-commands';
+import { RuntimeCommandName, runtimeCommandOutboxMessage } from '@libs/runtime/contracts/runtime-commands';
 import { NOW, ORG, SECRET } from './fixtures';
 
 const STEP = '6f1c2b0e-4d3a-4b5c-9d8e-7f6a5b4c3d2e';
@@ -98,6 +100,28 @@ describe('Cell registration token', () => {
         expect(await b.ledger.redeem(token, 'self_hosted')).toEqual({ ok: false, reason: 'unknown_or_used' });
         expect(await b.ledger.redeem('not-a-token', 'hybrid')).toEqual({ ok: false, reason: 'malformed' });
     });
+
+    it("redeems with the token's topology when the cell names none", async () => {
+        const { ledger } = setup();
+        const token = await issue(ledger, 'self_hosted');
+        expect(await ledger.redeem(token)).toEqual({ ok: true, organizationId: ORG, topology: 'self_hosted' });
+    });
+
+    it('a revoked token registers nothing; only its own org revokes it, and only while unused', async () => {
+        const { ledger, store } = setup();
+        const token = await issue(ledger);
+        const id = hashCellRegistrationToken(token);
+        expect(await ledger.revoke(id, 'other-org', 'u')).toBe(false);
+        expect(await ledger.revoke(id, ORG, 'u')).toBe(true);
+        expect(await ledger.revoke(id, ORG, 'u')).toBe(false);
+        expect(await ledger.redeem(token)).toEqual({ ok: false, reason: 'unknown_or_used' });
+        expect(cellTokenState(store.records.get(id)!, NOW)).toBe('revoked');
+
+        const used = await issue(ledger);
+        expect((await ledger.redeem(used)).ok).toBe(true);
+        expect(await ledger.revoke(hashCellRegistrationToken(used), ORG, 'u')).toBe(false);
+        expect(cellTokenState(store.records.get(hashCellRegistrationToken(used))!, NOW)).toBe('used');
+    });
 });
 
 describe('Egress host', () => {
@@ -135,6 +159,18 @@ describe('Budget', () => {
         expect(decideBudget({ run: 40, pullRequest: 0, orgToday: 0 }, limits, 50)).toEqual({ allowed: true, remaining: 10 });
         expect(decideBudget({ run: 50, pullRequest: 0, orgToday: 0 }, limits, 500)).toEqual({ allowed: true, remaining: 50 });
         expect(startOfUtcDay(new Date('2026-10-29T23:59:00-03:00')).toISOString()).toBe('2026-10-30T00:00:00.000Z');
+    });
+
+    it('gives a setup its own ceiling, above a Run ceiling, and no per-PR limit', () => {
+        // A Run's 200k cut the recipe author off mid-read (kr-calcom, 11/11): a setup reads far more of a repository.
+        const cfg = loadRuntimeApiConfig({});
+        expect(cfg.llmBudget.perRun).toBe(200_000);
+        const setup = setupBudgetLimits(withOrgBudget(cfg.llmBudget, 3_000_000));
+        expect(setup).toMatchObject({ perRun: 1_200_000, perPullRequest: Number.MAX_SAFE_INTEGER, perOrgPerDay: 3_000_000 });
+        expect(decideBudget({ run: 210_000, pullRequest: 0, orgToday: 0 }, setup)).toEqual({ allowed: true, remaining: 990_000 });
+        // An operator can still lower it, and without the knob a setup keeps the Run's ceiling.
+        expect(setupBudgetLimits(loadRuntimeApiConfig({ RUNTIME_LLM_MAX_TOKENS_PER_SETUP: '250000' }).llmBudget).perRun).toBe(250_000);
+        expect(setupBudgetLimits(limits).perRun).toBe(100);
     });
 });
 

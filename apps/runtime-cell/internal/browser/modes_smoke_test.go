@@ -31,10 +31,12 @@ type modeSmokeRunner struct {
 
 func (d modeSmokeRunner) Run(ctx context.Context, _ RunSpec, job []byte, out io.Writer) error {
 	name := fmt.Sprintf("kbr-modes-runner-%d", time.Now().UnixNano())
-	args := []string{"run", "--rm", "-i", "--name", name, "--network", d.network,
+	args := []string{
+		"run", "--rm", "-i", "--name", name, "--network", d.network,
 		"--add-host", AppHost + ":" + d.ip, "--read-only", "--tmpfs", "/tmp:rw,nosuid,nodev,size=1g",
 		"--user", "10001:10001", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
-		"--pids-limit", "512", "--memory", "1g", "--memory-swap", "1g", "--cpus", "1", "--log-driver", "none"}
+		"--pids-limit", "512", "--memory", "1g", "--memory-swap", "1g", "--cpus", "1", "--log-driver", "none",
+	}
 	if d.runtime != "" {
 		args = append(args, "--runtime", d.runtime)
 	}
@@ -99,7 +101,6 @@ func TestSmokeBrowserEvidenceModes(t *testing.T) {
 		modes = []protocol.EvidenceLevel{protocol.EvidenceLevelLean, protocol.EvidenceLevelFull}
 	}
 	for _, mode := range modes {
-		mode := mode
 		t.Run(string(mode), func(t *testing.T) {
 			observations[string(mode)] = map[string][]protocol.RequestLogEntry{}
 			var baseline []protocol.BaselineScreenshot
@@ -118,19 +119,25 @@ func TestSmokeBrowserEvidenceModes(t *testing.T) {
 				if err := os.MkdirAll(dir, 0o755); err != nil {
 					t.Fatal(err)
 				}
-				runner := modeSmokeRunner{image: image, network: network, runtime: os.Getenv("KBR_RUNTIME"), ip: ip,
-					output: dir, collector: os.Getenv("KBR_COLLECTOR"), socket: os.Getenv("KBR_DOCKER_SOCKET")}
+				runner := modeSmokeRunner{
+					image: image, network: network, runtime: os.Getenv("KBR_RUNTIME"), ip: ip,
+					output: dir, collector: os.Getenv("KBR_COLLECTOR"), socket: os.Getenv("KBR_DOCKER_SOCKET"),
+				}
 				capture := Capture{Runner: runner, Redactor: redact.New()}
 				started := time.Now()
-				out, err := capture.Run(context.Background(), Request{Probe: probe, Evidence: &mode,
-					Spec: RunSpec{ClaimID: "claim-mode-smoke", Service: "app", Port: 3000}, Baseline: baseline, T0: started})
+				out, err := capture.Run(context.Background(), Request{
+					Probe: probe, Evidence: &mode,
+					Spec: RunSpec{ClaimID: "claim-mode-smoke", Service: "app", Port: 3000}, Baseline: baseline, T0: started,
+				})
 				if err != nil {
 					t.Fatalf("%s/%s: %v", mode, round, err)
 				}
 				wall := time.Since(started).Milliseconds()
 				sequence++
-				result := protocol.ProbeResult{StepID: fmt.Sprintf("00000000-0000-4000-8000-%012x", sequence), Executor: "observer", ImageID: "sample-app",
-					Transport: protocol.ProbeResultTransportOk, Browser: out.Browser, Requests: out.Requests, DurationMs: wall}
+				result := protocol.ProbeResult{
+					StepID: fmt.Sprintf("00000000-0000-4000-8000-%012x", sequence), Executor: "observer", ImageID: "sample-app",
+					Transport: protocol.ProbeResultTransportOk, Browser: out.Browser, Requests: out.Requests, DurationMs: wall,
+				}
 				save(t, dir, out, result)
 				m := measurement{Mode: mode, Round: round, WallMs: wall, Requests: len(out.Requests)}
 				for _, artifact := range out.Artifacts {
@@ -160,7 +167,8 @@ func TestSmokeBrowserEvidenceModes(t *testing.T) {
 				}
 				sort.Slice(routes, func(i, j int) bool { return fmt.Sprint(routes[i]) < fmt.Sprint(routes[j]) })
 				observations[string(mode)][round] = routes
-				if round == "base-1" {
+				switch {
+				case round == "base-1":
 					for _, s := range out.Browser.Steps {
 						if !s.Ok {
 							t.Fatalf("main failed step %d", s.Index)
@@ -175,11 +183,11 @@ func TestSmokeBrowserEvidenceModes(t *testing.T) {
 						_, _ = w.Write(shot)
 					}))
 					baseline = []protocol.BaselineScreenshot{{Step: 2, Screenshot: 0, URL: baselineServer.URL + "/screenshot-0"}}
-				} else if len(out.Browser.Pixels) == 0 {
+				case len(out.Browser.Pixels) == 0:
 					t.Fatal("pixel measurement missing")
-				} else if (round == "base-2" || round == "control-1") && out.Browser.Pixels[0].Ratio > 0.001 {
+				case (round == "base-2" || round == "control-1") && out.Browser.Pixels[0].Ratio > 0.001:
 					t.Fatalf("main is not stable: %v", out.Browser.Pixels)
-				} else if round[:2] == "pr" {
+				case round[:2] == "pr":
 					last := out.Browser.Steps[4]
 					if last.Ok || last.Error == nil || *last.Error != protocol.BrowserStepErrorMismatch {
 						t.Fatalf("PR regression was missed: %+v", last)

@@ -5,30 +5,36 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"flag"
 	"log/slog"
-	"net/http"
+	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
-	"time"
-
-	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/hubclient"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/tlsutil"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/lifecycle"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer/observersrv"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/telemetry"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/version"
 )
-
-var version = "dev"
 
 // devEnv must be 1 for -insecure-dev, as for the local-docker driver.
 const devEnv = "KODY_RUNTIME_DEV"
 
 func main() {
+	log := slog.New(telemetry.NewHandler(slog.NewJSONHandler(os.Stderr, nil)))
+	if err := run(log); err != nil {
+		log.Error("observer.failed", "err", err)
+		os.Exit(lifecycle.ExitCode(err))
+	}
+}
+
+// run serves the cell agent until SIGTERM or SIGINT (observersrv.Run lets
+// the requests in flight end). -insecure-dev without its variable is the
+// operator's (exit 2). Every defer runs on the way out.
+func run(log *slog.Logger) error {
 	listen := flag.String("listen", ":7443", "address for the cell agent")
 	cellID := flag.String("cell-id", os.Getenv("KODUS_CELL_ID"), "cell id")
 	cert := flag.String("cert", "/etc/kodus/observer/cert.pem", "server certificate")
@@ -39,56 +45,21 @@ func main() {
 	// claim VM's host:port.
 	dsn := flag.String("sql-dsn", os.Getenv("KODUS_OBSERVER_SQL_DSN"), "DSN template, e.g. postgres://kody_observer@{address}/app?sslmode=disable")
 	flag.Parse()
-	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	log.Info("observer.start", "version", version)
+	log.Info("observer.start", "version", version.Get())
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
 
-	base := observer.Config{
-		// HTTP stays nil: each claim's prober dials only its targets.
-		OpenSQL: legacySQLClient(*dsn),
-	}
-	srv := &observer.Server{CellID: *cellID, NewID: hubclient.NewID, Base: base}
-	defer srv.Close()
-	hs := &http.Server{Addr: *listen, Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
-	go func() {
-		<-ctx.Done()
-		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = hs.Shutdown(sctx)
-	}()
-	var err error
 	if *insecure {
 		if os.Getenv(devEnv) != "1" {
-			log.Error("observer.insecure_dev refused", "need", devEnv+"=1")
-			os.Exit(2)
+			return lifecycle.Usage(errors.New("observer.insecure_dev refused: needs " + devEnv + "=1"))
 		}
 		log.Warn("observer.insecure_dev")
-		err = hs.ListenAndServe()
-	} else {
-		if hs.TLSConfig, err = tlsutil.Server(*cert, *key, *ca); err == nil {
-			err = hs.ListenAndServeTLS("", "")
-		}
 	}
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Error("observer", "err", err)
-		os.Exit(1)
+	l, err := (&net.ListenConfig{}).Listen(ctx, "tcp", *listen)
+	if err != nil {
+		return err
 	}
-}
-
-type errUnsupported string
-
-func (e errUnsupported) Error() string { return "sql kind not supported yet: " + string(e) }
-
-// legacySQLClient retains explicitly configured static DSNs for older cells.
-func legacySQLClient(template string) func(observer.Target) (*sql.DB, error) {
-	return func(t observer.Target) (*sql.DB, error) {
-		if strings.TrimSpace(template) == "" {
-			return nil, errors.New("observer SQL is not configured")
-		}
-		if t.Kind != "postgres" {
-			return nil, errUnsupported(t.Kind)
-		}
-		return sql.Open("pgx", strings.ReplaceAll(template, "{address}", t.Address))
-	}
+	return observersrv.Run(ctx, observersrv.Options{
+		Listener: l, CellID: *cellID, NewID: hubclient.NewID, Cert: *cert, Key: *key, CA: *ca, Insecure: *insecure, SQLDSN: *dsn, Log: log,
+	})
 }

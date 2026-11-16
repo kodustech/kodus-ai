@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"net"
@@ -124,8 +125,8 @@ func (r *OpenBaoReader) ReadVersion(ctx context.Context, ref SecretVersionRef) (
 	if err != nil {
 		return SecretVersion{}, baoReadError(ctx)
 	}
-	defer response.Body.Close()
-	if response.StatusCode == 401 || response.StatusCode == 403 || response.StatusCode == 404 {
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden || response.StatusCode == http.StatusNotFound {
 		return SecretVersion{}, ErrVaultDenied
 	}
 	if response.StatusCode != http.StatusOK {
@@ -164,9 +165,15 @@ func (r *OpenBaoReader) CloseIdleConnections() {
 	}
 }
 
+// baoReadError names a failed backend call. A deadline that has passed is
+// the request deadline even before the context's own timer marks it: the
+// transport's timeouts equal it, and under load either may fire first.
 func baoReadError(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) {
+		return context.DeadlineExceeded
 	}
 	return ErrVaultUnavailable
 }
@@ -193,7 +200,7 @@ func decodeOpenBaoVersion(raw []byte, ref SecretVersionRef) (SecretVersion, erro
 	if err != nil {
 		return SecretVersion{}, ErrVaultUnavailable
 	}
-	if _, err = decoder.Token(); err != io.EOF {
+	if _, err = decoder.Token(); !errors.Is(err, io.EOF) {
 		return SecretVersion{}, ErrVaultUnavailable
 	}
 	object, _ := root.(map[string]any)

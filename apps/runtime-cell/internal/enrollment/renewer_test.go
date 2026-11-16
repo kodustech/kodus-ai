@@ -33,7 +33,8 @@ type syncBuf struct {
 }
 
 func (s *syncBuf) Write(p []byte) (int, error) { s.mu.Lock(); defer s.mu.Unlock(); return s.b.Write(p) }
-func (s *syncBuf) String() string              { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
+
+func (s *syncBuf) String() string { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
 
 // renewHub signs /cells/renew CSRs for the certificate presented, the way
 // the TS hub does, and records the serial of every client handshake.
@@ -70,21 +71,25 @@ func (h *renewHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	}
 	der, _ := x509.CreateCertificate(rand.Reader, tpl, h.ca.Cert, csr.PublicKey, h.ca.Key)
-	_ = json.NewEncoder(w).Encode(CertificateResponse{OK: true, CellID: cn, Serial: tpl.SerialNumber.Text(16), ExpiresAt: tpl.NotAfter.UTC().Format(time.RFC3339),
-		Certificate: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})), CACertificate: string(h.ca.PEM)})
+	_ = json.NewEncoder(w).Encode(CertificateResponse{
+		OK: true, CellID: cn, Serial: tpl.SerialNumber.Text(16), ExpiresAt: tpl.NotAfter.UTC().Format(time.RFC3339),
+		Certificate: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})), CACertificate: string(h.ca.PEM),
+	})
 }
 
 func startHub(t *testing.T, h *renewHub) (*httptest.Server, string) {
 	serverCert, _ := h.ca.Issue("runtime-hub", time.Hour, "127.0.0.1")
 	srv := httptest.NewUnstartedServer(h)
 	srv.Config.ErrorLog = log.New(io.Discard, "", 0)
-	srv.TLS = &tls.Config{Certificates: []tls.Certificate{serverCert}, ClientCAs: h.ca.Pool(), ClientAuth: tls.RequireAndVerifyClientCert, MinVersion: tls.VersionTLS13,
+	srv.TLS = &tls.Config{
+		Certificates: []tls.Certificate{serverCert}, ClientCAs: h.ca.Pool(), ClientAuth: tls.RequireAndVerifyClientCert, MinVersion: tls.VersionTLS13,
 		VerifyConnection: func(cs tls.ConnectionState) error {
 			h.mu.Lock()
 			h.clients = append(h.clients, cs.PeerCertificates[0].SerialNumber.String())
 			h.mu.Unlock()
 			return nil
-		}}
+		},
+	}
 	srv.StartTLS()
 	t.Cleanup(srv.Close)
 	return srv, srv.URL
@@ -146,7 +151,7 @@ func TestRenewerSwapsTheCertificateAndKeepsLiveConnections(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	p := Paths{Key: filepath.Join(dir, "key.pem"), Cert: filepath.Join(dir, "cert.pem"), CA: filepath.Join(dir, "ca.pem")}
+	p := Paths{Key: filepath.Join(dir, "key.pem"), Cert: filepath.Join(dir, "cert.pem"), CA: filepath.Join(dir, "ca.pem"), Issuer: pinIssuer(t, dir, ca)}
 	logs := &syncBuf{}
 	r := &Renewer{Holder: holder, Hub: url, Roots: ca.Pool(), Paths: p, Log: slog.New(slog.NewJSONHandler(logs, nil)), Now: due}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -213,9 +218,11 @@ func TestRenewerAlarmsAndBacksOffUntilTheHubAnswers(t *testing.T) {
 	holder, _ := NewCertHolder(old)
 	dir := t.TempDir()
 	logs := &syncBuf{}
-	r := &Renewer{Holder: holder, Hub: url, Roots: ca.Pool(), Log: slog.New(slog.NewJSONHandler(logs, nil)), Now: due,
-		Paths:      Paths{Key: filepath.Join(dir, "key.pem"), Cert: filepath.Join(dir, "cert.pem"), CA: filepath.Join(dir, "ca.pem")},
-		MinBackoff: 20 * time.Millisecond, MaxBackoff: 80 * time.Millisecond}
+	r := &Renewer{
+		Holder: holder, Hub: url, Roots: ca.Pool(), Log: slog.New(slog.NewJSONHandler(logs, nil)), Now: due,
+		Paths:      Paths{Key: filepath.Join(dir, "key.pem"), Cert: filepath.Join(dir, "cert.pem"), CA: filepath.Join(dir, "ca.pem"), Issuer: pinIssuer(t, dir, ca)},
+		MinBackoff: 20 * time.Millisecond, MaxBackoff: 80 * time.Millisecond,
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go r.Run(ctx)
@@ -250,8 +257,10 @@ func TestRenewerExpiredAlarm(t *testing.T) {
 	old, _ := ca.Issue("cell-9", time.Second)
 	holder, _ := NewCertHolder(old)
 	logs := &syncBuf{}
-	r := &Renewer{Holder: holder, Hub: "https://127.0.0.1:1", Roots: ca.Pool(), Log: slog.New(slog.NewJSONHandler(logs, nil)),
-		Now: func() time.Time { return old.Leaf.NotAfter.Add(time.Minute) }, MinBackoff: time.Hour}
+	r := &Renewer{
+		Holder: holder, Hub: "https://127.0.0.1:1", Roots: ca.Pool(), Log: slog.New(slog.NewJSONHandler(logs, nil)),
+		Now: func() time.Time { return old.Leaf.NotAfter.Add(time.Minute) }, MinBackoff: time.Hour,
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	go r.Run(ctx)
 	for r.Failures.Load() == 0 {
@@ -272,9 +281,11 @@ func TestRenewerBacksOffWhenTheNewCertificateIsAlreadyDue(t *testing.T) {
 	old, _ := ca.Issue("cell-3", time.Second)
 	holder, _ := NewCertHolder(old)
 	dir := t.TempDir()
-	r := &Renewer{Holder: holder, Hub: url, Roots: ca.Pool(), Log: slog.New(slog.NewJSONHandler(io.Discard, nil)),
-		Paths:      Paths{Key: filepath.Join(dir, "key.pem"), Cert: filepath.Join(dir, "cert.pem")},
-		MinBackoff: 200 * time.Millisecond, MaxBackoff: 200 * time.Millisecond}
+	r := &Renewer{
+		Holder: holder, Hub: url, Roots: ca.Pool(), Log: slog.New(slog.NewJSONHandler(io.Discard, nil)),
+		Paths:      Paths{Key: filepath.Join(dir, "key.pem"), Cert: filepath.Join(dir, "cert.pem"), Issuer: pinIssuer(t, dir, ca)},
+		MinBackoff: 200 * time.Millisecond, MaxBackoff: 200 * time.Millisecond,
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 700*time.Millisecond)
 	defer cancel()
 	r.Run(ctx)
@@ -284,4 +295,14 @@ func TestRenewerBacksOffWhenTheNewCertificateIsAlreadyDue(t *testing.T) {
 	if r.Failures.Load() == 0 {
 		t.Fatal("an already-due certificate was taken as a success")
 	}
+}
+
+// pinIssuer writes ca as the issuer pinned at register and returns its path.
+func pinIssuer(t *testing.T, dir string, ca *testpki.CA) string {
+	t.Helper()
+	path := filepath.Join(dir, "issuer.pem")
+	if err := os.WriteFile(path, ca.PEM, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

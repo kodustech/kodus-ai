@@ -30,16 +30,18 @@ var ErrNotOwned = errors.New("driver: not this cell's")
 // egress policy must list them, or the proxy and the resolver refuse them as
 // unknown sources.
 type ComposeBooter interface {
-	Up(ctx context.Context, ref MachineRef, compose []byte, projectDir string) (sources []string, err error)
+	Up(ctx context.Context, req UpRequest) (sources []string, err error)
 }
 
-// RecipeRunner is a ComposeBooter that also runs the recipe's own boot steps
-// (setup, data.migrate, data.seed: recipe.HasBootSteps) in the project it
-// brought up. The agent calls it after every Up, once the claim's egress
-// policy names the project's containers (a setup command may fetch), and
-// before the claim is ready or the reset's step answers.
+// RecipeRunner runs the recipe's own boot steps (setup, data.migrate,
+// data.seed: recipe.HasBootSteps) in the compose project the driver's
+// ComposeBooter brought up; Parts carries the two on separate fields. The
+// agent calls it after every Up, once the claim's egress policy names the
+// project's containers (a setup command may fetch), and before the claim is
+// ready or the reset's step answers. Output takes the steps' lines as
+// UpRequest.Output does; nil: nobody listens.
 type RecipeRunner interface {
-	RunRecipe(ctx context.Context, ref MachineRef, projectDir string) error
+	RunRecipe(ctx context.Context, ref MachineRef, projectDir string, output func(line string)) error
 }
 
 // RecipeStepError is a recipe boot step that failed in the workload: the

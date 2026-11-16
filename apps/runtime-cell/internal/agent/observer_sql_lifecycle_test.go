@@ -49,9 +49,11 @@ type lifecycleSQLProvider struct {
 func (p *lifecycleSQLProvider) ProvisionObserverSQL(context.Context, driver.MachineRef, string) ([]observerauth.Credential, error) {
 	return append([]observerauth.Credential(nil), p.credentials...), p.err
 }
+
 func (p *lifecycleSQLProvider) ObserverSQLCredentials(string) []observerauth.Credential {
 	return append([]observerauth.Credential(nil), p.credentials...)
 }
+
 func (p *lifecycleSQLProvider) ObserverSQLSecrets(string) []string {
 	var out []string
 	for _, c := range p.credentials {
@@ -100,10 +102,10 @@ func TestSQLObserverLifecycleRefusesUnboundCredentials(t *testing.T) {
 			p := &lifecycleSQLProvider{credentials: tc.credentials}
 			configured := 0
 			h := newHarness(t, func(cfg *Config) {
-				cfg.SQLObservers = p
+				cfg.Parts.SQLObservers = p
 				cfg.Observers = func(context.Context, ClaimInfo, []observer.Target) (observer.Client, error) {
 					configured++
-					return nil, nil
+					return nil, nil //nolint:nilnil // fake factory: the SQL path discards the client
 				}
 			})
 			c := sqlLifecycleClaim(h)
@@ -125,13 +127,13 @@ func TestSQLObserverLifecycleConfiguresEachSeedGenerationWithRedaction(t *testin
 	p := &lifecycleSQLProvider{credentials: []observerauth.Credential{credential}}
 	var generations []uint64
 	h := newHarness(t, func(cfg *Config) {
-		cfg.SQLObservers = p
+		cfg.Parts.SQLObservers = p
 		cfg.Observers = func(_ context.Context, info ClaimInfo, targets []observer.Target) (observer.Client, error) {
 			generations = append(generations, info.ObserverGeneration)
 			if info.ClaimID != "claim-sql" || len(targets) != 1 || targets[0].Service != "db" || targets[0].Address != "10.0.0.7:5432" {
 				t.Error("configuration did not use this claim's target")
 			}
-			return nil, nil
+			return nil, nil //nolint:nilnil // fake factory: the SQL path discards the client
 		}
 	})
 	c := sqlLifecycleClaim(h)
@@ -167,7 +169,7 @@ func TestSQLObserverLifecycleFailureNeverPublishesReady(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := &lifecycleSQLProvider{credentials: tc.credentials}
 			h := newHarness(t, func(cfg *Config) {
-				cfg.SQLObservers = p
+				cfg.Parts.SQLObservers = p
 				cfg.Observers = func(context.Context, ClaimInfo, []observer.Target) (observer.Client, error) {
 					return nil, tc.configureErr
 				}

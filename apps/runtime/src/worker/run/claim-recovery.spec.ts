@@ -3,7 +3,7 @@ import { FakeEnvironmentRuntime, type LeaseRenewal } from '@libs/runtime/environ
 import { shopRunRequest } from '../../e2e/fixtures';
 import { SCENARIOS } from '../../fake-cell/scenarios';
 import { runPlannedTests } from '../intent/test-runs';
-import { inMemoryRunDeps } from './in-memory-deps';
+import { inMemoryRunDeps } from './testing';
 import type { StepRunner } from './ports';
 import { replayProbe } from './replay';
 import { runRuntimeRun } from './run-orchestrator';
@@ -31,7 +31,8 @@ const live = (): LeaseRenewal => ({ status: 'renewed', leaseExpiresAt: '2030-01-
 describe('claim authority after checkpoint recovery', () => {
     async function interruptedRun() {
         const memory = inMemoryRunDeps();
-        const saved = journal('agent:plan');
+        // The plan's step (made while the PR boots): interrupted before it ran.
+        const saved = journal('agent:plan:early');
         const acquire = jest.spyOn(memory.deps.env, 'acquire');
         const plan = jest.spyOn(memory.deps.agent, 'plan');
         const renew = jest.fn(async (_id: string) => live());

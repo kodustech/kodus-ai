@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import { dirname, join, relative, resolve, sep } from 'path';
 
-import { evidenceKey, InvalidEvidenceKeyError } from '@libs/runtime/api/domain/evidence';
+import { evidenceKey, InvalidEvidenceKeyError } from '@libs/runtime/contracts/evidence';
 
 // The evidence object store on a local volume (§8, self-hosted and dev): one
 // file per key {orgId}/{runId}/{side}/{stepId}/{type}, 0600 under 0700
@@ -42,6 +42,14 @@ export interface TakenUpload {
 
 const META = '.meta.json';
 
+/** A path that is not there (not created yet, or removed by a concurrent sweep) reads as `fallback`; any other error propagates. */
+const ifMissing =
+    <T>(fallback: T) =>
+    (e: unknown): T => {
+        if ((e as NodeJS.ErrnoException)?.code === 'ENOENT') return fallback;
+        throw e;
+    };
+
 /** The exact key, or InvalidEvidenceKeyError: five parts, each from its closed set. */
 export function canonicalEvidenceKey(key: string): string {
     const parts = String(key ?? '').split('/');
@@ -78,6 +86,7 @@ export class FileEvidenceStore implements EvidenceStore {
     async get(key: string): Promise<EvidenceObject | null> {
         const p = this.path(key);
         try {
+            // No meta yet (put writes it after the body) or an unreadable one: the body goes out as octet-stream, the safe type.
             const [body, meta] = await Promise.all([fs.readFile(p), fs.readFile(`${p}${META}`, 'utf8').catch(() => '{}')]);
             const contentType = (JSON.parse(meta) as { contentType?: string }).contentType ?? 'application/octet-stream';
             return { body, contentType };
@@ -92,13 +101,13 @@ export class FileEvidenceStore implements EvidenceStore {
         const cutoff = now.getTime() - days * 24 * 3_600_000;
         let removed = 0;
         const walk = async (dir: string): Promise<void> => {
-            const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+            const entries = await fs.readdir(dir, { withFileTypes: true }).catch(ifMissing([]));
             for (const e of entries) {
                 const p = join(dir, e.name);
                 if (e.isDirectory()) {
                     await walk(p);
                 } else if (!e.name.endsWith(META)) {
-                    const st = await fs.stat(p).catch(() => null);
+                    const st = await fs.stat(p).catch(ifMissing(null));
                     if (st && st.mtimeMs < cutoff) {
                         await fs.rm(p, { force: true });
                         await fs.rm(`${p}${META}`, { force: true });
@@ -106,6 +115,7 @@ export class FileEvidenceStore implements EvidenceStore {
                     }
                 }
             }
+            // Only an empty directory is removed: one that cannot be listed is kept, and a put that raced in (ENOTEMPTY) keeps it too; the next sweep retries.
             if (dir !== this.root && (await fs.readdir(dir).catch(() => ['?'])).length === 0) await fs.rmdir(dir).catch(() => undefined);
         };
         await walk(this.root);
@@ -113,14 +123,3 @@ export class FileEvidenceStore implements EvidenceStore {
     }
 }
 
-export class InMemoryEvidenceStore implements EvidenceStore {
-    readonly objects = new Map<string, EvidenceObject>();
-
-    async put(key: string, body: string | Buffer, contentType: string) {
-        this.objects.set(canonicalEvidenceKey(key), { body: Buffer.from(body), contentType });
-    }
-
-    async get(key: string) {
-        return this.objects.get(canonicalEvidenceKey(key)) ?? null;
-    }
-}

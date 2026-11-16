@@ -35,7 +35,7 @@ var numberRe = regexp.MustCompile(`^(?:-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+
 
 // reservedKeys are refused anywhere in a frame (strict-json.ts
 // RESERVED_JSON_KEYS).
-var reservedKeys = map[string]bool{"__proto__": true}
+var reservedKeys = setOf(ReservedJSONKeys)
 
 func (p *strictParser) fail(code DecodeErrorCode, msg string) error {
 	return &DecodeError{Code: code, Message: fmt.Sprintf("%s at %d", msg, p.i)}
@@ -168,7 +168,7 @@ func (p *strictParser) value(depth int) (any, error) {
 	case "false":
 		return false, nil
 	case "null":
-		return nil, nil
+		return nil, nil //nolint:nilnil // JSON null decodes to a nil value; it is not an error
 	}
 	return json.Number(m), nil
 }

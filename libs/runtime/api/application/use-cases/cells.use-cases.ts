@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 
 import {
     IOutboxMessageRepository,
@@ -6,17 +6,20 @@ import {
 } from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
 import type { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 
-import { CELL_TOKEN_TTL_MS, CELL_TOPOLOGIES, generateCellRegistrationToken, type CellTopology } from '../../domain/cell-token';
+import { CELL_TOKEN_TTL_MS, CELL_TOPOLOGIES, cellTokenState, generateCellRegistrationToken, isCellTokenId, type CellTopology } from '../../domain/cell-token';
 import { RuntimeCommandName, runtimeCommandOutboxMessage } from '../../domain/runtime-commands';
+import type { CellRegistrationTokenView } from '@libs/runtime/contracts/views/cells';
 import {
     RUNTIME_API_CONFIG,
     RUNTIME_CELL_READER,
+    RUNTIME_CELL_TOKEN_READER,
     RUNTIME_CLOCK,
     isKodusOncall,
     type Clock,
     type RuntimeApiConfig,
     type RuntimeCell,
     type RuntimeCellReader,
+    type RuntimeCellTokenReader,
 } from '../../domain/ports';
 
 
@@ -57,7 +60,83 @@ export class CreateCellRegistrationTokenUseCase {
                 tokenHash,
             ),
         );
-        return { token, topology, expiresAt };
+        // id: the token's hash, the Runtime's key for it (lists and revokes it; registers nothing).
+        return { id: tokenHash, token, topology, expiresAt };
+    }
+}
+
+// The view lives in contracts/views/cells.ts (the web imports it too); re-exported for the callers that imported it from here.
+export type { CellRegistrationTokenView };
+
+/** How far back the token list goes: enough to see who made the tokens of today's installs. */
+export const CELL_TOKEN_LIST_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * GET /runtime/cells/registration-tokens — the org's tokens of the last 24 h,
+ * newest first, with their state. Never the token: only its hash is stored.
+ */
+@Injectable()
+export class ListCellRegistrationTokensUseCase {
+    constructor(
+        @Inject(RUNTIME_CELL_TOKEN_READER)
+        private readonly tokens: RuntimeCellTokenReader,
+        @Inject(RUNTIME_CLOCK)
+        private readonly now: Clock,
+    ) {}
+
+    async execute(input: { user: Partial<IUser> }): Promise<CellRegistrationTokenView[]> {
+        const organizationId = orgOf(input.user);
+        const now = this.now();
+        const rows = await this.tokens.listByOrganization(organizationId, new Date(now.getTime() - CELL_TOKEN_LIST_WINDOW_MS));
+        return rows
+            .filter((t) => t.organizationId === organizationId)
+            .map((t) => ({
+                id: t.tokenHash,
+                topology: t.topology,
+                issuedBy: t.issuedBy,
+                issuedAt: t.issuedAt,
+                expiresAt: t.expiresAt,
+                state: cellTokenState(t, now),
+                ...(t.usedAt ? { usedAt: t.usedAt } : {}),
+                ...(t.revokedAt ? { revokedAt: t.revokedAt } : {}),
+            }));
+    }
+}
+
+/**
+ * POST /runtime/cells/registration-tokens/:id/revoke — revokes a pending
+ * token of the caller's org (docs/runtime/self-hosted.md). Another org's or
+ * an unknown token is 404; a used, expired or revoked one is 409, with its
+ * state. Through the outbox, like a cell revoke: a redemption that lands
+ * first wins, and its cell is revoked as a cell.
+ */
+@Injectable()
+export class RevokeCellRegistrationTokenUseCase {
+    constructor(
+        @Inject(RUNTIME_CELL_TOKEN_READER)
+        private readonly tokens: RuntimeCellTokenReader,
+        @Inject(OUTBOX_MESSAGE_REPOSITORY_TOKEN)
+        private readonly outbox: IOutboxMessageRepository,
+        @Inject(RUNTIME_CLOCK)
+        private readonly now: Clock,
+    ) {}
+
+    async execute(input: { user: Partial<IUser>; id: string }) {
+        const organizationId = orgOf(input.user);
+        const row = isCellTokenId(input.id) ? await this.tokens.get(input.id) : null;
+        if (!row || row.organizationId !== organizationId) throw new NotFoundException('Registration token not found');
+        const now = this.now();
+        const state = cellTokenState(row, now);
+        if (state !== 'pending') throw new ConflictException({ message: `The registration token is ${state}`, state });
+        const revokedAt = now.toISOString();
+        await this.outbox.create(
+            runtimeCommandOutboxMessage(
+                RuntimeCommandName.CellTokenRevoked,
+                { tokenHash: row.tokenHash, organizationId, revokedBy: actorOf(input.user), revokedAt },
+                `${row.tokenHash}:revoke`,
+            ),
+        );
+        return { id: row.tokenHash, state: 'revoke_requested' as const, revokedAt };
     }
 }
 

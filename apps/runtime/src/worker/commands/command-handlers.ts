@@ -4,16 +4,20 @@ import { Logger } from '@nestjs/common';
 import {
     RuntimeCellRevokeRequestedSchema,
     RuntimeCellTokenIssuedSchema,
+    RuntimeCellTokenRevokedSchema,
     RuntimeCommandName,
     RuntimeEgressApprovedSchema,
+    RuntimeEgressRevokedSchema,
+    RuntimeEgressSettingsChangedSchema,
     RuntimeLessonUpdateRequestedSchema,
     RuntimeEnvironmentPoolRequestedSchema,
     RuntimeEnvironmentSetupRequestedSchema,
     RuntimeForkApprovedSchema,
     RuntimeStopClearedSchema,
     RuntimeStopRequestedSchema,
-} from '@libs/runtime/api/domain/runtime-commands';
+} from '@libs/runtime/contracts/runtime-commands';
 import type { MachineSize } from '@libs/runtime/contracts/machine-size';
+import { RECOMMENDED_EGRESS_VERSION } from '@libs/runtime/protocol/egress-catalog';
 import type { RunProjectionStore } from '@libs/runtime/run';
 
 import type { CommandStore } from '../../shared/persistence/pg-command-store';
@@ -75,10 +79,65 @@ export class EgressApprovedHandler implements CommandHandler {
     async handle(body: Record<string, unknown>) {
         const p = RuntimeEgressApprovedSchema.safeParse(body);
         if (!p.success) return invalid('invalid egress approval', p.error.message);
-        await this.commands.recordEgressApproval({ ...p.data, approvedBy: p.data.approvedBy.userId });
-        // The environment's live claims get the new full allowlist without a new claim.
-        const allow = await this.commands.approvedHosts(p.data.organizationId, p.data.environmentId);
-        await this.egress?.push(p.data.organizationId, p.data.environmentId, allow).catch((e) => this.logger.warn({ msg: 'egress_policy.push_failed', error: (e as Error)?.message }));
+        const d = p.data;
+        const mode = d.mode ?? 'passthrough';
+        await this.commands.recordEgressApproval({
+            environmentId: d.environmentId, host: d.host, organizationId: d.organizationId, approvedBy: d.approvedBy.userId, approvedAt: d.approvedAt,
+            mode, ...(mode === 'inspected' ? { pathPrefixes: d.pathPrefixes } : {}), source: d.source ?? 'blocker',
+        });
+        // Who, when, which tier and from where (G4): the environment page shows it.
+        await this.commands.recordEgressAudit({
+            key: d.key + '@' + d.approvedAt, organizationId: d.organizationId, environmentId: d.environmentId, host: d.host, action: 'approve', mode,
+            ...(mode === 'inspected' ? { pathPrefixes: d.pathPrefixes } : {}), actor: d.approvedBy.userId, source: d.source ?? 'blocker',
+            ...(d.sourceRef ? { sourceRef: d.sourceRef } : {}), ...(d.reason ? { reason: d.reason } : {}), recommendedVersion: RECOMMENDED_EGRESS_VERSION, at: d.approvedAt,
+        });
+        await pushEgress(this.commands, this.egress, this.logger, d.organizationId, d.environmentId);
+    }
+}
+
+/** The scope's live claims get its full allowlist without a new claim (an org-list change reaches every environment). */
+async function pushEgress(commands: CommandStore, egress: EgressPolicyPusher | undefined, logger: Logger, organizationId: string, environmentId: string) {
+    const allow = await commands.approvedHosts(organizationId, environmentId);
+    await egress?.push(organizationId, environmentId, allow).catch((e) => logger.warn({ msg: 'egress_policy.push_failed', error: (e as Error)?.message }));
+}
+
+/** An approval revoked (G3): its live claims get the list without the host, which cuts their connections to it. */
+export class EgressRevokedHandler implements CommandHandler {
+    readonly event = RuntimeCommandName.EgressRevoked;
+    private readonly logger = new Logger('EgressRevoked');
+    constructor(
+        private readonly commands: CommandStore,
+        private readonly egress?: EgressPolicyPusher,
+    ) {}
+
+    async handle(body: Record<string, unknown>) {
+        const p = RuntimeEgressRevokedSchema.safeParse(body);
+        if (!p.success) return invalid('invalid egress revocation', p.error.message);
+        const d = p.data;
+        const revoked = await this.commands.revokeEgressApproval({ environmentId: d.environmentId, host: d.host, organizationId: d.organizationId, revokedBy: d.revokedBy.userId, revokedAt: d.revokedAt });
+        if (!revoked) this.logger.log({ msg: 'egress_revoke.nothing_live', key: d.key });
+        await this.commands.recordEgressAudit({
+            key: d.key + '@' + d.revokedAt, organizationId: d.organizationId, environmentId: d.environmentId, host: d.host, action: 'revoke',
+            actor: d.revokedBy.userId, source: 'settings', ...(d.reason ? { reason: d.reason } : {}), detail: { revoked }, at: d.revokedAt,
+        });
+        await pushEgress(this.commands, this.egress, this.logger, d.organizationId, d.environmentId);
+    }
+}
+
+/** The org's outbound access settings (D2, D3): the next claims read them; the change is audited. */
+export class EgressSettingsChangedHandler implements CommandHandler {
+    readonly event = RuntimeCommandName.EgressSettingsChanged;
+    constructor(private readonly commands: CommandStore) {}
+
+    async handle(body: Record<string, unknown>) {
+        const p = RuntimeEgressSettingsChangedSchema.safeParse(body);
+        if (!p.success) return invalid('invalid egress settings', p.error.message);
+        const d = p.data;
+        await this.commands.recordEgressSettings({ organizationId: d.organizationId, recommendedEnabled: d.recommendedEnabled, whoMayAdd: d.whoMayAdd, updatedBy: d.changedBy.userId, updatedAt: d.changedAt });
+        await this.commands.recordEgressAudit({
+            key: d.key, organizationId: d.organizationId, action: 'settings', actor: d.changedBy.userId, source: 'settings',
+            recommendedVersion: RECOMMENDED_EGRESS_VERSION, detail: { recommendedEnabled: d.recommendedEnabled, whoMayAdd: d.whoMayAdd }, at: d.changedAt,
+        });
     }
 }
 
@@ -185,6 +244,20 @@ export class CellTokenIssuedHandler implements CommandHandler {
         const p = RuntimeCellTokenIssuedSchema.safeParse(body);
         if (!p.success) return invalid('invalid cell token', p.error.message);
         await this.commands.recordCellToken({ tokenHash: p.data.tokenHash, organizationId: p.data.organizationId, topology: p.data.topology, expiresAt: p.data.expiresAt, issuedBy: p.data.issuedBy.userId });
+    }
+}
+
+/** Revokes an unused registration token of the org; another org's, a used or an unknown one is left as it is. */
+export class CellTokenRevokedHandler implements CommandHandler {
+    readonly event = RuntimeCommandName.CellTokenRevoked;
+    private readonly logger = new Logger('CellTokenRevoked');
+    constructor(private readonly commands: CommandStore) {}
+
+    async handle(body: Record<string, unknown>) {
+        const p = RuntimeCellTokenRevokedSchema.safeParse(body);
+        if (!p.success) return invalid('invalid cell token revoke', p.error.message);
+        const revoked = await this.commands.revokeCellToken({ tokenHash: p.data.tokenHash, organizationId: p.data.organizationId, revokedAt: p.data.revokedAt, revokedBy: p.data.revokedBy.userId });
+        this.logger.log({ msg: revoked ? 'cell_token.revoked' : 'cell_token.not_revoked', organizationId: p.data.organizationId });
     }
 }
 

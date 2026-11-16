@@ -37,6 +37,10 @@ describe('claim deadlines', () => {
 
     it('the wait for claim.ready is the consumer one, and ends a minute before the ceiling', () => {
         expect(readyWaitMs('runtime', freshDeadlines('runtime', T0), T0)).toBe(15 * MIN);
+        // The PR side builds the pull request's commit: it waits for that build, and the base side does not.
+        expect(readyWaitMs('runtime', freshDeadlines('runtime', T0), T0, 'pr')).toBe(30 * MIN);
+        expect(readyWaitMs('runtime', freshDeadlines('runtime', T0), T0, 'base')).toBe(15 * MIN);
+        expect(readyWaitMs('setup', freshDeadlines('setup', T0), T0, 'pr')).toBe(44 * MIN);
         expect(readyWaitMs('setup', freshDeadlines('setup', T0), T0)).toBe(44 * MIN);
         // A retry 40 minutes into a setup's 45: four minutes left to boot, not 44.
         expect(readyWaitMs('setup', freshDeadlines('setup', T0), T0 + 40 * MIN)).toBe(4 * MIN);

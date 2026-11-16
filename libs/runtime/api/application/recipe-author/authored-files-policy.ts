@@ -4,12 +4,15 @@ import * as yaml from 'js-yaml';
 
 import { AUTHORED_FILES_LIMITS } from '@libs/runtime/contracts/authored-files';
 import { RECIPE_FILE_PATHS } from '@libs/runtime/contracts/enums';
-import { RECIPE_TEST_VALUES } from '@libs/runtime/protocol/recipe';
+import { type RecipeNeed, recipeNeedsConflict, RECIPE_TEST_VALUES } from '@libs/runtime/protocol/recipe';
 import { redactPatterns } from '@libs/runtime/redaction';
 import { SECRET_NAME } from '@libs/runtime/run/recipe-inference';
 
+import { sanitiseAuthoredCompose } from './authored-compose-sanitiser';
+import { declareMirrorBuildArgs } from './authored-dockerfile-mirror';
 import { checkAuthoredRecipe, type AuthoredRecipeCheck } from './authored-recipe-policy';
 import { RepoPathError, repoPath } from './repo-reader';
+import { UNTRUSTED_YAML } from '@libs/runtime/protocol/yaml-limits';
 
 /**
  * The Dockerfiles and compose files Kody may write next to its recipe. Like
@@ -302,6 +305,508 @@ export function checkAuthoredDockerfile(path: string, content: string): string[]
     return errors;
 }
 
+// --- Node builds ------------------------------------------------------------------------------
+//
+// Rules on how an authored Dockerfile builds a Node project, not on what it may do: each one is a
+// build that measured slow or broke on the cell (cal.com copied apps/ and packages/ before `yarn
+// install`: a 17-minute install and a 21-minute image export on every source change; next.js let
+// corepack pick pnpm 11, which stopped on ERR_PNPM_IGNORED_BUILDS). They read the manifests at the
+// Dockerfile's build context and stay silent wherever those do not say enough to name the fix.
+
+/** What the Node build rules read from the manifests at a Dockerfile's build context. */
+export interface NodeBuildFacts {
+    /** Where the workspace members are: package.json workspaces, pnpm-workspace.yaml or lerna.json packages (negations dropped). */
+    workspaceGlobs: string[];
+    /** Workspaces, or a Lerna, Nx or Turborepo config: the install reads more than the root manifest. */
+    monorepo: boolean;
+    /** package.json packageManager, its hash dropped. */
+    packageManager?: { name: string; version: string };
+    /** The root lockfile's name. */
+    lockfile?: string;
+    /** lockfileVersion of pnpm-lock.yaml (`9.0`). */
+    pnpmLockfileVersion?: string;
+    /** The package manager's own files the install reads, as far as the manifests tell (.npmrc, .yarnrc.yml, .yarn/releases, patches). */
+    installFiles: string[];
+    /** nx.json is there. */
+    nx: boolean;
+    /** The root package.json scripts, for a RUN that calls one. */
+    scripts: Record<string, string>;
+}
+
+const LOCKFILE_NAMES = ['pnpm-lock.yaml', 'yarn.lock', 'package-lock.json', 'npm-shrinkwrap.json', 'bun.lock', 'bun.lockb'];
+const INSTALL_FILE_NAMES = ['pnpm-workspace.yaml', '.npmrc', '.yarnrc.yml', '.yarnrc', '.pnpmfile.cjs'];
+/** What only an install reads: a COPY of one of these (by name, or turbo prune's out/json) never brings source. */
+const MANIFEST_NAMES = new Set(['package.json', ...LOCKFILE_NAMES, ...INSTALL_FILE_NAMES]);
+const WORKSPACE_GLOB = /^[\w@.*{},/-]{1,80}$/;
+/** The pnpm major that writes each lockfileVersion (9.0 is also pnpm 10's, which skips unlisted build scripts). */
+const PNPM_FOR_LOCKFILE: Record<string, number> = { '9.0': 9, '6.0': 8, '6.1': 8, '5.4': 7, '5.3': 6 };
+
+/**
+ * The facts of the build context `context` (repository-relative, `.` for the
+ * root), or null when it has no package.json (not a Node build: no rule applies).
+ */
+export async function nodeBuildFacts(read: (path: string) => Promise<string | null>, context: string): Promise<NodeBuildFacts | null> {
+    const at = (f: string) => (context === '.' || context === '' ? f : posix.join(context, f));
+    // Advisory rules for the model (checkNodeBuild): an unreadable file skips them, and the boot still proves the build.
+    const text = (f: string) => read(at(f)).catch(() => null);
+    const json = async (f: string): Promise<Record<string, any> | null> => {
+        const t = await text(f);
+        if (t === null) return null;
+        try {
+            const v = JSON.parse(t);
+            return isMap(v) ? v : null;
+        } catch {
+            // A package.json that does not parse is not a Node build these rules can read.
+            return null;
+        }
+    };
+    const pkg = await json('package.json');
+    if (!pkg) return null;
+    const plain = (list: unknown): string[] =>
+        (Array.isArray(list) ? list : []).filter((g): g is string => typeof g === 'string' && !g.startsWith('!') && WORKSPACE_GLOB.test(g)).map((g) => g.replace(/^\.\//, '').replace(/\/+$/, ''));
+    let globs = plain(Array.isArray(pkg.workspaces) ? pkg.workspaces : pkg.workspaces?.packages);
+    const installFiles: string[] = [];
+    let pnpmWorkspace: Record<string, unknown> | null = null;
+    for (const f of INSTALL_FILE_NAMES) {
+        const t = await text(f);
+        if (t === null) continue;
+        installFiles.push(f);
+        if (f === 'pnpm-workspace.yaml') {
+            try {
+                const doc = yaml.load(t, UNTRUSTED_YAML);
+                pnpmWorkspace = isMap(doc) ? doc : null;
+            } catch {
+                // Unparseable: no pnpm globs, the package.json ones stand.
+                pnpmWorkspace = null;
+            }
+            const pnpmGlobs = plain(pnpmWorkspace?.packages);
+            if (pnpmGlobs.length) globs = pnpmGlobs;
+        }
+        if (f === '.yarnrc.yml') {
+            const yarnPath = /^yarnPath:\s*["']?([^"'\s#]+)/m.exec(t)?.[1];
+            const dir = yarnPath ? posix.dirname(posix.normalize(yarnPath)) : '';
+            if (dir && dir !== '.' && !dir.startsWith('..') && WORKSPACE_GLOB.test(dir)) installFiles.push(dir);
+        }
+    }
+    const lerna = await json('lerna.json');
+    if (lerna && !globs.length) globs = plain(lerna.packages ?? ['packages/*']);
+    const nx = (await text('nx.json')) !== null;
+    const turbo = (await text('turbo.json')) !== null;
+    // Patches the install applies (pnpm patchedDependencies, in package.json or pnpm-workspace.yaml): their directory.
+    const patched = { ...(isMap(pkg.pnpm?.patchedDependencies) ? pkg.pnpm.patchedDependencies : {}), ...(isMap(pnpmWorkspace?.patchedDependencies) ? pnpmWorkspace.patchedDependencies : {}) };
+    for (const p of Object.values(patched)) {
+        const dir = typeof p === 'string' ? posix.normalize(p).split('/')[0] : '';
+        if (dir && dir !== '.' && dir !== '..' && WORKSPACE_GLOB.test(dir) && !installFiles.includes(dir)) installFiles.push(dir);
+    }
+    let lockfile: string | undefined;
+    let pnpmLockfileVersion: string | undefined;
+    for (const f of LOCKFILE_NAMES) {
+        const t = await text(f);
+        if (t === null) continue;
+        lockfile = f;
+        if (f === 'pnpm-lock.yaml') pnpmLockfileVersion = /^lockfileVersion:\s*["']?([\d.]+)/m.exec(t)?.[1];
+        break;
+    }
+    const pm = typeof pkg.packageManager === 'string' ? /^([a-z]+)@([\w.-]+)/.exec(pkg.packageManager.trim()) : null;
+    const scripts = isMap(pkg.scripts) ? Object.fromEntries(Object.entries(pkg.scripts).filter(([, v]) => typeof v === 'string')) as Record<string, string> : {};
+    return {
+        workspaceGlobs: globs,
+        monorepo: globs.length > 0 || !!lerna || nx || turbo,
+        ...(pm ? { packageManager: { name: pm[1], version: pm[2] } } : {}),
+        ...(lockfile ? { lockfile } : {}),
+        ...(pnpmLockfileVersion ? { pnpmLockfileVersion } : {}),
+        installFiles,
+        nx,
+        scripts,
+    };
+}
+
+/** One command of a RUN: its words (quotes dropped), the tool first, and the variables set for it. */
+interface Command {
+    words: string[];
+    env: Map<string, string>;
+}
+
+const PREFIX_WORDS = new Set(['env', 'sudo', 'exec', 'time', 'nohup', 'cross-env']);
+const ASSIGNMENT = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/;
+
+/** The commands of a RUN's shell text, split at && || ; | and newlines; `export X=1` carries to the commands after it. */
+function commandsOf(text: string): Command[] {
+    const out: Command[] = [];
+    const exported = new Map<string, string>();
+    for (const seg of text.replace(/["'`()]/g, ' ').split(/&&|\|\||[;|\n]/)) {
+        let words = seg.trim().split(/\s+/).filter(Boolean);
+        const env = new Map(exported);
+        // Strip what only sets up the command: VAR=value, env/sudo/cross-env, `sh -c`, and `corepack pnpm` (pnpm runs).
+        while (words.length) {
+            const w = words[0];
+            const assign = ASSIGNMENT.exec(w);
+            if (assign) env.set(assign[1], assign[2]);
+            else if (w === 'export') {
+                for (const a of words.slice(1).map((x) => ASSIGNMENT.exec(x))) if (a) exported.set(a[1], a[2]);
+                words = [];
+                break;
+            } else if (/^(?:\/\S*\/)?(?:sh|bash|dash|ash)$/.test(w) && /^-\w*c\w*$/.test(words[1] ?? '')) words = words.slice(1);
+            else if (!PREFIX_WORDS.has(w) && !(w === 'corepack' && /^(pnpm|yarn|npm|npx)$/.test(words[1] ?? ''))) break;
+            words = words.slice(1);
+        }
+        if (words.length) out.push({ words: [posix.basename(words[0]), ...words.slice(1)], env });
+    }
+    return out;
+}
+
+/** Flags that take the next word as their value. */
+const VALUE_FLAGS = new Set(['--filter', '-F', '-C', '--dir', '--prefix', '--cwd', '-w', '--workspace', '--workspace-dir', '--config', '--registry', '--store-dir', '--loglevel', '--network-timeout', '--mode']);
+/** Flags that run a command in a package rather than the root. */
+const SCOPED_FLAGS = /^(--filter|-F|-C|--dir|--prefix|--cwd|-w|--workspace)(=|$)/;
+
+/** The non-flag words after the tool, in order. */
+function operands(words: string[]): string[] {
+    const out: string[] = [];
+    for (let i = 1; i < words.length; i++) {
+        const w = words[i];
+        if (w.startsWith('-')) {
+            if (VALUE_FLAGS.has(w)) i++;
+            continue;
+        }
+        out.push(w);
+    }
+    return out;
+}
+
+const isGlobal = (words: string[]) => words.includes('-g') || words.includes('--global');
+
+/** What a command does to the project's dependencies: an install, a pnpm fetch, or nothing. */
+function installKind(c: Command): 'install' | 'fetch' | null {
+    const [tool] = c.words;
+    const [sub, next] = operands(c.words);
+    if (isGlobal(c.words)) return null;
+    if (tool === 'npm') return sub === 'ci' || sub === 'install' || sub === 'i' || sub === 'add' ? 'install' : null;
+    if (tool === 'pnpm') return sub === 'install' || sub === 'i' ? 'install' : sub === 'fetch' ? 'fetch' : null;
+    if (tool === 'yarn') return sub === undefined || sub === 'install' || (sub === 'workspaces' && next === 'focus') ? 'install' : null;
+    if (tool === 'bun') return sub === 'install' || sub === 'i' ? 'install' : null;
+    return null;
+}
+
+/** The package managers a command installs or activates, as written (`pnpm`, `pnpm@9.15.0`, `yarn@latest`). */
+function activations(c: Command): { kind: 'corepack' | 'global'; specs: string[] } | null {
+    const [tool] = c.words;
+    const ops = operands(c.words);
+    const pms = (list: string[]) => list.filter((w) => /^(pnpm|yarn)(@\S*)?$/.test(w));
+    if (tool === 'corepack' && ['prepare', 'install', 'use'].includes(ops[0] ?? '')) return { kind: 'corepack', specs: pms(ops.slice(1)) };
+    if ((tool === 'npm' && ['install', 'i', 'add'].includes(ops[0] ?? '')) || (tool === 'pnpm' && ops[0] === 'add') || (tool === 'yarn' && ops[0] === 'global')) {
+        return isGlobal(c.words) || tool === 'yarn' ? { kind: 'global', specs: pms(ops.slice(tool === 'yarn' ? 2 : 1)) } : null;
+    }
+    if (tool === 'npx' || tool === 'pnpx' || tool === 'bunx') return /^(pnpm|yarn)(@|$)/.test(ops[0] ?? '') ? { kind: 'global', specs: [ops[0]] } : null;
+    return null;
+}
+
+const DIST_TAG = /^(latest|next|stable|canary|rc|beta|nightly|\*)$/;
+/** The version a spec pins, or null for none or a dist tag. */
+function pinnedVersion(spec: string): string | null {
+    const at = spec.indexOf('@');
+    const v = at < 0 ? '' : spec.slice(at + 1);
+    return !v || DIST_TAG.test(v) ? null : v;
+}
+const majorOf = (v: string) => Number(/^[\^~>=v\s]*(\d+)/.exec(v)?.[1] ?? NaN);
+
+/** The release of `pm` the project names, and where it says so; null when nothing does (the rule then stays silent). */
+function pinFor(pm: string, facts: NodeBuildFacts): { spec: string; why: string } | null {
+    if (facts.packageManager?.name === pm) return { spec: `${pm}@${facts.packageManager.version}`, why: 'what package.json packageManager names' };
+    if (pm === 'pnpm' && !facts.packageManager && facts.pnpmLockfileVersion && PNPM_FOR_LOCKFILE[facts.pnpmLockfileVersion]) {
+        return { spec: `pnpm@${PNPM_FOR_LOCKFILE[facts.pnpmLockfileVersion]}`, why: `the major that writes pnpm-lock.yaml lockfileVersion ${facts.pnpmLockfileVersion}` };
+    }
+    return null;
+}
+
+/** pnpm 11 stops on a pnpm 9.0 lockfile's unlisted build scripts unless the project itself moved to pnpm 11. */
+const pnpm11Breaks = (facts: NodeBuildFacts) =>
+    !!facts.pnpmLockfileVersion?.startsWith('9') && !(facts.packageManager?.name === 'pnpm' && majorOf(facts.packageManager.version) >= 11);
+const PNPM11_WHY = 'pnpm 11 stops the install on dependency build scripts pnpm-workspace.yaml does not allow (ERR_PNPM_IGNORED_BUILDS) and needs Node 22.13 or later';
+
+/** One path segment of a glob as a regular expression. */
+const segmentRegex = (s: string) => new RegExp(`^${s.replace(/[.+^$()|[\]\\]/g, '\\$&').replace(/\{([^}]*)\}/g, (_, a: string) => `(?:${a.split(',').join('|')})`).replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]')}$`);
+const hasWildcard = (s: string) => /[*?{[]/.test(s);
+function segmentsMatch(source: string, glob: string): boolean {
+    if (hasWildcard(source) && hasWildcard(glob)) return true;
+    if (hasWildcard(glob)) return segmentRegex(glob).test(source);
+    if (hasWildcard(source)) return segmentRegex(source).test(glob);
+    return source === glob;
+}
+
+/**
+ * Whether a COPY source from the build context brings whole workspace
+ * members, not only manifests: the context itself (`.`, `*`), a directory
+ * that holds members (`apps`, `packages`), or a member (`packages/ui`, `apps/*`).
+ * A path inside a member (packages/db/prisma) or a file (apps/*\/package.json)
+ * does not. A `**` glob at the top (every directory a member) says nothing about
+ * where they are: then only the context itself counts.
+ */
+export function copiesWorkspaceSource(source: string, globs: readonly string[]): boolean {
+    const s = posix.normalize(source.replace(/^\/+/, '')).replace(/\/+$/, '');
+    if (s === '.' || s === '' || s === '*' || s === '**') return true;
+    const parts = s.split('/');
+    if (MANIFEST_NAMES.has(parts[parts.length - 1])) return false;
+    for (const g of globs) {
+        const gs = g.split('/');
+        const deep = gs.indexOf('**');
+        if (deep === 0) continue;
+        const depth = deep > 0 ? deep + 1 : gs.length;
+        if (parts.length > depth) continue;
+        if (parts.every((p, i) => (deep >= 0 && i >= deep) || segmentsMatch(p, gs[i]))) return true;
+    }
+    return false;
+}
+
+/** A COPY --from source that holds only manifests: a manifest by name, or turbo prune --docker's out/json. */
+function manifestShaped(source: string): boolean {
+    const parts = posix.normalize(source).replace(/\/+$/, '').split('/');
+    if (MANIFEST_NAMES.has(parts[parts.length - 1])) return true;
+    return parts.some((p, i) => p === 'json' && parts[i - 1] === 'out');
+}
+
+/** How a Dockerfile's dependency install meets the source: each install, and the COPY of source before it when nothing installed before that COPY. */
+export interface InstallLayer {
+    line: number;
+    /** The COPY that brought source before this install, when no install or pnpm fetch had run on manifests alone before it. */
+    afterSource?: { line: number; source: string };
+}
+
+interface StageState {
+    source?: { line: number; source: string };
+    /** An install or pnpm fetch ran on manifests alone: later installs only relink. */
+    prepared: boolean;
+    env: Map<string, string>;
+}
+
+/** The sources of a COPY, JSON or shell form, its destination dropped. */
+function copySources(rest: string): string[] {
+    const trimmed = rest.trim();
+    if (trimmed.startsWith('[')) {
+        try {
+            const v = JSON.parse(trimmed) as unknown;
+            if (Array.isArray(v)) return v.filter((x): x is string => typeof x === 'string').slice(0, -1);
+        } catch {
+            /* the shell form below */
+        }
+    }
+    return trimmed.split(/\s+/).filter(Boolean).slice(0, -1);
+}
+
+/** Walks the stages of a Dockerfile (a FROM of an earlier stage starts from its state): each one's state when an instruction runs. */
+function walkStages(content: string, globs: readonly string[], visit: (i: Instruction, stage: StageState) => void): void {
+    const stages = new Map<string, StageState>();
+    const byIndex: StageState[] = [];
+    let stage: StageState = { prepared: false, env: new Map() };
+    for (const i of instructionsOf(content)) {
+        const { flags, rest } = flagsOf(i.args);
+        if (i.keyword === 'FROM') {
+            const m = /^(\S+)(?:\s+AS\s+(\S+))?/i.exec(rest);
+            const base = m ? stages.get(m[1].toLowerCase()) : undefined;
+            stage = base ? { ...(base.source ? { source: base.source } : {}), prepared: base.prepared, env: new Map(base.env) } : { prepared: false, env: new Map() };
+            byIndex.push(stage);
+            if (m?.[2]) stages.set(m[2].toLowerCase(), stage);
+            continue;
+        }
+        if (i.keyword === 'ENV' || i.keyword === 'ARG') {
+            for (const a of assignmentsOf(rest, i.keyword === 'ENV')) if (a.hasValue) stage.env.set(a.name, a.value);
+        }
+        if (i.keyword === 'COPY' || i.keyword === 'ADD') {
+            const fromFlag = flags.find((f) => f.name === '--from')?.value;
+            const from = fromFlag === undefined ? undefined : /^\d+$/.test(fromFlag) ? byIndex[Number(fromFlag)] : stages.get(fromFlag.toLowerCase());
+            for (const s of copySources(rest)) {
+                if (fromFlag !== undefined) {
+                    // From an image: tools or binaries, never this repository's source.
+                    if (!from) continue;
+                    if (s.split('/').includes('node_modules')) stage.prepared = true;
+                    else if (from.source && !manifestShaped(s)) stage.source ??= { line: i.line, source: `${s} from stage ${fromFlag}` };
+                    else if (from.prepared) stage.prepared = true;
+                } else if (!stage.source && copiesWorkspaceSource(s, globs)) stage.source = { line: i.line, source: s };
+            }
+        }
+        visit(i, stage);
+    }
+}
+
+/** Each dependency install of a Dockerfile and whether source came before it (the eval's "cache-friendly install"). */
+export function installLayersOf(content: string, facts: Pick<NodeBuildFacts, 'workspaceGlobs'>): InstallLayer[] {
+    const out: InstallLayer[] = [];
+    walkStages(content, facts.workspaceGlobs, (i, stage) => {
+        if (i.keyword !== 'RUN') return;
+        for (const c of commandsOf(flagsOf(i.args).rest)) {
+            const kind = installKind(c);
+            if (!kind) continue;
+            if (kind === 'install') out.push({ line: i.line, ...(stage.source && !stage.prepared ? { afterSource: stage.source } : {}) });
+            if (!stage.source) stage.prepared = true;
+        }
+    });
+    return out;
+}
+
+/** The COPY --parents line that takes only what the install reads, from the facts. */
+function manifestCopyLine(facts: NodeBuildFacts): string {
+    const files = ['package.json', ...(facts.lockfile ? [facts.lockfile] : []), ...facts.installFiles, ...facts.workspaceGlobs.slice(0, 12).map((g) => `${g}/package.json`)];
+    return `COPY --parents ${files.join(' ')} ./`;
+}
+
+/** A RUN that runs Nx, directly or through a root script: what it runs, or null. */
+function nxCall(c: Command, scripts: Record<string, string>): string | null {
+    const [tool] = c.words;
+    const ops = operands(c.words);
+    if (tool === 'nx') return c.words.join(' ');
+    if ((tool === 'npx' || tool === 'pnpx' || tool === 'bunx') && /^nx(@|$)/.test(ops[0] ?? '')) return c.words.join(' ');
+    if (tool !== 'pnpm' && tool !== 'yarn' && tool !== 'npm' && tool !== 'bun') return null;
+    if (ops[0] === 'nx' || (ops[0] === 'exec' && ops[1] === 'nx')) return c.words.join(' ');
+    if (c.words.some((w) => SCOPED_FLAGS.test(w)) || ops[0] === 'workspace') return null;
+    const script = ops[0] === 'run' || ops[0] === 'run-script' ? ops[1] : tool === 'npm' ? undefined : ops[0];
+    const text = script ? scripts[script] : undefined;
+    return text && /(?:^|[\s;&|(])(?:npx\s+|pnpm\s+(?:exec\s+)?|yarn\s+)?nx\s+[\w@:.-]/.test(text) ? `${c.words.join(' ')} (the script runs ${text.slice(0, 80)})` : null;
+}
+
+const truthy = (v: string | undefined) => v === 'true' || v === '1';
+
+/** The segments of a path in a stage's filesystem, resolved against `cwd` (COPY --from resolves against the stage root). */
+const stageSegments = (p: string, cwd = '/') => posix.normalize(posix.isAbsolute(p) ? p : posix.join(cwd, p)).split('/').filter(Boolean);
+const INSTALL_DIR_FLAG = /^(--prefix|-C|--dir|--cwd)(?:=(.+))?$/;
+
+/**
+ * Each COPY --from of an earlier stage that brings a dependency tree: a source
+ * that is or holds a node_modules directory, or that holds where that stage (or
+ * one it is built on) installed the project's dependencies, a workspace
+ * member's node_modules included. A COPY from an image (a tool or a binary)
+ * and build output (dist, .next, build) beside node_modules do not count.
+ */
+function dependencyTreeCopies(content: string, globs: readonly string[]): Array<{ line: number; from: string; source: string }> {
+    interface Stage {
+        workdir: string[];
+        /** The node_modules directories an install created, as segment globs. */
+        trees: string[][];
+    }
+    const named = new Map<string, Stage>();
+    const byIndex: Stage[] = [];
+    let stage: Stage = { workdir: [], trees: [] };
+    const out: Array<{ line: number; from: string; source: string }> = [];
+    for (const i of instructionsOf(content)) {
+        const { flags, rest } = flagsOf(i.args);
+        if (i.keyword === 'FROM') {
+            const m = /^(\S+)(?:\s+AS\s+(\S+))?/i.exec(rest);
+            const base = m ? named.get(m[1].toLowerCase()) : undefined;
+            stage = base ? { workdir: [...base.workdir], trees: [...base.trees] } : { workdir: [], trees: [] };
+            byIndex.push(stage);
+            if (m?.[2]) named.set(m[2].toLowerCase(), stage);
+        } else if (i.keyword === 'WORKDIR') {
+            stage.workdir = stageSegments(rest.trim(), `/${stage.workdir.join('/')}`);
+        } else if (i.keyword === 'RUN') {
+            let cwd = `/${stage.workdir.join('/')}`;
+            for (const c of commandsOf(rest)) {
+                if (c.words[0] === 'cd' && c.words[1]) cwd = `/${stageSegments(c.words[1], cwd).join('/')}`;
+                if (installKind(c) !== 'install') continue;
+                const flag = c.words.map((w, n) => [INSTALL_DIR_FLAG.exec(w), n] as const).find(([f]) => f);
+                const dir = flag ? stageSegments(flag[0]![2] ?? c.words[flag[1] + 1] ?? '.', cwd) : stageSegments(cwd);
+                stage.trees.push([...dir, 'node_modules'], ...globs.map((g) => [...dir, ...g.split('/'), 'node_modules']));
+            }
+        } else if (i.keyword === 'COPY') {
+            const fromFlag = flags.find((f) => f.name === '--from')?.value;
+            if (fromFlag === undefined) continue;
+            const from = /^\d+$/.test(fromFlag) ? byIndex[Number(fromFlag)] : named.get(fromFlag.toLowerCase());
+            if (!from) continue;
+            const source = copySources(rest).find((s) => {
+                const parts = stageSegments(s);
+                return parts.includes('node_modules') || from.trees.some((t) => parts.length <= t.length && parts.every((p, n) => segmentsMatch(p, t[n])));
+            });
+            if (source !== undefined) out.push({ line: i.line, from: fromFlag, source });
+        }
+    }
+    return out;
+}
+
+/**
+ * Each Node build rule an authored Dockerfile breaks, given the facts of its
+ * build context (nodeBuildFacts), in words the model can act on.
+ */
+export function checkNodeBuild(path: string, content: string, facts: NodeBuildFacts): string[] {
+    const errors: string[] = [];
+
+    // Dependencies before source in a monorepo: an install after a COPY of the members installs again on every change.
+    if (facts.monorepo) {
+        const late = installLayersOf(content, facts).find((l) => l.afterSource);
+        if (late?.afterSource) {
+            errors.push(
+                `${path}:${late.line} RUN installs dependencies after line ${late.afterSource.line} copied ${late.afterSource.source}, so every change to the code installs again (a large monorepo's install and its image layer take more than half an hour on the cell). Before the install copy only what it reads, each file at its path (${manifestCopyLine(facts)}), install, and only then COPY . . for the source. Or prune first: a stage that runs turbo prune <app> --docker, then COPY --from that stage out/json/ and the pruned lockfile, install, then out/full/. Or with pnpm: pnpm fetch on the lockfile, then COPY . . and pnpm install --offline.`,
+            );
+        }
+    }
+
+    const instructions = instructionsOf(content);
+    const runs = instructions.filter((i) => i.keyword === 'RUN').map((i) => ({ i, commands: commandsOf(flagsOf(i.args).rest) }));
+    const envSet = (name: string, value: (v: string) => boolean) =>
+        instructions.some((i) => (i.keyword === 'ENV' || i.keyword === 'ARG') && assignmentsOf(flagsOf(i.args).rest, i.keyword === 'ENV').some((a) => a.name === name && value(a.value))) ||
+        runs.some((r) => r.commands.some((c) => value(c.env.get(name) ?? '\0')));
+
+    // The package manager's release: pinned, and not one that breaks the lockfile.
+    let pinnedPnpm = false;
+    let barePrepare = false;
+    for (const { i, commands } of runs) {
+        for (const c of commands) {
+            const act = activations(c);
+            if (!act) continue;
+            if (act.kind === 'corepack' && !act.specs.length) barePrepare = true;
+            for (const spec of act.specs) {
+                const pm = spec.split('@')[0];
+                const version = pinnedVersion(spec);
+                const pin = pinFor(pm, facts);
+                const verb = c.words.join(' ').slice(0, 120);
+                const fix = pin && (act.kind === 'corepack' ? `corepack prepare ${pin.spec} --activate` : `npm install -g ${pin.spec}`);
+                if (!version) {
+                    if (pin) {
+                        const breaks = pm === 'pnpm' && pnpm11Breaks(facts) ? `, and ${PNPM11_WHY}` : '';
+                        errors.push(`${path}:${i.line} RUN ${verb} names no version, so it takes the latest release${breaks}; write ${fix} (${pin.why}).`);
+                    }
+                    continue;
+                }
+                if (pm === 'pnpm') pinnedPnpm = true;
+                if (pm === 'pnpm' && majorOf(version) >= 11 && pnpm11Breaks(facts)) {
+                    const to = fix ? `write ${fix} instead (${pin!.why})` : 'pin pnpm 9 or 10 instead';
+                    errors.push(`${path}:${i.line} RUN installs pnpm ${version}, but this lockfile (lockfileVersion ${facts.pnpmLockfileVersion}) is not pnpm 11's: ${PNPM11_WHY}; ${to}.`);
+                }
+            }
+        }
+    }
+    const usesPnpm = facts.packageManager ? facts.packageManager.name === 'pnpm' : !!facts.pnpmLockfileVersion;
+    const pnpmPin = pinFor('pnpm', facts);
+    if (usesPnpm && pnpmPin && !pinnedPnpm && !(barePrepare && facts.packageManager) && !envSet('COREPACK_DEFAULT_TO_LATEST', (v) => v === '0' || v === 'false')) {
+        const enable = runs.find((r) => r.commands.some((c) => c.words[0] === 'corepack' && operands(c.words)[0] === 'enable'));
+        if (enable) {
+            errors.push(
+                `${path}:${enable.i.line} RUN corepack enable pins no pnpm release: wherever no package.json naming one is in the working directory, corepack downloads the latest${pnpm11Breaks(facts) ? `, and ${PNPM11_WHY}` : ''}. Add corepack prepare ${pnpmPin.spec} --activate after it (${pnpmPin.why}), or ENV COREPACK_DEFAULT_TO_LATEST=0 before it.`,
+            );
+        }
+    }
+
+    // Nx: Nx Cloud is not reachable from the build.
+    if (facts.nx) {
+        walkStages(content, facts.workspaceGlobs, (i, stage) => {
+            if (i.keyword !== 'RUN' || errors.some((e) => e.includes('without NX_NO_CLOUD'))) return;
+            for (const c of commandsOf(flagsOf(i.args).rest)) {
+                const nx = nxCall(c, facts.scripts);
+                if (!nx || truthy(c.env.get('NX_NO_CLOUD')) || truthy(stage.env.get('NX_NO_CLOUD'))) continue;
+                errors.push(
+                    `${path}:${i.line} RUN runs Nx (${nx.slice(0, 160)}) without NX_NO_CLOUD=true, so Nx tries Nx Cloud, which the build cannot reach; add ENV NX_NO_CLOUD=true NX_DISABLE_REMOTE_CACHE=true NX_DAEMON=false in this stage before it.`,
+                );
+                return;
+            }
+        });
+    }
+
+    // No dependency tree copied between stages: under gVisor that copy is a per-file cost (twenty's COPY of /app/node_modules took 439 s).
+    for (const c of dependencyTreeCopies(content, facts.workspaceGlobs)) {
+        errors.push(
+            `${path}:${c.line} COPY --from=${c.from} ${c.source} copies installed dependencies (node_modules) from one stage to another, which takes minutes on the cell. Run the app from the stage that installed them: a test environment needs one build stage. Only if a smaller final image is truly needed, make it inside that stage with the package manager's own command (pnpm deploy --filter <app>, yarn workspaces focus --production <app>, turbo prune <app>) instead of copying node_modules across stages.`,
+        );
+    }
+    return errors;
+}
+
 // --- Compose ----------------------------------------------------------------------------------
 
 /** Keys of a service an authored compose file may set; the cell's allowlist (sandbox.go serviceKeys) less what Kody needs not, plus build. */
@@ -371,7 +876,11 @@ const REFUSED_SERVICE_KEYS: Record<string, string> = {
     storage_opt: 'host storage driver',
 };
 const TOP_KEYS = new Set(['services', 'volumes']);
-/** Keys whose text is the container's shell's, where a `$` is not compose interpolation. */
+/**
+ * Keys whose text the container's shell reads. Compose interpolates a `$`
+ * there too, from the cell's environment, before the shell sees it: the
+ * container's shell gets a `$` only as `$$`.
+ */
 const SHELL_KEYS = new Set(['command', 'entrypoint', 'healthcheck']);
 const BUILD_KEYS = new Set(['context', 'dockerfile', 'target', 'args']);
 const NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
@@ -384,6 +893,57 @@ function insideRoot(p: string): string | null {
     const n = posix.normalize(p).replace(/\/+$/, '');
     if (n === '..' || n.startsWith('../')) return null;
     return n === '' ? '.' : n;
+}
+
+/**
+ * The repositories of a multi-repository environment, as a compose file Kody
+ * writes may name them: `../<alias>` is that repository's directory beside the
+ * primary's (the cell's ws/<alias>), the only place outside the primary a
+ * build context or a bind may point at.
+ */
+export interface ComposeWorkspace {
+    /** The primary's alias: `../<it>/x` is the primary's x. */
+    primary: string;
+    /** Every other repository of the environment. */
+    members: ReadonlySet<string>;
+    /** Filled with each member a compose file builds or binds. */
+    used: Set<string>;
+}
+
+const aliasList = (ws: ComposeWorkspace) => [...ws.members].map((a) => `../${a}`).join(', ');
+
+/**
+ * A compose path, normalized: the primary's as insideRoot has it, or, in a
+ * workspace, `../<alias>/…` of a member (recorded in `used`). Null where
+ * insideRoot refuses it and there is no workspace (the single-repository
+ * message stands); `{ error }` names what a workspace path got wrong.
+ */
+function composePath(p: string, ws: ComposeWorkspace | undefined): string | null | { error: string } {
+    const inside = insideRoot(p);
+    if (inside || !ws) return inside;
+    if (!p || p.startsWith('/') || /[$~\\]/.test(p) || p.includes('docker.sock') || p.includes('://')) return null;
+    const n = posix.normalize(p).replace(/\/+$/, '');
+    const rest = n.slice(3);
+    const where = `name a path of this repository or ../<alias> of another repository of this environment (${aliasList(ws)})`;
+    if (!rest) return { error: `${p} is the workspace itself, not a repository; ${where}` };
+    const slash = rest.indexOf('/');
+    const alias = slash === -1 ? rest : rest.slice(0, slash);
+    if (alias === '..') return { error: `${p} leaves the workspace; ${where}` };
+    if (alias === ws.primary) return insideRoot(slash === -1 ? '.' : rest.slice(slash + 1));
+    if (!ws.members.has(alias)) return { error: `${p}: ../${alias} is not a repository of this environment; ${where}` };
+    ws.used.add(alias);
+    return n;
+}
+
+/** composePath as a string or null, its error (if any) pushed with `at`. */
+function placed(p: string, ws: ComposeWorkspace | undefined, errors: string[], at: string): string | null | undefined {
+    const r = composePath(p, ws);
+    if (typeof r === 'string') return r;
+    if (r) {
+        errors.push(`${at}: ${r.error}`);
+        return undefined;
+    }
+    return null;
 }
 
 /** A `$` compose would interpolate (not `$$`). */
@@ -400,6 +960,12 @@ export interface ComposeContext {
     authored: ReadonlySet<string>;
     /** Whether a repository file is there at the commit. */
     exists: (path: string) => Promise<boolean>;
+    /** Filled with each authored Dockerfile's build context, for the COPY source check. */
+    buildContexts?: Map<string, string>;
+    /** Set when a service takes the repository's code without a Dockerfile of Kody's: a Dockerfile of the repository, or a bind of one of its paths. */
+    repositoryCode?: { used: boolean };
+    /** A multi-repository environment: build contexts and binds may also name `../<alias>` of a member (its code counts as repository code). */
+    workspace?: ComposeWorkspace;
 }
 
 /** Each rule an authored compose file breaks, and the Dockerfiles its builds name. */
@@ -408,7 +974,7 @@ export async function checkAuthoredCompose(path: string, content: string, ctx: C
     const dockerfiles: string[] = [];
     let doc: unknown;
     try {
-        doc = yaml.load(content);
+        doc = yaml.load(content, UNTRUSTED_YAML);
     } catch (e) {
         return { errors: [`${path} is not YAML: ${String((e as Error).message).split('\n')[0].slice(0, 200)}`], dockerfiles };
     }
@@ -439,9 +1005,10 @@ export async function checkAuthoredCompose(path: string, content: string, ctx: C
         for (const k of Object.keys(svc)) {
             if (REFUSED_SERVICE_KEYS[k]) errors.push(`${at}.${k}: refused (${REFUSED_SERVICE_KEYS[k]})`);
             else if (!SERVICE_KEYS.has(k) && k !== '<<') errors.push(`${at}.${k}: Kody does not write this key`);
-            else if (!SHELL_KEYS.has(k)) {
+            else {
+                const fix = SHELL_KEYS.has(k) ? "write $$ for the container's shell to read a $" : 'write the value itself';
                 walkStrings(svc[k], `${at}.${k}`, (s, p) => {
-                    if (interpolates(s)) errors.push(`${p}: compose would interpolate the $; write the value itself`);
+                    if (interpolates(s)) errors.push(`${p}: compose would interpolate the $; ${fix}`);
                 });
             }
         }
@@ -452,16 +1019,24 @@ export async function checkAuthoredCompose(path: string, content: string, ctx: C
             if (!isMap(b)) errors.push(`${at}.build: neither a path nor a mapping`);
             else {
                 for (const k of Object.keys(b)) if (!BUILD_KEYS.has(k)) errors.push(`${at}.build.${k}: the cell builds from the checkout alone (context, dockerfile, target, args)`);
-                const context = insideRoot(String(b.context ?? '.'));
-                if (!context) errors.push(`${at}.build.context: must be a directory of the repository, relative to its root`);
+                const context = placed(String(b.context ?? '.'), ctx.workspace, errors, `${at}.build.context`);
+                if (context === null) errors.push(`${at}.build.context: must be a directory of the repository, relative to its root`);
                 const df = typeof b.dockerfile === 'string' ? b.dockerfile : 'Dockerfile';
-                const dockerfile = context && !df.startsWith('/') ? insideRoot(posix.join(context, df)) : null;
+                const resolved = context && !df.startsWith('/') ? composePath(posix.join(context, df), ctx.workspace) : null;
+                const dockerfile = typeof resolved === 'string' ? resolved : null;
                 if (context && !dockerfile) errors.push(`${at}.build.dockerfile: must be inside the build context`);
                 if (context && dockerfile && !(dockerfile === context || dockerfile.startsWith(context === '.' ? '' : `${context}/`))) {
                     errors.push(`${at}.build.dockerfile: ${dockerfile} is outside the context ${context}; the cell refuses it`);
                 } else if (dockerfile) {
-                    if (ctx.authored.has(dockerfile)) dockerfiles.push(dockerfile);
-                    else if (!(await ctx.exists(dockerfile))) {
+                    if (ctx.authored.has(dockerfile)) {
+                        dockerfiles.push(dockerfile);
+                        ctx.buildContexts?.set(dockerfile, context);
+                    }
+                    else if (await ctx.exists(dockerfile)) {
+                        if (ctx.repositoryCode) ctx.repositoryCode.used = true;
+                    } else if (dockerfile.startsWith('../')) {
+                        errors.push(`${at}.build.dockerfile: ${dockerfile} is not in ${dockerfile.split('/')[1]} at its commit`);
+                    } else {
                         errors.push(`${at}.build.dockerfile: ${dockerfile} is neither in the repository nor among the files you submit (paths are relative to the repository root)`);
                     }
                 }
@@ -522,7 +1097,9 @@ export async function checkAuthoredCompose(path: string, content: string, ctx: C
                 continue;
             }
             if (type === 'bind') {
-                if (!source || !insideRoot(source)) errors.push(`${vp}: a bind outside the repository (${JSON.stringify(source ?? '')}); bind only paths of the repository, relative to its root`);
+                const bound = source ? placed(source, ctx.workspace, errors, vp) : null;
+                if (bound === null) errors.push(`${vp}: a bind outside the repository (${JSON.stringify(source ?? '')}); bind only paths of the repository, relative to its root`);
+                else if (bound && ctx.repositoryCode && !`${bound}/`.startsWith(AUTHORED_FILES_DIR)) ctx.repositoryCode.used = true;
             } else if (type === 'volume') {
                 if (source && !declared.has(source)) errors.push(`${vp}: volume ${JSON.stringify(source)} is not declared under volumes`);
             } else if (type !== 'tmpfs') errors.push(`${vp}.type: ${JSON.stringify(type)} is refused`);
@@ -557,8 +1134,119 @@ function filesShapeProblem(files: unknown): string | null {
 }
 
 export interface AuthoredSubmissionCheck extends AuthoredRecipeCheck {
-    /** The files as accepted (normalized paths), when ok. */
+    /** The files as accepted (normalized paths, Kody's compose files as Kodus rewrote them), when ok. */
     files?: AuthoredFile[];
+    /** What Kodus rewrote in Kody's compose files before checking them (authored-compose-sanitiser.ts), accepted or not. */
+    adjusted?: string[];
+}
+
+/**
+ * The repository paths an authored Dockerfile's COPY and ADD read from the
+ * build context: not from another stage or image (--from), not a heredoc, not
+ * a glob (BuildKit allows an empty match only with a wildcard). Each must be at
+ * the commit, else the build stops at that line after a full build up to it
+ * (n8n's `.npmrc`, nocodb's missing package dir).
+ */
+export function copySourcesOf(content: string, opts: { patterns?: boolean } = {}): Array<{ line: number; source: string }> {
+    const out: Array<{ line: number; source: string }> = [];
+    for (const i of instructionsOf(content)) {
+        if (i.keyword !== 'COPY' && i.keyword !== 'ADD') continue;
+        const { flags, rest } = flagsOf(i.args);
+        if (flags.some((f) => f.name === '--from') || /<<-?/.test(rest) || /:\/\//.test(rest)) continue;
+        let parts: string[];
+        // Not JSON: the shell form below.
+        const json = rest.trim().startsWith('[') ? (() => { try { return JSON.parse(rest.trim()) as unknown; } catch { return null; } })() : null;
+        if (Array.isArray(json)) parts = json.filter((x): x is string => typeof x === 'string');
+        else parts = rest.trim().split(/\s+/).filter(Boolean);
+        for (const s of parts.slice(0, -1)) {
+            // Globs and variables cannot be checked against the commit, but they still read the repository.
+            if (!opts.patterns && (/[*?[]/.test(s) || s.includes('$'))) continue;
+            out.push({ line: i.line, source: s });
+        }
+    }
+    return out;
+}
+
+/** Each COPY or ADD source of an authored Dockerfile that is neither at the commit nor among the submitted files. */
+export async function missingCopySources(
+    path: string,
+    content: string,
+    context: string,
+    has: (repoPath: string) => Promise<boolean>,
+): Promise<string[]> {
+    const errors: string[] = [];
+    for (const { line, source } of copySourcesOf(content)) {
+        const p = posix.normalize(posix.join(context === '.' ? '' : context, source.replace(/^\/+/, '')));
+        if (p === '.' || p === '' || p.startsWith('..')) continue;
+        if (!(await has(p.replace(/\/+$/, '')))) {
+            errors.push(`${path}:${line} COPY ${source}: ${p} is not in the repository at this commit (build context ${context}); copy only what is there, list the directory first if unsure`);
+        }
+    }
+    return errors;
+}
+
+/**
+ * The environment a recipe is written for when it has repositories besides
+ * the primary. Absent (or with no member) for one repository: every check
+ * and message is then the single-repository one.
+ */
+export interface AuthoredWorkspace {
+    /** The repository the recipe is of (its .kodus/ holds the recipe and Kody's files). */
+    primary: { fullName: string; alias: string };
+    /** Every other repository of the environment, as its membership names it. */
+    members: ReadonlyArray<{ fullName: string; alias: string }>;
+}
+
+/** The members a repository compose file builds or binds (`../<alias>`): read only to require their needs, never refused here. */
+function membersUsedBy(text: string, ws: ComposeWorkspace): void {
+    let doc: unknown;
+    try {
+        doc = yaml.load(text, UNTRUSTED_YAML);
+    } catch {
+        // Read only to require needs: a file that does not parse requires none.
+        return;
+    }
+    if (!isMap(doc) || !isMap(doc.services)) return;
+    for (const svc of Object.values(doc.services)) {
+        if (!isMap(svc)) continue;
+        const b = typeof svc.build === 'string' ? { context: svc.build } : svc.build;
+        if (isMap(b) && typeof b.context === 'string') composePath(b.context, ws);
+        for (const vol of Array.isArray(svc.volumes) ? svc.volumes : []) {
+            const source = typeof vol === 'string' ? (vol.split(':').length > 1 ? vol.split(':')[0] : undefined) : isMap(vol) && vol.type === 'bind' ? vol.source : undefined;
+            if (typeof source === 'string') composePath(source, ws);
+        }
+    }
+}
+
+/**
+ * Why services.needs disagrees with the environment: it names the primary,
+ * a repository that is not a member, a member under another alias, or leaves
+ * out a member the compose files build or bind.
+ */
+export function workspaceNeedsErrors(needs: readonly RecipeNeed[] | undefined, ws: AuthoredWorkspace, used: ReadonlySet<string>): string[] {
+    const errors: string[] = [];
+    const conflict = recipeNeedsConflict(needs, ws.primary);
+    if (conflict) errors.push(`${conflict}; list only the other repositories of this environment`);
+    const byAlias = new Map(ws.members.map((m) => [m.alias, m]));
+    const known = ws.members.map((m) => `${m.alias} (${m.fullName})`).join(', ');
+    const declared = new Set<string>();
+    for (const [i, n] of (needs ?? []).entries()) {
+        if (n.repo.toLowerCase() === ws.primary.fullName.toLowerCase() || n.alias === ws.primary.alias) continue;
+        const m = byAlias.get(n.alias);
+        if (m && m.fullName.toLowerCase() === n.repo.toLowerCase()) {
+            declared.add(n.alias);
+            continue;
+        }
+        const same = ws.members.find((x) => x.fullName.toLowerCase() === n.repo.toLowerCase());
+        if (same) errors.push(`services.needs[${i}]: ${n.repo} is in this environment under the alias ${same.alias} (../${same.alias}); write alias: ${same.alias}`);
+        else if (m) errors.push(`services.needs[${i}]: alias ${n.alias} is ${m.fullName} in this environment, not ${n.repo}`);
+        else errors.push(`services.needs[${i}]: ${n.repo} is not a repository of this environment; the others are ${known}`);
+    }
+    for (const alias of used) {
+        const m = byAlias.get(alias);
+        if (m && !declared.has(alias)) errors.push(`services.needs: your compose files build or bind ../${alias}, so the recipe needs it; add - { repo: ${m.fullName}, alias: ${alias} }`);
+    }
+    return errors;
 }
 
 /**
@@ -574,7 +1262,26 @@ export async function checkAuthoredSubmission(
     files: unknown,
     exists: (path: string) => Promise<boolean>,
     read?: (path: string) => Promise<string | null>,
+    /** Whether a directory is at the commit; without it, COPY sources are not checked. */
+    dirExists?: (path: string) => Promise<boolean>,
+    /**
+     * The environment's other repositories. With one, `exists`, `read` and
+     * `dirExists` also answer `../<alias>/…` (WorkspaceRepoReader), Kody's
+     * compose files may build or bind `../<alias>`, and services.needs must
+     * name exactly the members they use (and only members).
+     */
+    workspace?: AuthoredWorkspace,
+    /**
+     * nodeBuild: also the Node build rules (checkNodeBuild) on each authored
+     * Dockerfile, with the facts `read` gives of its build context. Kody's tool
+     * turns them on, so the model fixes a slow or unpinned build in the same run;
+     * they stay off by default, so a recipe that booted before them is still
+     * reused as is (the use case checks the last recipe again).
+     */
+    options: { nodeBuild?: boolean } = {},
 ): Promise<AuthoredSubmissionCheck> {
+    const ws = workspace?.members.length ? workspace : undefined;
+    const composeWs: ComposeWorkspace | undefined = ws && { primary: ws.primary.alias, members: new Set(ws.members.map((m) => m.alias)), used: new Set() };
     const shape = filesShapeProblem(files);
     if (shape) return { ok: false, errors: [`files: ${shape}`] };
     const list = (files ?? []) as AuthoredFile[];
@@ -585,6 +1292,10 @@ export async function checkAuthoredSubmission(
         try {
             p = repoPath(f.path);
         } catch (e) {
+            if (ws && /^\.\.(\/|$)/.test(posix.normalize(f.path.trim()))) {
+                errors.push(`files: ${JSON.stringify(f.path.slice(0, 80))} is outside ${ws.primary.alias}; Kody's files go only under this repository's ${AUTHORED_FILES_DIR} (another repository's ${AUTHORED_FILES_DIR} is never applied)`);
+                continue;
+            }
             errors.push(`files: ${JSON.stringify(f.path.slice(0, 80))} ${e instanceof RepoPathError ? e.message : 'is not a path'}`);
             continue;
         }
@@ -613,27 +1324,130 @@ export async function checkAuthoredSubmission(
     }
     if (errors.length) return { ok: false, errors };
 
+    // Kody's compose files only (never the repository's): what the cell refuses but Kodus can write itself is rewritten first.
+    const adjusted: string[] = [];
+    let total = 0;
+    const rewritten = new Map<string, string>();
+    for (const f of byPath.values()) {
+        if (authoredFileKind(f.path) !== 'compose') {
+            total += Buffer.byteLength(f.content);
+            continue;
+        }
+        const s = await sanitiseAuthoredCompose(f.path, f.content, exists);
+        // A rewrite past the size bounds is not made: the checks refuse the file as written.
+        const fits = Buffer.byteLength(s.content) <= AUTHORED_FILE_LIMITS.fileBytes;
+        const content = s.changes.length && fits ? s.content : f.content;
+        if (content !== f.content) {
+            rewritten.set(f.path, content);
+            adjusted.push(...s.changes);
+        }
+        total += Buffer.byteLength(content);
+    }
+    if (rewritten.size && total <= AUTHORED_FILE_LIMITS.totalBytes) for (const [p, content] of rewritten) byPath.set(p, { path: p, content });
+    else adjusted.length = 0;
+    const withAdjusted = <T extends AuthoredSubmissionCheck>(c: T): T => (adjusted.length ? { ...c, adjusted } : c);
+
     const authored = new Set(byPath.keys());
     const overlayExists = async (p: string) => authored.has(p) || exists(p);
     const usedDockerfiles = new Set<string>();
+    const buildContexts = new Map<string, string>();
+    const repositoryCode = { used: false };
     for (const f of byPath.values()) {
         if (authoredFileKind(f.path) === 'dockerfile') errors.push(...checkAuthoredDockerfile(f.path, f.content));
         else {
-            const r = await checkAuthoredCompose(f.path, f.content, { authored, exists });
+            const r = await checkAuthoredCompose(f.path, f.content, { authored, exists, buildContexts, repositoryCode, ...(composeWs ? { workspace: composeWs } : {}) });
             errors.push(...r.errors);
             r.dockerfiles.forEach((d) => usedDockerfiles.add(d));
         }
     }
+    if (dirExists) {
+        const has = async (p: string) => authored.has(p) || (await exists(p)) || (await dirExists(p));
+        for (const [dockerfile, context] of buildContexts) {
+            const f = byPath.get(dockerfile);
+            if (f) errors.push(...(await missingCopySources(dockerfile, f.content, context, has)));
+        }
+    }
+    if (options.nodeBuild && read) {
+        for (const [dockerfile, context] of buildContexts) {
+            const f = byPath.get(dockerfile);
+            const facts = f ? await nodeBuildFacts(read, context) : null;
+            if (f && facts) errors.push(...checkNodeBuild(dockerfile, f.content, facts));
+        }
+    }
 
-    const check = await checkAuthoredRecipe(recipe, overlayExists, async (p) => byPath.get(p)?.content ?? (read ? read(p) : null));
+    const check = await checkAuthoredRecipe(recipe, overlayExists, async (p) => byPath.get(p)?.content ?? (read ? read(p) : null), ws ? { needs: true } : undefined);
     errors.push(...check.errors);
     if (check.recipe) {
         const named = new Set(check.recipe.composeFiles.map((f) => posix.normalize(f)));
+        if (ws && composeWs) {
+            // The repository's own compose files may build a member too: that member is needed as much.
+            if (read) for (const f of named) if (!authored.has(f)) membersUsedBy((await read(f)) ?? '', composeWs);
+            errors.push(...workspaceNeedsErrors(check.recipe.needs, ws, composeWs.used));
+        }
         for (const p of authored) {
             const kind = authoredFileKind(p);
             if (kind === 'compose' && !named.has(p)) errors.push(`files: ${p} is not in services.compose.files; name it there or leave it out`);
             if (kind === 'dockerfile' && !usedDockerfiles.has(p)) errors.push(`files: ${p} is built by no compose file you submit; add a service with build: { context: ., dockerfile: ${p} }`);
         }
+        // Only Kody's compose files, and nothing of the repository in them: no Dockerfile of the repository, no bind of
+        // its paths, and no COPY of Kody's Dockerfiles reading from it. That boots a placeholder (an nginx answering /
+        // passes every other check), not the pull request's code.
+        const copiesRepository = [...buildContexts.keys()].some((d) =>
+            copySourcesOf(byPath.get(d)?.content ?? '', { patterns: true }).some(({ source }) => !`${posix.normalize(source.replace(/^\/+/, ''))}/`.startsWith(AUTHORED_FILES_DIR)),
+        );
+        if (named.size && [...named].every((f) => authored.has(f)) && !repositoryCode.used && !copiesRepository) {
+            errors.push(
+                "files: no service takes the repository's code (no COPY of its files, no Dockerfile or bind of it), so the app booted would hold none of the pull request; COPY the source the app needs (COPY . . or its package directories), or answer that there is nothing to boot",
+            );
+        }
     }
-    return errors.length ? { ok: false, errors } : { ok: true, errors: [], recipe: check.recipe, files: [...byPath.values()] };
+    if (errors.length) return withAdjusted({ ok: false, errors });
+    // Once accepted (so every error names Kody's own lines), Kody's Dockerfiles install only through the cell's
+    // read-only mirror: each stage that installs declares its build args (declareMirrorBuildArgs, G1).
+    const accepted = [...byPath.values()].map((f) => {
+        if (authoredFileKind(f.path) !== 'dockerfile') return f;
+        const d = declareMirrorBuildArgs(f.path, f.content);
+        if (!d.changes.length || Buffer.byteLength(d.content) > AUTHORED_FILE_LIMITS.fileBytes) return f;
+        adjusted.push(...d.changes);
+        return { path: f.path, content: d.content };
+    });
+    return withAdjusted({ ok: true, errors: [], recipe: check.recipe, files: accepted });
+}
+
+/**
+ * For the eval: each authored Dockerfile's dependency installs, with the build
+ * context the authored compose files give it (`.` when none names it) and
+ * whether its context is a Node project and a monorepo. An install with no
+ * `afterSource` reads only manifests: a change to the code does not run it again.
+ */
+export async function authoredInstallLayers(
+    files: readonly AuthoredFile[],
+    read: (path: string) => Promise<string | null>,
+): Promise<Array<{ dockerfile: string; context: string; node: boolean; monorepo: boolean; installs: InstallLayer[] }>> {
+    const contexts = new Map<string, string>();
+    for (const f of files) {
+        if (authoredFileKind(f.path) !== 'compose') continue;
+        let doc: unknown;
+        try {
+            doc = yaml.load(f.content, UNTRUSTED_YAML);
+        } catch {
+            // The compose check reports the parse error; no layers to read here.
+            continue;
+        }
+        for (const svc of isMap(doc) && isMap(doc.services) ? Object.values(doc.services) : []) {
+            const b = isMap(svc) ? (typeof svc.build === 'string' ? { context: svc.build } : svc.build) : undefined;
+            if (!isMap(b)) continue;
+            const context = insideRoot(String(b.context ?? '.'));
+            const dockerfile = context && insideRoot(posix.join(context, typeof b.dockerfile === 'string' ? b.dockerfile : 'Dockerfile'));
+            if (context && dockerfile) contexts.set(dockerfile, context);
+        }
+    }
+    const out: Array<{ dockerfile: string; context: string; node: boolean; monorepo: boolean; installs: InstallLayer[] }> = [];
+    for (const f of files) {
+        if (authoredFileKind(f.path) !== 'dockerfile') continue;
+        const context = contexts.get(posix.normalize(f.path)) ?? '.';
+        const facts = await nodeBuildFacts(read, context);
+        out.push({ dockerfile: f.path, context, node: !!facts, monorepo: !!facts?.monorepo, installs: installLayersOf(f.content, facts ?? { workspaceGlobs: [] }) });
+    }
+    return out;
 }

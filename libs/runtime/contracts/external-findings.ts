@@ -141,6 +141,8 @@ export type ExternalFindingInput = z.infer<typeof ExternalFindingInputSchema>;
 export const SubmitFindingsSchema = z
     .strictObject({
         repositoryId: id,
+        /** The environment to run in; needed only when the repository is part of several the key reaches. */
+        environmentId: id.optional(),
         prNumber: z.number().int().min(1),
         headSha: sha,
         source: ExternalFindingSourceSchema,

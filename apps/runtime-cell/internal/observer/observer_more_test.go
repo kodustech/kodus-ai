@@ -93,7 +93,11 @@ func TestDefaultClientReachesOnlyTheTargets(t *testing.T) {
 		t.Fatal("takes a proxy from the environment")
 	}
 	c := &http.Client{Transport: tr}
-	if _, err := c.Get(other.URL); err == nil || !strings.Contains(err.Error(), "not one of the claim's targets") {
+	got, err := c.Get(other.URL)
+	if err == nil {
+		_ = got.Body.Close()
+	}
+	if err == nil || !strings.Contains(err.Error(), "not one of the claim's targets") {
 		t.Fatalf("reached a non-target: %v", err)
 	}
 	if resp, err := c.Get("http://" + target.Address + "/users"); err != nil {
@@ -134,9 +138,11 @@ func TestObserverAnswersOnlyItsClaim(t *testing.T) {
 	defer srv.Close()
 	cfg := `{"claimId":"c1","imageId":"img","targets":[{"Service":"api","Port":3000,"Kind":"http","Address":"` + target.Address + `"}]}`
 	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/v1/config", strings.NewReader(cfg))
-	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("config: %v %v", err, resp)
+	cfgResp, err := http.DefaultClient.Do(req)
+	if err != nil || cfgResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("config: %v %v", err, cfgResp)
 	}
+	_ = cfgResp.Body.Close()
 	frame, _ := protocol.Encode(protocol.Header{ID: step, CellID: "cell-1", ClaimID: "c2"}, &protocol.ProbeRunBody{StepID: step, Probe: httpProbe("GET", "/users")})
 	if _, _, err := (HTTPClient{BaseURL: srv.URL}).Run(context.Background(), frame); err == nil || !strings.Contains(err.Error(), "another claim") {
 		t.Fatalf("ran a frame for another claim: %v", err)

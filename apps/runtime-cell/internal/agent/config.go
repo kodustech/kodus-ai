@@ -4,6 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/evidence"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/pool"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/browser"
@@ -13,14 +18,11 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/metrics"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/policy"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/redact"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/tarball"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/transport"
-	"log/slog"
-	"net/http"
-	"os"
-	"time"
 )
 
 // ClaimInfo is what the agent tells the egress control and the observer
@@ -39,10 +41,25 @@ type ClaimInfo struct {
 	// ExtraAllow is the hub's egress.policy allowlist for this claim; it
 	// adds to the cell's base allowlist and replaces the previous one.
 	ExtraAllow []string
+	// ExtraInspect are the hub's approvals made as inspected (each host is
+	// on ExtraAllow).
+	ExtraInspect []policy.InspectRule
+	// Running: the claim's install is done (its build, boot and recipe
+	// steps); a PR or base claim then drops the recommended list's install
+	// hosts (D4, docs/runtime/egress-allowlist.md §8).
+	Running bool
 	// GoPins are what the checkout's go.sum pins (module@version).
 	GoPins []string
 	// ImagePins are the Docker Hub images the checkout's Dockerfiles name.
 	ImagePins []string
+	// OrgSecrets are the claim's secrets with their placeholders: the
+	// policy's Secrets (org_secrets.go). Never a value.
+	OrgSecrets []policy.Secret
+	// CellTrusted: the claim's own boot gave its machines the cell CA, so
+	// TLS from them to an inspected host may end at the injector
+	// (policy.ClaimPolicy.InspectSources). A pool machine booted before the
+	// claim never has it.
+	CellTrusted bool
 }
 
 // ObserverFactory returns the client for a claim's observer machine.
@@ -96,7 +113,11 @@ type DeniedEgressSource interface {
 }
 
 type Config struct {
-	CellID    string
+	CellID string
+	// Host is what a microVM cell found of its KVM host (SMT, KSM, swap,
+	// CPU mitigations, microcode, policy), sent in heartbeats to a hub that
+	// accepts hostHardening; nil: no such report.
+	Host      *protocol.HeartbeatBodyHost
 	Regions   []string
 	Owner     protocol.CellOwner
 	MaxClaims int
@@ -113,52 +134,64 @@ type Config struct {
 	Egress       EgressControl
 	RecipeEgress RecipeEgressValidator
 	FakeSupport  bool // this driver materializes the closed recipe fake services
-	SQLObservers driver.SQLObserverProvisioner
 	OrgKey       func(orgID string) (string, error)
 	// ClaimSecrets returns more exact values the cell knows for a claim
 	// (seed passwords, test secrets it injected); they are redacted from
 	// everything the claim sends, like the download token (S-51).
 	ClaimSecrets func(ClaimInfo) []redact.Known
 
-	// Optional capabilities, wired by the composition root; nil is "this
-	// cell has none". The agent never discovers them by type assertion.
+	// Parts are the driver's optional capabilities (driver.Parts: bake,
+	// compose boot and recipe, pool, sandboxes, memory snapshots, memory
+	// budget, diagnostics, logs, health, boot timings, observer SQL), given
+	// once by the composition root from the driver's own Parts. A nil part
+	// is a capability this cell does not have.
+	Parts driver.Parts
+
+	// Optional capabilities of the cell that are not the driver's, wired
+	// by the composition root; nil is "this cell has none". The agent never
+	// discovers a capability by type assertion.
 	Keys         ClaimKeyer          // per-claim transport keys (SSH)
 	Manifests    ManifestSource      // what the driver booted
-	BootTimes    driver.BootTimer    // the driver's boot and reset phases
-	Diagnoser    driver.Diagnoser    // the failure bundle's service view
 	Secrets      []ClaimSecretSource // more exact values to redact
 	DeniedEgress DeniedEgressSource  // the failure bundle's denied egress
-	// Composer boots the claim's compose project itself (docker-gvisor):
-	// the agent hands it the checkout's compose file and adds the
-	// containers' addresses to the claim's egress Sources.
-	Composer driver.ComposeBooter
-	// Recipes runs the recipe's own boot steps (setup, data.migrate,
-	// data.seed) in the project Composer brought up; nil: this cell runs
-	// none. Set with Composer, by the composition root.
-	Recipes driver.RecipeRunner
-	// BakePinner is set when the driver bakes from the setup claim's
-	// machine (docker-gvisor): image.bake pins that machine's output before
-	// the ack, so releasing the claim cannot take it away.
-	BakePinner driver.BakeSourcePinner
-	// BakeCatalog restores only verified default-branch image eligibility.
-	// It does not restore pool holders, claims, credentials or leases.
-	BakeCatalog driver.BakeCatalog
 	// RecoveryContext is the process startup/shutdown context; recovery is
 	// additionally capped at 30 seconds. Nil retains the bounded library default.
 	RecoveryContext context.Context
-	// Pooler keeps clean machines ready per environment (pool.target);
-	// nil refuses pool.target. PoolMax bounds one environment's pool and
-	// PoolTTL how long a pool machine waits (defaults 4 and 4h).
-	Pooler  driver.Pooler
+	// PoolMax bounds one environment's pool (Parts.Pooler; nil refuses
+	// pool.target) and PoolTTL how long a pool machine waits (defaults 4
+	// and 4h).
 	PoolMax int
 	PoolTTL time.Duration
 	// Alerts is the injector's alert feed: an exfiltration alert makes its
 	// claim a blocker and stops it (watchAlerts).
 	Alerts AlertSource
-	// ServiceLogs reads a claim's service logs in a probe round's window;
-	// Outbound its egress there (evidence.go). EvidenceHTTP is the client
-	// artifacts are uploaded with (nil: a plain one, 30 s).
-	ServiceLogs  driver.ServiceLogReader
+	// DiskWatch is the free-disk watchdog of the filesystem Docker writes
+	// to (disk_watch.go); nil: none.
+	DiskWatch *DiskWatch
+	// EgressAlerts is the proxy's alert feed: a placeholder_leak (a secret's
+	// placeholder over plain HTTP) makes its claim a blocker the same way.
+	EgressAlerts AlertSource
+	// SecretHostDenied is the platform's deny list (netguard.DenyList.Denies):
+	// a secret's host it denies is never handed to the claim, and a secret
+	// left with no host is dropped (org_secrets.go). Nil denies nothing.
+	SecretHostDenied func(host string) bool
+	// CellTrust: the driver mounts the cell's trust files (the injector's
+	// CA with the public roots, machinetrust) into the machines of a claim
+	// with org secrets, asked in UpRequest.CellTrust and
+	// SandboxRequest.CellTrust (org_secrets.go; a sandbox only when the
+	// driver's Capabilities.SandboxCellTrust). Such a sandbox is never a
+	// blank pool one, made before the claim without them. False: no machine
+	// gets them.
+	CellTrust bool
+	// InspectEgress: the cell inspects the hosts of the inspected tier
+	// (docs/runtime/egress-allowlist.md §6), so every claim the cell boots
+	// itself gets the trust files too, not only one with org secrets. Only
+	// with CellTrust; a blank pool sandbox still has none, and its TLS to an
+	// inspected host stays SNI passthrough.
+	InspectEgress bool
+	// Outbound is a claim's egress in a probe round's window, next to its
+	// service logs (Parts.ServiceLogs, evidence.go). EvidenceHTTP is the
+	// client artifacts are uploaded with (nil: a plain one, 30 s).
 	Outbound     evidence.OutboundSource
 	EvidenceHTTP *http.Client
 	// Browser starts the browser runner per probe round (ADR-071,
@@ -168,12 +201,32 @@ type Config struct {
 	// BrowserExplore is explicit and opt-in: only a preflight-verified native
 	// explorer image may advertise this distinct, non-verdict capability.
 	BrowserExplore browser.Runner
+	// SandboxPool is how many blank sandboxes the cell keeps ready (zero:
+	// none), on a driver with code sandboxes (Parts.Sandboxes; nil: the
+	// cell names no sandbox feature and refuses them).
+	SandboxPool int
+	// Preview serves preview URLs (feature preview, preview.go): the tunnel
+	// to the edge and the upstream of a preview claim's streams. Nil: the
+	// cell names no preview feature and nacks every preview frame.
+	Preview *PreviewCapability
+	// SandboxSize is the size a sandbox that asks none runs at and is
+	// counted at, and the size of every blank sandbox (hello
+	// capabilities.sandboxSize). It must be within the driver's
+	// MaxClaimSize. Zero: the driver's default size, for a driver that
+	// grants no size (a sandbox is then counted at the default's full
+	// memory, which its machine gets).
+	SandboxSize driver.ClaimSize
+	// GuestTraceContext sends the step's traceparent to the guest agent on
+	// each sandbox.op (-sandbox-guest-trace). Off by default: a guest agent
+	// built before the field refuses a frame that carries it, so turn it on
+	// once the sandbox image is rebuilt from a commit whose decoder takes it.
+	GuestTraceContext bool
 
 	// MemoryAllocatableMB is what the cell may commit to claims (its host
 	// memory less a reserve), for a driver whose claims share it
-	// (driver.MemoryBudget): a claim is taken only when it fits (ADR-070).
-	// Zero, or a driver without a budget: no memory admission, free slots
-	// alone, as before.
+	// (Parts.Memory): a claim is taken only when it fits (ADR-070). Zero,
+	// or a driver without a budget: no memory admission, free slots alone,
+	// as before.
 	MemoryAllocatableMB int
 	// RequireMemoryAdmission refuses startup without a usable shared-host
 	// budget and enforces capacity even when an older hub lacks cellMemory.
@@ -219,17 +272,28 @@ func (cfg *Config) complete() error {
 	if cfg.CellID == "" || cfg.Driver == nil || cfg.Transport == nil || cfg.Observers == nil {
 		return errors.New("agent: cell id, driver, transport and observers required")
 	}
+	if cfg.Preview != nil && (cfg.Preview.Service == nil || cfg.Preview.Upstreams == nil) {
+		return errors.New("agent: preview needs its service and its upstreams")
+	}
 	if cfg.Repo == nil || cfg.Extractor == nil || cfg.Revoker == nil || cfg.OrgKey == nil {
 		return errors.New("agent: repo source, extractor, revoker and org key required")
 	}
 	if cfg.RequireMemoryAdmission {
-		budget, ok := driver.MemoryBudgetOf(cfg.Driver)
-		if !ok || cfg.MemoryAllocatableMB <= 0 {
+		budget := cfg.Parts.Memory
+		if budget == nil || cfg.MemoryAllocatableMB <= 0 {
 			return fmt.Errorf("%w: agent requires a shared memory budget and positive allocatable memory", driver.ErrResourceEnforcement)
 		}
 		mem := budget.ClaimMemory(driver.ClaimSize{})
 		if mem.BootMB <= 0 || mem.ReadyMB <= 0 || mem.ReadyMB > mem.BootMB || mem.BootMB > maxReportedMemoryMB {
 			return fmt.Errorf("%w: agent requires a usable boot/ready memory budget", driver.ErrResourceEnforcement)
+		}
+	}
+	if !cfg.SandboxSize.IsZero() {
+		if cfg.SandboxSize.MemoryMB <= 0 || cfg.SandboxSize.CPUs <= 0 {
+			return fmt.Errorf("agent: the sandbox size %s needs both memory and CPUs", cfg.SandboxSize)
+		}
+		if err := cfg.SandboxSize.Within(cfg.Driver.Capabilities().MaxClaimSize); err != nil {
+			return fmt.Errorf("agent: the sandbox size: %w", err)
 		}
 	}
 	if cfg.Log == nil {

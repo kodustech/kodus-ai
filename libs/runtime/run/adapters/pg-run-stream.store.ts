@@ -1,5 +1,4 @@
-import { createHash } from 'crypto';
-
+import { lockCall, lockKey } from './advisory-lock';
 import { InvalidStreamOffsetError, type RunStreamEvent, type RunStreamPage, type RunStreamStore, streamKeyOf } from '../run-stream';
 
 // The Run stream in the Runtime Postgres (RUNTIME_STREAM_STORE=postgres, the
@@ -43,13 +42,13 @@ export class PgRunStreamStore implements KeyedRunStreamStore {
         if (Buffer.byteLength(json) > RUN_STREAM_EVENT_MAX_BYTES) throw new RunStreamEventTooLargeError(`a stream event is larger than ${RUN_STREAM_EVENT_MAX_BYTES} bytes`);
         // Per-stream commit order must precede nextval: a reader may resume past any visible seq (#2460).
         // Two int4 keys use a separate advisory-lock space from the single-bigint locks.
-        const lock = createHash('sha256').update(`kody-runtime/run-stream\0${orgId}\0${runId}`).digest();
+        const lock = lockCall('pg_advisory_xact_lock', lockKey('run_stream', orgId, runId), 5);
         await this.db.query(
-            `WITH stream_lock AS MATERIALIZED (SELECT pg_advisory_xact_lock($5::int, $6::int))
+            `WITH stream_lock AS MATERIALIZED (SELECT ${lock.sql})
              INSERT INTO runtime.runtime_run_events (org_id, run_id, event_key, event)
              SELECT $1, $2, $3, $4 FROM stream_lock WHERE true
              ON CONFLICT (run_id, event_key) WHERE event_key IS NOT NULL DO NOTHING`,
-            [orgId, runId, key ?? null, json, lock.readInt32BE(0), lock.readInt32BE(4)],
+            [orgId, runId, key ?? null, json, ...lock.values],
         );
     }
 

@@ -38,10 +38,12 @@ func (r *explorationRunner) Run(_ context.Context, spec browser.RunSpec, job []b
 	}
 	return tw.Close()
 }
+
 func explorationBody() *protocol.BrowserExploreBody {
 	path := "/"
 	return &protocol.BrowserExploreBody{StepID: step1, Request: protocol.BrowserExploreRequest{Steps: []protocol.BrowserExploreStep{{Goto: &path}}, Viewport: protocol.BrowserProbeViewport{Width: 640, Height: 480}, TimeoutMs: 1000}}
 }
+
 func TestBrowserExploreFeatureIsOnlyAdvertisedWithExplicitRunner(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		h := newHarness(t, func(c *Config) {
@@ -54,6 +56,7 @@ func TestBrowserExploreFeatureIsOnlyAdvertisedWithExplicitRunner(t *testing.T) {
 		}
 	}
 }
+
 func TestBrowserExploreRunsOnlyAcceptedBaseRuntimeClaimAndReturnsDistinctResult(t *testing.T) {
 	runner := &explorationRunner{}
 	h := newHarness(t, func(c *Config) { c.BrowserExplore = runner })
@@ -82,6 +85,7 @@ func TestBrowserExploreRunsOnlyAcceptedBaseRuntimeClaimAndReturnsDistinctResult(
 		t.Fatalf("conflict %s", code)
 	}
 }
+
 func TestBrowserExploreRefusesOldHubDisabledRunnerAndWrongClaimScope(t *testing.T) {
 	for _, scenario := range []string{"disabled", "old-hub", "pr", "setup"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -127,6 +131,7 @@ func (r *blockedExploreRunner) Run(ctx context.Context, _ browser.RunSpec, _ []b
 	close(r.exited)
 	return ctx.Err()
 }
+
 func TestBrowserExploreCapacityCancellationAndRelease(t *testing.T) {
 	for _, release := range []bool{false, true} {
 		t.Run(map[bool]string{false: "cancel", true: "release"}[release], func(t *testing.T) {

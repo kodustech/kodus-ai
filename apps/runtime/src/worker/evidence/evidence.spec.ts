@@ -6,15 +6,16 @@ import { join } from 'path';
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { RuntimeRunAccessService } from '@libs/runtime/api/application/run-access.service';
 import { GetRuntimeRunEvidenceUseCase } from '@libs/runtime/api/application/use-cases/get-run-evidence.use-case';
-import { evidenceKey, InvalidEvidenceKeyError, signEvidenceUrl, signUploadGrant } from '@libs/runtime/api/domain/evidence';
+import { evidenceKey, InvalidEvidenceKeyError, signEvidenceUrl, signUploadGrant } from '@libs/runtime/contracts/evidence';
 import { loadRuntimeApiConfig } from '@libs/runtime/api/infrastructure/runtime-api.config';
 import { realAuthorization, run, storeWith, user } from '@libs/runtime/api/__tests__/fixtures';
 
 import { shopRunRequest } from '../../e2e/fixtures';
-import { FileEvidenceStore, InMemoryEvidenceStore } from '../../shared/evidence/file-evidence-store';
-import { inMemoryRunDeps } from '../run/in-memory-deps';
+import { FileEvidenceStore } from '../../shared/evidence/file-evidence-store';
+import { inMemoryRunDeps } from '../run/testing';
 import { runRuntimeRun } from '../run/run-orchestrator';
 import { startEvidenceServer } from './evidence-server';
+import { InMemoryEvidenceStore } from '../../shared/evidence/testing';
 
 const SECRET = 'dev-only-runtime-evidence-signing-secret-000000';
 const STEP = '0b9e6c1e-6a6f-5d2e-9c1a-1f2e3d4c5b6a';

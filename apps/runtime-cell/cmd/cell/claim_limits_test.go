@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"errors"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/claimlimits"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/claimlimits"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 )
 
 func TestAggregateClaimLimitsAreExplicitAndValidated(t *testing.T) {
@@ -19,15 +20,19 @@ func TestAggregateClaimLimitsAreExplicitAndValidated(t *testing.T) {
 	if s.GVisorClaimLimits != "off" || s.GVisorClaimCgroupRoot != "" {
 		t.Fatalf("unexpected defaults: %+v", s)
 	}
-	for _, args := range [][]string{{"-gvisor-claim-limits", "auto"}, {"-gvisor-claim-limits", "required"}, {"-driver", "docker-gvisor", "-gvisor-claim-limits", "required"}, {"-gvisor-claim-cgroup-root", "/sys/fs/cgroup/test"}, {"-driver", "local-docker", "-gvisor-claim-limits", "required", "-gvisor-claim-cgroup-root", "/sys/fs/cgroup/test"}} {
+	for _, args := range [][]string{{"-gvisor-claim-limits", "auto"}, {"-gvisor-claim-limits", "required"}, {"-driver", "docker-gvisor", "-gvisor-claim-limits", "required"}, {"-gvisor-claim-cgroup-root", "/sys/fs/cgroup/test"}} {
 		if _, err := parse(t, args...); err == nil {
 			t.Fatalf("accepted %v", args)
 		}
+	}
+	if _, err := startOn(t, false, "", "-driver", "local-docker", "-dev-insecure-local-docker", "-gvisor-claim-limits", "required", "-gvisor-claim-cgroup-root", "/sys/fs/cgroup/test"); err == nil {
+		t.Fatal("claim limits accepted on local-docker")
 	}
 	if _, err := parse(t, "-driver", "docker-gvisor", "-gvisor-claim-limits", "required", "-gvisor-claim-cgroup-root", "/sys/fs/cgroup/test"); err != nil {
 		t.Fatal(err)
 	}
 }
+
 func TestAggregateClaimLimitsRejectRemoteEndpoints(t *testing.T) {
 	for _, s := range []string{"", "tcp://127.0.0.1:2375", "ssh://example", "unix://relative", "unix:///a/../b", "unix:///a\n"} {
 		if err := validateClaimEndpoint(s); err == nil {
@@ -40,7 +45,7 @@ func TestAggregateClaimLimitsRejectRemoteEndpoints(t *testing.T) {
 }
 
 func TestAggregateClaimLimitsRequirePhysicalAdmission(t *testing.T) {
-	if _, err := parse(t, "-driver", "docker-gvisor", "-gvisor-claim-limits", "required", "-gvisor-claim-cgroup-root", "/sys/fs/cgroup/test", "-memory-admission=false"); err == nil {
+	if _, err := startOn(t, false, "gvisor", append(claimLimitArgs, "-driver", "docker-gvisor", "-memory-admission=false")...); err == nil {
 		t.Fatal("aggregate mode accepted disabled physical admission")
 	}
 }
@@ -56,7 +61,8 @@ func TestSystemdClaimLimitConfigurationIsExplicitAndExclusive(t *testing.T) {
 		t.Fatalf("systemd=%+v err=%v", s, err)
 	}
 	for _, bad := range [][]string{
-		{"-gvisor-claim-limit-backend", "other"}, {"-gvisor-claim-limit-backend", "systemd"},
+		{"-gvisor-claim-limit-backend", "other"},
+		{"-gvisor-claim-limit-backend", "systemd"},
 		{"-driver", "docker-gvisor", "-gvisor-claim-limits", "required", "-gvisor-claim-limit-backend", "systemd"},
 		append(append([]string{}, args...), "-gvisor-claim-cgroup-root", "/sys/fs/cgroup/cell"),
 		{"-driver", "docker-gvisor", "-gvisor-claim-limits", "required", "-gvisor-claim-root-slice", "kodus0123456789ab.slice", "-gvisor-claim-cgroup-root", "/sys/fs/cgroup/cell"},
@@ -82,6 +88,7 @@ func (f *testLimitLifecycle) PruneEmpty() error {
 	}
 	return nil
 }
+
 func (f *testLimitLifecycle) RequireEmpty() error {
 	f.calls = append(f.calls, "empty")
 	if f.fail == "empty" {
@@ -125,6 +132,7 @@ func TestClaimLimitsFactoryPrunesBeforeAdmissionAndClosesOnFailure(t *testing.T)
 		}
 	}
 }
+
 func TestClaimLimitFactoryRefusesWrongDaemonBeforeOpeningRoot(t *testing.T) {
 	t.Setenv("DOCKER_HOST", "unix:///run/isolated.sock")
 	t.Setenv("DOCKER_CONTEXT", "")
@@ -134,15 +142,16 @@ func TestClaimLimitFactoryRefusesWrongDaemonBeforeOpeningRoot(t *testing.T) {
 	called := false
 	_, err := configureClaimLimitsWith(context.Background(), cli, settings{GVisorClaimLimitBackend: "systemd"}, "cell-1", func(context.Context, string, string, string) (claimlimits.Lifecycle, error) {
 		called = true
-		return nil, nil
+		return nil, nil //nolint:nilnil // never reached: the test fails if this is called
 	})
 	if err == nil || called {
 		t.Fatal("missing runsc mode reached root controller")
 	}
 }
+
 func TestSystemdClaimLimitConfigFileAndFlagPrecedence(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "cell.yaml")
-	if err := os.WriteFile(p, []byte("driver: docker-gvisor\nclaimLimits: required\nclaimLimitBackend: systemd\nclaimRootSlice: kodus0123456789ab.slice\n"), 0600); err != nil {
+	if err := os.WriteFile(p, []byte("driver: docker-gvisor\nclaimLimits: required\nclaimLimitBackend: systemd\nclaimRootSlice: kodus0123456789ab.slice\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	s, err := parse(t, "-config", p)

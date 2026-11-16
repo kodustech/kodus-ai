@@ -1,13 +1,13 @@
-import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
+import { consumerWith } from './testing';
 import { randomUUID } from 'crypto';
 import { Nack } from '@golevelup/nestjs-rabbitmq';
 import type { ConsumeMessage } from 'amqplib';
 import { RuntimeEventName } from '@libs/runtime/run';
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
-import { RuntimeCommandConsumer } from './run-request.consumer';
 import { RuntimeRunRetry } from './runtime-run-retry';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/testing';
+import { InMemoryCommandStore } from '../../shared/persistence/testing';
 
 const raw = (messageId: string, retry = 0, redelivered = false) =>
     ({
@@ -32,20 +32,7 @@ function fixture() {
         { publish: jest.fn() },
         { maxRetries: 2, delayMs: 100, maxDelayMs: 1000 },
     );
-    const consumer = new RuntimeCommandConsumer(
-        engine as any,
-        projection,
-        new InMemoryCommandStore(),
-        new InMemoryPrAdmissionStore(),
-        undefined,
-        setups,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        retry,
-    );
+    const consumer = consumerWith({ engine: engine as any, projection, commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore(), setups }, retry);
     const a = shopRunRequest();
     const b = {
         ...a,

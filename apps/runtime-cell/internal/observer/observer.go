@@ -283,7 +283,7 @@ func (r *Prober) runHTTP(ctx context.Context, p protocol.HTTPProbe, res *protoco
 	if err != nil {
 		return nil, &UnreachableError{err}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	// timedRequests: when it was sent, on the round's clock (the agent drops it for a hub that does not accept it).
 	entry := protocol.RequestLogEntry{Method: string(p.Method), Route: Route(u.Path), Status: int64(resp.StatusCode)}
 	timed := entry
@@ -325,7 +325,7 @@ func (l *limitedBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// UnreachableError: the app did not answer; vmHealth becomes unreachable.
+// UnreachableError means the app did not answer; vmHealth becomes unreachable.
 type UnreachableError struct{ Err error }
 
 func (e *UnreachableError) Error() string { return "unreachable: " + e.Err.Error() }
@@ -420,7 +420,7 @@ func (r *Prober) runSQL(ctx context.Context, p protocol.SQLProbe) (*protocol.Pro
 	if err != nil {
 		return nil, r.sqlConnectionError(err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // read-only: rollback is how it ends
 	if t.Kind == "postgres" {
 		if _, err := tx.ExecContext(ctx, "SET LOCAL statement_timeout = "+strconv.FormatInt(timeout.Milliseconds(), 10)); err != nil {
 			return nil, r.sqlConnectionError(err)
@@ -430,7 +430,7 @@ func (r *Prober) runSQL(ctx context.Context, p protocol.SQLProbe) (*protocol.Pro
 	if err != nil {
 		return nil, refuse("sql_error", "%v", r.sqlError(err))
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	cols, err := rows.Columns()
 	if err != nil {
 		return nil, refuse("sql_error", "%v", r.sqlError(err))

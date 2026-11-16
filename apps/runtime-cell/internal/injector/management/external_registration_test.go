@@ -29,10 +29,10 @@ func externalVault(t *testing.T, read injector.SecretVersionReader) (injector.Ma
 	base := privateDir(t)
 	dir := filepath.Join(base, "vault")
 	key := filepath.Join(base, "owner.key")
-	if err := os.Mkdir(dir, 0700); err != nil {
+	if err := os.Mkdir(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(key, bytes.Repeat([]byte{9}, 32), 0600); err != nil {
+	if err := os.WriteFile(key, bytes.Repeat([]byte{9}, 32), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -202,7 +202,7 @@ func TestExternalRegistrationUnixClientAndPeerRefusal(t *testing.T) {
 	}))
 	base := privateDir(t)
 	socket, _, _ := startServer(t, v, base)
-	_, err := call(ctx, socket, "register-external", []byte(externalMetadata), func(c *net.UnixConn) error { return samePeer(c, uint32(os.Geteuid()+1)) })
+	_, err := call(ctx, socket, "register-external", []byte(externalMetadata), func(c *net.UnixConn) error { return samePeer(c, effectiveUID()+1) })
 	var typed *Error
 	if !errors.As(err, &typed) || typed.Code != "denied" {
 		t.Fatal("external registration bypassed peer identity refusal")

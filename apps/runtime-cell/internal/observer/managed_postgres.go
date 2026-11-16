@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
+
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observerauth"
 )
 

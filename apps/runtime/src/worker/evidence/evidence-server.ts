@@ -1,7 +1,10 @@
+import { Logger } from '@nestjs/common';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http';
 
-import { InvalidEvidenceKeyError, isEvidenceContentType, verifyEvidenceSignature, verifyUploadGrant } from '@libs/runtime/api/domain/evidence';
+import { InvalidEvidenceKeyError, isEvidenceContentType, verifyEvidenceSignature, verifyUploadGrant } from '@libs/runtime/contracts/evidence';
+import { safeFailure } from '@libs/runtime/telemetry/failure';
 
+import { requestListener } from '../../shared/request-listener';
 import { canonicalEvidenceKey, type EvidenceStore } from '../../shared/evidence/file-evidence-store';
 
 // The evidence server (§8, RT-16): its own origin, no cookie, no session.
@@ -14,6 +17,8 @@ import { canonicalEvidenceKey, type EvidenceStore } from '../../shared/evidence/
 // upload grant the worker signed for it (EVIDENCE-CAPTURE-DESIGN): the exact
 // key, the declared content type (one of EVIDENCE_CONTENT_TYPES, the one
 // the type allows), at most the grant's bytes, before it expires, once.
+
+const logger = new Logger('EvidenceServer');
 
 const HEADERS = {
     'Cache-Control': 'private, no-store',
@@ -155,7 +160,9 @@ export function evidenceRequestHandler(opts: EvidenceServerOptions) {
                 'Content-Disposition': `attachment; filename="${side}-${stepId}-${type}.${ext ?? 'bin'}"`,
             });
             res.end(req.method === 'HEAD' ? undefined : obj.body);
-        } catch {
+        } catch (e) {
+            // The client gets a bare 500 (or a cut answer); the store's failure is told here, without the key.
+            logger.warn({ msg: 'evidence.request_failed', method: req.method, error: safeFailure(e) });
             if (!res.headersSent) deny(res, 500);
             else res.destroy();
         }
@@ -163,7 +170,7 @@ export function evidenceRequestHandler(opts: EvidenceServerOptions) {
 }
 
 export function startEvidenceServer(opts: EvidenceServerOptions & { port: number; host?: string }): Promise<Server> {
-    const server = createServer(evidenceRequestHandler(opts));
+    const server = createServer(requestListener(evidenceRequestHandler(opts)));
     return new Promise((resolve, reject) => {
         server.once('error', reject);
         server.listen(opts.port, opts.host ?? '0.0.0.0', () => resolve(server));

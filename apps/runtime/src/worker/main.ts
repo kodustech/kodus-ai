@@ -11,7 +11,7 @@ async function bootstrap() {
     // Fails here, before anything connects, on a missing seal key or a bad setting.
     const config = loadWorkerConfig();
     const logger = new RuntimeLogger('runtime-worker');
-    const shutdownOtel = await setupRuntimeOtel('runtime-worker', config.metricsPort);
+    const shutdownOtel = await setupRuntimeOtel({ serviceName: 'runtime-worker', serviceVersion: config.releaseVersion }, config.metricsPort);
     const app = await NestFactory.createApplicationContext(RuntimeWorkerModule.forConfig(config), { logger });
     app.enableShutdownHooks();
     await app.init();

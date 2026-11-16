@@ -17,7 +17,7 @@ type Registry struct {
 	byID map[string]*Claim
 }
 
-func NewRegistry(max int) *Registry { return &Registry{max: max, byID: map[string]*Claim{}} }
+func NewRegistry(limit int) *Registry { return &Registry{max: limit, byID: map[string]*Claim{}} }
 
 func (r *Registry) Add(c *Claim) error {
 	r.mu.Lock()

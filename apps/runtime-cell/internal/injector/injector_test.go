@@ -79,7 +79,7 @@ func newRig(t *testing.T, opts ...func(*Injector)) *rig {
 	t.Helper()
 	cellCA, _ := testpki.NewCA("cell-ca")
 	publicCA, _ := testpki.NewCA("public-ca")
-	upCert, _ := publicCA.Issue(host, time.Hour, host)
+	upCert, _ := publicCA.Issue(host, time.Hour, host, "public.example")
 	r := &rig{proxyTap: &tap{}, alerts: make(chan Alert, 8), seen: make(chan http.Header, 8), alertLog: eventlog.New[Alert](10), dialed: make(chan string, 16)}
 
 	up := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -101,11 +101,11 @@ func newRig(t *testing.T, opts ...func(*Injector)) *rig {
 			_, _ = w.Write(buf.Bytes())
 		case "/always-gzip": // compresses unasked: the injector cannot mask it
 			w.Header().Set("Content-Encoding", "br")
-			_, _ = w.Write([]byte(req.Header.Get("Authorization")))
+			_, _ = w.Write([]byte(req.Header.Get("Authorization"))) //nolint:gosec // G705: the fake upstream echoes the header so the test sees what the injector sent
 		case "/big":
 			_, _ = io.WriteString(w, strings.Repeat("y", 4096))
 		case "/artifact": // a package whose metadata embeds the token (S-28)
-			_, _ = io.WriteString(w, `{"name":"pkg","_resolved":"https://u:`+strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")+`@registry.private/pkg.tgz"}`)
+			_, _ = io.WriteString(w, `{"name":"pkg","_resolved":"https://u:`+strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")+`@registry.private/pkg.tgz"}`) //nolint:gosec // G705: the fake upstream echoes the token on purpose (S-28)
 		default:
 			b, _ := io.ReadAll(req.Body)
 			_, _ = w.Write(b)
@@ -117,8 +117,10 @@ func newRig(t *testing.T, opts ...func(*Injector)) *rig {
 	upAddr := strings.TrimPrefix(up.URL, "https://")
 
 	store := policy.NewStore(nil)
-	if err := store.Put(policy.ClaimPolicy{ClaimID: "claim-1", OrgID: "org-a", Sources: []string{"127.0.0.1"}, Phase: policy.PhaseBuild,
-		Allow: []string{host, "public.example"}, CredentialHosts: []string{host}, ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+	if err := store.Put(policy.ClaimPolicy{
+		ClaimID: "claim-1", OrgID: "org-a", Sources: []string{"127.0.0.1"}, Phase: policy.PhaseBuild,
+		Allow: []string{host, "public.example"}, CredentialHosts: []string{host}, ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
 		t.Fatal(err)
 	}
 	vault := &MemoryVault{}
@@ -297,7 +299,7 @@ func TestS28BakeLeavesNoCredentialOnDisk(t *testing.T) {
 	}
 	_ = filepath.Walk(disk, func(p string, info os.FileInfo, err error) error {
 		if err == nil && !info.IsDir() {
-			b, _ := os.ReadFile(p)
+			b, _ := os.ReadFile(p) //nolint:gosec // G122: the test walks the t.TempDir it just wrote
 			noSecret(t, p, b)
 		}
 		return nil
@@ -313,7 +315,7 @@ func TestOnlyDeclaredHostsAndOnlyTheProxy(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _ = io.WriteString(conn, "PROXY TCP4 127.0.0.1 127.0.0.1 1 443\r\n")
-	tc := tls.Client(conn, &tls.Config{ServerName: "public.example", InsecureSkipVerify: true})
+	tc := tls.Client(conn, &tls.Config{ServerName: "public.example", InsecureSkipVerify: true}) //nolint:gosec // G402: the test dials the injector's own leaf; only whether it is served matters
 	if err := tc.Handshake(); err == nil {
 		t.Fatal("injector served a host without a declared credential")
 	}
@@ -321,7 +323,7 @@ func TestOnlyDeclaredHostsAndOnlyTheProxy(t *testing.T) {
 	// A PROXY line naming a source with no policy gets nothing either.
 	conn, _ = net.Dial("tcp4", r.injAddr)
 	_, _ = io.WriteString(conn, "PROXY TCP4 10.9.9.9 127.0.0.1 1 443\r\n")
-	tc = tls.Client(conn, &tls.Config{ServerName: host, InsecureSkipVerify: true})
+	tc = tls.Client(conn, &tls.Config{ServerName: host, InsecureSkipVerify: true}) //nolint:gosec // G402: the test dials the injector's own leaf; only whether it is served matters
 	if err := tc.Handshake(); err == nil {
 		t.Fatal("injector served an unknown source")
 	}
@@ -361,7 +363,7 @@ func TestInjectorRefusesAnInternalDestination(t *testing.T) {
 	}
 	defer conn.Close()
 	_, _ = io.WriteString(conn, "PROXY TCP4 127.0.0.1 169.254.169.254 1 443\r\n")
-	tc := tls.Client(conn, &tls.Config{ServerName: host, InsecureSkipVerify: true})
+	tc := tls.Client(conn, &tls.Config{ServerName: host, InsecureSkipVerify: true}) //nolint:gosec // G402: the test dials the injector's own leaf; only whether it is served matters
 	if err := tc.Handshake(); err == nil {
 		t.Fatal("injector served a request bound for the metadata service")
 	}

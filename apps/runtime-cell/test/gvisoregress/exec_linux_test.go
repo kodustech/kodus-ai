@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver/drivertest"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
@@ -65,7 +65,7 @@ func TestExecRunsInThePublicServiceUnderGVisorAndStopsAtItsDeadline(t *testing.T
 	if err := os.WriteFile(filepath.Join(project, recipe.Path), []byte("version: 1\nservices:\n  compose:\n    files: [docker-compose.yml]\n    public: app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Up(ctx, ref, []byte(execProject), project); err != nil {
+	if _, err := d.Up(ctx, driver.UpRequest{Ref: ref, Compose: []byte(execProject), ProjectDir: project}); err != nil {
 		t.Fatalf("up: %v", err)
 	}
 

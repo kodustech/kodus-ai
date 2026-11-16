@@ -24,6 +24,7 @@ import (
 func signedPolicyForBinding(b Binding, now time.Time) policy.ClaimPolicy {
 	return policy.ClaimPolicy{ClaimID: b.Scope.ClaimID, OrgID: b.Scope.OrganizationID, EnvironmentID: b.Scope.EnvironmentID, Sources: []string{"127.0.0.1"}, Allow: []string{b.Host}, CredentialHosts: []string{b.Host}, Phase: policy.PhaseTest, ExpiresAt: now.Add(time.Hour), IssuedAt: now}
 }
+
 func installSignedPolicy(t *testing.T, handler http.Handler, key ed25519.PrivateKey, p policy.ClaimPolicy) {
 	t.Helper()
 	signed, err := policy.Sign(key, p)
@@ -40,6 +41,7 @@ func installSignedPolicy(t *testing.T, handler http.Handler, key ed25519.Private
 		t.Fatalf("signed policy refused: %d", rr.Code)
 	}
 }
+
 func TestPolicyClaimAuthorizerRequiresSignedExactLiveScope(t *testing.T) {
 	for _, change := range []string{"valid", "legacy", "organization", "environment", "claim", "host", "not_credentialed", "expired", "past_hard_expiry"} {
 		t.Run(change, func(t *testing.T) {
@@ -82,6 +84,7 @@ func TestPolicyClaimAuthorizerRequiresSignedExactLiveScope(t *testing.T) {
 		})
 	}
 }
+
 func TestPolicyClaimAuthorizerRealMTLSAndSigningBoundary(t *testing.T) {
 	cfg, _, b := vaultFixture(t)
 	pub, key, _ := ed25519.GenerateKey(rand.Reader)
@@ -139,6 +142,7 @@ func TestPolicyClaimAuthorizerRealMTLSAndSigningBoundary(t *testing.T) {
 		t.Fatal("removed signed policy still authorized")
 	}
 }
+
 func TestCredentialStopsOnLivePolicyRemovalOverExistingConnection(t *testing.T) {
 	cfg, version, b := vaultFixture(t)
 	version.Value = secret
@@ -169,7 +173,7 @@ func TestCredentialStopsOnLivePolicyRemovalOverExistingConnection(t *testing.T) 
 	}
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatal("valid credential refused")
 	}
 	<-rig.seen
@@ -188,7 +192,7 @@ func TestCredentialStopsOnLivePolicyRemovalOverExistingConnection(t *testing.T) 
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != 403 {
+	if resp.StatusCode != http.StatusForbidden {
 		t.Fatal("stale TLS connection kept a revoked policy's credential")
 	}
 	select {
@@ -197,6 +201,7 @@ func TestCredentialStopsOnLivePolicyRemovalOverExistingConnection(t *testing.T) 
 	default:
 	}
 }
+
 func TestCredentialAuthorityCheckDoesNotHoldVaultLockAcrossRevocation(t *testing.T) {
 	for _, kind := range []string{"version", "claim"} {
 		t.Run(kind, func(t *testing.T) {

@@ -1,12 +1,14 @@
 package agent
 
 import (
+	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/provenance"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver/fake"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/metrics"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 )
 
@@ -25,7 +27,7 @@ func (budgetDriver) ClaimMemory(size driver.ClaimSize) driver.ClaimMemory {
 // withMemory gives the harness's agent a memory budget of allocatableMB.
 func withMemory(allocatableMB int) func(*Config) {
 	return func(c *Config) {
-		c.Driver = budgetDriver{c.Driver.(*fake.Driver)}
+		c.Parts.Memory = budgetDriver{c.Driver.(*fake.Driver)}
 		c.MemoryAllocatableMB = allocatableMB
 	}
 }
@@ -154,4 +156,18 @@ func TestHeartbeatMemoryOnlyToAHubThatAcceptsIt(t *testing.T) {
 		t.Fatal("a cell without a memory budget reported memory")
 	}
 	plain.ready("claim-1")
+}
+
+// A driver wrapped in Observed, as cmd/cell wraps every driver, still gives
+// admission its memory budget: the cell counts a claim at its boot size.
+func TestAWrappedDriverStillGivesAdmissionItsMemoryBudget(t *testing.T) {
+	h := newHarness(t, withMemory(14_745), func(c *Config) {
+		c.Driver, c.Parts = driver.Observed(c.Driver, c.Parts, metrics.NewRegistry(), slog.New(slog.DiscardHandler))
+	})
+	if h.a.mem == nil {
+		t.Fatal("memory admission is off behind the wrapper")
+	}
+	if got := h.a.claimMemoryNeed(*h.acquireBody(), false); got != 12_288 {
+		t.Fatalf("a claim is counted at %d MB, want its boot size", got)
+	}
 }

@@ -5,11 +5,12 @@ import { ownsEnvSession } from '@libs/runtime/contracts/env-session';
 import type { EnvironmentSetupRecord } from '@libs/runtime/run';
 import { isSealedSecret } from '@libs/runtime/run/sealed-secret';
 
+import { RuntimeEnvironmentMembers } from '../application/environment-members.service';
 import { RuntimeEnvToolsService } from '../application/env-tools.service';
 import { ListRuntimeAuditUseCase } from '../application/use-cases/env-audit.use-case';
 import { ENV_EXEC_QUOTA, type EnvKeyPrincipal, EnvSessionPortError, type ProductEnvironment, type RuntimeEnvSessionPort } from '../domain/ports';
-import { InMemoryRuntimeEnvAuditStore } from '../infrastructure/mongo-env-audit.store';
-import { openSealed, SEAL_KEY } from './fixtures';
+import { InMemoryEnvironmentRepositories, openSealed, SEAL_KEY } from './fixtures';
+import { InMemoryRuntimeEnvAuditStore } from '../testing';
 
 const ORG = 'org-a';
 const SHA = 'b'.repeat(40);
@@ -52,7 +53,7 @@ const blockedSetup: EnvironmentSetupRecord = {
 class FakeEnvSessionPort implements RuntimeEnvSessionPort {
     readonly sessions = new Map<string, EnvSessionView & { owner: Omit<EnvSessionOwner, 'repositoryIds'> }>();
     readonly opened: EnvSessionOpen[] = [];
-    readonly execs: Array<{ sessionId: string; command: string }> = [];
+    readonly execs: Array<{ sessionId: string; command: string; repository?: string }> = [];
     private find(owner: EnvSessionOwner, sessionId: string) {
         const s = this.sessions.get(sessionId);
         if (!s || !ownsEnvSession({ ...s.owner, repositoryId: s.repositoryId }, owner)) throw new EnvSessionPortError(404, 'not_found', 'not found');
@@ -81,7 +82,7 @@ class FakeEnvSessionPort implements RuntimeEnvSessionPort {
         if(name!=='lint')throw new EnvSessionPortError(409,'validation_not_found','not found');
         return {session,name,command:'pnpm lint',recipeSha:SHA,recipeDigest:'a'.repeat(64)};
     }
-    async exec(owner: EnvSessionOwner, id: string, req: { stepId: string; command: string }): Promise<EnvStepView> {
+    async exec(owner: EnvSessionOwner, id: string, req: { stepId: string; command: string; repository?: string }): Promise<EnvStepView> {
         this.find(owner, id);
         this.execs.push({ sessionId: id, ...req });
         return { stepId: req.stepId, sessionId: id, state: 'running', command: req.command, startedAt: 'x' };
@@ -95,7 +96,9 @@ class FakeEnvSessionPort implements RuntimeEnvSessionPort {
     }
 }
 
-function harness(opts: { setup?: EnvironmentSetupRecord | null; environments?: ProductEnvironment[] } = {}) {
+function harness(
+    opts: { setup?: EnvironmentSetupRecord | null; environments?: ProductEnvironment[]; membership?: InMemoryEnvironmentRepositories; heads?: Record<string, string> } = {},
+) {
     const environments = opts.environments ?? [
         env(),
         env({ environmentId: 'env-b', organizationId: 'org-b', teamId: 'team-b', repositoryId: 'repo-b' }),
@@ -116,14 +119,22 @@ function harness(opts: { setup?: EnvironmentSetupRecord | null; environments?: P
     const service = new RuntimeEnvToolsService(
         products,
         views,
-        { getDefaultBranchHead: async () => ({ status: 'ok', branch: 'main', sha: SHA }) },
-        { issue: async () => (tokens.push('ghs_plain'), 'ghs_plain') },
+        { getDefaultBranchHead: async (r: { repositoryId: string }) => ({ status: 'ok', branch: 'main', sha: opts.heads?.[r.repositoryId] ?? SHA }) },
+        {
+            issue: async (r: { repositoryId: string }) => {
+                const token = r.repositoryId === 'repo-a' ? 'ghs_plain' : `ghs_${r.repositoryId}`;
+                tokens.push(token);
+                return token;
+            },
+        },
         { secretSealKey: SEAL_KEY },
         sessions,
         audit,
         { request: async (e: any, u: any) => (setupRequests.push({ e, u }), e) },
         { openRecipePullRequest: async (...args: any[]) => (prs.push(args), { number: 7, url: 'https://example.invalid/pr/7' }) },
         () => now,
+        undefined,
+        opts.membership ? new RuntimeEnvironmentMembers(products, opts.membership) : undefined,
     );
     return { service, sessions, audit, setupRequests, prs, tokens, advance: (ms: number) => (now = new Date(now.getTime() + ms)) };
 }
@@ -146,6 +157,66 @@ describe('RuntimeEnvToolsService (/mcp/env)', () => {
         expect(isSealedSecret(req.sealedRepoToken)).toBe(true);
         expect(openSealed(req.sealedRepoToken, `mcp:${req.sessionId}`)).toBe('ghs_plain');
         expect(JSON.stringify(req)).not.toContain('ghs_plain');
+        expect(req.workspace).toBeUndefined();
+    });
+
+    /** acme/shop (primary) with acme/billing beside it, both in the key. */
+    async function shopWithBilling() {
+        const environments = [env()];
+        const membership = new InMemoryEnvironmentRepositories(environments);
+        const row = { environmentId: 'env-a', organizationId: ORG, triggers: true, pairBranches: false };
+        await membership.add({ ...row, repositoryId: 'repo-a', repositoryName: 'acme/shop', fullName: 'acme/shop', role: 'primary', alias: 'shop' });
+        await membership.add({ ...row, repositoryId: 'repo-billing', repositoryName: 'acme/billing', fullName: 'acme/billing', role: 'member', alias: 'billing' });
+        return { environments, membership, key: { ...KEY, repositoryIds: ['repo-a', 'repo-billing'] } };
+    }
+
+    it('env_up on a multi-repository environment boots every repository at its default-branch head, each with its own token sealed to the session', async () => {
+        const { environments, membership, key } = await shopWithBilling();
+        const BILLING_HEAD = 'c'.repeat(40);
+        const h = harness({ environments, membership, heads: { 'repo-billing': BILLING_HEAD } });
+        await h.service.up(key, { environmentId: 'env-a' });
+        const req = h.sessions.opened[0];
+        const layout = req.workspace!.map(({ sealedRepoToken: _, ...r }) => r);
+        expect(layout).toEqual([
+            { repositoryId: 'repo-a', fullName: 'acme/shop', alias: 'shop', role: 'primary', sha: SHA },
+            { repositoryId: 'repo-billing', fullName: 'acme/billing', alias: 'billing', role: 'member', sha: BILLING_HEAD },
+        ]);
+        const opened = req.workspace!.map((r) => openSealed(r.sealedRepoToken, `mcp:${req.sessionId}`));
+        expect(opened).toEqual(['ghs_plain', 'ghs_repo-billing']);
+        expect(JSON.stringify(req)).not.toMatch(/ghs_/);
+    });
+
+    it('env_up boots a repository at the commit the caller names for its alias, and refuses an alias or a commit the environment cannot boot', async () => {
+        const { environments, membership, key } = await shopWithBilling();
+        const NAMED = 'd'.repeat(40);
+        const h = harness({ environments, membership });
+        await h.service.up(key, { environmentId: 'env-a', commits: { billing: NAMED } });
+        expect(h.sessions.opened[0].workspace!.map((r) => [r.alias, r.sha])).toEqual([
+            ['shop', SHA],
+            ['billing', NAMED],
+        ]);
+        const tokensBefore = h.tokens.length;
+        await expect(h.service.up(key, { environmentId: 'env-a', commits: { payments: NAMED } })).rejects.toThrow('not a repository of this environment: shop, billing');
+        await expect(h.service.up(key, { environmentId: 'env-a', commits: { billing: 'abc' } })).rejects.toThrow('full 40-character');
+        await expect(h.service.up(key, { environmentId: 'env-a', sha: SHA, commits: { shop: NAMED } })).rejects.toThrow('two different commits');
+        expect(h.sessions.opened).toHaveLength(1);
+        expect(h.tokens).toHaveLength(tokensBefore);
+    });
+
+    it('a team key missing one repository of a multi-repository environment does not reach it: env_up opens nothing, by id, by repository or as its only one', async () => {
+        const environments = [env()];
+        const membership = new InMemoryEnvironmentRepositories(environments);
+        const row = { environmentId: 'env-a', organizationId: ORG, triggers: true, pairBranches: false };
+        await membership.add({ ...row, repositoryId: 'repo-a', repositoryName: 'acme/shop', fullName: 'acme/shop', role: 'primary', alias: 'shop' });
+        await membership.add({ ...row, repositoryId: 'repo-billing', repositoryName: 'acme/billing', fullName: 'acme/billing', role: 'member', alias: 'billing' });
+        const h = harness({ environments, membership });
+        await expect(h.service.up(KEY, { environmentId: 'env-a' })).rejects.toBeInstanceOf(NotFoundException);
+        await expect(h.service.up(KEY, { repositoryId: 'repo-a' })).rejects.toBeInstanceOf(NotFoundException);
+        await expect(h.service.up(KEY, {})).rejects.toThrow('reaches no Kody Runtime environment');
+        expect(h.sessions.opened).toEqual([]);
+        expect(h.tokens).toEqual([]);
+        // The key that lists both reaches it.
+        expect((await h.service.up({ ...KEY, repositoryIds: ['repo-a', 'repo-billing'] }, { environmentId: 'env-a' })).environmentId).toBe('env-a');
     });
 
     it('env_up finds the environment by repository, or the key only one', async () => {
@@ -272,6 +343,17 @@ describe('RuntimeEnvToolsService (/mcp/env)', () => {
         const { sessionId } = await h.service.up(KEY, { environmentId: 'env-a' });
         await expect(h.service.exec(KEY, { sessionId, command: '' })).rejects.toMatchObject({ status: 400 });
         await expect(h.service.exec(KEY, { sessionId, command: 'x', timeoutMs: 700_000 })).rejects.toMatchObject({ status: 400 });
+    });
+
+    it("env_exec runs a command in the member repository the caller names, and refuses a name that is not an alias", async () => {
+        const { environments, membership, key } = await shopWithBilling();
+        const h = harness({ environments, membership });
+        const { sessionId } = await h.service.up(key, { environmentId: 'env-a' });
+        await h.service.exec(key, { sessionId, command: 'pnpm test', repository: 'billing' });
+        await h.service.exec(key, { sessionId, command: 'pnpm test' });
+        expect(h.sessions.execs.map((e) => e.repository)).toEqual(['billing', undefined]);
+        await expect(h.service.exec(key, { sessionId, command: 'ls', repository: '../shop' })).rejects.toMatchObject({ status: 400 });
+        expect(h.sessions.execs).toHaveLength(2);
     });
 
     it('env_fix opens the recipe PR for a set_env fix and asks for a setup for retry_setup, both audited', async () => {

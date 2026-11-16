@@ -22,11 +22,21 @@ type MachineReaper interface {
 	Destroy(ctx context.Context, ref driver.MachineRef) error
 }
 
+// OrphanReaper is a driver that can also end what it left on the host with
+// no record (a microVM's VMM, cgroup, jail or tap, after a crash): the
+// reaper runs that pass after the hard-expiry one.
+type OrphanReaper interface {
+	ReapOrphans(ctx context.Context) ([]string, error)
+}
+
 type Reaper struct {
 	CellID string
 	Driver MachineReaper
-	Now    func() time.Time
-	Log    *slog.Logger
+	// Orphans is the driver's orphan pass, when it has one (microvm,
+	// docker-gvisor); nil: the hard-expiry pass alone.
+	Orphans OrphanReaper
+	Now     func() time.Time
+	Log     *slog.Logger
 	// Metrics, when set, gets cell_reaper_terminated_total (anything above
 	// zero means the sweep and the dead-man failed: it alerts) and
 	// cell_reaper_pass_failures_total.
@@ -38,6 +48,8 @@ type Reaper struct {
 type Report struct {
 	Seen       int
 	Terminated []string
+	// Orphans are what the orphan pass removed (OrphanReaper drivers only).
+	Orphans []string
 }
 
 func (r *Reaper) Run(ctx context.Context) (Report, error) {
@@ -61,9 +73,8 @@ func (r *Reaper) Run(ctx context.Context) (Report, error) {
 	var errs []error
 	t := now()
 	for _, ref := range refs {
-		hard := driver.ParseExpiry(ref.Tags, driver.TagHardExpires)
 		// A machine nobody can date is past its ceiling.
-		if t.Before(hard) {
+		if !driver.Expired(ref.Tags, t) {
 			continue
 		}
 		if err := r.Driver.Destroy(ctx, ref); err != nil {
@@ -74,6 +85,17 @@ func (r *Reaper) Run(ctx context.Context) (Report, error) {
 		r.Terminated.Add(1)
 		terminated.Inc()
 		log.Error("reaper.terminated", "machine", ref.MachineID, "claim", ref.Tags[driver.TagClaim], "hardExpires", ref.Tags[driver.TagHardExpires])
+	}
+	if r.Orphans != nil {
+		gone, err := r.Orphans.ReapOrphans(ctx)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		rep.Orphans = gone
+		if len(gone) > 0 {
+			r.Metrics.Counter("cell_reaper_orphans_total", "Things the reaper removed that no machine record named (alert above zero).").Add(float64(len(gone)))
+			log.Error("reaper.orphans", "removed", gone)
+		}
 	}
 	return rep, errors.Join(errs...)
 }

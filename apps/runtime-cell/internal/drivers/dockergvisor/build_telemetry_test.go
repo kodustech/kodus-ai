@@ -13,8 +13,8 @@ import (
 	"testing"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 )
 
 type telemetryDocker struct {
@@ -35,7 +35,7 @@ func (m *telemetryDocker) RunBuild(ctx context.Context, b dockercli.BuildRun) er
 	return nil
 }
 
-func (m *telemetryDocker) LoadImage(context.Context, string) error {
+func (m *telemetryDocker) LoadImage(context.Context, dockercli.ImageLoad) error {
 	m.loaded = true
 	if m.cancelOnLoad != nil {
 		m.cancelOnLoad()
@@ -93,7 +93,7 @@ func TestBuildTimingIncludesFailedAndCanceledAttempts(t *testing.T) {
 			}
 			d.d = wrapped
 			ref := machine("claim-telemetry", bakeEnv)
-			_, _, err := d.runBuild(ctx, ref, sandbox.Build{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}, "test:claim", "net", "resolv", bakeSubnet)
+			_, _, err := d.runBuild(ctx, ref, sandbox.Build{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}, "test:claim", "net", "resolv", bakeSubnet, nil)
 			if !errors.Is(err, tc.wantErr) || wrapped.loaded != tc.wantLoad {
 				t.Fatalf("err %v, loaded %v; want %v, %v", err, wrapped.loaded, tc.wantErr, tc.wantLoad)
 			}
@@ -144,7 +144,7 @@ func TestBuildTimingMeasuresOnlyRegularImageTarballs(t *testing.T) {
 				return nil
 			}}
 			d.d = wrapped
-			_, _, err := d.runBuild(context.Background(), machine("claim-bytes", bakeEnv), sandbox.Build{Service: "api", Context: project(t)}, "test:claim", "net", "resolv", bakeSubnet)
+			_, _, err := d.runBuild(context.Background(), machine("claim-bytes", bakeEnv), sandbox.Build{Service: "api", Context: project(t)}, "test:claim", "net", "resolv", bakeSubnet, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -200,7 +200,7 @@ func TestBuildLogsItsCacheInputMode(t *testing.T) {
 			}
 			var logs bytes.Buffer
 			d.cfg.Log = slog.New(slog.NewJSONHandler(&logs, nil))
-			_, _, err := d.runBuild(context.Background(), ref, sandbox.Build{Service: "api", Context: project(t)}, "test:claim", "net", "resolv", bakeSubnet)
+			_, _, err := d.runBuild(context.Background(), ref, sandbox.Build{Service: "api", Context: project(t)}, "test:claim", "net", "resolv", bakeSubnet, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -222,7 +222,7 @@ func TestBuildLogsAConsistentImageSource(t *testing.T) {
 	build := sandbox.Build{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}
 	boot(t, d, setup, build)
 	boot(t, d, setup, build)
-	if err := d.PinBakeSource(setup); err != nil {
+	if err := d.PinBakeSource(t.Context(), setup); err != nil {
 		t.Fatal(err)
 	}
 	image, err := d.Bake(context.Background(), bakeSpec(setup))

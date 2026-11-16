@@ -11,8 +11,10 @@ import (
 // The managed account's first supported query language is intentionally
 // smaller than SQL. It reads one public table; executable expressions,
 // metadata relations and ambiguous syntax are refused before connecting.
-const managedIdentifier = `(?:"[A-Za-z_][A-Za-z0-9_]{0,62}"|[A-Za-z_][A-Za-z0-9_]{0,62})`
-const managedLiteral = `(?:'(?:[^'\\\x00]|'')*'|-?[0-9]{1,20}(?:\.[0-9]{1,20})?|NULL|TRUE|FALSE)`
+const (
+	managedIdentifier = `(?:"[A-Za-z_][A-Za-z0-9_]{0,62}"|[A-Za-z_][A-Za-z0-9_]{0,62})`
+	managedLiteral    = `(?:'(?:[^'\\\x00]|'')*'|-?[0-9]{1,20}(?:\.[0-9]{1,20})?|NULL|TRUE|FALSE)`
+)
 
 var (
 	managedSelect      = regexp.MustCompile(`(?is)^\s*SELECT\s+(.+?)\s+FROM\s+(?:(` + managedIdentifier + `)\s*\.\s*)?(` + managedIdentifier + `)(?:\s+WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+(.+?))?(?:\s+LIMIT\s+([0-9]{1,4}))?\s*$`)

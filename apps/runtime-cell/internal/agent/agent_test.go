@@ -128,7 +128,7 @@ func TestReadyBodyFallsBackToTheAcquireExpose(t *testing.T) {
 
 func TestReadyTimingCarriesPrepareAndBootPhases(t *testing.T) {
 	r := readyFor(t, func(c *Config) {
-		c.BootTimes = bootTimes{driver.BootTiming{Kind: "boot", TotalMs: 3500, BuildMs: 100, UpMs: 2900, SeedMs: 200, ReadyMs: 300}}
+		c.Parts.BootTimes = bootTimes{driver.BootTiming{Kind: "boot", TotalMs: 3500, BuildMs: 100, UpMs: 2900, SeedMs: 200, ReadyMs: 300}}
 	})
 	tm := r.Timing
 	if tm == nil || tm.BootMs == nil || *tm.BootMs != 3500 || *tm.BuildMs != 100 || *tm.UpMs != 2900 || *tm.SeedMs != 200 || *tm.ReadyMs != 300 {
@@ -143,7 +143,7 @@ func TestReadyTimingCarriesPrepareAndBootPhases(t *testing.T) {
 	}
 	// A boot that took the data snapshot reports how long it took.
 	snap := readyFor(t, func(c *Config) {
-		c.BootTimes = bootTimes{driver.BootTiming{Kind: "boot", TotalMs: 4700, SnapshotMs: 1200}}
+		c.Parts.BootTimes = bootTimes{driver.BootTiming{Kind: "boot", TotalMs: 4700, SnapshotMs: 1200}}
 	})
 	if snap.Timing == nil || snap.Timing.SnapshotMs == nil || *snap.Timing.SnapshotMs != 1200 {
 		t.Fatalf("timing %+v", snap.Timing)
@@ -201,7 +201,7 @@ func TestDiagnosticHoldEndsAtTheCeiling(t *testing.T) {
 		t.Fatalf("held %v machines %d\n%s", ok, len(h.drv.Machines()), h.logs.String())
 	}
 	for _, m := range h.drv.Machines() {
-		if !driver.ParseExpiry(m.Ref.Tags, driver.TagExpires).Equal(hard) {
+		if end, _ := driver.LeaseEnd(m.Ref.Tags); !end.Equal(hard) {
 			t.Fatalf("kodus:expires %s, want the ceiling %s", m.Ref.Tags[driver.TagExpires], hard)
 		}
 	}
@@ -226,7 +226,7 @@ func TestDiagnosticHoldEndsAtTheCeiling(t *testing.T) {
 func TestReadyTimingCarriesBuildStepsOnlyToAHubThatAcceptsThem(t *testing.T) {
 	steps := &driver.BuildSteps{Steps: 14, Done: 9, Cached: 5, Slowest: []driver.BuildStep{{Service: "grafana", Name: "[build 5/6] RUN go build ./pkg/cmd/grafana", Ms: 380_200}}}
 	boot := func(c *Config) {
-		c.BootTimes = bootTimes{driver.BootTiming{Kind: "boot", TotalMs: 455_000, BuildMs: 450_000, BuildSteps: steps}}
+		c.Parts.BootTimes = bootTimes{driver.BootTiming{Kind: "boot", TotalMs: 455_000, BuildMs: 450_000, BuildSteps: steps}}
 	}
 	ready := func(accepts *AckAccepts) *protocol.ClaimReadyBody {
 		h := newHarness(t, boot)

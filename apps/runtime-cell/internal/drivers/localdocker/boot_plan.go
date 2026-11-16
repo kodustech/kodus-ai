@@ -21,7 +21,7 @@ const ComposeFile = ".kodus-local-compose.yaml"
 // EnvFile holds the recipe's services.compose.env for interpolation.
 const EnvFile = ".kodus-local.env"
 
-// ErrNoEnvironment: the checkout has neither a compose file nor a Dockerfile.
+// ErrNoEnvironment means the checkout has neither a compose file nor a Dockerfile.
 var ErrNoEnvironment = errors.New("localdocker: the checkout has no compose file and no Dockerfile")
 
 // bootPlan is what a checkout boots, worked out before anything runs.
@@ -167,7 +167,7 @@ func (d *Driver) lastBootPlan(name string) (*bootPlan, error) {
 		return nil, fmt.Errorf("localdocker: unknown machine %s", name)
 	}
 	if m.checkout == "" {
-		return nil, nil
+		return nil, nil //nolint:nilnil // documented: nil plan when the machine never booted
 	}
 	return newBootPlan(m.checkout, name, m.claimExpose, nil)
 }

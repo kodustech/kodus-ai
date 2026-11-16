@@ -38,8 +38,10 @@ func TestResolver(t *testing.T) {
 		_ = w.WriteMsg(m)
 	}))
 	store := policy.NewStore(nil)
-	_ = store.Put(policy.ClaimPolicy{ClaimID: "claim-1", OrgID: "o", Sources: []string{"127.0.0.1"}, Phase: policy.PhaseTest,
-		Allow: []string{"mirror.cell.internal", "api.anthropic.com"}, AppAddress: "10.0.3.10", ExpiresAt: time.Now().Add(time.Hour)})
+	_ = store.Put(policy.ClaimPolicy{
+		ClaimID: "claim-1", OrgID: "o", Sources: []string{"127.0.0.1"}, Phase: policy.PhaseTest,
+		Allow: []string{"mirror.cell.internal", "api.anthropic.com"}, AppAddress: "10.0.3.10", ExpiresAt: time.Now().Add(time.Hour),
+	})
 	log := NewQueryLog(100)
 	addr := start(t, &Server{Policies: store, Upstream: ForwardTo(upstream), Log: log})
 
@@ -84,7 +86,9 @@ func TestResolver(t *testing.T) {
 	// What the claim's allowlist refused says so (the failure bundle's
 	// denied egress); an allowed answer does not, nor a name of the
 	// platform deny list (api.anthropic.com, dns.google), which no approval lifts.
-	approvable := map[string]bool{"x9k2.mirror.cell.internal": true, "evil.example": true}
+	// x9k2.mirror.cell.internal is a local name, on the deny list the API
+	// shares (G2): the API never approves it, so it is not approvable here.
+	approvable := map[string]bool{"evil.example": true}
 	for i, e := range entries {
 		if e.Denied != approvable[e.Name] {
 			t.Fatalf("entry %d %s denied=%v", i, e.Name, e.Denied)
@@ -115,8 +119,10 @@ func TestResolverDropsInternalAnswers(t *testing.T) {
 	}))
 	own, _ := netguard.ParseCIDRs("10.20.0.0/24")
 	store := policy.NewStore(nil)
-	_ = store.Put(policy.ClaimPolicy{ClaimID: "claim-1", OrgID: "o", Sources: []string{"127.0.0.1"}, Phase: policy.PhaseTest,
-		Allow: []string{"meta.attacker.example", "lan.attacker.example", "mirror.cell.internal"}, ExpiresAt: time.Now().Add(time.Hour)})
+	_ = store.Put(policy.ClaimPolicy{
+		ClaimID: "claim-1", OrgID: "o", Sources: []string{"127.0.0.1"}, Phase: policy.PhaseTest,
+		Allow: []string{"meta.attacker.example", "lan.attacker.example", "mirror.cell.internal"}, ExpiresAt: time.Now().Add(time.Hour),
+	})
 	srv := &Server{Policies: store, Upstream: ForwardTo(upstream), Log: NewQueryLog(10), InternalCIDRs: own}
 	addr := start(t, srv)
 	ask := func(name string) []dns.RR {
@@ -144,8 +150,10 @@ func TestResolverDropsInternalAnswers(t *testing.T) {
 // docker-gvisor: the mirror is on the egress, answered with the claim's steer address.
 func TestResolverAnswersTheMirrorWithTheSteerAddress(t *testing.T) {
 	store := policy.NewStore(nil)
-	_ = store.Put(policy.ClaimPolicy{ClaimID: "claim-1", OrgID: "o", Sources: []string{"127.0.0.1"}, Phase: policy.PhaseBuild,
-		SteerTo: "10.213.5.2", ExpiresAt: time.Now().Add(time.Hour)})
+	_ = store.Put(policy.ClaimPolicy{
+		ClaimID: "claim-1", OrgID: "o", Sources: []string{"127.0.0.1"}, Phase: policy.PhaseBuild,
+		SteerTo: "10.213.5.2", ExpiresAt: time.Now().Add(time.Hour),
+	})
 	addr := start(t, &Server{Policies: store, Upstream: ForwardTo("127.0.0.1:1"), Log: NewQueryLog(10)})
 	m := new(dns.Msg)
 	m.SetQuestion("mirror.cell.internal.", dns.TypeA)

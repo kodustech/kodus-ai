@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"net"
 	"os"
@@ -83,7 +84,11 @@ func (ca *CA) Issue(cn string, ttl time.Duration, names ...string) (tls.Certific
 
 // WriteFiles writes cert.pem and key.pem of a leaf, plus ca.pem, into dir.
 func (ca *CA) WriteFiles(dir, prefix string, c tls.Certificate) error {
-	keyDER, err := x509.MarshalECPrivateKey(c.PrivateKey.(*ecdsa.PrivateKey))
+	ecKey, ok := c.PrivateKey.(*ecdsa.PrivateKey)
+	if !ok {
+		return fmt.Errorf("testpki: key of type %T is not ECDSA", c.PrivateKey)
+	}
+	keyDER, err := x509.MarshalECPrivateKey(ecKey)
 	if err != nil {
 		return err
 	}

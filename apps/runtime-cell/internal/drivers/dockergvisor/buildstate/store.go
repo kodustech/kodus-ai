@@ -8,11 +8,13 @@
 //
 //   - a setup of the default branch (SeedsCache) mounts the environment's
 //     state directly and writes it;
-//   - every other build mounts a copy-on-write overlay of it (lower: the
-//     environment's, upper: the machine's), dropped when the build ends, so
-//     nothing a pull request wrote is ever read by a later build;
-//   - a state another build holds the other way, or a cell that cannot
-//     mount an overlay (not root, not Linux), leaves the build on its own
+//   - every other build mounts a copy-on-write view of it, dropped when the
+//     build ends, so nothing a pull request wrote is ever read by a later
+//     build: a reflink clone where the filesystem has reflinks, the
+//     kernel's overlay elsewhere (lower: the environment's, upper: the
+//     machine's; see cloneMounter for what the overlay cannot do);
+//   - a state another build holds the other way, or a cell that can make
+//     neither view (not root, not Linux), leaves the build on its own
 //     throwaway state and the exported cache, as before.
 //
 // A state is one environment's (cell, org, environment in its key), never
@@ -54,10 +56,16 @@ const (
 type State struct {
 	Dir  string // what the build mounts
 	Mode string // ModeSeed | ModeOverlay
+	// Fresh: a seed that found no state (never seeded, or evicted) and
+	// starts an empty one.
+	Fresh bool
 	// env is the environment's state the build holds; overlay is the
 	// machine's overlay directory ("" for a seed).
 	env, overlay string
 	machine      string
+	// since is when a seed took the state, on the store's clock: a fresh
+	// seed's hold is the state's rebuild cost (cost.go).
+	since time.Time
 }
 
 // Mounter makes and removes the overlay a non-seeding build reads the
@@ -98,6 +106,27 @@ type Store struct {
 	// stuck are the overlays whose unmount failed (state_overlays.go).
 	stuck []stuckOverlay
 	seq   int
+
+	// removing are the trash entries a released view's removal is still
+	// deleting; Evict leaves them to it. removeAll deletes one (os.RemoveAll).
+	removing  map[string]bool
+	removeAll func(string) error
+	removals  sync.WaitGroup
+
+	// Spare views (spare.go): spareViews says this store makes them (a
+	// clone mounter: a view is a plain directory a rename can move). gen
+	// counts each state's seeds; spares holds one made view per state, at
+	// the gen it was made at; making holds the states whose spare is being
+	// made.
+	spareViews bool
+	gen        map[string]uint64
+	spares     map[string]spareView
+	making     map[string]bool
+	spareWork  sync.WaitGroup
+
+	// evicted is the ledger of the states eviction removed (evicted.go), by
+	// their directory's name, until a seed makes each again.
+	evicted map[string]Evicted
 }
 
 // stateHold is who holds one environment's state. Writers come first: a
@@ -138,6 +167,10 @@ type Config struct {
 	Log        *slog.Logger
 	// SeedWait bounds a seed's wait for readers; zero: defaultSeedWait.
 	SeedWait time.Duration
+	// SpareViews makes a view of each state ahead of the build that will
+	// take it (spare.go). Only with a mounter whose view is a plain
+	// directory (a clone): a mounted overlay cannot be moved.
+	SpareViews bool
 }
 
 // New also unmounts the overlays a crashed cell left (see
@@ -146,10 +179,19 @@ func New(c Config) (*Store, error) {
 	if c.SeedWait <= 0 {
 		c.SeedWait = defaultSeedWait
 	}
-	s := &Store{root: c.Root, cellID: c.CellID, minFree: c.MinFree, builderDir: c.BuilderDir, mounter: c.Mounter, freeBytes: c.FreeBytes,
-		clock: clock.Or(c.Clock), log: c.Log, seedWait: c.SeedWait, holds: map[string]*stateHold{}}
+	s := &Store{
+		root: c.Root, cellID: c.CellID, minFree: c.MinFree, builderDir: c.BuilderDir, mounter: c.Mounter, freeBytes: c.FreeBytes,
+		clock: clock.Or(c.Clock), log: c.Log, seedWait: c.SeedWait, holds: map[string]*stateHold{},
+		removing: map[string]bool{}, removeAll: os.RemoveAll,
+		spareViews: c.SpareViews, gen: map[string]uint64{}, spares: map[string]spareView{}, making: map[string]bool{},
+		evicted: map[string]Evicted{},
+	}
+	s.loadEvicted()
 	if err := s.recoverOverlays(); err != nil {
 		return nil, fmt.Errorf("buildstate: overlays: %w", err)
+	}
+	if err := s.dropLeftoverSpares(); err != nil {
+		return nil, fmt.Errorf("buildstate: spares: %w", err)
 	}
 	return s, nil
 }
@@ -173,7 +215,7 @@ func (s *Store) Acquire(ctx context.Context, req Request) (State, bool) {
 		return State{}, false
 	}
 	dir := s.EnvDir(req.Org, req.Env)
-	locked := false
+	var locked bool
 	if req.Seeds {
 		locked = s.lockSeed(ctx, dir)
 	} else {
@@ -184,17 +226,26 @@ func (s *Store) Acquire(ctx context.Context, req Request) (State, bool) {
 		return State{}, false
 	}
 	if req.Seeds {
+		_, statErr := os.Stat(dir)
+		fresh := statErr != nil
 		if err := s.builderDir(dir); err != nil {
 			s.unlock(dir, true)
 			s.log.Warn("build.state.failed", "machine", req.Machine, "err", err)
 			return State{}, false
 		}
 		s.touch(dir)
-		return State{Dir: dir, Mode: ModeSeed, env: dir, machine: req.Machine}, true
+		s.own(dir, req.Org, req.Env)
+		s.forgetEvicted(dir)
+		return State{Dir: dir, Mode: ModeSeed, Fresh: fresh, env: dir, machine: req.Machine, since: s.clock.Now()}, true
 	}
 	// Nothing seeded yet: an overlay of nothing is a throwaway state.
 	if _, err := os.Stat(dir); err != nil {
 		s.unlock(dir, false)
+		if at, evicted := s.EvictedAt(req.Org, req.Env); evicted {
+			// The build runs cold because the disk floor took the state: said
+			// here, and to the hub through the ledger (evicted.go).
+			s.log.Warn("build.state.missing", "machine", req.Machine, "service", req.Service, "evicted", true, "evictedAt", at)
+		}
 		return State{}, false
 	}
 	base := filepath.Join(s.root, "machine", req.Machine, req.Service)
@@ -208,17 +259,27 @@ func (s *Store) Acquire(ctx context.Context, req Request) (State, bool) {
 		}
 		return State{}, false
 	}
+	if s.mounter == nil {
+		return fail("", nil)
+	}
+	began := time.Now()
+	if s.takeSpare(dir, base) {
+		s.log.Info("build.state.view", "machine", req.Machine, "service", req.Service, "ms", time.Since(began).Milliseconds(), "spare", true)
+		s.touch(dir)
+		s.own(dir, req.Org, req.Env)
+		return st, true
+	}
+	// Before the mount: the overlay's lower directory is not written under it.
+	s.own(dir, req.Org, req.Env)
 	for _, p := range []string{upper, work, st.Dir} {
 		if err := s.builderDir(p); err != nil {
 			return fail("build.state.failed", err)
 		}
 	}
-	if s.mounter == nil {
-		return fail("", nil)
-	}
 	if err := s.mounter.Overlay(dir, upper, work, st.Dir); err != nil {
 		return fail("build.state.overlay_failed", err)
 	}
+	s.log.Info("build.state.view", "machine", req.Machine, "service", req.Service, "ms", time.Since(began).Milliseconds())
 	s.touch(dir)
 	return st, true
 }
@@ -236,9 +297,62 @@ func (s *Store) Release(st State) {
 			s.quarantine(stuckOverlay{target: st.Dir, base: st.overlay, env: st.env})
 			return
 		}
-		_ = os.RemoveAll(st.overlay)
+		s.removeView(st)
+	}
+	if seeds && st.Fresh {
+		// The build made the state from none: what that took is what evicting
+		// it costs (cost.go).
+		s.recordRebuild(st.env, s.clock.Now().Sub(st.since))
 	}
 	s.unlock(st.env, seeds)
+	// The next build of this environment finds its view made.
+	s.makeSpare(st.env)
+}
+
+// removeView takes a released view out of the tree and deletes it after,
+// off the build's path: a clone of a large state holds hundreds of thousands
+// of entries, and deleting them took about 25 s of a PR side's boot (Run
+// 95c0f2f1, kr-twenty). Nothing reads it any more (it is unmounted, and a
+// clone shares no file with the state), so only its bytes wait. What a
+// restart interrupts stays in the trash, which Evict empties.
+func (s *Store) removeView(st State) {
+	s.mu.Lock()
+	trash, err := s.trashLocked(st.overlay, "view")
+	if err == nil {
+		s.removing[trash] = true
+	}
+	s.mu.Unlock()
+	if err != nil {
+		// Not in the trash: removed here, as before.
+		_ = os.RemoveAll(st.overlay)
+		return
+	}
+	s.removals.Add(1)
+	go func() {
+		defer s.removals.Done()
+		began := time.Now()
+		err := s.removeAll(trash)
+		s.mu.Lock()
+		delete(s.removing, trash)
+		s.mu.Unlock()
+		if err != nil {
+			s.log.Warn("build.state.view.remove_failed", "machine", st.machine, "err", err)
+			return
+		}
+		s.log.Info("build.state.view.removed", "machine", st.machine, "ms", time.Since(began).Milliseconds())
+	}()
+}
+
+// WaitRemovals returns once every released view's removal has ended, for a
+// caller that must see the disk settled (a test, a cell that stops).
+func (s *Store) WaitRemovals() { s.removals.Wait() }
+
+// Settle returns once no spare is being made and every released view's
+// removal has ended: the store's background work, which the driver's
+// Shutdown waits for.
+func (s *Store) Settle() {
+	s.WaitSpares()
+	s.WaitRemovals()
 }
 
 // lockReader takes the environment's state for one more reader, unless a
@@ -301,6 +415,9 @@ func (s *Store) unlock(dir string, seeds bool) {
 	}
 	if seeds {
 		h.seed = seedNone
+		// The seed may have written the state: a view made before is stale.
+		s.gen[dir]++
+		s.dropSpareLocked(dir)
 	} else if h.readers > 0 {
 		if h.readers--; h.readers == 0 && h.drained != nil {
 			close(h.drained)
@@ -336,54 +453,63 @@ func (s *Store) touch(dir string) {
 	f := filepath.Join(dir, stateUsedMark)
 	if err := os.Chtimes(f, now, now); errors.Is(err, os.ErrNotExist) {
 		// A new mark gets the wall's mtime; stamp it with the clock's too.
-		if os.WriteFile(f, nil, 0o644) == nil {
+		if os.WriteFile(f, nil, 0o600) == nil {
 			_ = os.Chtimes(f, now, now)
 		}
 	}
 }
 
-// Evict removes the least recently used environment states nobody holds
-// while the cell's disk has less free space than the floor, then whatever
-// an earlier sweep took out of the tree and did not finish removing.
+// Evict removes the environment states nobody holds that are cheapest to
+// keep (cost.go: rebuild cost weighed by how recently each was used) while
+// the cell's disk has less free space than the floor, then whatever an
+// earlier sweep took out of the tree and did not finish removing.
 // It retries the unmounts that failed first: their states stay held until then.
 func (s *Store) Evict() error {
-	errs := []error{s.retryStuck(), s.evictLRU()}
+	errs := []error{s.retryStuck(), s.evictCheapest()}
 	trash := filepath.Join(s.root, "trash")
 	entries, _ := os.ReadDir(trash)
 	for _, e := range entries {
-		errs = append(errs, os.RemoveAll(filepath.Join(trash, e.Name())))
+		p := filepath.Join(trash, e.Name())
+		s.mu.Lock()
+		busy := s.removing[p]
+		s.mu.Unlock()
+		if busy {
+			continue // a released view's removal is deleting it
+		}
+		errs = append(errs, os.RemoveAll(p))
 	}
 	return errors.Join(errs...)
 }
 
-func (s *Store) evictLRU() error {
+func (s *Store) evictCheapest() error {
 	if s.minFree <= 0 || s.freeBytes == nil {
 		return nil
 	}
 	root := filepath.Join(s.root, "env")
 	entries, err := os.ReadDir(root)
 	if err != nil {
-		return nil
+		return nil //nolint:nilerr // no env tree to list means nothing to evict; Evict still sweeps the trash
 	}
-	type state struct {
-		dir  string
-		used time.Time
-	}
-	var all []state
-	for _, e := range entries {
-		dir := filepath.Join(root, e.Name())
-		var used time.Time
-		if info, err := os.Stat(filepath.Join(dir, stateUsedMark)); err == nil {
-			used = info.ModTime()
+	// Spares first: each is only a head start for one build.
+	if s.hasSpares() {
+		if free, err := s.freeBytes(root); err == nil && free < s.minFree {
+			s.dropSpares()
 		}
-		all = append(all, state{dir, used})
 	}
-	sort.Slice(all, func(i, j int) bool { return all[i].used.Before(all[j].used) })
-	for _, st := range all {
+	var all []evictCandidate
+	for i := 0; ; i++ {
 		free, err := s.freeBytes(root)
 		if err != nil || free >= s.minFree {
 			return err
 		}
+		if all == nil {
+			// Ordered only once the disk is below its floor: a tie walks states.
+			all = s.evictionCandidates(root, entries)
+		}
+		if i >= len(all) {
+			return nil
+		}
+		st := all[i]
 		trash, err := s.takeOut(st.dir)
 		if err != nil {
 			return err
@@ -391,12 +517,35 @@ func (s *Store) evictLRU() error {
 		if trash == "" {
 			continue // held
 		}
-		s.log.Info("build.state.evicted", "state", filepath.Base(st.dir), "lastUsed", st.used)
+		owner, named := ownerOf(trash)
+		var rebuild time.Duration
+		if st.measured {
+			rebuild = st.rebuild
+		}
+		s.log.Info("build.state.evicted", "state", filepath.Base(st.dir), "lastUsed", st.used, "rebuildSeconds", int64(rebuild.Seconds()), "reported", named)
+		if named {
+			s.recordEvicted(owner, s.clock.Now(), rebuild)
+		}
 		if err := os.RemoveAll(trash); err != nil {
 			return err
 		}
 	}
-	return nil
+}
+
+// evictionCandidates are the states under root, cheapest to keep first (cost.go).
+func (s *Store) evictionCandidates(root string, entries []os.DirEntry) []evictCandidate {
+	now := s.clock.Now()
+	all := make([]evictCandidate, 0, len(entries))
+	for _, e := range entries {
+		dir := filepath.Join(root, e.Name())
+		var used time.Time
+		if info, err := os.Stat(filepath.Join(dir, stateUsedMark)); err == nil {
+			used = info.ModTime()
+		}
+		all = append(all, candidate(dir, used, now))
+	}
+	sort.SliceStable(all, evictionOrder(all))
+	return all
 }
 
 // takeOut moves a state nobody holds out of the tree, under the lock, so
@@ -408,6 +557,8 @@ func (s *Store) takeOut(dir string) (string, error) {
 	if s.holds[dir] != nil {
 		return "", nil
 	}
+	s.gen[dir]++
+	s.dropSpareLocked(dir)
 	return s.trashLocked(dir, filepath.Base(dir))
 }
 

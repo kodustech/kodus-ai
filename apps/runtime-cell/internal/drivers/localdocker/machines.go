@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 )
 
 // machineView is a copy of what the state file knows about a machine.
@@ -136,24 +137,43 @@ func (d *Driver) Resume(ctx context.Context, ref driver.MachineRef) error {
 	return d.recordPublishedPorts(ctx, ref.MachineID, plan.published)
 }
 
-// owner is the cell a machine belongs to: the state file's record, else the
-// cell label Docker shows on the containers carrying its machine name. ""
-// when neither knows the machine.
+// owner is the cell a machine belongs to (recorded). "" when nobody knows
+// the machine.
 func (d *Driver) owner(ctx context.Context, name string) (string, error) {
+	tags, err := d.recorded(ctx, name)
+	return tags[driver.TagCell], err
+}
+
+// recorded is a machine's tags as the driver keeps them: the state file's
+// record, else the reserved labels Docker shows on the containers carrying
+// its machine name. Never a caller's ref. Nil when neither knows it.
+func (d *Driver) recorded(ctx context.Context, name string) (map[string]string, error) {
 	d.mu.Lock()
 	m := d.st.Machines[name]
+	var tags map[string]string
+	if m != nil {
+		tags = maps.Clone(m.Tags)
+	}
 	d.mu.Unlock()
 	if m != nil {
-		return m.Tags[driver.TagCell], nil
+		return tags, nil
 	}
 	containers, err := d.docker.List(ctx, map[string]string{labelMachine: name})
-	if err != nil {
-		return "", err
+	if err != nil || len(containers) == 0 {
+		return nil, err
 	}
-	for _, c := range containers {
-		return c.Labels[dockercli.LabelFromTag(driver.TagCell)], nil
+	return reservedTags(containers[0].Labels), nil
+}
+
+// reservedTags are the driver's tags among a container's labels.
+func reservedTags(labels map[string]string) map[string]string {
+	tags := map[string]string{}
+	for k, v := range labels {
+		if strings.HasPrefix(k, reservedLabelPrefix) {
+			tags[dockercli.TagFromLabel(k)] = v
+		}
 	}
-	return "", nil
+	return tags
 }
 
 // Destroy takes the project down with its volumes and the images it built,
@@ -191,8 +211,8 @@ func (d *Driver) Destroy(ctx context.Context, ref driver.MachineRef) error {
 }
 
 // List is every machine of the state file plus every compose project Docker
-// runs with this cell's labels and a machine name. A project the state file does not know has
-// no kodus:expires, so a sweep treats it as expired.
+// runs with this cell's labels and a machine name. A project the state file
+// does not know has no kodus:expires, so the lease manager's sweep takes it.
 func (d *Driver) List(ctx context.Context, selector map[string]string) ([]driver.MachineRef, error) {
 	cell := d.cfg.CellID
 	if c, ok := selector[driver.TagCell]; ok && c != cell {
@@ -213,7 +233,8 @@ func (d *Driver) List(ctx context.Context, selector map[string]string) ([]driver
 		seen[ref.MachineID] = true
 		out = append(out, ref)
 	}
-	for _, c := range containers {
+	for k := range containers {
+		c := &containers[k]
 		// Only containers the driver labelled with its machine name: a
 		// compose project that merely carries this cell's label (a
 		// developer's own stack, another tool) is not the driver's to sweep.
@@ -225,12 +246,7 @@ func (d *Driver) List(ctx context.Context, selector map[string]string) ([]driver
 			add(d.refLocked(name))
 			continue
 		}
-		tags := map[string]string{}
-		for k, v := range c.Labels {
-			if strings.HasPrefix(k, reservedLabelPrefix) {
-				tags[dockercli.TagFromLabel(k)] = v
-			}
-		}
+		tags := reservedTags(c.Labels)
 		add(driver.MachineRef{MachineID: name, DriverRef: name, PrivateAddress: "127.0.0.1", ImageID: tags[tagImage], Tags: tags})
 	}
 	for name, m := range d.st.Machines {
@@ -241,28 +257,27 @@ func (d *Driver) List(ctx context.Context, selector map[string]string) ([]driver
 	return out, nil
 }
 
-// SetExpiry moves kodus:expires in the state file, never past
-// kodus:hard-expires, for a machine this cell owns. One Docker still runs
-// but the state file lost (a crash) is adopted back from its labels.
+// SetExpiry moves kodus:expires in the state file, never past the ceiling
+// the driver recorded (not the one the caller's ref says), for a machine
+// this cell owns. One Docker still runs but the state file lost (a crash)
+// is adopted back from its labels.
 func (d *Driver) SetExpiry(ctx context.Context, ref driver.MachineRef, at time.Time) error {
-	if cell, err := d.owner(ctx, ref.MachineID); err != nil {
+	tags, err := d.recorded(ctx, ref.MachineID)
+	if err != nil {
 		return err
-	} else if cell != d.cfg.CellID {
+	}
+	if tags[driver.TagCell] != d.cfg.CellID {
 		return fmt.Errorf("%w: machine %s", driver.ErrNotOwned, ref.MachineID)
 	}
-	if hard := driver.ParseExpiry(ref.Tags, driver.TagHardExpires); !hard.IsZero() && at.After(hard) {
-		at = hard
+	at, err = driver.ClampToCeiling(at, tags)
+	if err != nil {
+		return fmt.Errorf("localdocker: machine %s: %w", ref.MachineID, err)
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	m := d.st.Machines[ref.MachineID]
 	if m == nil {
-		tags := map[string]string{}
-		for k, v := range ref.Tags {
-			if k != driver.TagExpires {
-				tags[k] = v
-			}
-		}
+		delete(tags, driver.TagExpires)
 		m = &machineState{Tags: tags}
 		d.st.Machines[ref.MachineID] = m
 	}
@@ -270,10 +285,9 @@ func (d *Driver) SetExpiry(ctx context.Context, ref driver.MachineRef, at time.T
 	return d.saveLocked()
 }
 
-// Sweep destroys every machine of this cell past kodus:expires or
-// kodus:hard-expires, and every labelled project nobody can date. The cell
-// runs it at start, which is how a restarted laptop cell cleans up after a
-// crash.
+// Sweep destroys every machine of this cell past its ceiling, and every
+// labelled project with none that parses (driver.Expired). The cell runs it
+// at start; a project whose lease lapsed is the lease manager's to end.
 func (d *Driver) Sweep(ctx context.Context, now time.Time) ([]string, error) {
 	refs, err := d.List(ctx, map[string]string{driver.TagCell: d.cfg.CellID})
 	if err != nil {
@@ -282,9 +296,7 @@ func (d *Driver) Sweep(ctx context.Context, now time.Time) ([]string, error) {
 	var gone []string
 	var errs []error
 	for _, ref := range refs {
-		soft := driver.ParseExpiry(ref.Tags, driver.TagExpires)
-		hard := driver.ParseExpiry(ref.Tags, driver.TagHardExpires)
-		if now.Before(soft) && now.Before(hard) {
+		if !driver.Expired(ref.Tags, now) {
 			continue
 		}
 		if err := d.Destroy(ctx, ref); err != nil {

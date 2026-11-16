@@ -511,3 +511,60 @@ func (b blockingPrepare) PrepareClaim(ctx context.Context, spec driver.ClaimNetw
 	<-ctx.Done()
 	return driver.ClaimNetwork{}, ctx.Err()
 }
+
+// healthDriver is the fake driver with a workload health the test moves.
+type healthDriver struct {
+	*fake.Driver
+	mu     sync.Mutex
+	health driver.MachineHealth
+	reads  int
+	// during is the health from the second read on (after the probe).
+	during driver.MachineHealth
+}
+
+func (h *healthDriver) MachineHealth(context.Context, driver.MachineRef) (driver.MachineHealth, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.reads++
+	if h.reads%2 == 0 {
+		return h.during, nil
+	}
+	return h.health, nil
+}
+
+// S-35: a probe during which the workload's kernel killed a process for
+// memory says vmHealth oom; one after which the machine no longer runs
+// says crashed; a counter already above zero before the probe is not this
+// probe's OOM. What the observer answered stays the probe.
+func TestAProbesVMHealthIsTheWorkloadsOwnOOMOrCrash(t *testing.T) {
+	for name, c := range map[string]struct {
+		before, after driver.MachineHealth
+		want          protocol.VMHealth
+	}{
+		"an OOM during the probe": {driver.MachineHealth{Running: true, OOMKills: 2}, driver.MachineHealth{Running: true, OOMKills: 3}, protocol.VMHealthOom},
+		"a machine that stopped":  {driver.MachineHealth{Running: true}, driver.MachineHealth{Running: false}, protocol.VMHealthCrashed},
+		"an earlier OOM only":     {driver.MachineHealth{Running: true, OOMKills: 2}, driver.MachineHealth{Running: true, OOMKills: 2}, protocol.VMHealthOk},
+	} {
+		t.Run(name, func(t *testing.T) {
+			hd := &healthDriver{health: c.before, during: c.after}
+			h := newHarness(t, func(cfg *Config) {
+				hd.Driver = cfg.Driver.(*fake.Driver)
+				cfg.Driver, cfg.Parts.Health = hd, hd
+				cfg.Observers = func(context.Context, ClaimInfo, []observer.Target) (observer.Client, error) { return liar{}, nil }
+			})
+			h.ready("claim-1")
+			probe := &protocol.ProbeRunBody{StepID: step1, Probe: protocol.Probe{
+				ID: "p", Origin: protocol.ProbeOriginAgent, Purpose: "p", Expected: "200",
+				Compare: []protocol.CompareField{protocol.CompareFieldStatus},
+				Spec:    protocol.ProbeSpec{HTTP: &protocol.HTTPProbe{Target: protocol.ProbeTarget{Service: "api", Port: 80}, Method: protocol.HTTPMethodGet, Path: "/", TimeoutMs: 1000}},
+			}}
+			if err := h.handle("claim-1", protocol.MessageTypeProbeRun, probe); err != nil {
+				t.Fatal(err)
+			}
+			r := h.conn.next(t, func(f any) bool { _, ok := f.(*protocol.StepResultBody); return ok }).(*protocol.StepResultBody)
+			if r.VMHealth != c.want {
+				t.Fatalf("vmHealth %s, want %s", r.VMHealth, c.want)
+			}
+		})
+	}
+}

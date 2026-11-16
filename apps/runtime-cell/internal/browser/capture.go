@@ -79,8 +79,8 @@ type files struct {
 }
 
 // capped reads one entry: nil and false when it is over max (then drained).
-func capped(r io.Reader, max int64) ([]byte, bool, error) {
-	b, ok, err := limited(r, max)
+func capped(r io.Reader, limit int64) ([]byte, bool, error) {
+	b, ok, err := limited(r, limit)
 	if err == nil && !ok {
 		_, err = io.Copy(io.Discard, r)
 	}
@@ -88,12 +88,12 @@ func capped(r io.Reader, max int64) ([]byte, bool, error) {
 }
 
 // limited never drains beyond the bound: closing a ZIP entry must stop inflation.
-func limited(r io.Reader, max int64) ([]byte, bool, error) {
-	b, err := io.ReadAll(io.LimitReader(r, max+1))
+func limited(r io.Reader, limit int64) ([]byte, bool, error) {
+	b, err := io.ReadAll(io.LimitReader(r, limit+1))
 	if err != nil {
 		return nil, false, err
 	}
-	if int64(len(b)) > max {
+	if int64(len(b)) > limit {
 		return nil, false, nil
 	}
 	return b, true, nil
@@ -117,7 +117,7 @@ func readFiles(r io.Reader, lean bool) (*files, error) {
 			return nil, errors.New("browser: runner output contains a non-regular file")
 		}
 		if lean && (h.Name == "video.webm" || h.Name == "trace.zip" || h.Name == "har.json") {
-			if _, err := io.Copy(io.Discard, tr); err != nil {
+			if _, err := io.Copy(io.Discard, tr); err != nil { //nolint:gosec // G110: discarded, not kept: nothing grows with the entry's size
 				return nil, err
 			}
 			continue
@@ -139,7 +139,7 @@ func readFiles(r io.Reader, lean bool) (*files, error) {
 			limit = MaxScreenshotBytes
 		default:
 			// Not one of the runner's files: never kept.
-			if _, err := io.Copy(io.Discard, tr); err != nil {
+			if _, err := io.Copy(io.Discard, tr); err != nil { //nolint:gosec // G110: discarded, not kept: nothing grows with the entry's size
 				return nil, err
 			}
 			f.dropped = append(f.dropped, "unexpected file in the runner's output")
@@ -195,8 +195,10 @@ type runnerResult struct {
 var stepErrors = map[string]protocol.BrowserStepError{}
 
 func init() {
-	for _, e := range []protocol.BrowserStepError{protocol.BrowserStepErrorTimeout, protocol.BrowserStepErrorNotFound, protocol.BrowserStepErrorMismatch,
-		protocol.BrowserStepErrorNavigation, protocol.BrowserStepErrorRefused, protocol.BrowserStepErrorSkipped, protocol.BrowserStepErrorError} {
+	for _, e := range []protocol.BrowserStepError{
+		protocol.BrowserStepErrorTimeout, protocol.BrowserStepErrorNotFound, protocol.BrowserStepErrorMismatch,
+		protocol.BrowserStepErrorNavigation, protocol.BrowserStepErrorRefused, protocol.BrowserStepErrorSkipped, protocol.BrowserStepErrorError,
+	} {
 		stepErrors[string(e)] = e
 	}
 }
@@ -268,10 +270,10 @@ func (l *limitWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
-func (c Capture) red(s string, max int, n *int64) string {
+func (c Capture) red(s string, limit int, n *int64) string {
 	out, k := c.Redactor.String(s)
 	*n += int64(k)
-	out, _ = redact.Clip(out, max)
+	out, _ = redact.Clip(out, limit)
 	return out
 }
 
@@ -427,10 +429,19 @@ func (c Capture) har(req Request, raw []byte, out *Outcome, harvest bool) error 
 	}
 	for i := range doc.Log.Entries {
 		e := &doc.Log.Entries[i]
+		if u, ok := appSocketURL(e.Request.URL, req.Spec.Port); ok && validNetworkMethod(e.Request.Method) {
+			// A WebSocket to the app's own origin (a dev server's reload
+			// channel): allowed, and its handshake stays in the HAR, but it
+			// is no request the page measured. Its frames are never kept
+			// (only these fields are exported) nor compared.
+			e.Request.URL, _ = c.Redactor.String(u)
+			continue
+		}
 		u, err := safeURL(e.Request.URL)
 		atTime, timeErr := time.Parse(time.RFC3339Nano, e.StartedDateTime)
-		if err != nil || !validNetworkMethod(e.Request.Method) || e.Response.Status == nil || *e.Response.Status < 100 || *e.Response.Status > 599 || e.Time == nil || *e.Time < 0 || *e.Time > maxSinceT0 || timeErr != nil {
-			return errors.New("browser: invalid HAR entry")
+		if why := harEntryProblem(err, e.Request.URL, e.Request.Method, e.Response.Status, e.Time, timeErr); why != "" {
+			// Which check failed, never the entry: its URL and values are the app's.
+			return fmt.Errorf("browser: invalid HAR entry (%s)", why)
 		}
 		e.Request.URL, _ = c.Redactor.String(u)
 		entry := protocol.BrowserNetworkEntry{Method: e.Request.Method, URL: e.Request.URL, Status: *e.Response.Status}
@@ -449,9 +460,67 @@ func (c Capture) har(req Request, raw []byte, out *Outcome, harvest bool) error 
 	return nil
 }
 
+// harEntryProblem names the check one HAR entry fails, or "" when it passes.
+func harEntryProblem(urlErr error, rawURL, method string, status *int64, ms *float64, timeErr error) string {
+	switch {
+	case urlErr != nil:
+		return "url not http(s): " + urlShape(rawURL)
+	case !validNetworkMethod(method):
+		return "method"
+	case status == nil:
+		return "no status"
+	case *status < 100 || *status > 599:
+		return fmt.Sprintf("status %d", *status)
+	case ms == nil:
+		return "no time"
+	case *ms < 0 || *ms > maxSinceT0:
+		return "time out of range"
+	case timeErr != nil:
+		return "startedDateTime"
+	}
+	return ""
+}
+
 var networkMethod = regexp.MustCompile(`^[A-Z]{1,16}$`)
 
 func validNetworkMethod(method string) bool { return networkMethod.MatchString(method) }
+
+// urlShape says what kind of URL failed, never the URL: its scheme when it
+// is a plain word, else whether it parsed and had a host.
+func urlShape(raw string) string {
+	u, err := url.Parse(raw)
+	switch {
+	case err != nil:
+		return "unparsable"
+	case u.Scheme == "":
+		return "no scheme"
+	case !urlScheme.MatchString(u.Scheme):
+		return "odd scheme"
+	case u.Host == "" && (u.Scheme == "http" || u.Scheme == "https"):
+		return u.Scheme + " without host"
+	}
+	return "scheme " + strings.ToLower(u.Scheme)
+}
+
+var urlScheme = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]{0,31}$`)
+
+// socketScheme pairs a page origin's scheme with its WebSocket scheme.
+var socketScheme = map[string]string{"http": "ws", "https": "wss"}
+
+// appScheme is the scheme of the origin the page reaches the app by (jobFor).
+const appScheme = "http"
+
+// appSocketURL is raw without its query and fragment when it is a WebSocket
+// to the app's own origin: the scheme paired with the app's, its host and
+// port, and no user info.
+func appSocketURL(raw string, port int) (string, bool) {
+	u, err := url.Parse(raw)
+	if err != nil || u.User != nil || u.Scheme != socketScheme[appScheme] || u.Host != AppHost+":"+strconv.Itoa(port) {
+		return "", false
+	}
+	u.RawQuery, u.Fragment, u.RawFragment, u.ForceQuery = "", "", "", false
+	return u.String(), true
+}
 
 func safeURL(raw string) (string, error) {
 	u, err := url.Parse(raw)
@@ -503,7 +572,7 @@ func (c Capture) trace(raw []byte, out *Outcome) {
 			return
 		}
 		b, ok, err := limited(rc, remaining)
-		rc.Close()
+		_ = rc.Close()
 		if err != nil || !ok {
 			out.Dropped = append(out.Dropped, "trace: over its bound uncompressed")
 			return
@@ -622,7 +691,7 @@ func (c Capture) fetchBaseline(ctx context.Context, u string, viewport protocol.
 		// The error names the URL, which carries a signature.
 		return nil, errors.New("browser: baseline request failed")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK || !strings.HasPrefix(resp.Header.Get("Content-Type"), "image/png") {
 		return nil, fmt.Errorf("browser: baseline answered %d", resp.StatusCode)
 	}

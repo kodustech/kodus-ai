@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"go.yaml.in/yaml/v3"
 )
 
 // Build is one service's image the cell builds from the checkout, in a
@@ -20,12 +18,17 @@ type Build struct {
 	Dockerfile string
 	Target     string
 	Args       map[string]string
+	// Secrets are the org secrets the build asked for (build_secrets.go):
+	// BuildKit secret id to the org secret that holds its placeholder.
+	// Empty: the build gets none.
+	Secrets map[string]string
 }
 
 // buildKeys are what a build section may say. Anything else (a remote
-// context, additional contexts, ssh, secrets, cache import and export, a
-// network mode) reaches outside the checkout or the claim network.
-var buildKeys = map[string]bool{"context": true, "dockerfile": true, "target": true, "args": true}
+// context, additional contexts, ssh, cache import and export, a network
+// mode) reaches outside the checkout or the claim network. Its secrets name
+// org secrets only (build_secrets.go).
+var buildKeys = map[string]bool{"context": true, "dockerfile": true, "target": true, "args": true, "secrets": true}
 
 var (
 	plainToken = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
@@ -34,20 +37,23 @@ var (
 
 // Builds reads every service's build section and refuses, all at once,
 // any the cell cannot build inside the checkout.
+// It reads the file as Apply does (checker.parse): a YAML tag Apply would
+// refuse is refused here too, before anything is built.
 func Builds(raw []byte, o Options) ([]Build, error) {
-	var doc map[string]any
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		return nil, fmt.Errorf("sandbox: %w", err)
+	c := &checker{o: o}
+	doc, err := c.parse(raw)
+	if err != nil {
+		return nil, err
 	}
 	services, _ := doc["services"].(map[string]any)
-	c := &checker{o: o}
+	top := c.topSecrets(doc["secrets"])
 	var out []Build
 	for _, name := range sortedKeys(services) {
 		svc, _ := services[name].(map[string]any)
 		if svc == nil || svc["build"] == nil {
 			continue
 		}
-		if b, ok := c.build(name, svc["build"]); ok {
+		if b, ok := c.build(name, svc["build"], top); ok {
 			out = append(out, b)
 		}
 	}
@@ -57,9 +63,9 @@ func Builds(raw []byte, o Options) ([]Build, error) {
 	return out, nil
 }
 
-func (c *checker) build(service string, v any) (Build, bool) {
+func (c *checker) build(service string, v any, top map[string]string) (Build, bool) {
 	path := "services." + service + ".build"
-	b := Build{Service: service, Dockerfile: "Dockerfile", Args: map[string]string{}}
+	b := Build{Service: service, Dockerfile: "Dockerfile", Args: map[string]string{}, Secrets: map[string]string{}}
 	ctx := "."
 	switch x := v.(type) {
 	case string:
@@ -83,6 +89,7 @@ func (c *checker) build(service string, v any) (Build, bool) {
 			b.Target = s
 		}
 		c.buildArgs(path+".args", x["args"], b.Args)
+		c.buildSecrets(path+".secrets", x["secrets"], top, b.Secrets)
 	default:
 		c.add(path, "neither a path nor a mapping")
 		return b, false
@@ -91,7 +98,7 @@ func (c *checker) build(service string, v any) (Build, bool) {
 		c.add(path+".context", "a remote or interpolated context")
 		return b, false
 	}
-	abs, err := ResolveInside(c.o.ProjectDir, ctx)
+	abs, err := c.o.resolve(ctx)
 	if err != nil {
 		c.add(path+".context", err.Error())
 		return b, false
@@ -107,6 +114,10 @@ func (c *checker) build(service string, v any) (Build, bool) {
 		return b, false
 	}
 	b.Dockerfile, _ = filepath.Rel(abs, df)
+	if err := dockerfileSecrets(df, b.Secrets); err != nil {
+		c.add(path+".dockerfile", err.Error())
+		return b, false
+	}
 	return b, len(c.v) == 0
 }
 

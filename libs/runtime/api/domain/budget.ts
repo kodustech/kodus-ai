@@ -6,6 +6,12 @@ export interface RuntimeLlmBudgetLimits {
     perRun: number;
     perPullRequest: number;
     perOrgPerDay: number;
+    /**
+     * The ceiling of one setup (Kody's learn loop, the recipe author), in
+     * place of perRun: writing a recipe reads far more of a repository than a
+     * Run's test plan does. Absent, a setup takes perRun.
+     */
+    perSetup?: number;
 }
 
 export interface RuntimeLlmSpend {
@@ -72,9 +78,6 @@ export function planLlmCall(
     return { allowed: true, reserve: input.inputTokens + maxOutputTokens, maxOutputTokens, remaining: decision.remaining };
 }
 
-/** @deprecated use planLlmCall. */
-export const planCall = planLlmCall;
-
 /** The org's own daily budget (Settings) can only lower the gateway's. */
 export function withOrgBudget(limits: RuntimeLlmBudgetLimits, tokenBudgetPerDay: number | null | undefined): RuntimeLlmBudgetLimits {
     return tokenBudgetPerDay && tokenBudgetPerDay > 0
@@ -92,7 +95,7 @@ export function withOrgBudget(limits: RuntimeLlmBudgetLimits, tokenBudgetPerDay:
  * bound a setup instead.
  */
 export function setupBudgetLimits(limits: RuntimeLlmBudgetLimits): RuntimeLlmBudgetLimits {
-    return { ...limits, perPullRequest: Number.MAX_SAFE_INTEGER };
+    return { ...limits, perRun: limits.perSetup ?? limits.perRun, perPullRequest: Number.MAX_SAFE_INTEGER };
 }
 
 /** Start of the UTC day of `now`; the per-day budget resets at 00:00 UTC. */

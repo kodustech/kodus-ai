@@ -68,6 +68,29 @@ describe('planned HTTP request and assertion contract', () => {
 });
 
 
+// kr-remix#2 (2026-11-13/14, Runs 6ffa2b34, f5147f8d, 89d380fc): the planner wrote a compare field outside the closed
+// list for an HTTP probe of an HTML page ("compare.1: Invalid option"), the whole probe was refused, the round's tokens
+// ran out before a fix and the Run ended partly tested with no probe. What an HTTP probe compares is its floor (status,
+// the JSON body field by field, an HTML page's visible text and markup), so a word outside the list adds nothing.
+describe('the compare list of an HTTP probe', () => {
+    const get = { id: 'about-page', purpose: 'the about page answers', expected: '200 with the about page', spec: { kind: 'http', target: { service: 'app', port: 3000 }, method: 'GET', path: '/about', timeoutMs: 1_000 } };
+
+    it('drops what is not a compare field instead of refusing the probe', () => {
+        for (const extra of ['body', 'html', 'text']) {
+            const plan = check({ ...get, compare: ['status', extra] });
+            expect(plan.rejected).toEqual([]);
+            expect(plan.probes[0].probe.compare).toEqual(['status']);
+        }
+        expect(check({ ...get, compare: ['body'] }).probes[0].probe.compare).toEqual(['status']);
+    });
+
+    it('still refuses a compare that is not a list, and a field outside the list on another kind', () => {
+        expect(check({ ...get, compare: 'body' }).probes).toEqual([]);
+        const browser = { id: 'b', purpose: 'p', expected: 'e', compare: ['pixels', 'body'], spec: { kind: 'browser', steps: [{ goto: '/' }, { screenshot: 's' }], viewport: { width: 1280, height: 720 }, timeoutMs: 60_000 } };
+        expect(checkPlanSubmission({ probes: [{ entryPoint: 'POST /orders', probe: browser }] }, scope).rejected).toEqual([{ reason: expect.stringContaining('compare.1') }]);
+    });
+});
+
 describe('browser exploration selectors promoted to replay', () => {
     const browser = (selector: string) => ({ ...probe, spec: { kind: 'browser', steps: [{ goto: '/' }, { click: selector }, { screenshot: 'result' }], viewport: { width: 800, height: 600 }, timeoutMs: 10_000 } });
     it.each(['@e3', ' @e1 ', ' text=Save', '  internal:role=button', '//input', 'div >> text=Save'])('refuses ephemeral selector %s in a final plan', (selector) => {

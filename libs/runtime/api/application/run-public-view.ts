@@ -16,6 +16,7 @@ const VERDICTS: ReadonlySet<unknown> = new Set<VerdictState>([
     'regression',
     'partly_tested',
     'could_not_boot',
+    'nothing_to_test',
 ]);
 
 export function publicRunReason(

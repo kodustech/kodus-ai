@@ -46,6 +46,7 @@ export function browserStepTargetOf(step: BrowserStep | undefined): string | und
     const [kind, value] = Object.entries(step)[0] ?? [];
     const raw = kind === 'goto' && typeof value === 'string' ? routeOf(value) : Array.isArray(value) ? value[0] : value;
     if (typeof raw !== 'string') return undefined;
+    // eslint-disable-next-line no-control-regex -- matching a control character is the check itself
     const flat = redactPatterns(raw.replace(/[\u0000-\u001f\u007f]+/g, ' ')).text.trim();
     if (!flat) return undefined;
     return flat.length > MAX_STEP_TARGET ? `${flat.slice(0, MAX_STEP_TARGET - 1)}…` : flat;

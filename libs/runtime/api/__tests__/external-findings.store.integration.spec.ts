@@ -5,10 +5,17 @@ import { CreateRuntimeExternalFindings2026110800000000 } from '@libs/core/infras
 import { ExternalFindingLifecycle2026110800000001 } from '@libs/core/infrastructure/database/typeorm/migrations/2026110800000001-ExternalFindingLifecycle';
 import { TypeOrmExternalFindingsStore } from '../infrastructure/typeorm-external-findings.store';
 import { externalFindingsFixture } from './fixtures/external-findings.fixture';
+import { isolatedDatabase } from '../../../../apps/runtime/src/testing/isolated-database';
 
-// Explicit opt-in only. A unique generated schema owns every fixture table.
-const url = process.env.EXTERNAL_FINDINGS_IT_DATABASE_URL;
-(url ? describe : describe.skip)(
+// Runs with the standard integration database (RUNTIME_IT_DATABASE_URL) or its
+// own, in a database of its own: the store's maintenance takes an advisory
+// lock per organization, and advisory locks are database-wide, so a schema of
+// its own would still share them with every other run of this suite on the
+// server (isolated-database.ts). A unique generated schema owns every fixture table.
+const serverUrl = process.env.EXTERNAL_FINDINGS_IT_DATABASE_URL ?? process.env.RUNTIME_IT_DATABASE_URL;
+const database = isolatedDatabase(serverUrl ?? '', 'external_findings');
+const url = database.url;
+(url && process.env.SKIP_INTEGRATION !== 'true' ? describe : describe.skip)(
     'PostgreSQL durable external admission transaction',
     () => {
         const schema = `external_findings_it_${process.pid}_${randomUUID().replaceAll('-', '')}`;
@@ -26,6 +33,7 @@ const url = process.env.EXTERNAL_FINDINGS_IT_DATABASE_URL;
         };
         const store = () => new TypeOrmExternalFindingsStore(source, outbox);
         beforeAll(async () => {
+            await database.create();
             admin = new Pool({ connectionString: url, max: 1 });
             await admin.query(`CREATE SCHEMA "${schema}"`);
             source = new DataSource({
@@ -55,6 +63,7 @@ const url = process.env.EXTERNAL_FINDINGS_IT_DATABASE_URL;
                 await admin.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
                 await admin.end();
             }
+            await database.drop();
         });
         afterEach(async () => {
             failing = false;

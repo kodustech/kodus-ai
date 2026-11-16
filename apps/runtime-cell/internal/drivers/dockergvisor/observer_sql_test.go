@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 )
 
 const observerRecipe = `version: 1
@@ -199,18 +199,19 @@ type observerSQLSinkDocker struct {
 }
 
 func (b *observerSQLSinkDocker) ExecInput(ctx context.Context, container string, stdin []byte, argv ...string) ([]byte, error) {
-	if sink := driver.OutputFrom(ctx); sink != nil {
+	if sink := dockercli.OutputFrom(ctx); sink != nil {
 		b.leaked = true
 		sink("guest stderr containing verifier")
 	}
 	return b.memDocker.ExecInput(ctx, container, stdin, argv...)
 }
+
 func TestSQLObserverProvisioningDoesNotInheritProgressOutputSink(t *testing.T) {
 	d, docker, ref, dir := sqlDriver(t, observerRecipe)
 	b := &observerSQLSinkDocker{memDocker: docker}
 	d.d = b
 	var output []string
-	ctx := driver.WithOutput(context.Background(), func(line string) { output = append(output, line) })
+	ctx := dockercli.WithOutput(context.Background(), func(line string) { output = append(output, line) })
 	if _, err := d.ProvisionObserverSQL(ctx, ref, dir); err != nil {
 		t.Fatal(err)
 	}

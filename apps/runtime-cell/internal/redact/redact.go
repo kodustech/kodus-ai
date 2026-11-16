@@ -154,7 +154,7 @@ func (r *Redactor) String(s string) (string, int) {
 // sentinel marks the i-th replaced value until the markers go in. Its
 // inside is a private-use code point, not digits: a short known value ("1")
 // must not match inside an earlier sentinel and break it.
-func sentinel(i int) string { return "\x00" + string(rune(0xF0000+i)) + "\x00" }
+func sentinel(i int) string { return "\x00" + string(rune(0xF0000+i)) + "\x00" } //nolint:gosec // G115: i indexes the redactor's own labels, far below the int32 range
 
 // Patterns runs only the token-pattern pass (no known values).
 func Patterns(s string) (string, int) { return (&Redactor{rules: defaultRules}).String(s) }

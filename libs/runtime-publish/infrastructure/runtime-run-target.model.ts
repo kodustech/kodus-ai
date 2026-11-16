@@ -2,6 +2,8 @@ import { Column, Entity, Index } from 'typeorm';
 
 import { CoreModel } from '@libs/core/infrastructure/repositories/model/typeOrm';
 
+import type { RunTargetWorkspaceRef } from '../domain/run-target';
+
 /** Publish target of a Run, written by the product at enqueue time (§8: product Postgres, only the product writes). */
 @Entity('runtime_run_targets')
 @Index('UQ_runtime_run_targets_run', ['runId'], { unique: true })
@@ -35,4 +37,12 @@ export class RuntimeRunTargetModel extends CoreModel {
 
     @Column({ name: 'head_sha', type: 'varchar', length: 40 })
     headSha: string;
+
+    /** The commits of every repository of a multi-repository Run; null for one repository. */
+    @Column({ type: 'jsonb', nullable: true })
+    workspace: RunTargetWorkspaceRef[] | null;
+
+    /** The pull request comes from a fork (the request's own fact); null on targets from before it was kept. */
+    @Column({ type: 'boolean', nullable: true })
+    fork: boolean | null;
 }

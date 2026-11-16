@@ -22,6 +22,7 @@
         "poolMachineSize",
         "authoredFiles",
         "readyBuildSteps",
+        "bootPhases",
         "cellMemory",
         "timedRequests",
         "serviceLogs",

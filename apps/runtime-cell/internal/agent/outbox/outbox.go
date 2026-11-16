@@ -74,6 +74,10 @@ type Frame struct {
 	// Wanted, when set, is asked before every attempt: false ends the
 	// delivery with ErrUnwanted.
 	Wanted func() bool
+	// Once sends the frame a single time, with no retry: a frame a newer
+	// one replaces (claim.progress). A failure is counted gave_up and
+	// logged at debug.
+	Once bool
 }
 
 // Deliver sends f until the hub acks it (nil). A nack is final and
@@ -113,6 +117,11 @@ func (o *Outbox) Deliver(ctx context.Context, f Frame) error {
 		if errors.As(err, &n) {
 			o.deliveries.Inc(f.Kind, "nacked")
 			log.Warn(f.Kind+".nacked", "attempt", attempt, "code", n.Code, "message", n.Message)
+			return err
+		}
+		if f.Once {
+			o.deliveries.Inc(f.Kind, "gave_up")
+			log.Debug(f.Kind+".dropped", "err", err)
 			return err
 		}
 		if attempt >= o.cfg.Attempts || ctx.Err() != nil {

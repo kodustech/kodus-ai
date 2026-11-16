@@ -26,7 +26,7 @@ func TestLinuxDirectoryDoesNotFollowSymlinks(t *testing.T) {
 	dir := t.TempDir()
 	outside := t.TempDir()
 	target := filepath.Join(outside, "keep")
-	if err := os.WriteFile(target, []byte("unchanged"), 0600); err != nil {
+	if err := os.WriteFile(target, []byte("unchanged"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(target, filepath.Join(dir, "memory.max")); err != nil {
@@ -54,9 +54,10 @@ func TestLinuxDirectoryDoesNotFollowSymlinks(t *testing.T) {
 		t.Fatalf("outside mutated %q %v", got, err)
 	}
 }
+
 func TestLinuxReadControlFileIsBounded(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "cpu.max"), []byte(strings.Repeat("x", maxControlBytes+1)), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "cpu.max"), []byte(strings.Repeat("x", maxControlBytes+1)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	file, err := os.Open(dir)
@@ -105,6 +106,7 @@ func TestLinuxDirectoryLockLifetime(t *testing.T) {
 		t.Fatalf("lock not released with descriptor: %v", err)
 	}
 }
+
 func TestLinuxDirectoryLockChild(t *testing.T) {
 	path := os.Getenv("KODY_CGROUP_LOCK_PATH")
 	if path == "" {
@@ -120,6 +122,7 @@ func TestLinuxDirectoryLockChild(t *testing.T) {
 		t.Fatalf("independent manager accepted: %v", err)
 	}
 }
+
 func TestLinuxDirectoryLockFailsClosedOnInvalidDescriptor(t *testing.T) {
 	file, err := os.Open(t.TempDir())
 	if err != nil {

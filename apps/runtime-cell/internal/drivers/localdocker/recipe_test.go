@@ -48,7 +48,7 @@ func TestRecipeKeysLocalDockerIgnoresOrRefuses(t *testing.T) {
 	if got := strings.Join(recipeKeysIgnored(r), ","); got != "ui" {
 		t.Fatalf("ignored %s", got)
 	}
-	needs, err := recipe.Parse([]byte("version: 1\nservices: { needs: { sso: { repo: a/b } } }\n"))
+	needs, err := recipe.Parse([]byte("version: 1\nservices: { needs: [{ repo: a/b }] }\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,5 +178,37 @@ func TestReseedSkipsRecreate(t *testing.T) {
 	}
 	if m.joined() != "exec kodus-claim-1-workload web sh -c ./reseed" {
 		t.Fatalf("calls %s", m.joined())
+	}
+}
+
+// A data.seed.sql the repository commits as a symlink out of the checkout
+// is refused: the file it points at never reaches psql.
+func TestRecipeSeedSymlinkOutOfTheCheckoutIsRefused(t *testing.T) {
+	ctx := context.Background()
+	m := newFake()
+	d := newDriver(t, m, t.TempDir())
+	d.getStatus = func(context.Context, string) (int, error) { return 200, nil }
+	d.pollEvery = time.Millisecond
+	if _, err := d.PrepareClaim(ctx, driver.ClaimNetworkSpec{ClaimID: "Claim-1"}); err != nil {
+		t.Fatal(err)
+	}
+	work, _ := d.Create(ctx, spec(driver.RoleWorkload))
+	dir := recipeRepo(t)
+	outside := filepath.Join(t.TempDir(), "secret.sql")
+	if err := os.WriteFile(outside, []byte("select 'HOST-SECRET';\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	seed := filepath.Join(dir, "seed.sql")
+	if err := os.Remove(seed); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, seed); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Boot(ctx, work, dir); err == nil {
+		t.Fatal("booted with a seed that points out of the checkout")
+	}
+	if strings.Contains(m.joined(), "HOST-SECRET") {
+		t.Fatalf("the outside file reached psql:\n%s", m.joined())
 	}
 }

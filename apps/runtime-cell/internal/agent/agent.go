@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"runtime"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dedup"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/hubclient"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/isolation"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/lease"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 )
@@ -75,6 +77,14 @@ type Agent struct {
 	// beat asks the session for a heartbeat now (nudgeHeartbeat).
 	beat         chan struct{}
 	sourceHealth alertSourceHealth
+	// alertSources are the alert feeds watched (alertSources).
+	alertSources []AlertSource
+
+	// guests are the sandbox claims' streams to their guest agents
+	// (sandbox.go); sandboxPool the blank sandboxes (sandbox_pool.go), nil
+	// without one.
+	guests      guests
+	sandboxPool *sandboxPool
 }
 
 const (
@@ -101,26 +111,48 @@ func New(cfg Config) (*Agent, error) {
 		beat:    make(chan struct{}, 1),
 		m:       newAgentMetrics(cfg.Metrics),
 	}
-	a.evidence = &evidence.Collector{ServiceLogs: cfg.ServiceLogs, Outbound: cfg.Outbound, HTTP: cfg.EvidenceHTTP, Clock: cfg.Clock, Accepts: a.hubAccepts}
+	a.evidence = &evidence.Collector{ServiceLogs: cfg.Parts.ServiceLogs, Outbound: cfg.Outbound, HTTP: cfg.EvidenceHTTP, Clock: cfg.Clock, Accepts: a.hubAccepts}
 	a.pool = pool.New(pool.Config{
-		CellID: cfg.CellID, Pooler: cfg.Pooler, Machines: cfg.Driver, OrgKey: cfg.OrgKey,
+		CellID: cfg.CellID, Pooler: cfg.Parts.Pooler, Machines: cfg.Driver, OrgKey: cfg.OrgKey,
 		WorkloadSize: cfg.WorkloadSize, Max: cfg.PoolMax, TTL: cfg.PoolTTL,
 		Accepting: a.acceptingWork, Go: a.goTracked, Clock: cfg.Clock, Log: a.log, Outcomes: a.m.pool,
 	})
 	if err := a.recoverBakes(); err != nil {
 		return nil, err
 	}
-	// No source-health series for a cell without an injector alert source.
-	if cfg.Alerts != nil {
+	if h := cfg.Host; h != nil {
+		// What the KVM host is, for the alert on a shared host and the fleet's view.
+		g := cfg.Metrics.Gauge("cell_host_hardening", "The KVM host's SMT, KSM and swap (1 on the state found) and its unmitigated CPU vulnerabilities, by policy.", "policy", "check", "state")
+		for check, state := range map[string]string{"smt": string(h.Smt), "ksm": string(h.Ksm), "swap": string(h.Swap)} {
+			g.Set(1, string(h.Policy), check, state)
+		}
+		g.Set(float64(len(h.Vulnerable)), string(h.Policy), "vulnerable", "count")
+	}
+	// No source-health series for a cell without an alert source.
+	a.alertSources = alertSources(cfg)
+	a.sourceHealth.ready = make([]bool, len(a.alertSources))
+	if len(a.alertSources) > 0 {
 		a.m.alertSourceAvailable.Set(0)
 	}
-	if b, ok := driver.MemoryBudgetOf(cfg.Driver); ok && cfg.MemoryAllocatableMB > 0 {
-		a.mem, a.budget = admission.New(cfg.MemoryAllocatableMB), b
+	if cfg.Parts.Memory != nil && cfg.MemoryAllocatableMB > 0 {
+		a.mem, a.budget = admission.New(cfg.MemoryAllocatableMB), cfg.Parts.Memory
 	}
 	a.outbox = outbox.New(outbox.Config{
 		Conn: a.currentConn, Attempts: cfg.SettleAttempts, Backoff: cfg.SettleBackoff,
 		Clock: cfg.Clock, NewID: cfg.NewID, Metrics: cfg.Metrics,
 	})
+	if cfg.Parts.Sandboxes != nil && cfg.SandboxPool > 0 {
+		a.sandboxPool = &sandboxPool{
+			Target: cfg.SandboxPool, CellID: cfg.CellID, Driver: cfg.Driver, Sandboxes: cfg.Parts.Sandboxes, OrgKey: cfg.OrgKey,
+			Size: cfg.WorkloadSize, ClaimSize: cfg.SandboxSize, Clock: cfg.Clock, Log: a.log, Accepting: a.acceptingWork, dial: a.dialGuest,
+		}
+		if a.mem != nil {
+			// A blank sandbox holds its machine's memory, at the figure the
+			// claim that takes it is counted at (sandboxMemoryMB), in the
+			// same ledger the claims are admitted from.
+			a.sandboxPool.Mem, a.sandboxPool.MemMB = a.mem, a.sandboxMemoryMB(cfg.SandboxSize)
+		}
+	}
 	a.registerGauges()
 	a.observeClaims()
 	return a, nil
@@ -129,7 +161,7 @@ func New(cfg Config) (*Agent, error) {
 // recoverBakes restores which images this cell baked, from the driver's
 // catalog. Eligibility only: no claim, pool machine or lease comes back.
 func (a *Agent) recoverBakes() error {
-	if a.cfg.BakeCatalog == nil {
+	if a.cfg.Parts.BakeCatalog == nil {
 		return nil
 	}
 	startup := a.cfg.RecoveryContext
@@ -137,7 +169,7 @@ func (a *Agent) recoverBakes() error {
 		startup = context.Background()
 	}
 	ctx, cancel := context.WithTimeout(startup, 30*time.Second)
-	recovered, err := a.cfg.BakeCatalog.RecoverBakes(ctx)
+	recovered, err := a.cfg.Parts.BakeCatalog.RecoverBakes(ctx)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("agent: bake recovery: %w", err)
@@ -193,6 +225,8 @@ func (a *Agent) runContext() context.Context {
 }
 
 // goTracked runs f in a goroutine Wait waits for, with the Run context.
+//
+//nolint:contextcheck,nolintlint // background work outlives the frame that started it: it runs under the Run context on purpose (contextcheck reports at the callers, so nolintlint sees the directive as unused)
 func (a *Agent) goTracked(f func(ctx context.Context)) {
 	ctx := a.runContext()
 	a.wg.Add(1)
@@ -236,7 +270,35 @@ func (a *Agent) Hello() *protocol.HelloBody {
 		if feature == protocol.FeatureRecipeFakes && !a.cfg.FakeSupport {
 			continue
 		}
-		if feature == protocol.FeatureSeededSQL && a.cfg.SQLObservers == nil {
+		if feature == protocol.FeatureSeededSQL && a.cfg.Parts.SQLObservers == nil {
+			continue
+		}
+		// claim.acquire repos are laid out only where the driver's sandbox
+		// keeps the project inside the workspace (laysOutWorkspaces).
+		if feature == protocol.FeatureWorkspace && !a.laysOutWorkspaces() {
+			continue
+		}
+		if feature == protocol.FeatureSnapshots && a.cfg.Parts.Snapshots == nil {
+			continue // the hub sends no snapshot field to a cell that keeps none
+		}
+		if feature == protocol.FeatureSnapshotForget && a.cfg.Parts.Sessions == nil {
+			continue
+		}
+		if feature == protocol.FeatureHostHardening && a.cfg.Host == nil {
+			continue
+		}
+		if feature == protocol.FeatureSandbox && a.cfg.Parts.Sandboxes == nil {
+			continue
+		}
+		if (feature == protocol.FeatureBuildStateEvicted || feature == protocol.FeatureBuildStateRebuildCost) && a.cfg.Parts.BuildStates == nil {
+			continue
+		}
+		if feature == protocol.FeaturePreview && a.cfg.Preview == nil {
+			continue
+		}
+		// A placeholder is worth something only where an injector swaps it:
+		// a cell that pushes no egress policy takes no secrets.
+		if (feature == protocol.FeatureSecrets || feature == protocol.FeatureEgressTiers) && a.cfg.Egress == nil {
 			continue
 		}
 		kept = append(kept, feature)
@@ -251,7 +313,40 @@ func (a *Agent) Hello() *protocol.HelloBody {
 		Owner:        a.cfg.Owner,
 		Features:     features,
 		MaxClaimSize: protocol.MaxClaimSize(int64(caps.MaxClaimSize.MemoryMB), int64(caps.MaxClaimSize.CPUs)),
+		Capabilities: a.helloCapabilities(caps, a.cfg.Parts),
 	}
+}
+
+// helloCapabilities is what the cell's machines can be
+// (docs/runtime/isolation-architecture.md C2): the driver's backends, memory
+// snapshots, nested containers, the host's KVM and arch, the largest size,
+// the default one and a code sandbox's (only on a cell that runs them). Nil
+// on an architecture the protocol does not name.
+func (a *Agent) helloCapabilities(caps driver.Capabilities, parts driver.Parts) *protocol.HelloCapabilities {
+	arch := caps.HostArch
+	if arch == "" {
+		arch = isolation.ArchOf(runtime.GOARCH)
+	}
+	if arch == "" {
+		return nil
+	}
+	backends := append([]string{}, caps.Backends...)
+	return &protocol.HelloCapabilities{
+		Backends: backends, SnapshotMemory: parts.SnapshotsMemory(), NestedDocker: caps.NestedContainers, Kvm: caps.KVM,
+		Arch: protocol.MachineArch(arch), MaxSize: protocol.MaxClaimSize(int64(caps.MaxClaimSize.MemoryMB), int64(caps.MaxClaimSize.CPUs)),
+		DefaultSize: protocol.MaxClaimSize(int64(caps.DefaultClaimSize.MemoryMB), int64(caps.DefaultClaimSize.CPUs)),
+		SandboxSize: a.helloSandboxSize(),
+	}
+}
+
+// helloSandboxSize is hello capabilities.sandboxSize: nil on a cell that runs
+// no sandboxes or has no sandbox size of its own (the hub then counts a
+// sandbox at its own default, RUNTIME_SANDBOX_MEMORY_MB).
+func (a *Agent) helloSandboxSize() *protocol.MachineSize {
+	if a.cfg.Parts.Sandboxes == nil || a.cfg.SandboxSize.IsZero() {
+		return nil
+	}
+	return protocol.MaxClaimSize(int64(a.cfg.SandboxSize.MemoryMB), int64(a.cfg.SandboxSize.CPUs))
 }
 
 func (a *Agent) Heartbeat() *protocol.HeartbeatBody {
@@ -267,11 +362,47 @@ func (a *Agent) Heartbeat() *protocol.HeartbeatBody {
 	if a.hubAccepts(protocol.FeatureCellMemory) {
 		hb.Memory = a.memoryReport()
 	}
+	if a.cfg.Parts.BuildStates != nil && a.hubAccepts(protocol.FeatureBuildStateEvicted) {
+		hb.EvictedBuildStates = evictedBuildStates(a.cfg.Parts.BuildStates.EvictedBuildStates(), a.hubAccepts(protocol.FeatureBuildStateRebuildCost))
+	}
+	if a.cfg.Host != nil && a.hubAccepts(protocol.FeatureHostHardening) {
+		h := *a.cfg.Host
+		hb.Host = &h
+	}
 	return hb
 }
+
+// evictedBuildStates is the driver's ledger as heartbeat evictedBuildStates:
+// ids the schema takes only (an id past its bound is left out), at most the
+// schema's count. withCost adds each state's rebuild seconds, when measured
+// (a hub that accepts buildStateRebuildCost).
+func evictedBuildStates(ev []driver.EvictedBuildState, withCost bool) []protocol.HeartbeatBodyEvictedBuildStatesItem {
+	var out []protocol.HeartbeatBodyEvictedBuildStatesItem
+	for _, e := range ev {
+		if len(out) == maxEvictedBuildStates {
+			break
+		}
+		if e.Org == "" || e.Env == "" || len(e.Org) > 128 || len(e.Env) > 128 {
+			continue
+		}
+		item := protocol.HeartbeatBodyEvictedBuildStatesItem{OrgID: e.Org, EnvironmentID: e.Env, EvictedAt: protocol.FormatTime(e.At)}
+		if secs := int64(e.Rebuild / time.Second); withCost && secs >= 1 {
+			secs = min(secs, maxRebuildSeconds)
+			item.RebuildSeconds = &secs
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+// maxEvictedBuildStates is MAX_EVICTED_BUILD_STATES of the schema.
+const maxEvictedBuildStates = 64
+
+// maxRebuildSeconds is evictedBuildStates[].rebuildSeconds' bound in the schema: a week.
+const maxRebuildSeconds = 604_800
 
 // info is the ClaimInfo of c as it stands.
 func info(c *claims.Claim) ClaimInfo {
 	m := c.Machines()
-	return ClaimInfo{ClaimID: c.ID, ObserverGeneration: c.ObserverGeneration(), Acquire: c.Acquire, Workload: m.Workload, Observer: m.Observer, Network: m.Network, Sources: m.Sources, GoPins: m.GoPins, ImagePins: m.ImagePins}
+	return ClaimInfo{ClaimID: c.ID, ObserverGeneration: c.ObserverGeneration(), Acquire: c.Acquire, Workload: m.Workload, Observer: m.Observer, Network: m.Network, Sources: m.Sources, GoPins: m.GoPins, ImagePins: m.ImagePins, OrgSecrets: policySecrets(c), CellTrusted: c.CellTrusted(), Running: c.Running()}
 }

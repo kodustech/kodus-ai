@@ -1,10 +1,13 @@
 import { randomUUID } from 'crypto';
 
 import { DBOS } from '@dbos-inc/dbos-sdk';
+import { isolatedDatabase } from '../../testing/isolated-database';
 
 // Public SDK contract for the explicit release identity (#2465). This proves
 // queued version selection, not compatibility of journals across code changes.
-const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
+// A database of its own: suites in parallel never read each other's rows (isolated-database.ts).
+const database = isolatedDatabase(process.env.RUNTIME_IT_DATABASE_URL ?? '', 'release_version');
+const url = database.url;
 const skip = !url || process.env.SKIP_INTEGRATION === 'true';
 
 (skip ? describe.skip : describe)('DBOS release selection (integration, isolated Postgres)', () => {
@@ -24,7 +27,11 @@ const skip = !url || process.env.SKIP_INTEGRATION === 'true';
         return workflow;
     }
 
-    afterAll(async () => DBOS.shutdown({ deregister: true }));
+    beforeAll(() => database.create());
+    afterAll(async () => {
+        await DBOS.shutdown({ deregister: true });
+        await database.drop();
+    });
 
     it('leaves old-version work for an old compatible worker while new work progresses', async () => {
         const oldId = `old-${suffix}`;

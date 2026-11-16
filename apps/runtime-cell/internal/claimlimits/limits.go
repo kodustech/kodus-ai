@@ -17,8 +17,10 @@ import (
 )
 
 // ErrUnavailable means the requested aggregate enforcement was not established.
-var ErrUnavailable = errors.New("claimlimits: resource enforcement unavailable")
-var errPopulated = errors.New("claimlimits: parent still populated")
+var (
+	ErrUnavailable = errors.New("claimlimits: resource enforcement unavailable")
+	errPopulated   = errors.New("claimlimits: parent still populated")
+)
 
 const maxDirectoryEntries = 4096
 
@@ -57,8 +59,10 @@ type directory interface {
 	List() ([]string, error)
 }
 
-var keyPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
-var componentPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
+var (
+	keyPattern       = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	componentPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
+)
 
 // ValidateParent accepts an empty disabled value or an absolute cgroupfs path,
 // never a standalone systemd unit name. Ancestors may be systemd-owned
@@ -79,18 +83,21 @@ func ValidateParent(parent string) error {
 	}
 	return nil
 }
+
 func validKey(key string) error {
 	if !keyPattern.MatchString(key) {
 		return fmt.Errorf("%w: invalid generated key", ErrUnavailable)
 	}
 	return nil
 }
+
 func (l Limits) values() (map[string]string, error) {
 	if l.MemoryBytes < 1 || l.CPUQuota < 1000 || l.CPUPeriod < 1000 || l.CPUPeriod > 1000000 || l.Pids < 1 {
 		return nil, fmt.Errorf("%w: invalid resource ceiling", ErrUnavailable)
 	}
 	return map[string]string{"memory.max": strconv.FormatInt(l.MemoryBytes, 10), "memory.swap.max": "0", "cpu.max": fmt.Sprintf("%d %d", l.CPUQuota, l.CPUPeriod), "pids.max": strconv.FormatInt(l.Pids, 10)}, nil
 }
+
 func controllers(value string) bool {
 	set := map[string]bool{}
 	for _, v := range strings.Fields(value) {
@@ -98,6 +105,7 @@ func controllers(value string) bool {
 	}
 	return set["cpu"] && set["memory"] && set["pids"]
 }
+
 func emptyProcesses(d directory) error {
 	value, err := d.Read("cgroup.procs")
 	if err != nil {
@@ -108,6 +116,7 @@ func emptyProcesses(d directory) error {
 	}
 	return nil
 }
+
 func newFS(root directory, parent string) (*FS, error) {
 	if parent == "" {
 		return nil, fmt.Errorf("%w: dedicated root required", ErrUnavailable)
@@ -164,7 +173,7 @@ func (f *FS) Ensure(key string, limits Limits) (parent string, err error) {
 		}
 		return "", fmt.Errorf("%w: open group: %w", ErrUnavailable, err)
 	}
-	defer group.Close()
+	defer func() { _ = group.Close() }()
 	if created {
 		defer func() {
 			if err != nil {
@@ -326,6 +335,7 @@ func (f *FS) Verify(key string, pid int) error {
 	}
 	return verifyMembership(path.Join(f.parent, key), raw)
 }
+
 func verifyMembership(parent, raw string) error {
 	found := false
 	for _, line := range strings.Split(strings.TrimSpace(raw), "\n") {

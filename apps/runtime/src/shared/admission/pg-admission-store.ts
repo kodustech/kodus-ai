@@ -1,7 +1,8 @@
 import { LockScopedPg } from '../persistence/lock-scoped-pg';
-import { createHash } from 'crypto';
 
 import type { Pool } from 'pg';
+
+import { lockKey, lockStatement } from '@libs/runtime/run/adapters/advisory-lock';
 
 import type {
     AdmissionDue,
@@ -15,10 +16,8 @@ import {
     type StoredAdmission,
 } from './admission-store';
 
-const digest = createHash('sha256')
-    .update('kody-runtime/admission-quota')
-    .digest();
-const LOCK = [digest.readInt32BE(0), digest.readInt32BE(4)];
+/** One global key: every org's admission quota is decided under it. */
+const LOCK = lockStatement('pg_advisory_xact_lock', lockKey('admission_quota'));
 const COLUMNS = [
     'org_id',
     'kind',
@@ -156,10 +155,7 @@ export class PgAdmissionStore extends AdmissionStoreBase {
         return this.sql.transaction(async client => {
             await client.query("SET LOCAL lock_timeout='2s'");
             await client.query("SET LOCAL statement_timeout='5s'");
-            await client.query(
-                'SELECT pg_advisory_xact_lock($1::int, $2::int)',
-                LOCK,
-            );
+            await client.query(LOCK.text, LOCK.values);
             const at = (await client.query('SELECT clock_timestamp() AS at'))
                 .rows[0].at as Date;
             const tx: AdmissionTransaction = {

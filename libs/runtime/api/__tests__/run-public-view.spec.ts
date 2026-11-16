@@ -2,7 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { CHECK_CONCLUSIONS } from '@libs/runtime/contracts/enums';
-import { InMemoryRunStreamStore, type RunStreamEvent } from '@libs/runtime/run';
+import { type RunStreamEvent } from '@libs/runtime/run';
 
 import { RuntimeRunAccessService } from '../application/run-access.service';
 import { RuntimeRunCostService } from '../application/run-cost.service';
@@ -12,7 +12,7 @@ import { ReadRuntimeRunStreamUseCase } from '../application/use-cases/read-run-s
 import {
     clock,
     config,
-    InMemoryLlmUsage,
+    InMemoryLlmSpend,
     NOW,
     ORG,
     OTHER_ORG,
@@ -21,12 +21,13 @@ import {
     storeWith,
     user,
 } from './fixtures';
+import { InMemoryRunStreamStore } from '@libs/runtime/run/testing';
 
 const REASON = 'Kody Runtime could not finish this run. Try Run again.';
 const PRIVATE =
     'hub 400 pattern=^https?:// upload=https://evidence.test/upload?sig=PRIVATE_SIGNATURE Authorization: Bearer PRIVATE_TOKEN SELECT secret FROM credentials';
 const principal = { kind: 'user' as const, user: user(Role.OWNER) };
-const costs = () => new RuntimeRunCostService(new InMemoryLlmUsage(), clock);
+const costs = () => new RuntimeRunCostService(clock, new InMemoryLlmSpend());
 
 describe('Public Run failure boundary', () => {
     it.each(CHECK_CONCLUSIONS)(

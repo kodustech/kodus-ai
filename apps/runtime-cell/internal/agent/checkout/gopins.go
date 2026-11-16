@@ -24,7 +24,14 @@ const (
 func GoSumPins(repo string) ([]string, error) {
 	set := map[string]bool{}
 	files, total := 0, int64(0)
-	err := filepath.WalkDir(repo, func(path string, d fs.DirEntry, err error) error {
+	// Read through a root on the checkout: a file swapped for a link
+	// between the walk and the read never reads outside it.
+	root, err := os.OpenRoot(repo)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	err = filepath.WalkDir(repo, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -47,13 +54,16 @@ func GoSumPins(repo string) ([]string, error) {
 		if total += fi.Size(); total > maxGoSumBytes {
 			return errors.New("go.sum files larger than the mirror pins")
 		}
-		data, err := os.ReadFile(path)
+		rel, err := filepath.Rel(repo, path)
+		if err != nil {
+			return err
+		}
+		data, err := root.ReadFile(rel)
 		if err != nil {
 			return err
 		}
 		pins, err := mirror.ParseGoSum(data)
 		if err != nil {
-			rel, _ := filepath.Rel(repo, path)
 			return errors.New(rel + ": " + err.Error())
 		}
 		for p := range pins {

@@ -74,3 +74,20 @@ describe('clipMiddle', () => {
         expect(clipMiddle('abc', 5)).toBe('abc');
     });
 });
+
+// D7: the PR side of a fork never gets the environment's approved hosts nor the org's secrets.
+describe('bootFailureOf on a fork', () => {
+    it("says a fork's code gets no approved host when its PR side was stopped at the egress", () => {
+        const blocker = {
+            kind: 'external_service',
+            signature: 'compose_up',
+            message: 'compose up: exit 1',
+            bundle: { services: [], ports: [], disk: [], deniedEgress: [{ host: 'cdn.vendor.example', port: 443, at: AT }], redactions: 0, truncated: false, collectedAt: AT },
+        };
+        const fork = bootFailureOf({ side: 'pr', blocker, at: AT, clean: none, fork: true });
+        expect(fork).toMatchObject({ kind: 'external_service' });
+        expect(fork.title.startsWith("A fork's code gets no approved host and no secret: ")).toBe(true);
+        expect(bootFailureOf({ side: 'pr', blocker, at: AT, clean: none }).title).not.toContain('fork');
+        expect(bootFailureOf({ side: 'base', blocker, at: AT, clean: none, fork: true }).title).not.toContain('fork');
+    });
+});

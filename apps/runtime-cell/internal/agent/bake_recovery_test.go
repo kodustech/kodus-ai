@@ -26,6 +26,7 @@ func (c *recoveredBakeCatalog) RecoverBakes(ctx context.Context) ([]driver.Recov
 	}
 	return c.records, c.err
 }
+
 func (c *recoveredBakeCatalog) AcknowledgeBake(ctx context.Context, id string) error {
 	if c.ack != nil {
 		return c.ack(ctx, id)
@@ -35,7 +36,7 @@ func (c *recoveredBakeCatalog) AcknowledgeBake(ctx context.Context, id string) e
 
 func TestRecoveryRestoresOnlyBakeEligibilityNotClaimsOrPoolMachines(t *testing.T) {
 	catalog := &recoveredBakeCatalog{records: []driver.RecoveredBake{{ImageID: "old-generation", OrgID: "org-a", EnvironmentID: "env-a", SHA: testSHA}, {ImageID: "current-generation", OrgID: "org-a", EnvironmentID: "env-a", SHA: testSHA, Current: true}}}
-	h := newHarness(t, func(cfg *Config) { cfg.BakeCatalog = catalog })
+	h := newHarness(t, func(cfg *Config) { cfg.Parts.BakeCatalog = catalog })
 	if !catalog.bounded {
 		t.Fatal("recovery has no startup deadline")
 	}
@@ -51,7 +52,7 @@ func TestRecoveryRestoresOnlyBakeEligibilityNotClaimsOrPoolMachines(t *testing.T
 func TestRecoveryFailureRefusesAgentStartup(t *testing.T) {
 	h := newHarness(t)
 	cfg := h.a.cfg
-	cfg.BakeCatalog = &recoveredBakeCatalog{err: errors.New("unverified surviving holder")}
+	cfg.Parts.BakeCatalog = &recoveredBakeCatalog{err: errors.New("unverified surviving holder")}
 	if _, err := New(cfg); err == nil {
 		t.Fatal("unverified catalog accepted")
 	}
@@ -63,7 +64,7 @@ func TestRecoveryHonorsProcessCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	cfg.RecoveryContext = ctx
-	cfg.BakeCatalog = &recoveredBakeCatalog{waitForCancel: true}
+	cfg.Parts.BakeCatalog = &recoveredBakeCatalog{waitForCancel: true}
 	if _, err := New(cfg); !errors.Is(err, context.Canceled) {
 		t.Fatalf("startup cancellation lost: %v", err)
 	}
@@ -71,7 +72,7 @@ func TestRecoveryHonorsProcessCancellation(t *testing.T) {
 
 func TestSameEnvironmentCannotOvertakePublicationAcknowledgement(t *testing.T) {
 	catalog := &recoveredBakeCatalog{}
-	h := newHarness(t, func(cfg *Config) { cfg.BakeCatalog = catalog })
+	h := newHarness(t, func(cfg *Config) { cfg.Parts.BakeCatalog = catalog })
 	entered, release := make(chan struct{}), make(chan struct{})
 	catalog.ack = func(ctx context.Context, id string) error {
 		if strings.HasPrefix(id, "img-env-a-") {
@@ -85,17 +86,17 @@ func TestSameEnvironmentCannotOvertakePublicationAcknowledgement(t *testing.T) {
 		return nil
 	}
 	body := protocol.ImageBakeBody{OrgID: "org-a", EnvironmentID: "env-a", Sha: testSHA, RecipeSha: "r"}
-	if err := h.a.bake("", body); err != nil {
+	if err := h.a.bake(context.Background(), "", body); err != nil {
 		t.Fatal(err)
 	}
 	<-entered
-	if code := nackCode(h.a.bake("", body)); code != "bake_in_progress" {
+	if code := nackCode(h.a.bake(context.Background(), "", body)); code != "bake_in_progress" {
 		close(release)
 		t.Fatalf("second same-env bake accepted: %s", code)
 	}
 	other := body
 	other.EnvironmentID = "env-b"
-	if err := h.a.bake("", other); err != nil {
+	if err := h.a.bake(context.Background(), "", other); err != nil {
 		close(release)
 		t.Fatal(err)
 	}

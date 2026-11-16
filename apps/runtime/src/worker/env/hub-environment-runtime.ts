@@ -1,20 +1,22 @@
+import { DEFAULT_RESET_TIMEOUT_MS } from './ready-check';
 import { BROWSER_EXPLORE_LIMITS, BrowserExploreRequestSchema, BrowserExploreResultSchema, type BrowserExploreRequest, type BrowserExploreResult } from '@libs/runtime/contracts/browser-exploration';
 import { z } from 'zod';
 import { request as httpRequest } from 'http';
 import { Agent as HttpsAgent, request as httpsRequest } from 'https';
 
-import type { AcquireRequest, BakeOutcome, BakeRequest, Blocked, Claim, ClaimProgress, Consumer, EnvError, EnvironmentRuntime, ExecRequest, LeaseRenewal, PoolTargetRequest, ProbeOutcome, StepResult } from '@libs/runtime/environment';
-import { READY_TIMEOUT_MINUTES } from '@libs/runtime/environment';
+import type { AcquireOptions, AcquireRequest, BakeOutcome, BakeRequest, Blocked, Blocker, Claim, ClaimProgress, Consumer, EnvError, EnvironmentRuntime, ExecRequest, LeaseRenewal, PoolTargetRequest, ProbeOutcome, StepResult } from '@libs/runtime/environment';
+import { bootTimedOut, isolationUnavailable, readyTimeoutMinutes } from '@libs/runtime/environment';
 import type { Probe } from '@libs/runtime/probe';
-import type { EvidenceRequest, RepoRef } from '@libs/runtime/protocol';
-import type { RunStreamEvent } from '@libs/runtime/run';
+import type { ClaimRepo, EvidenceRequest, RepoRef } from '@libs/runtime/protocol';
+import { type ClaimWorkspace, type RunStreamEvent, workspaceSideOf } from '@libs/runtime/run';
 import { traceHeaders } from '@libs/runtime/telemetry';
 
 import { describeMachineSize } from '@libs/runtime/contracts/machine-size';
+import { repositoryAliasOf } from '@libs/runtime/contracts/workspace';
 
 import { type CellDirectory, type CellRefusal, type CellWant, isCellRefusal } from '../../shared/persistence/cell-directory';
-import { claimIdFor } from '../../shared/claim-id';
-import { CellUnavailableError, HubRefused, MemberCleanupPendingError } from '../../shared/errors';
+import { claimIdFor, isSetupChildSuffix } from '../../shared/claim-id';
+import { CellUnavailableError, HubRefused, HubUnreachableError, MemberCleanupPendingError } from '../../shared/errors';
 export { HubRefused } from '../../shared/errors';
 import type { PhysicalAdmissionTicket } from '../../shared/admission/admission-contract';
 import type { ClaimReleaser, RunEventSink } from '../run/ports';
@@ -24,18 +26,26 @@ import type { SecretOpener } from '../secrets/sealed-tokens';
 // finds the replica that holds the cell in the cell directory and calls its
 // internal listener over mTLS. It never talks to a cloud or a machine.
 
-/** @deprecated the old name of CellUnavailableError. */
-export const CellUnavailable = CellUnavailableError;
-
 const NETWORK_CODES = new Set(['ECONNRESET', 'ECONNREFUSED', 'ECONNABORTED', 'EPIPE', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN', 'ENOTFOUND']);
 /** A hub answer larger than this is refused (no route answers more than a step result). */
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
-/** A connection that failed or dropped, as opposed to an answer from the hub. */
+/** The hub did not answer within the request's time. */
+export class HubRequestTimeoutError extends Error {
+    constructor() {
+        super('hub request timed out');
+        this.name = 'HubRequestTimeoutError';
+    }
+}
+
+/**
+ * A connection that failed or dropped, as opposed to an answer from the hub.
+ * Decided on Node's error `code` (a "socket hang up" carries ECONNRESET), never on the message.
+ */
 export function isNetworkError(e: unknown): boolean {
+    if (e instanceof HubRequestTimeoutError) return true;
     const code = (e as NodeJS.ErrnoException | undefined)?.code;
-    const message = (e as Error | undefined)?.message ?? '';
-    return (!!code && NETWORK_CODES.has(code)) || /socket hang up|hub request timed out/i.test(message);
+    return typeof code === 'string' && NETWORK_CODES.has(code);
 }
 
 const CleanupPendingResponse = z.strictObject({
@@ -71,7 +81,7 @@ export function mtlsPost(tls: WorkerTls | undefined): Post {
                 res.on('end', () => resolve({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString('utf8') }));
                 res.on('error', reject);
             });
-            req.setTimeout(timeoutMs, () => req.destroy(new Error('hub request timed out')));
+            req.setTimeout(timeoutMs, () => req.destroy(new HubRequestTimeoutError()));
             req.on('error', reject);
             req.end(body);
         });
@@ -80,7 +90,7 @@ export function mtlsPost(tls: WorkerTls | undefined): Post {
 /** Per-route deadlines: the hub answers a step after the step's own timeout, an acquire after the boot. */
 // An acquire waits for the hub's own wait for claim.ready (READY_TIMEOUT_MINUTES), and a minute more.
 const TIMEOUT = {
-    acquire: (consumer: Consumer) => (READY_TIMEOUT_MINUTES[consumer] + 1) * 60_000,
+    acquire: (consumer: Consumer, side?: string) => (readyTimeoutMinutes(consumer, side) + 1) * 60_000,
     step: (ms: number) => ms + 30_000,
     short: 30_000,
 } as const;
@@ -93,7 +103,16 @@ export interface HubClientOptions {
     /** A hub's internal listener (Run events; a release when no replica holds the cell). */
     hubBaseUrl: string;
     postImpl?: Post;
+    /** Pauses before sending again a request the hub refused at connect (a replica restarting); tests pass short ones. */
+    refusedRetryDelaysMs?: readonly number[];
+    sleep?: (ms: number) => Promise<void>;
 }
+
+/** How long past a boot's ready deadline the worker still waits for the hub's own answer (its boot_timeout names the cell). */
+export const READY_ANSWER_GRACE_MS = 60_000;
+
+/** About a minute and a half in all: what a hub replica takes to come back after a deploy. */
+export const HUB_REFUSED_RETRY_MS: readonly number[] = [2_000, 5_000, 10_000, 20_000, 30_000, 30_000];
 
 export class HubClient {
     private readonly send: Post;
@@ -103,8 +122,21 @@ export class HubClient {
 
     async post<T>(baseUrl: string, path: string, body: unknown, correlationId?: string, timeoutMs: number = TIMEOUT.short): Promise<T> {
         let res: { status: number; text: string };
+        const delays = this.opts.refusedRetryDelaysMs ?? HUB_REFUSED_RETRY_MS;
+        const sleep = this.opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+        // A refused connection never reached the hub, so sending it again cannot do anything twice.
+        const sendReaching: Post = async (...a) => {
+            for (let attempt = 0; ; attempt++) {
+                try {
+                    return await this.send(...a);
+                } catch (e) {
+                    if (attempt >= delays.length || (e as NodeJS.ErrnoException | undefined)?.code !== 'ECONNREFUSED') throw e;
+                    await sleep(delays[attempt]);
+                }
+            }
+        };
         try {
-            res = await this.send(
+            res = await sendReaching(
                 `${baseUrl}${path}`,
                 {
                     'content-type': 'application/json',
@@ -117,7 +149,7 @@ export class HubClient {
         } catch (e) {
             // A hub replica restarting (a deploy) drops its connections: that is the cell
             // being out of reach for this call, not a failed Run.
-            if (isNetworkError(e)) throw new CellUnavailableError(`hub unreachable: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}`);
+            if (isNetworkError(e)) throw new HubUnreachableError(`hub unreachable: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}`);
             throw e;
         }
         if (res.status === 503) {
@@ -200,6 +232,21 @@ export interface HubRunContext {
     tokenBinding: string;
     imageId: string;
     expose: Claim['manifest']['expose'];
+    /** How long a machine.reset may take (resetTimeoutMs); absent, the hub's default. */
+    resetTimeoutMs?: number;
+    /**
+     * The repositories of a multi-repository environment, each side's token
+     * sealed (bound to tokenBinding): the primary's token replaces
+     * sealedRepoToken and sealedPrRepoToken, and every other repository goes
+     * in the acquire as repos. Absent: one repository, as before.
+     */
+    workspace?: ClaimWorkspace;
+    /**
+     * The member repository the PR is in (its alias), when it is not the
+     * primary: every command this client runs is on the PR's code, so each
+     * goes there (exec.repository). Absent: the claim's own repository.
+     */
+    execRepository?: string;
     /**
      * The cell that holds the environment's warm pool (its last setup's), tried
      * first among the eligible cells. Any failure finding it is no preference.
@@ -227,6 +274,14 @@ function refusalBlocker(r: CellRefusal): Blocked['blockers'][number] {
             };
         case 'no_capacity':
             return { kind: 'resources', signature: 'no_capacity', message: 'every cell that may serve this organization is full; the claim was not started' };
+        case 'isolation_unavailable':
+            return isolationUnavailable(r.isolation).blockers[0];
+        case 'backend_unavailable':
+            return {
+                kind: 'capacity',
+                signature: 'backend_unavailable',
+                message: `the Run's other side ran on ${r.driver}${r.isolation ? ` (${r.isolation})` : ''}, and no connected cell that may serve this organization runs it now; both sides must run on one backend, so the claim was not started`,
+            };
         case 'size_unavailable': {
             const largest = r.largest ? `the largest any of them grants is ${describeMachineSize(r.largest)}` : 'none of them grants a machine size (a cell older than machine sizes grants none)';
             return {
@@ -236,6 +291,44 @@ function refusalBlocker(r: CellRefusal): Blocked['blockers'][number] {
             };
         }
     }
+}
+
+/**
+ * The claim ids of the same Run attempt's other side (its first claim and its
+ * renewed one), for a Runtime claim keyed `${runId}:${side}:${attempt}[:renewed]`
+ * (acquireRequest). Any other claim has no other side: undefined.
+ */
+export function sameBackendAs(req: Pick<AcquireRequest, 'organizationId' | 'runId' | 'consumer' | 'ref' | 'idempotencyKey'>): string[] | undefined {
+    const side = req.ref?.side;
+    if (req.consumer !== 'runtime' || !req.runId || (side !== 'base' && side !== 'pr')) return undefined;
+    const prefix = `${req.runId}:${side}:`;
+    if (!req.idempotencyKey.startsWith(prefix)) return undefined;
+    const attempt = req.idempotencyKey.slice(prefix.length).split(':')[0];
+    if (!attempt) return undefined;
+    const other = `${req.runId}:${side === 'base' ? 'pr' : 'base'}:${attempt}`;
+    return [other, `${other}:renewed`].map((key) => claimIdFor(req.organizationId, key));
+}
+
+/** A repository of the workspace has no download token for the side: nothing is sent, and the blocker names it. */
+function workspaceTokenMissing(alias: string, side: string): Blocked {
+    const blocker: Blocker = {
+        kind: 'other_repo',
+        signature: 'workspace_token_missing',
+        message: `the request carries no download token for ${alias} on the ${side} side; the claim was not started`,
+        alias,
+    };
+    return { status: 'blocked', blockers: [blocker] };
+}
+
+/** The primary's alias is not the one the cell gives its directory: the members' `../<alias>` paths would not meet. */
+function workspacePrimaryAlias(alias: string, fullName: string): Blocked {
+    const blocker: Blocker = {
+        kind: 'other_repo',
+        signature: 'workspace_primary_alias',
+        message: `the primary repository ${fullName} has the alias ${alias}, and a cell lays it out as ${repositoryAliasOf(fullName)}; the claim was not started`,
+        alias,
+    };
+    return { status: 'blocked', blockers: [blocker] };
 }
 
 /** One EnvironmentRuntime per Run (or setup), over the hub's internal listener. */
@@ -250,7 +343,27 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
         return { organizationId: this.run.organizationId, ...(this.run.runId !== undefined ? { runId: this.run.runId } : { runId: null }) };
     }
 
-    async acquire(req: AcquireRequest): Promise<Claim | Blocked> {
+    /**
+     * With opts.readyBy (a boot that began on an earlier call) the call waits
+     * only until then, and a minute more for the hub's own answer: a hub that
+     * waits a fresh ready wait for a round it sent again (a new round after a
+     * restart, claim-deadlines.ts readyWaitMs) is cut there, and the boot is
+     * boot_timeout, never a dropped call that is asked again.
+     */
+    async acquire(req: AcquireRequest, opts: AcquireOptions = {}): Promise<Claim | Blocked> {
+        const { readyBy } = opts;
+        if (readyBy === undefined) return this.sendAcquire(req, TIMEOUT.acquire(req.consumer, req.ref?.side));
+        const leftMs = readyBy - Date.now();
+        if (leftMs <= 0) return bootTimedOut(req.consumer, req.ref?.side);
+        try {
+            return await this.sendAcquire(req, Math.min(TIMEOUT.acquire(req.consumer, req.ref?.side), leftMs + READY_ANSWER_GRACE_MS));
+        } catch (e) {
+            if (e instanceof HubUnreachableError && Date.now() >= readyBy) return bootTimedOut(req.consumer, req.ref?.side);
+            throw e;
+        }
+    }
+
+    private async sendAcquire(req: AcquireRequest, timeoutMs: number): Promise<Claim | Blocked> {
         const ticket = this.run.admissionTicket;
         if (ticket) {
             if (ticket.organizationId !== req.organizationId || req.organizationId !== this.run.organizationId ||
@@ -258,7 +371,7 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
                 (ticket.kind === 'setup' && req.consumer !== 'setup')) throw new Error('admission scope mismatch');
             const member = ticket.members.find((m) => m.side === req.ref.side && m.idempotencyKey === req.idempotencyKey && m.claimId === claimIdFor(req.organizationId, req.idempotencyKey));
             const setupChild = ticket.kind === 'setup' && req.ref.side === 'setup' &&
-                req.idempotencyKey.startsWith(`setup:${ticket.key}:`) && /^learn-[1-3](-replay)?$/.test(req.idempotencyKey.slice(`setup:${ticket.key}:`.length));
+                req.idempotencyKey.startsWith(`setup:${ticket.key}:`) && isSetupChildSuffix(req.idempotencyKey.slice(`setup:${ticket.key}:`.length));
             if (!member && !setupChild) throw new Error('admission member mismatch');
             const url = await this.hub.replicaForCell(ticket.cellId);
             if (!url) throw new CellUnavailableError('admission cell is unavailable');
@@ -279,10 +392,10 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
                     await new Promise<void>((resolve) => setTimeout(resolve, 500));
                 }
             }
-            const sealed = req.ref.side === 'pr' && this.run.sealedPrRepoToken ? this.run.sealedPrRepoToken : this.run.sealedRepoToken;
-            const repoToken = this.secrets.open(sealed, this.run.tokenBinding);
+            const fetch = this.fetchOf(req);
+            if ('status' in fetch) return fetch;
             try {
-                const outcome = await this.hub.post<Claim | Blocked>(url, `/internal/cells/${encodeURIComponent(ticket.cellId)}/acquire`, { ...req, admission: ticket, expose: this.run.expose, repo: this.run.repo, repoToken }, this.run.correlationId, TIMEOUT.acquire(req.consumer));
+                const outcome = await this.hub.post<Claim | Blocked>(url, `/internal/cells/${encodeURIComponent(ticket.cellId)}/acquire`, { ...req, admission: ticket, expose: this.run.expose, ...fetch }, this.run.correlationId, timeoutMs);
                 if ('status' in outcome && outcome.status === 'blocked' && outcome.blockers.some((b) => b.signature === 'admission_ticket_invalid' || b.signature === 'admission_ticket_required')) return capacityBlocked({ refused: 'no_capacity' });
                 return outcome;
             } catch (error) {
@@ -290,26 +403,52 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
                 throw error;
             }
         }
+        // Any failure finding the pool's cell is no preference (HubRunContext.preferCell): any eligible cell.
         const prefer = await this.run.preferCell?.(req.organizationId, req.environmentId).catch(() => undefined);
         // A new round of the same claim never counts against its own org's cap; a sized
-        // claim only goes to a cell that grants the size it will ask (req.size, sent as is).
+        // claim only goes to a cell that grants the size it will ask (req.size, sent as is),
+        // and a claim with an isolation minimum only to a cell that satisfies it.
         const cell = await this.hub.reserveCell(req.organizationId, {
             prefer,
             claimId: claimIdFor(req.organizationId, req.idempotencyKey),
             ...(req.size ? { size: req.size } : {}),
+            ...(req.isolation && req.isolation !== 'any' ? { isolation: req.isolation } : {}),
+            // A Run's two sides compare one build on one backend: once a side is placed, the other follows it.
+            ...(sameBackendAs(req) ? { sameBackendAs: sameBackendAs(req) } : {}),
         });
         if (!cell) throw new CellUnavailableError('no cell is connected for this organization');
         if (isCellRefusal(cell)) return capacityBlocked(cell);
-        // Opened here, inside the acquire step, for this one call; never returned or stored.
-        const sealed = req.ref?.side === 'pr' && this.run.sealedPrRepoToken ? this.run.sealedPrRepoToken : this.run.sealedRepoToken;
-        const repoToken = this.secrets.open(sealed, this.run.tokenBinding);
+        const fetch = this.fetchOf(req);
+        if ('status' in fetch) return fetch;
         return this.hub.post(
             cell.replicaUrl,
             `/internal/cells/${encodeURIComponent(cell.cellId)}/acquire`,
-            { ...req, expose: this.run.expose, repo: this.run.repo, repoToken },
+            { ...req, expose: this.run.expose, ...fetch },
             this.run.correlationId,
-            TIMEOUT.acquire(req.consumer),
+            timeoutMs,
         );
+    }
+
+    /**
+     * What the cell downloads for this claim: the repository and its token for
+     * the claim's side and, in a multi-repository environment, every other
+     * repository at that side's commit with that side's token. Opened here,
+     * inside the acquire step, for this one call; never returned, stored or
+     * logged. A repository without a token blocks the claim before any is opened.
+     */
+    private fetchOf(req: AcquireRequest): { repo: RepoRef; repoToken: string; repos?: ClaimRepo[] } | Blocked {
+        const ws = this.run.workspace;
+        if (!ws) {
+            const sealed = req.ref?.side === 'pr' && this.run.sealedPrRepoToken ? this.run.sealedPrRepoToken : this.run.sealedRepoToken;
+            return { repo: this.run.repo, repoToken: this.secrets.open(sealed, this.run.tokenBinding) };
+        }
+        const side = workspaceSideOf(req.ref.side);
+        // The cell lays the primary out under the alias of its name (repositoryAliasOf), which the protocol does not carry.
+        if (ws.members.length && repositoryAliasOf(ws.primary.fullName) !== ws.primary.alias) return workspacePrimaryAlias(ws.primary.alias, ws.primary.fullName);
+        for (const r of [ws.primary, ...ws.members]) if (!r[side].sealedToken) return workspaceTokenMissing(r.alias, side);
+        const open = (sealed: string | undefined) => this.secrets.open(sealed!, this.run.tokenBinding);
+        const repos = ws.members.map((m): ClaimRepo => ({ alias: m.alias, repo: { ...this.run.repo, fullName: m.fullName }, sha: m[side].sha, repoToken: open(m[side].sealedToken) }));
+        return { repo: { ...this.run.repo, fullName: ws.primary.fullName }, repoToken: open(ws.primary[side].sealedToken), ...(repos.length ? { repos } : {}) };
     }
 
     /** Best effort: a hub that does not know the claim yet, or is unreachable, is "no progress". */
@@ -347,12 +486,27 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
     }
 
     exec(claimId: string, req: ExecRequest): Promise<StepResult | EnvError> {
-        return this.onClaim(claimId, '/exec', { ...req }, TIMEOUT.step(req.timeoutMs));
+        const repository = req.repository ?? this.run.execRepository;
+        return this.onClaim(claimId, '/exec', { ...req, ...(repository ? { repository } : {}) }, TIMEOUT.step(req.timeoutMs));
     }
 
-    async reset(claimId: string, imageId?: string): Promise<void | EnvError> {
-        const r = await this.onClaim<{ ok?: boolean; code?: string }>(claimId, '/reset', { imageId: imageId ?? this.run.imageId }, TIMEOUT.step(120_000));
+    async reset(claimId: string, imageId?: string, roundSnapshotId?: string): Promise<void | EnvError> {
+        const waitMs = this.run.resetTimeoutMs;
+        const body = { imageId: imageId ?? this.run.imageId, ...(roundSnapshotId ? { roundSnapshotId } : {}), ...(waitMs ? { timeoutMs: waitMs } : {}) };
+        const r = await this.onClaim<{ ok?: boolean; code?: string }>(claimId, '/reset', body, TIMEOUT.step(waitMs ?? DEFAULT_RESET_TIMEOUT_MS));
         if (r && 'code' in r && r.code) return r as EnvError;
+    }
+
+    /** claim.snapshot round through the claim's replica; a cell that refuses it (no snapshots, a tainted machine) is an EnvError. */
+    async snapshotRound(claimId: string, stepId: string): Promise<{ id: string; ms: number } | EnvError> {
+        try {
+            const r = await this.onClaim<{ id: string; ms: number } | EnvError>(claimId, '/snapshot', { stepId, purpose: 'round' }, TIMEOUT.step(10 * 60_000));
+            if ('code' in r) return r;
+            return { id: r.id, ms: r.ms };
+        } catch (e) {
+            if (e instanceof HubRefused) return { code: 'transport_lost', stepId };
+            throw e;
+        }
     }
 
     async release(claimId: string): Promise<void> {
@@ -416,9 +570,6 @@ export class HubPoolTargetSender {
         return postPoolTarget(this.hub, url, req);
     }
 }
-
-/** @deprecated the old name of HubEnvironmentClient. */
-export const HubEnvironmentRuntime = HubEnvironmentClient;
 
 /**
  * Releases a claim through the hub. The replica that holds the cell tells it;

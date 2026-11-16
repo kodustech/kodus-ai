@@ -16,8 +16,11 @@ import type {
 } from './admission-contract';
 import { PgAdmissionStore } from './pg-admission-store';
 import { applyRetention, ensureRuntimeSchema } from '../persistence/runtime-schema';
+import { isolatedDatabase } from '../../testing/isolated-database';
 
-const url = process.env.RUNTIME_IT_DATABASE_URL ?? '';
+// A database of its own: suites in parallel never read each other's rows (isolated-database.ts).
+const database = isolatedDatabase(process.env.RUNTIME_IT_DATABASE_URL ?? '', 'admission_store');
+const url = database.url;
 const skip = !url || process.env.SKIP_INTEGRATION === 'true';
 const limits: AdmissionLimits = {
     globalWaiting: 50,
@@ -106,6 +109,7 @@ const ticket = (row: AdmissionRecord): PhysicalAdmissionTicket => ({
         };
 
         beforeAll(async () => {
+            await database.create();
             pool = new Pool({ connectionString: url, max: 8 });
             await ensureRuntimeSchema(pool);
             a = new PgAdmissionStore(pool);
@@ -124,7 +128,10 @@ const ticket = (row: AdmissionRecord): PhysicalAdmissionTicket => ({
                 [orgs],
             );
         });
-        afterAll(async () => pool?.end());
+        afterAll(async () => {
+            await pool?.end();
+            await database.drop();
+        });
 
         it('atomically bounds global and tenant ingress under concurrent writers', async () => {
             const results = await Promise.all(

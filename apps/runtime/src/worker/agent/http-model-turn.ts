@@ -57,6 +57,7 @@ export async function readRuntimeRpc(
             );
         }
     } finally {
+        // Releasing the body only; the answer or its error is already decided above.
         await reader.cancel().catch(() => undefined);
     }
 }

@@ -3,7 +3,13 @@ package agent
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/telemetry"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/claims"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
@@ -16,11 +22,21 @@ func hardCeiling(c protocol.Consumer) time.Duration {
 		return 60 * time.Minute
 	case protocol.ConsumerMcp:
 		return 4 * time.Hour
+	case protocol.ConsumerPreview:
+		// One start of a preview (HARD_EXPIRY_MINUTES.preview, docs/runtime/preview-urls.md §5.2).
+		return 120 * time.Minute
+	case protocol.ConsumerSetup, protocol.ConsumerCustomAgent, protocol.ConsumerSandbox:
+		// the default ceiling below
 	}
-	return 45 * time.Minute // setup, custom_agent, and anything newer
+	return 45 * time.Minute // setup, custom_agent, sandbox, and anything newer
 }
 
-func (a *Agent) acquire(claimID string, acq protocol.ClaimAcquireBody) error {
+func (a *Agent) acquire(tctx context.Context, claimID string, acq protocol.ClaimAcquireBody) error {
+	return a.acquireWith(tctx, claimID, acq, claims.SnapshotPlan{})
+}
+
+// acquireWith is acquire with what the claim asks of memory snapshots.
+func (a *Agent) acquireWith(tctx context.Context, claimID string, acq protocol.ClaimAcquireBody, plan claims.SnapshotPlan) error {
 	generation, available := a.alertAdmissionSnapshot()
 	if !available || !a.deadman.Accepting() {
 		return nack("not_accepting", "cell cannot accept work")
@@ -75,8 +91,29 @@ func (a *Agent) acquire(claimID string, acq protocol.ClaimAcquireBody) error {
 		}
 		counted = fresh
 	}
+	// The claim's span: a child of the hub's acquire span, ended when the preparation settles.
+	// Every line of the claim's logger carries its trace and span (telemetry.LogIDs).
+	sctx, span := telemetry.Tracer().Start(tctx, "cell.claim.acquire", trace.WithAttributes(
+		telemetry.ID(telemetry.ClaimID, claimID), telemetry.ID(telemetry.RunID, run), telemetry.ID(telemetry.OrganizationID, acq.OrgID),
+		telemetry.ID(telemetry.EnvironmentID, acq.EnvironmentID), attribute.String(telemetry.ClaimSide, string(acq.Side)), attribute.String(telemetry.ClaimConsumer, string(acq.Consumer))))
+	started := false
+	defer func() {
+		if !started {
+			span.End()
+		}
+	}()
 	// The claim's logger never carries the repo token or a key.
-	c := claims.New(claimID, acq, a.log.With("claim", claimID, "run", run), now)
+	c := claims.New(claimID, acq, a.log.With(append([]any{"claim", claimID, "run", run}, telemetry.LogIDs(sctx)...)...), now)
+	// A rejoin keeps the first round's placeholders: these are dropped with c.
+	secrets, droppedSecrets, err := a.orgSecretsFor(acq)
+	if err != nil {
+		if counted {
+			a.mem.Forget(claimID)
+		}
+		return nack("internal", "secret placeholders: %v", err)
+	}
+	c.OrgSecrets = secrets
+	c.Snapshot = plan
 	switch err := a.claims.Add(c); {
 	case errors.Is(err, claims.ErrExists):
 		if counted {
@@ -102,8 +139,17 @@ func (a *Agent) acquire(claimID string, acq protocol.ClaimAcquireBody) error {
 	}
 	a.observeClaims()
 	c.Log.Info("claim.acquire", "org", acq.OrgID, "environment", acq.EnvironmentID, "side", acq.Side, "consumer", acq.Consumer,
-		"sha", acq.Sha, "imageId", acq.ImageID, "expose", len(acq.Expose), "hardExpiresAt", acq.HardExpiresAt, "size", claimSize(acq).String(), "memoryMb", need)
-	a.goTracked(func(ctx context.Context) { a.bringUp(ctx, c, hard) })
+		"sha", acq.Sha, "imageId", acq.ImageID, "expose", len(acq.Expose), "hardExpiresAt", acq.HardExpiresAt, "size", claimSize(acq).String(), "memoryMb", need,
+		"secrets", len(secrets))
+	if len(droppedSecrets) > 0 {
+		// By id and reason only: the machines never see these.
+		c.Log.Warn("claim.secrets.dropped", "secrets", droppedSecrets)
+	}
+	started = true
+	a.goTracked(func(ctx context.Context) {
+		defer span.End()
+		a.bringUp(ctx, c, hard)
+	})
 	return nil
 }
 
@@ -120,7 +166,7 @@ func (a *Agent) rejoin(claimID string, acq protocol.ClaimAcquireBody) error {
 		return nack("claim_exists", "%s", claimID)
 	}
 	was := c.Acquire
-	if was.OrgID != acq.OrgID || was.EnvironmentID != acq.EnvironmentID || was.Sha != acq.Sha || was.Side != acq.Side || was.Consumer != acq.Consumer {
+	if was.OrgID != acq.OrgID || was.EnvironmentID != acq.EnvironmentID || was.Sha != acq.Sha || was.Side != acq.Side || was.Consumer != acq.Consumer || !sameRepos(was.Repos, acq.Repos) {
 		return nack("claim_exists", "%s", claimID)
 	}
 	switch c.State() {
@@ -135,6 +181,16 @@ func (a *Agent) rejoin(claimID string, acq protocol.ClaimAcquireBody) error {
 			}
 		})
 		return nil
+	case claims.Failed, claims.Held, claims.Released:
+		// nothing to rejoin: refused below
 	}
 	return nack("claim_exists", "%s", claimID)
+}
+
+// sameRepos is whether two acquires name the same other repositories, each
+// in the same directory at the same commit (their tokens may be new ones).
+func sameRepos(a, b []protocol.ClaimAcquireBodyReposItem) bool {
+	return slices.EqualFunc(a, b, func(x, y protocol.ClaimAcquireBodyReposItem) bool {
+		return x.Alias == y.Alias && x.Repo == y.Repo && x.Sha == y.Sha
+	})
 }

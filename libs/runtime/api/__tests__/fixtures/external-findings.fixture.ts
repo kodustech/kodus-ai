@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { ExternalFindingsService } from '../../application/external-findings.service';
+import { RuntimeEnvironmentMembers } from '../../application/environment-members.service';
 import { RuntimeRunRequestBuilder } from '../../application/run-request-builder.service';
 import {
     ExternalAdmissionError,
@@ -10,6 +11,7 @@ import {
 } from '../../domain/external-findings';
 import type { EnvKeyPrincipal } from '../../domain/env-tools';
 import type {
+    EnvironmentRepository,
     ProductEnvironmentStore,
     RuntimeEnvironmentReader,
     RuntimeGitPort,
@@ -251,7 +253,25 @@ export class InMemoryExternalFindingsStore implements ExternalFindingsStore {
     }
 }
 
-export function externalFindingsFixture() {
+/** An environment beside the fixture's own; its key covers it only when the test says so. */
+export interface FixtureEnvironment {
+    environmentId: string;
+    repositoryId: string;
+    organizationId?: string;
+    teamId?: string;
+}
+
+/**
+ * Without options every environment is its primary alone (no membership
+ * table). With them, `environments` stand beside the fixture's own and
+ * `members` are the repositories they hold besides their primary.
+ */
+export function externalFindingsFixture(
+    options: {
+        environments?: FixtureEnvironment[];
+        members?: Array<{ environmentId: string; repositoryId: string }>;
+    } = {},
+) {
     let at = new Date(NOW);
     let stopped = false;
     const principal: EnvKeyPrincipal = {
@@ -276,20 +296,73 @@ export function externalFindingsFixture() {
         imageId: 'img-1',
         expose: [{ service: 'web', port: 3000, kind: 'http' as const }],
     };
+    const others = (options.environments ?? []).map((e) => ({
+        ...environment,
+        repositoryName: `fixture/${e.repositoryId}`,
+        ...e,
+    }));
+    const images = new Map(
+        others.map((e) => [
+            e.environmentId,
+            { ...e, imageId: 'img-1', expose: image.expose },
+        ]),
+    );
+    const all = [environment, ...others];
     const products = {
         findByRepository: async (org: string, repo: string) =>
-            org === environment.organizationId &&
-            repo === environment.repositoryId
-                ? environment
-                : null,
+            all.find(
+                (e) => e.organizationId === org && e.repositoryId === repo,
+            ) ?? null,
+        get: async (org: string, id: string) =>
+            all.find(
+                (e) => e.organizationId === org && e.environmentId === id,
+            ) ?? null,
     } as ProductEnvironmentStore;
     const environmentReader = {
         get: async (org: string, id: string) =>
             org === environment.organizationId &&
             id === environment.environmentId
                 ? image
-                : null,
+                : (() => {
+                      const other = images.get(id);
+                      return other?.organizationId === org ? other : null;
+                  })(),
     } satisfies RuntimeEnvironmentReader;
+    const rows: EnvironmentRepository[] = (options.members ?? []).map(
+        (m) => {
+            const env = all.find((e) => e.environmentId === m.environmentId)!;
+            return {
+                environmentId: env.environmentId,
+                organizationId: env.organizationId,
+                repositoryId: m.repositoryId,
+                repositoryName: `fixture/${m.repositoryId}`,
+                fullName: `fixture/${m.repositoryId}`,
+                role: 'member' as const,
+                alias: m.repositoryId,
+                triggers: true,
+                pairBranches: false,
+                createdAt: at.toISOString(),
+                updatedAt: at.toISOString(),
+            };
+        },
+    );
+    const members =
+        options.environments || options.members
+            ? new RuntimeEnvironmentMembers(products, {
+                  listByEnvironment: async (org, id) =>
+                      rows.filter(
+                          (r) =>
+                              r.organizationId === org &&
+                              r.environmentId === id,
+                      ),
+                  listByRepository: async (org, repo) =>
+                      rows.filter(
+                          (r) =>
+                              r.organizationId === org &&
+                              r.repositoryId === repo,
+                      ),
+              })
+            : undefined;
     let head = {
         headSha: SHA,
         baseSha: BASE_SHA,
@@ -298,6 +371,11 @@ export function externalFindingsFixture() {
     };
     const git = {
         getPullRequestHead: async () => head,
+        getDefaultBranchHead: async () => ({
+            status: 'ok' as const,
+            branch: 'main',
+            sha: BASE_SHA,
+        }),
         getPullRequestDiff: async () => ({
             files: [
                 {
@@ -321,6 +399,7 @@ export function externalFindingsFixture() {
         environmentReader,
         fixtureConfig(),
         () => at,
+        members,
     );
     const runs = new InMemoryRunProjectionStore();
     const store = new InMemoryExternalFindingsStore();
@@ -334,6 +413,7 @@ export function externalFindingsFixture() {
         stops,
         builder,
         () => at,
+        members,
     );
     const input = {
         repositoryId: 'repo-a',

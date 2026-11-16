@@ -13,8 +13,10 @@ import (
 // These benchmarks measure only Go parsing and the authorized grant-ledger
 // lookup path. All inputs are synthetic. They do not measure TLS, OpenBao,
 // policy-signature verification, injection, process RSS, p99 or host capacity.
-var secretsBenchmarkVersionSink SecretVersion
-var secretsBenchmarkCredentialSink Credential
+var (
+	secretsBenchmarkVersionSink    SecretVersion
+	secretsBenchmarkCredentialSink Credential
+)
 
 const secretsBenchmarkValue = "Bearer synthetic-benchmark-value"
 
@@ -124,11 +126,11 @@ func secretsBenchmarkExternalGrant(b *testing.B, withBaits bool) (ManagedVault, 
 		b.Fatal("benchmark private directory was not canonical")
 	}
 	dir := filepath.Join(base, "metadata")
-	if err = os.Mkdir(dir, 0700); err != nil {
+	if err = os.Mkdir(dir, 0o700); err != nil {
 		b.Fatal("benchmark private metadata directory could not be created")
 	}
 	key := filepath.Join(base, "synthetic.key")
-	if err = os.WriteFile(key, bytes.Repeat([]byte{7}, 32), 0600); err != nil {
+	if err = os.WriteFile(key, bytes.Repeat([]byte{7}, 32), 0o600); err != nil {
 		b.Fatal("benchmark synthetic key could not be created")
 	}
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)

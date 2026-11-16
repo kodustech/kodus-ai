@@ -39,12 +39,14 @@ func (c *effectsConn) BeginTx(_ context.Context, o driver.TxOptions) (driver.Tx,
 	c.db.mu.Unlock()
 	return fakeTx{}, nil
 }
+
 func (c *effectsConn) ExecContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Result, error) {
 	c.db.mu.Lock()
 	c.db.queries = append(c.db.queries, q)
 	c.db.mu.Unlock()
 	return driver.RowsAffected(0), nil
 }
+
 func (c *effectsConn) QueryContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Rows, error) {
 	c.db.mu.Lock()
 	c.db.queries = append(c.db.queries, q)
@@ -74,8 +76,10 @@ func (c *effectsConn) QueryContext(_ context.Context, q string, _ []driver.Named
 	return nil, errors.New("unexpected query: " + q)
 }
 
-var effectsOnce sync.Once
-var effects = &effectsDB{}
+var (
+	effectsOnce sync.Once
+	effects     = &effectsDB{}
+)
 
 // One HTTP probe with database effects asked: the rows the app wrote while
 // it ran, per table, read only, secret-looking columns redacted.
@@ -164,5 +168,86 @@ func TestTrimSampleKeepsTheBudget(t *testing.T) {
 	}
 	if _, ok := quoteIdent("mysql", "a\x00b"); ok {
 		t.Fatal("NUL accepted")
+	}
+}
+
+// A database whose answer breaks partway through: the scenario (its DSN)
+// names which read breaks.
+type brokenReadDriver struct{}
+
+type (
+	brokenReadConn struct{ scenario string }
+	brokenReadRows struct {
+		col  string
+		rows []driver.Value
+		i    int
+	}
+)
+
+func (brokenReadDriver) Open(dsn string) (driver.Conn, error) { return brokenReadConn{dsn}, nil }
+func (brokenReadConn) Prepare(string) (driver.Stmt, error) {
+	return nil, errors.New("not supported")
+}
+func (brokenReadConn) Close() error              { return nil }
+func (brokenReadConn) Begin() (driver.Tx, error) { return fakeTx{}, nil }
+
+func (brokenReadConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error) {
+	return fakeTx{}, nil
+}
+
+func (brokenReadConn) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
+	return driver.RowsAffected(0), nil
+}
+
+func (c brokenReadConn) QueryContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Rows, error) {
+	switch {
+	case strings.Contains(q, "txid_snapshot_xmax"):
+		return &brokenReadRows{col: "xmax"}, nil
+	case strings.Contains(q, "pg_stat_user_tables"):
+		return &fakeRows{cols: []string{"schemaname", "relname", "n_tup_ins", "n_tup_upd", "n_tup_del"}}, nil
+	case strings.Contains(q, "information_schema.tables"):
+		if c.scenario == "listing" {
+			return &brokenReadRows{col: "table_name", rows: []driver.Value{[]byte("orders")}}, nil
+		}
+		return &fakeRows{cols: []string{"table_name"}, data: [][]driver.Value{{[]byte("orders")}}}, nil
+	case strings.HasPrefix(q, "SELECT COUNT(*)"):
+		return &brokenReadRows{col: "count"}, nil
+	}
+	return nil, errors.New("unexpected query: " + q)
+}
+
+func (r *brokenReadRows) Columns() []string { return []string{r.col} }
+func (r *brokenReadRows) Close() error      { return nil }
+func (r *brokenReadRows) Next(dest []driver.Value) error {
+	if r.i >= len(r.rows) {
+		return errors.New("connection reset mid-read")
+	}
+	dest[0] = r.rows[r.i]
+	r.i++
+	return nil
+}
+
+var brokenReadOnce sync.Once
+
+// The mark a probe's effects are measured from is an error when the database
+// breaks while answering, never a mark built from half an answer. It used to
+// keep xmax 0, the tables listed before the break, or a count of 0.
+func TestDBMarkFailsWhenTheDatabaseBreaksMidAnswer(t *testing.T) {
+	brokenReadOnce.Do(func() { sql.Register("observer-broken-read", brokenReadDriver{}) })
+	for _, tc := range []struct{ scenario, kind string }{
+		{"xmax", "postgres"},
+		{"listing", "mysql"},
+		{"count", "mysql"},
+	} {
+		t.Run(tc.scenario, func(t *testing.T) {
+			db := Target{Service: "db", Port: 5432, Kind: tc.kind, Address: "db:5432"}
+			r := New(Config{ImageID: "img-1", Targets: []Target{db}, OpenSQL: func(Target) (*sql.DB, error) {
+				return sql.Open("observer-broken-read", tc.scenario)
+			}})
+			defer r.Close()
+			if m, err := r.markDB(context.Background()); err == nil {
+				t.Fatalf("a broken read became a mark: %+v", m)
+			}
+		})
 	}
 }

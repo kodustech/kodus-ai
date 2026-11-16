@@ -7,9 +7,12 @@ import {
     RuntimeRunRequested,
     RuntimeRunRequestedSchema,
     isTerminal,
+    memberPullRequestAliasOf,
     type RunProjectionStore,
 } from '@libs/runtime/run';
 import { withRunSpan } from '@libs/runtime/telemetry';
+
+import { runSpanAttributes } from '../run/run-orchestrator';
 
 import type { PrAdmissionStore, PrAdmissionDecision, RunDeliveryContext } from '../../shared/admission/pr-admission-store';
 import type { DistributedLocks } from '../../shared/persistence/locks';
@@ -19,6 +22,22 @@ import type { CommandStore } from '../../shared/persistence/pg-command-store';
 import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
 import type { CommandHandler, HandlerResult } from './command-handlers';
 import type { RunEngine } from './run-engine.port';
+
+/** Ends the previews of a pull request's older Runs, or of all its Runs when it closed (docs/runtime/preview-urls.md §5.2). */
+export interface PullRequestPreviews {
+    expirePullRequest(input: { organizationId: string; repositoryId: string; prNumber: number; keepRunId?: string; why: 'newer_run' | 'pr_closed' }): Promise<number>;
+}
+
+/** Best effort: a preview that is not ended here still ends at its idle stop and its 7 days; the Run never waits on it. */
+async function expirePreviews(previews: PullRequestPreviews | undefined, logger: Logger, input: Parameters<PullRequestPreviews['expirePullRequest']>[0]) {
+    if (!previews) return;
+    try {
+        const n = await previews.expirePullRequest(input);
+        if (n) logger.log({ msg: 'preview.expired', organizationId: input.organizationId, prNumber: input.prNumber, why: input.why, previews: n });
+    } catch (e) {
+        logger.warn({ msg: 'preview.expire_failed', organizationId: input.organizationId, prNumber: input.prNumber, why: input.why, error: (e as Error).message.slice(0, 200) });
+    }
+}
 
 /** One lock per PR: the start/supersede decision runs on one worker at a time, cluster-wide. */
 export const prLockKey = (r: { organizationId: string; repositoryId: string; prNumber: number }) => `run:${r.organizationId}:${r.repositoryId}:${r.prNumber}`;
@@ -36,7 +55,7 @@ export class RunRequestedHandler implements CommandHandler {
         private readonly admissions: PrAdmissionStore,
         private readonly setups?: Pick<EnvironmentSetupStore, 'get'>,
         /** RUNTIME_SETUP_HEALTH_PATH: the ready path when the recipe names none, as the setup's. */
-        private readonly opts: { healthPath?: string } = {},
+        private readonly opts: { healthPath?: string; previews?: PullRequestPreviews } = {},
     ) {}
 
     async handle(body: Record<string, unknown>, delivery?: RunDeliveryContext): Promise<HandlerResult> {
@@ -67,7 +86,9 @@ export class RunRequestedHandler implements CommandHandler {
         }
         if (!this.setups) return { req };
         const setup = await this.setups.get(req.environment.environmentId);
-        if (!setup || setup.organizationId !== req.organizationId || setup.repositoryId !== req.repository.id || setup.state !== 'active') {
+        // The setup is the environment's, made from its primary: a member's PR is the primary's setup too.
+        const primaryId = req.workspace?.find((r) => r.role === 'primary')?.repositoryId ?? req.repository.id;
+        if (!setup || setup.organizationId !== req.organizationId || setup.repositoryId !== primaryId || setup.state !== 'active') {
             this.logger.log({ msg: 'run.no_active_setup', runId: req.runId, environmentId: req.environment.environmentId });
             return { req };
         }
@@ -134,7 +155,8 @@ export class RunRequestedHandler implements CommandHandler {
         // Do slow setup IO outside the PR lock, then recheck the durable generation before effects.
         const { req, recipe } = await this.withRecordedRecipe(incoming);
         const changedRecipe = recipeChangedInPr(req);
-        return withRunSpan('runtime.run.requested', req.correlationId, { 'runtime.run.id': req.runId, 'runtime.org.id': req.organizationId }, () =>
+        const changedInMember = changedRecipe.length ? memberPullRequestAliasOf(req) : undefined;
+        return withRunSpan('runtime.run.requested', req.correlationId, runSpanAttributes(req), () =>
             this.locks.withLock(key, async () => {
                 const authority = await this.admissions.current(scope, req.runId);
                 if ('reason' in authority) return this.refuseObsolete(req, authority);
@@ -149,8 +171,10 @@ export class RunRequestedHandler implements CommandHandler {
                         `new head ${req.pullRequest.headSha.slice(0, 12)}`,
                     );
                 }
-                // One live Run per org, repo, PR and SHA (ADR-057).
-                if (live.some((r) => r.runId !== req.runId && r.headSha === req.pullRequest.headSha)) {
+                // One live Run per org, repo, PR, SHA and environment, as the live-Run index
+                // (one_live_run_per_environment_sha; a Run recorded without an environment is null there).
+                const environmentId = req.environment.environmentId ?? null;
+                if (live.some((r) => r.runId !== req.runId && r.headSha === req.pullRequest.headSha && (r.environmentId ?? null) === environmentId)) {
                     this.logger.warn({ msg: 'run.ignored', runId: req.runId, why: 'a Run for this head is still live', headSha: req.pullRequest.headSha.slice(0, 12) });
                     await this.refuseExternal(req, 'external_verification_head_busy');
                     return;
@@ -177,13 +201,17 @@ export class RunRequestedHandler implements CommandHandler {
                         imageId: req.environment.imageId,
                         ...(recipe ? { recipe } : {}),
                         ...(changedRecipe.length ? { recipeChangedInPr: changedRecipe } : {}),
+                        ...(changedInMember ? { recipeChangedInMember: changedInMember } : {}),
                         state: 'queued',
                         requestedAt: req.requestedAt,
                     });
                 }
                 await this.engine.start(req);
                 this.logger.log({ msg: 'run.enqueued', runId: req.runId, organizationId: req.organizationId });
+                // A newer Run of the PR replaces its older Runs' previews (the comment now opens this one).
+                await expirePreviews(this.opts.previews, this.logger, { ...scope, keepRunId: req.runId, why: 'newer_run' });
             }),
+            req.traceparent,
         );
     }
 }
@@ -191,15 +219,32 @@ export class RunRequestedHandler implements CommandHandler {
 /** RuntimeRunCancelRequested: the PR closed, or the product superseded it. */
 export class RunCancelRequestedHandler implements CommandHandler {
     readonly event = RuntimeEventName.RunCancelRequested;
+    private readonly logger = new Logger('RunCancelRequested');
 
     constructor(
         private readonly engine: Pick<RunEngine, 'stop'>,
         private readonly projection: RunProjectionStore,
         private readonly locks: DistributedLocks,
         private readonly admissions: PrAdmissionStore,
+        private readonly previews?: PullRequestPreviews,
+        /** The PR's sessions, removed when it closes (pr-sessions.ts); absent: they go at SessionTTL. */
+        private readonly sessions?: { forget(orgId: string, pr: { repositoryId: string; prNumber: number }): Promise<unknown> },
+        private readonly log?: (msg: string, meta: Record<string, unknown>) => void,
     ) {}
 
     async handle(body: Record<string, unknown>, delivery?: RunDeliveryContext): Promise<HandlerResult> {
+        const result = await this.cancel(body, delivery);
+        const parsed = RuntimeRunCancelRequestedSchema.safeParse(body);
+        // A closed or merged PR leaves nothing behind, live Runs or not: its sessions go too.
+        if (parsed.success && parsed.data.reason === 'pr_closed' && this.sessions) {
+            await this.sessions.forget(parsed.data.organizationId, { repositoryId: parsed.data.repositoryId, prNumber: parsed.data.prNumber }).catch((e) => {
+                this.log?.('pr.sessions.forget_failed', { organizationId: parsed.data.organizationId, prNumber: parsed.data.prNumber, error: (e as Error).message });
+            });
+        }
+        return result;
+    }
+
+    private async cancel(body: Record<string, unknown>, delivery?: RunDeliveryContext): Promise<HandlerResult> {
         const parsed = RuntimeRunCancelRequestedSchema.safeParse(body);
         if (!parsed.success) return { invalid: 'invalid RuntimeRunCancelRequested', detail: parsed.error.message };
         if (!delivery?.messageId) return { invalid: 'missing_cancel_identity', detail: 'missing_cancel_identity' };
@@ -217,5 +262,7 @@ export class RunCancelRequestedHandler implements CommandHandler {
                 );
             }
         });
+        // The pull request closed: none of its Runs' previews stays open.
+        if (c.reason === 'pr_closed') await expirePreviews(this.previews, this.logger, { organizationId: c.organizationId, repositoryId: c.repositoryId, prNumber: c.prNumber, why: 'pr_closed' });
     }
 }

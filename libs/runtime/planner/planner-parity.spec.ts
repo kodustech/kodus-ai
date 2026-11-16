@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import type { AgentRunner } from '@libs/agent-harness/domain/contracts/agent.contract';
 import type { RunPlanRequest } from '@libs/runtime/contracts/run-plan';
-import * as apiPlanner from '../api/application/test-planner/test-planner.agent';
+import * as planner from './test-planner.agent';
 import * as apiReader from '../api/application/recipe-author/repo-reader';
 
 const request: RunPlanRequest = {
@@ -22,30 +22,30 @@ function reader(files: Record<string, string>): apiReader.RepoReader {
     return { list: async () => Object.keys(files), read: async path => files[path] ?? null };
 }
 
-async function scriptedPlan(planner: typeof apiPlanner) {
+async function scriptedPlan(p: typeof planner) {
     const answers: Record<string, unknown> = {};
     const runner: AgentRunner = {
         run: async (spec, _input, ctx) => {
-            answers.limits = { steps: spec.maxSteps, tokens: planner.TEST_PLANNER_LIMITS.maxTokens, reads: planner.TEST_PLANNER_LIMITS.reads };
+            answers.limits = { steps: spec.maxSteps, tokens: p.TEST_PLANNER_LIMITS.maxTokens, reads: p.TEST_PLANNER_LIMITS.reads };
             const tool = (name: string, input: unknown) => spec.tools.get(name)!.execute(input, ctx);
             answers.search = await tool('search_code', { text: 'orders', path: '' });
             answers.base = await tool('read_file', { path: 'src/orders.ts' });
             answers.head = await tool('read_file', { path: 'src/orders.ts', at: 'head' });
             answers.secret = await tool('read_file', { path: '.env' });
             answers.escape = await tool('read_file', { path: '../outside' });
-            answers.submit = await tool(planner.SUBMIT_PLAN_TOOL, submitted);
+            answers.submit = await tool(p.SUBMIT_PLAN_TOOL, submitted);
             return { runId: ctx.runId, agentId: spec.id, status: 'completed', steps: [], artifacts: [], usage: { inputTokens: 321, outputTokens: 45 }, trace: [] };
         },
     };
     const base = reader({ 'src/orders.ts': 'return orders(400);\n', '.env': 'API_KEY=fixture-secret\n' });
     const head = reader({ 'src/orders.ts': 'return orders(500);\n' });
-    const result = await planner.planTests({ runner, base, head }, { runId: request.runId, repositoryName: 'acme/shop', baseSha: 'a'.repeat(40), request });
+    const result = await p.planTests({ runner, base, head }, { runId: request.runId, repositoryName: 'acme/shop', baseSha: 'a'.repeat(40), request });
     return { result, answers };
 }
 
 describe('planner extraction behavior and compatibility', () => {
-    it('preserves the golden read/search/submit result and API export identities without calling a model', async () => {
-        const before = await scriptedPlan(apiPlanner);
+    it('preserves the golden read/search/submit result and the core export identities without calling a model', async () => {
+        const before = await scriptedPlan(planner);
         expect(before.result).toMatchObject({ status: 'planned', plan: submitted, rejected: [], usage: { inputTokens: 321, outputTokens: 45 }, steps: 0, runStatus: 'completed' });
         expect(before.answers.limits).toEqual({ steps: 12, tokens: 60_000, reads: 30 });
         expect(before.answers.submit).toEqual({ output: 'Accepted.' });
@@ -56,7 +56,7 @@ describe('planner extraction behavior and compatibility', () => {
         expect(JSON.stringify(before.answers.search)).toContain('src/orders.ts:1:');
         const core = existsSync(join(__dirname, 'index.ts')) ? require('./index') : undefined;
         expect(core).toBeDefined();
-        expect(core.planTests).toBe(apiPlanner.planTests);
+        expect(core.planTests).toBe(planner.planTests);
         expect(core.RepoPathError).toBe(apiReader.RepoPathError);
         expect(await scriptedPlan(core)).toEqual(before);
     });

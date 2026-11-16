@@ -1,8 +1,8 @@
+import { consumerWith } from './testing';
 import { LOCK_SCOPED_PG } from '../../shared/persistence/lock-scoped-pg';
 import { PR_ADMISSION_STORE } from '../../shared/admission/pr-admission-store';
 import { RUNTIME_PG_POOL, COMMAND_STORE } from '../../shared/config';
 import { ADMISSION_COORDINATOR } from '../dbos/admission-coordinator';
-import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
 import {
     AmqpConnection,
     Nack,
@@ -14,12 +14,13 @@ import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { RuntimeCommandName } from '@libs/runtime/contracts/runtime-commands';
 
 import { loadWorkerConfig } from '../../shared/config';
-import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
 import { DEV_SECRET_SEAL_KEY_HEX } from '../../testing/dev-seal-key';
 import { shopRunRequest } from '../../e2e/fixtures';
 import { RuntimeCommandConsumer } from './run-request.consumer';
 import { RuntimeWorkerModule } from '../runtime-worker.module';
 import { RuntimeRunRetry, runtimeRunErrorHandler } from './runtime-run-retry';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/testing';
+import { InMemoryCommandStore } from '../../shared/persistence/testing';
 
 describe('Runtime Run retry contract', () => {
     it('requires a production PG fence and shares the explicit lock-scoped adapter', () => {
@@ -44,9 +45,6 @@ describe('Runtime Run retry contract', () => {
         expect(
             providers.filter((p) => p.provide === LOCK_SCOPED_PG),
         ).toHaveLength(1);
-        expect(
-            Reflect.getMetadata('optional:paramtypes', RuntimeCommandConsumer),
-        ).not.toContain(3);
     });
 
     it('registers a retry callback but cannot bind its publish-only exchange', () => {
@@ -143,12 +141,7 @@ describe('Runtime Run retry contract', () => {
             stop: jest.fn(),
             approve: jest.fn(),
         };
-        const consumer = new RuntimeCommandConsumer(
-            engine as any,
-            new InMemoryRunProjectionStore(),
-            new InMemoryCommandStore(),
-            new InMemoryPrAdmissionStore(),
-        );
+        const consumer = consumerWith({ engine: engine as any, projection: new InMemoryRunProjectionStore(), commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore() });
         const result = await consumer.handle({
             event_name: { secret: 'not-loggable' },
             payload: {},
@@ -166,12 +159,7 @@ describe('Runtime Run retry contract', () => {
                 stop: jest.fn(),
                 approve: jest.fn(),
             };
-            const consumer = new RuntimeCommandConsumer(
-                engine as any,
-                new InMemoryRunProjectionStore(),
-                new InMemoryCommandStore(),
-                new InMemoryPrAdmissionStore(),
-            );
+            const consumer = consumerWith({ engine: engine as any, projection: new InMemoryRunProjectionStore(), commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore() });
             expect(
                 await consumer.handle({
                     event_name: event,
@@ -189,12 +177,7 @@ describe('Runtime Run retry contract', () => {
             stop: jest.fn(),
             approve: jest.fn(),
         };
-        const consumer = new RuntimeCommandConsumer(
-            engine as any,
-            new InMemoryRunProjectionStore(),
-            commands,
-            new InMemoryPrAdmissionStore(),
-        );
+        const consumer = consumerWith({ engine: engine as any, projection: new InMemoryRunProjectionStore(), commands, admissions: new InMemoryPrAdmissionStore() });
         const control = {
             event_name: RuntimeCommandName.StopRequested,
             payload: {

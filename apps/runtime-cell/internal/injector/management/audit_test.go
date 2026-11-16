@@ -38,6 +38,7 @@ type failingVault struct {
 func (v failingVault) ListVersions(context.Context, injector.SecretScope) ([]injector.SecretVersionInfo, error) {
 	return nil, v.err
 }
+
 func TestManagementAuditsOnlyClosedOperationOutcomeAndDuration(t *testing.T) {
 	for _, expected := range []struct {
 		err    error
@@ -74,11 +75,12 @@ func TestManagementAuditsOnlyClosedOperationOutcomeAndDuration(t *testing.T) {
 		})
 	}
 }
+
 func TestManagementRejectsParentAliasesAndExistingSocketWithoutRemovingIt(t *testing.T) {
 	base := privateDir(t)
 	v := newVault(t, base)
 	child := filepath.Join(base, "private")
-	if e := os.Mkdir(child, 0700); e != nil {
+	if e := os.Mkdir(child, 0o700); e != nil {
 		t.Fatal(e)
 	}
 	alias := filepath.Join(base, "alias")
@@ -97,7 +99,7 @@ func TestManagementRejectsParentAliasesAndExistingSocketWithoutRemovingIt(t *tes
 	}
 	l.SetUnlinkOnClose(false)
 	defer l.Close()
-	_ = os.Chmod(path, 0600)
+	_ = os.Chmod(path, 0o600)
 	before, e := os.Lstat(path)
 	if e != nil {
 		t.Fatal(e)
@@ -110,6 +112,7 @@ func TestManagementRejectsParentAliasesAndExistingSocketWithoutRemovingIt(t *tes
 		t.Fatal("foreign socket changed")
 	}
 }
+
 func TestServerEnforcesMediaMethodPathAndTypedScalars(t *testing.T) {
 	base := privateDir(t)
 	socket, _, _ := startServer(t, newVault(t, base), base)
@@ -149,10 +152,10 @@ func TestListenerPostBindGuardFailurePreservesOriginalIdentity(t *testing.T) {
 				if e := os.Remove(path); e != nil {
 					t.Fatal(e)
 				}
-				if e := os.WriteFile(path, []byte("foreign replacement"), 0600); e != nil {
+				if e := os.WriteFile(path, []byte("foreign replacement"), 0o600); e != nil {
 					t.Fatal(e)
 				}
-			} else if e := os.Chmod(base, 0755); e != nil {
+			} else if e := os.Chmod(base, 0o755); e != nil {
 				t.Fatal(e)
 			}
 			return privateSocket(path, parent)
@@ -160,7 +163,7 @@ func TestListenerPostBindGuardFailurePreservesOriginalIdentity(t *testing.T) {
 		if e == nil {
 			t.Fatal("post-bind guard mutation accepted")
 		}
-		_ = os.Chmod(base, 0700)
+		_ = os.Chmod(base, 0o700)
 		if replace {
 			b, e := os.ReadFile(path)
 			if e != nil || string(b) != "foreign replacement" {

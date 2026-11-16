@@ -25,7 +25,12 @@ export class ListRuntimeEnvironmentsUseCase {
         });
         if (scope !== null && scope.length === 0) return [];
         const recent = await this.reader.recentRuns(organizationId);
-        const sources = (await this.reader.sources(organizationId, recent)).filter((e) => scope === null || scope.includes(e.repositoryId));
+        const all = await this.reader.sources(organizationId, recent);
+        // Listed only when the caller reads every repository of the environment.
+        const sources: typeof all = [];
+        for (const e of all) {
+            if (scope === null || (await this.reader.repositoryIdsOf(e)).every((id) => scope.includes(id))) sources.push(e);
+        }
         // The list skips the Runtime Postgres (one query per environment); the detail has egress.
         // Metrics read each environment's own Runs of the window, not a cut of the org's latest.
         return Promise.all(sources.map(async (e) => this.reader.view(e, await this.reader.environmentRuns(organizationId, e.environmentId), false)));

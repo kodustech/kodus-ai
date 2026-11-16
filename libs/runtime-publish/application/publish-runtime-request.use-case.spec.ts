@@ -14,24 +14,20 @@ import {
     type RuntimeRunReport,
 } from '@libs/runtime/run';
 
-import { InMemoryCommentSlotStore } from '../domain/pull-request-comment-slot';
 import { RUNTIME_COMMENT_MARKER } from '../domain/render-runtime-comment';
-import { InMemoryRunTargetStore, type RunTarget } from '../domain/run-target';
-import { InMemoryPublicationStore } from '../domain/runtime-publication';
+import { type RunTarget } from '../domain/run-target';
 import type {
     CodeManagementPort,
+    OwnCommentAuthor,
     PublishMeasurement,
     PublishRepository,
 } from '../domain/runtime-publish.ports';
 import { toPublishRepository } from '../infrastructure/integration-config-repository.resolver';
-import {
-    MAX_CHECK_CREATE_ATTEMPTS,
-    PublicationBusyError,
-    PublicationFailedError,
-    PublishRuntimeRequestUseCase,
-    recoveredCommentRef,
-    unwrapPublishMessage,
-} from './publish-runtime-request.use-case';
+import { MAX_CHECK_CREATE_ATTEMPTS } from './check-publisher';
+import { recoveredCommentRef } from './comment-publisher';
+import { PublicationBusyError, PublicationFailedError } from './publication-outcome';
+import { PublishRuntimeRequestUseCase, unwrapPublishMessage } from './publish-runtime-request.use-case';
+import { InMemoryCommentSlotStore, InMemoryPublicationStore, InMemoryRunTargetStore } from '../testing';
 
 const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
 jest.mock('@libs/core/log/logger', () => ({ createLogger: () => logger }));
@@ -124,42 +120,149 @@ const REPOS: Record<string, PublishRepository> = {
     'org-a/team-a/repo-1': toPublishRepository({ id: 'repo-1', name: 'widgets', full_name: 'acme/widgets' }),
 };
 
-async function setup(opts: { platform?: PlatformType; target?: Partial<RunTarget> | null; slotWait?: { maxWaitMs: number; sleep?: (ms: number) => Promise<void> } } = {}) {
+/** Kody's GitHub App on this deployment: its comments carry performed_via_github_app.id 77. */
+const KODY_APP = 77;
+type CommentAuthor = { user?: { id: number; login: string; type?: string }; performed_via_github_app?: { id: number } | null };
+/** Who a comment Kody posted shows as its author on the platform. */
+const KODY_AUTHOR: CommentAuthor = { user: { id: 9, login: 'kodus[bot]', type: 'Bot' }, performed_via_github_app: { id: KODY_APP } };
+
+type Target = { organizationId: string; teamId: string; repositoryId: string; prNumber: number; platform?: PlatformType };
+type Gate = Promise<void>;
+
+/** A deferred step of the platform: the call waits until the test releases it. */
+const gate = (): { wait: Gate; release: () => void } => {
+    let release!: () => void;
+    return { wait: new Promise<void>((r) => (release = r)), release };
+};
+
+/**
+ * The pull request on the code platform, as a reviewer sees it: the comments
+ * on it with every revision of their body. Failures are the platform's
+ * answers queued for the next calls: a create with no id, an edit refused
+ * with an HTTP status, a listing that fails.
+ */
+class FakePullRequest implements CodeManagementPort {
+    readonly comments = new Map<number, { target: Target; revisions: string[]; author: CommentAuthor }>();
+    private nextId = 1000;
+    readonly createAnswers: Array<'no_id' | Gate> = [];
+    readonly updateAnswers: Array<Error | Gate> = [];
+    readonly listErrors: Error[] = [];
+
+    constructor(private readonly platform: PlatformType) {}
+
+    /** The body each comment shows now. */
+    bodies(): string[] {
+        return [...this.comments.values()].map((c) => c.revisions.at(-1)!);
+    }
+
+    /** A comment already on the PR; Kody's own unless another author is named. */
+    seed(id: number, body: string, author: CommentAuthor = KODY_AUTHOR) {
+        this.comments.set(id, { target: { ...PR }, revisions: [body], author });
+        this.nextId = Math.max(this.nextId, id);
+    }
+
+    async getTypeIntegration() {
+        return this.platform;
+    }
+
+    async createIssueComment(params: Parameters<CodeManagementPort['createIssueComment']>[0], platform?: PlatformType) {
+        const answer = this.createAnswers.shift();
+        if (answer === 'no_id') return null;
+        if (answer !== undefined) await answer;
+        const id = ++this.nextId;
+        const { organizationAndTeamData: o, repository, prNumber, body } = params;
+        this.comments.set(id, { target: { organizationId: o.organizationId!, teamId: o.teamId!, repositoryId: repository.id, prNumber, platform }, revisions: [body], author: KODY_AUTHOR });
+        return { id };
+    }
+
+    async updateIssueComment(params: Parameters<CodeManagementPort['updateIssueComment']>[0]) {
+        const answer = this.updateAnswers.shift();
+        if (answer instanceof Error) throw answer;
+        if (answer !== undefined) await answer;
+        const comment = this.comments.get(params.commentId);
+        if (!comment) throw httpError(404);
+        comment.revisions.push(params.body);
+        return { id: params.commentId };
+    }
+
+    async getAllCommentsInPullRequest(params: { failOnError?: boolean }) {
+        const error = this.listErrors.shift();
+        // The platform service answers [] on an error unless asked to fail.
+        if (error) {
+            if (params.failOnError) throw error;
+            return [];
+        }
+        return [...this.comments].map(([id, c]) => ({ id, body: c.revisions.at(-1), ...c.author }));
+    }
+
+    async createResponseToComment() {
+        return { id: 2002 };
+    }
+}
+
+/** The check runs on the platform, by id: where they point, their state and what they show. */
+class FakeChecks implements IChecksAdapter {
+    readonly runs = new Map<number, { headSha: string; name: string; repository: { owner: string; name: string }; status: CheckStatus; conclusion?: CheckConclusion; output: { title: string; summary: string; text?: string } }>();
+    private nextId = 555;
+    /** The next creates answer no check run (a PAT without checks:write, or a transient error). */
+    noRunOnCreate = 0;
+    /** The next closes the platform refuses. */
+    refusedUpdates = 0;
+
+    async createCheckRun(p: Parameters<IChecksAdapter['createCheckRun']>[0]) {
+        if (this.noRunOnCreate > 0) {
+            this.noRunOnCreate--;
+            return null;
+        }
+        const id = this.nextId++;
+        this.runs.set(id, { headSha: p.headSha, name: p.name, repository: p.repository, status: p.status, output: p.output });
+        return id;
+    }
+
+    async updateCheckRun(p: Parameters<IChecksAdapter['updateCheckRun']>[0]) {
+        if (this.refusedUpdates > 0) {
+            this.refusedUpdates--;
+            return false;
+        }
+        const run = this.runs.get(Number(p.checkRunId));
+        if (!run) return false;
+        Object.assign(run, { ...(p.status ? { status: p.status } : {}), ...(p.conclusion ? { conclusion: p.conclusion } : {}), ...(p.output ? { output: p.output } : {}) });
+        return true;
+    }
+
+    async findCheckRun(p: Parameters<IChecksAdapter['findCheckRun']>[0]) {
+        return [...this.runs].find(([, r]) => r.headSha === p.headSha && r.name === p.name)?.[0] ?? null;
+    }
+}
+
+async function setup(opts: { platform?: PlatformType; target?: Partial<RunTarget> | null; slotWait?: { maxWaitMs: number; sleep?: (ms: number) => Promise<void> }; ownAuthor?: OwnCommentAuthor | null } = {}) {
     const platform = opts.platform ?? PlatformType.GITHUB;
     const targets = new InMemoryRunTargetStore();
     if (opts.target !== null) await targets.record(record({ platform, ...opts.target }));
     const publications = new InMemoryPublicationStore();
     const slots = new InMemoryCommentSlotStore();
     const repositories = {
-        resolve: jest.fn(async (o: { organizationId?: string; teamId?: string }, id: string) => REPOS[`${o.organizationId}/${o.teamId}/${id}`] ?? null),
+        resolve: async (o: { organizationId?: string; teamId?: string }, id: string) => REPOS[`${o.organizationId}/${o.teamId}/${id}`] ?? null,
     };
-    let nextId = 1000;
-    const codeManagement: jest.Mocked<CodeManagementPort> = {
-        getTypeIntegration: jest.fn().mockResolvedValue(platform),
-        createIssueComment: jest.fn().mockImplementation(async () => ({ id: ++nextId })),
-        updateIssueComment: jest.fn().mockResolvedValue(undefined),
-        getAllCommentsInPullRequest: jest.fn().mockResolvedValue([]),
-        createResponseToComment: jest.fn().mockResolvedValue({ id: 2002 }),
-    };
-    const adapter: jest.Mocked<IChecksAdapter> = {
-        findCheckRun: jest.fn().mockResolvedValue(null),
-        createCheckRun: jest.fn().mockResolvedValue(555),
-        updateCheckRun: jest.fn().mockResolvedValue(true),
-    };
+    const pr = new FakePullRequest(platform);
+    const checks = new FakeChecks();
     const measurements: PublishMeasurement[] = [];
+    const authorOf = jest.fn().mockResolvedValue(opts.ownAuthor === undefined ? { userIds: [], githubAppId: KODY_APP } : opts.ownAuthor);
     const useCase = new PublishRuntimeRequestUseCase(
         targets,
         publications,
         slots,
         repositories,
-        codeManagement,
-        { getAdapter: jest.fn().mockReturnValue(adapter) },
+        pr,
+        { getAdapter: () => checks },
         undefined,
         DASHBOARD,
         { record: (m) => measurements.push(m) },
         opts.slotWait ?? { maxWaitMs: 0 },
+        undefined,
+        { ownAuthor: authorOf },
     );
-    return { targets, publications, slots, repositories, codeManagement, adapter, useCase, measurements };
+    return { targets, publications, slots, pr, checks, useCase, measurements, authorOf };
 }
 
 const PR = { organizationId: 'org-a', teamId: 'team-a', repositoryId: 'repo-1', prNumber: 42 };
@@ -169,29 +272,28 @@ beforeEach(() => jest.clearAllMocks());
 
 describe('PublishRuntimeRequestUseCase', () => {
     describe('target: only the product-stored record', () => {
+        // Behavior: the result lands as one comment on the PR the product recorded, rendered and marked as Kody's.
         it('publishes on the PR of the record, with the rendered and marked body', async () => {
             const t = await setup();
             const out = await t.useCase.execute(onTheWire(result()));
 
             expect(out).toEqual({ outcome: 'published', key: `${RUN_ID}:1:comment`, action: 'created' });
-            const [params, platform] = t.codeManagement.createIssueComment.mock.calls[0];
-            expect(platform).toBe(PlatformType.GITHUB);
-            expect(params).toMatchObject({
-                organizationAndTeamData: { organizationId: 'org-a', teamId: 'team-a' },
-                repository: { id: 'repo-1', name: 'widgets' },
-                prNumber: 42,
-            });
-            expect(params.body.startsWith('### Kody Runtime · No regressions')).toBe(true);
-            expect(params.body.endsWith(RUNTIME_COMMENT_MARKER)).toBe(true);
+            const [comment] = [...t.pr.comments.values()];
+            expect(t.pr.comments.size).toBe(1);
+            expect(comment.target).toEqual({ ...PR, platform: PlatformType.GITHUB });
+            expect(comment.revisions[0].startsWith('### Kody Runtime · No regressions')).toBe(true);
+            expect(comment.revisions[0].endsWith(RUNTIME_COMMENT_MARKER)).toBe(true);
         });
 
+        // Behavior: a message that names its own PR is refused; nothing appears on any PR.
         it('refuses a message that carries its own target', async () => {
             const t = await setup();
             const out = await t.useCase.execute(onTheWire({ ...result(), organizationId: 'org-b', prNumber: 7 }));
             expect(out).toMatchObject({ outcome: 'refused', reason: 'invalid_message' });
-            expect(t.codeManagement.createIssueComment).not.toHaveBeenCalled();
+            expect(t.pr.comments.size).toBe(0);
         });
 
+        // Behavior: a record that does not match what the product configured is refused: no comment, no publication row.
         it.each([
             ['an unknown runId', { target: null }, 'target_not_found'],
             ['another attempt', { target: { attempt: 2 } }, 'attempt_mismatch'],
@@ -201,10 +303,11 @@ describe('PublishRuntimeRequestUseCase', () => {
         ] as const)('refuses %s', async (_what, opts, reason) => {
             const t = await setup(opts as never);
             expect(await t.useCase.execute(onTheWire(result()))).toMatchObject({ outcome: 'refused', reason });
-            expect(t.codeManagement.createIssueComment).not.toHaveBeenCalled();
+            expect(t.pr.comments.size).toBe(0);
             expect(t.publications.rows.size).toBe(0);
         });
 
+        // Behavior: only the key of the message's kind, and only this event on the queue, is published.
         it('refuses a key that is not the one of its kind, and another event on the queue', async () => {
             const t = await setup();
             expect(await t.useCase.execute(onTheWire(result({ key: `${RUN_ID}:1:check` })))).toMatchObject({ reason: 'key_mismatch' });
@@ -214,6 +317,7 @@ describe('PublishRuntimeRequestUseCase', () => {
     });
 
     describe('structured fields only', () => {
+        // Behavior: free text never reaches the PR, and the attempt raises a security alert (the log line is the alert).
         it('refuses free text (comment.body) and logs it as an alert', async () => {
             const t = await setup();
             const legacy = { ...result(), report: undefined, comment: { body: '[Reset your token](https://evil.test) @org/admins' } };
@@ -221,201 +325,274 @@ describe('PublishRuntimeRequestUseCase', () => {
             const out = await t.useCase.execute(onTheWire(legacy));
 
             expect(out).toMatchObject({ outcome: 'refused', reason: 'unstructured_body' });
-            expect(t.codeManagement.createIssueComment).not.toHaveBeenCalled();
+            expect(t.pr.comments.size).toBe(0);
             expect(logger.error).toHaveBeenCalledWith(
                 expect.objectContaining({ metadata: expect.objectContaining({ alert: 'runtime_publish_refused', reason: 'unstructured_body' }) }),
             );
         });
 
+        // Behavior: a completed check needs a report; without one no check run appears on the head.
         it('refuses a completed check without a report, unless it is the fork waiting for a maintainer', async () => {
             const t = await setup();
             const bare = finalCheck({ report: undefined, check: { status: 'completed', conclusion: 'success', title: 'All good', summary: 'trust me' } });
             expect(await t.useCase.execute(onTheWire(bare))).toMatchObject({ outcome: 'refused', reason: 'unstructured_body' });
-            expect(t.adapter.createCheckRun).not.toHaveBeenCalled();
+            expect(t.checks.runs.size).toBe(0);
         });
 
+        // Behavior: the check run shows Kodus's words for the awaiting phase, never the message's title or summary.
         it("never shows the Runtime's check title or summary", async () => {
             const t = await setup();
             await t.useCase.execute(onTheWire(awaitingCheck()));
 
-            const created = t.adapter.createCheckRun.mock.calls[0][0];
-            expect(created.output!.title).toBe('Waiting for a maintainer');
-            expect(JSON.stringify(t.adapter.updateCheckRun.mock.calls)).not.toMatch(/evil\.test|@everyone/);
-            expect(t.adapter.updateCheckRun).toHaveBeenCalledWith(expect.objectContaining({ conclusion: CheckConclusion.ACTION_REQUIRED }));
+            const [run] = [...t.checks.runs.values()];
+            expect(run).toMatchObject({ status: CheckStatus.COMPLETED, conclusion: CheckConclusion.ACTION_REQUIRED, output: { title: 'Waiting for a maintainer' } });
+            expect(JSON.stringify(run)).not.toMatch(/evil\.test|@everyone/);
         });
 
+        // Behavior: the check run's conclusion and text come from the report, whatever the message says.
         it('takes the check output from the report, not from the message', async () => {
             const t = await setup();
             await t.useCase.execute(onTheWire(finalCheck({ check: { status: 'completed', conclusion: 'failure', title: '<img src=x>', summary: '<script>' } })));
-            const update = t.adapter.updateCheckRun.mock.calls[0][0];
-            expect(update.conclusion).toBe(CheckConclusion.SUCCESS);
-            expect(update.output!.title).toBe('No regressions in what was tested');
-            expect(JSON.stringify(update)).not.toMatch(/<img|<script>/);
+            const [run] = [...t.checks.runs.values()];
+            expect(run.conclusion).toBe(CheckConclusion.SUCCESS);
+            expect(run.output.title).toBe('No regressions in what was tested');
+            expect(JSON.stringify(run)).not.toMatch(/<img|<script>/);
         });
     });
 
     describe('one comment per PR', () => {
+        // Behavior: a redelivery never adds a second comment.
         it('a redelivered comment is published once', async () => {
             const t = await setup();
             await t.useCase.execute(onTheWire(result()));
             expect(await t.useCase.execute(onTheWire(result()))).toEqual({ outcome: 'duplicate', key: `${RUN_ID}:1:comment` });
-            expect(t.codeManagement.createIssueComment).toHaveBeenCalledTimes(1);
+            expect(t.pr.comments.size).toBe(1);
         });
 
+        // Behavior: two phases delivered at once leave one comment on the PR: the second waits for the slot and edits it.
         it('two phases delivered at once never both create: the second waits for the slot and edits', async () => {
             const t = await setup();
-            let finishCreate!: (v: { id: number }) => void;
-            t.codeManagement.createIssueComment.mockImplementationOnce(() => new Promise((resolve) => (finishCreate = resolve)));
+            const create = gate();
+            t.pr.createAnswers.push(create.wait);
 
             const booting = t.useCase.execute(onTheWire(progress('booting')));
             await new Promise((r) => setImmediate(r));
             await expect(t.useCase.execute(onTheWire(progress('applying')))).rejects.toBeInstanceOf(PublicationBusyError);
-            finishCreate({ id: 1001 });
+            create.release();
             await booting;
 
             // The broker redelivers the busy one: it edits the comment the first created.
             expect(await t.useCase.execute(onTheWire(progress('applying')))).toMatchObject({ outcome: 'published', action: 'updated' });
-            expect(t.codeManagement.createIssueComment).toHaveBeenCalledTimes(1);
-            expect(t.codeManagement.updateIssueComment).toHaveBeenCalledWith(expect.objectContaining({ commentId: 1001 }), PlatformType.GITHUB);
+            expect(t.pr.comments.size).toBe(1);
+            expect([...t.pr.comments.values()][0].revisions).toHaveLength(2);
         });
 
+        // Behavior: the report waits for the slot a progress edit holds, then edits the same comment.
         it('the report waits for the slot a progress update holds, then edits the comment', async () => {
-            let release!: () => void;
             const t = await setup({ slotWait: { maxWaitMs: 10_000, sleep: () => new Promise<void>((r) => setImmediate(r)) } });
             await t.useCase.execute(onTheWire(progress('booting')));
-            t.codeManagement.updateIssueComment.mockImplementationOnce(() => new Promise((resolve) => (release = () => resolve({ id: 1001 } as any))));
+            const edit = gate();
+            t.pr.updateAnswers.push(edit.wait);
 
             const reporting = t.useCase.execute(onTheWire(progress('reporting')));
             await new Promise((r) => setImmediate(r));
             // The report lands while the last progress edit still holds the slot: it waits instead of failing.
             const report = t.useCase.execute(onTheWire(result()));
             await new Promise((r) => setImmediate(r));
-            release();
+            edit.release();
             await reporting;
             expect(await report).toMatchObject({ outcome: 'published', action: 'updated' });
-            expect(t.codeManagement.createIssueComment).toHaveBeenCalledTimes(1);
+            expect(t.pr.comments.size).toBe(1);
+            expect(t.pr.bodies()[0].startsWith('### Kody Runtime · No regressions')).toBe(true);
         });
 
+        // Behavior: a slot another worker still holds after the wait sends the delivery back to the broker.
         it('a slot still held after the wait goes back to the broker', async () => {
             const t = await setup({ slotWait: { maxWaitMs: 300, sleep: async () => undefined } });
             await t.slots.acquire(PR, 'another-worker');
             await expect(t.useCase.execute(onTheWire(result()))).rejects.toBeInstanceOf(PublicationBusyError);
         });
 
+        // Behavior: a failed edit is retried on the same comment, never turned into a second one.
         it('a failed edit is retried, never turned into a second comment', async () => {
             const t = await setup();
             await t.useCase.execute(onTheWire(progress('booting')));
-            t.codeManagement.updateIssueComment.mockRejectedValueOnce(httpError(502));
+            t.pr.updateAnswers.push(httpError(502));
 
             await expect(t.useCase.execute(onTheWire(progress('testing')))).rejects.toThrow('HTTP 502');
-            expect(t.codeManagement.createIssueComment).toHaveBeenCalledTimes(1);
+            expect(t.pr.comments.size).toBe(1);
             expect(t.publications.rows.get(`${RUN_ID}:1:comment:testing`)?.status).toBe('failed');
 
             expect(await t.useCase.execute(onTheWire(progress('testing')))).toMatchObject({ outcome: 'published', action: 'updated' });
-            expect(t.codeManagement.createIssueComment).toHaveBeenCalledTimes(1);
+            expect(t.pr.comments.size).toBe(1);
         });
 
-        it('a comment deleted on the PR (404) or no longer editable (403) is replaced by a new one', async () => {
+        // Behavior: a comment someone deleted, or one Kody may no longer edit, is replaced by a new one the slot then points at.
+        it.each([
+            ['deleted on the PR (404)', (t: Awaited<ReturnType<typeof setup>>) => void t.pr.comments.clear(), 1],
+            ['no longer editable (403)', (t: Awaited<ReturnType<typeof setup>>) => void t.pr.updateAnswers.push(httpError(403)), 2],
+        ] as const)('a comment %s is replaced by a new one', async (_what, change, onThePr) => {
             const t = await setup();
             await t.useCase.execute(onTheWire(progress('booting')));
-            t.codeManagement.updateIssueComment.mockRejectedValueOnce(httpError(404));
+            change(t);
 
             expect(await t.useCase.execute(onTheWire(progress('testing')))).toMatchObject({ outcome: 'published', action: 'created' });
-            expect(t.codeManagement.createIssueComment).toHaveBeenCalledTimes(2);
+            expect(t.pr.comments.size).toBe(onThePr);
             expect([...t.slots.rows.values()][0].comment).toEqual({ id: 1002 });
+            expect(t.pr.comments.get(1002)).toBeDefined();
         });
 
+        // Behavior: after a create whose answer was lost, the marked comment is found and edited; nothing new is posted and a human's comment is untouched.
         it('after a create whose answer was lost, finds the marked comment instead of posting again', async () => {
             const t = await setup();
             // A worker died between the platform's create and recording its id.
             await t.slots.acquire(PR, 'dead-worker', new Date(Date.now() - 10 * 60_000));
             await t.slots.update(PR, 'dead-worker', { createPending: true });
-            t.codeManagement.getAllCommentsInPullRequest.mockResolvedValueOnce([
-                { id: 3, body: 'a human comment' },
-                { id: 1001, body: `### Kody Runtime · running\n\n${RUNTIME_COMMENT_MARKER}` },
-            ]);
+            t.pr.seed(3, 'a human comment', { user: { id: 5, login: 'dev' } });
+            t.pr.seed(1001, `### Kody Runtime · running\n\n${RUNTIME_COMMENT_MARKER}`);
 
             const out = await t.useCase.execute(onTheWire(progress('testing')));
 
             expect(out).toMatchObject({ outcome: 'published', action: 'updated' });
-            expect(t.codeManagement.getAllCommentsInPullRequest).toHaveBeenCalledWith(expect.objectContaining({ failOnError: true, prNumber: 42 }), PlatformType.GITHUB);
-            expect(t.codeManagement.createIssueComment).not.toHaveBeenCalled();
-            expect(t.codeManagement.updateIssueComment).toHaveBeenCalledWith(expect.objectContaining({ commentId: 1001 }), PlatformType.GITHUB);
+            expect([...t.pr.comments.keys()]).toEqual([3, 1001]);
+            expect(t.pr.comments.get(3)!.revisions).toEqual(['a human comment']);
+            expect(t.pr.comments.get(1001)!.revisions).toHaveLength(2);
             expect([...t.slots.rows.values()][0]).toMatchObject({ comment: { id: 1001 } });
             expect([...t.slots.rows.values()][0].createPending).toBeUndefined();
         });
 
+        it("never adopts a marked comment another author posted: it edits Kody's own, or creates a new one (#11)", async () => {
+            const body = `### Kody Runtime · running\n\n${RUNTIME_COMMENT_MARKER}`;
+            const author: CommentAuthor = { user: { id: 5, login: 'pr-author', type: 'User' }, performed_via_github_app: null };
+            const otherApp: CommentAuthor = { user: { id: 6, login: 'other[bot]', type: 'Bot' }, performed_via_github_app: { id: 12 } };
+            const kody: CommentAuthor = { user: { id: 9, login: 'kodus[bot]', type: 'Bot' }, performed_via_github_app: { id: KODY_APP } };
+            const pending = async (t: Awaited<ReturnType<typeof setup>>) => {
+                await t.slots.acquire(PR, 'dead-worker', new Date(Date.now() - 10 * 60_000));
+                await t.slots.update(PR, 'dead-worker', { createPending: true });
+            };
+
+            // The PR author (and another app) posted the marker after Kody's comment: Kody's is the one edited.
+            const t = await setup();
+            await pending(t);
+            for (const [id, who] of [[1001, kody], [4, author], [5, otherApp]] as Array<[number, CommentAuthor]>) t.pr.seed(id, body, who);
+            expect(await t.useCase.execute(onTheWire(progress('testing')))).toMatchObject({ outcome: 'published', action: 'updated' });
+            expect(t.pr.comments.get(1001)!.revisions).toHaveLength(2);
+            expect(t.authorOf).toHaveBeenCalledWith(expect.objectContaining({ organizationId: 'org-a' }), PlatformType.GITHUB);
+
+            // Only someone else's marked comments: none is adopted, Kody posts its own.
+            const u = await setup();
+            await pending(u);
+            for (const [id, who] of [[4, author], [5, otherApp]] as Array<[number, CommentAuthor]>) u.pr.seed(id, body, who);
+            expect(await u.useCase.execute(onTheWire(progress('testing')))).toMatchObject({ outcome: 'published', action: 'created' });
+            expect([...u.pr.comments.values()].filter((c) => c.revisions.length > 1)).toEqual([]);
+
+            // A token integration posts as its user: that user's marked comment is Kody's.
+            const v = await setup({ ownAuthor: { userIds: ['9'] } });
+            await pending(v);
+            for (const [id, who] of [[4, author], [1001, { user: { id: 9, login: 'kody-token-user' } }]] as Array<[number, CommentAuthor]>) v.pr.seed(id, body, who);
+            expect(await v.useCase.execute(onTheWire(progress('testing')))).toMatchObject({ outcome: 'published', action: 'updated' });
+            expect(v.pr.comments.get(1001)!.revisions).toHaveLength(2);
+
+            // Who Kody posts as is unknown: nothing is adopted.
+            const w = await setup({ ownAuthor: null });
+            await pending(w);
+            for (const [id, who] of [[1001, kody]] as Array<[number, CommentAuthor]>) w.pr.seed(id, body, who);
+            expect(await w.useCase.execute(onTheWire(progress('testing')))).toMatchObject({ outcome: 'published', action: 'created' });
+            expect([...w.pr.comments.values()].filter((c) => c.revisions.length > 1)).toEqual([]);
+        });
+
+        // Behavior: a listing the platform failed is not read as "no comment": nothing is posted and the delivery is retried.
+        it('a failed listing after a lost create posts nothing and goes back to the broker', async () => {
+            const t = await setup();
+            await t.slots.acquire(PR, 'dead-worker', new Date(Date.now() - 10 * 60_000));
+            await t.slots.update(PR, 'dead-worker', { createPending: true });
+            t.pr.seed(1001, `### Kody Runtime · running\n\n${RUNTIME_COMMENT_MARKER}`);
+            t.pr.listErrors.push(httpError(502));
+
+            await expect(t.useCase.execute(onTheWire(progress('testing')))).rejects.toThrow();
+            expect([...t.pr.comments.keys()]).toEqual([1001]);
+        });
+
+        // Behavior: a create the platform answered without an id stays pending; the redelivery finds no marked comment and creates exactly one.
         it('creates when a pending create left no marked comment, and a failed create stays pending', async () => {
             const t = await setup();
-            t.codeManagement.createIssueComment.mockResolvedValueOnce(null);
+            t.pr.createAnswers.push('no_id');
             await expect(t.useCase.execute(onTheWire(progress('booting')))).rejects.toBeInstanceOf(PublicationFailedError);
             expect([...t.slots.rows.values()][0]).toMatchObject({ createPending: true });
             expect([...t.slots.rows.values()][0].leaseOwner).toBeUndefined();
 
             expect(await t.useCase.execute(onTheWire(progress('booting')))).toMatchObject({ outcome: 'published', action: 'created' });
-            expect(t.codeManagement.getAllCommentsInPullRequest).toHaveBeenCalledTimes(1);
+            expect(t.pr.comments.size).toBe(1);
         });
 
+        // Behavior: a phase older than the one the comment shows leaves the comment as it is.
         it('a phase older than the one shown is skipped', async () => {
             const t = await setup();
             await t.useCase.execute(onTheWire(result()));
             expect(await t.useCase.execute(onTheWire(progress('testing')))).toMatchObject({ outcome: 'skipped', reason: 'stale_comment' });
-            expect(t.codeManagement.updateIssueComment).not.toHaveBeenCalled();
+            expect([...t.pr.comments.values()][0].revisions).toHaveLength(1);
         });
     });
 
     describe('checks', () => {
+        // Behavior: the head gets one check run, on the configured repository, closed with the verdict table's conclusion.
         it('opens the check run and closes it with the conclusion of the verdict table', async () => {
             const t = await setup();
             expect(await t.useCase.execute(onTheWire(finalCheck()))).toMatchObject({ outcome: 'published', action: 'created' });
-            expect(t.adapter.createCheckRun).toHaveBeenCalledWith(expect.objectContaining({ status: CheckStatus.IN_PROGRESS, headSha: HEAD, repository: { owner: 'acme', name: 'widgets' } }));
-            expect(t.adapter.updateCheckRun).toHaveBeenCalledWith(expect.objectContaining({ checkRunId: 555, status: CheckStatus.COMPLETED, conclusion: CheckConclusion.SUCCESS }));
+            expect([...t.checks.runs.values()]).toEqual([
+                expect.objectContaining({ headSha: HEAD, repository: { owner: 'acme', name: 'widgets' }, status: CheckStatus.COMPLETED, conclusion: CheckConclusion.SUCCESS }),
+            ]);
         });
 
+        // Behavior: a platform that creates no check run is retried delivery by delivery and skipped only after every attempt.
         it('retries a create that answers no check run, and skips only after every attempt', async () => {
             const t = await setup();
-            t.adapter.createCheckRun.mockResolvedValue(null);
+            t.checks.noRunOnCreate = MAX_CHECK_CREATE_ATTEMPTS;
 
             for (let i = 1; i < MAX_CHECK_CREATE_ATTEMPTS; i++) {
                 await expect(t.useCase.execute(onTheWire(finalCheck()))).rejects.toBeInstanceOf(PublicationFailedError);
                 expect(t.publications.rows.get(`${RUN_ID}:1:check`)).toMatchObject({ status: 'failed', checkCreateFailures: i });
             }
             expect(await t.useCase.execute(onTheWire(finalCheck()))).toMatchObject({ outcome: 'skipped', reason: 'checks_unavailable' });
-            expect(t.adapter.createCheckRun).toHaveBeenCalledTimes(MAX_CHECK_CREATE_ATTEMPTS);
+            expect(t.checks.runs.size).toBe(0);
         });
 
+        // Behavior: one transient miss does not cost the check: the next delivery publishes it.
         it('a transient null followed by a working create publishes the check', async () => {
             const t = await setup();
-            t.adapter.createCheckRun.mockResolvedValueOnce(null);
+            t.checks.noRunOnCreate = 1;
             await expect(t.useCase.execute(onTheWire(finalCheck()))).rejects.toBeInstanceOf(PublicationFailedError);
             expect(await t.useCase.execute(onTheWire(finalCheck()))).toMatchObject({ outcome: 'published' });
+            expect([...t.checks.runs.values()]).toEqual([expect.objectContaining({ status: CheckStatus.COMPLETED, conclusion: CheckConclusion.SUCCESS })]);
         });
 
+        // Behavior: a platform without a checks API gets no check run, and the delivery is done.
         it('skips at once on a platform without a checks API', async () => {
             const t = await setup({ platform: PlatformType.GITLAB });
             expect(await t.useCase.execute(onTheWire(finalCheck()))).toMatchObject({ outcome: 'skipped', reason: 'checks_unavailable' });
-            expect(t.adapter.createCheckRun).not.toHaveBeenCalled();
+            expect(t.checks.runs.size).toBe(0);
         });
 
+        // Behavior: a close the platform refused is retried on the run already opened, never a second run.
         it('keeps the opened check run when closing it fails, and the retry closes the same run', async () => {
             const t = await setup();
-            t.adapter.updateCheckRun.mockResolvedValueOnce(false);
+            t.checks.refusedUpdates = 1;
             await expect(t.useCase.execute(onTheWire(finalCheck()))).rejects.toBeInstanceOf(PublicationFailedError);
             await t.useCase.execute(onTheWire(finalCheck()));
-            expect(t.adapter.createCheckRun).toHaveBeenCalledTimes(1);
-            expect(t.adapter.updateCheckRun).toHaveBeenLastCalledWith(expect.objectContaining({ checkRunId: 555 }));
+            expect([...t.checks.runs.values()]).toEqual([expect.objectContaining({ status: CheckStatus.COMPLETED, conclusion: CheckConclusion.SUCCESS })]);
         });
 
+        // Behavior: the run the awaiting phase opened is the one the final verdict closes.
         it('moves the check run of the awaiting phase to the final verdict', async () => {
             const t = await setup();
             await t.useCase.execute(onTheWire(awaitingCheck()));
             await t.useCase.execute(onTheWire(finalCheck()));
-            expect(t.adapter.createCheckRun).toHaveBeenCalledTimes(1);
-            expect(t.adapter.updateCheckRun).toHaveBeenLastCalledWith(expect.objectContaining({ checkRunId: 555, conclusion: CheckConclusion.SUCCESS }));
+            expect([...t.checks.runs.values()]).toEqual([expect.objectContaining({ conclusion: CheckConclusion.SUCCESS })]);
         });
     });
 
     describe('what a redrive needs', () => {
+        // Behavior: the request a sweeper replays is kept for the final comment and the completed check, never for a progress phase.
         it('keeps the request of a final comment and a completed check, never of a progress phase', async () => {
             const t = await setup();
             await t.useCase.execute(onTheWire(progress('booting')));
@@ -428,53 +605,59 @@ describe('PublishRuntimeRequestUseCase', () => {
             expect(t.publications.rows.get(publishKey(RUN_ID, 1, 'check'))?.request).toEqual(finalCheck());
         });
 
+        // Behavior: a final comment that failed keeps its request for the sweeper.
         it('a failed final comment keeps its request for the sweeper', async () => {
             const t = await setup();
-            t.codeManagement.createIssueComment.mockResolvedValueOnce(null);
+            t.pr.createAnswers.push('no_id');
             await expect(t.useCase.execute(onTheWire(result()))).rejects.toBeInstanceOf(PublicationFailedError);
             expect(t.publications.rows.get(publishKey(RUN_ID, 1, 'comment'))).toMatchObject({ status: 'failed', request: result() });
         });
 
+        // Behavior: the fallback edits the progress comment into the short notice, marked as Kody's.
         it('the fallback replaces the progress with the short notice, marked as such', async () => {
             const t = await setup();
             await t.useCase.execute(onTheWire(progress('reporting')));
             const out = await t.useCase.execute(result(), { fallback: true });
 
             expect(out).toMatchObject({ outcome: 'published', action: 'updated' });
-            const body = t.codeManagement.updateIssueComment.mock.calls[0][0].body;
+            expect(t.pr.comments.size).toBe(1);
+            const body = t.pr.bodies()[0];
             expect(body).toContain('could not post the full report here');
             expect(body).not.toContain('What I tested');
             expect(body.endsWith(RUNTIME_COMMENT_MARKER)).toBe(true);
             expect(t.publications.rows.get(publishKey(RUN_ID, 1, 'comment'))).toMatchObject({ status: 'published', fallback: true });
         });
 
+        // Behavior: the fallback closes the final check neutral with the short notice, never the verdict.
         it('the fallback closes a final check neutral with the short notice, never the verdict', async () => {
             const t = await setup();
             const out = await t.useCase.execute(finalCheck(), { fallback: true });
 
             expect(out).toMatchObject({ outcome: 'published' });
-            const update = t.adapter.updateCheckRun.mock.calls.at(-1)[0];
-            expect(update.status).toBe(CheckStatus.COMPLETED);
-            expect(update.conclusion).toBe(CheckConclusion.NEUTRAL);
-            expect(update.output!.title).toBe('Result not posted');
-            expect(update.output!.summary).toContain('could not post its result');
+            const [run] = [...t.checks.runs.values()];
+            expect(run.status).toBe(CheckStatus.COMPLETED);
+            expect(run.conclusion).toBe(CheckConclusion.NEUTRAL);
+            expect(run.output.title).toBe('Result not posted');
+            expect(run.output.summary).toContain('could not post its result');
             expect(t.publications.rows.get(publishKey(RUN_ID, 1, 'check'))).toMatchObject({ status: 'published', fallback: true });
         });
 
+        // Behavior: a fallback for an older Run leaves a newer Run's comment as it is.
         it('the fallback still respects the order: a newer Run keeps its comment', async () => {
             const t = await setup();
             await t.useCase.execute(onTheWire(progress('booting', '2026-10-31T15:00:00.000Z')));
             const out = await t.useCase.execute(result(), { fallback: true });
             expect(out).toMatchObject({ outcome: 'skipped', reason: 'stale_comment' });
-            expect(t.codeManagement.updateIssueComment).not.toHaveBeenCalled();
+            expect([...t.pr.comments.values()][0].revisions).toHaveLength(1);
         });
     });
 
     describe('metrics', () => {
+        // Behavior: every delivery is measured with its outcome; one that throws counts as a retry.
         it('records every delivery with its outcome, and a thrown one as retry', async () => {
             const t = await setup();
             await t.useCase.execute(onTheWire({ ...result(), report: undefined, comment: { body: 'x' } }));
-            t.codeManagement.createIssueComment.mockResolvedValueOnce(null);
+            t.pr.createAnswers.push('no_id');
             await expect(t.useCase.execute(onTheWire(result()))).rejects.toBeInstanceOf(PublicationFailedError);
 
             expect(t.measurements).toEqual([

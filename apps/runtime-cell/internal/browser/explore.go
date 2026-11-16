@@ -17,9 +17,11 @@ import (
 
 // ExploreGrace bounds startup/cleanup past the 30s action budget. The hub
 // waits request timeout +20s; this runner ends at request timeout +10s.
-const ExploreGrace = 10 * time.Second
-const maxExplorationJSON = 256 << 10
-const maxExplorationStream = 512 << 10
+const (
+	ExploreGrace         = 10 * time.Second
+	maxExplorationJSON   = 256 << 10
+	maxExplorationStream = 512 << 10
+)
 
 // Explorer reuses the isolated one-job Runner but returns no ProbeResult,
 // coverage or artifacts. Its observations never enter the replay gate.
@@ -92,7 +94,11 @@ func (e Explorer) Run(ctx context.Context, spec RunSpec, req protocol.BrowserExp
 	if err != nil {
 		return empty, errors.New("browser: invalid exploration result")
 	}
-	result := *message.Body.(*protocol.StepResultBody).BrowserExploration
+	stepBody, ok := message.Body.(*protocol.StepResultBody)
+	if !ok || stepBody.BrowserExploration == nil {
+		return empty, errors.New("browser: invalid exploration result")
+	}
+	result := *stepBody.BrowserExploration
 	if result.ActionsCompleted > int64(len(req.Steps)) || (result.Status == protocol.BrowserExploreStatusObserved && result.ActionsCompleted != int64(len(req.Steps))) {
 		return empty, errors.New("browser: exploration action count does not match request")
 	}

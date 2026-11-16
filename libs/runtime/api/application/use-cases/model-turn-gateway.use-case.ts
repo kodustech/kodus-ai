@@ -26,9 +26,8 @@ import {
     decideBudget,
     estimateInputTokens,
     planLlmCall,
-    startOfUtcDay,
-    withOrgBudget,
     type CallPlan,
+    type RuntimeLlmBudgetLimits,
 } from '../../domain/budget';
 import {
     RUNTIME_MODEL_TURN_PROVIDER,
@@ -46,14 +45,38 @@ import {
     type Clock,
     type RuntimeLlmUsageStore,
     type RunProjectionReader,
+    type RuntimeRunProjection,
     type RuntimeSettingsStore,
+    LlmBudgetBusyError,
 } from '../../domain/ports';
+import type { RunTokenClaims } from '../../domain/run-token';
 import type { ModelCallBudget } from '@libs/llm/agent-loop-call';
+import {
+    type LlmCallScope,
+    type LlmReservation,
+    orgLlmBudget,
+    reservationFor,
+    withReservation,
+} from '../llm-run-budget';
+import { withFailureContext } from '../failure-context';
 import { modelInputBytes } from '../model-input-bytes';
 import {
     runtimeWorkerScope,
     verifyRuntimeWorkerToken,
 } from '../runtime-worker-scope';
+
+/** One model turn the gateway runs: the parsed request, the Run it is scoped to, its budget and receipt. */
+interface ModelTurn {
+    input: { signal?: AbortSignal };
+    request: ModelTurnRequest;
+    claims: RunTokenClaims;
+    run: RuntimeRunProjection;
+    scope: LlmCallScope;
+    limits: RuntimeLlmBudgetLimits;
+    canaries: ReturnType<HmacCanaryVault['forRun']>;
+    receiptKey: string;
+    fingerprint: string;
+}
 
 /** Fixed planner model turns only. No tool callback or model credential crosses this boundary. */
 @Injectable()
@@ -152,32 +175,42 @@ export class RuntimeModelTurnGatewayUseCase {
                 });
             return parseModelTurnResponse(receipt.response, request);
         }
-        const org = await this.settings?.getOrganization(claims.organizationId);
-        const limits = withOrgBudget(
-            this.config.llmBudget,
-            org?.tokenBudgetPerDay,
+        const limits = await orgLlmBudget(
+            this.config,
+            this.settings,
+            claims.organizationId,
         );
+        const scope: LlmCallScope = {
+            runId: run.runId,
+            organizationId: claims.organizationId,
+            repositoryId: run.repositoryId,
+            prNumber: run.prNumber,
+            task: 'runtime.plan',
+        };
         let plan: CallPlan | undefined;
-        const reservation = await this.usage.reserve({
-            usage: {
-                runId: run.runId,
-                organizationId: claims.organizationId,
-                repositoryId: run.repositoryId,
-                prNumber: run.prNumber,
-                task: 'runtime.plan',
-                at: this.now(),
-            },
-            orgDayStart: startOfUtcDay(this.now()),
-            decide: (spend) => {
+        let allowed: Extract<CallPlan, { allowed: true }> | undefined;
+        const turn = await withReservation(
+            this.usage,
+            reservationFor(scope, this.now(), (spend) => {
                 plan = planLlmCall(spend, limits, {
                     runCeiling: claims.maxTokens,
                     inputTokens: estimateInputTokens(serialized.length),
                     requestedOutputTokens: request.call.maxOutputTokens,
                 });
+                allowed = plan.allowed ? plan : undefined;
                 return plan.allowed ? plan.reserve : null;
-            },
-        });
-        if (!reservation || !plan || !plan.allowed)
+            }),
+            // The turn owns the reservation: its first model attempt releases
+            // it and reserves what that attempt asks.
+            (reservation) =>
+                this.runTurn(
+                    { input, request, claims, run, scope, limits, canaries, receiptKey, fingerprint },
+                    reservation,
+                    allowed!,
+                ),
+            { onFailure: 'leave' },
+        );
+        if (!turn.reserved)
             throw new HttpException(
                 {
                     code: 'llm_budget_exceeded',
@@ -187,7 +220,15 @@ export class RuntimeModelTurnGatewayUseCase {
                 },
                 429,
             );
-        const allowed = plan;
+        return turn.value;
+    }
+
+    private async runTurn(
+        t: ModelTurn,
+        reservation: LlmReservation,
+        allowed: Extract<CallPlan, { allowed: true }>,
+    ) {
+        const { input, request, claims, run, scope, limits, canaries, receiptKey, fingerprint } = t;
         let preflightReleased: Promise<void> | undefined;
         let attempts = 0,
             additionalUsageUnknown = false,
@@ -238,17 +279,8 @@ export class RuntimeModelTurnGatewayUseCase {
                 );
                 await preflightReleased;
                 let attemptPlan: CallPlan | undefined;
-                const held = await this.usage.reserve({
-                    usage: {
-                        runId: run.runId,
-                        organizationId: claims.organizationId,
-                        repositoryId: run.repositoryId,
-                        prNumber: run.prNumber,
-                        task: 'runtime.plan',
-                        at: this.now(),
-                    },
-                    orgDayStart: startOfUtcDay(this.now()),
-                    decide: (spend) => {
+                const held = await this.usage.reserve(
+                    reservationFor(scope, this.now(), (spend) => {
                         attemptPlan = planLlmCall(spend, limits, {
                             runCeiling: claims.maxTokens,
                             inputTokens,
@@ -258,8 +290,8 @@ export class RuntimeModelTurnGatewayUseCase {
                             ),
                         });
                         return attemptPlan.allowed ? attemptPlan.reserve : null;
-                    },
-                });
+                    }),
+                );
                 if (!held || !attemptPlan || !attemptPlan.allowed) {
                     budgetRefused = true;
                     throw new HttpException(
@@ -384,17 +416,8 @@ export class RuntimeModelTurnGatewayUseCase {
             // Read the store's current scoped counters after all raw leases
             // settle. A null decision allocates no reservation. A per-attempt
             // `remaining` can be stale after parallel repair settles out of order.
-            await this.usage.reserve({
-                usage: {
-                    runId: run.runId,
-                    organizationId: claims.organizationId,
-                    repositoryId: run.repositoryId,
-                    prNumber: run.prNumber,
-                    task: 'runtime.plan',
-                    at: this.now(),
-                },
-                orgDayStart: startOfUtcDay(this.now()),
-                decide: (spend) => {
+            await this.usage.reserve(
+                reservationFor(scope, this.now(), (spend) => {
                     const current = decideBudget(
                         spend,
                         limits,
@@ -403,8 +426,8 @@ export class RuntimeModelTurnGatewayUseCase {
                     remainingTokens =
                         current.allowed === true ? current.remaining : 0;
                     return null;
-                },
-            });
+                }),
+            );
             const response = parseModelTurnResponse(
                 {
                     v: 1,
@@ -449,10 +472,14 @@ export class RuntimeModelTurnGatewayUseCase {
                     429,
                 );
             if (e instanceof HttpException && e.getStatus() === 429) throw e;
-            throw new BadGatewayException({
+            const failed = new BadGatewayException({
                 code: 'llm_unavailable',
                 message: "Kody's model call failed",
             });
+            // The filter's line is the only one: a busy budget lock is named on it.
+            if (e instanceof LlmBudgetBusyError)
+                throw withFailureContext(failed, { failure: 'llm_budget_busy' }, e);
+            throw failed;
         }
     }
 }

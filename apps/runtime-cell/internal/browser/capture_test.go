@@ -143,12 +143,16 @@ func resultWithNetwork(t *testing.T, value string, requireShot bool) []byte {
 
 func harJSON() []byte {
 	b, _ := json.Marshal(map[string]any{"log": map[string]any{"entries": []map[string]any{
-		{"startedDateTime": t0.Add(400 * time.Millisecond).Format(time.RFC3339Nano), "time": 12.4,
+		{
+			"startedDateTime": t0.Add(400 * time.Millisecond).Format(time.RFC3339Nano), "time": 12.4,
 			"request":  map[string]any{"method": "GET", "url": "http://app.kody.internal:3000/orders/42?key=" + secret},
-			"response": map[string]any{"status": 200}},
-		{"startedDateTime": t0.Add(410 * time.Millisecond).Format(time.RFC3339Nano), "time": 1,
+			"response": map[string]any{"status": 200},
+		},
+		{
+			"startedDateTime": t0.Add(410 * time.Millisecond).Format(time.RFC3339Nano), "time": 1,
 			"request":  map[string]any{"method": "GET", "url": "https://cdn.example.com/x.js"},
-			"response": map[string]any{"status": 404}},
+			"response": map[string]any{"status": 404},
+		},
 	}}})
 	return b
 }
@@ -290,8 +294,10 @@ func TestCaptureWithoutABaselineHasNoPixelDiff(t *testing.T) {
 func TestCaptureRejectsWhenTheBaselineIsUnavailable(t *testing.T) {
 	srv := baselineServer(t, nil)
 	r := &fakeRunner{stream: tarOf(t, entry{"result.json", resultWithNetwork(t, "keyboard", true)}, entry{"screenshot-0.png", pngOf(t, 10, 10, white)})}
-	_, err := newCapture(r, srv.Client()).Run(context.Background(), Request{Probe: ordersProbe(), Spec: RunSpec{Port: 3000}, T0: t0,
-		Baseline: []protocol.BaselineScreenshot{{Step: 2, Screenshot: 0, URL: srv.URL + "/elsewhere"}}})
+	_, err := newCapture(r, srv.Client()).Run(context.Background(), Request{
+		Probe: ordersProbe(), Spec: RunSpec{Port: 3000}, T0: t0,
+		Baseline: []protocol.BaselineScreenshot{{Step: 2, Screenshot: 0, URL: srv.URL + "/elsewhere"}},
+	})
 	if err == nil {
 		t.Fatal("a missing baseline silently omitted its required comparison")
 	}
@@ -371,8 +377,10 @@ func TestCaptureKeepsTheResultWithinAFrame(t *testing.T) {
 	var entries []map[string]any
 	var console []map[string]any
 	for i := 0; i < 200; i++ {
-		entries = append(entries, map[string]any{"startedDateTime": t0.Format(time.RFC3339Nano), "time": 1,
-			"request": map[string]any{"method": "GET", "url": "http://app.kody.internal:3000/" + long}, "response": map[string]any{"status": 200}})
+		entries = append(entries, map[string]any{
+			"startedDateTime": t0.Format(time.RFC3339Nano), "time": 1,
+			"request": map[string]any{"method": "GET", "url": "http://app.kody.internal:3000/" + long}, "response": map[string]any{"status": 200},
+		})
 		console = append(console, map[string]any{"level": "log", "text": long[:2_000], "at": 1})
 	}
 	har, _ := json.Marshal(map[string]any{"log": map[string]any{"entries": entries}})

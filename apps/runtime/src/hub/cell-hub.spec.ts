@@ -7,13 +7,14 @@ import { decodeFrame, PROTOCOL_VERSION } from '@libs/runtime/protocol';
 import { InMemoryRunStreamStore } from '@libs/runtime/run/testing';
 import { RuntimeMetrics } from '@libs/runtime/telemetry';
 
-import { generateCellRegistrationToken } from '@libs/runtime/api/domain/cell-token';
+import { generateCellRegistrationToken } from '@libs/runtime/contracts/cell-token';
 
 import { createCa, createCsr, normalizeSerial } from './ca/x509';
 import { CellCredential, CellHub, HubLogLine } from './cell-hub';
 import { InternalController } from './http/internal.controller';
 import { claimIdFor } from './claims/claim.service';
-import { InMemoryHubStore } from './hub-store';
+import type { Blocked } from '@libs/runtime/environment/environment-runtime';
+import { InMemoryHubStore } from './testing';
 
 class FakeSocket {
     sent: any[] = [];
@@ -35,7 +36,20 @@ const SHA = 'a'.repeat(40);
 const frame = (cellId: string, type: string, body: unknown, extra: Record<string, unknown> = {}) =>
     JSON.stringify({ v: PROTOCOL_VERSION, id: randomUUID(), cellId, type, body, ...extra });
 /** What a hello may add (absent: an older cell that names nothing). */
-type HelloCaps = { features?: string[]; maxClaimSize?: { memoryMb: number; cpus: number } };
+type HelloCaps = {
+    features?: string[];
+    maxClaimSize?: { memoryMb: number; cpus: number };
+    isolation?: string;
+    capabilities?: {
+        backends: string[];
+        snapshotMemory: boolean;
+        nestedDocker: boolean;
+        kvm: boolean;
+        arch: string;
+        maxSize?: { memoryMb: number; cpus: number };
+        defaultSize?: { memoryMb: number; cpus: number };
+    };
+};
 const hello = (cellId: string, owner = 'kodus', caps: HelloCaps = {}) => frame(cellId, 'hello', { versions: [1], driver: 'fake', isolation: 'vm', regions: ['local'], owner, ...caps });
 /** A cell of this build: it decodes every optional claim.acquire field and grants up to 64 GB / 16 CPUs. */
 const CURRENT_CELL: HelloCaps = { features: ['seedsCache', 'claimSize', 'egressAllow', 'poolMachineSize', 'authoredFiles'], maxClaimSize: { memoryMb: 65_536, cpus: 16 } };
@@ -59,7 +73,7 @@ const probe = {
     spec: { kind: 'http' as const, target: { service: 'web', port: 3000 }, method: 'POST' as const, path: '/orders', timeoutMs: 1_000 },
 };
 
-function setup(extra: { allowInsecureCells?: boolean; readyTimeoutMs?: number; now?: () => Date } = {}) {
+function setup(extra: { allowInsecureCells?: boolean; readyTimeoutMs?: number; now?: () => Date; cellSilenceMs?: number } = {}) {
     const store = new InMemoryHubStore();
     const streams = new InMemoryRunStreamStore();
     const metrics = new RuntimeMetrics();
@@ -102,6 +116,60 @@ function setup(extra: { allowInsecureCells?: boolean; readyTimeoutMs?: number; n
     };
     return { hub, store, streams, violations, logs, connect, acquireOn };
 }
+
+describe('a cell that goes silent', () => {
+    const heartbeat = (cellId: string) => frame(cellId, 'heartbeat', { freeSlots: 4, claims: [] });
+
+    it('keeps a cell that sends heartbeats and ends the session of one that stopped, resolving the boot that waited on it', async () => {
+        let t = 1_000_000;
+        const { hub, store, logs, connect, acquireOn } = setup({ now: () => new Date(t), cellSilenceMs: 45_000 });
+        const quiet = await connect('cell-a', 'kodus', CURRENT_CELL);
+        const alive = await connect('cell-c', 'kodus', CURRENT_CELL);
+        // cell-a took a claim and is building it when its path dies.
+        const booting = acquireOn(quiet, 'cell-a', 'org-a', 'none');
+        // Until the cell acked the claim.acquire: from here the round only waits for claim.ready.
+        for (let i = 0; i < 8; i++) await tick();
+        expect(quiet.sock.last('claim.acquire')).toBeDefined();
+
+        for (let i = 0; i < 4; i++) {
+            t += 10_000;
+            await alive.onMessage(heartbeat('cell-c'));
+            expect(await hub.dropSilentCells()).toEqual([]);
+        }
+        t += 10_000;
+        await alive.onMessage(heartbeat('cell-c'));
+        expect(await hub.dropSilentCells()).toEqual(['cell-a']);
+
+        expect(quiet.sock.closed).toBe(true);
+        expect(hub.isConnected('cell-a')).toBe(false);
+        expect(hub.isConnected('cell-c')).toBe(true);
+        expect((await store.session('cell-a'))?.cellId).toBeUndefined();
+        expect(logs.some((l) => l.msg === 'cell.silent' && l.cellId === 'cell-a')).toBe(true);
+        // The round that waited for claim.ready ends as a lost cell, which the worker asks again.
+        expect(await booting).toMatchObject({ status: 'blocked', blockers: [{ kind: 'platform', signature: 'cell_lost' }] });
+    });
+
+    it('drops nothing on a check that ran late: the frames that arrived meanwhile are not read yet', async () => {
+        let t = 1_000_000;
+        const { hub, connect } = setup({ now: () => new Date(t), cellSilenceMs: 45_000 });
+        const cell = await connect('cell-a', 'kodus', CURRENT_CELL);
+        expect(await hub.dropSilentCells()).toEqual([]);
+        // The process was paused for two minutes (a host that slept).
+        t += 120_000;
+        expect(await hub.dropSilentCells()).toEqual([]);
+        // Its queued heartbeat is read before the next check.
+        await cell.onMessage(heartbeat('cell-a'));
+        t += 5_000;
+        expect(await hub.dropSilentCells()).toEqual([]);
+        // Still silent a full window later: gone.
+        t += 20_000;
+        expect(await hub.dropSilentCells()).toEqual([]);
+        t += 20_000;
+        expect(await hub.dropSilentCells()).toEqual([]);
+        t += 20_000;
+        expect(await hub.dropSilentCells()).toEqual(['cell-a']);
+    });
+});
 
 describe('cell session fencing', () => {
     it('serializes a replaced hello whose session write finishes after the next hello starts', async () => {
@@ -276,7 +344,7 @@ describe('CellHub', () => {
     });
 
     it('refuses a customer cell for another org and records egress only for its own claims', async () => {
-        const { hub, store, violations, connect, acquireOn } = setup();
+        const { store, violations, connect, acquireOn } = setup();
         const b = await connect('cell-b', 'customer');
         await expect(acquireOn(b, 'cell-b', 'org-a')).rejects.toThrow('does not serve this organization');
         expect(violations).toContain('cross_org_claim');
@@ -342,13 +410,35 @@ describe('CellHub', () => {
         expect(await p).toEqual({ status: 'blocked', blockers: [{ kind: 'missing_env', signature: 'KEY', message: 'needs a fake' }] });
     });
 
+    it("registers a cell that names no topology with the token's, and refuses one revoked before use", async () => {
+        const { hub, store } = setup();
+        const key = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).privateKey;
+        const issue = async () => {
+            const t = generateCellRegistrationToken();
+            await store.ledger.record({ tokenHash: t.tokenHash, organizationId: 'org-b', topology: 'self_hosted', expiresAt: new Date(Date.now() + 60_000).toISOString(), issuedBy: 'admin' });
+            return t;
+        };
+        const plain = await issue();
+        const reg: any = await hub.register(plain.token, undefined, createCsr(key));
+        expect(reg.ok).toBe(true);
+        expect(store.cells.get(reg.cellId)).toMatchObject({ organizationId: 'org-b', owner: 'customer', topology: 'self_hosted' });
+
+        const revoked = await issue();
+        expect(await store.ledger.revoke(revoked.tokenHash, 'org-b', 'admin')).toBe(true);
+        expect(await hub.register(revoked.token, undefined, createCsr(key))).toEqual({ ok: false, reason: 'unknown_or_used' });
+    });
+
     it('registers a customer cell from a CSR: 24 h cert, CN = cellId, pinned serial, refused once revoked', async () => {
         const { hub, store } = setup();
         const { token, tokenHash } = generateCellRegistrationToken();
         await store.ledger.record({ tokenHash, organizationId: 'org-b', topology: 'hybrid', expiresAt: new Date(Date.now() + 60_000).toISOString(), issuedBy: 'admin' });
         const key = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).privateKey;
 
-        expect(await hub.register(token, 'hybrid', 'not a csr')).toMatchObject({ ok: false });
+        // A CSR is read only after its token redeems; the parser's words never leave the hub.
+        const spare = generateCellRegistrationToken();
+        await store.ledger.record({ tokenHash: spare.tokenHash, organizationId: 'org-b', topology: 'hybrid', expiresAt: new Date(Date.now() + 60_000).toISOString(), issuedBy: 'admin' });
+        expect(await hub.register(spare.token, 'hybrid', 'not a csr')).toEqual({ ok: false, reason: 'invalid_csr' });
+        expect(await hub.register('kcr_unknown', 'hybrid', 'not a csr')).toMatchObject({ ok: false, reason: expect.not.stringMatching(/csr/) });
         const reg: any = await hub.register(token, 'hybrid', createCsr(key));
         expect(reg.ok).toBe(true);
         expect(await hub.register(token, 'hybrid', createCsr(key))).toEqual({ ok: false, reason: 'unknown_or_used' });
@@ -546,7 +636,7 @@ describe('CellHub', () => {
     });
 
     it('claim.failed fails the claim with its kind and signature', async () => {
-        const { hub, store, connect, acquireOn } = setup();
+        const { store, connect, acquireOn } = setup();
         const c = await connect('cell-a');
         const r: any = await acquireOn(c, 'cell-a', 'org-a', 'failed');
         expect(r).toEqual({ status: 'blocked', blockers: [{ kind: 'resources', signature: 'create_workload', message: 'no capacity' }], cellId: 'cell-a' });
@@ -595,11 +685,175 @@ describe('CellHub', () => {
         const { store, connect, acquireOn } = setup({ readyTimeoutMs: 30 });
         const c = await connect('cell-a');
         const r = await acquireOn(c, 'cell-a', 'org-a', 'none');
-        expect(r).toMatchObject({ status: 'blocked', blockers: [{ kind: 'resources', signature: 'boot_timeout', message: expect.stringContaining('the most a setup waits') }] });
+        expect(r).toMatchObject({ status: 'blocked', blockers: [{ kind: 'resources', signature: 'boot_timeout', message: expect.stringContaining('the most a boot of this claim waits') }] });
+        // A Run's claim: calcom's comment named the setup's wait (2026-11-13).
+        expect((r as Blocked).blockers[0].message).not.toContain('setup');
+        expect((r as Blocked).buildStateEvictedAt).toBeUndefined();
         const claimId = [...store.claims.keys()][0];
         expect((await store.claim(claimId))!.state).toBe('failed');
         await tick();
         expect(c.sock.sent.filter((m) => m.type === 'claim.release').map((m) => m.claimId)).toEqual([claimId]);
+    });
+
+    describe('build states a cell evicted (heartbeat evictedBuildStates)', () => {
+        const evicted = { orgId: 'org-a', environmentId: 'shop', evictedAt: '2026-11-13T07:31:31.000Z' };
+        const beat = (body: Record<string, unknown> = {}) => frame('cell-a', 'heartbeat', { freeSlots: 4, claims: [], ...body });
+
+        it('keeps what the cell names, drops what it stops naming, and hears nothing from a cell that did not name the feature', async () => {
+            const { store, connect } = setup();
+            const old = await connect('cell-a', 'kodus', CURRENT_CELL);
+            await old.onMessage(beat({ evictedBuildStates: [evicted] }));
+            expect(await store.evictedBuildStateAt('cell-a', 'org-a', 'shop')).toBeNull();
+
+            const c = await connect('cell-a', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, 'buildStateEvicted'] });
+            await c.onMessage(beat({ evictedBuildStates: [evicted] }));
+            expect(await store.evictedBuildStateAt('cell-a', 'org-a', 'shop')).toBe(evicted.evictedAt);
+            expect(await store.evictedBuildStateAt('cell-a', 'org-b', 'shop')).toBeNull();
+            // A setup seeded it again: the cell no longer names it.
+            await c.onMessage(beat());
+            expect(await store.evictedBuildStateAt('cell-a', 'org-a', 'shop')).toBeNull();
+        });
+
+        it("a Run's boot that outlives the wait on an evicted state says it built with no cache and that a setup restores it", async () => {
+            const { store, connect, acquireOn } = setup({ readyTimeoutMs: 30 });
+            const c = await connect('cell-a', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, 'buildStateEvicted'] });
+            await c.onMessage(beat({ evictedBuildStates: [evicted] }));
+            const r = (await acquireOn(c, 'cell-a', 'org-a', 'none')) as Blocked;
+            expect(r.buildStateEvictedAt).toBe(evicted.evictedAt);
+            expect(r.blockers[0]).toMatchObject({ kind: 'resources', signature: 'boot_timeout' });
+            expect(r.blockers[0].message).toContain('removed this environment\'s build cache to free disk at 2026-11-13T07:31:31.000Z, and a new setup restores it');
+            await tick();
+            expect(store.claims.size).toBe(1);
+        });
+
+        it("a customer cell writes no eviction row for another org, and no cell writes one dated in the future (#10)", async () => {
+            const at = Date.parse('2026-11-14T12:00:00.000Z');
+            const { store, connect } = setup({ now: () => new Date(at) });
+            const features = [...CURRENT_CELL.features!, 'buildStateEvicted'];
+            // cell-b is org-b's own cell: it may speak only for org-b.
+            const b = await connect('cell-b', 'customer', { ...CURRENT_CELL, features });
+            await b.onMessage(
+                frame('cell-b', 'heartbeat', {
+                    freeSlots: 4,
+                    claims: [],
+                    evictedBuildStates: [
+                        { orgId: 'org-a', environmentId: 'shop', evictedAt: '2026-11-13T07:31:31.000Z' },
+                        { orgId: 'org-b', environmentId: 'shop', evictedAt: '2026-11-13T07:31:31.000Z' },
+                        { orgId: 'org-b', environmentId: 'cart', evictedAt: new Date(at + 3_600_000).toISOString() },
+                        { orgId: 'org-b', environmentId: 'skew', evictedAt: new Date(at + 30_000).toISOString() },
+                    ],
+                }),
+            );
+            expect(await store.evictedBuildStateAt('cell-b', 'org-a', 'shop')).toBeNull();
+            expect(await store.evictedBuildStateAt('cell-b', 'org-b', 'shop')).toBe('2026-11-13T07:31:31.000Z');
+            expect(await store.evictedBuildStateAt('cell-b', 'org-b', 'cart')).toBeNull();
+            // A few seconds of clock skew pass.
+            expect(await store.evictedBuildStateAt('cell-b', 'org-b', 'skew')).toBe(new Date(at + 30_000).toISOString());
+            // A Kodus shared cell serves every org; a future date is refused there too.
+            const a = await connect('cell-a', 'kodus', { ...CURRENT_CELL, features });
+            await a.onMessage(beat({ evictedBuildStates: [evicted, { orgId: 'org-b', environmentId: 'cart', evictedAt: new Date(at + 3_600_000).toISOString() }] }));
+            expect(await store.evictedBuildStateAt('cell-a', 'org-a', 'shop')).toBe(evicted.evictedAt);
+            expect(await store.evictedBuildStateAt('cell-a', 'org-b', 'cart')).toBeNull();
+        });
+
+        describe("a Run's PR side on a cell that evicted the state (architecture review P3)", () => {
+            const evictingCell = { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, 'buildStateEvicted'] };
+            const acquireAs = (hub: ReturnType<typeof setup>['hub'], over: { side: 'base' | 'pr' | 'setup'; consumer?: 'runtime' | 'setup'; org?: string }) =>
+                hub.acquire('cell-a', {
+                    organizationId: over.org ?? 'org-a',
+                    environmentId: 'shop',
+                    ...(over.consumer === 'setup' ? {} : { runId: 'run-1' }),
+                    imageId: 'img-1',
+                    ref: { side: over.side, sha: SHA },
+                    consumer: over.consumer ?? 'runtime',
+                    idempotencyKey: `run-1:${over.side}:1`,
+                    expose: [],
+                    repo: { provider: 'github', fullName: 'acme/shop', apiBase: 'https://api.github.com' },
+                    repoToken: 'tok',
+                });
+
+            // Behavior: the PR would build cold past its wait, so nothing is taken, recorded or sent, and the blocker names the setup as the fix.
+            it('is refused at once: no claim recorded, no claim.acquire sent, and the blocker says a setup restores the cache', async () => {
+                const { hub, store, connect } = setup();
+                const c = await connect('cell-a', 'kodus', evictingCell);
+                await c.onMessage(beat({ evictedBuildStates: [evicted] }));
+
+                const r = (await acquireAs(hub, { side: 'pr' })) as Blocked;
+
+                expect(r).toEqual({
+                    status: 'blocked',
+                    blockers: [{ kind: 'platform', signature: 'build_state_evicted', message: expect.stringContaining('Run the setup again') }],
+                    buildStateEvictedAt: evicted.evictedAt,
+                });
+                expect(store.claims.size).toBe(0);
+                expect(c.sock.last('claim.acquire')).toBeUndefined();
+            });
+
+            // Behavior: a state the cell measured as rebuilt within the wait boots (its exported cache keeps it warm);
+            // one whose build from none took the wait or longer is refused, and the blocker says how long it took.
+            it.each([
+                ['boots when its measured rebuild fits in the wait', 10 * 60, true],
+                ['is refused when its measured rebuild takes the whole wait or longer', 40 * 60, false],
+            ])('a PR side on an evicted state %s', async (_name, rebuildSeconds, boots) => {
+                const { hub, connect } = setup();
+                const c = await connect('cell-a', 'kodus', { ...evictingCell, features: [...evictingCell.features!, 'buildStateRebuildCost'] });
+                await c.onMessage(beat({ evictedBuildStates: [{ ...evicted, rebuildSeconds }] }));
+
+                const p = acquireAs(hub, { side: 'pr' });
+                await tick();
+                await tick();
+
+                expect(c.sock.last('claim.acquire') !== undefined).toBe(boots);
+                if (!boots) expect(((await p) as Blocked).blockers[0]).toMatchObject({ signature: 'build_state_evicted', message: expect.stringContaining('took 40 min') });
+                await c.onClose();
+                await p.catch(() => undefined);
+            });
+
+            // Behavior: the base boots on the baked image and a setup is what makes the state again; neither is refused.
+            it.each([
+                ['the base side of the Run', { side: 'base' as const }],
+                ['a setup', { side: 'setup' as const, consumer: 'setup' as const }],
+            ])('still sends %s to the cell', async (_name, over) => {
+                const { hub, connect } = setup();
+                const c = await connect('cell-a', 'kodus', evictingCell);
+                await c.onMessage(beat({ evictedBuildStates: [evicted] }));
+
+                const p = acquireAs(hub, over);
+                await tick();
+                await tick();
+
+                expect(c.sock.last('claim.acquire')).toBeDefined();
+                await c.onClose();
+                await p.catch(() => undefined);
+            });
+
+            // Behavior: once a setup made the state again (the cell stops naming it), or for another org's environment, the PR boots.
+            it.each([
+                ['after a setup made the state again', [] as (typeof evicted)[], 'org-a'],
+                ["for another org's environment of the same id", [evicted], 'org-b'],
+            ])('boots the PR side %s', async (_name, evictedBuildStates, org) => {
+                const { hub, connect } = setup();
+                const c = await connect('cell-a', 'kodus', evictingCell);
+                await c.onMessage(beat({ evictedBuildStates: [evicted] }));
+                await c.onMessage(beat({ evictedBuildStates }));
+
+                const p = acquireAs(hub, { side: 'pr', org });
+                await tick();
+                await tick();
+
+                expect(c.sock.last('claim.acquire')).toBeDefined();
+                await c.onClose();
+                await p.catch(() => undefined);
+            });
+        });
+
+        it('a claim that booted after building on an evicted state carries when it was evicted', async () => {
+            const { connect, acquireOn } = setup();
+            const c = await connect('cell-a', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, 'buildStateEvicted'] });
+            await c.onMessage(beat({ evictedBuildStates: [evicted] }));
+            const built = await acquireOn(c, 'cell-a', 'org-a', 'ready', { timing: { prepareMs: 10, buildMs: 900_000 } });
+            expect(built).toMatchObject({ buildStateEvictedAt: evicted.evictedAt });
+        });
     });
 
     it('a claim pending when the connection drops is not bound', async () => {
@@ -633,11 +887,13 @@ describe('CellHub', () => {
         expect(await pending).toMatchObject({ code: 'vm_unhealthy', vmHealth: 'oom' });
     });
 
-    it('pushes egress.policy to the live claims of the environment only', async () => {
-        const { hub, connect, acquireOn } = setup();
+    it('pushes egress.policy to the live claims of the environment only, with the approvals it reads again', async () => {
+        const { hub, store, connect, acquireOn } = setup();
         const c = await connect('cell-a');
         const claim: any = await acquireOn(c, 'cell-a');
-        const p = hub.pushEgressPolicy('org-a', 'shop', ['Registry.npmjs.org', 'api.stripe.com', 'api.stripe.com']);
+        // The hub reads the approvals itself (a revoked one is gone from them); the worker's list is the fallback only.
+        store.approvals.set('org-a/shop', ['Registry.npmjs.org', 'api.stripe.com']);
+        const p = hub.pushEgressPolicy('org-a', 'shop', ['stale.example']);
         await tick();
         await tick();
         const sent = c.sock.last('egress.policy');
@@ -646,6 +902,50 @@ describe('CellHub', () => {
         expect(await p).toEqual([claim.claimId]);
         expect(await hub.pushEgressPolicy('org-a', 'other-env', ['x.test'])).toEqual([]);
         expect(await hub.pushEgressPolicy('org-z', 'shop', ['x.test'])).toEqual([]);
+    });
+
+    it("pushes the worker's list when the approvals cannot be read, and logs the failed read", async () => {
+        const { hub, store, logs, connect, acquireOn } = setup();
+        const c = await connect('cell-a');
+        const claim: any = await acquireOn(c, 'cell-a');
+        jest.spyOn(store, 'approvedEgress').mockRejectedValueOnce(new Error('approvals table unavailable'));
+        const p = hub.pushEgressPolicy('org-a', 'shop', ['API.stripe.com']);
+        await tick();
+        await tick();
+        const sent = c.sock.last('egress.policy');
+        expect(sent).toMatchObject({ claimId: claim.claimId, body: { allow: ['api.stripe.com'] } });
+        await c.onMessage(frame('cell-a', 'ack', {}, { re: sent.id }));
+        expect(await p).toEqual([claim.claimId]);
+        expect(logs.filter((l) => l.msg === 'claim.egress_policy.unread')).toEqual([
+            expect.objectContaining({ level: 'error', cellId: 'cell-a', claimId: claim.claimId, error: 'approvals table unavailable', fallback: 'worker_list' }),
+        ]);
+    });
+
+    // docs/runtime/egress-allowlist.md §9: an org-list change reaches every environment of the org; an inspected
+    // approval goes as inspect only to a cell that names egressTiers (an older one gets the host alone).
+    it('pushes an org-list change to every environment and the inspected approvals only to a cell that names egressTiers', async () => {
+        const { hub, store, connect, acquireOn } = setup();
+        const tiers = await connect('cell-a', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, 'egressTiers'] });
+        const claim: any = await acquireOn(tiers, 'cell-a');
+        store.approvals.set('org-a/*', ['cdn.vendor.example']);
+        store.inspectedApprovals.set('org-a/*', [{ host: 'cdn.vendor.example', paths: ['/dist/'] }]);
+        const p = hub.pushEgressPolicy('org-a', '*', []);
+        await tick();
+        await tick();
+        const sent = tiers.sock.last('egress.policy');
+        expect(sent).toMatchObject({ claimId: claim.claimId, body: { allow: ['cdn.vendor.example'], inspect: [{ host: 'cdn.vendor.example', paths: ['/dist/'] }] } });
+        await tiers.onMessage(frame('cell-a', 'ack', {}, { re: sent.id }));
+        expect(await p).toEqual([claim.claimId]);
+
+        const older = setup();
+        const o = await older.connect('cell-a', 'kodus', CURRENT_CELL);
+        await older.acquireOn(o, 'cell-a');
+        older.store.approvals.set('org-a/*', ['cdn.vendor.example']);
+        older.store.inspectedApprovals.set('org-a/*', [{ host: 'cdn.vendor.example', paths: ['/dist/'] }]);
+        void older.hub.pushEgressPolicy('org-a', '*', []);
+        await tick();
+        await tick();
+        expect(o.sock.last('egress.policy').body).toEqual({ allow: ['cdn.vendor.example'], issuedAt: expect.any(String) });
     });
 
     it('acks a resent claim.ready or claim.failed by claimId and refuses the other outcome', async () => {
@@ -667,6 +967,35 @@ describe('CellHub', () => {
         const id = [...other.store.claims.values()].find((x) => x.state === 'failed')!.claimId;
         await failed.onMessage(frame('cell-a', 'claim.failed', { kind: 'resources', signature: 'create_workload', reason: 'no capacity' }, { claimId: id }));
         expect(failed.sock.last()).toMatchObject({ type: 'ack' });
+    });
+
+    // Feature egressTiers (docs/runtime/egress-allowlist.md): the inspected approvals and, when the org turned the
+    // Kodus recommended list off (D2), egressRecommended false; a cell without the feature gets the hosts alone.
+    it.each([
+        ['names egressTiers', true],
+        ['does not name egressTiers', false],
+    ])('a cell that %s gets the inspected approvals and the recommended switch accordingly', async (_name, tiers) => {
+        const { hub, store, connect } = setup();
+        store.approvals.set('org-a/shop', ['cdn.vendor.example', 'api.stripe.com']);
+        store.inspectedApprovals.set('org-a/shop', [{ host: 'cdn.vendor.example', paths: ['/dist/'] }]);
+        store.egressSettings.set('org-a', false);
+        const c = await connect('cell-a', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, ...(tiers ? ['egressTiers'] : [])] });
+        // Never answered here: the acquire ends on its ack timeout, which must not reject unobserved.
+        void hub.acquire('cell-a', {
+            organizationId: 'org-a', environmentId: 'shop', runId: 'run-8', ref: { side: 'pr', sha: SHA }, consumer: 'runtime', idempotencyKey: 'run-8:pr:1',
+            expose: [], repo: { provider: 'github', fullName: 'acme/shop', apiBase: 'https://api.github.com' }, repoToken: 'tok',
+        }).catch(() => undefined);
+        await tick();
+        await tick();
+        const body = c.sock.last('claim.acquire').body;
+        expect(body.egressAllow).toEqual(['api.stripe.com', 'cdn.vendor.example']);
+        if (tiers) {
+            expect(body.egressInspect).toEqual([{ host: 'cdn.vendor.example', paths: ['/dist/'] }]);
+            expect(body.egressRecommended).toBe(false);
+        } else {
+            expect(body).not.toHaveProperty('egressInspect');
+            expect(body).not.toHaveProperty('egressRecommended');
+        }
     });
 
     it('sends the approved hosts of the environment in claim.acquire and again after claim.ready', async () => {
@@ -714,6 +1043,55 @@ describe('CellHub', () => {
         expect(JSON.stringify(logs)).not.toContain('ghs_secret_token');
     });
 
+    it('the approved hosts never reach the PR side of a fork: not in the acquire, not after ready, not on a new approval', async () => {
+        const { hub, store, connect } = setup();
+        store.approvals.set('org-a/shop', ['registry.npmjs.org']);
+        const c = await connect('cell-a', 'kodus', CURRENT_CELL);
+        const acquire = (side: 'base' | 'pr') =>
+            hub.acquire('cell-a', {
+                organizationId: 'org-a',
+                environmentId: 'shop',
+                runId: 'run-fork',
+                ref: { side, sha: SHA },
+                consumer: 'runtime',
+                idempotencyKey: `run-fork:${side}:1`,
+                expose: [],
+                repo: { provider: 'github', fullName: 'acme/shop', apiBase: 'https://api.github.com' },
+                repoToken: 'ghs_secret_token',
+                ...(side === 'pr' ? { forkPullRequest: true } : {}),
+            });
+        const boot = async (side: 'base' | 'pr') => {
+            const p = acquire(side);
+            for (let i = 0; i < 3; i++) await tick();
+            const req = c.sock.last('claim.acquire');
+            await c.onMessage(frame('cell-a', 'ack', {}, { re: req.id }));
+            await c.onMessage(frame('cell-a', 'claim.ready', { manifest, observer: { id: 'obs-1', state: 'ready' } }, { claimId: req.claimId }));
+            for (let i = 0; i < 5; i++) await tick();
+            return { req, p };
+        };
+
+        const pr = await boot('pr');
+        expect(pr.req.body).not.toHaveProperty('egressAllow');
+        expect(c.sock.sent.filter((f: any) => f.type === 'egress.policy')).toEqual([]);
+        expect(await pr.p).toMatchObject({ claimId: pr.req.claimId });
+        expect((await store.claim(pr.req.claimId))!.forkPullRequest).toBe(true);
+
+        // The base side of the same Run is the repository's own code: it keeps the approvals.
+        const base = await boot('base');
+        expect(base.req.body.egressAllow).toEqual(['registry.npmjs.org']);
+        const after = c.sock.last('egress.policy');
+        expect(after).toMatchObject({ claimId: base.req.claimId });
+        await c.onMessage(frame('cell-a', 'ack', {}, { re: after.id }));
+        await base.p;
+
+        const pushed = hub.pushEgressPolicy('org-a', 'shop', ['api.stripe.com']);
+        for (let i = 0; i < 3; i++) await tick();
+        const policies = c.sock.sent.filter((f: any) => f.type === 'egress.policy');
+        expect(policies.map((f: any) => f.claimId)).not.toContain(pr.req.claimId);
+        await c.onMessage(frame('cell-a', 'ack', {}, { re: policies.at(-1).id }));
+        expect(await pushed).toEqual([base.req.claimId]);
+    });
+
     it('a cell that does not name egressAllow gets the approved hosts only in the push after claim.ready', async () => {
         const { store, connect, acquireOn } = setup();
         store.approvals.set('org-a/shop', ['registry.npmjs.org']);
@@ -747,6 +1125,15 @@ describe('CellHub', () => {
         await c.onMessage(frame('cell-a', 'ack', {}, { re: c.sock.last('claim.release').id }));
         await rel;
         expect(logs.find((l) => l.msg === 'claim.release')).toMatchObject({ claimId: claim.claimId, runId: 'run-1', reply: 'ack' });
+    });
+
+    it("a machine.reset waits the caller's deadline, not a fixed one", async () => {
+        const { hub, connect, acquireOn } = setup();
+        const c = await connect('cell-a');
+        const claim: any = await acquireOn(c, 'cell-a');
+        const started = Date.now();
+        expect(await hub.reset(ref(claim.claimId), 'img-1', undefined, undefined, 50)).toEqual({ code: 'timeout', afterMs: 50 });
+        expect(Date.now() - started).toBeLessThan(5_000);
     });
 
     it('acks heartbeats', async () => {
@@ -847,6 +1234,23 @@ describe('CellHub', () => {
             expect(await p).toEqual({ status: 'refused', code: 'sha_mismatch', message: 'x' });
         });
 
+        it("sends snapshot.forget for a closed PR's sessions to a cell that names it, and to no older cell", async () => {
+            const ctx = setup();
+            const ids = ['ksn-' + '1'.repeat(32), 'ksn-' + '2'.repeat(32)];
+            const c = await ctx.connect('cell-a', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, 'snapshots', 'snapshotForget'] });
+            const p = ctx.hub.forgetSessions('cell-a', { organizationId: 'org-a', snapshotIds: ids });
+            await tick();
+            const sent = c.sock.last('snapshot.forget');
+            expect(sent.body).toEqual({ orgId: 'org-a', snapshotIds: ids });
+            await c.onMessage(frame('cell-a', 'ack', {}, { re: sent.id }));
+            expect(await p).toEqual({ status: 'forgotten' });
+
+            const old = await ctx.connect('cell-c', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, 'snapshots'] });
+            const before = old.sock.sent.length;
+            expect(await ctx.hub.forgetSessions('cell-c', { organizationId: 'org-a', snapshotIds: ids })).toEqual({ status: 'unsupported' });
+            expect(old.sock.sent.length).toBe(before);
+        });
+
         it("sends the environment's machine size on pool.target to a cell that makes sized pools", async () => {
             const ctx = setup();
             const c = await ctx.connect('cell-a', 'kodus', CURRENT_CELL);
@@ -925,6 +1329,38 @@ describe('CellHub', () => {
             expect(plain.req.body).not.toHaveProperty('size');
         });
 
+        it("records a sized claim's vCPUs with what it held, for the usage report; none at the default size of a cell that does not say it", async () => {
+            const ctx = setup();
+            const c = await ctx.connect('cell-a', 'kodus', CURRENT_CELL);
+            const sized = await acquireAs(ctx, c, { side: 'pr', consumer: 'runtime', runId: 'run-cpus', size: { memoryMb: 8_192, cpus: 4 }, key: 'run-cpus:pr:1' }, ready);
+            expect((await ctx.store.claim(sized.req.claimId))!.metering).toMatchObject({ cpus: 4 });
+            const plain = await acquireAs(ctx, c, { side: 'setup', consumer: 'setup', key: 'setup:plain-cpus' }, ready);
+            expect((await ctx.store.claim(plain.req.claimId))!.metering?.cpus).toBeUndefined();
+        });
+
+        it("records the vCPUs of a claim at the cell's default size when its hello says that size", async () => {
+            const ctx = setup();
+            const capabilities = { backends: ['gvisor'], snapshotMemory: false, nestedDocker: true, kvm: false, arch: 'arm64', defaultSize: { memoryMb: 4_096, cpus: 2 } };
+            const c = await ctx.connect('cell-a', 'kodus', { ...CURRENT_CELL, capabilities });
+            const plain = await acquireAs(ctx, c, { side: 'setup', consumer: 'setup', key: 'setup:default-cpus' }, ready);
+            expect((await ctx.store.claim(plain.req.claimId))!.metering).toMatchObject({ cpus: 2 });
+            const sized = await acquireAs(ctx, c, { side: 'pr', consumer: 'runtime', runId: 'run-cpus', size: { memoryMb: 8_192, cpus: 4 }, key: 'run-cpus:pr:2' }, ready);
+            expect((await ctx.store.claim(sized.req.claimId))!.metering).toMatchObject({ cpus: 4 });
+        });
+
+        it('records how the workload came to be when the cell says it, and accepts the field from a cell that names readyStart', async () => {
+            const ctx = setup();
+            const c = await ctx.connect('cell-a', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, 'readyStart'] });
+            expect(c.sock.last('ack').body.accepts).toContain('readyStart');
+            const pooled = await acquireAs(ctx, c, { side: 'pr', consumer: 'runtime', runId: 'run-start', key: 'run-start:pr:1' }, (claimId) =>
+                frame('cell-a', 'claim.ready', { manifest, observer: { id: 'obs-1', state: 'ready' }, start: 'pool' }, { claimId }),
+            );
+            expect(pooled.claim).toMatchObject({ claimId: pooled.req.claimId });
+            expect((await ctx.store.claim(pooled.req.claimId))!.start).toBe('pool');
+            const unsaid = await acquireAs(ctx, c, { side: 'base', consumer: 'runtime', runId: 'run-start', key: 'run-start:base:1' }, ready);
+            expect((await ctx.store.claim(unsaid.req.claimId))!.start).toBeNull();
+        });
+
         it('a size the cell refuses although its hello granted it comes back as its blocker, nothing bound', async () => {
             const ctx = setup();
             const c = await ctx.connect('cell-a', 'kodus', CURRENT_CELL);
@@ -957,6 +1393,18 @@ describe('CellHub', () => {
             const ctx = setup();
             const c = await ctx.connect('cell-a', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, 'readyBuildSteps'] });
             expect(c.sock.last('ack').body).toEqual({ version: PROTOCOL_VERSION, accepts: ['readyBuildSteps'] });
+        });
+
+        it("a microVM cell's host report is accepted from a cell that names hostHardening and logged once per change; a Kodus cell on an unsafe host it calls dedicated is an alarm", async () => {
+            const ctx = setup();
+            const c = await ctx.connect('cell-a', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features!, 'hostHardening'] });
+            expect(c.sock.last('ack').body.accepts).toContain('hostHardening');
+            const host = { policy: 'dedicated', smt: 'on', ksm: 'off', swap: 'off', vulnerable: [], microcode: '0x2b000603' };
+            for (let i = 0; i < 2; i++) await c.onMessage(frame('cell-a', 'heartbeat', { claims: [], freeSlots: 4, host }));
+            const lines = ctx.logs.filter((l) => l.msg.startsWith('cell.host'));
+            expect(lines).toEqual([expect.objectContaining({ level: 'warn', msg: 'cell.host.unsafe_shared', cellId: 'cell-a', smt: 'on', alarm: true })]);
+            await c.onMessage(frame('cell-a', 'heartbeat', { claims: [], freeSlots: 4, host: { ...host, policy: 'shared', smt: 'off' } }));
+            expect(ctx.logs.filter((l) => l.msg.startsWith('cell.host')).at(-1)).toMatchObject({ level: 'info', msg: 'cell.host', policy: 'shared' });
         });
 
         it('a cell that does not name it gets the ack it always got, without accepts', async () => {
@@ -1049,7 +1497,7 @@ describe('CellHub', () => {
             repoToken: 'tok',
         };
         /** A setup acquire on cell-a; answered ready when the hub sent claim.acquire, else what the hub returned. */
-        const setupOn = async (ctx: ReturnType<typeof setup>, c: Awaited<ReturnType<ReturnType<typeof setup>['connect']>>, key: string, over: { seedsCache?: boolean; size?: { memoryMb: number; cpus: number }; recipe?: { path: string; content: string | null; digest?: string; files?: Array<{ path: string; content: string }> } }) => {
+        const setupOn = async (ctx: ReturnType<typeof setup>, c: Awaited<ReturnType<ReturnType<typeof setup>['connect']>>, key: string, over: { isolation?: 'any' | 'kernel' | 'vm'; seedsCache?: boolean; size?: { memoryMb: number; cpus: number }; recipe?: { path: string; content: string | null; digest?: string; files?: Array<{ path: string; content: string }> } }) => {
             const before = c.sock.sent.filter((m) => m.type === 'claim.acquire').length;
             const p = ctx.hub.acquire('cell-a', { ...SETUP, idempotencyKey: key, ...over });
             await tick();
@@ -1092,6 +1540,22 @@ describe('CellHub', () => {
             // Nothing was recorded for a claim that never left the hub.
             expect(await ctx.store.claim(claimIdFor('org-a', 'setup:old-size'))).toBeNull();
             expect(ctx.logs.find((l) => l.msg === 'claim.size_unavailable')).toMatchObject({ cellId: 'cell-a', memoryMb: 8_192, cpus: 4 });
+        });
+
+        it('a gVisor cell is never sent a vm claim: blocked capacity before anything is recorded; a kernel claim boots there', async () => {
+            const ctx = setup();
+            const gvisor = { ...CURRENT_CELL, isolation: 'sandboxed-container', capabilities: { backends: ['gvisor'], snapshotMemory: false, nestedDocker: true, kvm: false, arch: 'arm64' } };
+            const c = await ctx.connect('cell-a', 'kodus', gvisor);
+            expect(ctx.logs.find((l) => l.msg === 'cell.hello')).toMatchObject({ isolation: 'sandboxed-container', backends: 'gvisor', kvm: false, arch: 'arm64' });
+
+            const vm = await setupOn(ctx, c, 'setup:vm', { isolation: 'vm' });
+            expect(vm.req).toBeUndefined();
+            expect(vm.claim).toMatchObject({ status: 'blocked', blockers: [{ kind: 'capacity', signature: 'isolation_unavailable' }] });
+            expect(await ctx.store.claim(claimIdFor('org-a', 'setup:vm'))).toBeNull();
+            expect(ctx.logs.find((l) => l.msg === 'claim.isolation_unavailable')).toMatchObject({ cellId: 'cell-a', isolation: 'vm', cellIsolation: 'sandboxed-container' });
+
+            const kernel = await setupOn(ctx, c, 'setup:kernel', { isolation: 'kernel' });
+            expect(kernel.claim).toMatchObject({ claimId: kernel.req.claimId });
         });
 
         it("a recipe with Kody's files never boots on a cell that cannot write them: blocked before it reaches the cell", async () => {

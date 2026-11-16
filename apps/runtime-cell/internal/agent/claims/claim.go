@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/policy"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/redact"
 )
@@ -52,6 +53,14 @@ type Machines struct {
 	ImagePins []string
 }
 
+// OrgSecret is one org secret the claim's machines hold as a placeholder:
+// the env var Name, and the policy's id, placeholder and hosts. Never the
+// value.
+type OrgSecret struct {
+	Name string
+	policy.Secret
+}
+
 // Claim is one claim on this cell. What claim.acquire said is fixed at
 // creation; everything else changes under the claim's lock and is read
 // through its methods.
@@ -60,6 +69,12 @@ type Claim struct {
 	Acquire    protocol.ClaimAcquireBody
 	Log        *slog.Logger
 	AcquiredAt time.Time
+	// OrgSecrets are the claim's secrets with their placeholders, fixed
+	// before the claim is added to the registry (agent.orgSecretsFor).
+	OrgSecrets []OrgSecret
+	// Snapshot is what the claim asked of memory snapshots (sandbox.acquire
+	// prepares, templateKey, resumeFrom), fixed before the claim is added.
+	Snapshot SnapshotPlan
 
 	mu            sync.Mutex
 	state         State
@@ -81,12 +96,31 @@ type Claim struct {
 	composeDir  string
 	// compromised is why the claim may run nothing more (an exfiltration
 	// alert); empty while it is not.
-	compromised        string
+	compromised string
+	// halted is why the cell stopped the claim's preparation (its disk ran
+	// low): what its claim.failed says; nil while it did not.
+	halted             error
 	observerGeneration uint64
+	// start is how the workload came to be (protocol.ClaimReadyBodyStart*);
+	// empty until the preparation decided it.
+	start string
+	// cellTrusted: the claim's own boot mounted the cell CA in its machines
+	// (UpRequest.CellTrust, SandboxRequest.CellTrust), so the injector may
+	// end their TLS.
+	cellTrusted bool
+	// running: the install is done (MarkRunning).
+	running bool
+	// round is the claim's round snapshot, once claim.snapshot round made
+	// it; the zero value before.
+	round driver.MemorySnapshot
+	// prepPhases are the agent's own phases of the preparation that ended
+	// (fetch, upload, recipe...), in order.
+	prepPhases []driver.BootPhase
 
 	// egress.policy: allowGen counts the policies received, appliedGen is
 	// the last one pushed. egressMu orders pushes and the final removal.
 	allow       []string
+	inspect     []policy.InspectRule
 	allowIssued time.Time
 	allowGen    int
 	appliedGen  int
@@ -100,8 +134,20 @@ func New(id string, acq protocol.ClaimAcquireBody, log *slog.Logger, at time.Tim
 	return &Claim{
 		ID: id, Acquire: acq, Log: log, AcquiredAt: at,
 		settled: make(chan struct{}), prepared: make(chan struct{}), cancels: map[string]context.CancelFunc{}, activeSteps: map[string]struct{}{},
-		allow: slices.Clone(acq.EgressAllow),
+		allow: slices.Clone(acq.EgressAllow), inspect: InspectRules(acq.EgressInspect),
 	}
+}
+
+// InspectRules are the hub's inspected approvals as policy rules.
+func InspectRules(items []protocol.ClaimAcquireBodyEgressInspectItem) []policy.InspectRule {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]policy.InspectRule, 0, len(items))
+	for _, it := range items {
+		out = append(out, policy.InspectRule{Host: it.Host, Paths: slices.Clone(it.Paths)})
+	}
+	return out
 }
 
 func (c *Claim) State() State {
@@ -204,6 +250,60 @@ func (c *Claim) Failure() error {
 	return c.failure
 }
 
+// SetStart records how the claim's workload came to be: cold, pool or bake.
+func (c *Claim) SetStart(start string) {
+	c.mu.Lock()
+	c.start = start
+	c.mu.Unlock()
+}
+
+// MarkCellTrusted records that the claim's own boot gave its machines the
+// cell CA. Once set it stays: the machines keep the files until they end.
+func (c *Claim) MarkCellTrusted() {
+	c.mu.Lock()
+	c.cellTrusted = true
+	c.mu.Unlock()
+}
+
+// CellTrusted reports whether the claim's machines trust the cell CA.
+func (c *Claim) CellTrusted() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cellTrusted
+}
+
+// SnapshotPlan is what a sandbox claim asked of memory snapshots.
+type SnapshotPlan struct {
+	// Prepares: the claim makes its org's template under TemplateKey.
+	Prepares bool
+	// TemplateKey: with Prepares, the key the template is kept under;
+	// without, start from the org's newest template of that key.
+	TemplateKey string
+	// ResumeFrom is a session snapshot the claim restores, once.
+	ResumeFrom string
+}
+
+// SetRound records the claim's round snapshot.
+func (c *Claim) SetRound(s driver.MemorySnapshot) {
+	c.mu.Lock()
+	c.round = s
+	c.mu.Unlock()
+}
+
+// Round is the claim's round snapshot; ok false before one was made.
+func (c *Claim) Round() (driver.MemorySnapshot, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.round, c.round.ID != ""
+}
+
+// Start is how the claim's workload came to be; empty before it was decided.
+func (c *Claim) Start() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.start
+}
+
 func (c *Claim) BoundAt() time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -242,8 +342,6 @@ func (c *Claim) Machines() Machines {
 	return m
 }
 
-// SetSources sets the compose containers' addresses; a change makes the
-// egress policy due for a push again.
 // SetImagePins records the Docker Hub images the checkout's Dockerfiles
 // name, for the claim's policy.
 func (c *Claim) SetImagePins(pins []string) {
@@ -265,6 +363,8 @@ func (c *Claim) SetGoPins(pins []string) {
 	c.mu.Unlock()
 }
 
+// SetSources sets the compose containers' addresses; a change makes the
+// egress policy due for a push again.
 func (c *Claim) SetSources(s []string) {
 	c.mu.Lock()
 	if !slices.Equal(c.machines.Sources, s) {
@@ -272,6 +372,20 @@ func (c *Claim) SetSources(s []string) {
 	}
 	c.machines.Sources = slices.Clone(s)
 	c.mu.Unlock()
+}
+
+// AddPrepPhase keeps one phase of the preparation that ended.
+func (c *Claim) AddPrepPhase(name string, ms int64) {
+	c.mu.Lock()
+	c.prepPhases = append(c.prepPhases, driver.BootPhase{Name: name, Ms: ms})
+	c.mu.Unlock()
+}
+
+// PrepPhases are the preparation's phases that ended, in order.
+func (c *Claim) PrepPhases() []driver.BootPhase {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.prepPhases)
 }
 
 // SetCompose keeps the compose project the claim booted from.
@@ -338,7 +452,33 @@ func (c *Claim) SetPrepareCancel(cancel context.CancelFunc) bool {
 		return false
 	}
 	c.cancelPrepare = cancel
+	if c.halted != nil {
+		cancel()
+	}
 	return true
+}
+
+// Halt stops an acquiring claim's preparation with err, the reason its
+// claim.failed gives instead of the canceled step's; true for the first
+// call on an acquiring claim.
+func (c *Claim) Halt(err error) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.halted != nil || c.state != Acquiring {
+		return false
+	}
+	c.halted = err
+	if c.cancelPrepare != nil {
+		c.cancelPrepare()
+	}
+	return true
+}
+
+// Halted is why the cell stopped the claim's preparation (nil when it did not).
+func (c *Claim) Halted() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.halted
 }
 
 // AddStep registers a running step's cancel; false (and cancel called) when
@@ -399,7 +539,7 @@ func (c *Claim) CancelStep(stepID string) bool {
 // SetAllow stores an egress.policy allowlist; stale when an older policy
 // than the one held arrives (it is dropped). It reports false when the
 // claim is released.
-func (c *Claim) SetAllow(allow []string, issued time.Time) (stale, ok bool) {
+func (c *Claim) SetAllow(allow []string, inspect []policy.InspectRule, issued time.Time) (stale, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.state == Released {
@@ -408,9 +548,36 @@ func (c *Claim) SetAllow(allow []string, issued time.Time) (stale, ok bool) {
 	if issued.Before(c.allowIssued) {
 		return true, true
 	}
-	c.allow, c.allowIssued = slices.Clone(allow), issued
+	c.allow, c.inspect, c.allowIssued = slices.Clone(allow), slices.Clone(inspect), issued
 	c.allowGen++
 	return false, true
+}
+
+// PendingInspect is the hub's inspected approvals that go with
+// PendingAllow's list.
+func (c *Claim) PendingInspect() []policy.InspectRule {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.inspect)
+}
+
+// MarkRunning records that the claim's install is done (its build, boot and
+// recipe steps): its policy drops the recommended list's install hosts
+// (D4), and is pushed again.
+func (c *Claim) MarkRunning() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.running {
+		c.running = true
+		c.allowGen++
+	}
+}
+
+// Running reports whether the claim's install is done.
+func (c *Claim) Running() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.running
 }
 
 // EgressLock orders pushes of the claim's policy and its final removal.

@@ -35,7 +35,7 @@ export interface EnvAuditRecord {
     reason?: string;
 }
 
-/** The env_exec / env_fix audit in the product Mongo; every read names the org. */
+/** The env_exec / env_fix audit in the product Postgres; every read names the org. */
 export interface RuntimeEnvAuditStore {
     record(r: EnvAuditRecord): Promise<void>;
     setOutcome(organizationId: string, auditId: string, outcome: EnvAuditRecord['outcome'], reason?: string): Promise<void>;
@@ -60,10 +60,41 @@ export interface RuntimeEnvSessionPort {
     open(req: EnvSessionOpen): Promise<EnvSessionView>;
     status(owner: EnvSessionOwner, sessionId: string): Promise<EnvSessionView>;
     validation(owner: EnvSessionOwner, sessionId: string, name: string): Promise<EnvValidationResolution>;
-    exec(owner: EnvSessionOwner, sessionId: string, req: { stepId: string; command: string; cwd?: string; timeoutMs: number; validationName?: string; executionScope?: 'workload' }): Promise<EnvStepView>;
+    exec(owner: EnvSessionOwner, sessionId: string, req: { stepId: string; command: string; cwd?: string; repository?: string; timeoutMs: number; validationName?: string; executionScope?: 'workload' }): Promise<EnvStepView>;
     step(owner: EnvSessionOwner, stepId: string): Promise<EnvStepView>;
     release(owner: EnvSessionOwner, sessionId: string): Promise<EnvSessionView>;
 }
 
 export const RUNTIME_ENV_SESSION_PORT = Symbol.for('RuntimeApi.EnvSessionPort');
 export const RUNTIME_ENV_AUDIT_STORE = Symbol.for('RuntimeApi.EnvAuditStore');
+
+const FULL_SHA = /^[0-9a-f]{40}$/;
+
+/**
+ * The commits env_up boots, by repository alias: `sha` names the primary's (as
+ * it always has), `commits` names any repository's by its alias. Every other
+ * repository boots at its default-branch head. An unknown alias, a short sha,
+ * or two different commits for the primary is the caller's mistake.
+ */
+export function envUpCommits(
+    input: { sha?: unknown; commits?: unknown },
+    aliases: readonly string[],
+    primaryAlias: string,
+): { commits: Map<string, string> } | { error: string } {
+    const commits = new Map<string, string>();
+    if (input.sha !== undefined && input.sha !== null && input.sha !== '') {
+        if (typeof input.sha !== 'string' || !FULL_SHA.test(input.sha)) return { error: 'sha must be a full 40-character commit SHA' };
+        commits.set(primaryAlias, input.sha);
+    }
+    if (input.commits === undefined || input.commits === null) return { commits };
+    if (typeof input.commits !== 'object' || Array.isArray(input.commits)) {
+        return { error: 'commits maps a repository alias to a full 40-character commit SHA' };
+    }
+    for (const [alias, sha] of Object.entries(input.commits as Record<string, unknown>)) {
+        if (!aliases.includes(alias)) return { error: `commits names ${alias.slice(0, 64)}, which is not a repository of this environment: ${aliases.join(', ')}` };
+        if (typeof sha !== 'string' || !FULL_SHA.test(sha)) return { error: `the commit of ${alias} must be a full 40-character commit SHA` };
+        if (commits.has(alias) && commits.get(alias) !== sha) return { error: `sha and commits name two different commits for ${alias}` };
+        commits.set(alias, sha);
+    }
+    return { commits };
+}

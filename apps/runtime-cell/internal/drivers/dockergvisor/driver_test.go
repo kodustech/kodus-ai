@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 )
 
 type call struct {
@@ -79,8 +80,10 @@ func TestRefusesDockerWithoutRunsc(t *testing.T) {
 
 func spec() driver.MachineSpec {
 	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
-	return driver.MachineSpec{CellID: "cell-1", EnvironmentID: "env", Role: driver.RoleWorkload, OrgID: "org-a", ClaimID: "claim-1",
-		ImageID: "img-1", ClaimGroupID: "kodus-claim-1", KMSKeyRef: "local", ExpiresAt: now.Add(5 * time.Minute), HardExpiresAt: now.Add(time.Hour)}
+	return driver.MachineSpec{
+		CellID: "cell-1", EnvironmentID: "env", Role: driver.RoleWorkload, OrgID: "org-a", ClaimID: "claim-1",
+		ImageID: "img-1", ClaimGroupID: "kodus-claim-1", KMSKeyRef: "local", ExpiresAt: now.Add(5 * time.Minute), HardExpiresAt: now.Add(time.Hour),
+	}
 }
 
 func TestHolderRunsUnderGVisorWithClaimLabels(t *testing.T) {
@@ -131,7 +134,7 @@ func TestCreateRefusesAnotherClaimsNetworkAndBadIDs(t *testing.T) {
 }
 
 func canonicalFor(dir string) string {
-	return `{"services":{"a":{"image":"x","runtime":"runsc","security_opt":["no-new-privileges:true"],"networks":{"kodus-claim":{"ipv4_address":"10.213.5.10","mac_address":"02:42:0a:d5:05:0a"}},"extra_hosts":["a=10.213.5.10"],
+	return `{"services":{"a":{"image":"x","runtime":"runsc","logging":{"driver":"local","options":{"max-size":"10m","max-file":"3"}},"security_opt":["no-new-privileges:true"],"cap_drop":["ALL"],"pids_limit":2048,"mem_limit":"4294967296","cpus":2,"networks":{"kodus-claim":{"ipv4_address":"10.213.5.10","mac_address":"02:42:0a:d5:05:0a"}},"extra_hosts":["a=10.213.5.10"],
 "labels":{"kodus.cell":"cell-1","kodus.org":"","kodus.claim":"claim-1","kodus.role":"","kodus.hard-expires":"2026-10-29T13:00:00Z"}}},
 "networks":{"kodus-claim":{"name":"kodus-claim-1","external":true}}}`
 }
@@ -140,7 +143,7 @@ func TestUpRefusesBeforeAnyContainerStarts(t *testing.T) {
 	d, r, _ := newDriver(t, `{"runsc":{}}`)
 	ref, _ := d.Create(context.Background(), spec())
 	ref.Tags[driver.TagOrg], ref.Tags[driver.TagRole] = "", ""
-	_, err := d.Up(context.Background(), ref, []byte("services:\n  a:\n    image: x\n    privileged: true\n"), t.TempDir())
+	_, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte("services:\n  a:\n    image: x\n    privileged: true\n"), ProjectDir: t.TempDir()})
 	var re *sandbox.RefusedError
 	if !errors.As(err, &re) {
 		t.Fatalf("err %v", err)
@@ -152,7 +155,7 @@ func TestUpRefusesBeforeAnyContainerStarts(t *testing.T) {
 	r.answers["compose config"] = canonicalFor(dir)
 	r.answers["ps"] = "s1\n"
 	r.answers["inspect"] = `[{"Id":"s1","Name":"/kodus-claim-1-workload-a-1","Config":{"Labels":{"kodus.cell":"cell-1"}},"NetworkSettings":{"Networks":{"kodus-claim-1":{"IPAddress":"172.30.0.9"}}}}]`
-	sources, err := d.Up(context.Background(), ref, []byte("services:\n  a:\n    image: x\n"), dir)
+	sources, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte("services:\n  a:\n    image: x\n"), ProjectDir: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +179,7 @@ func TestUpRefusesBeforeAnyContainerStarts(t *testing.T) {
 	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
 		t.Fatalf("wrote into the checkout: %v", entries)
 	}
-	if f := r.find("compose", "-p", "kodus-claim-1-workload", "--project-directory"); f == nil || strings.HasPrefix(f[5], dir) {
+	if f := r.find("compose", "-p", "kodus-claim-1-workload", "--project-directory"); len(f) < 6 || strings.HasPrefix(f[5], dir) {
 		t.Fatalf("compose file inside the checkout: %v", f)
 	}
 
@@ -203,13 +206,35 @@ func TestUpRefusesBeforeAnyContainerStarts(t *testing.T) {
 
 // The second reader: compose's own canonical output contradicts what the
 // allowlist approved (it would run on runc). Nothing starts.
+func TestUpRefusesAComposeFileBeforeItBuildsAnything(t *testing.T) {
+	d, r, _ := newDriver(t, `{"runsc":{}}`)
+	ref, _ := d.Create(context.Background(), spec())
+	ref.Tags[driver.TagOrg], ref.Tags[driver.TagRole] = "", ""
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte("FROM scratch\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// What the build needs is fine; what compose would run is not (immich's dev compose).
+	_, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte("services:\n  app:\n    build: .\n    container_name: immich_server\n"), ProjectDir: dir})
+	var re *sandbox.RefusedError
+	if !errors.As(err, &re) {
+		t.Fatalf("err %v, want the refusal (and not a build's error: nothing may be built first)", err)
+	}
+	if !strings.Contains(err.Error(), "container_name") {
+		t.Fatalf("refusal %v does not name container_name", err)
+	}
+	if r.has("buildctl-daemonless.sh") {
+		t.Fatal("a build ran before the compose file was checked")
+	}
+}
+
 func TestUpRefusesWhatComposeWouldReallyRun(t *testing.T) {
 	d, r, _ := newDriver(t, `{"runsc":{}}`)
 	ref, _ := d.Create(context.Background(), spec())
 	ref.Tags[driver.TagOrg], ref.Tags[driver.TagRole] = "", ""
 	dir := t.TempDir()
 	r.answers["compose config"] = strings.Replace(canonicalFor(dir), `"runtime":"runsc"`, `"runtime":"runc"`, 1)
-	_, err := d.Up(context.Background(), ref, []byte("services:\n  a:\n    image: x\n"), dir)
+	_, err := d.Up(context.Background(), driver.UpRequest{Ref: ref, Compose: []byte("services:\n  a:\n    image: x\n"), ProjectDir: dir})
 	var re *sandbox.RefusedError
 	if !errors.As(err, &re) {
 		t.Fatalf("err %v", err)

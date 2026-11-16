@@ -1,20 +1,19 @@
 package dockergvisor
 
-// The claim's network: one bridge per claim out of the cell's pool, its
-// resolver file, and its release.
+// The claim's network: one network per claim out of the cell's pool, made
+// and attached by the placement (placement/docker), its resolver file, and
+// its release.
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"hash/fnv"
-	"net/netip"
 	"os"
 	"path/filepath"
-	"strings"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/placement"
 )
 
 func (d *Driver) PrepareClaim(ctx context.Context, spec driver.ClaimNetworkSpec) (driver.ClaimNetwork, error) {
@@ -25,65 +24,30 @@ func (d *Driver) PrepareClaim(ctx context.Context, spec driver.ClaimNetworkSpec)
 	labels := toLabels(map[string]string{driver.TagCell: d.cfg.CellID, driver.TagOrg: spec.OrgID, driver.TagClaim: spec.ClaimID})
 	// internal: no route out except through the cell's proxy and resolver,
 	// which join it here.
-	subnet, err := d.createClaimNetwork(ctx, spec.ClaimID, name, labels)
+	subnet, err := d.place.CreateNetwork(ctx, placement.NetworkSpec{Name: name, Key: spec.ClaimID, Labels: labels, Pool: d.cfg.ClaimSubnets})
 	if err != nil {
 		return driver.ClaimNetwork{}, err
 	}
 	n := driver.ClaimNetwork{WorkloadGroupID: name, ObserverGroupID: name}
 	if d.cfg.BuilderImage != "" {
 		n.Sources = []string{builderAddress(subnet).String()}
+		n.SourcesTrustCellCA = d.builderTrusted()
 	}
 	if d.cfg.EgressContainer == "" {
 		return n, nil
 	}
-	addr, err := d.d.NetworkConnect(ctx, name, d.cfg.EgressContainer)
+	addr, err := d.place.AttachEgress(ctx, name, d.cfg.EgressContainer)
 	if err == nil {
 		err = d.writeResolv(name, addr)
 	}
 	if err != nil {
 		// A claim the egress cannot join would run with no way out but
 		// also with no resolver: refuse it rather than boot half wired.
-		_ = d.d.NetworkDisconnect(ctx, name, d.cfg.EgressContainer)
-		return driver.ClaimNetwork{}, errors.Join(fmt.Errorf("dockergvisor: attach egress to %s: %w", name, err), d.d.NetworkRemove(ctx, name))
+		_ = d.place.DetachEgress(ctx, name, d.cfg.EgressContainer)
+		return driver.ClaimNetwork{}, errors.Join(fmt.Errorf("dockergvisor: attach egress to %s: %w", name, err), d.place.RemoveNetwork(ctx, name))
 	}
 	n.EgressAddress = addr
 	return n, nil
-}
-
-// createClaimNetwork makes the claim's network in a /24 of ClaimSubnets,
-// starting where the claim id points and moving on while Docker says the
-// subnet is taken. Docker hands dynamic addresses (the holder, the egress)
-// only from the upper half; services take fixed ones in the lower half.
-func (d *Driver) createClaimNetwork(ctx context.Context, claimID, name string, labels map[string]string) (netip.Prefix, error) {
-	pool := d.cfg.ClaimSubnets
-	if !pool.IsValid() {
-		pool = netip.MustParsePrefix("10.213.0.0/16")
-	}
-	slots := 1 << (24 - pool.Bits())
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(claimID))
-	start := int(h.Sum32() % uint32(slots))
-	var last error
-	for i := range min(slots, 32) {
-		subnet, upper := claimSlot(pool, (start+i)%slots)
-		last = d.d.NetworkCreate(ctx, dockercli.NetworkSpec{Name: name, Internal: true, Labels: labels, Subnet: subnet.String(), IPRange: upper.String()})
-		if last == nil {
-			return subnet, nil
-		}
-		if !strings.Contains(last.Error(), "overlap") {
-			return netip.Prefix{}, last
-		}
-	}
-	return netip.Prefix{}, fmt.Errorf("dockergvisor: no free /24 for %s in %s: %w", name, pool, last)
-}
-
-// claimSlot is the slot-th /24 of pool and its upper half.
-func claimSlot(pool netip.Prefix, slot int) (netip.Prefix, netip.Prefix) {
-	b := pool.Masked().Addr().As4()
-	n := (uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8) + uint32(slot)<<8
-	base := netip.AddrFrom4([4]byte{byte(n >> 24), byte(n >> 16), byte(n >> 8), 0})
-	upper := netip.AddrFrom4([4]byte{byte(n >> 24), byte(n >> 16), byte(n >> 8), 128})
-	return netip.PrefixFrom(base, 24), netip.PrefixFrom(upper, 25)
 }
 
 // resolvPath is the cell's resolv.conf for a claim network: in the cell's
@@ -98,11 +62,11 @@ func (d *Driver) resolvPath(network string) string {
 
 func (d *Driver) writeResolv(network, egress string) error {
 	p := d.resolvPath(network)
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil { //nolint:gosec // G301: the machines' users read resolv.conf through it; only the cell writes it
 		return err
 	}
 	// Read by the machines' users: world-readable, written by the cell only.
-	return os.WriteFile(p, []byte("nameserver "+egress+"\noptions ndots:0 timeout:2 attempts:2\n"), 0o644)
+	return os.WriteFile(p, []byte("nameserver "+egress+"\noptions ndots:0 timeout:2 attempts:2\n"), 0o644) //nolint:gosec // G306: the machines' users must read it; it holds no secret
 }
 
 // claimResolv is the resolv.conf a claim's machines mount ("" with no egress).
@@ -123,7 +87,7 @@ func (d *Driver) ReleaseClaim(ctx context.Context, n driver.ClaimNetwork) error 
 	if n.WorkloadGroupID == "" {
 		return nil
 	}
-	labels, err := d.d.NetworkLabels(ctx, n.WorkloadGroupID)
+	labels, err := d.place.NetworkLabels(ctx, n.WorkloadGroupID)
 	if err != nil {
 		return err
 	}
@@ -152,14 +116,14 @@ func (d *Driver) ReleaseClaim(ctx context.Context, n driver.ClaimNetwork) error 
 	}
 	// Docker removes no network a container is still attached to.
 	if d.cfg.EgressContainer != "" {
-		if err := d.d.NetworkDisconnect(ctx, n.WorkloadGroupID, d.cfg.EgressContainer); err != nil {
+		if err := d.place.DetachEgress(ctx, n.WorkloadGroupID, d.cfg.EgressContainer); err != nil {
 			return err
 		}
 		if err := os.Remove(d.resolvPath(n.WorkloadGroupID)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 	}
-	if err := d.d.NetworkRemove(ctx, n.WorkloadGroupID); err != nil {
+	if err := d.place.RemoveNetwork(ctx, n.WorkloadGroupID); err != nil {
 		return err
 	}
 	d.forgetAdoptions(n.WorkloadGroupID)

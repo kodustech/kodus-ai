@@ -161,6 +161,17 @@ export const conditionHolds = (c: RuleCondition, pr: PullRequestFacts) => {
     }
 };
 
+/** A repository's mode from its settings row; rows written before the mode existed: in the pilot means on request; no row is off. */
+export const repositoryModeOf = (s: { mode?: RuntimeMode; pilot?: boolean } | undefined): RuntimeMode => s?.mode ?? (s?.pilot ? 'on_request' : 'off');
+
+/**
+ * Runs asked by hand on one pull request (and environment) in any 24 hours:
+ * `@kody runtime` comments, Run again and "Run on this PR" share the count
+ * (application/asked-runs.ts). Each one boots machines and spends model
+ * budget, and anyone allowed to ask can ask again and again.
+ */
+export const COMMENT_RUNS_PER_PULL_REQUEST_PER_DAY = 10;
+
 export type RunDecision =
     | { run: true; rule: number }
     | { run: false; reason: 'off' | 'on_request_only' | 'rule_not_matched' | 'bot_author' | 'new_pushes_off' };

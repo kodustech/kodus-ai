@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 )
 
 // chowns records what the driver gives the builder, in place of lchown:
@@ -88,14 +88,14 @@ func TestTheBuildersDirectoriesAreItsAlone(t *testing.T) {
 	build := sandbox.Build{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}
 	seeder := machine("claim-seed", bakeEnv)
 	asSetup(d, seeder, true)
-	boot(t, d, seeder, build) // the environment's state, written directly
+	boot(t, d, seeder, build) // the environment's state, written directly, and its export
 	boot(t, d, machine("claim-pr", bakeEnv), build)
 	d.states = noStates{}
 	setup := machine("claim-setup", bakeEnv)
 	asSetup(d, setup, false)
 	boot(t, d, setup, build) // a cache of its own
-	if checked != 1+1+1+3+1+1 {
-		t.Fatalf("checked %d directories, want the seed's out and state, the PR's out and overlay, the setup's out and cache", checked)
+	if checked != 1+1+1+1+3+1+1 {
+		t.Fatalf("checked %d directories, want the seed's out, state and cache, the PR's out and overlay, the setup's out and cache", checked)
 	}
 }
 

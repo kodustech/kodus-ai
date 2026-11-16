@@ -132,7 +132,7 @@ func TestOpenBaoKVReadinessBoundsUpgradeWait(t *testing.T) {
 	client := &http.Client{Transport: feedTransport(func(*http.Request) (*http.Response, error) {
 		calls++
 		raw, _ := json.Marshal(map[string]any{"errors": []string{baoKVUpgradingMessage}})
-		return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader(string(raw))), Header: make(http.Header)}, nil
+		return &http.Response{StatusCode: http.StatusBadRequest, Body: io.NopCloser(strings.NewReader(string(raw))), Header: make(http.Header)}, nil
 	})}
 	c := clock.NewFake(time.Now())
 	start := c.Now()

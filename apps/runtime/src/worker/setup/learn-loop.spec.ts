@@ -1,3 +1,5 @@
+import { Logger } from '@nestjs/common';
+
 import type { RuntimeEnvironmentSetupRequested } from '@libs/runtime/api/domain/runtime-commands';
 import type { EnvironmentRuntime } from '@libs/runtime/environment';
 import type { FailureBundle } from '@libs/runtime/protocol';
@@ -5,12 +7,13 @@ import { type EnvironmentSetupRecord, sealSecret, setupLearnScopeId } from '@lib
 import { inferRecipe } from '@libs/runtime/run/recipe-inference';
 
 import { devSealKey } from '../../testing/dev-seal-key';
-import { testSetupService } from '../../testing/setup-service';
+import { clockFrom, testSetupService } from '../../testing/setup-service';
 import { LlmBudgetExceededError, type LlmGateway, type LlmRequest, LlmUnavailableError } from '../agent/llm-gateway';
+import type { SetupRepoTokensClient } from '../agent/http-setup-repo-tokens';
 import { capacityBlocked } from '../env/hub-environment-runtime';
-import { InMemoryEnvironmentSetupStore, type SetupStepRunner } from './environment-setup.service';
+import { type SetupStepRunner } from './environment-setup.service';
 import { learnTarget } from './learn-loop';
-import { InMemoryLessonStore } from './lesson.store';
+import { InMemoryEnvironmentSetupStore, InMemoryLessonStore } from './testing';
 
 const SHA = 'c'.repeat(40);
 const KEY = 'env-1:2026-11-04T12:00:00.000Z';
@@ -117,12 +120,25 @@ class ScriptedLlm implements LlmGateway {
 
 const h = (hypothesis: unknown) => JSON.stringify({ hypothesis });
 
-function make(answers: Array<string | Error>, envOpts: Parameters<typeof fakeEnv>[0] = {}, store = new InMemoryEnvironmentSetupStore()) {
+/** The product's answer to a learn boot's ask for download tokens: new ones each time, unless a spec says otherwise. */
+const issuing: SetupRepoTokensClient = {
+    refresh: async (req) => ({ status: 'issued', repoToken: sealSecret(`ghs_${req.attempt}`, devSealKey(), KEY) }),
+};
+
+/** `repoTokens: null`: a worker with no client to ask the product for new download tokens. */
+function make(answers: Array<string | Error>, envOpts: Parameters<typeof fakeEnv>[0] = {}, store = new InMemoryEnvironmentSetupStore(), repoTokens: SetupRepoTokensClient | null = issuing) {
     const fake = fakeEnv(envOpts);
     const llm = new ScriptedLlm(answers);
     const lessons = new InMemoryLessonStore();
-    const svc = testSetupService({ envForSetup: () => fake.env }, store, { learn: { llm, lessons } });
-    return { ...fake, llm, lessons, svc, store };
+    // What each boot downloads the repositories with: the tokens of the runtime its claim was asked on.
+    const downloads: Array<{ key: string; token: string; workspace?: unknown }> = [];
+    const envForSetup = (input: { sealedRepoToken: string; workspace?: unknown }): EnvironmentRuntime => ({
+        ...fake.env,
+        acquire: (req) => (downloads.push({ key: req.idempotencyKey!, token: input.sealedRepoToken, ...(input.workspace ? { workspace: input.workspace } : {}) }), fake.env.acquire(req)),
+    });
+    // The request was just made: its download tokens are alive (a stale one asks for new ones first, environment-setup.tokens.spec.ts).
+    const svc = testSetupService({ envForSetup }, store, { learn: { llm, lessons }, now: clockFrom(cmd().requestedAt), ...(repoTokens ? { repoTokens } : {}) });
+    return { ...fake, llm, lessons, svc, store, downloads };
 }
 
 describe('Kody learn loop on a blocked setup', () => {
@@ -181,7 +197,7 @@ describe('Kody learn loop on a blocked setup', () => {
         expect(rec.learn?.attempts).toEqual([
             expect.objectContaining({
                 n: 1,
-                signature: 'compose_up',
+                signature: 'service_exited:web',
                 result: 'booted',
                 cleanBoots: 2,
                 fix: { id: 'set_env:SESSION_STORE_URL', action: 'set_env', label: 'Give SESSION_STORE_URL a test value' },
@@ -189,7 +205,7 @@ describe('Kody learn loop on a blocked setup', () => {
             }),
         ]);
         expect(rec.learn?.proven).toMatchObject({
-            signature: 'compose_up',
+            signature: 'service_exited:web',
             origin: 'inferred',
             cleanBoots: 2,
             change: { path: ['env', 'SESSION_STORE_URL'], value: 'http://kodus-fake.invalid' },
@@ -215,7 +231,7 @@ describe('Kody learn loop on a blocked setup', () => {
 
         const [lesson] = [...t.lessons.byId.values()];
         expect(lesson).toMatchObject({
-            signature: 'compose_up',
+            signature: 'service_exited:web',
             scope: 'repo',
             fix: { id: 'set_env:SESSION_STORE_URL', action: 'set_env', summary: 'Set SESSION_STORE_URL in services.compose.env of the recipe.' },
             origin: { sha: SHA, branch: 'main', blockedSetupKey: KEY, fixedSetupKey: `${KEY}#learn-1` },
@@ -223,11 +239,30 @@ describe('Kody learn loop on a blocked setup', () => {
         expect(JSON.stringify(lesson)).not.toContain('kodus-fake.invalid');
     });
 
+    it('a lesson store that cannot be read or written is told, and the hypothesis is still proven', async () => {
+        const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+        try {
+            const t = make([h({ kind: 'set_env', name: 'SESSION_STORE_URL' })]);
+            const down = Object.assign(new Error('mongodb://user:pw@db down'), { code: 'ECONNREFUSED' });
+            t.lessons.listForRepo = async () => Promise.reject(down);
+            t.lessons.record = async () => Promise.reject(down);
+            const rec = await t.svc.run(cmd());
+
+            expect(rec.learn?.stopped).toBe('proven');
+            const failure = { kind: 'network', code: 'ECONNREFUSED' };
+            expect(warn).toHaveBeenCalledWith(expect.objectContaining({ msg: 'setup.lessons_read_failed', environmentId: rec.environmentId, error: failure }));
+            expect(warn).toHaveBeenCalledWith(expect.objectContaining({ msg: 'setup.lesson_record_failed', environmentId: rec.environmentId, signature: 'service_exited:web', error: failure }));
+            expect(JSON.stringify(warn.mock.calls)).not.toContain('pw@');
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
     it('ENV-06: one boot is not proof; a replay that does not answer leaves it unproven and the loop moves on', async () => {
         const t = make([h({ kind: 'set_env', name: 'SESSION_STORE_URL' }), h({ kind: 'cannot_fix' })], { replayFails: true });
         const rec = await t.svc.run(cmd());
         expect(rec.learn?.proven).toBeUndefined();
-        expect(rec.learn?.attempts[0]).toMatchObject({ result: 'booted_once', cleanBoots: 1, blocker: { signature: 'compose_up' } });
+        expect(rec.learn?.attempts[0]).toMatchObject({ result: 'booted_once', cleanBoots: 1, blocker: { signature: 'service_exited:web' } });
         expect(rec.learn?.stopped).toBe('cannot_fix');
         expect(t.lessons.byId.size).toBe(0);
     });
@@ -248,14 +283,14 @@ describe('Kody learn loop on a blocked setup', () => {
         expect(t.llm.calls).toHaveLength(3);
         expect(rec.learn?.attempts.map((a) => a.result)).toEqual(['blocked', 'blocked', 'refused']);
         expect(rec.learn?.attempts[2].refusal).toBe('not_json');
-        expect(rec.learn?.tried).toEqual([{ signature: 'compose_up', count: 3 }]);
+        expect(rec.learn?.tried).toEqual([{ signature: 'service_exited:web', count: 3 }]);
         expect(rec.learn?.stopped).toBe('cap');
 
         // The next setup of the same environment, same blocker: no LLM call, the card stays.
         const next = make([h({ kind: 'set_env', name: 'SESSION_STORE_URL' })], { bootsWhen: () => false }, store);
         const again = await next.svc.run(cmd({ key: 'env-1:2026-11-04T13:00:00.000Z', requestedAt: '2026-11-04T13:00:00.000Z' }));
         expect(next.llm.calls).toHaveLength(0);
-        expect(again.learn).toMatchObject({ stopped: 'cap', tried: [{ signature: 'compose_up', count: 3 }] });
+        expect(again.learn).toMatchObject({ stopped: 'cap', tried: [{ signature: 'service_exited:web', count: 3 }] });
         expect(again.learn?.attempts).toHaveLength(3);
     });
 
@@ -330,6 +365,8 @@ describe('Kody learn loop on a blocked setup', () => {
         expect(blockedOn({ kind: 'platform', signature: 'repo_upload', message: 'upload failed' })).toBeNull();
         expect(blockedOn({ kind: 'unknown', signature: 'compose_up', message: 'boom' })).toBeNull(); // repository recipe, not a ready-check field
         expect(blockedOn({ kind: 'unknown', signature: 'compose_up', message: 'boom' }, { ...rec.recipe!, origin: 'inferred' })).not.toBeNull();
+        // A service that exited on its own error (service_exited) is a card with no fix of the catalog's: Kody still learns, whatever kind the cell named.
+        expect(learnTarget({ ...base, recipe: { ...rec.recipe!, origin: 'inferred' }, blockers: [{ kind: 'toolchain', signature: 'compose_up', message: 'compose up failed', at: rec.updatedAt }], failureBundle: bundle(LOG) })).not.toBeNull();
         expect(learnTarget({ ...base, refSource: 'dev_override' })).toBeNull();
         // A recipe Kody wrote has no file on the default branch for a one-field PR: not this loop's, even on a ready-check field.
         expect(learnTarget({ ...base, recipe: { ...rec.recipe!, origin: 'authored' } })).toBeNull();
@@ -353,7 +390,84 @@ describe('Kody learn loop on a blocked setup', () => {
             'learn:release:learn-1-replay',
             'learn:lesson',
         ]);
+        // A resumed workflow reads the tokens each boot was given: it never asks the product again.
+        expect(names.filter((n) => n.startsWith('tokens:'))).toEqual(['tokens:learn:1', 'tokens:learn:2']);
         // No clock read outside a step: every timestamp of the loop came from a clock step.
         expect(names.filter((n) => n.startsWith('clock:')).length).toBeGreaterThan(5);
+    });
+});
+
+// The cell revokes a repository token right after its first download, so
+// every clean boot of the learn loop downloads with tokens the product mints
+// for it (the first learn boot of a blocked setup failed on `download status
+// 401` with the setup's own, already spent, token).
+describe("the learn loop's clean boots download with fresh tokens", () => {
+    const FIRST = sealSecret('ghs_first', devSealKey(), KEY);
+    const MEMBER_FIRST = sealSecret('ghs_member_first', devSealKey(), KEY);
+    const workspace: NonNullable<RuntimeEnvironmentSetupRequested['workspace']> = [
+        { repositoryId: 'repo-1', fullName: 'acme/shop', alias: 'shop', role: 'primary', sha: SHA, branch: 'main', sealedRepoToken: FIRST },
+        { repositoryId: 'repo-2', fullName: 'acme/billing', alias: 'billing', role: 'member', sha: 'd'.repeat(40), branch: 'main', sealedRepoToken: MEMBER_FIRST },
+    ];
+    const minted = new Map<string, string>();
+    const mint = (name: string) => minted.get(name) ?? (minted.set(name, sealSecret(name, devSealKey(), KEY)), minted.get(name)!);
+    const fresh = (attempt: string) => mint(`ghs_${attempt}`);
+    const freshMember = (attempt: string) => mint(`ghs_member_${attempt}`);
+    const unavailable = { status: 'unavailable' as const, message: "the product answered 409" };
+
+    it('asks the product for each boot and boots it with the tokens it answers, the primary and every member', async () => {
+        const asked: unknown[] = [];
+        const tokens: SetupRepoTokensClient = {
+            refresh: async (req) => (asked.push(req), { status: 'issued', repoToken: fresh(req.attempt), workspace: [{ repositoryId: 'repo-2', sealedRepoToken: freshMember(req.attempt) }] }),
+        };
+        const t = make([h({ kind: 'set_env', name: 'SESSION_STORE_URL' })], {}, undefined, tokens);
+        const rec = await t.svc.run(cmd({ repoToken: FIRST, workspace }));
+
+        expect(rec.learn?.stopped).toBe('proven');
+        expect(asked).toEqual([
+            { organizationId: 'org-1', llmToken: LLM_TOKEN, setupKey: KEY, attempt: 'learn-1' },
+            { organizationId: 'org-1', llmToken: LLM_TOKEN, setupKey: KEY, attempt: 'learn-2' },
+        ]);
+        expect(t.downloads.map((d) => [d.key, d.token])).toEqual([
+            [`setup:${KEY}`, FIRST],
+            [`setup:${KEY}:learn-1`, fresh('learn-1')],
+            [`setup:${KEY}:learn-1-replay`, fresh('learn-2')],
+        ]);
+        expect(t.downloads[2].workspace).toMatchObject({ primary: { base: { sealedToken: fresh('learn-2') } }, members: [{ alias: 'billing', base: { sealedToken: freshMember('learn-2') } }] });
+    });
+
+    it('with no new token to be had, stops plainly before Kody is asked, and nothing boots on a spent token', async () => {
+        for (const tokens of [null, { refresh: async () => unavailable }]) {
+            const t = make([h({ kind: 'set_env', name: 'SESSION_STORE_URL' })], {}, undefined, tokens);
+            const rec = await t.svc.run(cmd());
+
+            expect(rec.state).toBe('blocked');
+            expect(rec.learn).toMatchObject({ stopped: 'no_token', attempts: [], tried: [] });
+            expect(t.llm.calls).toHaveLength(0);
+            expect(t.acquires.map((a) => a.key)).toEqual([`setup:${KEY}`]);
+            // The setup's own blocker stays the verdict: no download failure is added to it.
+            expect(rec.blockers).toEqual([expect.objectContaining({ signature: 'compose_up' })]);
+        }
+    });
+
+    it('a replay with no new token leaves the fix booted once, unproven, and the loop stops plainly', async () => {
+        const tokens: SetupRepoTokensClient = { refresh: async (req) => (req.attempt === 'learn-1' ? { status: 'issued', repoToken: fresh(req.attempt) } : unavailable) };
+        const t = make([h({ kind: 'set_env', name: 'SESSION_STORE_URL' }), h({ kind: 'cannot_fix' })], {}, undefined, tokens);
+        const rec = await t.svc.run(cmd());
+
+        expect(rec.learn?.stopped).toBe('no_token');
+        expect(rec.learn?.attempts).toEqual([expect.objectContaining({ n: 1, result: 'booted_once', cleanBoots: 1 })]);
+        expect(rec.learn?.attempts[0].blocker).toBeUndefined();
+        expect(rec.learn?.proven).toBeUndefined();
+        expect(t.llm.calls).toHaveLength(1);
+        expect(t.acquires.map((a) => a.key)).toEqual([`setup:${KEY}`, `setup:${KEY}:learn-1`]);
+        expect(t.lessons.byId.size).toBe(0);
+    });
+
+    it('a setup that downloads with no token boots its learn attempts without asking the product', async () => {
+        const asked: string[] = [];
+        const t = make([h({ kind: 'set_env', name: 'SESSION_STORE_URL' })], {}, undefined, { refresh: async (req) => (asked.push(req.attempt), unavailable) });
+        const rec = await t.svc.run(cmd({ repoToken: undefined }));
+        expect(rec.learn?.stopped).toBe('proven');
+        expect(asked).toEqual([]);
     });
 });

@@ -35,12 +35,14 @@ func (f *fakeClaimLimits) Ensure(key string, l claimlimits.Limits) (string, erro
 	f.groups[key] = l
 	return "/kodus-test/" + key, nil
 }
+
 func (f *fakeClaimLimits) Verify(_ string, pid int) error {
 	if pid <= 0 {
 		return fmt.Errorf("missing pid")
 	}
 	return f.verifyErr
 }
+
 func (f *fakeClaimLimits) Remove(key string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -59,6 +61,7 @@ func limitedDriver(t *testing.T) (*Driver, *memDocker, *fakeClaimLimits) {
 	}
 	return d, docker, limits
 }
+
 func TestClaimLimitsAllHoldersSharePhysicalParent(t *testing.T) {
 	d, docker, limits := limitedDriver(t)
 	ctx := context.Background()
@@ -87,6 +90,7 @@ func TestClaimLimitsAllHoldersSharePhysicalParent(t *testing.T) {
 		}
 	}
 }
+
 func TestClaimLimitsFailureStartsNoHolder(t *testing.T) {
 	d, docker, limits := limitedDriver(t)
 	ctx := context.Background()
@@ -103,6 +107,7 @@ func TestClaimLimitsFailureStartsNoHolder(t *testing.T) {
 		t.Fatal("container launched without ceiling")
 	}
 }
+
 func TestClaimLimitsRejectWrongDaemonMembership(t *testing.T) {
 	d, docker, limits := limitedDriver(t)
 	ctx := context.Background()
@@ -119,6 +124,7 @@ func TestClaimLimitsRejectWrongDaemonMembership(t *testing.T) {
 		t.Fatal("unverified holder survived")
 	}
 }
+
 func TestClaimLimitsKeepReadyAdmissionAtEnforcedCeiling(t *testing.T) {
 	d, _, _ := limitedDriver(t)
 	for _, size := range []driver.ClaimSize{{}, {MemoryMB: 3072, CPUs: 1}} {
@@ -128,6 +134,7 @@ func TestClaimLimitsKeepReadyAdmissionAtEnforcedCeiling(t *testing.T) {
 		}
 	}
 }
+
 func TestClaimLimitsRecoverParentAndSizeFromHolder(t *testing.T) {
 	d, docker, limits := limitedDriver(t)
 	ctx := context.Background()
@@ -154,6 +161,7 @@ func TestClaimLimitsRecoverParentAndSizeFromHolder(t *testing.T) {
 		t.Fatalf("lost parent: %s", p)
 	}
 }
+
 func TestClaimLimitsReleaseOnlyAfterNetworkContainersGone(t *testing.T) {
 	d, docker, limits := limitedDriver(t)
 	ctx := context.Background()

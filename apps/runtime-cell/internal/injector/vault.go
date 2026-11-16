@@ -131,7 +131,9 @@ type RefusingVault struct{}
 func (RefusingVault) Credential(context.Context, string, string, string) (Credential, error) {
 	return Credential{}, ErrVaultNotConfigured
 }
+
 func (RefusingVault) PutVersion(context.Context, SecretVersion) error { return ErrVaultNotConfigured }
+
 func (RefusingVault) RegisterExternalVersion(context.Context, ExternalSecretVersion) error {
 	return ErrVaultNotConfigured
 }
@@ -139,22 +141,29 @@ func (RefusingVault) Bind(context.Context, Binding) error { return ErrVaultNotCo
 func (RefusingVault) RevokeVersion(context.Context, SecretScope, string, uint64) error {
 	return ErrVaultNotConfigured
 }
-func (RefusingVault) RevokeClaim(context.Context, ClaimScope) error  { return ErrVaultNotConfigured }
+
+func (RefusingVault) RevokeClaim(context.Context, ClaimScope) error { return ErrVaultNotConfigured }
+
 func (RefusingVault) RevokeKnownClaim(context.Context, string) error { return ErrVaultNotConfigured }
+
 func (RefusingVault) ListVersions(context.Context, SecretScope) ([]SecretVersionInfo, error) {
 	return nil, ErrVaultNotConfigured
 }
 func (RefusingVault) Close() error { return nil }
 
-var vaultID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$`)
-var vaultHeader = regexp.MustCompile("^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$")
+var (
+	vaultID     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$`)
+	vaultHeader = regexp.MustCompile("^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$")
+)
 
 func validSecretScope(s SecretScope) bool {
 	return vaultID.MatchString(s.OrganizationID) && vaultID.MatchString(s.EnvironmentID)
 }
+
 func validClaimScope(s ClaimScope) bool {
 	return validSecretScope(s.SecretScope) && vaultID.MatchString(s.ClaimID)
 }
+
 func validHeader(s string) bool {
 	return vaultHeader.MatchString(s) && !hopByHop[http.CanonicalHeaderKey(s)] && !strings.EqualFold(s, "Host") && !strings.EqualFold(s, "Content-Length") && !strings.EqualFold(s, "Accept-Encoding")
 }

@@ -21,6 +21,7 @@ import { explorationEvidence, exploredCommand, putStepOutput, type RunEvidence }
 import { stableStepId } from '../run/step-id';
 import type { SecurityViolation } from '../run/security-violation';
 import type { RunPlanClient } from './http-run-plan';
+import { keepFirstStatuses, reconOnBase } from './plan-recon';
 import { LlmGateway, LlmMessage, LlmResponse } from './llm-gateway';
 
 // The agent explores the base machine and writes probes (docs §4). It never
@@ -46,6 +47,16 @@ export interface AgentPlan {
     exploration?: ExploredCommand[];
     /** The tokens the plan used, over all its model calls. */
     usage?: LlmResponse['usage'];
+    /**
+     * The reconnaissance pass (plan-recon.ts): http probes sent to base once,
+     * how many had a doubt, and whether a planner round revised the plan.
+     */
+    recon?: { probes: number; doubts: number; revised: boolean };
+    /** The planner version (TEST_PLANNER_VERSION) and the key a later Run of the same head reuses this plan by (run/plan-reuse.ts). */
+    plannerVersion?: string;
+    reuseKey?: string;
+    /** The Run whose accepted plan this one reuses: no model call, no exploration. */
+    reusedFrom?: string;
 }
 
 export interface AgentInput {
@@ -112,6 +123,7 @@ function parseJson(text: string): any {
     try {
         return JSON.parse(m[0]);
     } catch {
+        // Model text that is not JSON is no answer: the caller treats undefined as none.
         return undefined;
     }
 }
@@ -189,23 +201,31 @@ export class RuntimeAgent {
             exploration,
             usage,
         });
+        // The plan the reconnaissance pass sent back for one revision round, and what base answered to it.
+        let first: AgentPlan | undefined;
+        let recon: RunPlanRequest['recon'];
+        let reconCount: AgentPlan['recon'];
         for (let round = 0; round <= RUN_PLAN_LIMITS.maxExecRounds; round++) {
             const body: RunPlanRequest = {
                 ...fixed,
                 round,
-                execLeft: MAX_EXPLORE - observations.length,
+                // The revision round fixes the plan from what base answered; it explores nothing more.
+                execLeft: recon ? 0 : MAX_EXPLORE - observations.length,
                 observations: observations.map(asPlanObservation),
-                ...(browserEnabled ? { browserExploration: { v: 1 as const, left: RUN_PLAN_LIMITS.maxExecRounds - round }, browserObservations } : {}),
+                ...(browserEnabled ? { browserExploration: { v: 1 as const, left: recon ? 0 : RUN_PLAN_LIMITS.maxExecRounds - round }, browserObservations } : {}),
                 ...(notes ? { notes } : {}),
+                ...(recon ? { recon } : {}),
             };
             const res = await planner.plan({ runId: input.runId, attempt: input.attempt, signal: input.signal, organizationId: input.organizationId, runToken: input.runToken, body });
             usage = addUsage(usage, res.usage);
+            // A revision round that does not plan leaves the plan it was asked to fix.
+            if (first && res.status !== 'planned') return { ...first, usage, recon: { ...reconCount!, revised: false } };
             if (res.status === 'no_plan') return { ...empty(res.reason), rejected: [{ reason: noPlanReason(res.reason) }, ...res.rejected.map((reason) => ({ reason }))] };
             if (res.status === 'planned') {
                 const checked = checkPlanSubmission(res.plan, scope);
                 const rejected = [...new Set([...res.rejected, ...checked.rejected.map((r) => r.reason)])].map((reason) => ({ reason }));
-                return {
-                    probes: checked.probes,
+                const plan: AgentPlan = {
+                    probes: first ? keepFirstStatuses(checked.probes, first.probes) : checked.probes,
                     tests: checked.tests,
                     claims: checked.claims,
                     rejected,
@@ -215,6 +235,25 @@ export class RuntimeAgent {
                     exploration,
                     usage,
                 };
+                if (first) return { ...plan, recon: { ...reconCount!, revised: true } };
+                // Each http probe to base once before the replay; a doubt gets one revision round, while a round is left.
+                const http = plan.probes.filter((p) => p.probe.spec.kind === 'http');
+                if (!http.length || round >= RUN_PLAN_LIMITS.maxExecRounds) return plan;
+                const seen = await reconOnBase({
+                    env: this.env,
+                    baseClaimId: input.baseClaimId,
+                    probes: plan.probes,
+                    entryPoints: input.entryPoints,
+                    stepIdOf: (i, n) => stableStepId(input.runId, input.attempt, `agent:plan:recon:${round}:${i}:${n}`),
+                    canaries: input.canaries ?? input.evidence?.canaries ?? [],
+                });
+                if (seen.securityViolation) return { ...empty('the reconnaissance request stopped for security'), securityViolation: { side: 'base', signature: seen.securityViolation } };
+                const doubts = seen.answers.filter((a) => a.doubts.length).length;
+                reconCount = { probes: seen.answers.length, doubts, revised: false };
+                if (!doubts) return { ...plan, recon: reconCount };
+                first = plan;
+                recon = { probes: res.plan.probes.slice(0, RUN_PLAN_LIMITS.maxProbes), answers: seen.answers };
+                continue;
             }
             if (res.status === 'explore_browser') {
                 if (!browserEnabled || round >= RUN_PLAN_LIMITS.maxExecRounds) return empty('browser exploration is unavailable or exhausted');

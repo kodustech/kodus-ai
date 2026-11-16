@@ -29,6 +29,7 @@ const id = z
     .string()
     .min(1)
     .max(128)
+    // eslint-disable-next-line no-control-regex -- matching a control character is the check itself
     .regex(/^[^\u0000-\u001f\u007f]+$/);
 const text = z.string().max(MODEL_TURN_LIMITS.text);
 const count = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);

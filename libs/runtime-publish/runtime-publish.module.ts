@@ -1,8 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { getConnectionToken } from '@nestjs/mongoose';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import type { Collection } from 'mongodb';
-import type { Connection } from 'mongoose';
+import { DataSource } from 'typeorm';
 
 import { ChecksAdapterFactory } from '@libs/core/infrastructure/pipeline/services/checks-adapter.factory';
 import { NullChecksAdapter } from '@libs/core/infrastructure/pipeline/services/null-checks.adapter';
@@ -11,53 +9,40 @@ import { IntegrationConfigCoreModule } from '@libs/integrations/modules/config-c
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { ForgejoChecksService } from '@libs/platform/infrastructure/adapters/services/forgejo/forgejo-checks.service';
 import { GithubChecksService } from '@libs/platform/infrastructure/adapters/services/github/github-checks.service';
+import { GithubService } from '@libs/platform/infrastructure/adapters/services/github/github.service';
 import { ForgejoModule } from '@libs/platform/modules/forgejo.module';
 import { GithubModule } from '@libs/platform/modules/github.module';
 import { PlatformCoreModule } from '@libs/platform/modules/platform-core.module';
+import { PULL_REQUESTS_REPOSITORY_TOKEN, type IPullRequestsRepository } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
+import { PlatformDataModule } from '@libs/platformData/platformData.module';
+import { TypeOrmSql } from '@libs/runtime/api/infrastructure/typeorm-sql';
 
 import { PublishRuntimeRequestUseCase } from './application/publish-runtime-request.use-case';
 import { RedriveRuntimePublicationsUseCase } from './application/redrive-runtime-publications.use-case';
-import {
-    RUNTIME_PR_COMMENT_SLOT_STORE_TOKEN,
-    RUNTIME_PR_COMMENTS_COLLECTION,
-    type PullRequestCommentSlot,
-} from './domain/pull-request-comment-slot';
+import { RUNTIME_PR_COMMENT_SLOT_STORE_TOKEN } from './domain/pull-request-comment-slot';
 import { RUNTIME_RUN_TARGET_STORE_TOKEN } from './domain/run-target';
-import {
-    RUNTIME_PUBLICATIONS_COLLECTION,
-    type RuntimePublication,
-} from './domain/runtime-publication';
 import {
     RUNTIME_PUBLICATION_STORE_TOKEN,
     RUNTIME_PUBLISH_CHECKS_TOKEN,
     RUNTIME_PUBLISH_CODE_MANAGEMENT_TOKEN,
+    RUNTIME_PUBLISH_COMMENT_AUTHOR_TOKEN,
     RUNTIME_PUBLISH_DASHBOARD_URL_TOKEN,
     RUNTIME_PUBLISH_METRICS_TOKEN,
+    RUNTIME_PUBLISH_PREVIEW_OFFER_TOKEN,
     RUNTIME_PUBLISH_REPOSITORY_RESOLVER_TOKEN,
     RUNTIME_PUBLISH_SUGGESTION_RESOLVER_TOKEN,
 } from './domain/runtime-publish.ports';
 import { IntegrationConfigRepositoryResolver } from './infrastructure/integration-config-repository.resolver';
-import { MongoCommentSlotStore } from './infrastructure/mongo-comment-slot.store';
-import { MongoPublicationStore } from './infrastructure/mongo-publication.store';
 import { OtelPublishMetrics } from './infrastructure/otel-publish.metrics';
-import {
-    PULL_REQUESTS_COLLECTION,
-    PullRequestSuggestionResolver,
-} from './infrastructure/pull-request-suggestion.resolver';
+import { PlatformCommentAuthor } from './infrastructure/platform-comment-author';
+import { ProductPreviewOfferReader } from './infrastructure/product-preview-offer.reader';
+import { PullRequestSuggestionResolver } from './infrastructure/pull-request-suggestion.resolver';
 import { RuntimePublicationRedriveCron } from './infrastructure/runtime-publication-redrive.cron';
 import { RuntimePublishRequestedConsumer } from './infrastructure/runtime-publish-requested.consumer';
 import { RuntimeRunTargetModel } from './infrastructure/runtime-run-target.model';
+import { TypeOrmCommentSlotStore } from './infrastructure/typeorm-comment-slot.store';
+import { TypeOrmPublicationStore } from './infrastructure/typeorm-publication.store';
 import { TypeOrmRunTargetStore } from './infrastructure/typeorm-run-target.store';
-
-// Mongoose bundles its own copy of the driver; the stores are typed against
-// the top-level `mongodb` package, so the collection is cast at this seam.
-function collectionOf<T>(connection: Connection, name: string): Collection<T> {
-    const db = connection.db;
-    if (!db) {
-        throw new Error(`Mongo connection is not open; cannot read ${name}`);
-    }
-    return db.collection(name) as unknown as Collection<T>;
-}
 
 /**
  * The product worker's publisher for Kody Runtime (ADR-052): consumes
@@ -72,6 +57,8 @@ function collectionOf<T>(connection: Connection, name: string): Collection<T> {
         forwardRef(() => GithubModule),
         forwardRef(() => ForgejoModule),
         forwardRef(() => IntegrationConfigCoreModule),
+        // The review record a reply answers (pullRequests): read through the product's repository.
+        forwardRef(() => PlatformDataModule),
     ],
     providers: [
         GithubChecksService,
@@ -88,6 +75,12 @@ function collectionOf<T>(connection: Connection, name: string): Collection<T> {
             useExisting: CodeManagementService,
         },
         {
+            // Who Kody posts as: a lost create adopts only its own marked comment (review 2026-11-14, #11).
+            provide: RUNTIME_PUBLISH_COMMENT_AUTHOR_TOKEN,
+            useFactory: (codeManagement: CodeManagementService, github: GithubService) => new PlatformCommentAuthor(codeManagement, () => github.getGithubAppId()),
+            inject: [CodeManagementService, GithubService],
+        },
+        {
             provide: RUNTIME_PUBLISH_REPOSITORY_RESOLVER_TOKEN,
             useExisting: IntegrationConfigRepositoryResolver,
         },
@@ -97,30 +90,17 @@ function collectionOf<T>(connection: Connection, name: string): Collection<T> {
             useClass: TypeOrmRunTargetStore,
         },
         {
+            // runtime_publications in the product Postgres: its primary key on the
+            // idempotency key is what makes the dedup atomic (the migration makes it).
             provide: RUNTIME_PUBLICATION_STORE_TOKEN,
-            // The unique indexes are what make the dedup atomic: without them a
-            // race publishes twice, so a failure here fails the worker's start.
-            useFactory: async (connection: Connection) => {
-                const collection = collectionOf<RuntimePublication>(
-                    connection,
-                    RUNTIME_PUBLICATIONS_COLLECTION,
-                );
-                await MongoPublicationStore.ensureIndexes(collection);
-                return new MongoPublicationStore(collection);
-            },
-            inject: [getConnectionToken()],
+            useFactory: (source: DataSource) => new TypeOrmPublicationStore(new TypeOrmSql(source)),
+            inject: [DataSource],
         },
         {
+            // runtime_pr_comments: the primary key on the PR lets one delivery hold its comment.
             provide: RUNTIME_PR_COMMENT_SLOT_STORE_TOKEN,
-            useFactory: async (connection: Connection) => {
-                const collection = collectionOf<PullRequestCommentSlot>(
-                    connection,
-                    RUNTIME_PR_COMMENTS_COLLECTION,
-                );
-                await MongoCommentSlotStore.ensureIndexes(collection);
-                return new MongoCommentSlotStore(collection);
-            },
-            inject: [getConnectionToken()],
+            useFactory: (source: DataSource) => new TypeOrmCommentSlotStore(new TypeOrmSql(source)),
+            inject: [DataSource],
         },
         {
             provide: RUNTIME_PUBLISH_METRICS_TOKEN,
@@ -128,11 +108,9 @@ function collectionOf<T>(connection: Connection, name: string): Collection<T> {
         },
         {
             provide: RUNTIME_PUBLISH_SUGGESTION_RESOLVER_TOKEN,
-            useFactory: (connection: Connection) =>
-                new PullRequestSuggestionResolver(
-                    collectionOf(connection, PULL_REQUESTS_COLLECTION),
-                ),
-            inject: [getConnectionToken()],
+            useFactory: (pullRequests: IPullRequestsRepository) =>
+                new PullRequestSuggestionResolver(pullRequests.getNativeCollection()),
+            inject: [PULL_REQUESTS_REPOSITORY_TOKEN],
         },
         {
             // Links in the comment go to the dashboard only (Run page, settings).
@@ -147,6 +125,12 @@ function collectionOf<T>(connection: Connection, name: string): Collection<T> {
                 }
                 return url;
             },
+        },
+        {
+            // The preview line of the comment and the check: only with RUNTIME_PREVIEW_DOMAIN here and the org's previews on.
+            provide: RUNTIME_PUBLISH_PREVIEW_OFFER_TOKEN,
+            useFactory: (source: DataSource) => new ProductPreviewOfferReader(new TypeOrmSql(source), process.env.RUNTIME_PREVIEW_DOMAIN),
+            inject: [DataSource],
         },
         PublishRuntimeRequestUseCase,
         RuntimePublishRequestedConsumer,

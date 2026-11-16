@@ -1,3 +1,4 @@
+import { traceparentFor } from '@libs/runtime/telemetry/runtime-telemetry';
 import { HttpException, Inject, Injectable, Optional } from '@nestjs/common';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -12,6 +13,7 @@ import { machineSizeOf, MACHINE_SIZES } from '@libs/runtime/contracts/machine-si
 
 import { parseRecipe } from '@libs/runtime/protocol/recipe';
 import { resolveRecipeResources } from '@libs/runtime/run/recipe-resources';
+import { setupBudgetLimits } from '../domain/budget';
 import { effectivePoolSize } from '../domain/pool';
 import { RuntimePoolController } from './pool-controller.service';
 import {
@@ -22,7 +24,7 @@ import {
     runtimeCommandOutboxMessage,
     type RuntimeEnvironmentSetupRequested,
     type SetupRequestBlockerKind,
-} from '../domain/runtime-commands';
+} from '@libs/runtime/contracts/runtime-commands';
 import {
     RUNTIME_API_CONFIG,
     RUNTIME_CLOCK,
@@ -37,18 +39,34 @@ import {
     type RuntimeRepoTokenIssuer,
 } from '../domain/ports';
 import { RUN_TOKEN_DEFAULT_TTL_SECONDS, signSetupToken } from '../domain/run-token';
+import { RepositoryFullNameSchema } from '@libs/runtime/contracts/workspace';
+import { RuntimeEnvironmentMembers } from './environment-members.service';
 import { inferRecipeAtCommit } from './recipe-inference.reader';
 import { sealForRuntime } from './secret-sealer';
 
 type Resolved = Pick<RuntimeEnvironmentSetupRequested,
     | 'ref' | 'repoToken' | 'llmToken' | 'recipe' | 'blocker' | 'repositoryFullName'
-    | 'machineSize'
+    | 'machineSize' | 'workspace'
 >;
 
 const blocked = (kind: SetupRequestBlockerKind, message: string, extra: Resolved = {}): Resolved => ({
     ...extra,
     blocker: { kind, message: message.slice(0, 500) },
 });
+
+/**
+ * Which recipe file broke which rule. The parser's reason is the repository's
+ * own file read back, never a secret (a value that looks like one is named,
+ * not quoted). A refused shared recipe is often Runo's developer-VM recipe:
+ * the Runtime-only file is read first, so it is the way out.
+ */
+const invalidRecipeMessage = (path: string, error: string): string => {
+    const reason = error.replace(/^recipe:\s*/, '');
+    const runtimeOnly = RUNTIME_RECIPE_PATHS[0];
+    return path === runtimeOnly
+        ? `${path} is invalid: ${reason}.`
+        : `${path} is invalid: ${reason}. Correct it, or put a recipe for Kody Runtime in ${runtimeOnly}, which the Runtime reads first.`;
+};
 
 /** Product-authored message of an HttpException; anything else stays generic (it may carry request details). */
 const safeMessage = (e: unknown, fallback: string) => (e instanceof HttpException ? e.message : fallback);
@@ -79,6 +97,9 @@ export class RuntimeSetupRequester {
         private readonly config: RuntimeApiConfig,
         @Optional()
         private readonly pool?: RuntimePoolController,
+        // Required by Nest; a requester made without it (the older tests) sets up the primary alone.
+        @Inject(RuntimeEnvironmentMembers)
+        private readonly members?: RuntimeEnvironmentMembers,
     ) {}
 
     async request(env: ProductEnvironment, user: Partial<IUser>): Promise<ProductEnvironment> {
@@ -98,6 +119,8 @@ export class RuntimeSetupRequester {
                     requestedBy: { userId: user.uuid!, ...(user.email ? { email: user.email } : {}) },
                     requestedAt,
                     key,
+                    // The setup's trace, named by its key (the product exports no live span to continue).
+                    traceparent: traceparentFor(key),
                     ...resolved,
                     // The org admin's diagnostic hold (§11 runbook); the hub and the cell keep it to setup, never a PR.
                     ...(env.diagnosticHold ? { diagnosticHold: true } : {}),
@@ -174,12 +197,8 @@ export class RuntimeSetupRequester {
         // Resolve from this trusted base recipe before outbox/admission and before issuing a token.
         const parsed =
             recipe.content === null ? undefined : parseRecipe(recipe.content);
-        if (parsed && !parsed.ok)
-            return blocked(
-                'recipe_invalid',
-                'The base recipe is invalid; correct it before requesting setup.',
-                { ...base, ref, recipe },
-            );
+        if (parsed && parsed.ok === false)
+            return blocked('recipe_invalid', invalidRecipeMessage(recipe.path, parsed.error), { ...base, ref, recipe });
         const resources = resolveRecipeResources({
             ...(parsed?.ok && parsed.recipe.size
                 ? { recipe: parsed.recipe.size }
@@ -207,7 +226,67 @@ export class RuntimeSetupRequester {
         if (!this.config.secretSealKey) {
             return blocked('token_unavailable', 'RUNTIME_SECRET_SEAL_KEY is not configured; the download token is not handed over plain.', { ...base, ref, recipe });
         }
-        return { ...base, ref, recipe, ...sized, repoToken: sealForRuntime(this.config, repoToken, sealFor), ...this.llmTokenFor(env, sealFor) };
+        const sealedRepoToken = sealForRuntime(this.config, repoToken, sealFor);
+        const workspace = await this.workspaceOf(env, { sha: head.sha, branch: head.branch, sealedRepoToken }, sealFor);
+        if ('blocker' in workspace) return { ...base, ref, recipe, blocker: workspace.blocker };
+        return {
+            ...base,
+            ref,
+            recipe,
+            ...sized,
+            repoToken: sealedRepoToken,
+            ...this.llmTokenFor(env, sealFor),
+            // Only an environment of several repositories carries it: a single-repository setup stays as it was.
+            ...(workspace.entries ? { workspace: workspace.entries } : {}),
+        };
+    }
+
+    /**
+     * Every repository of a multi-repository environment at its default-branch
+     * head (the primary at the setup's ref, with its token), each with a
+     * download token for that repository only, sealed for this setup. Nothing
+     * for an environment of one repository.
+     */
+    private async workspaceOf(
+        env: ProductEnvironment,
+        primary: { sha: string; branch: string; sealedRepoToken: string },
+        sealFor: string,
+    ): Promise<{ entries?: NonNullable<Resolved['workspace']> } | { blocker: NonNullable<Resolved['blocker']> }> {
+        const members = this.members ? await this.members.list(env) : [];
+        if (members.length <= 1) return {};
+        const orgTeam = { organizationId: env.organizationId, teamId: env.teamId };
+        const stop = (kind: SetupRequestBlockerKind, message: string) => ({ blocker: { kind, message: message.slice(0, 500) } });
+        const entries: NonNullable<Resolved['workspace']> = [];
+        for (const m of members) {
+            if (!RepositoryFullNameSchema.safeParse(m.fullName).success) {
+                return stop('no_ref', `Kodus does not know the full name (owner/name) of ${m.repositoryName}; add it to the environment again.`);
+            }
+            const common = { repositoryId: m.repositoryId, fullName: m.fullName, alias: m.alias, role: m.role };
+            if (m.role === 'primary') {
+                entries.push({ ...common, ...primary });
+                continue;
+            }
+            const repo = { ...orgTeam, repositoryId: m.repositoryId, repositoryName: m.repositoryName };
+            let head: Awaited<ReturnType<RuntimeGitPort['getDefaultBranchHead']>>;
+            try {
+                head = await this.git.getDefaultBranchHead(repo);
+            } catch (e) {
+                this.warnGitFailure(`default branch head of member ${m.alias}`, env, e);
+                return stop('git_unavailable', `The Git API did not answer the default branch head of ${m.fullName}; ask for the setup again.`);
+            }
+            if (head.status === 'unsupported_platform') {
+                return stop('unsupported_platform', `Environment setup reads the default branch of ${m.fullName} from ${head.platform ?? 'the Git platform'}, which is not supported yet (GitHub only).`);
+            }
+            if (head.status === 'not_found') return stop('no_ref', `${m.fullName} has no default branch head to build (empty repository or no access).`);
+            let token: string;
+            try {
+                token = await this.repoTokens.issue(repo);
+            } catch (e) {
+                return stop('token_unavailable', safeMessage(e, `The download token of ${m.fullName} could not be issued.`));
+            }
+            entries.push({ ...common, sha: head.sha, branch: head.branch, sealedRepoToken: sealForRuntime(this.config, token, sealFor) });
+        }
+        return { entries };
     }
 
     /**
@@ -224,7 +303,7 @@ export class RuntimeSetupRequester {
                 organizationId: env.organizationId,
                 teamId: env.teamId,
                 repositoryId: env.repositoryId,
-                ...(this.config.llmBudget?.perRun ? { maxTokens: this.config.llmBudget.perRun } : {}),
+                ...(this.config.llmBudget?.perRun ? { maxTokens: setupBudgetLimits(this.config.llmBudget).perRun } : {}),
                 exp: Math.floor(this.now().getTime() / 1000) + RUN_TOKEN_DEFAULT_TTL_SECONDS,
             },
             this.config.runTokenSecret,

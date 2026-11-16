@@ -1,16 +1,15 @@
-import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
+import { consumerWith } from '../consumer/testing';
 import { RUNTIME_CONTROL_BINDING, RUNTIME_CONTROL_ROUTING_KEY, RUNTIME_RUN_ROUTING_KEY, RuntimeEventName, runtimeEnvelope, runtimeOutboxMessage } from '@libs/runtime/run';
-import { RuntimeCommandName, runtimeCommandOutboxMessage, runtimeCommandRoute } from '@libs/runtime/api/domain/runtime-commands';
+import { isRunLaneEvent, RuntimeCommandName, runtimeCommandOutboxMessage, runtimeCommandRoute } from '@libs/runtime/contracts/runtime-commands';
 import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryDistributedLocks } from '../../shared/persistence/locks';
-import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
-import { RuntimeCommandConsumer } from '../consumer/run-request.consumer';
 import { EnvironmentPoolRequestedHandler } from './command-handlers';
 import { AmqpPublishRequester, PUBLISH_CONFIRM_TIMEOUT_MS } from '../publish/amqp-publish-requester';
-import { inMemoryRunDeps } from '../run/in-memory-deps';
+import { inMemoryRunDeps } from '../run/testing';
 import { runRuntimeRun } from '../run/run-orchestrator';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/testing';
+import { InMemoryCommandStore, InMemoryDistributedLocks } from '../../shared/persistence/testing';
 
 const asMessage = (payload: unknown, event: string = RuntimeEventName.RunRequested) => runtimeEnvelope(event, { ...(payload as object), workflowType: 'RUNTIME_RUN' }, 'm1') as any;
 
@@ -31,7 +30,7 @@ describe('RunRequested under concurrency', () => {
     it('two heads registered before effects: only the latest generation starts', async () => {
         const projection = new InMemoryRunProjectionStore();
         const e = engine();
-        const consumer = new RuntimeCommandConsumer(e as any, projection, new InMemoryCommandStore(), new InMemoryPrAdmissionStore(), undefined, undefined, new InMemoryDistributedLocks());
+        const consumer = consumerWith({ engine: e as any, projection, commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore(), locks: new InMemoryDistributedLocks() });
         const a = shopRunRequest();
         const b = shopRunRequest({ pullRequest: { ...a.pullRequest, headSha: 'c'.repeat(40) } });
         await Promise.all([consumer.handle(asMessage(a)), consumer.handle(asMessage(b))]);
@@ -43,7 +42,7 @@ describe('RunRequested under concurrency', () => {
     it('the same head delivered twice at once starts one Run', async () => {
         const projection = new InMemoryRunProjectionStore();
         const e = engine();
-        const consumer = new RuntimeCommandConsumer(e as any, projection, new InMemoryCommandStore(), new InMemoryPrAdmissionStore(), undefined, undefined, new InMemoryDistributedLocks());
+        const consumer = consumerWith({ engine: e as any, projection, commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore(), locks: new InMemoryDistributedLocks() });
         const a = shopRunRequest();
         const again = shopRunRequest({ pullRequest: a.pullRequest });
         await Promise.all([consumer.handle(asMessage(a)), consumer.handle(asMessage(again))]);
@@ -52,9 +51,9 @@ describe('RunRequested under concurrency', () => {
 
     it('a setup store that cannot be read fails the message (retried), never boots with the request recipe', async () => {
         const e = engine();
-        const setups = { get: async () => Promise.reject(new Error('mongo down')) };
-        const consumer = new RuntimeCommandConsumer(e as any, new InMemoryRunProjectionStore(), new InMemoryCommandStore(), new InMemoryPrAdmissionStore(), undefined, setups);
-        await expect(consumer.handle(asMessage(shopRunRequest()))).rejects.toThrow('mongo down');
+        const setups = { get: async () => Promise.reject(new Error('database down')) };
+        const consumer = consumerWith({ engine: e as any, projection: new InMemoryRunProjectionStore(), commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore(), setups });
+        await expect(consumer.handle(asMessage(shopRunRequest()))).rejects.toThrow('database down');
         expect(e.start).not.toHaveBeenCalled();
     });
 
@@ -74,21 +73,56 @@ describe('RunRequested under concurrency', () => {
             }),
         });
         const sized = engine();
-        await new RuntimeCommandConsumer(sized as any, new InMemoryRunProjectionStore(), new InMemoryCommandStore(), new InMemoryPrAdmissionStore(), undefined, active({ memoryMb: 16_384, cpus: 8 })).handle(
+        await consumerWith({ engine: sized as any, projection: new InMemoryRunProjectionStore(), commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore(), setups: active({ memoryMb: 16_384, cpus: 8 }) }).handle(
             asMessage(shopRunRequest()),
         );
         expect((sized.start.mock.calls[0] as any[])[0].environment.size).toEqual({ memoryMb: 16_384, cpus: 8 });
         const plain = engine();
         const req = shopRunRequest();
         req.environment = { ...req.environment, size: { memoryMb: 65_536, cpus: 16 } };
-        await new RuntimeCommandConsumer(plain as any, new InMemoryRunProjectionStore(), new InMemoryCommandStore(), new InMemoryPrAdmissionStore(), undefined, active()).handle(asMessage(req));
+        await consumerWith({ engine: plain as any, projection: new InMemoryRunProjectionStore(), commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore(), setups: active() }).handle(asMessage(req));
         expect((plain.start.mock.calls[0] as any[])[0].environment).not.toHaveProperty('size');
         // With no active setup (or no setup store) the request's size is not taken either: the cell's default.
         for (const setups of [{ get: async () => null }, undefined]) {
             const none = engine();
-            await new RuntimeCommandConsumer(none as any, new InMemoryRunProjectionStore(), new InMemoryCommandStore(), new InMemoryPrAdmissionStore(), undefined, setups).handle(asMessage(req));
+            await consumerWith({ engine: none as any, projection: new InMemoryRunProjectionStore(), commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore(), setups }).handle(asMessage(req));
             expect((none.start.mock.calls[0] as any[])[0].environment).not.toHaveProperty('size');
         }
+    });
+
+    it("a member's PR boots with its environment's setup, which the primary's repository made", async () => {
+        const setups = {
+            get: async () => ({
+                environmentId: 'shop',
+                organizationId: 'org-demo',
+                repositoryId: 'repo-shop',
+                key: 'k',
+                state: 'active' as const,
+                steps: [],
+                blockers: [],
+                machineSize: { memoryMb: 2_048, cpus: 2 },
+                requestedAt: '2026-11-05T10:00:00.000Z',
+                updatedAt: '2026-11-05T10:00:00.000Z',
+            }),
+        };
+        const base = shopRunRequest();
+        const member = shopRunRequest({
+            repository: { id: 'repo-billing', name: 'billing', fullName: 'demo/billing' },
+            workspace: [
+                { repositoryId: 'repo-shop', fullName: 'demo/shop', alias: 'shop', role: 'primary', baseSha: 'c'.repeat(40), headSha: 'c'.repeat(40), source: 'default_branch' },
+                { repositoryId: 'repo-billing', fullName: 'demo/billing', alias: 'billing', role: 'member', baseSha: base.pullRequest.baseSha, headSha: base.pullRequest.headSha, source: 'pull_request' },
+            ],
+        });
+        const e = engine();
+        await consumerWith({ engine: e as any, projection: new InMemoryRunProjectionStore(), commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore(), setups: setups as any }).handle(asMessage(member));
+        expect(e.start).toHaveBeenCalledTimes(1);
+        expect((e.start.mock.calls[0] as any[])[0].environment.size).toEqual({ memoryMb: 2_048, cpus: 2 });
+        // A Run of another repository that names no workspace is not this setup's.
+        const stranger = engine();
+        await consumerWith({ engine: stranger as any, projection: new InMemoryRunProjectionStore(), commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore(), setups: setups as any }).handle(
+            asMessage(shopRunRequest({ repository: { id: 'repo-other', name: 'other', fullName: 'demo/other' } })),
+        );
+        expect((stranger.start.mock.calls[0] as any[])[0].environment).not.toHaveProperty('size');
     });
 
     it("a Run waits on its setup's ready check, never on one the request names", async () => {
@@ -110,17 +144,17 @@ describe('RunRequested under concurrency', () => {
         const req = shopRunRequest();
         req.environment = { ...req.environment, ready: { service: 'evil', port: 1, path: '/x', waitSeconds: 900 } };
         const e = engine();
-        await new RuntimeCommandConsumer(e as any, new InMemoryRunProjectionStore(), new InMemoryCommandStore(), new InMemoryPrAdmissionStore(), undefined, setup as any).handle(asMessage(req));
+        await consumerWith({ engine: e as any, projection: new InMemoryRunProjectionStore(), commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore(), setups: setup as any }).handle(asMessage(req));
         expect((e.start.mock.calls[0] as any[])[0].environment.ready).toEqual({ service: 'web', port: 3000, path: '/api/health', waitSeconds: 90 });
         // Without an active setup the request's ready check is dropped too.
         const none = engine();
-        await new RuntimeCommandConsumer(none as any, new InMemoryRunProjectionStore(), new InMemoryCommandStore(), new InMemoryPrAdmissionStore(), undefined, { get: async () => null }).handle(asMessage(req));
+        await consumerWith({ engine: none as any, projection: new InMemoryRunProjectionStore(), commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore(), setups: { get: async () => null } }).handle(asMessage(req));
         expect((none.start.mock.calls[0] as any[])[0].environment).not.toHaveProperty('ready');
     });
 
     it('refuses a Run request whose tokens are not sealed', async () => {
         const e = engine();
-        const consumer = new RuntimeCommandConsumer(e as any, new InMemoryRunProjectionStore(), new InMemoryCommandStore(), new InMemoryPrAdmissionStore());
+        const consumer = consumerWith({ engine: e as any, projection: new InMemoryRunProjectionStore(), commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore() });
         const out = await consumer.handle(asMessage({ ...shopRunRequest(), repoToken: 'ghs_plain' }));
         expect(out).toMatchObject({ requeue: false });
         expect(e.start).not.toHaveBeenCalled();
@@ -217,8 +251,18 @@ describe('command routes', () => {
         expect(RUNTIME_CONTROL_ROUTING_KEY).toMatch(new RegExp(`^${RUNTIME_CONTROL_BINDING.replace(/\./g, '\\.').replace('*', '[^.]+')}$`));
     });
 
+    it('one rule decides the lane: what the outbox routes to the Run queue is what the Run consumer accepts', () => {
+        for (const name of Object.values(RuntimeCommandName)) {
+            expect(isRunLaneEvent(name)).toBe(runtimeCommandRoute(name).routingKey === RUNTIME_RUN_ROUTING_KEY);
+        }
+        expect(isRunLaneEvent(RuntimeEventName.RunRequested)).toBe(true);
+        expect(isRunLaneEvent(RuntimeEventName.RunCancelRequested)).toBe(true);
+        expect(isRunLaneEvent(RuntimeEventName.PublishRequested)).toBe(false);
+        expect(isRunLaneEvent('runtime.unknown')).toBe(false);
+    });
+
     it('the consumer handles a control command from its own queue', async () => {
-        const consumer = new RuntimeCommandConsumer({} as any, new InMemoryRunProjectionStore(), new InMemoryCommandStore(), new InMemoryPrAdmissionStore());
+        const consumer = consumerWith({ engine: {} as any, projection: new InMemoryRunProjectionStore(), commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore() });
         const msg = runtimeCommandOutboxMessage(
             RuntimeCommandName.StopRequested,
             { scope: 'global', requestedBy: { userId: 'u-1' }, requestedAt: new Date().toISOString(), correlationId: 'corr-1' },
@@ -227,5 +271,26 @@ describe('command routes', () => {
         expect(msg.routingKey).toBe(RUNTIME_CONTROL_ROUTING_KEY);
         // Handled, not dead-lettered as an unknown event.
         await expect(consumer.onControl(msg.payload as any)).resolves.toBeUndefined();
+    });
+
+    it("an owner's token revoke reaches the token store: that org's unused token only", async () => {
+        const commands = new InMemoryCommandStore();
+        const consumer = consumerWith({ engine: {} as any, projection: new InMemoryRunProjectionStore(), commands, admissions: new InMemoryPrAdmissionStore() });
+        const hash = (c: string) => c.repeat(64);
+        const expiresAt = new Date(Date.now() + 600_000).toISOString();
+        for (const [h, org] of [[hash('a'), 'org-a'], [hash('b'), 'org-b']] as const) {
+            await commands.recordCellToken({ tokenHash: h, organizationId: org, topology: 'self_hosted', expiresAt, issuedBy: 'u' });
+        }
+        const revoke = (tokenHash: string) =>
+            consumer.onControl(
+                runtimeCommandOutboxMessage(RuntimeCommandName.CellTokenRevoked, { tokenHash, organizationId: 'org-a', revokedBy: { userId: 'u-1' }, revokedAt: new Date().toISOString() }, tokenHash)
+                    .payload as any,
+            );
+        await revoke(hash('a'));
+        await revoke(hash('b'));
+        expect(commands.tokens.map((t) => [t.organizationId, !!t.revokedAt])).toEqual([
+            ['org-a', true],
+            ['org-b', false],
+        ]);
     });
 });

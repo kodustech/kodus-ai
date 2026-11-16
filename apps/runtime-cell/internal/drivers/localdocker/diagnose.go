@@ -34,18 +34,16 @@ func (d *Driver) Diagnose(ctx context.Context, _ string, ref driver.MachineRef, 
 		return out, fmt.Errorf("localdocker: machine %s not found", ref.MachineID)
 	}
 	var errs []string
-	if dd, ok := d.docker.(DiagnosticDocker); ok {
-		states, err := dd.ComposePs(ctx, ref.MachineID)
+	states, err := d.docker.ComposePs(ctx, ref.MachineID)
+	if err != nil {
+		errs = append(errs, "ps: "+err.Error())
+	}
+	for _, s := range states {
+		lines, err := d.docker.ComposeLogs(ctx, ref.MachineID, s.Service, 500)
 		if err != nil {
-			errs = append(errs, "ps: "+err.Error())
+			lines = append(lines, "kodus: logs unavailable: "+err.Error())
 		}
-		for _, s := range states {
-			lines, err := dd.ComposeLogs(ctx, ref.MachineID, s.Service, 500)
-			if err != nil {
-				lines = append(lines, "kodus: logs unavailable: "+err.Error())
-			}
-			out.Services = append(out.Services, driver.ServiceDiagnostics{Name: s.Service, State: s.State, Log: lines})
-		}
+		out.Services = append(out.Services, driver.ServiceDiagnostics{Name: s.Service, State: s.State, Log: lines})
 	}
 	if len(published) == 0 {
 		published = expose

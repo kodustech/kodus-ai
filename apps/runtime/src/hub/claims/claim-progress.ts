@@ -1,11 +1,11 @@
-import type { MessageBody } from '@libs/runtime/protocol';
+import type { BootPhases, MessageBody } from '@libs/runtime/protocol';
 
 // Where each claim's preparation is (claim.progress from its cell), for the
 // worker to show on the setup while it waits for claim.ready. Best effort and
 // held by the replica the cell talks to; bounded, and forgotten after a while.
 
 export type ClaimProgressPhase = { phase: string; state: 'started' | 'done'; at: string; ms?: number };
-export type ClaimProgressView = { phases: ClaimProgressPhase[]; lines: string[]; updatedAt: string };
+export type ClaimProgressView = { phases: ClaimProgressPhase[]; lines: string[]; updatedAt: string; bootPhases?: BootPhases };
 
 const MAX_CLAIMS = 1_000;
 const MAX_PHASES = 32;
@@ -32,6 +32,8 @@ export class ClaimProgressBook {
         else if (body.state === 'done' || e.phases[i].state === 'started') e.phases[i] = { ...phase, at: body.state === 'done' ? body.at : e.phases[i].at };
         if (e.phases.length > MAX_PHASES) e.phases.splice(0, e.phases.length - MAX_PHASES);
         if (body.lines) e.lines = body.lines;
+        // Where the boot spent its time so far: the latest says it all.
+        if (body.phases) e.bootPhases = body.phases;
         e.updatedAt = body.at;
         e.touched = t;
     }
@@ -40,6 +42,6 @@ export class ClaimProgressBook {
     get(claimId: string, orgId: string): ClaimProgressView | null {
         const e = this.byClaim.get(claimId);
         if (!e || e.orgId !== orgId) return null;
-        return { phases: e.phases.map((p) => ({ ...p })), lines: [...e.lines], updatedAt: e.updatedAt };
+        return { phases: e.phases.map((p) => ({ ...p })), lines: [...e.lines], updatedAt: e.updatedAt, ...(e.bootPhases ? { bootPhases: e.bootPhases.map((p) => ({ ...p })) } : {}) };
     }
 }

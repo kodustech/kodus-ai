@@ -44,7 +44,7 @@ func decodeSystemdUnit(p map[string]any) (systemdUnit, error) {
 // A read can materialize an automatic slice object even before a unit has
 // been created. Only a fully identified, file-free inactive placeholder under
 // our generated namespace is absent; configured/transient units stay intact.
-func decodeNativeSystemdUnit(name string, p map[string]any) (systemdUnit, error) {
+func decodeNativeSystemdUnit(name string, p map[string]any) (systemdUnit, error) { //nolint:unparam,nolintlint // unparam fires off linux only (darwin builds have no other caller); off linux only tests call it; systemd_linux.go returns the unit
 	unit, err := decodeSystemdUnit(p)
 	if err != nil {
 		return unit, err

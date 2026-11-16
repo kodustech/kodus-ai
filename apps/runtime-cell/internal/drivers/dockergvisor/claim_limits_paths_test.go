@@ -11,12 +11,13 @@ import (
 	"testing"
 	"time"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/browser"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/claimlimits"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose/sandbox"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
-	"go.yaml.in/yaml/v3"
 )
 
 // limitsPathDocker keeps the normal stateful Docker fake and records the
@@ -29,7 +30,7 @@ type limitsPathDocker struct {
 }
 
 func (m *limitsPathDocker) CopyVolumeGeneration(ctx context.Context, runtime, helper, from, to string, labels map[string]string, parent, expected, write string) error {
-	return m.memDocker.copyGeneration(from, to, expected, write, func() error { return m.CopyVolumeBound(ctx, runtime, helper, from, to, labels, parent) })
+	return m.copyGeneration(from, to, expected, write, func() error { return m.CopyVolumeBound(ctx, runtime, helper, from, to, labels, parent) })
 }
 
 func (m *limitsPathDocker) ComposeConfig(_ context.Context, p dockercli.ComposeProject) ([]byte, error) {
@@ -48,13 +49,15 @@ func (m *limitsPathDocker) ComposeConfig(_ context.Context, p dockercli.ComposeP
 	}
 	return json.Marshal(doc)
 }
+
 func (m *limitsPathDocker) CopyVolumeBound(ctx context.Context, runtime, helper, from, to string, labels map[string]string, parent string) error {
 	m.copyParents = append(m.copyParents, parent)
 	if m.copyErr != nil {
 		return m.copyErr
 	}
-	return m.memDocker.CopyVolumeIn(ctx, runtime, helper, from, to, labels)
+	return m.CopyVolumeIn(ctx, runtime, helper, from, to, labels)
 }
+
 func limitedPathsDriver(t *testing.T) (*Driver, *limitsPathDocker, *fakeClaimLimits) {
 	t.Helper()
 	docker := &limitsPathDocker{memDocker: newMemDocker()}
@@ -66,6 +69,7 @@ func limitedPathsDriver(t *testing.T) (*Driver, *limitsPathDocker, *fakeClaimLim
 	recordChowns(d)
 	return d, docker, limits
 }
+
 func makeLimitedClaim(t *testing.T, d *Driver, id string) (driver.ClaimNetwork, driver.MachineRef) {
 	t.Helper()
 	ctx := context.Background()
@@ -83,6 +87,7 @@ func makeLimitedClaim(t *testing.T, d *Driver, id string) (driver.ClaimNetwork, 
 	}
 	return n, ref
 }
+
 func runLimitedBrowser(t *testing.T, d *Driver, claim string, ref driver.MachineRef) ([]string, error) {
 	t.Helper()
 	d.mu.Lock()
@@ -108,14 +113,14 @@ func TestClaimLimitsBuildersComposeAndBrowserKeepTheHolderParent(t *testing.T) {
 		t.Fatal("holder has no aggregate parent")
 	}
 	dir := project(t)
-	_, _, err := d.build(ctx, ref, []sandbox.Build{{Service: "api", Context: dir, Dockerfile: "Dockerfile"}}, n.WorkloadGroupID, "", netip.MustParsePrefix(docker.subnets[n.WorkloadGroupID]))
+	_, _, err := d.build(ctx, ref, []sandbox.Build{{Service: "api", Context: dir, Dockerfile: "Dockerfile"}}, n.WorkloadGroupID, "", netip.MustParsePrefix(docker.subnets[n.WorkloadGroupID]), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(docker.builds) != 1 || docker.builds[0].CgroupParent != parent {
 		t.Fatalf("builder parent escaped: %+v", docker.builds)
 	}
-	_, err = d.Up(ctx, ref, []byte("services:\n  api:\n    image: app\n"), t.TempDir())
+	_, err = d.Up(ctx, driver.UpRequest{Ref: ref, Compose: []byte("services:\n  api:\n    image: app\n"), ProjectDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,9 +146,9 @@ func TestClaimLimitsControllerLossRefusesEveryNewContainerPath(t *testing.T) {
 			var err error
 			switch kind {
 			case "builder":
-				_, _, err = d.build(ctx, ref, []sandbox.Build{{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}}, n.WorkloadGroupID, "", netip.MustParsePrefix(docker.subnets[n.WorkloadGroupID]))
+				_, _, err = d.build(ctx, ref, []sandbox.Build{{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}}, n.WorkloadGroupID, "", netip.MustParsePrefix(docker.subnets[n.WorkloadGroupID]), nil)
 			case "compose":
-				_, err = d.Up(ctx, ref, []byte("services:\n  api:\n    image: app\n"), t.TempDir())
+				_, err = d.Up(ctx, driver.UpRequest{Ref: ref, Compose: []byte("services:\n  api:\n    image: app\n"), ProjectDir: t.TempDir()})
 			case "browser":
 				_, err = runLimitedBrowser(t, d, "claim-loss", ref)
 			case "restore":
@@ -198,7 +203,7 @@ func TestClaimLimitsBakePinAndRestoreHelpersRetainTheirOwnedParent(t *testing.T)
 	parent := docker.containers[setup.MachineID].CgroupParent
 	d.machineOutput(setup.MachineID).volumes = []string{"pgdata"}
 	docker.plantVolume(setup.MachineID, "pgdata", "seed")
-	if err := d.PinBakeSource(setup); err != nil {
+	if err := d.PinBakeSource(t.Context(), setup); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.Destroy(ctx, setup); err != nil {

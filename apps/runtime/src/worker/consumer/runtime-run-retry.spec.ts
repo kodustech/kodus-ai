@@ -1,4 +1,4 @@
-import { InMemoryPrAdmissionStore } from '../../shared/admission/pr-admission-store';
+import { consumerWith } from './testing';
 import {
     AmqpConnection,
     MessageHandlerErrorBehavior,
@@ -18,13 +18,14 @@ import { InMemoryRunProjectionStore } from '@libs/runtime/run/testing';
 import { RuntimeCommandName } from '@libs/runtime/contracts/runtime-commands';
 
 import { shopRunRequest } from '../../e2e/fixtures';
-import { InMemoryCommandStore } from '../../shared/persistence/pg-command-store';
 import { RuntimeCommandConsumer } from './run-request.consumer';
 import {
     RuntimeRunRetry,
     runtimeRunErrorHandler,
     deserializeRuntimeCommand,
 } from './runtime-run-retry';
+import { InMemoryPrAdmissionStore } from '../../shared/admission/testing';
+import { InMemoryCommandStore } from '../../shared/persistence/testing';
 
 const raw = (value: unknown, count?: unknown) =>
     ({
@@ -76,19 +77,7 @@ function fixture() {
             return req.key;
         }),
     };
-    const consumer = new RuntimeCommandConsumer(
-        engine as any,
-        new InMemoryRunProjectionStore(),
-        new InMemoryCommandStore(), new InMemoryPrAdmissionStore(),
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        retry,
-    );
+    const consumer = consumerWith({ engine: engine as any, projection: new InMemoryRunProjectionStore(), commands: new InMemoryCommandStore(), admissions: new InMemoryPrAdmissionStore() }, retry);
     const channel = { ack: jest.fn(), nack: jest.fn() };
     return { publish, retry, canonical, engine, consumer, channel };
 }

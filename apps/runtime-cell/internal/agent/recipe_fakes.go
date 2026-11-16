@@ -2,6 +2,9 @@ package agent
 
 import (
 	"errors"
+	"fmt"
+	"strings"
+
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent/claims"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/compose"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
@@ -10,11 +13,9 @@ import (
 
 // loadClaimCompose validates declarative changes before transports can build,
 // then produces the same project used by the gVisor execution path.
-func loadClaimCompose(c *claims.Claim, repo string, rec *recipe.Recipe) (*compose.Project, error) {
-	// Other repositories booted beside this one: a cell does not, and what
-	// would run without them is not the app.
-	if rec != nil && !rec.Services.Needs.IsZero() {
-		return nil, blockerErr(protocol.BlockerKindOtherRepo, "recipe_needs", errors.New("services.needs (other repositories booted beside this one) is not supported by this cell yet"))
+func (a *Agent) loadClaimCompose(c *claims.Claim, repo string, rec *recipe.Recipe) (*compose.Project, error) {
+	if err := a.checkNeeds(c, rec); err != nil {
+		return nil, err
 	}
 	var files []string
 	if rec != nil {
@@ -51,4 +52,35 @@ func loadClaimCompose(c *claims.Claim, repo string, rec *recipe.Recipe) (*compos
 		}
 	}
 	return proj, nil
+}
+
+// checkNeeds refuses a recipe whose services.needs the claim cannot boot:
+// what would run without those repositories is not the app. A cell that
+// lays workspaces out boots them when the hub sent every one (claim.acquire
+// repos, by alias and repository); the first it lacks is named. Any other
+// cell refuses services.needs as before.
+func (a *Agent) checkNeeds(c *claims.Claim, rec *recipe.Recipe) error {
+	if rec == nil || len(rec.Services.Needs) == 0 {
+		return nil
+	}
+	ws, err := a.claimWorkspace(c)
+	if err != nil {
+		return blockerErr(protocol.BlockerKindPlatform, "workspace_layout", err)
+	}
+	if !a.laysOutWorkspaces() {
+		return blockerErr(protocol.BlockerKindOtherRepo, "recipe_needs", errors.New("services.needs (other repositories booted beside this one) is not supported by this cell yet"))
+	}
+	primary := recipe.AliasOf(c.Acquire.Repo.FullName)
+	if ws != nil {
+		primary = ws.Primary
+	}
+	if err := rec.NeedsConflict(c.Acquire.Repo.FullName, primary); err != nil {
+		return blockerErr(protocol.BlockerKindRecipeOutdated, "recipe_needs_conflict", err)
+	}
+	for _, n := range rec.Services.Needs {
+		if ws == nil || !ws.Has(n.Alias, n.Repo) {
+			return blockerErr(protocol.BlockerKindOtherRepo, "recipe_needs", inRepository(n.Alias, fmt.Errorf("services.needs names %s, which this claim did not bring; add it to the environment's repositories", strings.TrimSpace(n.Repo))))
+		}
+	}
+	return nil
 }

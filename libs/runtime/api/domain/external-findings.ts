@@ -1,3 +1,4 @@
+import { canonicalJson } from '@libs/runtime/contracts/derive-id';
 import type { SubmitFindings } from '@libs/runtime/contracts/external-findings';
 import type { RuntimeRunRequested } from '@libs/runtime/run/run-messages';
 import type { EnvKeyPrincipal } from './env-tools';
@@ -60,6 +61,8 @@ export interface ExternalSubmissionRecord {
     fingerprint: string;
     findingIds: string[];
     submission: SubmitFindings;
+    /** The environment the submission was resolved to; a retry runs there. Absent on records written before it. */
+    environmentId?: string;
     runId?: string;
     imageId?: string;
     refusal?:
@@ -163,14 +166,4 @@ export class ExternalAdmissionError extends Error {
 }
 
 /** Stable JSON identity survives object-key normalization by JSONB and different transports. */
-export function canonicalExternalJSON(value: unknown): string {
-    if (Array.isArray(value))
-        return `[${value.map(canonicalExternalJSON).join(',')}]`;
-    if (value !== null && typeof value === 'object')
-        return `{${Object.entries(value)
-            .filter(([, v]) => v !== undefined)
-            .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-            .map(([k, v]) => `${JSON.stringify(k)}:${canonicalExternalJSON(v)}`)
-            .join(',')}}`;
-    return JSON.stringify(value);
-}
+export const canonicalExternalJSON: (value: unknown) => string = canonicalJson;

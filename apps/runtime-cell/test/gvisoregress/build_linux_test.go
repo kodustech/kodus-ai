@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver/drivertest"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/policy"
 )
@@ -43,8 +43,10 @@ func TestABuildRunsInTheSandboxAndFetchesOnlyThroughTheCell(t *testing.T) {
 			dir := t.TempDir()
 			e := startEgress(t, dir, "kodus-egress-build")
 			ctx := context.Background()
-			d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{CellID: "cell-e2e", HolderImage: "alpine:3.20",
-				WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name, BuilderImage: builderImage})
+			d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{
+				CellID: "cell-e2e", HolderImage: "alpine:3.20",
+				WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name, BuilderImage: builderImage,
+			})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -61,9 +63,11 @@ func TestABuildRunsInTheSandboxAndFetchesOnlyThroughTheCell(t *testing.T) {
 			}
 			t.Cleanup(func() { _ = d.Destroy(context.Background(), ref) })
 			// The policy names the builder from the start, as the agent's does.
-			pol := policy.ClaimPolicy{ClaimID: "claim-build", OrgID: "org-e2e", Phase: policy.PhaseBuild,
+			pol := policy.ClaimPolicy{
+				ClaimID: "claim-build", OrgID: "org-e2e", Phase: policy.PhaseBuild,
 				Sources: append([]string{ref.PrivateAddress}, n.Sources...), Allow: append(append([]string{}, buildHosts...), "pastebin.com"),
-				SteerTo: n.EgressAddress, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now()}
+				SteerTo: n.EgressAddress, ExpiresAt: time.Now().Add(time.Hour), IssuedAt: time.Now(),
+			}
 			if err := e.push.Push(ctx, pol); err != nil {
 				t.Fatalf("push policy: %v", err)
 			}
@@ -75,7 +79,7 @@ func TestABuildRunsInTheSandboxAndFetchesOnlyThroughTheCell(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(project, "app", "Dockerfile"), []byte(dockerfile), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			_, err = d.Up(ctx, ref, []byte("services:\n  api:\n    build: ./app\n"), project)
+			_, err = d.Up(ctx, driver.UpRequest{Ref: ref, Compose: []byte("services:\n  api:\n    build: ./app\n"), ProjectDir: project})
 			if !c.boots {
 				// It must fail at the RUN step, the base image having come
 				// through the cell: a failure anywhere else proves nothing.

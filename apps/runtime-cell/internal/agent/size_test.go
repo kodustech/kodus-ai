@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -205,7 +206,7 @@ func (d defaultSizePooler) PoolCreate(ctx context.Context, spec driver.PoolSpec)
 func TestAPoolMachineOfAnotherSizeThanAskedIsDiscarded(t *testing.T) {
 	h, img := poolHarness(t, func(c *Config) {
 		c.Driver.(*fake.Driver).MaxClaimSize = driver.ClaimSize{MemoryMB: 16384, CPUs: 8}
-		c.Pooler = defaultSizePooler{c.Driver.(*fake.Driver)}
+		c.Parts.Pooler = defaultSizePooler{c.Driver.(*fake.Driver)}
 	})
 	if err := h.handle("", protocol.MessageTypePoolTarget, &protocol.PoolTargetBody{OrgID: "org-a", EnvironmentID: "env-1", ImageID: img, Size: 1, MachineSize: &protocol.MachineSize{MemoryMb: 8192, Cpus: 4}}); err != nil {
 		t.Fatal(err)
@@ -213,5 +214,37 @@ func TestAPoolMachineOfAnotherSizeThanAskedIsDiscarded(t *testing.T) {
 	waitFor(t, func() bool { return len(h.drv.DestroyedIDs()) > 0 })
 	if ms := h.poolMachines(""); len(ms) != 0 {
 		t.Fatalf("pool %v holds a machine of the default size", ms)
+	}
+}
+
+// fullDiskDriver refuses every workload: the cell's disk cannot hold it.
+type fullDiskDriver struct{ *fake.Driver }
+
+func (fullDiskDriver) Create(context.Context, driver.MachineSpec) (driver.MachineRef, error) {
+	return driver.MachineRef{}, fmt.Errorf("microvm: %w: the state disk has 3 GiB free", driver.ErrDiskCapacity)
+}
+
+// A workload the cell's disk cannot hold next to its other machines is the
+// cell's capacity (resources/disk_capacity), never the claim's boot.
+func TestAWorkloadTheCellsDiskCannotHoldIsResourcesDiskCapacity(t *testing.T) {
+	h := newHarness(t, func(cfg *Config) { cfg.Driver = fullDiskDriver{Driver: cfg.Driver.(*fake.Driver)} })
+	if err := h.handle("claim-1", protocol.MessageTypeClaimAcquire, h.acquireBody()); err != nil {
+		t.Fatal(err)
+	}
+	f := h.conn.next(t, isFailed).(*protocol.ClaimFailedBody)
+	if f.Kind != protocol.BlockerKindResources || f.Signature != "disk_capacity" {
+		t.Fatalf("claim.failed %+v, want resources/disk_capacity", f)
+	}
+}
+
+// A boot or a recipe step that filled the machine's data disk is the cell's
+// disk capacity, never the repository's boot or seed.
+func TestABootThatFilledItsDiskIsResourcesDiskCapacity(t *testing.T) {
+	full := fmt.Errorf("microvm: %w: the environment filled its 8 GiB data disk", driver.ErrDiskCapacity)
+	for name, err := range map[string]error{"up": upBlocker(full), "recipe": recipeBlockerOf(full)} {
+		f := failedBody(err)
+		if f.Kind != protocol.BlockerKindResources || f.Signature != "disk_capacity" || !strings.Contains(f.Reason, "8 GiB") {
+			t.Errorf("%s: %+v", name, f)
+		}
 	}
 }

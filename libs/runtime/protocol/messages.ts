@@ -12,8 +12,12 @@ import {
 } from '@libs/runtime/contracts/enums';
 import { AUTHORED_FILES_LIMITS, AuthoredFilesSchema } from '@libs/runtime/contracts/authored-files';
 import { MACHINE_SIZE_LIMITS, type MachineSize, MachineSizeSchema } from '@libs/runtime/contracts/machine-size';
+import { CELL_ISOLATIONS, ISOLATION_BACKEND_NAME, MACHINE_ARCHES } from '@libs/runtime/contracts/isolation';
+import { MAX_WORKSPACE_REPOSITORIES, REPOSITORY_ALIAS_PATTERN } from '@libs/runtime/contracts/workspace';
 import { EVIDENCE_CONTENT_TYPES, EVIDENCE_UPLOAD_TYPES, type EvidenceUploadType } from '@libs/runtime/contracts/evidence';
 import { EvidenceRefSchema, ProbeResultSchema, ProbeSchema } from '@libs/runtime/probe';
+import { PREVIEW_TUNNEL_TICKET_PATTERN, PREVIEW_TUNNEL_URL_PATTERN, PreviewIdSchema } from '@libs/runtime/contracts/preview';
+import { SandboxOpCheckedSchema, SandboxResultSchema } from './sandbox';
 
 // Cell protocol bodies (docs §1b, ADR-051). Every object is strict: an
 // unknown or case-variant key is refused, so TS and Go read the same frame.
@@ -30,6 +34,17 @@ const hostname = z
     .regex(/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/);
 
 const ExposeListSchema = z.array(ExposeSchema).max(64);
+
+// One host of the inspected egress tier (feature egressTiers,
+// docs/runtime/egress-allowlist.md §6): an approval made as inspected. The
+// cell lets only a GET or HEAD under one of its path prefixes, with no body,
+// reach it; the host must also be on the claim's allowlist (egressAllow).
+const EgressInspectPath = z.string().min(1).max(256).regex(/^\/[\x21-\x7e]*$/);
+export const EgressInspectSchema = z.strictObject({
+    host: hostname,
+    paths: z.array(EgressInspectPath).min(1).max(16),
+});
+const EgressInspectListSchema = z.array(EgressInspectSchema).max(256);
 
 // One path segment that is not `.` or `..` (RE2 has no lookahead, and the Go
 // cell compiles these patterns, so the exclusion is spelled out).
@@ -103,6 +118,58 @@ export const ClaimCanarySchema = z.strictObject({
 export type ClaimCanary = z.infer<typeof ClaimCanarySchema>;
 
 /**
+ * One other repository of a multi-repository claim (claim.acquire repos):
+ * fetched like `repo`, at its own commit, with a download token for that
+ * repository only, into the workspace directory named by its alias.
+ */
+export const ClaimRepoSchema = z.strictObject({
+    alias: z.string().regex(REPOSITORY_ALIAS_PATTERN),
+    repo: RepoRefSchema,
+    sha: z.string().regex(/^[0-9a-f]{40}$/),
+    repoToken: z.string().min(1).max(8_192),
+});
+export type ClaimRepo = z.infer<typeof ClaimRepoSchema>;
+
+/** Why claim.acquire repos is malformed, or undefined: each alias once (the Go cell's protocol.refine says the same). */
+export function claimReposError(repos: readonly { alias: string }[] | undefined): string | undefined {
+    const seen = new Set<string>();
+    for (const r of repos ?? []) {
+        if (seen.has(r.alias)) return `repos: alias ${r.alias} twice`;
+        seen.add(r.alias);
+    }
+    return undefined;
+}
+
+/**
+ * One org secret as claim.acquire and sandbox.acquire carry it
+ * (docs/runtime/sandbox.md "Secrets: OpenBao"): a reference, never the value.
+ * id is the secret's key in the store (orgs/<org>/secrets/<id>), name the env
+ * var the machines see its placeholder in (id is name in lower case), hosts
+ * the exact hosts the injector may send the value to. The cell makes a new
+ * placeholder per claim; the value stays in the store and reaches only those
+ * hosts, added by the injector on the way out.
+ */
+export const MAX_CLAIM_SECRETS = 100;
+export const MAX_CLAIM_SECRET_HOSTS = 16;
+export const ClaimSecretSchema = z.strictObject({
+    id: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
+    name: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
+    hosts: z.array(hostname).min(1).max(MAX_CLAIM_SECRET_HOSTS),
+});
+export type ClaimSecret = z.infer<typeof ClaimSecretSchema>;
+
+/** Why a claim's secrets are malformed, or undefined: each id once, id is the name in lower case (the Go cell's protocol.refine says the same). */
+export function claimSecretsError(secrets: readonly { id: string; name: string }[] | undefined): string | undefined {
+    const seen = new Set<string>();
+    for (const s of secrets ?? []) {
+        if (s.name.toLowerCase() !== s.id) return `secrets: ${s.id} is not the lower case of ${s.name}`;
+        if (seen.has(s.id)) return `secrets: ${s.id} twice`;
+        seen.add(s.id);
+    }
+    return undefined;
+}
+
+/**
  * Optional claim.acquire fields a cell advertises it decodes (hello
  * features). Every field added to claim.acquire after the first cells
  * shipped is one of these: the hub leaves it out for a cell that did not
@@ -122,6 +189,13 @@ export type ClaimCanary = z.infer<typeof ClaimCanarySchema>;
  *   - readyBuildSteps: claim.ready timing.buildSteps (where the boot's image
  *     builds spent their time, step by step). This one goes the other way,
  *     cell to hub: see HUB_ACCEPTED_FEATURES.
+ *   - bootPhases: claim.ready timing.phases and claim.failed phases (where
+ *     the boot spent its time, in words: the base image pull, each RUN, the
+ *     export of the layers, moving the image into Docker, compose up, the
+ *     first healthy answer). Cell to hub, like readyBuildSteps; claim.failed
+ *     carries the phases of a boot that failed, and claim.progress the
+ *     phases so far while it runs (the one still running marked running), so
+ *     a boot stopped at its ceiling still says where it was.
  *   - cellMemory: heartbeat memory (what the cell may commit to claims and
  *     what it has committed, builds included). Cell to hub, like
  *     readyBuildSteps: sent only to a hub whose hello ack accepts it. The
@@ -142,6 +216,45 @@ export type ClaimCanary = z.infer<typeof ClaimCanarySchema>;
  *     sends probe.browser (steps, pixel diffs, network, console) only to a
  *     hub that accepts it. A cell without it refuses a browser probe with
  *     browser_unavailable, as before the runner existed.
+ *   - workspace: claim.acquire repos (the other repositories of a
+ *     multi-repository environment, each fetched with its own token into
+ *     its own directory) and exec.repository (a command on one of them).
+ *     The hub sends either only to a cell that names it; a cell that does
+ *     not refuses a recipe with services.needs.
+ *   - sandbox: the cell boots sandbox.acquire (one tool container under its
+ *     isolation, no compose, no Run) and runs sandbox.op through the guest
+ *     agent inside it. The hub sends either only to a cell that names it.
+ *   - traceContext: the envelope's traceparent (W3C trace context). The
+ *     hub sends it on a claim's frames, from the span that sends them, so the
+ *     cell's spans join the Run's trace; the cell passes it on to its guest
+ *     agent. A cell without it gets no traceparent.
+ *   - readyStart: claim.ready start (whether the claim's workload came
+ *     cold, from a pool machine or from a bake this cell made). Cell to hub,
+ *     like readyBuildSteps: sent only to a hub whose hello ack accepts it.
+ *   - secrets: claim.acquire and sandbox.acquire secrets (the org's secrets
+ *     by reference). The cell gives each a placeholder per claim in the
+ *     machines' env and signs it into the claim's egress policy, so the
+ *     injector swaps it for the value on its hosts. A cell without it gets
+ *     none, and its machines hold no placeholder.
+ *   - egressTiers: claim.acquire and sandbox.acquire egressInspect and
+ *     egressRecommended, and egress.policy inspect
+ *     (docs/runtime/egress-allowlist.md): the approvals made as inspected,
+ *     and whether the org keeps the Kodus recommended list on. A cell
+ *     without it gets the hosts in egressAllow alone (an inspected approval
+ *     reaches it as a plain one) and has no recommended list to turn off.
+ *   - preview: claim.acquire consumer preview, and preview.tunnel,
+ *     preview.route and preview.unroute (docs/runtime/preview-urls.md §9.1).
+ *     The hub sends a cell without it no preview claim.
+ *   - buildStateEvicted: heartbeat evictedBuildStates (the environments
+ *     whose build state the cell's disk floor removed and no setup of their
+ *     default branch made again: their builds run with no cache until one
+ *     does). Cell to hub, like readyBuildSteps: sent only to a hub whose
+ *     hello ack accepts it. The list is the cell's whole ledger each time:
+ *     from a cell that named the feature, a heartbeat without it has none.
+ *   - buildStateRebuildCost: heartbeat evictedBuildStates[].rebuildSeconds,
+ *     how long the build that made each evicted state from none took (the
+ *     cost of the next build that finds it gone with no cache). Cell to hub:
+ *     sent only to a hub whose hello ack accepts it.
  */
 export const CELL_FEATURES = [
     'seedsCache',
@@ -150,6 +263,7 @@ export const CELL_FEATURES = [
     'poolMachineSize',
     'authoredFiles',
     'readyBuildSteps',
+    'bootPhases',
     'cellMemory',
     'timedRequests',
     'serviceLogs',
@@ -161,6 +275,26 @@ export const CELL_FEATURES = [
     'browserExplore',
     'recipeFakes',
     'seededSQL',
+    'workspace',
+    'sandbox',
+    'secrets',
+    'readyStart',
+    'traceContext',
+    'preview',
+    'buildStateEvicted',
+    'egressTiers',
+    'snapshots',
+    // snapshot.forget: the hub has the cell remove an org's sessions (a PR
+    // closed, docs/runtime/isolation-p3-snapshots.md). An older cell keeps
+    // them to SessionTTL; the hub sends it the frame only when named.
+    'snapshotForget',
+    // heartbeat host: the KVM host's SMT, KSM, swap, unmitigated CPU
+    // vulnerabilities and microcode, and the cell's host policy (shared
+    // cells refuse an unsafe host; dedicated ones start and report it). Cell
+    // to hub, like readyBuildSteps: sent only to a hub whose hello ack
+    // accepts it.
+    'hostHardening',
+    'buildStateRebuildCost',
 ] as const;
 export type CellFeature = (typeof CELL_FEATURES)[number];
 
@@ -172,12 +306,40 @@ export type CellFeature = (typeof CELL_FEATURES)[number];
  * without `accepts`, so it never sees the field; an older cell never names
  * it, so it never gets an ack with `accepts` it would refuse.
  */
-export const HUB_ACCEPTED_FEATURES = ['readyBuildSteps', 'cellMemory', 'timedRequests', 'serviceLogs', 'dbEffects', 'outboundCalls', 'execCast', 'browser', 'browserExplore'] as const satisfies readonly CellFeature[];
+export const HUB_ACCEPTED_FEATURES = ['readyBuildSteps', 'bootPhases', 'cellMemory', 'timedRequests', 'serviceLogs', 'dbEffects', 'outboundCalls', 'execCast', 'browser', 'browserExplore', 'readyStart', 'buildStateEvicted', 'snapshots', 'hostHardening', 'buildStateRebuildCost'] as const satisfies readonly CellFeature[];
 export type HubAcceptedFeature = (typeof HUB_ACCEPTED_FEATURES)[number];
 
 /** What a hello ack's `accepts` names: the cell's features this hub accepts fields of. Empty: send `accepts` not at all. */
 export function hubAccepts(cellFeatures: readonly string[] | undefined): HubAcceptedFeature[] {
     return HUB_ACCEPTED_FEATURES.filter((f) => cellFeatures?.includes(f));
+}
+
+/** claim.ready start: how a claim's workload came to be. template and session only to a hub that accepts snapshots. */
+export const CLAIM_STARTS = ['cold', 'pool', 'bake', 'template', 'session'] as const;
+export type ClaimStart = (typeof CLAIM_STARTS)[number];
+
+/**
+ * Memory snapshots of a microVM (feature snapshots,
+ * docs/runtime/isolation-p3-snapshots.md):
+ *   - template: a setup's machine that ran no PR code and was handed no
+ *     secret; many machines of its org start from it; its source ends.
+ *   - session: one machine set aside, restored once.
+ *   - round: a claim's own machine at its first ready state, restored on
+ *     each machine.reset of that claim, deleted with it; never a template.
+ */
+export const SNAPSHOT_PURPOSES = ['template', 'session', 'round'] as const;
+export type SnapshotPurpose = (typeof SNAPSHOT_PURPOSES)[number];
+/** A snapshot's id: random, made by the cell. */
+export const SnapshotIdSchema = z.string().regex(/^ksn-[0-9a-f]{32}$/);
+/** What a template is kept under for its org (a repository, a tool set): the newest one of a key replaces the others. */
+export const SnapshotKeySchema = z.string().regex(/^[a-z0-9][a-z0-9._:-]{0,127}$/);
+
+/** Why a sandbox.acquire's snapshot fields do not go together, or undefined (the Go cell's refine says the same). */
+export function sandboxSnapshotError(b: { prepares?: boolean; templateKey?: string; resumeFrom?: string; secrets?: unknown[] }): string | undefined {
+    if (b.prepares && !b.templateKey) return 'a sandbox that prepares a template names its templateKey';
+    if (b.prepares && b.secrets?.length) return 'a sandbox that prepares a template is handed no secret';
+    if (b.resumeFrom && (b.prepares || b.templateKey)) return 'a sandbox resumes a session or starts from a template, not both';
+    return undefined;
 }
 
 const CellFeatureNameSchema = z.string().regex(/^[a-z][A-Za-z0-9]{0,63}$/);
@@ -205,6 +367,19 @@ export const BuildStepsSchema = z.strictObject({
         .max(8),
 });
 export type BuildSteps = z.infer<typeof BuildStepsSchema>;
+
+/**
+ * claim.ready timing.phases and claim.failed phases: where the boot spent its
+ * time, in words a person reads at a glance ("yarn install", "export layers",
+ * "pull image", "compose up", "first healthy"), slowest first, at most 8.
+ * Phases of the same name across services are added up. A name comes from a
+ * Dockerfile line the cell already redacted, cut to 48 bytes. running: the
+ * phase had not ended when the boot stopped (claim.failed only).
+ */
+export const BootPhasesSchema = z
+    .array(z.strictObject({ name: z.string().min(1).max(48), ms, running: z.literal(true).optional() }))
+    .max(8);
+export type BootPhases = z.infer<typeof BootPhasesSchema>;
 
 /**
  * One upload grant (EVIDENCE-CAPTURE-DESIGN "Transport and storage"): where
@@ -350,13 +525,74 @@ export const HeartbeatMemorySchema = z.strictObject({
 });
 export type HeartbeatMemory = z.infer<typeof HeartbeatMemorySchema>;
 
+/** The most environments one heartbeat names in evictedBuildStates (the cell's ledger keeps as many). */
+export const MAX_EVICTED_BUILD_STATES = 64;
+
+/**
+ * heartbeat evictedBuildStates: one environment whose build state the cell's
+ * disk floor removed (evictedAt) and no setup of its default branch made
+ * again. Ids only.
+ */
+export const EvictedBuildStateSchema = z.strictObject({
+    orgId: id,
+    environmentId: id,
+    evictedAt: z.iso.datetime(),
+    // Only to a hub whose hello ack accepts buildStateRebuildCost: how long the
+    // build that made the state from none took, in seconds (at most a week);
+    // absent when the cell never measured it.
+    rebuildSeconds: z.number().int().min(1).max(604_800).optional(),
+});
+export type EvictedBuildState = z.infer<typeof EvictedBuildStateSchema>;
+const hostSwitch = z.enum(['on', 'off', 'unknown']);
+/** What a microVM cell found of its host (cell feature hostHardening). */
+export const HeartbeatHostSchema = z.strictObject({
+    policy: z.enum(['shared', 'dedicated']),
+    smt: hostSwitch,
+    ksm: hostSwitch,
+    swap: hostSwitch,
+    vulnerable: z.array(z.string().regex(/^[a-z0-9_]{1,64}$/)).max(32),
+    microcode: z.string().max(32).optional(),
+});
+export type HeartbeatHost = z.infer<typeof HeartbeatHostSchema>;
+
+/**
+ * hello capabilities (docs/runtime/isolation-architecture.md C2): what the
+ * cell's machines can be, beside the isolation it runs claims under.
+ *   - backends: the isolation backends the cell runs ("gvisor", later
+ *     "firecracker"), plain names an older hub ignores.
+ *   - snapshotMemory: a machine's memory can be snapshotted and restored.
+ *   - nestedDocker: a workload can run containers (compose) in its machine.
+ *   - kvm: the cell's host gives it /dev/kvm.
+ *   - arch: the architecture its machines run.
+ *   - maxSize: the largest size it grants one claim (hello maxClaimSize).
+ *   - defaultSize: the size a claim that asks none runs at; a fractional
+ *     default CPU count is announced by its whole part, as maxSize is. The
+ *     hub records its vCPUs on such a claim (the usage report's vCPU·min).
+ *   - sandboxSize: the size a code sandbox that asks none runs at and is
+ *     counted at (its blank pool sandboxes are of it), within maxSize; absent
+ *     from a cell that runs no sandboxes or is older than it. The hub admits
+ *     such a sandbox at it, never at defaultSize (a Run's).
+ * Placement reads hello isolation; these say what a cell could offer next.
+ */
+export const HelloCapabilitiesSchema = z.strictObject({
+    backends: z.array(z.string().regex(ISOLATION_BACKEND_NAME)).max(8),
+    snapshotMemory: z.boolean(),
+    nestedDocker: z.boolean(),
+    kvm: z.boolean(),
+    arch: z.enum(MACHINE_ARCHES),
+    maxSize: MachineSizeSchema.optional(),
+    defaultSize: MachineSizeSchema.optional(),
+    sandboxSize: MachineSizeSchema.optional(),
+});
+export type HelloCapabilities = z.infer<typeof HelloCapabilitiesSchema>;
+
 export const MessageBodySchemas = {
     'hello': z.strictObject({
         versions: z.array(z.number().int().min(1)).min(1).max(16),
         driver: z.string().min(1).max(64),
         // 'none' is the dev-only local-docker driver; a hub refuses it unless
         // it runs with RUNTIME_DEV_ALLOW_INSECURE_CELLS=1.
-        isolation: z.enum(['vm', 'microvm', 'sandboxed-container', 'none']),
+        isolation: z.enum(CELL_ISOLATIONS),
         regions: z.array(z.string().max(64)).max(64),
         owner: z.enum(CELL_OWNERS),
         // The optional claim.acquire fields this cell decodes (CELL_FEATURES).
@@ -369,12 +605,19 @@ export const MessageBodySchemas = {
         // clamped to MACHINE_SIZE_LIMITS: no claim asks more). Absent: it
         // grants none, and the hub sends it no sized claim.
         maxClaimSize: MachineSizeSchema.optional(),
+        // What the cell's machines can be (HelloCapabilitiesSchema). Absent: a
+        // cell older than it; the hub places it by isolation alone.
+        capabilities: HelloCapabilitiesSchema.optional(),
     }),
     'heartbeat': z.strictObject({
         claims: z.array(z.strictObject({ claimId: id, machines: z.number().int().min(0) })).max(1_024),
         freeSlots: z.number().int().min(0),
         // Only to a hub whose hello ack accepts cellMemory (ADR-070).
         memory: HeartbeatMemorySchema.optional(),
+        // Only to a hub whose hello ack accepts buildStateEvicted: the cell's whole ledger, newest first.
+        evictedBuildStates: z.array(EvictedBuildStateSchema).max(MAX_EVICTED_BUILD_STATES).optional(),
+        // Only to a hub whose hello ack accepts hostHardening.
+        host: HeartbeatHostSchema.optional(),
     }),
     'claim.acquire': z.strictObject({
         orgId: id,
@@ -413,6 +656,11 @@ export const MessageBodySchemas = {
         // starts: the policy the cell pushes before the build already has
         // them. An egress.policy later replaces the list, as on any claim.
         egressAllow: z.array(hostname).max(256).optional(),
+        // Feature egressTiers: the approvals made as inspected (each host is
+        // also in egressAllow), and false when the org turned the Kodus
+        // recommended list off. Absent: no inspected approval, list on.
+        egressInspect: EgressInspectListSchema.optional(),
+        egressRecommended: z.boolean().optional(),
         // The environment's machine size for this claim's workload: the
         // memory and CPUs every build and service gets. The cell refuses a
         // size above the largest it grants (blocker resources/size_unavailable)
@@ -422,12 +670,62 @@ export const MessageBodySchemas = {
         // plants them in the workload (env and a credentials file), never
         // in a label, a log or anything it sends back.
         canaries: z.array(ClaimCanarySchema).max(CANARY_SLOTS.length).optional(),
+        // The other repositories of a multi-repository environment (feature
+        // workspace), the claim's own repository being `repo`. Absent for an
+        // environment of one repository.
+        repos: z.array(ClaimRepoSchema).min(1).max(MAX_WORKSPACE_REPOSITORIES - 1).optional(),
+        // The org's secrets by reference (feature secrets): the cell gives
+        // each a placeholder in the machines' env, the injector swaps it for
+        // the value on the secret's hosts. Never the PR side of a fork.
+        secrets: z.array(ClaimSecretSchema).min(1).max(MAX_CLAIM_SECRETS).optional(),
+    }).refine((b) => claimSecretsError(b.secrets) === undefined, {
+        message: 'each secret once, its id the lower case of its name',
+        path: ['secrets'],
     }).refine((b) => !b.diagnosticHold || b.consumer === 'setup', {
         message: 'only a setup claim may ask for a diagnostic hold',
         path: ['diagnosticHold'],
     }).refine((b) => !b.seedsCache || (b.consumer === 'setup' && b.side !== 'pr'), {
         message: 'only a setup claim that is not a PR may seed the build cache',
         path: ['seedsCache'],
+    }).refine((b) => claimReposError(b.repos) === undefined, {
+        message: 'each repository of a claim has its own alias',
+        path: ['repos'],
+    }),
+    // A code sandbox (feature sandbox): the claim's network and one tool
+    // container with an empty /workspace, under the claim's lease and
+    // ceiling, no compose, no observer, no Run. Answered like claim.acquire:
+    // ack, then claim.ready or claim.failed. The code comes in through
+    // sandbox.op (a git fetch the caller runs), never from the cell.
+    'sandbox.acquire': z.strictObject({
+        orgId: id,
+        hardExpiresAt: z.iso.datetime(),
+        leaseExpiresAt: z.iso.datetime().optional(),
+        // The hosts it may reach (the ones approved for sandboxes and the git
+        // host the caller fetches from), on top of the cell's base list; never
+        // an environment's approvals (G5).
+        egressAllow: z.array(hostname).max(256).optional(),
+        // Feature egressTiers, as in claim.acquire.
+        egressInspect: EgressInspectListSchema.optional(),
+        egressRecommended: z.boolean().optional(),
+        size: MachineSizeSchema.optional(),
+        // The org's secrets by reference (feature secrets), as in claim.acquire.
+        secrets: z.array(ClaimSecretSchema).min(1).max(MAX_CLAIM_SECRETS).optional(),
+        // Feature snapshots. prepares: this sandbox makes its org's template
+        // under templateKey (claim.snapshot template); the caller runs in it
+        // only what a setup runs (no PR code), and it is handed no secret.
+        // templateKey without prepares: start from the org's newest template
+        // of that key when the cell holds one, else boot as usual (claim.ready
+        // start says which). resumeFrom: a session snapshot of the org,
+        // restored once.
+        prepares: z.boolean().optional(),
+        templateKey: SnapshotKeySchema.optional(),
+        resumeFrom: SnapshotIdSchema.optional(),
+    }).refine((b) => claimSecretsError(b.secrets) === undefined, {
+        message: 'each secret once, its id the lower case of its name',
+        path: ['secrets'],
+    }).refine((b) => sandboxSnapshotError(b) === undefined, {
+        message: 'prepares needs a templateKey and no secrets; resumeFrom goes with neither',
+        path: ['prepares'],
     }),
     // The claim's machines are up, the code is in and the observer answers.
     // The hub only marks a claim bound on this message, never on the ack of
@@ -440,6 +738,10 @@ export const MessageBodySchemas = {
             seedSha: z.string().min(1).max(128),
         }),
         observer: z.strictObject({ id, state: z.enum(['creating', 'ready', 'failed']) }),
+        // How the workload came to be (CLAIM_STARTS): built and booted (cold), a ready
+        // pool machine adopted (pool), or a base booted from a bake this cell made
+        // (bake). Only to a hub whose hello ack accepts readyStart.
+        start: z.enum(CLAIM_STARTS).optional(),
         // How long the claim took on the cell, in ms. prepareMs is the cell
         // agent's wall time from the ack of claim.acquire to this message
         // (network, machines, code, boot, egress); the rest are the driver's
@@ -458,6 +760,8 @@ export const MessageBodySchemas = {
                 snapshotMs: ms.optional(),
                 // Only to a hub whose hello ack accepts readyBuildSteps.
                 buildSteps: BuildStepsSchema.optional(),
+                // Only to a hub whose hello ack accepts bootPhases.
+                phases: BootPhasesSchema.optional(),
             })
             .optional(),
     }),
@@ -470,6 +774,9 @@ export const MessageBodySchemas = {
         reason: z.string().max(4_096),
         bundle: FailureBundleSchema.optional(),
         held: z.boolean().optional(),
+        // Where the boot spent its time until it stopped; only to a hub whose
+        // hello ack accepts bootPhases.
+        phases: BootPhasesSchema.optional(),
     }),
     'claim.renew': z.strictObject({ leaseExpiresAt: z.iso.datetime() }),
     'claim.release': z.strictObject({}),
@@ -483,6 +790,10 @@ export const MessageBodySchemas = {
         timeoutMs,
         stream: z.boolean().optional(),
         evidence: EvidenceRequestSchema.optional(),
+        // feature workspace: the alias of another repository of the claim
+        // whose code the command runs on; the cell runs it in the container
+        // built from that repository. Absent: the claim's own repository.
+        repository: z.string().regex(REPOSITORY_ALIAS_PATTERN).optional(),
     }),
     'upload': z.strictObject({
         stepId: z.uuid(),
@@ -502,13 +813,24 @@ export const MessageBodySchemas = {
             .max(256),
     }),
     'exec.cancel': z.strictObject({ stepId: z.uuid() }),
+    // One operation on a sandbox claim (exec or a file), hub to cell, and the
+    // same frame cell to guest agent inside the machine.
+    'sandbox.op': z.strictObject({ stepId: z.uuid(), op: SandboxOpCheckedSchema }),
+    // The guest agent's answer to a sandbox.op (re), on its stream to the cell only.
+    'guest.result': z.strictObject({ stepId: z.uuid(), result: SandboxResultSchema }),
     'machine.reset': z.strictObject({
         stepId: z.uuid(),
         snapshot: z.strictObject({
-            kind: z.enum(['compose_volumes', 'disk']),
+            // memory (feature snapshots): the claim's round snapshot, ref its id.
+            kind: z.enum(['compose_volumes', 'disk', 'memory']),
             ref: z.string().min(1).max(1_024),
         }),
     }),
+    // Keep the claim's workload machine as a memory snapshot (feature
+    // snapshots). template and session end the machine (the claim keeps
+    // only its network until released); round restores it at once from the
+    // snapshot. Answered by step.result snapshot.
+    'claim.snapshot': z.strictObject({ stepId: z.uuid(), purpose: z.enum(SNAPSHOT_PURPOSES) }),
     'step.result': z.strictObject({
         stepId: z.uuid(),
         executor: z.enum(['observer', 'vm']),
@@ -528,6 +850,10 @@ export const MessageBodySchemas = {
             .optional(),
         probe: ProbeResultSchema.optional(),
         browserExploration: BrowserExploreResultSchema.optional(),
+        // A sandbox.op's result, as the guest agent gave it (executor vm, nothing else).
+        sandbox: SandboxResultSchema.optional(),
+        // claim.snapshot's: the snapshot the cell made (executor vm, nothing else).
+        snapshot: z.strictObject({ id: SnapshotIdSchema, purpose: z.enum(SNAPSHOT_PURPOSES), ms }).optional(),
         // How many values the cell replaced with [redacted:<rule>] in this
         // result before it left the cell (S-51).
         redactions: z.number().int().min(0).optional(),
@@ -535,6 +861,8 @@ export const MessageBodySchemas = {
         // down, up, migrate, seed and ready of the reset).
         durationMs: ms.optional(),
     }).superRefine((b, ctx) => {
+        if (b.sandbox && (b.exec || b.probe || b.browserExploration || b.executor !== 'vm')) ctx.addIssue({ code: 'custom', message: 'a sandbox result is an exclusive vm result', path: ['sandbox'] });
+        if (b.snapshot && (b.exec || b.probe || b.browserExploration || b.sandbox || b.executor !== 'vm')) ctx.addIssue({ code: 'custom', message: 'a snapshot result is an exclusive vm result', path: ['snapshot'] });
         if (b.browserExploration && (b.exec || b.probe || b.executor !== 'observer')) ctx.addIssue({ code: 'custom', message: 'browser exploration is an exclusive observer result', path: ['browserExploration'] });
         // A probe result comes from the observer, an exec result from the VM,
         // never both: a result that says otherwise is refused, not guessed.
@@ -550,6 +878,16 @@ export const MessageBodySchemas = {
         orgId: id,
         recipeSha: z.string().min(1).max(128),
         sha: z.string().regex(/^[0-9a-f]{40}$/),
+        // A multi-repository environment's bake key (contracts/workspace.ts
+        // refsDigest): every repository's commit and the recipe. Absent for
+        // an environment of one repository, whose key is sha and recipeSha.
+        refsDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/).optional(),
+    }),
+    // The org's sessions to remove at once (their PR closed or merged); a
+    // template or a round is not one, and the cell refuses those.
+    'snapshot.forget': z.strictObject({
+        orgId: id,
+        snapshotIds: z.array(SnapshotIdSchema).min(1).max(64),
     }),
     'pool.target': z.strictObject({
         orgId: id,
@@ -591,13 +929,39 @@ export const MessageBodySchemas = {
         at: z.iso.datetime(),
         ms: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
         lines: z.array(z.string().max(2_048)).max(40).optional(),
+        // Where the boot spent its time so far (the build's phases, the one
+        // running marked so); only to a hub whose hello ack accepts
+        // bootPhases. A boot the hub stops at its ceiling sends no
+        // claim.failed: this is what says where it was.
+        phases: BootPhasesSchema.optional(),
     }),
     // The claim's full allowlist, replacing the previous one (an approved
     // egress request reaches live claims without a new claim).
     'egress.policy': z.strictObject({
         allow: z.array(hostname).max(256),
+        // Feature egressTiers: the hosts of allow approved as inspected.
+        inspect: EgressInspectListSchema.optional(),
         issuedAt: z.iso.datetime(),
     }),
+    // Dial the preview edge (feature preview): one more outbound WebSocket,
+    // with the cell's own client certificate and this one-time ticket, that
+    // carries HTTP/2 with the cell as the server. Sent before the cell's
+    // first route and whenever the edge has no tunnel of this cell.
+    'preview.tunnel': z.strictObject({
+        url: z.string().max(512).regex(PREVIEW_TUNNEL_URL_PATTERN),
+        ticket: z.string().regex(PREVIEW_TUNNEL_TICKET_PATTERN),
+        expiresAt: z.iso.datetime(),
+    }),
+    // Serve tunnel streams of this preview id to this claim's http expose
+    // entry, through its observer, until `until` (the claim's lease) or an
+    // unroute. A target outside the claim's expose, or not http, is nacked.
+    'preview.route': z.strictObject({
+        previewId: PreviewIdSchema,
+        target: z.strictObject({ service: z.string().min(1).max(128), port: z.number().int().min(1).max(65_535) }),
+        until: z.iso.datetime(),
+    }),
+    // Refuse the preview id from now on and close its open streams.
+    'preview.unroute': z.strictObject({ previewId: PreviewIdSchema }),
     'cell.revoked': z.strictObject({ reason: z.string().max(512) }),
     // version is set only on the ack of hello: the version the hub chose (§1b).
     // accepts too, and only with names the cell's hello named

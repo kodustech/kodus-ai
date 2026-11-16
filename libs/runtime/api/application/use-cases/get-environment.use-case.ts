@@ -20,8 +20,14 @@ export class GetRuntimeEnvironmentUseCase {
         const organizationId = orgOf(user);
         const found = await this.reader.source(organizationId, environmentId);
         if (!found) throw new NotFoundException('Environment not found');
-        await this.authorization.ensure({ user, action: Action.Read, resource: ResourceType.RuntimeEnvironment, repoIds: [found.env.repositoryId] });
+        // Its machines hold the code of every repository of the environment: reading it needs all of them.
+        await this.authorization.ensure({ user, action: Action.Read, resource: ResourceType.RuntimeEnvironment, repoIds: await this.reader.repositoryIdsOf(found.env) });
         return found;
+    }
+
+    /** Every repository of the environment: acting on it needs access to all of them. */
+    repositoryIdsOf(env: { organizationId: string; environmentId: string; repositoryId: string }) {
+        return this.reader.repositoryIdsOf(env);
     }
 
     async setup(env: { environmentId: string; organizationId: string }) {

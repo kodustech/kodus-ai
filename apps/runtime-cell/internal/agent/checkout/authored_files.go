@@ -51,12 +51,12 @@ func WriteAuthoredFiles(repo string, r *protocol.ClaimAcquireBodyRecipe) error {
 	if err != nil {
 		return fmt.Errorf("open the checkout: %w", err)
 	}
-	defer unix.Close(root)
+	defer func() { _ = unix.Close(root) }()
 	dir, err := openAuthoredDir(root, true)
 	if err != nil {
 		return err
 	}
-	defer unix.Close(dir)
+	defer func() { _ = unix.Close(dir) }()
 	for _, f := range r.Files {
 		if err := writeAuthoredFile(dir, f); err != nil {
 			return err
@@ -88,11 +88,11 @@ func openAuthoredDir(root int, create bool) (int, error) {
 	}
 	var st unix.Stat_t
 	if err := unix.Fstat(fd, &st); err != nil {
-		unix.Close(fd)
+		_ = unix.Close(fd)
 		return -1, fmt.Errorf("stat %s: %w", authoredFilesDir, err)
 	}
 	if st.Mode&unix.S_IFMT != unix.S_IFDIR || int(st.Uid) != os.Geteuid() {
-		unix.Close(fd)
+		_ = unix.Close(fd)
 		return -1, &authoredFileError{path: authoredFilesDir, reason: "is not a directory of this cell; Kody's build files are written only into one"}
 	}
 	return fd, nil
@@ -124,8 +124,8 @@ func writeAuthoredFile(dir int, f protocol.AuthoredFile) error {
 		return fmt.Errorf("create %s: %w", f.Path, err)
 	}
 	file := os.NewFile(uintptr(fd), f.Path)
-	defer file.Close()
-	if _, err := io.WriteString(file, f.Content); err != nil {
+	defer func() { _ = file.Close() }()
+	if _, err := file.WriteString(f.Content); err != nil {
 		return fmt.Errorf("write %s: %w", f.Path, err)
 	}
 	return file.Close()
@@ -141,7 +141,7 @@ func sameFile(dir int, name string, f protocol.AuthoredFile) error {
 		return &authoredFileError{path: f.Path, reason: "is already in the checkout and is not a regular file; Kody never replaces or follows it"}
 	}
 	file := os.NewFile(uintptr(fd), f.Path)
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	st, err := file.Stat()
 	if err != nil || !st.Mode().IsRegular() {
 		return &authoredFileError{path: f.Path, reason: "is already in the checkout and is not a regular file; Kody never replaces or follows it"}

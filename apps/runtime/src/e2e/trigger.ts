@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 
 import * as amqp from 'amqplib';
-import { MongoClient } from 'mongodb';
+import { Pool } from 'pg';
 import WebSocket from 'ws';
 
 import {
@@ -12,8 +12,9 @@ import {
     RUNTIME_RUN_ROUTING_KEY,
     RuntimeEventName,
     runtimeRunOutboxMessage,
-    RUNTIME_RUNS_COLLECTION,
 } from '@libs/runtime/run';
+import { PgRunProjectionStore } from '@libs/runtime/run/adapters/pg-run-projection.store';
+import { PgSql } from '@libs/runtime/run/adapters/pg-sql';
 
 import { devSealKey } from '../testing/dev-seal-key';
 import { shopRunRequest } from './fixtures';
@@ -25,7 +26,8 @@ import { readRunStreamForE2e } from './run-stream-reader';
 // payload), then follows the Run until it reaches a verdict.
 
 const rabbitUrl = process.env.RUNTIME_RABBITMQ_URL ?? 'amqp://guest:guest@localhost:5673';
-const mongoUrl = process.env.RUNTIME_MONGO_URL ?? 'mongodb://localhost:27018';
+// The Run projection is read where the worker writes it: runtime.runtime_runs in the Runtime Postgres.
+const runtimeDbUrl = process.env.RUNTIME_DATABASE_READ_URL || process.env.RUNTIME_DATABASE_URL || 'postgres://runtime:runtime@localhost:5442/kodus_runtime';
 const metricsUrls = (process.env.RUNTIME_METRICS_URLS ?? 'http://localhost:9464/metrics,http://localhost:9465/metrics').split(',');
 
 /** A second cell sends a step.result for a step the hub never sent it: protocol.violation. */
@@ -74,13 +76,13 @@ async function main() {
     });
     console.log(`published RuntimeRunRequested runId=${req.runId} correlationId=${req.correlationId} (jobId: none)`);
 
-    const mongo = await MongoClient.connect(mongoUrl);
-    const runs = mongo.db(process.env.RUNTIME_MONGO_DB ?? 'kodus').collection(RUNTIME_RUNS_COLLECTION);
+    const pool = new Pool({ connectionString: runtimeDbUrl, max: 1 });
+    const runs = new PgRunProjectionStore(new PgSql(() => pool, { readOnly: true }));
     const deadline = Date.now() + 120_000;
     let run: any;
     let lastState = '';
     while (Date.now() < deadline) {
-        run = await runs.findOne({ runId: req.runId }, { projection: { _id: 0 } });
+        run = await runs.get(req.runId, { organizationId: req.organizationId });
         if (run?.state && run.state !== lastState) {
             console.log(`state: ${run.state}${run.phase ? ` (phase ${run.phase})` : ''}`);
             lastState = run.state;
@@ -116,7 +118,7 @@ async function main() {
             console.log(`${url}: ${(e as Error).message}`);
         }
     }
-    await mongo.close();
+    await pool.end();
     await conn.close();
     if (!run || !isTerminal(run.state)) {
         console.error('Run did not reach a verdict in time');

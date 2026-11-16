@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
 )
@@ -35,17 +37,20 @@ func (m *fakeDocker) Version(context.Context) (string, error) {
 	m.calls = append(m.calls, "version")
 	return "29.0.0", m.versionErr
 }
+
 func (m *fakeDocker) ComposeUp(_ context.Context, p ComposeProject) error {
 	m.calls = append(m.calls, "up "+p.Name)
 	b, err := os.ReadFile(p.File)
 	m.composes[p.Name] = b
 	return err
 }
+
 func (m *fakeDocker) ComposeBuild(_ context.Context, p ComposeProject, pullServices []string) error {
 	m.calls = append(m.calls, "build "+p.Name)
 	m.pulled[p.Name] = pullServices
 	return nil
 }
+
 func (m *fakeDocker) ComposeExec(_ context.Context, project, service string, stdin []byte, cmd ...string) error {
 	m.calls = append(m.calls, fmt.Sprintf("exec %s %s %s", project, service, strings.Join(cmd, " ")))
 	if stdin != nil {
@@ -53,10 +58,12 @@ func (m *fakeDocker) ComposeExec(_ context.Context, project, service string, std
 	}
 	return nil
 }
+
 func (m *fakeDocker) Shell(_ context.Context, dir string, env map[string]string, command string) error {
 	m.calls = append(m.calls, "sh "+command)
 	return nil
 }
+
 func (m *fakeDocker) ComposeDown(_ context.Context, project string, opts DownOptions) error {
 	m.calls = append(m.calls, fmt.Sprintf("down %s v=%v", project, opts.Volumes))
 	if opts.BuiltImages {
@@ -71,19 +78,23 @@ func (m *fakeDocker) ComposeDown(_ context.Context, project string, opts DownOpt
 	m.containers = kept
 	return nil
 }
+
 func (m *fakeDocker) ComposeStop(_ context.Context, project string) error {
 	m.calls = append(m.calls, "stop "+project)
 	return nil
 }
+
 func (m *fakeDocker) ComposeStart(_ context.Context, project string) error {
 	m.calls = append(m.calls, "start "+project)
 	return nil
 }
+
 func (m *fakeDocker) ComposePort(_ context.Context, project, service string, port int) (string, error) {
 	m.port++
 	m.calls = append(m.calls, fmt.Sprintf("port %s %s %d", project, service, port))
 	return fmt.Sprintf("127.0.0.1:%d", m.port), nil
 }
+
 func (m *fakeDocker) List(_ context.Context, labels map[string]string) ([]Container, error) {
 	var out []Container
 	for _, c := range m.containers {
@@ -165,8 +176,10 @@ func TestRefusesWithoutDaemon(t *testing.T) {
 var t0 = time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
 
 func spec(role driver.Role) driver.MachineSpec {
-	return driver.MachineSpec{CellID: "cell-1", EnvironmentID: "env", Role: role, OrgID: "org-a", ClaimID: "Claim-1",
-		ImageID: "img-1", ClaimGroupID: "kodus-claim-1", KMSKeyRef: "local", ExpiresAt: t0.Add(5 * time.Minute), HardExpiresAt: t0.Add(time.Hour)}
+	return driver.MachineSpec{
+		CellID: "cell-1", EnvironmentID: "env", Role: role, OrgID: "org-a", ClaimID: "Claim-1",
+		ImageID: "img-1", ClaimGroupID: "kodus-claim-1", KMSKeyRef: "local", ExpiresAt: t0.Add(5 * time.Minute), HardExpiresAt: t0.Add(time.Hour),
+	}
 }
 
 const sampleCompose = `services:
@@ -214,10 +227,10 @@ func TestLifecycle(t *testing.T) {
 
 	// The cell uploads the checkout; the upload boots the project.
 	repo := writeRepo(t, map[string]string{"compose.yaml": sampleCompose, "Dockerfile": "FROM scratch\n"})
-	if err := d.Transport().Upload(ctx, work, repo, "workspace"); err != nil {
+	if err := d.Transport().Upload(ctx, work, repo, "workspace", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.Transport().Upload(ctx, obs, repo, "workspace"); err != nil {
+	if err := d.Transport().Upload(ctx, obs, repo, "workspace", nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.Count(m.joined(), "up "); got != 1 {
@@ -414,9 +427,10 @@ func TestSweep(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An orphan: labelled by this cell, unknown to the state file (it was
-	// lost). Nobody can date it, so it goes. Another cell's project stays.
+	// lost), with no ceiling. Nobody can date it, so it goes. Another
+	// cell's project stays.
 	m.containers = []Container{
-		{Name: "orphan-web-1", Labels: map[string]string{"kodus.cell": "cell-1", "kodus.claim": "gone", "kodus.role": "workload", "kodus.machine": "kodus-gone-workload", labelProject: "kodus-gone-workload", "kodus.hard-expires": driver.FormatTime(t0.Add(time.Hour))}},
+		{Name: "orphan-web-1", Labels: map[string]string{"kodus.cell": "cell-1", "kodus.claim": "gone", "kodus.role": "workload", "kodus.machine": "kodus-gone-workload", labelProject: "kodus-gone-workload"}},
 		{Name: "live-web-1", Labels: map[string]string{"kodus.cell": "cell-1", "kodus.machine": live.MachineID, labelProject: live.MachineID}},
 		{Name: "other-web-1", Labels: map[string]string{"kodus.cell": "cell-2", "kodus.machine": "kodus-x-workload"}},
 		// This cell's label on a developer's own stack, with no machine
@@ -428,7 +442,8 @@ func TestSweep(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(gone, ",") != "kodus-old-workload,kodus-gone-workload" && strings.Join(gone, ",") != "kodus-gone-workload,kodus-old-workload" {
+	// The stale lease is the lease manager's to end, not the sweep's.
+	if strings.Join(gone, ",") != "kodus-gone-workload" {
 		t.Fatalf("swept %v", gone)
 	}
 	if strings.Contains(m.joined(), live.MachineID+" v=") || strings.Contains(m.joined(), "kodus-x-workload") || strings.Contains(m.joined(), "mystack") {
@@ -436,7 +451,32 @@ func TestSweep(t *testing.T) {
 	}
 	// Past the hard ceiling, renewals do not save it.
 	gone, _ = d.Sweep(ctx, t0.Add(time.Hour))
-	if len(gone) != 1 || gone[0] != live.MachineID {
+	if len(gone) != 2 || !slices.Contains(gone, live.MachineID) || !slices.Contains(gone, staleRef.MachineID) {
 		t.Fatalf("hard ceiling sweep %v", gone)
 	}
+}
+
+// errFakeNoCopy: fakeDocker copies no volumes, so a snapshot is never taken
+// (snapFake is the fake that copies).
+var errFakeNoCopy = errors.New("fakeDocker copies no volumes")
+
+func (m *fakeDocker) ComposeStopServices(context.Context, string, ...string) error {
+	return errFakeNoCopy
+}
+
+func (m *fakeDocker) CopyVolume(context.Context, string, string, map[string]string) error {
+	return errFakeNoCopy
+}
+
+func (m *fakeDocker) Volumes(context.Context, map[string]string) ([]dockercli.Volume, error) {
+	return nil, nil
+}
+
+func (m *fakeDocker) VolumeRemove(context.Context, ...string) error { return nil }
+
+// ComposePs and ComposeLogs: fakeDocker reports no services (diagMock does).
+func (m *fakeDocker) ComposePs(context.Context, string) ([]ServiceState, error) { return nil, nil }
+
+func (m *fakeDocker) ComposeLogs(context.Context, string, string, int) ([]string, error) {
+	return nil, nil
 }

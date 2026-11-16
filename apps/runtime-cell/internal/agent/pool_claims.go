@@ -34,5 +34,8 @@ func (a *Agent) takePoolMachine(acq protocol.ClaimAcquireBody, hard time.Time) (
 
 // hasPoolMachine reports whether takePoolMachine would find one now.
 func (a *Agent) hasPoolMachine(acq protocol.ClaimAcquireBody, hard time.Time) bool {
+	if acq.Consumer == protocol.ConsumerSandbox {
+		return a.takesBlankSandbox(acq) && a.sandboxPool.has(a.sandboxSizeOf(acq), hard)
+	}
 	return a.pool.Has(poolRequest(acq, hard))
 }

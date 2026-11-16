@@ -59,9 +59,9 @@ func TestExternalVersionKeepsHistoricalFormatOneReadableAndUnchanged(t *testing.
 	}
 	nonce := bytes.Repeat([]byte{3}, aead.NonceSize())
 	encrypted := aead.Seal(nil, nonce, plain, []byte("kodus-runtime/injector-vault/v1\x00cell-a"))
-	raw := []byte(fmt.Sprintf(`{"version":1,"nonce":"%s","ciphertext":"%s"}`, base64.RawStdEncoding.EncodeToString(nonce), base64.RawStdEncoding.EncodeToString(encrypted)))
+	raw := []byte(fmt.Sprintf(`{"version":1,"nonce":%q,"ciphertext":%q}`, base64.RawStdEncoding.EncodeToString(nonce), base64.RawStdEncoding.EncodeToString(encrypted)))
 	path := filepath.Join(cfg.Directory, "vault.json")
-	if err = os.WriteFile(path, raw, 0600); err != nil {
+	if err = os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	v, err := OpenConfiguredVault(cfg)
@@ -277,7 +277,7 @@ func TestExternalVersionWrappedBackendDenialsKeepSafeClassification(t *testing.T
 		}))
 		v := registerExternalBinding(t, cfg, secret, binding)
 		got, err := v.Credential(context.Background(), "org-a", "claim-a", binding.Host)
-		if err != sentinel || got.Value != "" {
+		if err != sentinel || got.Value != "" { //nolint:errorlint // identity is the assertion: the vault returns the bare sentinel, never the wrapped backend error
 			t.Fatal("wrapped denial lost safe classification or leaked backend detail")
 		}
 	}

@@ -1,28 +1,52 @@
+import { isClaimStateIn, MACHINE_HOLDING_CLAIM_STATES } from '@libs/runtime/contracts/enums';
 import type { RuntimeRunProjection } from '@libs/runtime/run/run-projection';
 
-// The cost of one Run (§11 "Custo", §13 PR 5): machine time and LLM tokens,
+import { type RuntimeLlmAgent, type RuntimeLlmSpendRow, sumLlmSpend } from './llm-spend';
+
+// The cost of one Run: machine time and LLM tokens,
 // priced from list prices. Every number here is an estimate. The machine side
 // depends on where the Run's claims ran:
-//   - a cell whose claims share its host's memory (docker-gvisor, ADR-070):
+//   - a cell whose claims share its host's memory (docker-gvisor):
 //     the share of the host each claim held, Σ over the Run's claims of
 //     (MB × minutes at its build size + MB × minutes at its ready size)
 //     / the MB the cell may commit to claims × the host's US$/h. Time spent
 //     waiting for room holds nothing and costs nothing (the hub records a
 //     claim only once it is admitted);
 //   - an aws-ec2 cell (one VM per claim): the Run's wall time times the list
-//     price of the machines §11 sizes, as before.
-// The LLM side is the tokens the gateway counted times the model's list price.
-// What cannot be priced stays null; it is never rounded into a zero.
+//     price of the machines the cell is sized with.
+// The LLM side is the Run's usage spans (the calls LLM.run recorded, the
+// source Token Usage reads), each priced at the tier its prompt fell in
+// (domain/llm-spend.ts). What cannot be priced stays null; it is never
+// rounded into a zero.
 
 /**
- * §11: each Run holds two VMs (base and PR) and two observers. List prices in
- * us-east-1, on demand: m7i.2xlarge and t3.medium. Ten minutes come to about
- * US$ 0.15, the "cerca de US$ 0,16" of §11 before the reset time.
+ * On-demand Linux list prices, us-east-1, US$/h, of the instance types the
+ * aws-ec2 driver starts (apps/runtime-cell/internal/drivers/awsec2/driver.go
+ * InstanceType). Source: the AWS public price list behind
+ * aws.amazon.com/ec2/pricing/on-demand (b0.p.awsstatic.com/pricing/2.0/
+ * meteredUnitMaps/ec2/USD/current/ec2-ondemand-without-sec-sel/
+ * US East (N. Virginia)/Linux/index.json), published 2026-11-10, read 2026-11-12.
+ */
+export const AWS_EC2_LIST_PRICES: Readonly<Record<string, number>> = {
+    'c7i.large': 0.08925,
+    'm7i.large': 0.1008,
+    'c7i.xlarge': 0.1785,
+    'm7i.xlarge': 0.2016,
+    'c7i.2xlarge': 0.357,
+    'm7i.2xlarge': 0.4032,
+    'm7i.4xlarge': 0.8064,
+};
+
+/**
+ * Each Run holds two VMs (base and PR) and two observers. An aws-ec2 cell
+ * starts each claim's workload at its default size, 4 vCPU / 16 GiB, and its
+ * observer at 2 vCPU / 4 GiB (agent/config.go), which InstanceType maps to
+ * m7i.xlarge and c7i.large. Ten minutes come to about US$ 0.10.
  */
 export const RUNTIME_MACHINE_LIST_PRICES = {
     region: 'us-east-1',
-    vm: { instanceType: 'm7i.2xlarge', count: 2, usdPerHour: 0.4032 },
-    observer: { instanceType: 't3.medium', count: 2, usdPerHour: 0.0416 },
+    vm: { instanceType: 'm7i.xlarge', count: 2, usdPerHour: AWS_EC2_LIST_PRICES['m7i.xlarge'] },
+    observer: { instanceType: 'c7i.large', count: 2, usdPerHour: AWS_EC2_LIST_PRICES['c7i.large'] },
 } as const;
 
 export interface RuntimeMachinePrices {
@@ -71,6 +95,8 @@ export interface RunClaimUsage {
     bootMb: number | null;
     readyMb: number | null;
     allocatableMb: number | null;
+    /** vCPUs of the claim's machine size (migration 23); null at the cell's default size or on older rows. */
+    cpus?: number | null;
     admittedAt: string | null;
     readyAt: string | null;
     releasedAt: string | null;
@@ -80,15 +106,6 @@ export interface RunClaimUsage {
 
 /** Why the machine part is null although the Run held machines. */
 export type MachineCostUnpriced = 'missing_claim_facts' | 'cell_price_unknown';
-
-/** US$ per token of one model; null when the product cannot price it. */
-export type ModelTokenPrice = { input: number; output: number; cacheRead: number; cacheWrite: number } | null;
-
-export interface RunLlmUsageInput {
-    /** The budget counter: settled calls plus reservations not settled. */
-    tokens: number;
-    byModel: Array<{ model?: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }>;
-}
 
 export interface RuntimeRunCost {
     /** Always true: list prices times measured time and counted tokens, never a bill. */
@@ -124,10 +141,25 @@ export interface RuntimeRunCost {
     };
     llm: {
         tokens: number;
-        /** Null when some counted tokens could not be priced (model unknown or not on the price list). */
+        /** Null when some tokens could not be priced (model unknown or not on the price list), or the spans could not be read. */
         usd: number | null;
-        models: Array<{ model?: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; usd: number | null }>;
-        /** Counted on the budget but without a settled call to price (in flight, or lost in a crash). */
+        /** `telemetry`: the Run's usage spans; `not_measured`: this deployment cannot read them (usd is null). */
+        source: 'telemetry' | 'not_measured';
+        models: Array<{
+            model?: string;
+            inputTokens: number;
+            outputTokens: number;
+            cacheReadTokens: number;
+            cacheWriteTokens: number;
+            /** Of these, tokens of calls priced at a tier above the base one (a prompt over the model's threshold). */
+            aboveBaseTierTokens: number;
+            usd: number | null;
+        }>;
+        /** By agent: the recipe author, the planner, the Run agent... (domain/llm-spend.ts). */
+        agents: Array<{ agent: RuntimeLlmAgent; tokens: number; usd: number | null }>;
+        /** Of the priced US$, what the org pays its own provider (BYOK); the rest is Kodus's. */
+        customerUsd: number;
+        /** Kept for older clients: always 0, a call counts once its span is written. */
         unsettledTokens: number;
     };
     /** Sum of the priced parts; null when nothing could be priced. */
@@ -149,18 +181,6 @@ export function machineMinutesOf(run: Pick<RuntimeRunProjection, 'bootingAt' | '
     return round6(nonNegative((to - from) / MS_PER_MINUTE));
 }
 
-/** Cache tokens are part of the input count (ai@7), so they come off the full-price input once. */
-export function tokensUsd(
-    t: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number },
-    price: NonNullable<ModelTokenPrice>,
-): number {
-    const cacheRead = nonNegative(t.cacheReadTokens);
-    const cacheWrite = nonNegative(t.cacheWriteTokens);
-    const uncached = Math.max(0, nonNegative(t.inputTokens) - cacheRead - cacheWrite);
-    return uncached * price.input + cacheRead * price.cacheRead + cacheWrite * price.cacheWrite + nonNegative(t.outputTokens) * price.output;
-}
-
-const LIVE_CLAIM_STATES = new Set(['pending', 'bound', 'held', 'compromised']);
 const ms = (iso: string | null | undefined) => (iso ? Date.parse(iso) : NaN);
 
 /**
@@ -171,7 +191,7 @@ const ms = (iso: string | null | undefined) => (iso ? Date.parse(iso) : NaN);
 function heldUntil(c: RunClaimUsage, now: Date): number {
     const released = ms(c.releasedAt);
     if (Number.isFinite(released)) return released;
-    if (LIVE_CLAIM_STATES.has(c.state)) {
+    if (isClaimStateIn(MACHINE_HOLDING_CLAIM_STATES, c.state)) {
         const ceiling = ms(c.hardExpiresAt);
         return Number.isFinite(ceiling) ? Math.min(now.getTime(), ceiling) : now.getTime();
     }
@@ -189,6 +209,24 @@ export function claimMbMinutes(c: RunClaimUsage, now: Date): number | null {
     const ready = ms(c.readyAt);
     const readyFrom = Number.isFinite(ready) ? Math.min(Math.max(ready, from), end) : end;
     return nonNegative(c.bootMb) * ((readyFrom - from) / MS_PER_MINUTE) + nonNegative(c.readyMb) * ((end - readyFrom) / MS_PER_MINUTE);
+}
+
+/** Minutes one claim round held its machines: from admission to its end (now while open). Null without the facts. */
+export function claimHeldMinutes(c: RunClaimUsage, now: Date): number | null {
+    const from = ms(c.admittedAt);
+    const to = heldUntil(c, now);
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
+    return Math.max(0, to - from) / MS_PER_MINUTE;
+}
+
+/** Minutes one claim round spent building: from admission until ready, or until its end when it never got ready. */
+export function claimBuildMinutes(c: RunClaimUsage, now: Date): number | null {
+    const from = ms(c.admittedAt);
+    const to = heldUntil(c, now);
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
+    const ready = ms(c.readyAt);
+    const until = Number.isFinite(ready) ? Math.min(Math.max(ready, from), Math.max(from, to)) : Math.max(from, to);
+    return (until - from) / MS_PER_MINUTE;
 }
 
 type SharedCellCost = { mbMinutes: number | null; usd: number | null; host?: CellHostPrice & { cellId: string }; unpriced?: MachineCostUnpriced };
@@ -216,9 +254,8 @@ export function sharedCellCost(claims: RunClaimUsage[], priceOf: (cellId: string
 
 export function estimateRunCost(args: {
     run: Pick<RuntimeRunProjection, 'bootingAt' | 'startedAt' | 'finishedAt' | 'cellOwner'>;
-    usage: RunLlmUsageInput | undefined;
-    /** By model id, as `usage.byModel` names them. */
-    prices: Map<string, ModelTokenPrice>;
+    /** The Run's priced usage spans; undefined when they could not be read (the LLM part is "not measured"). */
+    spend: readonly RuntimeLlmSpendRow[] | undefined;
     machinePrices?: RuntimeMachinePrices;
     /** The Run's claim rounds as the hub recorded them; undefined when they could not be read. */
     claims?: RunClaimUsage[];
@@ -230,30 +267,48 @@ export function estimateRunCost(args: {
     const minutes = machineMinutesOf(args.run, args.now);
     const paidBy = args.run.cellOwner === 'customer' ? 'customer' : 'kodus';
     const machines = machineCost(args, mp, minutes, paidBy);
-
-    const usage = args.usage ?? { tokens: 0, byModel: [] };
-    const models = usage.byModel.map((m) => {
-        const price = m.model ? (args.prices.get(m.model) ?? null) : null;
-        const used = m.inputTokens + m.outputTokens > 0;
-        return { ...m, usd: price ? round6(tokensUsd(m, price)) : used ? null : 0 };
-    });
-    const settled = usage.byModel.reduce((n, m) => n + nonNegative(m.inputTokens) + nonNegative(m.outputTokens), 0);
-    const unsettledTokens = Math.max(0, nonNegative(usage.tokens) - settled);
-    const pricedLlm = models.reduce((n, m) => n + (m.usd ?? 0), 0);
-    const llmComplete = unsettledTokens === 0 && models.every((m) => m.usd !== null);
-    const llmUsd = llmComplete ? round6(pricedLlm) : null;
+    const llm = llmCost(args.spend);
 
     const machinesUsd = machines.usd;
-    const anyPriced = machinesUsd !== null || models.some((m) => m.usd !== null && m.usd > 0) || llmUsd !== null;
+    const pricedLlm = llm.source === 'telemetry' ? sumLlmSpend(args.spend ?? []).pricedUsd : 0;
+    const anyPriced = machinesUsd !== null || pricedLlm > 0 || llm.usd !== null;
     const totalUsd = anyPriced ? round6((machinesUsd ?? 0) + pricedLlm) : null;
     return {
         estimate: true,
         currency: 'USD',
-        llmTokens: nonNegative(usage.tokens),
+        llmTokens: llm.tokens,
         machines: { minutes, vm: { ...mp.vm }, observer: { ...mp.observer }, region: mp.region, paidBy, ...machines },
-        llm: { tokens: nonNegative(usage.tokens), usd: llmUsd, models, unsettledTokens },
+        llm,
         totalUsd,
-        complete: machinesUsd !== null && llmComplete,
+        complete: machinesUsd !== null && llm.usd !== null,
+    };
+}
+
+/** The LLM part: the spans by model and by agent, priced as the price list prices each call. */
+function llmCost(spend: readonly RuntimeLlmSpendRow[] | undefined): RuntimeRunCost['llm'] {
+    if (!spend) return { tokens: 0, usd: null, source: 'not_measured', models: [], agents: [], customerUsd: 0, unsettledTokens: 0 };
+    const group = <K extends string>(keyOf: (r: RuntimeLlmSpendRow) => K) => {
+        const by = new Map<K, RuntimeLlmSpendRow[]>();
+        for (const r of spend) by.set(keyOf(r), [...(by.get(keyOf(r)) ?? []), r]);
+        return [...by.entries()].map(([k, rows]) => [k, sumLlmSpend(rows)] as const);
+    };
+    const total = sumLlmSpend(spend);
+    return {
+        tokens: total.totalTokens,
+        usd: total.usd,
+        source: 'telemetry',
+        models: group((r) => r.model).map(([model, t]) => ({
+            ...(model ? { model } : {}),
+            inputTokens: t.inputTokens,
+            outputTokens: t.outputTokens,
+            cacheReadTokens: t.cacheReadTokens,
+            cacheWriteTokens: t.cacheWriteTokens,
+            aboveBaseTierTokens: t.aboveBaseTierTokens,
+            usd: t.usd,
+        })),
+        agents: group((r) => r.agent).map(([agent, t]) => ({ agent, tokens: t.totalTokens, usd: t.usd })),
+        customerUsd: total.customerUsd,
+        unsettledTokens: 0,
     };
 }
 

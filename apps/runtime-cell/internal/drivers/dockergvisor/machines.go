@@ -40,6 +40,10 @@ type machineState struct {
 	// targets are the containers of its last Up by compose service, where a
 	// recipe step that names a service runs (RunRecipe).
 	targets map[string]execTarget
+	// repoExec is, for a claim of several repositories, where a command on
+	// another repository's code runs (kodyexec.Request.Repository): the
+	// container of the service built from ws/<alias>, by alias.
+	repoExec map[string]execTarget
 	// observerSQLGeneration invalidates credential allocations that were in
 	// flight when cleanup forgot the account, even before it was installed.
 	observerSQLGeneration uint64
@@ -59,6 +63,9 @@ type machineState struct {
 	// boot is its last boot, per phase, under the claim it booted for
 	// (BootTiming).
 	boot *claimBoot
+	// phases are its last boot in words, failed or not, under the claim it
+	// booted for (BootPhases).
+	phases *claimPhases
 	// reset is the down of a reset whose Up has not come yet: that Up
 	// reports itself as the reset, from this down on.
 	reset *pendingReset
@@ -72,6 +79,11 @@ type pendingReset struct {
 type claimBoot struct {
 	claim  string
 	timing driver.BootTiming
+}
+
+type claimPhases struct {
+	claim  string
+	phases []driver.BootPhase
 }
 
 // machineLocked is the machine's state, made empty when there is none.

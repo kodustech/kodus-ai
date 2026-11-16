@@ -1,4 +1,8 @@
-import { createHash, randomUUID } from 'crypto';
+import { repoTokensOf, withMemberTokens } from '@libs/runtime/run/run-workspace';
+import type { ForkApprovalTokens } from '@libs/runtime/contracts/runtime-commands';
+import { randomUUID } from 'crypto';
+
+import { canonicalJson, sha256Hex } from '@libs/runtime/contracts/derive-id';
 
 import { z } from 'zod';
 
@@ -77,22 +81,10 @@ export interface AdmissionTransaction {
     hasLiveClaims(row: StoredAdmission): Promise<boolean>;
 }
 
-const canonical = (value: unknown): string => {
-    if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-    if (value && typeof value === 'object')
-        return `{${Object.keys(value)
-            .sort()
-            .filter((key) => (value as any)[key] !== undefined)
-            .map(
-                (key) =>
-                    `${JSON.stringify(key)}:${canonical((value as any)[key])}`,
-            )
-            .join(',')}}`;
-    return JSON.stringify(value);
-};
-const hash = (payload: AdmissionPayload) =>
-    createHash('sha256').update(canonical(payload)).digest('hex');
-const publicRow = (row: StoredAdmission): AdmissionRecord => {
+/** The stored payload_hash: the same payload, whatever its key order, hashes the same. */
+export const canonicalAdmissionPayloadHash = (payload: AdmissionPayload) =>
+    sha256Hex(canonicalJson(payload));
+export const publicRow = (row: StoredAdmission): AdmissionRecord => {
     const { payloadHash: _hash, lastScannedAt: _scan, ...rest } = row;
     return structuredClone(rest);
 };
@@ -188,7 +180,7 @@ export abstract class AdmissionStoreBase implements AdmissionStore {
         const bytes = Buffer.byteLength(JSON.stringify(payload));
         if (bytes > cap.maxPayloadBytes) return { status: 'payload_too_large' };
         const ref = payloadRef(payload);
-        const fingerprint = hash(payload);
+        const fingerprint = canonicalAdmissionPayloadHash(payload);
         return this.atomic(async (tx) => {
             const old = await tx.get(ref);
             if (old?.state === 'cancelled')
@@ -260,7 +252,7 @@ export abstract class AdmissionStoreBase implements AdmissionStore {
 
     async approveRun(
         ref: AdmissionRef,
-        tokens?: { repoToken: string; prRepoToken?: string; runToken: string },
+        tokens?: ForkApprovalTokens,
         limits?: AdmissionLimits,
     ): Promise<AdmissionTransition> {
         checkedRef(ref);
@@ -286,7 +278,8 @@ export abstract class AdmissionStoreBase implements AdmissionStore {
             }
             const payload = checkedPayload({
                 kind: 'run',
-                request: { ...row.payload.request, ...tokens },
+                // A multi-repository Run's member tokens go into its workspace, never over it.
+                request: withMemberTokens({ ...row.payload.request, ...repoTokensOf(tokens) }, tokens),
                 options: { forkApproved: true, queuedAt: at },
             });
             const bytes = Buffer.byteLength(JSON.stringify(payload));
@@ -665,126 +658,3 @@ export const admissionDueAction = (
             ? 'dispatch'
             : 'attempt';
 
-export class InMemoryAdmissionStore extends AdmissionStoreBase {
-    private readonly rows = new Map<string, StoredAdmission>();
-    private pending: Promise<unknown> = Promise.resolve();
-    private readonly now: () => Date;
-    constructor(
-        private readonly opts: {
-            now?: () => Date;
-            hasLiveClaims?: (row: AdmissionRecord) => Promise<boolean>;
-        } = {},
-    ) {
-        super();
-        this.now = opts.now ?? (() => new Date());
-    }
-    private key(ref: AdmissionRef) {
-        return JSON.stringify([ref.organizationId, ref.kind, ref.key]);
-    }
-    protected async read(ref: AdmissionRef) {
-        return structuredClone(this.rows.get(this.key(ref)) ?? null);
-    }
-    protected async atomic<T>(
-        fn: (tx: AdmissionTransaction) => Promise<T>,
-    ): Promise<T> {
-        const operation = this.pending.then(async () => {
-            const edits = new Map<string, StoredAdmission>();
-            const all = () => new Map([...this.rows, ...edits]);
-            const tx: AdmissionTransaction = {
-                now: this.now(),
-                get: async (ref) =>
-                    structuredClone(
-                        edits.get(this.key(ref)) ??
-                            this.rows.get(this.key(ref)) ??
-                            null,
-                    ),
-                put: async (row) => {
-                    edits.set(this.key(row), structuredClone(row));
-                },
-                collision: async (ref, execution) =>
-                    [...all().values()].some(
-                        (row) =>
-                            !!row.payload &&
-                            (row.executionId === execution ||
-                                (row.kind === ref.kind &&
-                                    row.key === ref.key)) &&
-                            this.key(row) !== this.key(ref),
-                    ),
-                stats: async (org) => {
-                    const rows = [...all().values()];
-                    const waiting = rows.filter(admissionWaiting);
-                    const active = rows.filter((row) => row.permitHeld);
-                    return {
-                        waiting: waiting.length,
-                        orgWaiting: waiting.filter(
-                            (row) => row.organizationId === org,
-                        ).length,
-                        bytes: waiting.reduce(
-                            (n, row) => n + row.payloadBytes,
-                            0,
-                        ),
-                        orgBytes: waiting
-                            .filter((row) => row.organizationId === org)
-                            .reduce((n, row) => n + row.payloadBytes, 0),
-                        executing: active.length,
-                        orgExecuting: active.filter(
-                            (row) => row.organizationId === org,
-                        ).length,
-                        orgSetups: active.filter(
-                            (row) =>
-                                row.organizationId === org &&
-                                row.kind === 'setup',
-                        ).length,
-                    };
-                },
-                hasLiveClaims: async (row) =>
-                    this.opts.hasLiveClaims?.(publicRow(row)) ?? false,
-            };
-            const result = await fn(tx);
-            for (const [key, row] of edits) this.rows.set(key, row);
-            return result;
-        });
-        this.pending = operation.catch(() => undefined);
-        return operation;
-    }
-    protected async scanDue(limit: number) {
-        return this.atomic(async (tx) => {
-            const now = tx.now.getTime();
-            const selected = [...this.rows.values()]
-                .filter(
-                    (row) =>
-                        row.nextAt &&
-                        Date.parse(row.nextAt) <= now &&
-                        (!row.ownerUntil || Date.parse(row.ownerUntil) <= now),
-                )
-                .sort(
-                    (a, b) =>
-                        (a.lastScannedAt ?? '').localeCompare(
-                            b.lastScannedAt ?? '',
-                        ) ||
-                        a.nextAt!.localeCompare(b.nextAt!) ||
-                        a.createdAt.localeCompare(b.createdAt),
-                )
-                .slice(0, limit);
-            const scanAt = new Date(
-                Math.max(
-                    tx.now.getTime(),
-                    ...[...this.rows.values()].map((row) =>
-                        row.lastScannedAt
-                            ? Date.parse(row.lastScannedAt) + 1
-                            : 0,
-                    ),
-                ),
-            ).toISOString();
-            for (const row of selected)
-                await tx.put({ ...row, lastScannedAt: scanAt });
-            return selected.map((row) => ({
-                organizationId: row.organizationId,
-                kind: row.kind,
-                key: row.key,
-                generation: row.generation,
-                action: admissionDueAction(row),
-            }));
-        });
-    }
-}

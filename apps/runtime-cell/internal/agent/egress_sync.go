@@ -18,7 +18,7 @@ func (a *Agent) egressPolicy(claimID string, b *protocol.EgressPolicyBody) error
 	if !ok {
 		return nack("unknown_claim", "%s", claimID)
 	}
-	stale, ok := c.SetAllow(b.Allow, issued)
+	stale, ok := c.SetAllow(b.Allow, claims.InspectRules(b.Inspect), issued)
 	if !ok {
 		return nack("unknown_claim", "%s", claimID)
 	}
@@ -57,7 +57,7 @@ func (a *Agent) applyEgress(ctx context.Context, c *claims.Claim) error {
 			return nil
 		}
 		ci := info(c)
-		ci.ExtraAllow = allow
+		ci.ExtraAllow, ci.ExtraInspect = allow, c.PendingInspect()
 		if err := a.cfg.Egress.Apply(ctx, ci); err != nil {
 			return err
 		}
@@ -73,6 +73,6 @@ func (a *Agent) pushEgressBeforeUp(ctx context.Context, c *claims.Claim) error {
 	defer unlock()
 	allow, _, _ := c.PendingAllow()
 	ci := info(c)
-	ci.ExtraAllow = allow
+	ci.ExtraAllow, ci.ExtraInspect = allow, c.PendingInspect()
 	return a.cfg.Egress.Apply(ctx, ci)
 }

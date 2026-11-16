@@ -6,14 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 type allowVaultClaim struct{ denied bool }
@@ -24,6 +26,7 @@ func (a allowVaultClaim) AuthorizeBinding(_ context.Context, b Binding) (ClaimAu
 	}
 	return ClaimAuthority{Scope: b.Scope, ExpiresAt: time.Date(2030, 1, 1, 1, 0, 0, 0, time.UTC), CredentialHosts: []string{b.Host}}, nil
 }
+
 func vaultFixture(t *testing.T) (VaultConfig, SecretVersion, Binding) {
 	t.Helper()
 	base, err := filepath.EvalSymlinks(t.TempDir())
@@ -31,11 +34,11 @@ func vaultFixture(t *testing.T) (VaultConfig, SecretVersion, Binding) {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(base, "vault")
-	if err = os.Mkdir(dir, 0700); err != nil {
+	if err = os.Mkdir(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	key := filepath.Join(base, "owner.key")
-	if err = os.WriteFile(key, bytes.Repeat([]byte{7}, 32), 0600); err != nil {
+	if err = os.WriteFile(key, bytes.Repeat([]byte{7}, 32), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -44,6 +47,7 @@ func vaultFixture(t *testing.T) (VaultConfig, SecretVersion, Binding) {
 	binding := Binding{Scope: ClaimScope{SecretScope: scope, ClaimID: "claim-a"}, SecretID: version.ID, Version: 1, Host: "api.example.test", Header: "Authorization", ExpiresAt: now.Add(30 * time.Minute)}
 	return VaultConfig{Directory: dir, KeyFile: key, CellID: "cell-a", Claims: allowVaultClaim{}, Now: func() time.Time { return now }}, version, binding
 }
+
 func TestEncryptedVaultPersistsCiphertextAndScopedLookup(t *testing.T) {
 	cfg, secret, binding := vaultFixture(t)
 	v, err := OpenConfiguredVault(cfg)
@@ -90,6 +94,7 @@ func TestEncryptedVaultPersistsCiphertextAndScopedLookup(t *testing.T) {
 		t.Fatalf("recovery failed: %v", err)
 	}
 }
+
 func TestVaultRevocationSurvivesRestart(t *testing.T) {
 	cfg, secret, binding := vaultFixture(t)
 	v, err := OpenConfiguredVault(cfg)
@@ -118,6 +123,7 @@ func TestVaultRevocationSurvivesRestart(t *testing.T) {
 		t.Fatalf("revoked credential recovered: %v", err)
 	}
 }
+
 func TestVaultRefusesUnconfiguredPartialAndUnsafeKey(t *testing.T) {
 	v, err := OpenConfiguredVault(VaultConfig{})
 	if err != nil {
@@ -133,13 +139,14 @@ func TestVaultRefusesUnconfiguredPartialAndUnsafeKey(t *testing.T) {
 		t.Fatalf("partial configuration: %v", err)
 	}
 	cfg, _, _ = vaultFixture(t)
-	if err = os.Chmod(cfg.KeyFile, 0644); err != nil {
+	if err = os.Chmod(cfg.KeyFile, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = OpenConfiguredVault(cfg); !errors.Is(err, ErrVaultConfig) {
 		t.Fatalf("public key file: %v", err)
 	}
 }
+
 func TestVaultRequiresAuthorityAndMatchingEnvironment(t *testing.T) {
 	cfg, secret, binding := vaultFixture(t)
 	cfg.Claims = nil
@@ -171,7 +178,7 @@ func TestVaultRejectsWrongKeyCellAndTamperedCiphertext(t *testing.T) {
 			v.Close()
 			switch kind {
 			case "wrong_key":
-				if err = os.WriteFile(cfg.KeyFile, bytes.Repeat([]byte{8}, 32), 0600); err != nil {
+				if err = os.WriteFile(cfg.KeyFile, bytes.Repeat([]byte{8}, 32), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			case "wrong_cell":
@@ -180,13 +187,13 @@ func TestVaultRejectsWrongKeyCellAndTamperedCiphertext(t *testing.T) {
 				p := filepath.Join(cfg.Directory, "vault.json")
 				raw, _ := os.ReadFile(p)
 				raw[len(raw)-8] ^= 1
-				if err = os.WriteFile(p, raw, 0600); err != nil {
+				if err = os.WriteFile(p, raw, 0o600); err != nil {
 					t.Fatal(err)
 				}
 			case "noncanonical":
 				p := filepath.Join(cfg.Directory, "vault.json")
 				raw, _ := os.ReadFile(p)
-				if err = os.WriteFile(p, append(raw, '\n'), 0600); err != nil {
+				if err = os.WriteFile(p, append(raw, '\n'), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -196,6 +203,7 @@ func TestVaultRejectsWrongKeyCellAndTamperedCiphertext(t *testing.T) {
 		})
 	}
 }
+
 func TestVaultExclusiveOwnerAndPrivatePaths(t *testing.T) {
 	cfg, _, _ := vaultFixture(t)
 	v, err := OpenConfiguredVault(cfg)
@@ -228,7 +236,9 @@ func TestVaultExclusiveOwnerAndPrivatePaths(t *testing.T) {
 				}
 				cfg.Directory = p
 			case "public_dir":
-				os.Chmod(cfg.Directory, 0755)
+				if err := os.Chmod(cfg.Directory, 0o755); err != nil {
+					t.Fatal(err)
+				}
 			case "public_store":
 				v, err := OpenConfiguredVault(cfg)
 				if err != nil {
@@ -238,10 +248,12 @@ func TestVaultExclusiveOwnerAndPrivatePaths(t *testing.T) {
 					t.Fatal(err)
 				}
 				v.Close()
-				os.Chmod(filepath.Join(cfg.Directory, "vault.json"), 0644)
+				if err := os.Chmod(filepath.Join(cfg.Directory, "vault.json"), 0o644); err != nil {
+					t.Fatal(err)
+				}
 			case "fifo_key":
 				os.Remove(cfg.KeyFile)
-				if err = unix.Mkfifo(cfg.KeyFile, 0600); err != nil {
+				if err = unix.Mkfifo(cfg.KeyFile, 0o600); err != nil {
 					t.Fatal(err)
 				}
 			case "hardlink_key":
@@ -261,6 +273,7 @@ type vaultAuthorityFunc func(context.Context, Binding) (ClaimAuthority, error)
 func (f vaultAuthorityFunc) AuthorizeBinding(ctx context.Context, b Binding) (ClaimAuthority, error) {
 	return f(ctx, b)
 }
+
 func TestVaultBindingAuthorityScopeAndTTLCannotBeSuppliedByCaller(t *testing.T) {
 	for _, kind := range []string{"denied", "org", "environment", "claim", "host", "ttl", "version_ttl", "cross_environment", "reserved_header", "immutable_binding"} {
 		t.Run(kind, func(t *testing.T) {
@@ -311,6 +324,7 @@ func TestVaultBindingAuthorityScopeAndTTLCannotBeSuppliedByCaller(t *testing.T) 
 		})
 	}
 }
+
 func TestVaultExpiryAndClaimRevocation(t *testing.T) {
 	cfg, secret, b := vaultFixture(t)
 	now := cfg.Now()
@@ -347,6 +361,7 @@ func TestVaultExpiryAndClaimRevocation(t *testing.T) {
 		t.Fatalf("revoked claim rebound: %v", err)
 	}
 }
+
 func TestVaultUncertainRevocationFailsClosedAndRecoversCommittedState(t *testing.T) {
 	cfg, secret, b := vaultFixture(t)
 	managed, err := OpenConfiguredVault(cfg)
@@ -378,6 +393,7 @@ func TestVaultUncertainRevocationFailsClosedAndRecoversCommittedState(t *testing
 		t.Fatalf("committed revocation lost: %v", err)
 	}
 }
+
 func TestVaultCancellationDoesNotPersistOrWaitForLock(t *testing.T) {
 	cfg, secret, b := vaultFixture(t)
 	managed, err := OpenConfiguredVault(cfg)
@@ -401,10 +417,11 @@ func TestVaultCancellationDoesNotPersistOrWaitForLock(t *testing.T) {
 		t.Fatalf("cancelled lookup waited: %v", err)
 	}
 }
+
 func TestVaultCleansOnlyBoundedPrivatePendingFiles(t *testing.T) {
 	cfg, _, _ := vaultFixture(t)
 	p := filepath.Join(cfg.Directory, "pending-0123456789abcdef01234567")
-	if err := os.WriteFile(p, []byte("synthetic encrypted pending"), 0600); err != nil {
+	if err := os.WriteFile(p, []byte("synthetic encrypted pending"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	v, err := OpenConfiguredVault(cfg)
@@ -416,7 +433,7 @@ func TestVaultCleansOnlyBoundedPrivatePendingFiles(t *testing.T) {
 		t.Fatal("abandoned temporary file remains")
 	}
 	foreign := filepath.Join(cfg.Directory, "do-not-delete")
-	if err = os.WriteFile(foreign, []byte("synthetic unrelated"), 0600); err != nil {
+	if err = os.WriteFile(foreign, []byte("synthetic unrelated"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = OpenConfiguredVault(cfg); !errors.Is(err, ErrVaultConfig) {
@@ -426,6 +443,7 @@ func TestVaultCleansOnlyBoundedPrivatePendingFiles(t *testing.T) {
 		t.Fatal("foreign file was removed")
 	}
 }
+
 func TestVaultCiphertextChangesAndMetadataNeverReturnsValues(t *testing.T) {
 	cfg, secret, b := vaultFixture(t)
 	v, err := OpenConfiguredVault(cfg)
@@ -462,6 +480,7 @@ func TestVaultCiphertextChangesAndMetadataNeverReturnsValues(t *testing.T) {
 		}
 	}
 }
+
 func TestEncryptedVaultWorksThroughInjectorAndRevocation(t *testing.T) {
 	cfg, version, b := vaultFixture(t)
 	version.Value = secret
@@ -486,7 +505,7 @@ func TestEncryptedVaultWorksThroughInjectorAndRevocation(t *testing.T) {
 	}
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatal("credentialed request refused")
 	}
 	if (<-rig.seen).Get("Authorization") != secret {
@@ -501,7 +520,7 @@ func TestEncryptedVaultWorksThroughInjectorAndRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != 403 {
+	if resp.StatusCode != http.StatusForbidden {
 		t.Fatal("revoked credential still forwarded")
 	}
 }
@@ -538,6 +557,7 @@ func TestVaultClaimsArePrunedAfterHardExpiryButLiveRevocationRemains(t *testing.
 		t.Fatal("cleanup deleted live revocation or retained expired claims")
 	}
 }
+
 func TestVaultBoundsImmutableVersionsAndConcurrentCalls(t *testing.T) {
 	cfg, secret, _ := vaultFixture(t)
 	managed, err := OpenConfiguredVault(cfg)
@@ -590,6 +610,7 @@ func TestVaultBoundsImmutableVersionsAndConcurrentCalls(t *testing.T) {
 		t.Fatalf("unbounded versions: %v", err)
 	}
 }
+
 func TestVaultRefusesInvalidValuesAndCancelledAuthority(t *testing.T) {
 	cfg, secret, b := vaultFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -603,9 +624,9 @@ func TestVaultRefusesInvalidValuesAndCancelledAuthority(t *testing.T) {
 	}
 	defer v.Close()
 	for _, value := range []string{"", "contains\nnewline", string([]byte{0xff}), strings.Repeat("x", maxVaultValue+1)} {
-		copy := secret
-		copy.Value = value
-		if err = v.PutVersion(context.Background(), copy); !errors.Is(err, ErrVaultDenied) {
+		invalid := secret
+		invalid.Value = value
+		if err = v.PutVersion(context.Background(), invalid); !errors.Is(err, ErrVaultDenied) {
 			t.Fatalf("invalid value accepted: %v", err)
 		}
 	}

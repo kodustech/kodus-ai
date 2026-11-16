@@ -43,6 +43,7 @@ export async function recordProductTarget(
         await new PgRunTargetStore(pool).record(runTargetOf(req, platform));
         return 'recorded';
     } finally {
+        // A one-shot pool: the record's own error is what the caller sees, not a failed close.
         await pool.end().catch(() => undefined);
     }
 }

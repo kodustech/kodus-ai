@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/browser"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/redact"
 )
 
@@ -137,7 +137,8 @@ type browserOpts struct {
 
 // browserArgs is the docker argv of one runner container.
 func browserArgs(o browserOpts) []string {
-	args := []string{"run", "--rm", "-i", "--name", o.Name,
+	args := []string{
+		"run", "--rm", "-i", "--name", o.Name,
 		"--network", o.Network,
 		"--add-host", o.Host + ":" + o.IP,
 		"--read-only", "--tmpfs", "/tmp:rw,nosuid,nodev,size=1g",
@@ -185,7 +186,7 @@ func (t *tailBuf) Write(p []byte) (int, error) {
 // dockerStream runs docker with stdin and stdout streamed, the minimal
 // environment, and the stderr tail (redacted) in its error.
 func dockerStream(ctx context.Context, args []string, stdin []byte, stdout io.Writer) error {
-	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd := exec.CommandContext(ctx, "docker", args...) //nolint:gosec // G204: a fixed binary with argv (no shell); the callers build args from validated parts
 	cmd.Env = dockercli.MinimalEnv()
 	if stdin != nil {
 		cmd.Stdin = strings.NewReader(string(stdin))

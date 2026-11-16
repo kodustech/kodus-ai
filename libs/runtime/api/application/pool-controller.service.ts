@@ -14,9 +14,13 @@ import {
     type RuntimeApiConfig,
 } from '../domain/ports';
 import { RUNTIME_MACHINE_LIST_PRICES } from '../domain/run-cost';
-import { RuntimeCommandName, runtimeCommandOutboxMessage } from '../domain/runtime-commands';
+import { RuntimeCommandName, runtimeCommandOutboxMessage } from '@libs/runtime/contracts/runtime-commands';
 
-/** List price of one ready machine an hour: the VM a Run adopts (§11 sizing). */
+/**
+ * List price of one ready machine an hour: the workload VM an aws-ec2 cell
+ * keeps in its pool (m7i.xlarge). On a shared cell a pool machine is a slice
+ * of the host, so this is an upper bound there.
+ */
 export const POOL_USD_PER_MACHINE_HOUR = RUNTIME_MACHINE_LIST_PRICES.vm.usdPerHour;
 
 /** The actor of a pool change no person asked for (the schedule, a pull request, the budget). */

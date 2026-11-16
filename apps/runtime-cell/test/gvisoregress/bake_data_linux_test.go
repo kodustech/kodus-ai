@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver/drivertest"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
@@ -51,8 +51,10 @@ func TestALaterClaimBootsOnTheSetupsBakedData(t *testing.T) {
 volumes:
   pgdata: {}
 `)
-	d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{CellID: cell, HolderImage: "alpine:3.20",
-		WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name})
+	d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{
+		CellID: cell, HolderImage: "alpine:3.20",
+		WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +64,7 @@ volumes:
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = d.ReleaseClaim(context.Background(), n) })
+		t.Cleanup(func() { _ = d.ReleaseClaim(context.WithoutCancel(ctx), n) })
 		spec := drivertest.BaseSpec(cell, id, n)
 		spec.OrgID, spec.EnvironmentID, spec.ExpiresAt, spec.HardExpiresAt = org, env, time.Now().Add(10*time.Minute), time.Now().Add(time.Hour)
 		spec.ImageID, spec.Setup = imageID, setup
@@ -70,8 +72,8 @@ volumes:
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = d.Destroy(context.Background(), ref) })
-		if _, err := d.Up(ctx, ref, compose, project); err != nil {
+		t.Cleanup(func() { _ = d.Destroy(context.WithoutCancel(ctx), ref) })
+		if _, err := d.Up(ctx, driver.UpRequest{Ref: ref, Compose: compose, ProjectDir: project}); err != nil {
 			t.Fatalf("up %s: %v", id, err)
 		}
 		return ref
@@ -91,7 +93,7 @@ volumes:
 
 	setup := claim(t, "claim-setup", "setup", true)
 	seeded := seed(t, setup)
-	if err := d.PinBakeSource(setup); err != nil {
+	if err := d.PinBakeSource(t.Context(), setup); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.Destroy(ctx, setup); err != nil {
@@ -146,8 +148,10 @@ func TestAClaimAdoptsAPoolMachineReadyWithTheBakesData(t *testing.T) {
 volumes:
   pgdata: {}
 `)
-	d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{CellID: cell, HolderImage: "alpine:3.20",
-		WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name})
+	d, err := dockergvisor.New(ctx, dockercli.CLI{}, dockergvisor.Config{
+		CellID: cell, HolderImage: "alpine:3.20",
+		WorkDir: filepath.Join(dir, "cell"), EgressContainer: e.name,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,11 +181,11 @@ volumes:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Up(ctx, setup, compose, project); err != nil {
+	if _, err := d.Up(ctx, driver.UpRequest{Ref: setup, Compose: compose, ProjectDir: project}); err != nil {
 		t.Fatal(err)
 	}
 	seeded := seed(t, setup.MachineID)
-	if err := d.PinBakeSource(setup); err != nil {
+	if err := d.PinBakeSource(t.Context(), setup); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.Destroy(ctx, setup); err != nil {
@@ -194,8 +198,10 @@ volumes:
 
 	// The pool machine: the bake's data is in its volume before any claim.
 	start := time.Now()
-	pm, err := d.PoolCreate(ctx, driver.PoolSpec{CellID: cell, OrgID: org, EnvironmentID: env, ImageID: img.ImageID, KMSKeyRef: "k",
-		Size: driver.MachineSize{CPU: 2, MemoryGB: 4, DiskGB: 20}, ExpiresAt: time.Now().Add(time.Hour), HardExpiresAt: time.Now().Add(2 * time.Hour)})
+	pm, err := d.PoolCreate(ctx, driver.PoolSpec{
+		CellID: cell, OrgID: org, EnvironmentID: env, ImageID: img.ImageID, KMSKeyRef: "k",
+		Size: driver.MachineSize{CPU: 2, MemoryGB: 4, DiskGB: 20}, ExpiresAt: time.Now().Add(time.Hour), HardExpiresAt: time.Now().Add(2 * time.Hour),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +226,7 @@ volumes:
 	}
 	t.Cleanup(func() { _ = d.Destroy(context.Background(), observer) })
 	start = time.Now()
-	if _, err := d.Up(ctx, pm.Workload, compose, project); err != nil {
+	if _, err := d.Up(ctx, driver.UpRequest{Ref: pm.Workload, Compose: compose, ProjectDir: project}); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("adopted up %s", time.Since(start).Round(time.Millisecond))

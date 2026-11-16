@@ -3,13 +3,14 @@ package observerclient
 import (
 	"context"
 	"encoding/json"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observerauth"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"sync/atomic"
 	"testing"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observer"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/observerauth"
 )
 
 // A private config PUT must never replay its credential body at a redirect.
@@ -28,7 +29,7 @@ func TestConfigurationNeverFollowsCredentialRedirect(t *testing.T) {
 		reached.Add(1)
 		w.Header().Set(observer.ConfigFingerprintHeader, fingerprint)
 		w.Header().Set(observer.ConfigGenerationHeader, strconv.FormatUint(cc.Generation, 10))
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer spy.Close()
 	control := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

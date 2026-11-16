@@ -130,3 +130,97 @@ func TestATrackerKeepsAtMostMaxSteps(t *testing.T) {
 		t.Fatalf("steps: %d slowest: %d", s.Steps, len(s.Slowest))
 	}
 }
+
+// A failed npm install: the first lines that say why come out of the step's
+// output; the docker command around the build used to be all the error had.
+func TestFailureKeepsTheFirstErrorLinesOfTheFailedStep(t *testing.T) {
+	tr := New()
+	feed(tr, `#6 [deps 3/5] RUN --mount=type=cache,target=/root/.npm npm ci
+#6 0.812 npm WARN deprecated inflight@1.0.6
+#6 12.101 npm ERR! code ENOTFOUND
+#6 12.102 npm ERR! syscall getaddrinfo
+#6 12.103 npm ERR! errno ENOTFOUND
+#6 12.104 npm ERR! network request to https://registry.npmjs.org/x failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org
+#6 12.200 npm ERR! A complete log of this run can be found in: /root/.npm/_logs/debug.log
+#6 ERROR: process "/bin/sh -c npm ci" did not complete successfully: exit code: 1
+#7 [app 2/2] COPY . .
+#7 CANCELED
+error: failed to solve: process "/bin/sh -c npm ci" did not complete successfully: exit code: 1
+`)
+	f, ok := tr.Failure()
+	if !ok || f.Step != "[deps 3/5] RUN --mount=type=cache,target=/root/.npm npm ci" || !f.ProcessExit || !f.CacheMount {
+		t.Fatalf("failure %+v", f)
+	}
+	if len(f.Lines) != 6 || f.Lines[0] != "npm ERR! code ENOTFOUND" || !strings.HasPrefix(f.Lines[5], "ERROR: process") {
+		t.Fatalf("lines %q", f.Lines)
+	}
+	for _, l := range f.Lines {
+		if strings.Contains(l, "WARN deprecated") {
+			t.Fatalf("a warning was kept as an error: %q", l)
+		}
+	}
+	if !tr.SolveFailed() {
+		t.Fatal("the solve failure was not seen")
+	}
+}
+
+// A step whose output says nothing that reads as an error still names its
+// last lines, so the failure has some text of its own.
+func TestFailureFallsBackToTheStepsLastLines(t *testing.T) {
+	tr := New()
+	tr.Line("#3 [b 1/1] RUN ./build.sh")
+	for i := range 10 {
+		tr.Line("#3 1.00" + strconv.Itoa(i) + " step " + strconv.Itoa(i))
+	}
+	tr.Line("#3 ERROR: process \"/bin/sh -c ./build.sh\" did not complete successfully: exit code: 2")
+	f, ok := tr.Failure()
+	if !ok || len(f.Lines) != MaxTailLines+1 || f.Lines[0] != "step 6" || f.CacheMount {
+		t.Fatalf("%+v", f)
+	}
+}
+
+// What a step printed is redacted and bounded, line by line and in number.
+func TestFailureLinesAreRedactedAndBounded(t *testing.T) {
+	tr := New()
+	tr.Line("#2 [a 1/1] RUN make")
+	tr.Line("#2 0.100 error: DB_PASSWORD=hunter2 ghp_0123456789abcdefghijABCDEFGHIJ012345 " + strings.Repeat("x", 2*MaxLine))
+	for range 3 * MaxErrorLines {
+		tr.Line("#2 0.200 error: again")
+	}
+	tr.Line("#2 ERROR: failed")
+	f, _ := tr.Failure()
+	if len(f.Lines) != MaxErrorLines+1 || f.ProcessExit {
+		t.Fatalf("%d lines, exit %v", len(f.Lines), f.ProcessExit)
+	}
+	if l := f.Lines[0]; strings.Contains(l, "hunter2") || strings.Contains(l, "ghp_") || len(l) > MaxLine {
+		t.Fatalf("kept %q", l)
+	}
+}
+
+// The observed case: the builder ended with steps still running and none
+// reported failed: no Failure, and no solve failure, so the cell can tell it
+// from the code's.
+func TestABuilderThatDiesLeavesNoFailure(t *testing.T) {
+	tr := New()
+	feed(tr, "#7 [base 3/9] RUN apt-get update && apt-get install -y build-essential\n#7 4.200 Get:1 http://deb.debian.org/debian bookworm InRelease\n")
+	if _, ok := tr.Failure(); ok || tr.SolveFailed() {
+		t.Fatal("a builder that died was read as a failed step")
+	}
+}
+
+func TestErrorLinesAreTheOnesThatSayWhy(t *testing.T) {
+	for _, l := range []string{
+		"npm ERR! code E404", "ERR_PNPM_FETCH_404  GET https://registry.npmjs.org/x: Not Found", "gyp ERR! stack Error: not found: make",
+		"getaddrinfo EAI_AGAIN registry.npmjs.org", "E: Unable to locate package libfoo", "error: linker `cc` not found", "Err:1 http://deb.debian.org bookworm InRelease",
+		"fatal: unable to access 'https://github.com/x/y/'", "go: github.com/x/y@v1.0.0: reading https://proxy.golang.org: 403 Forbidden: failed",
+	} {
+		if !errorLine.MatchString(l) {
+			t.Errorf("not an error line: %q", l)
+		}
+	}
+	for _, l := range []string{"npm WARN deprecated inflight@1.0.6", "Setting up everything (1.2.3) ...", "Get:1 http://deb.debian.org/debian bookworm InRelease", "added 812 packages in 30s"} {
+		if errorLine.MatchString(l) {
+			t.Errorf("an error line: %q", l)
+		}
+	}
+}

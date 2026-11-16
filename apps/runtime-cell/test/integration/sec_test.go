@@ -24,7 +24,7 @@ const (
 
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
-func execOn(t *testing.T, ctx context.Context, w *world, claim, command string) *protocol.StepResultBody {
+func execOn(ctx context.Context, t *testing.T, w *world, claim, command string) *protocol.StepResultBody {
 	t.Helper()
 	step := hubclient.NewID()
 	if err := w.hub.Send(ctx, "cell-1", claim, &protocol.ExecBody{StepID: step, Command: command, TimeoutMs: 5000}); err != nil {
@@ -53,7 +53,7 @@ func TestS51RedactionBeforeTheResultLeavesTheCell(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	token := "ghs_dl+Tok/en=42Zq7"
-	w.acquire(t, ctx, "claim-s51", "org-a", func(b *protocol.ClaimAcquireBody) { b.RepoToken = token })
+	w.acquire(ctx, t, "claim-s51", "org-a", func(b *protocol.ClaimAcquireBody) { b.RepoToken = token })
 
 	lines := []string{
 		"plain " + token,
@@ -67,7 +67,7 @@ func TestS51RedactionBeforeTheResultLeavesTheCell(t *testing.T) {
 	for i, l := range lines {
 		quoted[i] = shellQuote(l)
 	}
-	res := execOn(t, ctx, w, "claim-s51", "printf '%s\\n' "+strings.Join(quoted, " "))
+	res := execOn(ctx, t, w, "claim-s51", "printf '%s\\n' "+strings.Join(quoted, " "))
 	frame, _ := json.Marshal(res)
 	for _, leaked := range []string{token, base64.StdEncoding.EncodeToString([]byte(token)), redact.EncodeURIComponent(token), fakeAWS, fakeJWT} {
 		if strings.Contains(string(frame), leaked) {
@@ -83,7 +83,7 @@ func TestS51RedactionBeforeTheResultLeavesTheCell(t *testing.T) {
 		t.Fatalf("redactions %v in %q", res.Redactions, res.Exec.Stdout)
 	}
 	// Ordinary output passes untouched and the count says so.
-	clean := execOn(t, ctx, w, "claim-s51", "echo GET /users 200")
+	clean := execOn(ctx, t, w, "claim-s51", "echo GET /users 200")
 	if clean.Exec.Stdout != "GET /users 200\n" || clean.Redactions == nil || *clean.Redactions != 0 {
 		t.Fatalf("clean output %q %v", clean.Exec.Stdout, clean.Redactions)
 	}
@@ -95,7 +95,7 @@ func TestS52PRNeverPoisonsImageOrPool(t *testing.T) {
 	w := newWorld(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	w.acquire(t, ctx, "claim-pr", "org-a", func(b *protocol.ClaimAcquireBody) { b.Side = protocol.SidePr })
+	w.acquire(ctx, t, "claim-pr", "org-a", func(b *protocol.ClaimAcquireBody) { b.Side = protocol.SidePr })
 	var prMachine driver.MachineRef
 	for _, m := range w.drv.Machines() {
 		if m.Spec.Role == driver.RoleWorkload {
@@ -103,7 +103,7 @@ func TestS52PRNeverPoisonsImageOrPool(t *testing.T) {
 		}
 	}
 	// The PR writes into the dependency cache and ends normally.
-	if r := execOn(t, ctx, w, "claim-pr", "mkdir -p .cache/npm && echo poisoned > .cache/npm/left-pad.js"); r.Exec == nil || r.Exec.ExitCode != 0 {
+	if r := execOn(ctx, t, w, "claim-pr", "mkdir -p .cache/npm && echo poisoned > .cache/npm/left-pad.js"); r.Exec == nil || r.Exec.ExitCode != 0 {
 		t.Fatalf("write cache: %+v", r)
 	}
 
@@ -134,7 +134,7 @@ func TestS52PRNeverPoisonsImageOrPool(t *testing.T) {
 	}
 
 	// The next claim gets a new machine from the image, without the file.
-	w.acquire(t, ctx, "claim-next", "org-a")
+	w.acquire(ctx, t, "claim-next", "org-a")
 	for _, m := range w.drv.Machines() {
 		if m.Spec.Role != driver.RoleWorkload {
 			continue
@@ -226,7 +226,7 @@ func TestSetupFailureBundleAndDiagnosticHold(t *testing.T) {
 	if err := w.hub.Send(ctx, "cell-1", "claim-setup-held", probeRun(hubclient.NewID(), w.appPort, "/users")); nackCode(err) != "diagnostic_hold" {
 		t.Fatalf("probe.run on a held claim: %v", err)
 	}
-	if r := execOn(t, ctx, w, "claim-setup-held", "echo investigating"); r.Exec == nil || r.Exec.Stdout != "investigating\n" {
+	if r := execOn(ctx, t, w, "claim-setup-held", "echo investigating"); r.Exec == nil || r.Exec.Stdout != "investigating\n" {
 		t.Fatalf("exec on a held claim: %+v", r)
 	}
 	if err := w.hub.Send(ctx, "cell-1", "claim-setup-held", &protocol.ClaimReleaseBody{}); err != nil {

@@ -5,7 +5,7 @@
 - **runtime-hub** (`src/hub/main.ts`): terminates the cells' mTLS WebSocket and drives claims and steps on them.
 - **runtime-worker** (`src/worker/main.ts`): consumes the product's Runtime commands and runs each Run and environment setup as a DBOS workflow.
 
-Domain code shared with the product (protocol, gate, run state, sealed secrets, telemetry) lives in `libs/runtime`. This app only wires it to Postgres, RabbitMQ, Mongo and the cells.
+Domain code shared with the product (protocol, gate, run state, sealed secrets, telemetry) lives in `libs/runtime`. This app only wires it to Postgres, RabbitMQ and the cells.
 
 ## A Run, end to end
 
@@ -45,7 +45,9 @@ sequenceDiagram
 |---|---|---|
 | `CellIdentityService` | `hub/enrollment/cell-identity.service.ts` | Enrollment with a single-use token and a CSR, 24 h renewals, and the per-replica pin and revocation cache checked at the TLS handshake. |
 | `CellConnectionRegistry` | `hub/gateway/cell-connections.ts` | One live socket per cell; request/ack plumbing. A dropped connection resolves every wait on it as lost. |
-| `ClaimService` | `hub/claims/claim.service.ts` | Acquire (rebind on retry, a duplicate joins the round in flight), claim outcomes, release, heartbeat reconciliation, security violations, egress policy, image bake, pool target. |
+| `ClaimService` | `hub/claims/claim.service.ts` | Acquire (rebind on retry, a duplicate joins the round in flight), claim outcomes, release, heartbeat reconciliation, security violations. |
+| `ClaimEgressService` | `hub/claims/claim-egress.service.ts` | The environment's approved egress hosts: in the acquire, after `claim.ready` and on a new approval. Never to the PR side of a fork (`receivesApprovedHosts`). |
+| `ClaimImageService` | `hub/claims/claim-image.service.ts` | Image bake (setup claims only) and pool target (from a baked image, never a claim). |
 | `StepDispatcher` | `hub/claims/step-dispatcher.ts` | probe.run, exec and machine.reset on a bound claim, at most once per stepId. |
 
 The CA is `hub/ca/x509.ts`. It signs cell certificates (OU=cell, CN=cellId) and verifies every certificate it issues against itself. The DER and CSR handling is hand-written and is not replaced by a library yet.
@@ -57,7 +59,7 @@ The CA is `hub/ca/x509.ts`. It signs cell certificates (OU=cell, CN=cellId) and 
 
 Each listener answers 404 to the other's routes.
 
-**Outgoing backpressure** (#2462). Each cell connection permits at most 4 MiB
+**Outgoing backpressure.** Each cell connection permits at most 4 MiB
 of queued outgoing data, a frame of 1 MiB, 128 unanswered requests and 256
 in-flight steps. The byte check includes the next frame. Crossing a ceiling
 closes that connection and terminates its transport; pending requests reject,
@@ -106,9 +108,9 @@ They do not bound incoming message queues or total process connections.
 - **Cell choice**: `shared/persistence/cell-directory.ts` reserves a slot on the best eligible cell (the org's own first, then the cells where the org holds fewer live claims, then the most free slots). A Run's acquire passes the cell of its environment's last setup as `prefer` (`poolCellOf`, only from a record of the same org): that cell holds the warm pool, so it goes first while it is eligible and has a slot. A failure finding it is no preference.
   - An org holds at most `RUNTIME_ORG_SHARED_CLAIM_CAP` live claims (pending, bound, held) on shared (kodus-owned) cells; its own cells are not capped. Past the cap, and with no free slot on any eligible cell, the acquire is blocked (kind `resources`, signature `org_capacity` or `no_capacity`) before anything is sent to a cell; both have a card in `libs/runtime/blockers/catalog.ts`. No connected cell at all is still `cell_unavailable`.
   - The cap counts the claim rows the hub wrote, so acquires of one org in flight together may pass it by their number (the DBOS org partition bounds them). A new round of a claim never counts against itself.
-- **Setup**: `worker/setup/environment-setup.service.ts` boots the default-branch head with the recipe the product read, checks the app answers, and asks for an image bake. When the bake is accepted and the command carries `poolSize`, the `pool` step sends `pool.target` with `imageId: latest` to the cell that baked, before the release; the cell fills the pool from that bake once it is done (S-52). The record lives in `environment-setup.store.ts`.
+- **Setup**: `worker/setup/environment-setup.service.ts` boots the default-branch head with the recipe the product read, checks the app answers, and asks for an image bake. When the bake is accepted and the command carries `poolSize`, the `pool` step sends `pool.target` with `imageId: latest` to the cell that baked, before the release; the cell fills the pool from that bake once it is done (a pool only uses an image baked from a clean default-branch setup). The record lives in `environment-setup.store.ts`.
 
-**Restored claims** (#2464). A claim read from a checkpoint is an identity,
+**Restored claims.** A claim read from a checkpoint is an identity,
 not evidence that its machines still exist. Existing new planner/replay/test
 and setup health/bake callbacks renew it through the scoped hub client before
 starting work. A renewal failure is recorded as closed data and interpreted
@@ -118,9 +120,10 @@ checkpoint does not reissue its work. The production factory requires renewal;
 only the explicit fake-driver path permits an adapter without it. This does
 not cancel work already in flight or reacquire machines behind a recorded round.
 
-**Transport and machine facts** (#2466). `cell_unavailable` and `transport_lost`
+**Transport and machine facts.** `cell_unavailable` and `transport_lost`
 do not assert guest failure. Only explicit VM-health observations can support
 `pr_destabilizes_machine`; repeated missing control links remain inconclusive.
+
 - **Maintenance**: `RunEngineService.maintenanceTick` runs every 15 s. The replica that takes the maintenance advisory lock sweeps stuck Runs, reaps claims past their hard expiry through the hub, and, once an hour, applies 30-day retention (`applyRetention` in `shared/persistence/runtime-schema.ts`; the Run stream in batches of 5,000).
 - **Evidence**: see [Evidence](#evidence).
 
@@ -137,13 +140,15 @@ The Runtime has its own Postgres database, migrated by `ensureRuntimeSchema` (`s
 | `runtime_cell_tokens` | Worker inserts (token issued); hub consumes on registration, in the same transaction as the cell row. |
 | `runtime_fork_approvals`, `runtime_egress_approvals`, `runtime_stops`, `runtime_cell_revocations` | Worker (commands from the API, which never writes this database). |
 | `runtime_run_events` | Hub (`libs/runtime/run/adapters/pg-run-stream.store.ts`), the Run stream (default store). Read by the API with the read-only role. |
+| `runtime_runs` | Worker, from the DBOS step of each transition (`libs/runtime/run/adapters/pg-run-projection.store.ts`): the Run projection. Read by the API and the product worker with the read-only role. |
+| `runtime_environment_setups`, `runtime_lessons` | Worker (setup workflow, learn loop, an admin's promote or retire): the latest setup of each environment and the lessons. Read by the API with the read-only role. |
 | DBOS system tables | DBOS, inside the worker. |
 
-Mongo (product cluster, `runtime_*` collections) holds the Run projection and the environment setup records. Both are written by the worker.
+The Runtime uses no Mongo. The projection write is not in the same transaction as the DBOS step's checkpoint: a step (`DBOS.runStep`) also calls the hub over HTTP, and DBOS records its output on its own connection after the step returns. The write is an idempotent merge, so a step replayed after a crash writes the same fields again.
 
 ## Run stream
 
-The hub writes the Run stream (ADR-047):
+The hub writes the Run stream:
 
 - Step events: from `StepDispatcher`.
 - Run events: from the worker over `POST /internal/runs/:runId/events`, with an event key.
@@ -154,13 +159,13 @@ The hub writes the Run stream (ADR-047):
 
 - **Idempotent**: every event has a key, unique per Run (`runtime_run_events_key_idx`), so a retried append from any replica is a no-op. The worker's keys are `{attempt}:state:…`, `{attempt}:phase:…`; the hub's are `step:{stepId}:started|finished` (a stepId is sent at most once) and `security:{claimId}:{signature}`.
 - **Bounded**: an event over 64 KiB is refused (`RunStreamEventTooLargeError`); a page reads at most 1,000 events on the `(org_id, run_id, seq)` index; rows go after 30 days, oldest seq first in batches, found by a BRIN index on `created_at` (migration 10).
-- **API read**: `PgRuntimeRunStreamReader` (`libs/runtime/api/infrastructure`) with `RUNTIME_DATABASE_READ_URL`, inside `BEGIN READ ONLY`. The role is `kodus_runtime_reader` (`scripts/runtime/dev-runtime-users.sh`): `SELECT` on `runtime_run_events`, `runtime_cells`, `runtime_egress_*` and `runtime_claims` (the Run cost), nothing else. The long-poll reads every `RUNTIME_STREAM_POLL_INTERVAL_MS` (500 ms) per open request.
+- **API read**: `PgRuntimeRunStreamReader` (`libs/runtime/api/infrastructure`) with `RUNTIME_DATABASE_READ_URL`, inside `BEGIN READ ONLY`. The role is `kodus_runtime_reader` (`scripts/runtime/runtime-reader-grants.sql`, applied by `dev-runtime-users.sh`): `SELECT` on `runtime_run_events`, `runtime_cells`, `runtime_egress_*`, `runtime_claims` (the Run cost), the `runtime_machine_usage` view, `runtime_runs`, `runtime_environment_setups` and `runtime_lessons`, nothing else. The long-poll reads every `RUNTIME_STREAM_POLL_INTERVAL_MS` (500 ms) per open request.
 - **Cutover**: while the API still has `RUNTIME_STREAM_DIR`, a Run with no row in Postgres is read from its file stream, and a file offset keeps reading the file. Unset it once the Runs from before the switch no longer matter. A Run in flight during the switch shows only its file part.
 - `RUNTIME_STREAM_STORE=file` keeps the shared volume (`RUNTIME_STREAM_DIR`) for both, single host only.
 
 ## Evidence
 
-A Run's evidence (§8, `experiments/kody-runtime/EVIDENCE-CAPTURE-DESIGN.md`) lives at the key `{orgId}/{runId}/{side}/{stepId}/{type}`. The worker writes `output`; cells upload their artifacts (logs, db, cast, screenshots, video, trace, HAR) with grants the worker signs per step. Two stores, `RUNTIME_EVIDENCE_STORE` on the worker and the API:
+A Run's evidence lives at the key `{orgId}/{runId}/{side}/{stepId}/{type}`. The worker writes `output`; cells upload their artifacts (logs, db, cast, screenshots, video, trace, HAR) with grants the worker signs per step. Two stores, `RUNTIME_EVIDENCE_STORE` on the worker and the API:
 
 | | `file` (default) | `s3` |
 |---|---|---|
@@ -219,12 +224,12 @@ All config is read in one place, `shared/config.ts`:
 
 - `loadRuntimeConfig` is the hub's loader; `loadWorkerConfig` adds the worker's settings.
 - Both validate at boot. A bad number, bad JSON, or a missing seal key stops the process.
-- Only the standard `OTEL_*` variables are read elsewhere, in `shared/observability/otel.ts`.
+- Only the standard `OTEL_*` variables are read elsewhere, in `shared/observability/otel.ts` and `resource.ts`.
 
 | Variable | Default (dev) | Notes |
 |---|---|---|
 | `RUNTIME_DATABASE_URL` | `postgres://runtime:runtime@localhost:5442/kodus_runtime` | Runtime database and DBOS system database. |
-| `RUNTIME_RABBITMQ_URL`, `RUNTIME_MONGO_URL`, `RUNTIME_MONGO_DB` | localhost | `workflow.exchange` is checked, never declared. |
+| `RUNTIME_RABBITMQ_URL` | localhost | `workflow.exchange` is checked, never declared. |
 | `RUNTIME_HUB_PORT` / `RUNTIME_HUB_INTERNAL_PORT` | 3410 / 3411 | Must differ. |
 | `RUNTIME_REPLICA_URL`, `RUNTIME_HUB_URL` | internal listener | What the worker dials. |
 | `RUNTIME_TLS_CA`, `_CA_KEY`, `_CERT`, `_KEY`, `RUNTIME_TLS_WORKER_CA`, `RUNTIME_WORKER_TLS_CERT`, `_KEY` | none | PEM file paths. The hub refuses to start without them, except in plaintext test mode. |
@@ -232,8 +237,18 @@ All config is read in one place, `shared/config.ts`:
 | `RUNTIME_SECRET_SEAL_KEY` | none | Worker only; 32 bytes as hex or base64. |
 | `RUNTIME_MANAGED_CELLS` | `{}` | cellId → certificate serial. |
 | `RUNTIME_ORG_CONCURRENCY`, `RUNTIME_GLOBAL_CONCURRENCY` | 2, 20 | Fair-queue limits. |
-| `RUNTIME_RELEASE_VERSION` | `development` outside production | Worker only. Required in production; immutable release identifier passed to DBOS `applicationVersion`. 1–128 letters, digits, dots, underscores or hyphens; starts with a letter or digit. |
+| `RUNTIME_RELEASE_VERSION` | `development` outside production | Worker only. Required in production; immutable release identifier passed to DBOS `applicationVersion` (with `+planner-worker` appended when `RUNTIME_PLANNER_HOST=worker`). 1–128 letters, digits, dots, underscores or hyphens; starts with a letter or digit. |
+| `RUNTIME_PLANNER_HOST` | `product` | Worker only; `product` or `worker`. Where a Run's test planner runs: `product` calls the product's planner endpoint; `worker` drives the planner in this worker against the product's model-turn gateway and requires `RUNTIME_LLM_GATEWAY_URL`. Any other value refuses to start. The host is part of the DBOS version, so a workflow never resumes on the other host; drain the previous host's Runs before switching. |
 | `RUNTIME_ORG_SHARED_CLAIM_CAP` | 8 | Hub and worker must agree. Live claims/ticket slots one org may hold on shared cells at once. |
+| `RUNTIME_SANDBOX_MEMORY_MB` | 2048 | Hub only. The memory a code sandbox that asks no size is admitted at on a cell whose hello names no `sandboxSize` (a cell that names one is admitted at its own, `-sandbox-memory-mb`). Never the cell's default Run size. |
+| `RUNTIME_PREVIEW_DOMAIN` | unset | Worker and preview edge. The registrable domain previews are served under (docs/runtime/preview-urls.md), never the one Kodus runs on. Unset: previews are off and the product says so; the edge refuses to start. |
+| `RUNTIME_PREVIEW_TUNNEL_URL` | unset | Hub only. The edge's `wss://<host>[:port]/v1/cells/tunnel` the hub sends a preview claim's cell to dial. Unset: no preview is routed. |
+| `RUNTIME_PREVIEW_APP_URL` | required (edge) | Preview edge. The web app's origin, for links back and the same-site check (`RUNTIME_PREVIEW_ALLOW_SAME_SITE=true` overrides it, as a warning). |
+| `RUNTIME_PREVIEW_SESSION_REVALIDATE_MINUTES` | 15 | Preview edge. A preview session older than this is not served: a page load goes back to the app's preview page for a fresh grant (the app checks access again), a script request gets 401. 1 to 720. |
+| `RUNTIME_PREVIEW_GRANT_PUBLIC_KEY` | required (edge) | Preview edge. The Ed25519 public key of the API's `RUNTIME_PREVIEW_GRANT_PRIVATE_KEY`: a PEM, the base64 of one, or the base64 of its SPKI DER. |
+| `RUNTIME_PREVIEW_TLS_CERT` / `_KEY` | required unless `RUNTIME_PREVIEW_TLS_UPSTREAM=1` | Preview edge. Paths of the wildcard certificate for `*.<domain>` (browser listener, `RUNTIME_PREVIEW_EDGE_PORT`, 3430). With `RUNTIME_PREVIEW_TLS_UPSTREAM=1` it serves plain HTTP behind a balancer that terminates TLS. |
+| `RUNTIME_PREVIEW_TUNNEL_TLS_CERT` / `_KEY` | required (edge) | Preview edge. Paths of the tunnel listener's certificate (`RUNTIME_PREVIEW_TUNNEL_PORT`, 3431), which the cells verify against their hub CA; the listener checks the cells' certificates against `RUNTIME_TLS_CA`. Never behind a TLS-terminating balancer. |
+| `RUNTIME_ROUND_SNAPSHOTS` | `1` | Worker only; `0` or `1`. `1` (default): each Run side's acquire step also keeps the claim as its round snapshot once ready, and the Run's replay and test resets restore it (kind `memory`) on cells that keep snapshots. A cell that refuses keeps the compose reset. No new workflow step. |
 | `RUNTIME_DURABLE_ADMISSION` | `0` | Opt-in on both hub and worker. Short durable attempts and shared Run/setup execution budget. Requires worker maintenance. |
 | `RUNTIME_ADMISSION_GLOBAL_WAITING`, `_ORG_WAITING` | 1000 / 100 | Accepted waiting requests, including pending cleanup. |
 | `RUNTIME_ADMISSION_MAX_PAYLOAD_BYTES`, `_GLOBAL_BACKLOG_BYTES`, `_ORG_BACKLOG_BYTES` | 20 / 256 / 64 MiB | Sealed input byte ceilings. |
@@ -253,7 +268,7 @@ The production image (`docker/Dockerfile` target `runtime-control-plane`, `RUNTI
 
 Production workers also require `RUNTIME_RELEASE_VERSION`, for example an immutable build or commit ID, set consistently on replicas of that release. Never use the shared `development` identity in production. The production Docker target supplies no fallback; startup fails with a named configuration error if it is absent or invalid. The two development Compose worker examples default to `development` only when the variable is absent; an explicit empty value is rejected.
 
-Durable admission introduces new workflow branches and Runtime migrations. Keep it off on existing deployments until an isolated rollout uses a new release identity and both sides are configured consistently. Its strict shared-host Run reservation requires two cold boot budgets plus two slots; it does not make two 12 GiB builds fit a 16 GiB host. Details and evidence boundaries: [admission implementation](../../experiments/kody-runtime/ADMISSION-IMPLEMENTATION.md).
+Durable admission introduces new workflow branches and Runtime migrations. Keep it off on existing deployments until an isolated rollout uses a new release identity and both sides are configured consistently. Its strict shared-host Run reservation requires two cold boot budgets plus two slots; it does not make two 12 GiB builds fit a 16 GiB host.
 
 DBOS's inferred version hashes registered workflow wrapper source, SDK version and application name; it does not traverse imported Run/setup helpers. Explicit release identity selects the compatible stored workflow version, without changing queue names or migrating checkpoints. Keep compatible old workers available to finish old-version work. A new identifier does not prove old-journal replay compatibility, and old auto-hashed executions need an explicit recovery/deployment plan.
 
@@ -266,17 +281,17 @@ Setup capacity waits read the current DBOS cancellation signal inside their exis
   - Worker: `runtime.run.requested`, `runtime.run`, `runtime.run.boot`, `.agent`, `.replay`, `.intent`.
   - Hub: `runtime.hub.claim.acquire` and `runtime.hub.step`. They join the worker's trace through the W3C `traceparent` the worker sends (`hub/http/trace-context.interceptor.ts`).
   - Traces go to OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
+  - Spans and metrics carry the process's resource (`shared/observability/resource.ts`): `service.name` is `runtime-hub`, `runtime-worker` or `runtime-preview-edge`; `service.instance.id` is `RUNTIME_REPLICA_ID` on the hub and the edge, a random UUID per process on the worker; `service.version` is the worker's DBOS version, `RUNTIME_RELEASE_VERSION` (plus `+planner-worker` on the worker planner host). `OTEL_RESOURCE_ATTRIBUTES` adds to it or overrides it (e.g. `deployment.environment.name=dev`) and `OTEL_SERVICE_NAME` wins over both, as the OpenTelemetry specification says: set it per service, never in an env file the three share.
 - **Metrics**: Prometheus on `RUNTIME_METRICS_PORT`.
-  - The §11 set comes from `libs/runtime/telemetry`.
+  - The shared Runtime metric set comes from `libs/runtime/telemetry` (`RuntimeMetrics`).
   - The hub adds `runtime.claim.ready_wait{outcome,consumer}`, `runtime.step.duration{kind,outcome}`, `runtime.hub.background_error{op}`, `runtime.claim.reconciled` and `runtime.claim.transition{to,reason}` (`HubMetrics` in `hub/hub-types.ts`). Every transition is also a `claim.transition` log line with the claim's ids, the state reached, its reason and the cell's detail.
 
 ## Run it locally
 
-1. Write the dev CA and certificates: `scripts/runtime/dev-ca.sh .runtime-certs cell-dev-1`. Optionally, create the least-privilege Postgres, Mongo and RabbitMQ users with `scripts/runtime/dev-runtime-users.sh`.
+1. Write the dev CA and certificates: `scripts/runtime/dev-ca.sh .runtime-certs cell-dev-1`. Optionally, create the least-privilege Postgres and RabbitMQ users with `scripts/runtime/dev-runtime-users.sh`.
 2. Start the services: `docker compose -f docker-compose.dev.yml up runtime-hub runtime-worker`. They create the `kodus_runtime` database on boot when it is missing (`ensureDatabase` in `src/shared/persistence/runtime-schema.ts`).
    - The worker's dev seal key equals the product's dev default in the same file.
    - The hub's public port is published on 127.0.0.1:3410. The internal port is not published.
-3. Run one Run end to end with the Go cell on the host: `ENV_FILE=.env experiments/kody-runtime/sample-app/run-e2e.sh`. Its header lists the variables it takes.
 
 For the isolated stack with the TS fake cell (`src/fake-cell`), use `docker-compose.runtime.yml` with `pnpm run runtime:up` and `pnpm run runtime:e2e`. There the worker reaches the hub's internal listener on `:3411` (`RUNTIME_HUB_URL`, `RUNTIME_REPLICA_URL`) and opens tokens with the dev key from `src/testing/dev-seal-key.ts`. Its container names match the dev stack's runtime services, so run one stack at a time.
 
@@ -300,16 +315,16 @@ The planner can ask for `browser_explore` when UI files changed and the acquired
 
 The cell runs agent-browser against local Chromium. The result is bounded untrusted planner input, never a replay probe. The worker checks canaries across the request/result before retaining or redacting observations; only count/duration/status summaries remain in the final agent plan. Playwright replay and the gate keep deciding the result independently.
 
-Upgrade the product API's optional planner request schema before enabling `-browser-explore` on cells. Without the distinct capability, the worker omits the new request fields for old API compatibility. No external browser provider exists in this path. See [the delivery and validation notes](../../experiments/kody-runtime/agent-browser/README.md).
+Upgrade the product API's optional planner request schema before enabling `-browser-explore` on cells. Without the distinct capability, the worker omits the new request fields for old API compatibility. No external browser provider exists in this path.
 
 ## A2A executable finding tasks
 
-The product exposes the A2A1.0 Agent Card and JSON-RPC finding transport. Set `RUNTIME_A2A_BASE_URL` on the API to its trusted public origin (HTTPS, or literal-loopback HTTP in development), apply the new product migration and grant the read-only Runtime role only `scope`, `organization_id` and `cleared_at` on `runtime.runtime_stops`. Keys need `findings:submit`, repository scope and `env:exec` for executable probes. Upgrade the worker before enabling the product transport. The worker uses closed external probes through existing replay/gate and emits no publication for these Runs. [Implemented lifecycle, budgets, tests and remaining Inc. A work](../../experiments/kody-runtime/a2a/README.md).
+The product exposes the A2A1.0 Agent Card and JSON-RPC finding transport. Set `RUNTIME_A2A_BASE_URL` on the API to its trusted public origin (HTTPS, or literal-loopback HTTP in development), apply the new product migration and grant the read-only Runtime role only `scope`, `organization_id` and `cleared_at` on `runtime.runtime_stops`. Keys need `findings:submit`, repository scope and `env:exec` for executable probes. Upgrade the worker before enabling the product transport. The worker uses closed external probes through existing replay/gate and emits no publication for these Runs.
 
 
-## Contract completion wave 3
+## Recipe validation, Run delivery retry and external-task maintenance
 
-[#2497–#2499 behavior and rollout](../../experiments/kody-runtime/contract-wave3/README.md) covers named recipe validation, recoverable Run delivery and product-owned external-task maintenance. Apply Runtime migrations 17/18 and the additive product lifecycle migration through the normal reviewed deployment path; they were not activated by the implementation tests.
+Apply Runtime migrations 17/18 and the additive product lifecycle migration through the normal reviewed deployment path; they were not activated by the implementation tests.
 
 `env_validate(sessionId, name)` resolves only checks pinned from a confirmed default-branch recipe. It shares exec scopes/quota/audit, returns a step ID and requires current isolated workload execution; it never supplies observer proof or boot readiness.
 

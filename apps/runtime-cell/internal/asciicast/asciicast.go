@@ -30,8 +30,8 @@ type Cast struct {
 }
 
 // New starts a cast with its header line: terminal size and when it started.
-func New(width, height int, start time.Time, max int) *Cast {
-	c := &Cast{Max: max}
+func New(width, height int, start time.Time, limit int) *Cast {
+	c := &Cast{Max: limit}
 	header, _ := json.Marshal(struct {
 		Version   int               `json:"version"`
 		Width     int               `json:"width"`

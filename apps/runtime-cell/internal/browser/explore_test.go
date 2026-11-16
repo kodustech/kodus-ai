@@ -4,22 +4,25 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/redact"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/protocol"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/redact"
 )
 
 func exploreRequest() protocol.BrowserExploreRequest {
 	path := "/"
 	return protocol.BrowserExploreRequest{Steps: []protocol.BrowserExploreStep{{Goto: &path}}, Viewport: protocol.BrowserProbeViewport{Width: 640, Height: 480}, TimeoutMs: 1000}
 }
+
 func explorationJSON(t *testing.T) []byte {
 	t.Helper()
 	raw, _ := json.Marshal(protocol.BrowserExploreResult{Status: protocol.BrowserExploreStatusObserved, Snapshot: "Name ghs_download", Candidates: []protocol.BrowserExploreCandidate{{Ref: "e1", Selector: `[id="name"]`}}, ActionsCompleted: 1, DurationMs: 10, CliCalls: 4})
 	return raw
 }
+
 func TestExplorerUsesDistinctJobAndReturnsNoProbeOrArtifacts(t *testing.T) {
 	r := &fakeRunner{stream: tarOf(t, entry{"exploration.json", explorationJSON(t)})}
 	got, err := (Explorer{Runner: r, Redactor: redact.New(redact.Known{Value: "ghs_download", Label: "download"})}).Run(context.Background(), RunSpec{Port: 3000}, exploreRequest())
@@ -38,6 +41,7 @@ func TestExplorerUsesDistinctJobAndReturnsNoProbeOrArtifacts(t *testing.T) {
 		t.Fatalf("origin %v", job["origin"])
 	}
 }
+
 func TestExplorerRefusesUnexpectedDuplicateOrOversizedTarOutput(t *testing.T) {
 	for _, stream := range [][]byte{tarOf(t, entry{"result.json", explorationJSON(t)}), tarOf(t, entry{"exploration.json", explorationJSON(t)}, entry{"exploration.json", explorationJSON(t)}), tarOf(t, entry{"../exploration.json", explorationJSON(t)}), bytes.Repeat([]byte("x"), 600<<10)} {
 		if _, err := (Explorer{Runner: &fakeRunner{stream: stream}}).Run(context.Background(), RunSpec{Port: 3000}, exploreRequest()); err == nil {
@@ -45,6 +49,7 @@ func TestExplorerRefusesUnexpectedDuplicateOrOversizedTarOutput(t *testing.T) {
 		}
 	}
 }
+
 func TestExplorerRejectsDuplicateJSONUnknownFieldsAndMissingMetrics(t *testing.T) {
 	for _, raw := range []string{`{"status":"observed","status":"blocked","snapshot":"","candidates":[],"actionsCompleted":0,"durationMs":1,"cliCalls":1,"truncated":false}`, `{"status":"observed","snapshot":"","candidates":[],"actionsCompleted":0,"durationMs":1,"cliCalls":1,"truncated":false,"probe":{}}`, `{"status":"observed","snapshot":"","candidates":[]}`} {
 		if _, err := (Explorer{Runner: &fakeRunner{stream: tarOf(t, entry{"exploration.json", []byte(raw)})}}).Run(context.Background(), RunSpec{Port: 3000}, exploreRequest()); err == nil {
@@ -52,6 +57,7 @@ func TestExplorerRejectsDuplicateJSONUnknownFieldsAndMissingMetrics(t *testing.T
 		}
 	}
 }
+
 func TestExplorerDropsCandidateWhoseSelectorContainsASecret(t *testing.T) {
 	var result protocol.BrowserExploreResult
 	_ = json.Unmarshal(explorationJSON(t), &result)
@@ -65,6 +71,7 @@ func TestExplorerDropsCandidateWhoseSelectorContainsASecret(t *testing.T) {
 		t.Fatalf("selector changed or leaked: %+v", got)
 	}
 }
+
 func TestExplorerChecksPrefixBeforeStartingRunner(t *testing.T) {
 	r := &fakeRunner{}
 	request := exploreRequest()

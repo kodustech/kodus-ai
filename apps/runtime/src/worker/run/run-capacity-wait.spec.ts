@@ -4,7 +4,7 @@ import { SCENARIOS } from '../../fake-cell/scenarios';
 import { shopRunRequest } from '../../e2e/fixtures';
 import { CellUnavailableError } from '../../shared/errors';
 import { acquireWaitingForRoom } from '../env/capacity-wait';
-import { inMemoryRunDeps } from './in-memory-deps';
+import { inMemoryRunDeps } from './testing';
 import { RUN_TIMEOUT_MS, runRuntimeRun } from './run-orchestrator';
 
 // A Run whose claims find no room on a cell waits for it (ADR-070): the
@@ -149,10 +149,11 @@ describe('waiting for room on a cell', () => {
         const { deps, projection, claims } = inMemoryRunDeps({ env });
         deps.now = () => new Date(clock);
         deps.sleep = async (ms) => void (clock += ms);
-        const step = deps.step;
-        deps.step = async (name, fn) => {
-            if (name === 'agent:plan') clock += planMin * 60_000;
-            return step(name, fn);
+        // The plan takes planMin, wherever the Run makes it (while the PR boots, or after).
+        const plan = deps.agent.plan.bind(deps.agent);
+        deps.agent.plan = async (input) => {
+            clock += planMin * 60_000;
+            return plan(input);
         };
         const capacityAts: string[] = [];
         const upsert = projection.upsert.bind(projection);

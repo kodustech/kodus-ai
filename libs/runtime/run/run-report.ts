@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { BLOCKER_KINDS, FINDING_INTENTS, FINDING_KINDS, MAX_RECIPE_CHANGED_PATHS, RECIPE_CHANGED_PATH, RUN_TRIGGERS, SECURITY_VIOLATION_SIGNATURE, VERDICTS } from '@libs/runtime/contracts/enums';
+import { RepositoryAliasSchema } from '@libs/runtime/contracts/workspace';
 import { BROWSER_STEP_KINDS } from '@libs/runtime/probe/probe.schema';
 
 import { RUN_STATES } from './run-state';
@@ -59,6 +60,8 @@ export const ReportBrowserStepSchema = z.strictObject({
 });
 export type ReportBrowserStep = z.infer<typeof ReportBrowserStepSchema>;
 
+export const INTENDED_BY = ['diff', 'test'] as const;
+
 /** One tested path: an entry point of the diff, the probe that exercised it and what each side did. */
 export const ReportPathSchema = z.strictObject({
     entryPoint: label,
@@ -70,6 +73,8 @@ export const ReportPathSchema = z.strictObject({
     verdict: z.enum(VERDICTS),
     findingKind: z.enum(FINDING_KINDS).optional(),
     intent: z.enum(FINDING_INTENTS).optional(),
+    /** What shows an intended change: the PR's diff spells it out (gate/intended-change.ts), or a test that existed on main expects it. */
+    intendedBy: z.enum(INTENDED_BY).optional(),
     base: ObservedSchema.optional(),
     pr: ObservedSchema.optional(),
     differingFields: z.array(z.string().min(1).max(128)).max(5).optional(),
@@ -81,6 +86,15 @@ export const ReportPathSchema = z.strictObject({
     suggestionId: z.string().min(1).max(128).optional(),
 });
 export type ReportPath = z.infer<typeof ReportPathSchema>;
+
+/**
+ * Why a boot blocker's paths were not tested, past its kind: the boot
+ * outlived its wait (boot_timeout, kind resources, which is not a machine out
+ * of resources), or it did because its builds ran with no cache, the cell
+ * having evicted the environment's build state (build_state_evicted).
+ */
+export const BOOT_BLOCKER_CAUSES = ['boot_timeout', 'build_state_evicted'] as const;
+export type BootBlockerCause = (typeof BOOT_BLOCKER_CAUSES)[number];
 
 /** An entry point without sufficient evidence for success, and why. */
 export const UncoveredSchema = z.strictObject({
@@ -94,6 +108,10 @@ export const UncoveredSchema = z.strictObject({
                 .string()
                 .regex(/^[A-Z][A-Z0-9_]{0,63}$/)
                 .optional(),
+            /** For other_repo: the member of the environment the recipe does not boot, whose PR this Run tests. */
+            alias: RepositoryAliasSchema.optional(),
+            /** For a boot blocker: what its kind alone does not say (BOOT_BLOCKER_CAUSES). */
+            cause: z.enum(BOOT_BLOCKER_CAUSES).optional(),
         })
         .optional(),
 });
@@ -101,7 +119,7 @@ export type Uncovered = z.infer<typeof UncoveredSchema>;
 
 export const RuntimeRunReportSchema = z.strictObject({
     state: z.enum(RUN_STATES),
-    verdictState: z.enum(['no_regressions', 'regression', 'partly_tested', 'could_not_boot']).optional(),
+    verdictState: z.enum(['no_regressions', 'regression', 'partly_tested', 'could_not_boot', 'nothing_to_test']).optional(),
     headSha: sha,
     requestedAt: at,
     trigger: z.enum(RUN_TRIGGERS).optional(),
@@ -123,7 +141,15 @@ export const RuntimeRunReportSchema = z.strictObject({
     securityViolation: z.strictObject({ side: z.enum(['base', 'pr']), signature: z.string().regex(SECURITY_VIOLATION_SIGNATURE) }).optional(),
     skipReason: z.enum(SKIP_REASONS).optional(),
     /** could_not_boot: the base fails too, and the kind of the first blocker. */
-    bootFailure: z.strictObject({ failsOnBase: z.boolean(), kind: z.enum(BLOCKER_KINDS) }).optional(),
+    /** needsSetup: nothing failed to boot; the cell holds no prepared image of the environment, and the setup has to run again. */
+    /** alias: the repository of a multi-repository environment that did not boot, when the blocker names one. */
+    bootFailure: z.strictObject({ failsOnBase: z.boolean(), kind: z.enum(BLOCKER_KINDS), needsSetup: z.boolean().optional(), alias: RepositoryAliasSchema.optional() }).optional(),
+    /**
+     * A side whose builds ran with no cache because the cell had evicted the
+     * environment's build state to free disk (when: evictedAt); a new setup
+     * restores it. Set whether or not that side then booted.
+     */
+    coldBuild: z.strictObject({ side: z.enum(['base', 'pr']), cause: z.literal('build_state_evicted'), evictedAt: at }).optional(),
     /**
      * One line of a failed boot's output, of the side that decided the Run:
      * the line the blocker catalog matched, else the last error line, redacted
@@ -140,8 +166,15 @@ export const RuntimeRunReportSchema = z.strictObject({
                 .regex(/^[^\r\n]*$/),
         })
         .optional(),
+    /**
+     * nothing_to_test: the changed files a parser judged to change nothing that runs (only comments,
+     * layout or documentation), so the comment can name them. Repository paths, never their content.
+     */
+    noRuntimeEffect: z.array(z.string().min(1).max(512)).min(1).max(20).optional(),
     /** Recipe files the PR changes whose PR copy the Run never boots (S-19): the base's are used (ADR-012), so the PR's were not tested. */
     recipeChangedInPr: z.array(z.string().regex(RECIPE_CHANGED_PATH)).min(1).max(MAX_RECIPE_CHANGED_PATHS).optional(),
+    /** The PR is in this member repository of a multi-repository environment: its recipeChangedInPr were not applied (only the primary's recipe boots). */
+    recipeChangedInMember: RepositoryAliasSchema.optional(),
 });
 export type RuntimeRunReport = z.infer<typeof RuntimeRunReportSchema>;
 

@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/kodyexec"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/recipe"
 )
@@ -54,8 +54,11 @@ func targetOf(c dockercli.Container) execTarget {
 	return execTarget{container: c.ID, dir: dir}
 }
 
-// ErrNoExecService: the project names no service exec steps could run in.
+// ErrNoExecService means the project names no service exec steps could run in.
 var ErrNoExecService = errors.New("dockergvisor: no service to run commands in (the recipe names no public service and the project has more than one)")
+
+// ErrNoRepositoryService means no service of the project is built from the repository a command names.
+var ErrNoRepositoryService = errors.New("dockergvisor: no service of the project is built from repository")
 
 // execGrace is how much longer the docker client may run than the command:
 // timeout(1) in the sandbox stops the command first.
@@ -69,7 +72,16 @@ func (d *Driver) Exec(ctx context.Context, ref driver.MachineRef, req kodyexec.R
 	if _, err := d.owned(ctx, ref.MachineID); err != nil {
 		return kodyexec.Result{}, err
 	}
-	at := d.peek(ref.MachineID).exec
+	m := d.peek(ref.MachineID)
+	at := m.exec
+	if req.Repository != "" {
+		// A command on another repository's code of the workspace runs where that code was built.
+		t, ok := m.repoExec[req.Repository]
+		if !ok {
+			return kodyexec.Result{}, fmt.Errorf("%w: %s", ErrNoRepositoryService, req.Repository)
+		}
+		at = &t
+	}
 	if at == nil {
 		return kodyexec.Result{}, ErrNoExecService
 	}
@@ -87,6 +99,15 @@ func (d *Driver) Exec(ctx context.Context, ref driver.MachineRef, req kodyexec.R
 
 // execIn runs req in the container at, from at.dir, under its timeout in
 // the sandbox and a little longer on the docker client.
+//
+// This is an environment machine's exec path on the gvisor backend, and the
+// seam where the guest agent takes over (docs/runtime/isolation-architecture.md
+// C4): on a microVM the guest agent runs in the VM, next to the project's
+// Docker, and the cell sends it the same exec op over vsock
+// (isolation.Backend.DialGuest), which runs it in the service's container.
+// On gVisor the services are the host's containers, so the guest agent
+// would have to enter the customer's own image to serve them; that changes
+// what runs, and docker exec stays until then.
 func (d *Driver) execIn(ctx context.Context, at execTarget, req kodyexec.Request) kodyexec.Result {
 	timeout := req.TimeoutMs
 	if timeout <= 0 {

@@ -5,6 +5,8 @@
 import type { FindingKind as SharedFindingKind, ProbeSide, Verdict as SharedVerdict } from '@libs/runtime/contracts/enums';
 import { VISUAL_CHANGE_ONLY_REASON } from '@libs/runtime/contracts/enums';
 
+import type { IntendedChange } from './intended-change';
+
 export type { ProbeSide };
 /** @deprecated use ProbeSide (the environment's Side also has 'setup'). */
 export type Side = ProbeSide;
@@ -25,6 +27,11 @@ export interface GateStep {
     expectedHolds?: boolean;
     /** The observer's request log of this step (S-32): entry-point coverage comes from it. */
     requests?: Array<{ method: string; route: string }>;
+    /**
+     * The HTTP status the ready check's last try answered right before this
+     * round's probe. Absent without a ready check or when it got no answer.
+     */
+    readyStatus?: number;
 }
 
 export type Verdict = SharedVerdict;
@@ -38,6 +45,8 @@ export type GateDecision =
           findingKind?: FindingKind;
           differingFields: string[];
           maskedFields: string[];
+          /** The differences the PR's diff spells out (decideIntendedChange): the PR's intended change. */
+          intendedChange?: IntendedChange[];
       }
     | { kind: 'more_rounds'; base: number; pr: number; reason: string };
 
@@ -82,9 +91,6 @@ export interface GateOptions {
  */
 export const isBuildIdentityField = (field: string) =>
     /(^|\.)(sha|commit|commit_?sha|git_?sha|build_?id|etag|asset_?hash)$/i.test(field);
-
-/** @deprecated use isBuildIdentityField. */
-export const DEFAULT_VERSION_SURFACE = isBuildIdentityField;
 
 /** Top-level kinds (status, exit, db_count, lines, dom, network, console, json): no dot, no sub-path. */
 export const isDecisiveField = (field: string) => !field.includes('.');
@@ -189,6 +195,19 @@ export function decideProbe(steps: GateStep[], opts: GateOptions): GateDecision 
     if (masked.length > maxMasked) {
         return verdict('inconclusive', `more than ${maxMasked} fields vary between base rounds`, { maskedFields: masked });
     }
+    // Fields only the PR's answers carry and that vary between its rounds (a
+    // resource the PR now creates: its id, its dates) are masked like the
+    // base's own varying fields, but only once a decisive field (the status)
+    // already differs from the base on every PR round: the verdict rests on
+    // that field, never on the masked ones. With an equal status nothing is
+    // masked, so a PR-only value that changes per round still reads as
+    // disagreement (Run fb8e4e71, kr-kodus-ai#1).
+    const stablyDiffers = (f: string) => !masked.includes(f) && pr.every((s) => s.fields[f] === pr[0].fields[f]) && pr[0].fields[f] !== base[0].fields[f];
+    const decisiveChange = [...fields].some((f) => isDecisive(f) && !isVersion(f) && stablyDiffers(f));
+    const prOnlyVarying = decisiveChange
+        ? [...fields].filter((f) => !isDecisive(f) && !masked.includes(f) && base.every((s) => !(f in s.fields)) && new Set(pr.map((s) => s.fields[f])).size > 1)
+        : [];
+    if (prOnlyVarying.length > 0) masked.push(...prOnlyVarying);
     const compared = [...fields].filter((f) => !masked.includes(f));
     if (compared.filter((f) => !isVersion(f)).length === 0) {
         return verdict('inconclusive', 'no behavior field is left to compare once the varying and build fields are set aside', { maskedFields: masked });
@@ -276,3 +295,48 @@ export function markUnbackedClaims(
 
 /** @deprecated use markUnbackedClaims. */
 export const checkClaims = markUnbackedClaims;
+
+/** How a framework answers a route it does not have. */
+const ROUTE_ABSENT = new Set(['404', '405']);
+const statusOf = (s: GateStep) => (s.fields.status !== undefined && /^\d{3}$/.test(s.fields.status) ? Number(s.fields.status) : undefined);
+/** The base app was up and routing in this round: its health path answered 2xx or 3xx just before the probe. */
+const baseAnsweredReady = (s: GateStep) => s.readyStatus !== undefined && s.readyStatus >= 200 && s.readyStatus < 400;
+
+/**
+ * A route the PR adds is new behavior, not a regression (ADR-038 verdicts,
+ * plan-status decision of 2026-11-12). It turns a `behavior_change` finding
+ * into `new_endpoint` only when all of these hold, and otherwise returns the
+ * decision unchanged:
+ *
+ * - the diff adds the route the probe covered (`addedByDiff`: its
+ *   declaration is an added line, entry-points/extract.ts);
+ * - the status is one of the differing fields;
+ * - every base round answered 404 or 405, and in every base round the ready
+ *   check answered 2xx or 3xx first, so main was booted, ready and routing and
+ *   only lacked the route (a broken base that answers 404 everywhere fails
+ *   its ready check and stays a finding);
+ * - every PR round answered with a status other than 404 or 405.
+ *
+ * A PR answer of 5xx stays a finding, of kind `new_endpoint_error`: the new
+ * code fails, which no base comparison is needed to say. A route the PR
+ * removes (main answers, the PR 404s) is never `addedByDiff` and stays a
+ * regression.
+ */
+export function decideNewEndpoint<D extends GateDecision>(decision: D, steps: GateStep[], opts: { addedByDiff: boolean }): D {
+    if (decision.kind !== 'verdict' || decision.verdict !== 'finding' || decision.findingKind !== 'behavior_change') return decision;
+    if (!opts.addedByDiff || !decision.differingFields.includes('status')) return decision;
+    const observer = steps.filter((s) => s.executor === 'observer');
+    const base = observer.filter((s) => s.side === 'base');
+    const pr = observer.filter((s) => s.side === 'pr');
+    if (base.length === 0 || pr.length === 0) return decision;
+    const absentOnBase = base.every((s) => ROUTE_ABSENT.has(s.fields.status ?? '') && baseAnsweredReady(s));
+    const prStatuses = pr.map(statusOf);
+    if (!absentOnBase || prStatuses.some((s) => s === undefined || ROUTE_ABSENT.has(String(s)))) return decision;
+    const mainSays = base[0].fields.status;
+    const prSays = [...new Set(prStatuses)].join('/');
+    if (prStatuses.some((s) => s! >= 500)) {
+        return { ...decision, findingKind: 'new_endpoint_error', reason: `a route this PR adds answers ${prSays} on the PR; main has no such route (${mainSays})` } as D;
+    }
+    const { findingKind: _kind, ...rest } = decision;
+    return { ...rest, verdict: 'new_endpoint', reason: `main has no such route (${mainSays}) and this PR answers it (${prSays}): new behavior, not a regression` } as D;
+}

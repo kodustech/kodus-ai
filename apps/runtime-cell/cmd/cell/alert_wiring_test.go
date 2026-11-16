@@ -18,7 +18,7 @@ func TestInjectorAlertsKeepsNegotiatedContinuityAcrossPolls(t *testing.T) {
 	})
 	server := httptest.NewServer(log.Handler())
 	defer server.Close()
-	source := injectorAlerts{c: &injector.AlertClient{URL: server.URL, HTTP: server.Client(), Wait: time.Nanosecond}}
+	source := alertFeed{c: &injector.AlertClient{URL: server.URL, HTTP: server.Client(), Wait: time.Nanosecond}}
 	first, err := source.Alerts(context.Background(), 0)
 	if err != nil || len(first) != 1 {
 		t.Fatalf("first poll: %v (%d events)", err, len(first))

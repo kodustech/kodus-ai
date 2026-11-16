@@ -21,6 +21,25 @@ export function forkPolicyOf(setting: unknown): ForkPullRequestPolicy {
 }
 
 /**
+ * Whether a fork Run may start without a maintainer in an environment of
+ * that many repositories: only in one of a single repository. A Run's machine
+ * holds the code of every repository of its environment, so a fork's code
+ * would run next to every member's.
+ */
+export function forkMayRunUnheld(repositoryCount: number): boolean {
+    return repositoryCount <= 1;
+}
+
+/**
+ * The fork policy that applies to the environment: its own, except that
+ * `run` reads as `require_approval` once it holds several repositories.
+ */
+export function effectiveForkPolicy(setting: unknown, repositoryCount: number): ForkPullRequestPolicy {
+    const policy = forkPolicyOf(setting);
+    return policy === 'run' && !forkMayRunUnheld(repositoryCount) ? 'require_approval' : policy;
+}
+
+/**
  * Whether a PR's head may start a Run under the environment's fork policy
  * (ADR-030). `head.fork` comes from the Git API comparing the head and base
  * repository ids (ADR-057), never from the webhook; an unknown repo already

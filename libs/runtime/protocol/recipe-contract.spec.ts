@@ -11,7 +11,7 @@ const fixtures = join(__dirname, 'fixtures/recipes');
 const { recipes } = JSON.parse(readFileSync(join(fixtures, 'verdicts.json'), 'utf8')) as {
     recipes: Record<string, { cell: string; runo: string; why?: string; healthTimeoutSeconds?: number; healthTimeoutDefault?: boolean; unapplied?: string[];
             size?: unknown;
-            egressAllow?: string[]; fakes?: unknown[] }>;
+            egressAllow?: string[]; fakes?: unknown[]; needs?: Array<{ repo: string; alias: string }> }>;
 };
 
 describe('recipe contract (ENV-08)', () => {
@@ -28,6 +28,8 @@ describe('recipe contract (ENV-08)', () => {
                     expect(r.recipe.unapplied ?? []).toEqual(v.unapplied ?? []);
                     if (v.size) expect(r.recipe.size).toEqual(v.size);
                     if (v.fakes) expect(r.recipe.fakes).toEqual(v.fakes);
+                    // services.needs with every alias resolved, as the cell resolves it (Services.Needs).
+                    expect(r.recipe.needs ?? []).toEqual(v.needs ?? []);
                     if (v.egressAllow)
                         expect(r.recipe.egressAllow).toEqual(v.egressAllow);
                 }
@@ -51,7 +53,6 @@ describe('recipe contract (ENV-08)', () => {
 
 describe('recipe.schema.json', () => {
     it('is what recipeJsonSchema generates (regenerate with scripts/dump-recipe-schema.ts)', () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { recipeJsonSchema } = require('./recipe');
         expect(JSON.parse(readFileSync(join(__dirname, 'recipe.schema.json'), 'utf8'))).toEqual(recipeJsonSchema());
     });
