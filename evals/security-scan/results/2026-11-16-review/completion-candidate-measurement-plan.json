@@ -1,0 +1,59 @@
+{
+  "baselinePositiveCommit": "e5223d6a0664a663adb9a6d241cee0b2034c2003",
+  "failedLibraryCandidateCommit": "71dfbcbb63f3d6aa3c422a4caeabb07576c29a3f",
+  "candidateCommit": "0f7653b8ba357ed9c231b6512d7265d5fcfb1175",
+  "hypotheses": [
+    "library-boundary-hypothesis.json",
+    "submission-contract-hypothesis.json",
+    "codec-boundary-hypothesis.json",
+    "completion-retry-hypothesis.json",
+    "input-capability-hypothesis.json"
+  ],
+  "model": "deepseek-v4-flash@fireworks",
+  "budgetUsdPerCase": 3,
+  "concurrency": 2,
+  "schedule": "One paid runner at a time. Finish and retain the entire active 5617 control measurement, including false/incomplete outcomes. Never run its positive phase after the observed failed controls. Only then run a new capped four-control queue on this source; no paid start from this plan alone.",
+  "inputChanges": "Relative to 5617: one shared paragraph sentence requires a shipped less-trusted source for symbol-keyed/accessor/callback/custom-prototype inputs. Production scan engine permits at most one fresh native investigation of an empty completed-but-unsubmitted lens; successes, findings-bearing results, cuts, errors, unverified results and exhausted budgets do not receive that retry.",
+  "invariants": [
+    "Same case pins, seven classes, DeepSeek model route/effort, tools, per-invocation 30-step budget, 2000-unit limit, four concurrent units and $3 per-case cap. A single class can now invoke the native harness at most twice only for the narrowly defined protocol failure; this is additional work, not an unchanged total step count.",
+    "Same sampler, exact-claim judge protocol, matcher, 60% per-language target and minimum 20 judged or all if fewer.",
+    "Preserve original expected-zero control fields and every raw/incomplete/false report; UUID remains an extra diagnostic positive."
+  ],
+  "controls": {
+    "cases": [
+      "is-control",
+      "itsdangerous-control",
+      "xxhash-control",
+      "uuid-control"
+    ],
+    "maximumCaseBudgetsUsd": 12,
+    "validNegativeCases": [
+      "is-control",
+      "itsdangerous-control",
+      "xxhash-control"
+    ],
+    "advanceCondition": "All three valid negatives must finish every planned unit without findings, surface gaps or provider infrastructure errors. Inspect every control finding. Require the confirmed intrinsic UUID uniqueness defect to remain detectable; include all true and false UUID reports in development precision. A prose-only finish with no formal result is not a clean negative."
+  },
+  "positive": {
+    "condition": "Only after the revised control assessment passes; never auto-launch on process exit.",
+    "development": [
+      "flowise-f0c12941",
+      "langflow-73c1f203",
+      "weknora-a20541cd"
+    ],
+    "confirmation": [
+      "paperclip-50cd76d8",
+      "mlflow-083eac9c",
+      "ollama-73257915"
+    ],
+    "maximumCaseBudgetsUsd": 18,
+    "sampling": "Same 20-smallest-key-hash seeds as continuation-measurement-plan.json. Freeze raw cases/selections before reading descriptions. Confirmation descriptions remain blind during candidate development."
+  },
+  "scoring": "Development plus all four new-source controls, confirmation separately, same floor/minimum. Retain every prior failed attempt and false judgment. Source judge is Codex; no independent human review or overall improvement claim from zero outputs/tests. Report additional model work, coverage, strict recall and spend.",
+  "diagnostics": {
+    "preload": "contracts/candidate-observer.cjs",
+    "sha256": "84b92272722ab61b6bf99e6369aeba9dcaa076ccb19e093a7bffc76e15895aed",
+    "contract": "Forward inputs, result values and thrown errors unchanged. Bounded event names, numeric HTTP status and lens completion flags/counts only; no model bodies or free-form errors."
+  },
+  "failedRevisedCandidateCommit": "5617eab0a603cb94cb13d6dabb5de8e51e588e5f"
+}
