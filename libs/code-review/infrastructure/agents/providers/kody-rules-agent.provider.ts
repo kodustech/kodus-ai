@@ -286,7 +286,12 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // See runStructuredReviewCall for the model policy. runAiSdkLLMInSpan
             // (inside the helper) emits the `tu`-stamped LLM-usage span so the
             // sharded path's tokens still reach the user-facing token analytics.
-            const runJudge: RunJudge = async ({ system, user, filename }) => {
+            const runJudge: RunJudge = async ({
+                system,
+                user,
+                filename,
+                cachePrefix,
+            }) => {
                 // The validate step recovers or rejects an off-shape reply but
                 // has no org or PR; this call logs what it did, with them.
                 const reshapes: ShardReplyReshape[] = [];
@@ -312,6 +317,11 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         system,
                         user,
                         runName: 'kodus-rules-review-agent.shard',
+                        // Shards with the same rules open with the same head;
+                        // marking it lets the provider serve it from cache.
+                        ...(cachePrefix
+                            ? { promptCache: { userPrefix: cachePrefix } }
+                            : {}),
                         organizationId:
                             input.organizationAndTeamData?.organizationId,
                         attrs: {
@@ -660,7 +670,14 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             shardsRun = result.shardsRun;
             shardsErrored = result.shardsErrored;
 
-            const { referenceStats } = result;
+            const { referenceStats, promptCacheStats } = result;
+            if (promptCacheStats?.fileShards > 0) {
+                this.shardLogger.log?.({
+                    message: `[kody-rules-shard] prompt cache: ${promptCacheStats.fileShards} file shard(s) in ${promptCacheStats.groups} head group(s), ${promptCacheStats.sharedGroups} shared; ${promptCacheStats.siblingsAfterLeader} of ${promptCacheStats.siblings} sibling(s) ran after their group's first shard`,
+                    context: this.getIdentity().name,
+                    metadata: { ...logMetadata, ...promptCacheStats },
+                });
+            }
             if (referenceStats?.shards > 0) {
                 this.shardLogger.log?.({
                     message: `[kody-rules-shard] printed ${referenceStats.entries} reference file(s) across ${referenceStats.shards} shard(s); per-rule inlining would have printed ${referenceStats.perUnitCopies}`,
