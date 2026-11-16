@@ -160,6 +160,30 @@ describe('GitHubPullRequestHandler', () => {
         );
     });
 
+    it('keeps the repository owner on the calls a synchronize makes', async () => {
+        codeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
+            [{ sha: 'new-head-sha' }],
+        );
+
+        await handler.execute({
+            event: 'pull_request',
+            platformType: PlatformType.GITHUB,
+            payload: makeGitHubPullRequestWebhookPayload('synchronize'),
+        } as any);
+
+        // GitHub addresses a repository by its own owner; without the full
+        // name a token integration falls back to its recorded account.
+        const withOwner = expect.objectContaining({
+            repository: expect.objectContaining({ fullName: 'org/test-repo' }),
+        });
+        expect(
+            codeManagementService.getCommitsForPullRequestForCodeReview,
+        ).toHaveBeenCalledWith(withOwner);
+        expect(enqueueImplementationCheckUseCase.execute).toHaveBeenCalledWith(
+            withOwner,
+        );
+    });
+
     it('writes force_pushed invalidation when synchronize removes previous head from PR commits', async () => {
         codeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
             [{ sha: 'new-head-sha' }],

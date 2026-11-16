@@ -227,4 +227,41 @@ describe('GithubService addresses a repository by its own owner', () => {
         const owners = getAllPrMessages.mock.calls.map((call) => call[1]);
         expect(owners.sort()).toEqual(['Novaorg01', 'OtherOrg']);
     });
+    it('lists pull requests a few repositories at a time and keeps the others when one fails', async () => {
+        const service = makeService({});
+        const repos = Array.from({ length: 8 }, (_, i) => ({
+            name: `repo-${i}`,
+            full_name: `Novaorg01/repo-${i}`,
+            http_url: `https://github.com/Novaorg01/repo-${i}`,
+        }));
+        jest.spyOn(
+            service as any,
+            'findOneByOrganizationAndTeamDataAndConfigKey',
+        ).mockResolvedValue(repos);
+        let inFlight = 0;
+        let peak = 0;
+        jest.spyOn(service as any, 'getAllPrMessages').mockImplementation(
+            async (_octokit: any, _owner: string, repo: string) => {
+                inFlight += 1;
+                peak = Math.max(peak, inFlight);
+                await new Promise((resolve) => setTimeout(resolve, 5));
+                inFlight -= 1;
+                if (repo === 'repo-3') throw new Error('boom');
+                return [{ repo, created_at: '2026-11-16T00:00:00Z' }];
+            },
+        );
+
+        const result = await service.getListPullRequests(
+            organizationAndTeamData,
+            {},
+        );
+
+        expect(peak).toBeLessThanOrEqual(5);
+        expect(result.map((pr: any) => pr.repo).sort()).toEqual(
+            repos
+                .map((r) => r.name)
+                .filter((n) => n !== 'repo-3')
+                .sort(),
+        );
+    });
 });

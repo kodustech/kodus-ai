@@ -348,6 +348,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                         repository: {
                             id: repository.id,
                             name: repository.name,
+                            fullName: repository.fullName,
                         },
                         platformType: PlatformType.GITHUB,
                         pullRequestNumber: payload?.pull_request?.number,
@@ -387,6 +388,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                                     repository: {
                                         id: repository.id,
                                         name: repository.name,
+                                        fullName: repository.fullName,
                                     },
                                     prNumber: payload?.pull_request?.number,
                                 },
@@ -477,6 +479,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                                 repository: {
                                     id: repository.id,
                                     name: repository.name,
+                                    fullName: repository.fullName,
                                 },
                             });
                         if (baseRef !== defaultBranch) {
@@ -490,6 +493,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                                         repository: {
                                             id: repository.id,
                                             name: repository.name,
+                                            fullName: repository.fullName,
                                         },
                                         prNumber: payload?.pull_request?.number,
                                     },
@@ -682,6 +686,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                                 repository: {
                                     id: repository.id,
                                     name: repository.name,
+                                    fullName: repository.fullName,
                                 },
                                 head: {
                                     ref: data?.head?.ref,

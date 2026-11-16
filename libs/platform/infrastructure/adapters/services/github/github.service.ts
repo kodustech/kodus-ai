@@ -4261,17 +4261,31 @@ export class GithubService
             const { startDate, endDate } = filters || {};
 
             // One request per repository record, under its own owner: two
-            // repositories can share a name across owners.
-            const promises = repositories.map(async (repository) => {
-                const [repo] = extractRepoNames([repository]);
-                return await this.getAllPrMessages(
-                    octokit,
-                    this.ownerOf(repository, githubAuthDetail),
-                    repo,
-                    startDate,
-                    endDate,
-                );
-            });
+            // repositories can share a name across owners. A few at a time,
+            // and a failing repository costs only its own pull requests.
+            const limit = pLimit(5);
+            const promises = repositories.map((repository) =>
+                limit(async () => {
+                    const [repo] = extractRepoNames([repository]);
+                    try {
+                        return await this.getAllPrMessages(
+                            octokit,
+                            this.ownerOf(repository, githubAuthDetail),
+                            repo,
+                            startDate,
+                            endDate,
+                        );
+                    } catch (error) {
+                        this.logger.warn({
+                            message: `Could not list the pull requests of ${repo}`,
+                            context: GithubService.name,
+                            error,
+                            metadata: { organizationAndTeamData, repo },
+                        });
+                        return [];
+                    }
+                }),
+            );
 
             const results = await Promise.all(promises);
 
