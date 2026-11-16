@@ -377,3 +377,87 @@ describe('a kody_rules finding with a line but no file goes PR-level, not discar
         );
     });
 });
+
+/**
+ * GitHub withholds a file's patch past a size limit and then rejects any line
+ * comment on it with 422 "diff is too large". The dependency scan reads such a
+ * lockfile from a hunk it recovered, so its advisories have to be delivered at
+ * PR level or they never reach the PR.
+ */
+describe('a finding on a file whose diff the host withheld', () => {
+    const LOCKFILE = 'web/package-lock.json';
+    const advisory = {
+        tool: 'dependencies',
+        ruleId: 'osv/GHSA-35jh-r3h4-6jhm',
+        path: LOCKFILE,
+        startLine: 11,
+        endLine: 11,
+        severity: 'error',
+        message: 'lodash 4.17.20 is vulnerable',
+        subject: 'lodash@4.17.20',
+    };
+
+    it.each([
+        ['an ignored file', { ignoredFileChanges: [{ filename: LOCKFILE }] }],
+        [
+            'a reviewed file',
+            {
+                changedFiles: [
+                    { filename: 'src/user.ts', patch: PATCH },
+                    { filename: LOCKFILE },
+                ],
+            },
+        ],
+    ])(
+        'is delivered as a PR-level comment citing file:line (%s)',
+        async (_, files) => {
+            const result = await run([], {
+                ...files,
+                analyzerFindings: [advisory],
+            });
+
+            expect(result.validSuggestionsByPR).toHaveLength(1);
+            expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+                `\`${LOCKFILE}:11\``,
+            );
+            expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+                'lodash@4.17.20',
+            );
+            expect(inlineSuggestionsOf(result)).toEqual([]);
+            expect(result.validSuggestions ?? []).toEqual([]);
+        },
+    );
+
+    // The PR-level comment shows the title as its heading; repeating it as
+    // the body's opening sentence read as a stutter.
+    it('does not repeat the title in the body', async () => {
+        const result = await run([], {
+            ignoredFileChanges: [{ filename: LOCKFILE }],
+            analyzerFindings: [advisory],
+        });
+        const [comment] = result.validSuggestionsByPR;
+
+        expect(comment.oneSentenceSummary).toBeTruthy();
+        for (const text of [
+            comment.suggestionContent,
+            comment.fullExplanation,
+        ]) {
+            expect(text).not.toContain(comment.oneSentenceSummary);
+            expect(text.startsWith(`\`${LOCKFILE}:11\`\n\n- `)).toBe(true);
+        }
+    });
+
+    it('stays inline when the host sent the file with its diff', async () => {
+        const result = await run([], {
+            ignoredFileChanges: [
+                {
+                    filename: LOCKFILE,
+                    patch: '@@ -10,0 +11,1 @@\n+"lodash": "4.17.20"',
+                },
+            ],
+            analyzerFindings: [advisory],
+        });
+
+        expect(result.validSuggestionsByPR ?? []).toEqual([]);
+    });
+});

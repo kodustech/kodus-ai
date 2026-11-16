@@ -1874,12 +1874,24 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // it (KRC-20) instead of leaking out as an unanchored PR-level
             // comment. `changedFilesByName` (built above for the diff-snap
             // step) tells the two cases apart.
+            //
+            // An analyzer finding on a file whose diff the host withheld takes
+            // no line comment either: GitHub rejects it with 422 "diff is too
+            // large". The analyzers read such a file from a hunk they
+            // recovered, so a lockfile advisory would never reach the PR.
+            const withheldDiffs = new Set(
+                [...changedFiles, ...(context.ignoredFileChanges ?? [])]
+                    .filter((f) => f.filename && !f.patch)
+                    .map((f) => f.filename),
+            );
             const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
-                s.label === 'kody_rules' &&
-                (!s.relevantFile ||
-                    s.fileAnchored === true ||
-                    (!s.relevantLinesStart &&
-                        changedFilesByName.has(s.relevantFile)));
+                (isAnalyzerSuggestion(s) &&
+                    withheldDiffs.has(s.relevantFile)) ||
+                (s.label === 'kody_rules' &&
+                    (!s.relevantFile ||
+                        s.fileAnchored === true ||
+                        (!s.relevantLinesStart &&
+                            changedFilesByName.has(s.relevantFile))));
             // Agents set to `single-comment` publish one PR-level comment
             // gathering their findings instead of inline comments (#2172).
             const singleComments = collectSingleComments(
@@ -2043,6 +2055,29 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     if (!draft.validSuggestionsByPR) {
                         draft.validSuggestionsByPR = [];
                     }
+                    // An analyzer body opens with its own title, which the
+                    // PR-level comment already shows as its heading, and
+                    // continues with a list that cannot follow a dash.
+                    const analyzerBody = (s: Partial<CodeSuggestion>) => {
+                        const content = s.suggestionContent || '';
+                        const title = s.oneSentenceSummary;
+                        return title && content.startsWith(title)
+                            ? content
+                                  .slice(title.length)
+                                  .replace(/^[.:]?\s*/, '')
+                            : content;
+                    };
+                    const cite = (
+                        s: Partial<CodeSuggestion>,
+                        text: string,
+                    ): string => {
+                        const where = s.relevantLinesStart
+                            ? `\`${s.relevantFile}:${s.relevantLinesStart}\``
+                            : `\`${s.relevantFile}\``;
+                        return isAnalyzerSuggestion(s)
+                            ? `${where}\n\n${analyzerBody(s)}`
+                            : `${where} — ${text}`;
+                    };
                     draft.validSuggestionsByPR.push(
                         ...prLevelSuggestions.map((s) => ({
                             id: crypto.randomUUID(),
@@ -2057,15 +2092,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             // empty/unparseable-patch case — would point at
                             // a line that need not exist in the diff at all.
                             suggestionContent: s.relevantFile
-                                ? s.relevantLinesStart
-                                    ? `\`${s.relevantFile}:${s.relevantLinesStart}\` — ${s.suggestionContent || ''}`
-                                    : `\`${s.relevantFile}\` — ${s.suggestionContent || ''}`
+                                ? cite(s, s.suggestionContent || '')
                                 : s.suggestionContent || '',
                             oneSentenceSummary: s.oneSentenceSummary || '',
                             fullExplanation: s.relevantFile
-                                ? s.relevantLinesStart
-                                    ? `\`${s.relevantFile}:${s.relevantLinesStart}\` — ${s.fullExplanation || s.suggestionContent || ''}`
-                                    : `\`${s.relevantFile}\` — ${s.fullExplanation || s.suggestionContent || ''}`
+                                ? cite(
+                                      s,
+                                      s.fullExplanation ||
+                                          s.suggestionContent ||
+                                          '',
+                                  )
                                 : s.fullExplanation,
                             label: (s.label as any) || 'kody_rules',
                             severity: this.normalizeSeverity(
