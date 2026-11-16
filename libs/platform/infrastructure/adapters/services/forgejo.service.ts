@@ -146,6 +146,7 @@ import {
     repoEditPullRequest,
     repoGet,
     repoGetAllCommits,
+    repoGetBranch,
     repoGetContents,
     repoGetLanguages,
     repoGetPullRequest,
@@ -820,17 +821,15 @@ export class ForgejoService implements Omit<
         branchName: string,
     ): Promise<boolean> {
         try {
-            await getTree({
+            await repoGetBranch({
                 client,
                 path: {
                     owner: repoInfo.owner,
                     repo: repoInfo.repo,
-                    sha: branchName,
+                    branch: branchName,
                 },
-                query: {
-                    recursive: false,
-                },
-            });
+                throwOnError: true,
+            })
 
             return true;
         } catch (error) {
@@ -919,6 +918,7 @@ export class ForgejoService implements Omit<
                 query: {
                     ref: branchName,
                 },
+                throwOnError: true,
             });
 
             return true;
