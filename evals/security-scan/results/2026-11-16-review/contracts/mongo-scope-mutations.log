@@ -1,0 +1,85 @@
+EXPECTED_RED_MUTATION host
+SCOPE_MUTATION host removed 5 predicates
+(node:699039) [MONGOOSE] Warning: mongoose: the `new` option for `findOneAndUpdate()` and `findOneAndReplace()` is deprecated. Use `returnDocument: 'after'` instead.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:699039) [MONGOOSE] Warning: mongoose: the `new` option for `findOneAndUpdate()` and `findOneAndReplace()` is deprecated. Use `returnDocument: 'after'` instead.
+FAIL test/integration/issues/security-scan-lifecycle.integration.spec.ts
+  scan finding lifecycle on real Mongo
+    ✓ keeps one unchanged issue, requires two distinct misses, and resets misses on a sighting (115 ms)
+    ✕ isolates upserts, sightings and two-miss resolution by host and platform, including hostless legacy records (40 ms)
+
+  ● scan finding lifecycle on real Mongo › isolates upserts, sightings and two-miss resolution by host and platform, including hostless legacy records
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "reopened": 0,
+    -   "sighted": 1,
+    +   "sighted": 3,
+      }
+
+      156 |                 fingerprints: [finding.fingerprint, ...foreign.map((f) => f.fingerprint!)],
+      157 |                 foundAgain: true,
+    > 158 |             })).toEqual({ sighted: 1, reopened: 0 });
+          |                 ^
+      159 |             expect(await missed('own-miss-1')).toBe(0);
+      160 |             expect(await missed('own-miss-2')).toBe(1);
+      161 |             for (const entry of foreign) {
+
+      at Object.toEqual (test/integration/issues/security-scan-lifecycle.integration.spec.ts:158:17)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 passed, 2 total
+Snapshots:   0 total
+Time:        1.785 s
+Ran all test suites matching test/integration/issues/security-scan-lifecycle.integration.spec.ts.
+Test results written to: ../.cache/kodus-review-2451/mutation-host.json
+VERIFIED_ASSERTION_FAILURE host [
+  'isolates upserts, sightings and two-miss resolution by host and platform, including hostless legacy records'
+]
+EXPECTED_RED_MUTATION platform
+SCOPE_MUTATION platform removed 5 predicates
+(node:699124) [MONGOOSE] Warning: mongoose: the `new` option for `findOneAndUpdate()` and `findOneAndReplace()` is deprecated. Use `returnDocument: 'after'` instead.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:699124) [MONGOOSE] Warning: mongoose: the `new` option for `findOneAndUpdate()` and `findOneAndReplace()` is deprecated. Use `returnDocument: 'after'` instead.
+FAIL test/integration/issues/security-scan-lifecycle.integration.spec.ts
+  scan finding lifecycle on real Mongo
+    ✓ keeps one unchanged issue, requires two distinct misses, and resets misses on a sighting (156 ms)
+    ✕ isolates upserts, sightings and two-miss resolution by host and platform, including hostless legacy records (42 ms)
+
+  ● scan finding lifecycle on real Mongo › isolates upserts, sightings and two-miss resolution by host and platform, including hostless legacy records
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "reopened": 0,
+    -   "sighted": 1,
+    +   "sighted": 2,
+      }
+
+      156 |                 fingerprints: [finding.fingerprint, ...foreign.map((f) => f.fingerprint!)],
+      157 |                 foundAgain: true,
+    > 158 |             })).toEqual({ sighted: 1, reopened: 0 });
+          |                 ^
+      159 |             expect(await missed('own-miss-1')).toBe(0);
+      160 |             expect(await missed('own-miss-2')).toBe(1);
+      161 |             for (const entry of foreign) {
+
+      at Object.toEqual (test/integration/issues/security-scan-lifecycle.integration.spec.ts:158:17)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 passed, 2 total
+Snapshots:   0 total
+Time:        1.989 s
+Ran all test suites matching test/integration/issues/security-scan-lifecycle.integration.spec.ts.
+Test results written to: ../.cache/kodus-review-2451/mutation-platform.json
+VERIFIED_ASSERTION_FAILURE platform [
+  'isolates upserts, sightings and two-miss resolution by host and platform, including hostless legacy records'
+]
+Both scope mutations rejected by the new real-Mongo case.

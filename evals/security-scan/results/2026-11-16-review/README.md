@@ -72,6 +72,48 @@ languages. It is not an unbiased estimate for every language or repository.
 The historical RealVuln leaderboard claims were removed from the PR because
 their original output could not be recovered; they are not reused here.
 
+The fresh run is still in progress. Its first three immutable case snapshots
+and their selections are in `fresh.cases/`, committed before inspection.
+The is control completed 3/3 planned units and reported one false positive;
+itsdangerous completed 7/10 units and reported one false positive. Its three
+unfinished units remain visible; no provider request failures were recorded
+for either case. These two reports invent a remote/constrained caller not shipped
+by the library; the underlying regex/decompression behavior is real, but
+the claimed security boundary is not established. Exact-claim source
+judgments remain in `../../adjudications.json`. These checkpoints are not
+a passing quality gate or a completed development/confirmation measurement.
+
+The uuid control completed 14/16 units with two unfinished, and reported two
+findings for $2.855392944, with no provider request failures. Its v1 MAC/token
+report is false: it describes the documented version-1 semantics and invents
+a token consumer. Its v6 concurrency report is real: the pinned source omits
+the time-state mutex on NewV6WithTime. `contracts/uuid-race-probe.*` retains
+the added bounded test, source hashes and race-detector output: 6,000 serial
+calls produced 6,000 unique IDs; 6,000 concurrent calls produced 1,208 duplicates.
+This proves the identity-integrity bug, not the report's hypothetical session
+hijack or severity. This repository was assumed clean when selected, but is
+not a valid clean negative for that behavior. Its raw result and original
+expected-zero assumption remain intact; it is not replaced with a favorable
+case. The three-control zero-finding check fails, and three proven clean
+controls cannot be claimed from this set.
+
+## Kody review corrections
+
+`cc61b7011` refuses hostless scans before queueing, validates a positive
+integer queue prefetch, distinguishes missing reproduction flags, removes
+unreachable severity fallbacks, and includes organization/team in store errors.
+Offline reproductions no longer attempt automatic dependency downloads.
+The probe summary omits raw sandbox output and free-form errors.
+
+The focused regressions pass (171 tests); the retained identity, provider
+and surface contracts pass (90 tests). Both real-Mongo lifecycle tests pass,
+including same-ID foreign-host/platform and hostless legacy records.
+The new case also fails when either scope predicate is deliberately removed
+by a test-only transform, with the original lifecycle case still passing.
+`contracts/mongo-scope-mutations.log` records those expected assertion failures.
+`contracts/isolation.kody.json` records an executed, successful real E2B probe
+at the clean correction commit, with zero model calls and no raw output fields.
+
 ## Contracts and scope
 
 `contracts/` contains the E2B isolation result, validation logs, graph probe,

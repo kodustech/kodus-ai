@@ -1,0 +1,112 @@
+FAIL libs/core/infrastructure/config/loaders/workflow-queue.loader.spec.ts
+  ● security scan queue prefetch › keeps a bounded default for invalid configuration "0"
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 5
+    Received: 0
+
+      13 |         (value) => {
+      14 |             process.env[name] = value;
+    > 15 |             expect(WorkflowQueueLoader()[name]).toBe(5);
+         |                                                 ^
+      16 |         },
+      17 |     );
+      18 |
+
+      at toBe (libs/core/infrastructure/config/loaders/workflow-queue.loader.spec.ts:15:49)
+
+  ● security scan queue prefetch › keeps a bounded default for invalid configuration "-1"
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 5
+    Received: -1
+
+      13 |         (value) => {
+      14 |             process.env[name] = value;
+    > 15 |             expect(WorkflowQueueLoader()[name]).toBe(5);
+         |                                                 ^
+      16 |         },
+      17 |     );
+      18 |
+
+      at toBe (libs/core/infrastructure/config/loaders/workflow-queue.loader.spec.ts:15:49)
+
+  ● security scan queue prefetch › keeps a bounded default for invalid configuration "1.5"
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 5
+    Received: 1
+
+      13 |         (value) => {
+      14 |             process.env[name] = value;
+    > 15 |             expect(WorkflowQueueLoader()[name]).toBe(5);
+         |                                                 ^
+      16 |         },
+      17 |     );
+      18 |
+
+      at toBe (libs/core/infrastructure/config/loaders/workflow-queue.loader.spec.ts:15:49)
+
+FAIL libs/security-scan/application/start-security-scan.use-case.spec.ts
+  ● StartSecurityScanUseCase — running again continues › refuses a repository without a confirmed host (undefined) before writing or queuing a scan
+
+    expect(received).rejects.toThrow()
+
+    Received promise resolved instead of rejected
+    Resolved to value: {"budget": {"maxUsd": 5}, "modelName": "fireworks:deepseek", "organizationId": "org-1", "progress": [], "repository": {"defaultBranch": "trunk", "fullName": "acme/shop", "host": "", "id": "repo-1", "name": "shop", "platform": "GITHUB"}, "requestedBy": undefined, "spend": {"inputTokens": 0, "outputTokens": 0, "requests": 0, "usd": 0}, "status": "queued", "teamId": "t", "units": [], "uuid": "scan-2"}
+
+      185 |         async (http_url) => {
+      186 |             const { scans, start, jobQueue } = useCaseWith(null, 'GITHUB', 'trunk', { http_url });
+    > 187 |             await expect(start()).rejects.toThrow(/Git host.*reconnect/i);
+          |                   ^
+      188 |             expect(scans.failStale).not.toHaveBeenCalled();
+      189 |             expect(scans.findActive).not.toHaveBeenCalled();
+      190 |             expect(scans.create).not.toHaveBeenCalled();
+
+      at expect (node_modules/expect/build/index.js:2116:15)
+      at expect (libs/security-scan/application/start-security-scan.use-case.spec.ts:187:19)
+
+  ● StartSecurityScanUseCase — running again continues › refuses a repository without a confirmed host () before writing or queuing a scan
+
+    expect(received).rejects.toThrow()
+
+    Received promise resolved instead of rejected
+    Resolved to value: {"budget": {"maxUsd": 5}, "modelName": "fireworks:deepseek", "organizationId": "org-1", "progress": [], "repository": {"defaultBranch": "trunk", "fullName": "acme/shop", "host": "", "id": "repo-1", "name": "shop", "platform": "GITHUB"}, "requestedBy": undefined, "spend": {"inputTokens": 0, "outputTokens": 0, "requests": 0, "usd": 0}, "status": "queued", "teamId": "t", "units": [], "uuid": "scan-2"}
+
+      185 |         async (http_url) => {
+      186 |             const { scans, start, jobQueue } = useCaseWith(null, 'GITHUB', 'trunk', { http_url });
+    > 187 |             await expect(start()).rejects.toThrow(/Git host.*reconnect/i);
+          |                   ^
+      188 |             expect(scans.failStale).not.toHaveBeenCalled();
+      189 |             expect(scans.findActive).not.toHaveBeenCalled();
+      190 |             expect(scans.create).not.toHaveBeenCalled();
+
+      at expect (node_modules/expect/build/index.js:2116:15)
+      at expect (libs/security-scan/application/start-security-scan.use-case.spec.ts:187:19)
+
+  ● StartSecurityScanUseCase — running again continues › refuses a repository without a confirmed host (not a URL) before writing or queuing a scan
+
+    expect(received).rejects.toThrow()
+
+    Received promise resolved instead of rejected
+    Resolved to value: {"budget": {"maxUsd": 5}, "modelName": "fireworks:deepseek", "organizationId": "org-1", "progress": [], "repository": {"defaultBranch": "trunk", "fullName": "acme/shop", "host": "", "id": "repo-1", "name": "shop", "platform": "GITHUB"}, "requestedBy": undefined, "spend": {"inputTokens": 0, "outputTokens": 0, "requests": 0, "usd": 0}, "status": "queued", "teamId": "t", "units": [], "uuid": "scan-2"}
+
+      185 |         async (http_url) => {
+      186 |             const { scans, start, jobQueue } = useCaseWith(null, 'GITHUB', 'trunk', { http_url });
+    > 187 |             await expect(start()).rejects.toThrow(/Git host.*reconnect/i);
+          |                   ^
+      188 |             expect(scans.failStale).not.toHaveBeenCalled();
+      189 |             expect(scans.findActive).not.toHaveBeenCalled();
+      190 |             expect(scans.create).not.toHaveBeenCalled();
+
+      at expect (node_modules/expect/build/index.js:2116:15)
+      at expect (libs/security-scan/application/start-security-scan.use-case.spec.ts:187:19)
+
+Test Suites: 2 failed, 2 total
+Tests:       6 failed, 24 passed, 30 total
+Snapshots:   0 total
+Time:        1.491 s
+Ran all test suites within paths "libs/security-scan/application/start-security-scan.use-case.spec.ts", "libs/core/infrastructure/config/loaders/workflow-queue.loader.spec.ts".

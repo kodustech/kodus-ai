@@ -1432,6 +1432,72 @@
             "sha256": "eb5c868dc4995817b9c51e6bc0d1508d9aaa1936feef56cbd373609d6892aab3"
           }
         ]
+      },
+      "uuid-control|misconfiguration|version1.go|NewUUID|36": {
+        "sourceResult": "results/2026-11-16-review/fresh.cases/uuid-control.json",
+        "sourceResultSha256": "aafb7cea62885bdbb53de7d9ac9a5013d973b6e7f5f6eb404cb06dc2eae3f770",
+        "findingSha256": "31501538b6e711ea7d19a4705a316374adacd987410cbd9d2da576cc75b94ba1",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "NewUUID explicitly implements time/node-based version 1 UUIDs and documents the NodeID/clock-sequence behavior; the ordinary New/NewRandom API uses randomness. Publishing the version-1 node field is intentional UUID semantics, not a secret newly exposed against this API contract. The repository ships no session/reset/token consumer using v1 as an unpredictable credential. The report's token forgery and network-attack impacts assume a caller the library does not provide.",
+        "sources": [
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/version1.go#L11",
+            "sha256": "38a2c229a2aad4bb72d45529304f210b1f31e8ef60bbd2605690a10f0d8a8242"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/version1.go#L19",
+            "sha256": "38a2c229a2aad4bb72d45529304f210b1f31e8ef60bbd2605690a10f0d8a8242"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/node.go#L29",
+            "sha256": "73a93d192ca24078e0f93b8c1675e13adb442421252d3974d697b0821c4832cf"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/version4.go#L8",
+            "sha256": "f252aeb4028659d83cbf7b037d4524f7c9b76cde1fdca1f6f7de310dab6f4dcd"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/version4.go#L25",
+            "sha256": "f252aeb4028659d83cbf7b037d4524f7c9b76cde1fdca1f6f7de310dab6f4dcd"
+          }
+        ]
+      },
+      "uuid-control|secret_identity|time.go|getTime|51": {
+        "sourceResult": "results/2026-11-16-review/fresh.cases/uuid-control.json",
+        "sourceResultSha256": "aafb7cea62885bdbb53de7d9ac9a5013d973b6e7f5f6eb404cb06dc2eae3f770",
+        "findingSha256": "8b522d698bffce133c188cfb7be8a2c0fed0b6d7f1a3da138b9cfa6b6a90b116",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "Confirmed identity-integrity defect: NewV6WithTime calls getTime without the mutex that protects global clockSeq/lasttime on the normal GetTime path. A bounded probe on this exact pinned source produced 6000 distinct UUIDs serially, but 1208 duplicate results in 6000 concurrent calls at one fixed timestamp, below the 16384-sequence limit, and Go's race detector reports the shared-state race. This verifies the uniqueness failure; it does not verify the report's hypothetical session hijack, cross-user data access or high severity. The proposed negative-control repository is therefore not clean for this case; do not relabel the result false to preserve the control assumption.",
+        "sources": [
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/version6.go#L32",
+            "sha256": "0bafc74725a9ee94939d6cde6bad8e13804aa594328e7b20d7cf05fb86315307"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/version6.go#L39",
+            "sha256": "0bafc74725a9ee94939d6cde6bad8e13804aa594328e7b20d7cf05fb86315307"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/time.go#L45",
+            "sha256": "4154b2d7897acfff253c4c2ac0d38d1765cfe3f6ca2e482c71c0677d98380d63"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/time.go#L51",
+            "sha256": "4154b2d7897acfff253c4c2ac0d38d1765cfe3f6ca2e482c71c0677d98380d63"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/time.go#L65",
+            "sha256": "4154b2d7897acfff253c4c2ac0d38d1765cfe3f6ca2e482c71c0677d98380d63"
+          },
+          {
+            "url": "https://github.com/google/uuid/blob/2d3c2a9cc518326daf99a383f07c4d3c44317e4d/version6_test.go#L8",
+            "sha256": "32ae7065267bd8827123c8801511cac781aa4cf45dee47953e07890e7c4b1109"
+          }
+        ]
       }
     }
   },
@@ -1496,5 +1562,7 @@
   "weknora-a20541cd|authz|internal/application/service/knowledge.go|knowledgeService.validateFAQKnowledgeBase|4069": "real",
   "weknora-a20541cd|injection|internal/application/service/knowledgebase.go||32": "real",
   "itsdangerous-control|resource_exhaustion|src/itsdangerous/url_safe.py|URLSafeSerializerMixin.load_payload|44": "false",
-  "is-control|resource_exhaustion|source/index.ts|getObjectType|184": "false"
+  "is-control|resource_exhaustion|source/index.ts|getObjectType|184": "false",
+  "uuid-control|misconfiguration|version1.go|NewUUID|36": "false",
+  "uuid-control|secret_identity|time.go|getTime|51": "real"
 }

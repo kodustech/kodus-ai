@@ -1,0 +1,23 @@
+{
+  "kind": "contract",
+  "provenance": {
+    "measuredAt": "2026-11-16T14:36:25.072Z",
+    "engineCommit": "cc61b7011b5a9a011a1048c4f896a50b071cc30a",
+    "dirty": false,
+    "datasets": {},
+    "scoringVersion": 4,
+    "probeSha256": "c5889725279a2cb342ad6d63f7424b82cdcbb1a858cf21474f98ee5e55a6fcc2"
+  },
+  "date": "2026-11-16T14:36:40.491Z",
+  "provider": "e2b",
+  "modelCalls": 0,
+  "controlListenerReachable": true,
+  "checks": {
+    "lockAuditCheckout": true,
+    "prepareReproUser": true
+  },
+  "failedCommands": [],
+  "executed": true,
+  "passed": true,
+  "exitCode": 0
+}
