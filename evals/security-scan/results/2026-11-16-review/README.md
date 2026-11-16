@@ -234,6 +234,54 @@ positive phase (maximum $18). The same hash samples, separate blind
 confirmation group, source judge and 60% per-language target remain in force.
 These validation checks and proposed runs do not establish a quality pass.
 
+The running revised candidate has already failed its advance conditions:
+is finishes 4/4 units with one false report for $0.68219118; xxhash finishes
+8/8 with zero reports for $0.61964274. Both snapshots and selections are
+retained in `revised-candidate.cases/`, committed before inspection.
+The is claim repeats the earlier real regex-performance pitfall while
+inventing a downstream service capable of supplying symbol-keyed objects.
+The pinned code returns primitive strings directly; ordinary JSON does not
+supply the required symbol key. The actual performance behavior remains
+acknowledged; no shipped remote/constrained caller is established.
+Itsdangerous also has completed lenses with no submitted result despite
+the explicit instruction. Its and UUID's final results are still pending.
+The revised candidate's positive phase will not run.
+
+## Bounded completion candidate
+
+`completion-retry-hypothesis.json` was frozen before implementation, after
+the revised injection lens returned completed, unsubmitted, no error/cut,
+and no kept/unverified findings. Bounded native logs identify a missing
+artifact; no model text is captured. `input-capability-hypothesis.json` and
+the repeated is judgment were also committed before the prompt edit.
+
+Source `0f7653b8b` permits at most one fresh native investigation only for
+that empty completed-but-unsubmitted case. Successful calls, partial
+findings, unverified findings, provider errors, cuts and exhausted budgets
+retain their behavior. The same input, model, tools, meter, cancellation and
+deadline apply to both attempts. A second missing result stays incomplete;
+prose is never converted into examined coverage. This is additional work:
+each invocation retains 30 steps, with up to two invocations for that class.
+The shared library paragraph also requires a shipped less-trusted source
+for symbol/accessor/callback/custom-prototype values; it names no benchmark
+repository, function or advisory and preserves real restricted-host paths.
+The design comment on #2451 records the retry decision before implementation.
+
+On an isolated clean VM checkout, 123 tests pass, including recovery to both
+an empty result and a real finding, a second protocol failure, preserved
+partial/error/cut/unverified states, cancellation/deadline and request-cap
+admission. Scripted wiring passes with the same 100 scripted calls.
+`contracts/completion-candidate-*` records these checks and all seven actual
+native-builder input comparisons. Only the shared paragraph sentence
+changes those inputs; the engine retry is the separate execution change.
+The native adapter, other prompt exports and pinned catalogs are unchanged.
+
+`completion-candidate-measurement-plan.json` freezes another capped
+four-control measurement, only after retaining the previous full failed
+run. It has not started. A positive phase still requires the unchanged
+control conditions first, with the same blind confirmation group and
+per-language precision target. Neither tests nor this plan establish quality.
+
 ## Kody review corrections
 
 `cc61b7011` refuses hostless scans before queueing, validates a positive
@@ -272,6 +320,9 @@ The clean-cache Mongo/Issues rerun also passes all 35 assertions.
 wiring, type, dependency-injection, permissions, environment and feature-gate
 checks also pass. The advisory mutation workflow was canceled; it supplies
 no complete mutation score. These checks precede revised prompt `5617eab0a`.
+`contracts/ci-backend-299.json` records a later full backend pass on
+`29995cefe`: 20,203 tests and eight snapshots, plus full wiring/type/DI gates.
+It precedes the bounded retry and capability-origin clarification.
 
 ## Contracts and scope
 

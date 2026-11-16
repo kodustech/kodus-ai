@@ -1,0 +1,17 @@
+{
+  "checkedAt": "2026-11-16T20:24:57.906Z",
+  "beforeCommit": "5617eab0a603cb94cb13d6dabb5de8e51e588e5f",
+  "candidateCommit": "0f7653b8ba357ed9c231b6512d7265d5fcfb1175",
+  "changedFiles": [
+    "libs/security-scan/application/security-scan-engine.spec.ts",
+    "libs/security-scan/application/security-scan-engine.ts",
+    "libs/security-scan/domain/scan-prompts.ts"
+  ],
+  "allSevenNativeBuilderInputs": "Only one shared generic capability-origin sentence differs in systemPrompt and laneFocus; all other fields equal.",
+  "otherPromptExportsUnchanged": true,
+  "caseCatalogsByteIdentical": true,
+  "nativeAdapterUnchanged": true,
+  "additionalWork": "At most one fresh native investigation for an empty completed-but-unsubmitted result. Both attempts receive the same input/secrets; per-invocation steps remain 30, not an unchanged combined maximum.",
+  "successfulCallsUnchanged": true,
+  "modelCalls": 0
+}

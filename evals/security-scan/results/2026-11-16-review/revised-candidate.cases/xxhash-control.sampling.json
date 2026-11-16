@@ -1,0 +1,11 @@
+{
+  "method": "All reported control findings.",
+  "group": "controls",
+  "seed": "wellington-review-2451-2026-11-16",
+  "case": "xxhash-control",
+  "language": "go",
+  "sourceResult": "results/2026-11-16-review/revised-candidate.cases/xxhash-control.json",
+  "sourceResultSha256": "5b8dafdb8b55c0f1f3055968ca076328275d7f6415dd3428dab2f1987563f67a",
+  "offListPopulation": 0,
+  "selected": []
+}
