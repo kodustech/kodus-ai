@@ -1,0 +1,40 @@
+✅ preflight           0s
+✅ parse               4s  model calls=13
+✅ prose-recovery      1s  model calls=32
+✅ review-chain        1s
+✅ shape-invariance    0s
+✅ verifier-verdict    1s
+✅ format              1s  model calls=155
+✅ business-logic      2s  model calls=10
+✅ business-logic-requirements   3s  model calls=29
+✅ approval-risk       1s  model calls=2
+✅ pr-risk             1s  model calls=11
+✅ approval-risk-shared   1s  model calls=2
+✅ memories            5s  model calls=110
+✅ security-scan       4s  model calls=100
+✅ custom-agents       7s  model calls=231
+✅ funnel-anchoring    2s
+✅ funnel-dedup        2s  model calls=4
+✅ funnel-severity     2s  model calls=2
+✅ severity-levels     2s  model calls=2
+✅ suggestion-enrichment   2s  model calls=4
+✅ funnel-verify       3s  model calls=14
+✅ finder-recall       3s  model calls=17
+✅ heavy-recall        3s  model calls=44
+✅ managed-route       3s  model calls=17
+✅ kody-rules         11s  model calls=1
+✅ repo-instructions   5s  model calls=32
+✅ pr-summary          1s  model calls=12
+✅ implementation-check   1s  model calls=3
+✅ reference-detection   1s  model calls=4
+✅ reply-addressing    1s  model calls=2
+✅ conversation        5s  model calls=27
+✅ thread-rule         5s  model calls=28
+✅ thread-memory       5s  model calls=17
+✅ thread-rule-offers   7s  model calls=24
+✅ thread-memory-offers   6s  model calls=15
+✅ review-rounds       6s  model calls=23
+✅ review-lifecycle   11s  model calls=57
+✅ pr paths filter   1109 repo files loaded, all covered
+
+Every eval still drives the engine.

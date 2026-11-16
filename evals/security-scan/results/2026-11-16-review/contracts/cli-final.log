@@ -1,0 +1,9 @@
+
+ RUN  v5.1.0 /Users/gabrielmalinosqui/orca/workspaces/kodus-ai/dungeness/apps/cli
+
+
+ Test Files  2 passed (2)
+      Tests  9 passed (9)
+   Start at  09:24:05
+   Duration  157ms (transform 45%, import 37%, tests 11%, worker 6%)
+
