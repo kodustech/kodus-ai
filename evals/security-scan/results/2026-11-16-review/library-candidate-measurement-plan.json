@@ -7,21 +7,44 @@
   "concurrency": 2,
   "scheduling": "One paid runner at a time. Start candidate controls only after the active baseline queue has retained all six completed case results without infrastructure errors. Do not replace unfavorable completed measurements.",
   "phase1": {
-    "cases": ["is-control", "itsdangerous-control", "xxhash-control", "uuid-control"],
+    "cases": [
+      "is-control",
+      "itsdangerous-control",
+      "xxhash-control",
+      "uuid-control"
+    ],
     "maximumCaseBudgetsUsd": 12,
-    "validNegativeCases": ["is-control", "itsdangerous-control", "xxhash-control"],
+    "validNegativeCases": [
+      "is-control",
+      "itsdangerous-control",
+      "xxhash-control"
+    ],
     "diagnosticPositiveCase": "uuid-control",
     "advanceCondition": "All three valid negatives must be fully examined and report no findings, with no provider infrastructure errors. Inspect every reported control finding. The UUID identity-integrity defect must remain detectable and its false reports must not be hidden. A budget gap or unread class is not a passing negative.",
     "legacyExpectation": "Preserve UUID's original expected-zero field and every raw report; its standalone legacy diagnostic may remain red because the repository contains a real defect. It is not counted as one of the three clean negative cases."
   },
   "phase2": {
     "condition": "Start only after phase1 is evaluated, not merely because its process ended.",
-    "development": ["flowise-f0c12941", "langflow-73c1f203", "weknora-a20541cd"],
-    "confirmation": ["paperclip-50cd76d8", "mlflow-083eac9c", "ollama-73257915"],
+    "development": [
+      "flowise-f0c12941",
+      "langflow-73c1f203",
+      "weknora-a20541cd"
+    ],
+    "confirmation": [
+      "paperclip-50cd76d8",
+      "mlflow-083eac9c",
+      "ollama-73257915"
+    ],
     "maximumCaseBudgetsUsd": 18,
     "sampling": "Same seeds and 20-smallest-key-hash selection as continuation-measurement-plan.json. Freeze raw cases and samples in Git before inspecting their descriptions. Keep confirmation descriptions out of candidate development."
   },
   "scoring": "Keep the 60% floor and unknown-finding policy unchanged. Score development together with all four candidate control cases, including every real and false UUID finding. Report the three confirmation repositories separately. Inspect all control reports, and do not count unjudged findings as true.",
   "comparability": "The six positive case definitions, model route, tools, settings, unit limit and caps are identical before/after; prompts intentionally differ by the generic API-contract instruction. The supplemental control did not exist in the old measurement. Historical f7723e64b controls are reported with their own source commit and incomplete coverage, not called a same-commit paired control run.",
-  "acceptance": "Measured precision at least 60% per language in each positive group, full valid-negative coverage without reports, and preservation of the confirmed intrinsic identity defect. Record recall, spend and coverage trade-offs; neither unit tests nor a zero-output failure is a release-quality pass."
+  "acceptance": "Measured precision at least 60% per language in each positive group, full valid-negative coverage without reports, and preservation of the confirmed intrinsic identity defect. Record recall, spend and coverage trade-offs; neither unit tests nor a zero-output failure is a release-quality pass.",
+  "diagnostics": {
+    "preload": "contracts/candidate-observer.cjs",
+    "contract": "Forward every scan/model/lens argument, success value and thrown error unchanged. Record only bounded case/task/error names, numeric HTTP status and lens completion flags/counts; no prompts, response bodies, error messages or secrets. Diagnostics do not change raw failure counters, scoring or acceptance.",
+    "sha256": "84b92272722ab61b6bf99e6369aeba9dcaa076ccb19e093a7bffc76e15895aed",
+    "purpose": "Distinguish budget admission/cancellation, invalid model output and exhausted provider failures; the existing generic call-failure total combines those categories."
+  }
 }
