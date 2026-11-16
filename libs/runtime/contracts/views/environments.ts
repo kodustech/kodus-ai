@@ -163,6 +163,8 @@ export interface RuntimeBlockerGroupView {
     lastPr?: number;
     state: 'open';
     evidence?: BlockerEvidence;
+    /** What Kody's learn loop already tried on this signature, in order, each with how it ended (docs §5 Blocker.tried); absent: nothing yet. */
+    tried?: string[];
     /** In order; the first is the recommended one (ADR-015). */
     fixes: RuntimeBlockerFixView[];
 }

@@ -346,3 +346,38 @@ describe('the proven fix reaches the dev', () => {
         expect(tampered.git.openPullRequestWithFiles).not.toHaveBeenCalled();
     });
 });
+
+describe("the blocker card says what Kody already tried (docs §5 Blocker.tried)", () => {
+    const SIG = 'setup:not_ready:web:3000/health';
+    const attempt = (n: number, over: Record<string, unknown>) => ({ n, signature: SIG, setupKey: KEY, at: `2026-10-29T12:0${n}:00.000Z`, ...over });
+
+    it('lists each attempt on that signature in order, with how it ended, and nothing from another signature', () => {
+        const setup = blockedSetup({
+            learn: {
+                tried: [{ signature: SIG, count: 3 }],
+                attempts: [
+                    attempt(3, { fix: { id: 'set_ready_timeout:300', action: 'set_ready_timeout', label: 'Wait 300 s for the ready check' }, result: 'booted_once' }),
+                    attempt(1, {
+                        fix: { id: 'set_health_path:/healthz', action: 'set_health_path', label: 'Check /healthz for the ready check' },
+                        result: 'blocked',
+                        blocker: { kind: 'not_ready', signature: SIG, title: 'The app did not answer its ready check' },
+                    }),
+                    attempt(2, { result: 'refused', refusal: 'not_in_evidence' }),
+                    { n: 1, signature: 'setup:other', fix: { id: 'x', action: 'set_env', label: 'Set FOO' }, result: 'blocked', setupKey: KEY, at: '2026-10-29T12:01:00.000Z' },
+                ],
+                stopped: 'cap',
+            },
+        } as any);
+        const [group] = blockerGroups(setup, []);
+        expect(group.tried).toEqual([
+            'Check /healthz for the ready check: still blocked (The app did not answer its ready check)',
+            'A change Kody proposed was not tried: it named a value that is not in the evidence',
+            'Wait 300 s for the ready check: booted once, then not on the second clean machine',
+        ]);
+    });
+
+    it('a card Kody never worked on has no tried list', () => {
+        const [group] = blockerGroups(blockedSetup(), []);
+        expect(group.tried).toBeUndefined();
+    });
+});

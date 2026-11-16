@@ -2,7 +2,7 @@ import { type BlockerFixView, classifyBlocker, KODY_FIX_PREFIX } from '@libs/run
 import { type Lesson, lessonsFor } from '@libs/runtime/blockers/lessons';
 import { applyRecipeChange } from '@libs/runtime/blockers/recipe-edit';
 import { parseRecipe } from '@libs/runtime/protocol/recipe';
-import type { EnvironmentSetupRecord, RuntimeRunProjection } from '@libs/runtime/run';
+import type { EnvironmentLearnAttempt, EnvironmentLearnRecord, EnvironmentSetupRecord, RuntimeRunProjection } from '@libs/runtime/run';
 
 import { type EnvironmentRepository, type RuntimeLessonReader } from '../../domain/ports';
 import { RuntimeBlockerFixView, RuntimeBlockerGroupView, type RuntimeMembershipBlockerGroupView } from './environment-view';
@@ -85,7 +85,43 @@ export function blockerGroups(setup: EnvironmentSetupRecord | null, runs: Runtim
             g.fixes = [...g.fixes.filter((f) => f.learned), ...g.fixes.filter((f) => !f.learned)];
         }
     }
+    for (const g of groups.values()) {
+        const tried = triedOn(setup?.learn, g.signature);
+        if (tried.length) g.tried = tried;
+    }
     return [...groups.values()].sort((a, b) => b.count - a.count);
+}
+
+/** Why Kodus did not try a hypothesis Kody sent, in the dev's words (EnvironmentLearnAttempt.refusal). */
+const REFUSED: Record<NonNullable<EnvironmentLearnAttempt['refusal']>, string> = {
+    not_json: 'its answer was not a change Kodus could read',
+    not_allowed: 'it was a change Kodus does not make on its own',
+    not_in_evidence: 'it named a value that is not in the evidence',
+    already_set: 'the recipe already had it',
+    not_higher: 'it did not raise the current value',
+    unknown_service: 'it named a service the recipe does not have',
+    duplicate: 'it repeated an earlier try',
+    edit_failed: 'the recipe could not take the edit',
+};
+
+/**
+ * Blocker.tried (docs §5): each attempt of the learn loop on this signature, the earlier setups' included,
+ * oldest first, as one line a dev reads: the change and how its boot ended.
+ */
+export function triedOn(learn: EnvironmentLearnRecord | undefined, signature: string): string[] {
+    return (learn?.attempts ?? [])
+        .filter((a) => a.signature === signature)
+        .sort((a, b) => a.at.localeCompare(b.at) || a.n - b.n)
+        .map((a) => {
+            if (a.result === 'refused' || !a.fix) return `A change Kody proposed was not tried: ${a.refusal ? REFUSED[a.refusal] : 'it was not a change Kodus could try'}`;
+            const ended = {
+                trying: 'booting now',
+                booted: `booted on ${a.cleanBoots ?? 2} clean machines`,
+                booted_once: 'booted once, then not on the second clean machine',
+                blocked: a.blocker && a.blocker.signature !== signature ? `blocked by something else (${a.blocker.title})` : `still blocked${a.blocker ? ` (${a.blocker.title})` : ''}`,
+            }[a.result];
+            return `${a.fix.label}: ${ended}`;
+        });
 }
 
 /** The lessons that may apply to this environment's repo, or none when the store is unreachable (the cards still show). */
