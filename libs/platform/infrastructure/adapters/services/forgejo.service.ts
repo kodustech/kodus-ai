@@ -885,12 +885,11 @@ export class ForgejoService implements Omit<
                 branch: baseBranch,
                 ...(identity ? { author: identity, committer: identity } : {}),
             },
+            throwOnError: true,
         });
 
-        if (!res || res.status >= 300) {
-            throw new Error(
-                `Failed to initialize empty repository: ${res?.status}`,
-            );
+        if (!res) {
+            throw new Error('Failed to initialize empty repository');
         }
 
         this.logger.log({
