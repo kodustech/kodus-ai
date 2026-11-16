@@ -22,6 +22,10 @@
 const fs = require('fs');
 const path = require('path');
 
+// scan-repo imports production's LLM layer, whose crypto module reads this
+// at import time. CI has no .env; install the eval-only key before that import.
+if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
+
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { countTokens, tokensUsed, registerTs } = require('../shared/eval-kit');
 const { orgRouteOrExit } = require('../shared/model-route');
@@ -44,9 +48,6 @@ const SANDBOX = args.sandbox === 'e2b' ? 'e2b' : 'local';
 const CONCURRENCY = Math.max(1, Number(args.concurrency || 2));
 let runSettings = { model: MODEL, budgetUsd: BUDGET_USD, sandbox: SANDBOX };
 const OUT = args.output || path.join(__dirname, '..', 'results', `security-scan-${MODEL.replace(/[^\w.-]/g, '_')}.json`);
-
-if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
-
 
 const DATA = require('./vulngym-cases.json');
 const TARGETS = require('./targets.json');

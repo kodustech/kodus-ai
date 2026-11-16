@@ -255,6 +255,11 @@ async function main() {
             name: 'security-scan',
             result: 'shared',
             model: true,
+            // Exercise CI's key-free startup even on a configured dev machine.
+            env: {
+                API_CRYPTO_KEY: '',
+                DOTENV_CONFIG_PATH: process.platform === 'win32' ? 'NUL' : '/dev/null',
+            },
             check: ({ result, verdictPrompts }) => {
                 const droveLenses = result?.cases?.length && result.cases.every(c =>
                     c.coverage?.done > 0 && Object.entries(c.coverage.modelCalls ?? {}).some(([name, count]) =>
