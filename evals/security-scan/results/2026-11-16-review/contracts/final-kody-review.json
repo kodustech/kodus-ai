@@ -1,0 +1,28 @@
+{
+  "headSha": "72c3036adcb98554541b369f4899531261d0826c",
+  "checkRun": 133594962551,
+  "startedAt": "2026-11-16T20:36:24Z",
+  "completedAt": "2026-11-16T20:46:15Z",
+  "conclusion": "success",
+  "meaning": "Review completed; not a claim of no suggestions or human approval.",
+  "triggerComment": 6928568453,
+  "newComments": [
+    {
+      "id": 4591315580,
+      "action": "Declined with source proof: submittedResult is a computed boolean, not model content. Frozen observational preload stays unchanged.",
+      "contract": "libs/code-review/infrastructure/agents/review-agent.contract.ts:632",
+      "producer": "libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.ts:609"
+    },
+    {
+      "id": 4591317326,
+      "action": "Added previous-revision execution proof; four cases fail the old implementation, eight negative cases are intentional retry-boundary guards. No duplicated positive trigger in each guard.",
+      "proof": "completion-retry-before.json"
+    }
+  ],
+  "productionChangesRequiredByThisPass": false,
+  "paidBenchmarkCallsForResponses": 0,
+  "previousKodyCommentsHandled": 16,
+  "totalKodyCommentsHandled": 18,
+  "wellingtonInlineCommentsHandled": 32,
+  "qualityGate": "Not passed; new-source model calibration deferred."
+}

@@ -302,6 +302,17 @@ the prepared launcher is disabled against automatic execution. A positive phase 
 control conditions first, with the same blind confirmation group and
 per-language precision target. Neither tests nor this plan establish quality.
 
+The final Kody pass on `72c3036ad` completed in check `133594962551`.
+Its raw-submission logging alert refers to an optional boolean, computed by
+the native adapter's whole-result predicate; no model payload is logged.
+`contracts/completion-retry-before.json` answers its regression-test question:
+the candidate tests overlaid on isolated pre-fix `b5ce037d2` fail four cases,
+each because the old engine invokes the lens once instead of twice. Eight
+negative cases intentionally remain green as retry-boundary guards; they
+are not claimed as regression pins. The current source passes all 123
+focused tests. The old test file is restored afterwards, caches are isolated,
+and there are zero paid calls. Neither comment changes production code.
+
 ## Kody review corrections
 
 `cc61b7011` refuses hostless scans before queueing, validates a positive
