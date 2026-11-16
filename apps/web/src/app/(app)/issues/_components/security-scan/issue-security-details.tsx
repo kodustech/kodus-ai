@@ -86,7 +86,7 @@ export const IssueSecurityFacts = ({
                 <div className="flex gap-3">
                     <UserIcon className="text-secondary-light size-4.5 shrink-0" />
                     <span className="text-text-secondary">
-                        @{owner.username}
+                        @{owner.username.replace(/^@/, "")}
                         {ownerNote && (
                             <span className="text-text-tertiary">
                                 {" "}
