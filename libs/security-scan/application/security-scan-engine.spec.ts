@@ -427,30 +427,35 @@ describe('SecurityScanEngine', () => {
         ).toHaveLength(1);
     });
 
-    it('gives each lens the scan prompt, the sandbox tools and no diff', async () => {
-        const runLens = fakeLens(() => []);
-        const sandbox = fakeSandbox();
-        const engine = new SecurityScanEngine({
-            runLens,
-            llm: fakeLlm({ units: [] }),
-            collectSurface: jest.fn(async () => SURFACE),
-        });
+    it.each([undefined, 'none', 'low', 'high'] as const)(
+        'gives each lens the scan context and honors BYOK effort %s',
+        async (effort) => {
+            const runLens = fakeLens(() => []);
+            const sandbox = fakeSandbox();
+            const engine = new SecurityScanEngine({
+                runLens,
+                llm: fakeLlm({ units: [] }),
+                collectSurface: jest.fn(async () => SURFACE),
+            });
 
-        await engine.run({
-            ...baseParams(),
-            sandbox,
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-        } as any);
+            await engine.run({
+                ...baseParams(),
+                model: { ...baseParams().model, reasoningEffort: effort },
+                sandbox,
+                meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            } as any);
 
-        const [input, secrets] = runLens.mock.calls[0];
-        expect(input.changedFiles).toBeUndefined();
-        expect(input.allowedLabels).toEqual(['security']);
-        expect(input.skipHeavyPasses).toBe(true);
-        // Its verify drops a finding that crosses no security boundary.
-        expect(input.laneFocus).toMatch(/crosses a security boundary/);
-        expect(input.systemPrompt).toMatch(/not reviewing a pull request/);
-        expect(secrets.remoteCommands).toBe(sandbox.remoteCommands);
-    });
+            const [input, secrets] = runLens.mock.calls[0];
+            expect(input.changedFiles).toBeUndefined();
+            expect(input.allowedLabels).toEqual(['security']);
+            expect(input.skipHeavyPasses).toBe(true);
+            expect(input.reasoningEffort).toBe(effort ?? 'high');
+            // Its verify drops a finding that crosses no security boundary.
+            expect(input.laneFocus).toMatch(/crosses a security boundary/);
+            expect(input.systemPrompt).toMatch(/not reviewing a pull request/);
+            expect(secrets.remoteCommands).toBe(sandbox.remoteCommands);
+        },
+    );
 
     it('falls back to the pattern ranking when the planner fails', async () => {
         const engine = new SecurityScanEngine({

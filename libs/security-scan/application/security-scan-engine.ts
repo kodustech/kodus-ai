@@ -1296,7 +1296,10 @@ export class SecurityScanEngine {
             allowedLabels: ['security'],
             laneFocus: buildLensFocus(vulnClass),
             contextWindowTokens: m.contextWindowTokens,
-            reasoningEffort: m.reasoningEffort,
+            // A whole-repository audit needs investigation, as do the map
+            // and finalize calls. Preserve an explicit BYOK effort/override;
+            // an unset effort must not silently disable thinking here.
+            reasoningEffort: m.reasoningEffort ?? 'high',
             reasoningConfigOverride: m.reasoningConfigOverride,
             byokProvider: m.byokProvider,
             modelName: m.modelName,
