@@ -1540,6 +1540,156 @@ describe('SecurityScanEngine', () => {
     });
 });
 
+describe('SecurityScanEngine: a completed lens without a result', () => {
+    const unit = {
+        id: 'completion-unit',
+        file: 'src/admin/exec.ts',
+        relatedFiles: [],
+        language: 'typescript',
+        classes: ['injection'],
+        priority: 90,
+        reasons: [],
+    };
+    const missing = {
+        findings: { reasoning: 'No result delivered.', suggestions: [] },
+        finishReason: 'completed',
+        submittedResult: false,
+    };
+    const complete = {
+        findings: { reasoning: 'Investigation complete.', suggestions: [] },
+        finishReason: 'stopped',
+        submittedResult: true,
+    };
+    const scan = (
+        runLens: any,
+        overrides: Record<string, unknown> = {},
+        now?: () => number,
+    ) =>
+        new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm(),
+            collectSurface: async () => SURFACE,
+            ...(now && { now }),
+        }).run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            units: [unit],
+            ...overrides,
+        } as any);
+
+    it.each([
+        ['an empty result', []],
+        ['a finding', [IDOR]],
+    ])(
+        'counts coverage only after the new investigation submits %s',
+        async (_name, suggestions) => {
+            const runLens = jest
+                .fn()
+                .mockResolvedValueOnce(missing)
+                .mockResolvedValueOnce({
+                    ...complete,
+                    findings: { reasoning: 'Complete.', suggestions },
+                });
+            const result = await scan(runLens);
+
+            expect(runLens).toHaveBeenCalledTimes(2);
+            expect(runLens.mock.calls[1]).toEqual(runLens.mock.calls[0]);
+            expect(result.progress[0].state).toBe('done');
+            expect(result.examinedByClass).toContainEqual(
+                expect.objectContaining({ vulnerabilityClass: 'injection' }),
+            );
+            expect(result.findings).toHaveLength((suggestions as any[]).length);
+        },
+    );
+
+    it('leaves the class incomplete after two missing results', async () => {
+        const runLens = jest.fn().mockResolvedValue(missing);
+        const result = await scan(runLens);
+
+        expect(runLens).toHaveBeenCalledTimes(2);
+        expect(result.progress[0].state).toBe('failed');
+        expect(result.examinedByClass).toEqual([]);
+    });
+
+    it.each([
+        ['a submitted result', complete],
+        [
+            'partial findings',
+            { ...missing, findings: { reasoning: '', suggestions: [IDOR] } },
+        ],
+        [
+            'a provider error',
+            { ...missing, finishReason: 'error', errorName: 'APICallError' },
+        ],
+        [
+            'a step limit',
+            {
+                ...missing,
+                finishReason: 'budget-exhausted',
+                incompleteReason: 'budget-exhausted',
+            },
+        ],
+        ['a truncated turn', { ...missing, incompleteReason: 'truncated' }],
+        ['an unverified finding', { ...missing, unverifiedByVerify: [IDOR] }],
+    ])('does not retry %s', async (_name, output) => {
+        const runLens = jest.fn().mockResolvedValue(output);
+        const result = await scan(runLens);
+
+        expect(runLens).toHaveBeenCalledTimes(1);
+        expect(result.progress[0].state).toBe(
+            output === complete ? 'done' : 'failed',
+        );
+        if (output !== complete) expect(result.examinedByClass).toEqual([]);
+    });
+
+    it('does not retry after cancellation', async () => {
+        const abort = new AbortController();
+        const runLens = jest.fn(async () => {
+            abort.abort(new Error('canceled'));
+            return missing as any;
+        });
+        const result = await scan(runLens, { signal: abort.signal });
+
+        expect(runLens).toHaveBeenCalledTimes(1);
+        expect(result.examinedByClass).toEqual([]);
+    });
+
+    it('does not retry once the slice deadline has passed', async () => {
+        let now = 1000;
+        const runLens = jest.fn(async () => {
+            now = 2000;
+            return missing as any;
+        });
+        const result = await scan(runLens, { deadlineAt: 2000 }, () => now);
+
+        expect(runLens).toHaveBeenCalledTimes(1);
+        expect(result.finished).toBe(false);
+        expect(result.examinedByClass).toEqual([]);
+    });
+
+    it('refuses retry requests that exceed the shared request-level cap', async () => {
+        const meter = new ScanBudgetMeter({ maxUsd: 0.06 }, RATES);
+        let sent = 0;
+        const runLens = jest.fn(async (input: any) => {
+            await bill(
+                sent === 0 ? 25_000 : 10_000,
+                sent === 0 ? 25_000 : 10_000,
+                input.usageRunName,
+            );
+            sent++;
+            return missing as any;
+        });
+        const result = await scan(runLens, { meter });
+
+        expect(runLens).toHaveBeenCalledTimes(2);
+        expect(sent).toBe(1);
+        expect(meter.committedSpend().usd).toBeCloseTo(0.05);
+        expect(result.stoppedByBudget).toBe(true);
+        expect(result.examinedByClass).toEqual([]);
+    });
+});
+
 describe('SecurityScanEngine: what a scan may resolve', () => {
     const controllerOnly = {
         units: [

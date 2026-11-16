@@ -1081,13 +1081,45 @@ export class SecurityScanEngine {
                         .map((f) => `- ${f.filePath}:${f.startLine} ${f.title}`)
                         .join('\n')}`;
                 }
-                const output = await scanAwait(
-                    this.runLens(input, {
-                        remoteCommands: params.sandbox.remoteCommands,
-                        byokConfig: params.model.slot,
-                    }),
-                    signal,
-                );
+                const run = () =>
+                    scanAwait(
+                        this.runLens(input, {
+                            remoteCommands: params.sandbox.remoteCommands,
+                            byokConfig: params.model.slot,
+                        }),
+                        signal,
+                    );
+                let output = await run();
+                // A completed empty turn can still omit its formal result.
+                // Investigate once more through the same native harness;
+                // never turn the first turn's prose into examined coverage.
+                // Partial findings and real interruptions keep their normal
+                // incomplete state. Both attempts share the scan's meter.
+                if (
+                    output.finishReason === 'completed' &&
+                    output.submittedResult === false &&
+                    !output.incompleteReason &&
+                    !output.findings?.suggestions?.length &&
+                    !output.unverifiedByVerify?.length &&
+                    !signal.aborted &&
+                    !params.meter.isExhausted() &&
+                    (params.deadlineAt === undefined ||
+                        this.now() < params.deadlineAt)
+                ) {
+                    logger.warn({
+                        message:
+                            'Security lens completed without a formal result; retrying once',
+                        context: SecurityScanEngine.name,
+                        metadata: {
+                            organizationId: params.organizationId,
+                            teamId: params.teamId,
+                            repositoryId: params.repositoryId,
+                            unit: unit.id,
+                            vulnClass,
+                        },
+                    });
+                    output = await run();
+                }
                 if (
                     signal.aborted ||
                     (params.deadlineAt !== undefined &&
