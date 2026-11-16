@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 
 import { AcquireRequest, FakeEnvironment, FakeEnvironmentRuntime, isBlocked, isEnvError } from '@libs/runtime/environment';
 import { CELL_FEATURES, decodeFrame, Envelope, MACHINE_SIZE_LIMITS, MessageBody, MessageType, PROTOCOL_VERSION } from '@libs/runtime/protocol';
@@ -26,6 +26,8 @@ export class FakeCell {
     private readonly claims = new Map<string, string>(); // hub claimId -> fake claimId
     private readonly seen = new Map<string, string>(); // stepId -> command
     readonly received: string[] = [];
+    /** What upload wrote, by hub claimId then path: the bytes the read grant served. */
+    readonly uploaded = new Map<string, Map<string, { body: Buffer; mode?: number }>>();
 
     constructor(private readonly o: FakeCellOptions) {
         this.env = new FakeEnvironmentRuntime(o.scenarios, () => new Date());
@@ -82,6 +84,8 @@ export class FakeCell {
             case 'exec':
             case 'machine.reset':
                 return this.step(msg as Envelope<'probe.run' | 'exec' | 'machine.reset'>);
+            case 'upload':
+                return this.upload(msg as Envelope<'upload'>);
             default:
                 return this.out('nack', { code: 'unsupported', message: msg.type }, { re: msg.id });
         }
@@ -111,6 +115,39 @@ export class FakeCell {
                 this.out('egress.blocked', { host, port: 443, phase: 'test', at: new Date().toISOString() }, { claimId: msg.claimId });
             }
         }
+    }
+
+    /**
+     * upload as the real cell does it (internal/agent/upload.go): every file read from its grant over HTTP, its digest
+     * checked when the frame names one, and nothing written unless all of them were read. A refusal is a step.result
+     * whose exec failed, with a reason that never names the grant.
+     */
+    private async upload(msg: Envelope<'upload'>) {
+        const b = msg.body;
+        const command = JSON.stringify(b.files.map(({ url: _grant, ...f }) => f));
+        const prev = this.seen.get(b.stepId);
+        if (prev !== undefined) return this.out('nack', { code: prev === command ? 'duplicate_step' : 'step_reused', message: b.stepId }, { re: msg.id });
+        this.seen.set(b.stepId, command);
+        if (!this.claims.has(msg.claimId!)) return this.out('nack', { code: 'unknown_claim', message: String(msg.claimId) }, { re: msg.id });
+        const imageId = (this.o.scenarios[Object.keys(this.o.scenarios)[0]] ?? { imageId: 'img' }).imageId;
+        const done = (exitCode: number, stderr: string) =>
+            this.out(
+                'step.result',
+                { stepId: b.stepId, executor: 'vm', imageId, vmHealth: 'ok', exec: { exitCode, stdout: '', stderr, truncated: false, durationMs: 1 } },
+                { re: msg.id, claimId: msg.claimId },
+            );
+        const read = new Map<string, { body: Buffer; mode?: number }>();
+        for (const [i, f] of b.files.entries()) {
+            const res = await fetch(f.url).catch(() => null);
+            if (!res?.ok) return done(1, `files[${i}]: the read grant answered ${res?.status ?? 'nothing'}`);
+            const body = Buffer.from(await res.arrayBuffer());
+            if (f.sha256 && createHash('sha256').update(body).digest('hex') !== f.sha256) return done(1, `files[${i}]: the bytes do not match sha256`);
+            read.set(f.path, { body, ...(f.mode !== undefined ? { mode: f.mode } : {}) });
+        }
+        const mine = this.uploaded.get(msg.claimId!) ?? new Map();
+        for (const [path, file] of read) mine.set(path, file);
+        this.uploaded.set(msg.claimId!, mine);
+        return done(0, '');
     }
 
     private async step(msg: Envelope<'probe.run' | 'exec' | 'machine.reset'>) {
