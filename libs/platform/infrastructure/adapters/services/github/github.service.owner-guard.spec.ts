@@ -55,6 +55,7 @@ function makeOctokit(owners: string[]) {
                 };
                 p.iterator = async function* (_fn: any, args: any) {
                     record(args);
+                    yield* [];
                 };
                 return p;
             }
@@ -96,12 +97,10 @@ async function ownersSentByEveryMethod(auth: {
         const owners: string[] = [];
         const service = new GithubService(
             {
-                getPlatformAuthDetails: jest
-                    .fn()
-                    .mockResolvedValue({
-                        ...auth,
-                        accountType: 'organization',
-                    }),
+                getPlatformAuthDetails: jest.fn().mockResolvedValue({
+                    ...auth,
+                    accountType: 'organization',
+                }),
                 findOne: jest.fn().mockResolvedValue({ uuid: 'i' }),
             } as any,
             {} as any,
@@ -173,6 +172,60 @@ async function ownersSentByEveryMethod(auth: {
     return sent;
 }
 
+// Every method the probe reaches today. Each must keep sending an owner, so a
+// method that stops reaching GitHub here fails instead of silently dropping
+// out of the check; one added later is checked by `wrong` without a listing.
+const PROBED = [
+    'addReactionToComment',
+    'addReactionToPR',
+    'approvePullRequest',
+    'createCommentInPullRequest',
+    'createIssueComment',
+    'createPullRequestWithFiles',
+    'createResponseToComment',
+    'createReviewComment',
+    'diagnoseRepositoryAccess',
+    'dismissOwnReviews',
+    'getAllCommentsInPullRequest',
+    'getChangedFilesSinceLastCommit',
+    'getCommits',
+    'getCommitsForPullRequestForCodeReview',
+    'getDefaultBranch',
+    'getFilesByPullRequestId',
+    'getListOfValidReviews',
+    'getPullRequest',
+    'getPullRequestByNumber',
+    'getPullRequestFilesAtCommit',
+    'getPullRequestReviewComment',
+    'getPullRequestReviewComments',
+    'getPullRequestReviewThreads',
+    'getPullRequests',
+    'getPullRequestsByRepository',
+    'getPullRequestsWithChangesRequested',
+    'getRecentRepositoryComments',
+    'getRepositoryAllFiles',
+    'getRepositoryAllFilesWithContent',
+    'getRepositoryTree',
+    'getRepositoryTreeByDirectory',
+    'getReviewStatusByPullRequest',
+    'isWebhookActive',
+    'mergePullRequest',
+    'removeReactionsFromComment',
+    'removeReactionsFromPR',
+    'requestChangesPullRequest',
+    'updateIssueComment',
+    'updateResponseToComment',
+    'uploadFiles',
+];
+
+const sentToAnotherOwner = (
+    sent: Record<string, string[]>,
+    expected: string,
+): Array<[string, string[]]> =>
+    Object.entries(sent).filter(([, owners]) =>
+        owners.some((owner) => owner !== expected),
+    );
+
 describe('GithubService addresses every repository call by its saved owner', () => {
     it('a token recorded under another account', async () => {
         const sent = await ownersSentByEveryMethod({
@@ -180,24 +233,20 @@ describe('GithubService addresses every repository call by its saved owner', () 
             authMode: 'token',
         });
 
-        // The probe must reach the calls, or it proves nothing.
-        expect(Object.keys(sent).length).toBeGreaterThanOrEqual(40);
-        const wrong = Object.entries(sent).filter(([, owners]) =>
-            owners.some((owner) => owner !== 'kodus-qa'),
-        );
-        expect(wrong).toEqual([]);
+        expect(Object.keys(sent)).toEqual(expect.arrayContaining(PROBED));
+        expect(sentToAnotherOwner(sent, 'kodus-qa')).toEqual([]);
     }, 120000);
 
-    it('an App installation stays on its own account', async () => {
+    it('an App installation stays on its own account, whatever the saved selection holds', async () => {
+        // The saved record names `kodus-qa`; the installation is `acme`. An
+        // App only reaches its own account, so the selection lookup must not
+        // reach it.
         const sent = await ownersSentByEveryMethod({
-            org: 'kodus-qa',
+            org: 'acme',
             authMode: 'oauth',
         });
 
-        expect(Object.keys(sent).length).toBeGreaterThanOrEqual(40);
-        const wrong = Object.entries(sent).filter(([, owners]) =>
-            owners.some((owner) => owner !== 'kodus-qa'),
-        );
-        expect(wrong).toEqual([]);
+        expect(Object.keys(sent)).toEqual(expect.arrayContaining(PROBED));
+        expect(sentToAnotherOwner(sent, 'acme')).toEqual([]);
     }, 120000);
 });

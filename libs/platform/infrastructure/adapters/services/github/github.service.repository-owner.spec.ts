@@ -189,6 +189,27 @@ describe('GithubService addresses a repository by its own owner', () => {
         );
     });
 
+    it('does not hand a repository outside the selection the owner of a same-named one', async () => {
+        // `SomeoneElse/qa2004-empty` is not `Novaorg01/qa2004-empty`: taking
+        // the saved owner by name would comment on another repository.
+        const get = jest.fn().mockResolvedValue({ data: null });
+        const service = makeService({ pulls: { get } });
+
+        await service.getPullRequest({
+            organizationAndTeamData,
+            repository: {
+                id: '7',
+                name: 'qa2004-empty',
+                fullName: 'SomeoneElse/qa2004-empty',
+            },
+            prNumber: 1,
+        });
+
+        expect(get).toHaveBeenLastCalledWith(
+            expect.objectContaining({ owner: 'Wellington01' }),
+        );
+    });
+
     it('does not guess between two saved repositories that share a name', async () => {
         const get = jest.fn().mockResolvedValue({ data: null });
         const service = makeService({ pulls: { get } });

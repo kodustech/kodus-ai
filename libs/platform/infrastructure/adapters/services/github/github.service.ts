@@ -2046,7 +2046,8 @@ export class GithubService
      * and a webhook payload can carry any owner, so the saved selection is
      * the source: the record with the repository's id, then the owner the
      * repository names when it is the recorded account or a connected owner,
-     * then the record with the repository's name when one owner holds it.
+     * then, for a repository that names no owner, the record with its name
+     * when one owner holds it.
      * An App installation has no selection here and keeps its own account.
      */
     private trustedOwnerOf(
@@ -2077,9 +2078,12 @@ export class GithubService
             return owner;
         }
 
+        // The name only stands in for an owner the repository does not name:
+        // `OtherOrg/api` outside the selection must not become the selected
+        // `Novaorg01/api`, a different repository.
         const name = typeof repository === 'string' ? repository : record?.name;
         const bareName = name?.split('/').pop()?.toLowerCase();
-        if (selection && bareName) {
+        if (selection && bareName && !owner) {
             const byName = selection.ownerByName.get(bareName);
             if (byName) {
                 return byName;
