@@ -86,6 +86,8 @@ import {
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { TreeItem } from '@libs/core/infrastructure/config/types/general/tree.type';
+import { classifyGitHubError } from '@libs/core/workflow/domain/errors/classify-github-error';
+import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 import {
     AUTH_INTEGRATION_SERVICE_TOKEN,
     IAuthIntegrationService,
@@ -513,9 +515,24 @@ export class GithubService
                     params.type,
                 );
 
+            if (params.configKey === IntegrationConfigKey.REPOSITORIES) {
+                this.connectedOwnersByTeam.delete(
+                    GithubService.teamKey(params.organizationAndTeamData),
+                );
+            }
+
             if (shouldRefreshTokenWebhooks) {
+                // The config update does not return the saved row
+                // (`integrationConfig.repository.ts` update needs the
+                // integration in its filter), so an append's request holds
+                // only the repositories it adds. An append never removes:
+                // the selection is what was there plus what it adds.
+                const requested = <Repositories[]>(params.configValue ?? []);
                 const nextRepositories = <Repositories[]>(
-                    (updatedConfig?.configValue ?? params.configValue ?? [])
+                    (updatedConfig?.configValue ??
+                        (params.type === 'append'
+                            ? [...previousRepositories, ...requested]
+                            : requested))
                 );
                 const removedRepositories = previousRepositories.filter(
                     (previousRepository) =>
@@ -1933,6 +1950,94 @@ export class GithubService
     }
 
     /**
+     * The owner a repository record names: its full name's owner, then its
+     * organization. Undefined when the record carries none.
+     */
+    static recordedOwnerOf(
+        repository:
+            | {
+                  fullName?: string;
+                  full_name?: string;
+                  organizationName?: string;
+                  name?: string;
+              }
+            | string
+            | null
+            | undefined,
+    ): string | undefined {
+        // `extractRepoData` builds `${organizationName}/${name}`, so a record
+        // without an organization arrives as "undefined/<name>".
+        const ownerFromFullName = (value?: string) => {
+            if (typeof value !== 'string' || !value.includes('/')) {
+                return undefined;
+            }
+            const owner = value.split('/')[0].trim();
+            return owner && owner !== 'undefined' && owner !== 'null'
+                ? owner
+                : undefined;
+        };
+
+        if (typeof repository === 'string') {
+            return ownerFromFullName(repository);
+        }
+
+        return (
+            ownerFromFullName(repository?.fullName) ||
+            ownerFromFullName(repository?.full_name) ||
+            repository?.organizationName ||
+            ownerFromFullName(repository?.name)
+        );
+    }
+
+    /**
+     * Owners of the repositories connected to a token integration, read from
+     * the saved selection when its auth details are loaded. Keyed by the auth
+     * details object, so a copy of it falls back to the recorded account.
+     */
+    private readonly connectedOwners = new WeakMap<object, Set<string>>();
+
+    /**
+     * The same owners per organization and team, so a review step does not
+     * re-read the selection on every GitHub call. Dropped when this instance
+     * saves the selection; another instance sees a change after the TTL.
+     */
+    private readonly connectedOwnersByTeam = new Map<
+        string,
+        { owners: Set<string>; expiresAt: number }
+    >();
+    private static readonly CONNECTED_OWNERS_TTL_MS = 60_000;
+
+    private static teamKey(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): string {
+        return `${organizationAndTeamData?.organizationId}:${organizationAndTeamData?.teamId}`;
+    }
+
+    /**
+     * The account GitHub addresses a repository under. A token integration
+     * records one account as `org` (for a fine-grained token or a personal
+     * account, the user's login), while its repositories can belong to an
+     * organization. The repository's owner is used only when it is the
+     * recorded account or the owner of a connected repository: the owner can
+     * come from a webhook payload, and must not steer the token anywhere the
+     * saved selection does not reach. Anything else gets the recorded account.
+     */
+    private ownerOf(
+        repository: Parameters<typeof GithubService.recordedOwnerOf>[0],
+        githubAuthDetail: { org?: string } | null | undefined,
+    ): string {
+        const org = githubAuthDetail?.org;
+        const owner = GithubService.recordedOwnerOf(repository);
+        if (!owner || owner.toLowerCase() === org?.toLowerCase()) {
+            return owner || org;
+        }
+        const connected = githubAuthDetail
+            ? this.connectedOwners.get(githubAuthDetail)
+            : undefined;
+        return connected?.has(owner.toLowerCase()) ? owner : org;
+    }
+
+    /**
      * Retrieves the authentication details for a specific GitHub Oauth organization.
      *
      * @param {string} organizationId - The ID of the GitHub organization.
@@ -1947,10 +2052,53 @@ export class GithubService
                 PlatformType.GITHUB,
             );
 
-        return {
+        const authDetail = {
             ...githubAuthDetail,
             authMode: githubAuthDetail?.authMode || AuthMode.OAUTH,
         };
+
+        // An App installation only reaches its own account's repositories,
+        // so only a token can need another owner.
+        if (authDetail.authMode === AuthMode.TOKEN) {
+            this.connectedOwners.set(
+                authDetail,
+                await this.readConnectedOwners(organizationAndTeamData),
+            );
+        }
+
+        return authDetail;
+    }
+
+    /**
+     * A failed read throws: an unreadable selection is not an empty one, and
+     * resolving it as empty would quietly send every call to the recorded
+     * account.
+     */
+    private async readConnectedOwners(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<Set<string>> {
+        const key = GithubService.teamKey(organizationAndTeamData);
+        const cached = this.connectedOwnersByTeam.get(key);
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.owners;
+        }
+
+        const repositories =
+            await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                organizationAndTeamData,
+                IntegrationConfigKey.REPOSITORIES,
+            );
+        const owners = new Set(
+            (Array.isArray(repositories) ? repositories : [])
+                .map((repository) => GithubService.recordedOwnerOf(repository))
+                .filter(Boolean)
+                .map((owner) => owner.toLowerCase()),
+        );
+        this.connectedOwnersByTeam.set(key, {
+            owners,
+            expiresAt: Date.now() + GithubService.CONNECTED_OWNERS_TTL_MS,
+        });
+        return owners;
     }
 
     /**
@@ -2457,7 +2605,7 @@ export class GithubService
             const repoPromises = allRepositories.map(async (repo) => {
                 try {
                     const { data } = await octokit.rest.pulls.list({
-                        owner: githubAuthDetail?.org,
+                        owner: this.ownerOf(repo, githubAuthDetail),
                         repo: repo.name,
                         state: 'all',
                         since: since.toISOString(),
@@ -4191,21 +4339,42 @@ export class GithubService
                 return null;
             }
 
-            const formatRepo = extractRepoNames(repositories);
-
             const octokit = await this.instanceOctokit(organizationAndTeamData);
 
             const { startDate, endDate } = filters || {};
 
-            const promises = formatRepo.map(async (repo) => {
-                return await this.getAllPrMessages(
-                    octokit,
-                    githubAuthDetail?.org,
-                    repo,
-                    startDate,
-                    endDate,
-                );
-            });
+            // One request per repository record, under its own owner: two
+            // repositories can share a name across owners. A few at a time,
+            // and a failing repository costs only its own pull requests.
+            const limit = pLimit(5);
+            const promises = repositories.map((repository) =>
+                limit(async () => {
+                    const [repo] = extractRepoNames([repository]);
+                    try {
+                        return await this.getAllPrMessages(
+                            octokit,
+                            this.ownerOf(repository, githubAuthDetail),
+                            repo,
+                            startDate,
+                            endDate,
+                        );
+                    } catch (error) {
+                        // A rate limit is retryable: let it fail the listing
+                        // instead of reporting the repository as empty.
+                        const classified = classifyGitHubError(error);
+                        if (isRateLimitError(classified)) {
+                            throw classified;
+                        }
+                        this.logger.warn({
+                            message: `Could not list the pull requests of ${repo}`,
+                            context: GithubService.name,
+                            error,
+                            metadata: { organizationAndTeamData, repo },
+                        });
+                        return [];
+                    }
+                }),
+            );
 
             const results = await Promise.all(promises);
 
@@ -4218,6 +4387,9 @@ export class GithubService
                 }) || null
             );
         } catch (err) {
+            if (isRateLimitError(err)) {
+                throw err;
+            }
             throw new BadRequestException(err);
         }
     }
@@ -4359,7 +4531,10 @@ export class GithubService
                 const pullRequests =
                     (
                         await octokit.pulls.list({
-                            owner: githubAuthDetail.org,
+                            owner: this.ownerOf(
+                                respositoryData,
+                                githubAuthDetail,
+                            ),
                             repo,
                             state: 'all',
                             sort: 'created',
@@ -4375,7 +4550,10 @@ export class GithubService
                             ? []
                             : await this.getPullRequestFiles(
                                   octokit,
-                                  githubAuthDetail.org,
+                                  this.ownerOf(
+                                      respositoryData,
+                                      githubAuthDetail,
+                                  ),
                                   repo,
                                   pullRequest?.number,
                               );
@@ -4402,7 +4580,7 @@ export class GithubService
             // Legacy path: full pagination for all configured repos
             const pullRequests = await this.getAllPrMessages(
                 octokit,
-                githubAuthDetail.org,
+                this.ownerOf(respositoryData, githubAuthDetail),
                 repo,
                 startDate,
                 endDate,
@@ -4413,7 +4591,7 @@ export class GithubService
                 pullRequests.map(async (pullRequest) => {
                     const files = await this.getPullRequestFiles(
                         octokit,
-                        githubAuthDetail.org,
+                        this.ownerOf(respositoryData, githubAuthDetail),
                         repo,
                         pullRequest?.number,
                     );
@@ -4479,7 +4657,7 @@ export class GithubService
 
         // 2. Get all commits in the PR and find the most recent one (head)
         const commits = await octokit.paginate(octokit.pulls.listCommits, {
-            owner: githubAuthDetail?.org,
+            owner: this.ownerOf(repository, githubAuthDetail),
             repo: repository?.name,
             pull_number: prNumber,
         });
@@ -4500,7 +4678,7 @@ export class GithubService
         // This returns the diff between the last reviewed commit and the latest commit
         const { data: comparison } =
             await octokit.repos.compareCommitsWithBasehead({
-                owner: githubAuthDetail?.org,
+                owner: this.ownerOf(repository, githubAuthDetail),
                 repo: repository.name,
                 basehead: `${baseSha}...${headSha}`,
             });
@@ -4528,7 +4706,7 @@ export class GithubService
         // 4. Get the PR files list to filter out files that came from merge commits
         // pulls.listFiles only returns files that belong to the PR (relative to base branch)
         const prFiles = await octokit.paginate(octokit.pulls.listFiles, {
-            owner: githubAuthDetail?.org,
+            owner: this.ownerOf(repository, githubAuthDetail),
             repo: repository.name,
             pull_number: prNumber,
         });
@@ -4583,7 +4761,7 @@ export class GithubService
 
             // Three dots: from the merge base, so only the PR's own changes.
             const { data } = await octokit.repos.compareCommitsWithBasehead({
-                owner: githubAuthDetail?.org,
+                owner: this.ownerOf(repository, githubAuthDetail),
                 repo: repository?.name,
                 basehead: `${baseBranch}...${headSha}`,
             });
@@ -4645,18 +4823,19 @@ export class GithubService
             return null;
         }
 
-        const formatRepo = extractRepoNames(repositories);
-
         const octokit = await this.instanceOctokit(
             params?.organizationAndTeamData,
         );
 
         const pullRequestCodeReviewTime: PullRequestCodeReviewTime[] = [];
 
-        for (const repo of formatRepo) {
+        // One request per repository record, under its own owner: two
+        // repositories can share a name across owners.
+        for (const repository of repositories) {
+            const [repo] = extractRepoNames([repository]);
             const pullRequests = await this.getAllPrMessages(
                 octokit,
-                githubAuthDetail.org,
+                this.ownerOf(repository, githubAuthDetail),
                 repo,
                 startDate,
                 endDate,
@@ -4685,7 +4864,7 @@ export class GithubService
         const octokit = await this.instanceOctokit(organizationAndTeamData);
 
         const pullRequest = (await octokit.rest.pulls.get({
-            owner: githubAuthDetail?.org,
+            owner: this.ownerOf(repository, githubAuthDetail),
             repo: repository?.name,
             pull_number: prNumber,
         })) as any;
@@ -4728,7 +4907,7 @@ export class GithubService
 
         const octokit = await this.instanceOctokit(organizationAndTeamData);
         const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
-            owner: githubAuthDetail?.org,
+            owner: this.ownerOf(repository, githubAuthDetail),
             repo: repository?.name,
             pull_number: prNumber,
         });
@@ -4898,7 +5077,7 @@ This is an experimental feature that generates committable changes. Review the d
 
         try {
             const comment = await octokit.pulls.createReviewComment({
-                owner: githubAuthDetail?.org,
+                owner: this.ownerOf(repository, githubAuthDetail),
                 repo: repository.name,
                 pull_number: prNumber,
                 body: bodyFormatted,
@@ -4919,7 +5098,7 @@ This is an experimental feature that generates committable changes. Review the d
             if (githubAuthDetail?.authMode !== 'token') {
                 await this.addThumbsReactions({
                     octokit,
-                    owner: githubAuthDetail?.org,
+                    owner: this.ownerOf(repository, githubAuthDetail),
                     repo: repository.name,
                     comment_id: comment.data.id,
                     prNumber,
@@ -4982,7 +5161,7 @@ This is an experimental feature that generates committable changes. Review the d
 
         try {
             const reviewComments = await octokit.pulls.listReviewComments({
-                owner: githubAuthDetail?.org,
+                owner: this.ownerOf(repository, githubAuthDetail),
                 repo: repository.name,
                 pull_number: prNumber,
                 per_page: 100,
@@ -5055,7 +5234,7 @@ This is an experimental feature that generates committable changes. Review the d
         `;
 
         const variables = {
-            owner: githubAuthDetail?.org,
+            owner: this.ownerOf(repository, githubAuthDetail),
             name: repository.name,
             number: prNumber,
             cursor: null, // Start with no cursor
@@ -5142,7 +5321,7 @@ This is an experimental feature that generates committable changes. Review the d
         `;
 
         const variables = {
-            owner: githubAuthDetail?.org,
+            owner: this.ownerOf(repository, githubAuthDetail),
             name: repository.name,
         };
 
@@ -5237,7 +5416,7 @@ This is an experimental feature that generates committable changes. Review the d
             );
 
             await octokit.rest.reactions.createForIssue({
-                owner: githubAuthDetail.org,
+                owner: this.ownerOf(params.repository, githubAuthDetail),
                 repo: params.repository.name,
                 issue_number: params.prNumber,
                 content: params.reaction as GitHubReaction,
@@ -5283,7 +5462,7 @@ This is an experimental feature that generates committable changes. Review the d
 
             try {
                 await octokit.rest.reactions.createForIssueComment({
-                    owner: githubAuthDetail.org,
+                    owner: this.ownerOf(params.repository, githubAuthDetail),
                     repo: params.repository.name,
                     comment_id: params.commentId,
                     content: params.reaction as GitHubReaction,
@@ -5297,7 +5476,10 @@ This is an experimental feature that generates committable changes. Review the d
                 if (issueCommentError.status === 404) {
                     await octokit.rest.reactions.createForPullRequestReviewComment(
                         {
-                            owner: githubAuthDetail.org,
+                            owner: this.ownerOf(
+                                params.repository,
+                                githubAuthDetail,
+                            ),
                             repo: params.repository.name,
                             comment_id: params.commentId,
                             content: params.reaction as GitHubReaction,
@@ -5348,7 +5530,7 @@ This is an experimental feature that generates committable changes. Review the d
 
             const existingReactions = await octokit.rest.reactions.listForIssue(
                 {
-                    owner: githubAuthDetail.org,
+                    owner: this.ownerOf(params.repository, githubAuthDetail),
                     repo: params.repository.name,
                     issue_number: params.prNumber,
                 },
@@ -5361,7 +5543,10 @@ This is an experimental feature that generates committable changes. Review the d
             await Promise.all(
                 reactionsToRemove.map((reaction) =>
                     octokit.rest.reactions.deleteForIssue({
-                        owner: githubAuthDetail.org,
+                        owner: this.ownerOf(
+                            params.repository,
+                            githubAuthDetail,
+                        ),
                         repo: params.repository.name,
                         issue_number: params.prNumber,
                         reaction_id: reaction.id,
@@ -5414,7 +5599,10 @@ This is an experimental feature that generates committable changes. Review the d
             try {
                 existingReactions =
                     await octokit.rest.reactions.listForIssueComment({
-                        owner: githubAuthDetail.org,
+                        owner: this.ownerOf(
+                            params.repository,
+                            githubAuthDetail,
+                        ),
                         repo: params.repository.name,
                         comment_id: params.commentId,
                     });
@@ -5423,7 +5611,10 @@ This is an experimental feature that generates committable changes. Review the d
                     existingReactions =
                         await octokit.rest.reactions.listForPullRequestReviewComment(
                             {
-                                owner: githubAuthDetail.org,
+                                owner: this.ownerOf(
+                                    params.repository,
+                                    githubAuthDetail,
+                                ),
                                 repo: params.repository.name,
                                 comment_id: params.commentId,
                             },
@@ -5444,7 +5635,10 @@ This is an experimental feature that generates committable changes. Review the d
                         octokit.request(
                             'DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions/{reaction_id}',
                             {
-                                owner: githubAuthDetail.org,
+                                owner: this.ownerOf(
+                                    params.repository,
+                                    githubAuthDetail,
+                                ),
                                 repo: params.repository.name,
                                 comment_id: params.commentId,
                                 reaction_id: reaction.id,
@@ -5456,7 +5650,10 @@ This is an experimental feature that generates committable changes. Review the d
                 await Promise.all(
                     reactionsToRemove.map((reaction) =>
                         octokit.rest.reactions.deleteForIssueComment({
-                            owner: githubAuthDetail.org,
+                            owner: this.ownerOf(
+                                params.repository,
+                                githubAuthDetail,
+                            ),
                             repo: params.repository.name,
                             comment_id: params.commentId,
                             reaction_id: reaction.id,
@@ -5492,7 +5689,7 @@ This is an experimental feature that generates committable changes. Review the d
         const octokit = await this.instanceOctokit(organizationAndTeamData);
 
         const response = await octokit.rest.pulls.update({
-            owner: githubAuthDetail.org,
+            owner: this.ownerOf(repository, githubAuthDetail),
             repo: repository.name,
             pull_number: prNumber,
             body: fitPRDescription(summary, PlatformType.GITHUB),
@@ -5516,7 +5713,7 @@ This is an experimental feature that generates committable changes. Review the d
         const octokit = await this.instanceOctokit(organizationAndTeamData);
 
         const response = (await octokit.rest.pulls.createReview({
-            owner: githubAuthDetail?.org,
+            owner: this.ownerOf(repository, githubAuthDetail),
             repo: repository?.name,
             pull_number: prNumber,
             body: overallComment,
@@ -5599,7 +5796,7 @@ This is an experimental feature that generates committable changes. Review the d
             try {
                 // First, try to fetch from the head branch of the PR
                 const lines = (await octokit.repos.getContent({
-                    owner: githubAuthDetail?.org,
+                    owner: this.ownerOf(repository, githubAuthDetail),
                     repo: repository.name,
                     path: file.filename,
                     ref: pullRequest.head.ref,
@@ -5662,7 +5859,7 @@ This is an experimental feature that generates committable changes. Review the d
 
                 // If it fails, try to fetch from the base branch
                 const lines = (await octokit.repos.getContent({
-                    owner: githubAuthDetail?.org,
+                    owner: this.ownerOf(repository, githubAuthDetail),
                     repo: repository.name,
                     path: file.filename,
                     ref: pullRequest.base.ref,
@@ -5766,7 +5963,7 @@ This is an experimental feature that generates committable changes. Review the d
                 const varDefs = ['$owner: String!', '$repo: String!'];
                 const fields: string[] = [];
                 const variables: Record<string, any> = {
-                    owner: githubAuthDetail.org,
+                    owner: this.ownerOf(repository, githubAuthDetail),
                     repo: repository.name,
                 };
 
@@ -5965,7 +6162,7 @@ This is an experimental feature that generates committable changes. Review the d
         const octokit = await this.instanceOctokit(organizationAndTeamData);
 
         const commits = await octokit.paginate(octokit.pulls.listCommits, {
-            owner: githubAuthDetail?.org,
+            owner: this.ownerOf(repository, githubAuthDetail),
             repo: repository?.name,
             sort: 'created',
             direction: 'asc',
@@ -6019,7 +6216,7 @@ This is an experimental feature that generates committable changes. Review the d
             const repoName = extractRepoName(repository.name);
 
             const response = await octokit.issues.createComment({
-                owner: githubAuthDetail?.org,
+                owner: this.ownerOf(repository, githubAuthDetail),
                 repo: repoName,
                 issue_number: prNumber,
                 body,
@@ -6231,7 +6428,7 @@ This is an experimental feature that generates committable changes. Review the d
         const octokit = await this.instanceOctokit(organizationAndTeamData);
 
         const response = await octokit.repos.get({
-            owner: githubAuthDetail?.org,
+            owner: this.ownerOf(repository, githubAuthDetail),
             repo: repository?.name,
         });
 
@@ -6258,7 +6455,7 @@ This is an experimental feature that generates committable changes. Review the d
         const comments = await octokit.paginate(
             octokit.pulls.listReviewComments,
             {
-                owner: githubAuthDetail?.org,
+                owner: this.ownerOf(filters?.repository, githubAuthDetail),
                 repo: filters?.repository?.name ?? filters?.repository,
                 pull_number: filters?.pullRequestNumber,
                 per_page: 200,
@@ -6284,7 +6481,7 @@ This is an experimental feature that generates committable changes. Review the d
         const octokit = await this.instanceOctokit(organizationAndTeamData);
 
         const response = await octokit.pulls.createReplyForReviewComment({
-            owner: githubAuthDetail?.org,
+            owner: this.ownerOf(repository, githubAuthDetail),
             repo: repository?.name,
             pull_number: prNumber,
             comment_id: inReplyToId,
@@ -6355,7 +6552,7 @@ This is an experimental feature that generates committable changes. Review the d
             const octokit = await this.instanceOctokit(organizationAndTeamData);
 
             const response = await octokit.pulls.get({
-                owner: githubAuthDetail.org, // Name of the organization or user
+                owner: this.ownerOf(repository, githubAuthDetail), // Name of the organization or user
                 repo: repository.name, // Repository name
                 pull_number: prNumber, // Pull Request ID
             });
@@ -6495,8 +6692,7 @@ This is an experimental feature that generates committable changes. Review the d
             // The hook lives under the REPO's namespace, not the integration
             // account's: a personal token's own login 404s on every
             // repository the account only collaborates on.
-            const recorded =
-                repo.full_name?.split('/')[0] || repo.organizationName;
+            const recorded = GithubService.recordedOwnerOf(repo);
             if (recorded) {
                 return recorded;
             }
@@ -6987,7 +7183,7 @@ This is an experimental feature that generates committable changes. Review the d
             const octokit = await this.instanceOctokit(organizationAndTeamData);
 
             await octokit.rest.pulls.merge({
-                owner: githubAuthDetail.org,
+                owner: this.ownerOf(repository, githubAuthDetail),
                 repo: repository.name,
                 pull_number: prNumber,
             });
@@ -7054,7 +7250,7 @@ This is an experimental feature that generates committable changes. Review the d
         const allReviews = await octokit.paginate(
             octokit.rest.pulls.listReviews,
             {
-                owner: githubAuth.org,
+                owner: this.ownerOf(repository, githubAuth),
                 repo: repository.name,
                 pull_number: prNumber,
                 per_page: 100,
@@ -7210,7 +7406,7 @@ This is an experimental feature that generates committable changes. Review the d
             githubAuth,
         );
         const reviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
-            owner: githubAuth.org,
+            owner: this.ownerOf(repository, githubAuth),
             repo: repository.name,
             pull_number: prNumber,
             per_page: 100,
@@ -7227,7 +7423,7 @@ This is an experimental feature that generates committable changes. Review the d
             try {
                 await runWithBoundedTimeout(
                     octokit.rest.pulls.dismissReview({
-                        owner: githubAuth.org,
+                        owner: this.ownerOf(repository, githubAuth),
                         repo: repository.name,
                         pull_number: prNumber,
                         review_id: reviewId,
@@ -7329,7 +7525,7 @@ This is an experimental feature that generates committable changes. Review the d
             const octokit = await this.instanceOctokit(organizationAndTeamData);
 
             await octokit.rest.pulls.createReview({
-                owner: githubAuthDetail.org,
+                owner: this.ownerOf(repository, githubAuthDetail),
                 repo: repository.name,
                 pull_number: prNumber,
                 event: 'APPROVE',
@@ -7441,7 +7637,7 @@ This is an experimental feature that generates committable changes. Review the d
 
             const listOfCriticalIssues = this.getListOfCriticalIssues({
                 criticalComments,
-                orgName: githubAuthDetail.org,
+                orgName: this.ownerOf(repository, githubAuthDetail),
                 repository,
                 prNumber,
                 githubHost: githubAuthDetail.host,
@@ -7455,7 +7651,7 @@ This is an experimental feature that generates committable changes. Review the d
             );
 
             await octokit.rest.pulls.createReview({
-                owner: githubAuthDetail.org,
+                owner: this.ownerOf(repository, githubAuthDetail),
                 repo: repository.name,
                 pull_number: prNumber,
                 event: 'REQUEST_CHANGES',
@@ -7556,7 +7752,7 @@ This is an experimental feature that generates committable changes. Review the d
             const comments = await octokit.paginate(
                 octokit.issues.listComments,
                 {
-                    owner: githubAuthDetail.org,
+                    owner: this.ownerOf(repository, githubAuthDetail),
                     repo: repository.name,
                     issue_number: prNumber,
                 },
@@ -7867,7 +8063,7 @@ This is an experimental feature that generates committable changes. Review the d
             const pullRequests = await octokit.paginate(
                 octokit.pulls.list,
                 {
-                    owner: githubAuthDetail.org,
+                    owner: this.ownerOf(repository, githubAuthDetail),
                     repo: repository.name,
                     state: 'all',
                     sort:
@@ -8018,7 +8214,7 @@ This is an experimental feature that generates committable changes. Review the d
             };
 
             const listParams = {
-                owner: githubAuthDetail.org,
+                owner: this.ownerOf(repository, githubAuthDetail),
                 repo: repository.name,
                 sort: 'created' as const,
                 direction: 'desc' as const,
@@ -8120,7 +8316,7 @@ This is an experimental feature that generates committable changes. Review the d
         `;
 
         const variables = {
-            owner: githubAuthDetail?.org,
+            owner: this.ownerOf(repository, githubAuthDetail),
             name: repository.name,
             number: prNumber,
         };
