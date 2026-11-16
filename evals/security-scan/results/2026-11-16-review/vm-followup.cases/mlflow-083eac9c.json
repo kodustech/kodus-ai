@@ -1,0 +1,353 @@
+{
+  "kind": "completed-case-from-remote-checkpoint",
+  "note": "One completed engine case, not an aggregate benchmark or passing gate; no aggregate tokens attributed to this case.",
+  "capturedAt": "2026-11-16T18:48:58.820382+00:00",
+  "provenance": {
+    "measuredAt": "2026-11-16T17:29:07.006Z",
+    "engineCommit": "e5223d6a0664a663adb9a6d241cee0b2034c2003",
+    "dirty": false,
+    "datasets": {
+      "vulngym-cases.json": "782e60de00d6de9f4d6518a87e5a45b8284c67da3dde447fe6c717de347e774e",
+      "clean-controls.json": "9c2d8f82db429e1fe75b7e0f3234abc10fbbdd57cb06365cd9b4d6bb13b549bc"
+    },
+    "scoringVersion": 4
+  },
+  "scoring": {
+    "version": 4,
+    "matcherSha256": "d6bc9cabca5ae11af8178baf6673e2aa41fbb4b1dd8c812f20c0a655061094c0",
+    "adjudicationsSha256": "67dc6365d1ae8f564986f4e8f7696237da3574ec609e054644603205fe2e429d"
+  },
+  "model": "deepseek-v4-flash@fireworks",
+  "budgetUsd": 3,
+  "sourceCase": {
+    "id": "mlflow-083eac9c",
+    "repo": "mlflow/mlflow",
+    "commit": "083eac9cd0be4a8934fac7010f9248c7888c6da4",
+    "language": "python"
+  },
+  "cases": [
+    {
+      "id": "mlflow-083eac9c",
+      "language": "python",
+      "runtime": {
+        "provider": "openai_compatible",
+        "servedModel": "accounts/fireworks/models/deepseek-v4p1-flash"
+      },
+      "checks": "Of 1 published vulnerability in mlflow/mlflow@083eac9c, how many does a scan capped at $3 report?",
+      "hits": 1,
+      "total": 1,
+      "detail": [
+        {
+          "what": "GHSA-7QHF-V65M-G5F3 (authz) MLflow FastAPI Jobs\u7aef\u70b9\u5b8c\u5168\u7ed5\u8fc7\u8ba4\u8bc1\u9274\u6743\uff08CWE-306\uff09 - __init__.py",
+          "ok": true,
+          "vulnerabilityClass": "authz",
+          "examined": true,
+          "classPlanned": true,
+          "planRank": 0
+        }
+      ],
+      "precision": {
+        "listed": 1,
+        "judgedReal": 0,
+        "judgedFalse": 0,
+        "unjudged": 16
+      },
+      "rawFindings": 18,
+      "findings": [
+        {
+          "key": "mlflow-083eac9c|authz|mlflow/server/auth/__init__.py|fastapi_permission_middleware|2957",
+          "matched": true,
+          "verdict": null,
+          "class": "authz",
+          "severity": "critical",
+          "file": "mlflow/server/auth/__init__.py",
+          "lines": [
+            2957,
+            2960
+          ],
+          "symbol": "fastapi_permission_middleware",
+          "title": "Unauthenticated callers bypass auth on FastAPI routes to read, submit, and cancel jobs",
+          "description": "Entry: mlflow/server/auth/__init__.py:2949 (fastapi_permission_middleware). Attacker: an unauthenticated network caller crossing the login boundary, reaching routes that require a valid MLflow account. Path: the request hits the FastAPI app built by create_fastapi_app (mlflow/server/fastapi_app.py:61), which includes job_api_router (/ajax-api/3.0/jobs, mlflow/server/job_api.py:15) and otel_router before mounting Flask at \"/\"; the middleware runs _find_fastapi_validator(path) (line 2910), which returns a validator only when path.startswith(\"/gateway/\"), and for every other FastAPI-native route validator is None, so line 2959 returns `await call_next(request)` without calling _authenticate_request (line 2973) and without checking any Authorization header. Flask's _before_request (line 1746), which authenticates every non-static route, is never invoked because these routers are matched before the WSGI mount. Nothing on the path stops it: job_api.py imports no auth dependency and its endpoints (get_job, submit_job, cancel_job, search_jobs) return job_name, params (including experiment ids and job arguments), result and status; the OTLP export endpoint likewise has no dependency. Impact: an anonymous caller can enumerate and read all server jobs, submit new jobs on the server's job executor, cancel running jobs, and write traces through the OTLP endpoint, with none of the basic-auth or workspace/permission checks that protect the equivalent REST routes. Fix: authenticate and default-deny before the validator lookup (call _authenticate_request first, return 401 when the user is None), or give every FastAPI-native route an explicit validator so that an unmatched path is rejected rather than passed through."
+        },
+        {
+          "key": "mlflow-083eac9c|authz|mlflow/server/auth/__init__.py|validate_gateway_proxy|1414",
+          "matched": false,
+          "verdict": null,
+          "class": "authz",
+          "severity": "high",
+          "file": "mlflow/server/auth/__init__.py",
+          "lines": [
+            1414,
+            1419
+          ],
+          "symbol": "validate_gateway_proxy",
+          "title": "Authenticated user can invoke scorers and gateway endpoints without permission",
+          "description": "Entry: mlflow/server/auth/__init__.py:1595 (\"(INVOKE_SCORER, POST): validate_gateway_proxy\"; the same validator is bound to GATEWAY_PROXY at 1593-1594). Attacker: an authenticated MLflow user who has no permission on the target experiment or gateway endpoint, crossing the per-experiment/per-endpoint authorization boundary. Path: POST /ajax-api/3.0/mlflow/scorer/invoke with body {\"experiment_id\": ..., \"serialized_scorer\": ..., \"trace_ids\": [...]} reaches _before_request (line 1746), which finds validate_gateway_proxy in BEFORE_REQUEST_VALIDATORS and calls it; validate_gateway_proxy returns True unconditionally (line 1419), so no permission lookup happens. The handler _invoke_scorer_handler (mlflow/server/handlers.py:5110) then takes experiment_id, serialized_scorer and trace_ids straight from the request body, calls get_trace_batches_for_scorer to fetch the traces, and submits scorer jobs, with no experiment, scorer or workspace permission check anywhere in the handler. Nothing on the path stops it: every sibling scorer route (RegisterScorer, GetScorer, DeleteScorer, the scorer permission routes) is bound to validate_can_update_experiment / validate_can_read_scorer / validate_can_manage_scorer_permission, so this is the one scorer operation with no guard; the same always-true validator also removes the per-endpoint USE check (_validate_gateway_use_permission) that the FastAPI /gateway routes enforce, letting any authenticated user invoke arbitrary gateway endpoints through the Flask proxy. Impact: a user with no rights on an experiment can read its traces through scorer evaluation, write assessments into it, and consume server/LLM compute; the same applies to invoking gateway endpoints they were not granted USE on. Fix: bind INVOKE_SCORER to a validator that resolves the experiment_id from the body and requires at least read/update (or scorer manage) permission on that experiment, and bind GATEWAY_PROXY to a validator that resolves the endpoint name and requires USE permission instead of returning True."
+        },
+        {
+          "key": "mlflow-083eac9c|data_exposure|mlflow/server/auth/__init__.py||2680",
+          "matched": false,
+          "verdict": null,
+          "class": "data_exposure",
+          "severity": "high",
+          "file": "mlflow/server/auth/__init__.py",
+          "lines": [
+            2680,
+            2687
+          ],
+          "title": "Authenticated user can enumerate all model versions via GraphQL",
+          "description": "Entry: mlflow/server/handlers.py:3331 (the /graphql route, registered at handlers.py:5237). Attacker: any authenticated non-admin user (e.g. a user with no grant on a registered model, or a user in another workspace), crossing the per-object authorization boundary enforced by the basic-auth permission system. Path: the caller POSTs {\"query\": \"{ mlflowSearchModelVersions(input: {}) { model_versions { name version source run_id } } }\"} to /graphql; handlers._graphql parses it and executes the schema with GraphQLAuthorizationMiddleware. In resolve() (auth/__init__.py:2702-2705) field_name is \"mlflowSearchModelVersions\", which is not in PROTECTED_FIELDS, so next(root, info, **args) is invoked without any permission check, and QueryType.resolve_mlflow_search_model_versions (mlflow/server/graphql/autogenerated_graphql_schema.py:332-336) calls mlflow.server.handlers.search_model_versions_impl directly. Nothing on the path stops it: the only other gate for /graphql is authentication in _before_request (auth/__init__.py:1750-1767), and _find_validator returns None because /graphql is not in BEFORE_REQUEST_VALIDATORS, so the per-field middleware is the sole authorization layer; search_model_versions_impl performs no permission filtering and there is no after-request filtering for GraphQL. Impact: any logged-in user can enumerate every registered model version in every workspace (names, versions, source URIs, run ids, tags, descriptions) even when the deployment relies on default_permission=NO_PERMISSIONS or workspace isolation. Fix: add \"mlflowSearchModelVersions\" to PROTECTED_FIELDS and, for that field, resolve each returned model version's registered model and enforce read permission (returning only readable ones), also covering the nested MlflowRunExtension.resolve_model_versions field."
+        },
+        {
+          "key": "mlflow-083eac9c|secret_identity|mlflow/server/auth/basic_auth.ini||4",
+          "matched": false,
+          "verdict": null,
+          "class": "secret_identity",
+          "severity": "critical",
+          "file": "mlflow/server/auth/basic_auth.ini",
+          "lines": [
+            4,
+            5
+          ],
+          "title": "Shipped default admin password (admin/password1234) grants full admin access",
+          "description": "Entry: mlflow/server/auth/basic_auth.ini:5 (loaded by mlflow/server/auth/config.py:23 when MLFLOW_AUTH_CONFIG_PATH is unset, seeded by mlflow/server/auth/__init__.py:3046).\nAttacker: an unauthenticated network caller who has read the public repository, crossing the login and administrator boundary.\nThe path: read_auth_config() falls back to this committed file, create_app() calls create_admin_user(auth_config.admin_username, auth_config.admin_password), which calls store.create_user(username, password, is_admin=True), so the account admin/password1234 is created on first startup.\nNothing on the path stops it: the fallback to the in-repo file is unconditional, the code never requires the operator to override the password or detects the placeholder, and the value is committed to the repository so it is public.\nImpact: every deployment started with `mlflow server --app-name basic-auth` that does not point MLFLOW_AUTH_CONFIG_PATH at its own config has a fully privileged administrator account whose password anyone can look up; the attacker can log in, create users, grant themselves permissions on all experiments and models, read all data, and change the admin password.\nFix: do not ship a default password; require admin_password (or the admin user itself) to be supplied via configuration/environment and fail startup if it is missing or still the placeholder, or generate a random one-time password at first startup and force a change."
+        },
+        {
+          "key": "mlflow-083eac9c|injection|mlflow/server/handlers.py|gateway_proxy_handler|2038",
+          "matched": false,
+          "verdict": null,
+          "class": "injection",
+          "severity": "medium",
+          "file": "mlflow/server/handlers.py",
+          "lines": [
+            2038,
+            2040
+          ],
+          "symbol": "gateway_proxy_handler",
+          "title": "HEAD requests bypass gateway path allow-list and proxy arbitrary paths",
+          "description": "Entry: mlflow/server/__init__.py:143 registers /ajax-api/2.0/mlflow/gateway-proxy with methods=[\"POST\", \"GET\"] and dispatches to gateway_proxy_handler (mlflow/server/handlers.py:2030). Attacker: any client that can reach the tracking server (the basic-auth plugin exempts this route from all permission checks via validate_gateway_proxy at mlflow/server/auth/__init__.py:1414-1419), crossing the gateway-path allow-list that is supposed to limit which paths the server proxies to MLFLOW_DEPLOYMENTS_TARGET. Path: because the route allows GET, Werkzeug automatically adds HEAD, and Flask dispatches HEAD to the same view with request.method == \"HEAD\". Line 2036 therefore takes args = request.json (method is not \"GET\"), letting the caller supply gateway_path and json_data in the body. _validate_gateway_path (handlers.py:2008-2026) has branches only for method == \"GET\" (exact match \"api/2.0/endpoints\") and method == \"POST\" (regex gateway/[^/]+/invocations); for method == \"HEAD\" only the non-empty check runs, so any gateway_path value passes. Line 2040 then executes requests.request(\"HEAD\", f\"{target_uri}/{gateway_path}\", json=json_data) against the deployments service at an attacker-chosen path with an attacker-chosen JSON body. Nothing on the path stops this: the route has no auth guard, and the only input restriction is keyed on the request-method string, which the HEAD alias evades. The target host is fixed by operator configuration, so this is not arbitrary-host SSRF, but it defeats the code's own path allow-list and turns the tracking server into a blind request proxy/oracle against the deployments service (the non-200 status is echoed in the raised MlflowException message; a 200 response makes response.json() fail on the empty HEAD body). Fix: in _validate_gateway_path, explicitly reject any method other than GET and POST (add an else/elif branch raising INVALID_PARAMETER_VALUE), or check request.method against an explicit allow-list in gateway_proxy_handler before building the URL."
+        },
+        {
+          "key": "mlflow-083eac9c|authz|mlflow/server/handlers.py|get_trace_artifact_handler|3805",
+          "matched": false,
+          "verdict": null,
+          "class": "authz",
+          "severity": "high",
+          "file": "mlflow/server/handlers.py",
+          "lines": [
+            3805,
+            3809
+          ],
+          "symbol": "get_trace_artifact_handler",
+          "title": "Authenticated user can read any experiment's trace artifact via 3.0 endpoint",
+          "description": "Entry: mlflow/server/__init__.py:157 (@app.route(_add_static_prefix(\"/ajax-api/3.0/mlflow/get-trace-artifact\"))). Attacker: an authenticated user with no permission on the target experiment/workspace, crossing the per-experiment authorization boundary. The request hits get_trace_artifact_handler with an arbitrary request_id; the handler fetches the trace (or its artifact repo) and streams the trace data without any permission lookup. The authorization layer only maps the 2.0 path: mlflow/server/auth/routes.py:32 defines GET_TRACE_ARTIFACT with _get_ajax_path's default version=2, so BEFORE_REQUEST_VALIDATORS contains only (\"/ajax-api/2.0/mlflow/get-trace-artifact\", \"GET\") (mlflow/server/auth/__init__.py:1588). _find_validator does an exact dict lookup, the path is not a /mlflow/logged-models path, and _is_proxy_artifact_path is false, so no validator runs for the 3.0 route; only basic authentication is enforced. The frontend itself calls this 3.0 endpoint (mlflow/server/js/src/experiment-tracking/pages/experiment-scorers/useEvaluateTraces.common.ts:11), so it is reachable in practice, and any authenticated low-privilege user can read traces of any experiment by guessing request_id. Fix: register the 3.0 path in BEFORE_REQUEST_VALIDATORS with validate_can_read_trace_artifact (or make _find_validator match version-agnostic routes), and add a defense-in-depth permission check inside get_trace_artifact_handler."
+        },
+        {
+          "key": "mlflow-083eac9c|authz|mlflow/server/handlers.py|get_logged_model_artifact_handler|4101",
+          "matched": false,
+          "verdict": null,
+          "class": "authz",
+          "severity": "high",
+          "file": "mlflow/server/handlers.py",
+          "lines": [
+            4101,
+            4113
+          ],
+          "symbol": "get_logged_model_artifact_handler",
+          "title": "Authenticated user can download any logged model's artifacts via model_id",
+          "description": "Entry: mlflow/server/__init__.py:162-167 (@app.route(_add_static_prefix(\"/ajax-api/2.0/mlflow/logged-models/<model_id>/artifacts/files\"))). Attacker: an authenticated user with no permission on the logged model's experiment/workspace, crossing the per-experiment authorization boundary. get_logged_model_artifact_handler loads the logged model by the client-supplied model_id and streams the requested artifact file (_send_artifact) without checking the caller's experiment or workspace permission. The auth layer does not cover this route: _find_validator special-cases any path containing \"/mlflow/logged-models\" and returns next((v for (pat, method), v in LOGGED_MODEL_BEFORE_REQUEST_VALIDATORS.items() if pat.fullmatch(req.path) and method == req.method), None) (mlflow/server/auth/__init__.py:1701-1711), and LOGGED_MODEL_BEFORE_REQUEST_VALIDATORS is built from proto service endpoints via get_endpoints (mlflow/server/handlers.py:5226-5247), which does not include this manually registered Flask route. A repository-wide search shows \"/artifacts/files\" appears only in mlflow/server/__init__.py and the JS client, so no validator ever matches, _find_validator returns None, and _before_request performs no authorization check at all (only authentication). Result: any valid low-privilege account can download artifacts of any logged model by model_id, including models in other experiments/workspaces. Fix: register this route with a validator that resolves the logged model's experiment (or workspace) and requires READ permission, mirroring _get_permission_from_model_id, and re-check it in get_logged_model_artifact_handler."
+        },
+        {
+          "key": "mlflow-083eac9c|resource_exhaustion|mlflow/server/handlers.py|get_metric_history_bulk_handler|1848",
+          "matched": false,
+          "verdict": null,
+          "class": "resource_exhaustion",
+          "severity": "high",
+          "file": "mlflow/server/handlers.py",
+          "lines": [
+            1848,
+            1849
+          ],
+          "symbol": "get_metric_history_bulk_handler",
+          "title": "Unauthenticated negative max_results triggers unbounded metric query (DoS)",
+          "description": "Entry: mlflow/server/__init__.py:120 (/ajax-api/2.0/mlflow/metrics/get-history-bulk) -> get_metric_history_bulk_handler. Attacker: an unauthenticated network client of a default MLflow tracking server (no auth is enabled unless MLFLOW_AUTH_CONFIG_PATH is set), crossing the boundary between a trivial request and unbounded server-side query work. Path: request.args[\"max_results\"] is parsed with int() and only clamped on the high side by min(max_results, MAX_HISTORY_RESULTS); there is no lower-bound check, so max_results=-1 (or any negative value) is passed unchanged to store.get_metric_history_bulk(run_ids=..., metric_key=..., max_results=-1) (mlflow/store/tracking/sqlalchemy_store.py:1322-1357). SQLAlchemy emits `.limit(-1)` and SQLite treats a negative LIMIT as \"no upper bound\", so the query returns every metric row for the key across the requested runs (up to 100 run_ids are allowed); on other SQL backends the negative limit surfaces as an unhandled DB error. The handler then serializes all rows and returns `metrics_with_run_ids[:max_results]`, and the slice `[: -1]` drops only the last element, so nearly the entire unbounded result set is returned. Nothing else on the path validates the parameter: unlike the sibling get_metric_history_bulk_interval_handler (line 1915-1923, which enforces 1..MAX_RESULTS_PER_RUN), this handler has no schema at all. Impact: one small GET request makes the server load and JSON-encode potentially millions of metric rows, exhausting memory and worker CPU on a SQLite-backed server (the common sqlite:///mlflow.db deployment). Fix: reject non-positive max_results and clamp it, e.g. `max_results = max(1, min(int(request.args.get(\"max_results\", MAX_HISTORY_RESULTS)), MAX_HISTORY_RESULTS))`, and validate the parameter with the same schema used by the interval endpoint."
+        },
+        {
+          "key": "mlflow-083eac9c|resource_exhaustion|mlflow/server/handlers.py|_search_logged_models|4235",
+          "matched": false,
+          "verdict": null,
+          "class": "resource_exhaustion",
+          "severity": "critical",
+          "file": "mlflow/server/handlers.py",
+          "lines": [
+            4235,
+            4256
+          ],
+          "symbol": "_search_logged_models",
+          "title": "Unauthenticated client can force full logged-models table scan via unbounded max_results",
+          "description": "Entry: /mlflow/logged-models/search (registered via handlers.get_endpoints(); handler _search_logged_models). Attacker: an unauthenticated network client of the tracking server, crossing from a tiny JSON request to an unbounded database read and response. Path: the schema only applies _assert_intlike to max_results (line 4235), with no upper bound, and line 4256 forwards `request_message.max_results or None` directly to store.search_logged_models. SqlAlchemyStore.search_logged_models (mlflow/store/tracking/sqlalchemy_store.py:3041-3081) performs `max_results = max_results or SEARCH_LOGGED_MODEL_MAX_RESULTS_DEFAULT` and then `models.offset(offset).limit(max_results + 1).all()` without ever calling _validate_max_results_param, so max_results=2147483647 (the int32 maximum) turns the query into a full table scan that loads every logged model and returns them all (`models[:max_results]` keeps everything). Nothing else on the path caps the value: auth is off by default, and unlike search_experiments/search_runs/search_datasets, this store method has no threshold check. Impact: a request of a few bytes forces the server to fetch, convert and protobuf-serialize the entire logged-models table into memory and into the HTTP response. Fix: validate max_results in the handler (e.g. _assert_less_than_or_equal(int(x), SEARCH_MAX_RESULTS_THRESHOLD)) and/or call self._validate_max_results_param(max_results) in search_logged_models before applying the limit."
+        },
+        {
+          "key": "mlflow-083eac9c|resource_exhaustion|mlflow/server/handlers.py|_query_trace_metrics|3840",
+          "matched": false,
+          "verdict": null,
+          "class": "resource_exhaustion",
+          "severity": "medium",
+          "file": "mlflow/server/handlers.py",
+          "lines": [
+            3840,
+            3848
+          ],
+          "symbol": "_query_trace_metrics",
+          "title": "Unauthenticated DoS via unbounded max_results in trace metrics query",
+          "description": "Entry: /mlflow/traces/metrics (POST, handler _query_trace_metrics registered in handlers.get_endpoints()). Attacker: an unauthenticated network client, crossing from a small JSON request to an unbounded aggregation result. Path: the schema for max_results contains only _assert_intlike (line 3840), so any int32 value is accepted, and lines 3844-3848 pass it (or the 1000 default) to _get_tracking_store().query_trace_metrics. SqlAlchemyStore.query_trace_metrics (mlflow/store/tracking/sqlalchemy_store.py:3662-3710) forwards it to query_metrics, which executes `query.limit(max_results).all()` (mlflow/store/tracking/utils/sql_trace_metrics_utils.py:744) with no threshold validation. The caller also controls dimensions and time_interval_seconds, so the number of GROUP BY result rows can be driven up (e.g. one bucket per second per span name) while max_results=2147483647 removes any ceiling. Every returned row is converted to a MetricDataPoint, extended into the protobuf response and JSON-serialized in the handler. Nothing on the path (no auth by default, no store-side cap) stops it. Impact: one request can make the server materialize and serialize an arbitrarily large aggregation over the trace store, exhausting memory and CPU. Fix: enforce an upper bound on max_results in the schema (e.g. _assert_less_than_or_equal(int(x), MAX_RESULTS_QUERY_TRACE_METRICS) or the shared SEARCH_MAX_RESULTS_THRESHOLD) and call _validate_max_results_param in query_trace_metrics."
+        },
+        {
+          "key": "mlflow-083eac9c|resource_exhaustion|mlflow/server/handlers.py|_get_dataset_records_handler|5613",
+          "matched": false,
+          "verdict": null,
+          "class": "resource_exhaustion",
+          "severity": "high",
+          "file": "mlflow/server/handlers.py",
+          "lines": [
+            5613,
+            5624
+          ],
+          "symbol": "_get_dataset_records_handler",
+          "title": "Unauthenticated GET can load entire dataset records, exhausting server memory/CPU",
+          "description": "Entry: /mlflow/datasets/{dataset_id}/records (GET, handler _get_dataset_records_handler). Attacker: an unauthenticated network client, crossing from a one-line request to an unbounded database read. Path: the schema validates max_results with only _assert_intlike (line 5613), and line 5618 computes `max_results = request_message.max_results or 1000`; the value is passed to _get_tracking_store()._load_dataset_records(dataset_id, max_results=..., page_token=...). SqlAlchemyStore._load_dataset_records (mlflow/store/tracking/sqlalchemy_store.py:5210-5285) sets `effective_max_results = max_results or LOAD_DATASET_RECORDS_MAX_RESULTS` and runs `query.limit(effective_max_results + 1).all()` without calling _validate_max_results_param, so max_results=2147483647 returns every record of the dataset; the handler then builds a list of dicts for all records and json.dumps them into the response. Nothing on the path caps the value (no auth by default, no store-side threshold; the sibling search_datasets does call _validate_max_results_param at line 5076, this method does not). Impact: a tiny GET forces the server to load and serialize the entire record set of a dataset, which for evaluation datasets can be very large, exhausting memory and CPU. Fix: cap max_results in the handler (e.g. _assert_less_than_or_equal(int(x), LOAD_DATASET_RECORDS_MAX_RESULTS)) and/or call _validate_max_results_param in _load_dataset_records."
+        },
+        {
+          "key": "mlflow-083eac9c|authz|mlflow/server/handlers.py|_attach_model_to_gateway_endpoint|4899",
+          "matched": false,
+          "verdict": null,
+          "class": "authz",
+          "severity": "high",
+          "file": "mlflow/server/handlers.py",
+          "lines": [
+            4899,
+            4905
+          ],
+          "symbol": "_attach_model_to_gateway_endpoint",
+          "title": "Missing USE check on attach-model lets user hijack another's gateway credentials",
+          "description": "Entry: mlflow/server/handlers.py:4889 (_attach_model_to_gateway_endpoint, POST /api/2.0/mlflow/gateway/endpoints/models/attach, whose before-request validator is validate_can_update_gateway_endpoint registered at mlflow/server/auth/__init__.py:1487).\nAttacker: an authenticated, non-admin user who has UPDATE permission on any gateway endpoint they control (e.g. one they created), crossing into another user's / another workspace's gateway model definition and the upstream provider secret it references, which they were never granted USE on.\nThe request body carries the client-chosen model definition id: AttachModelToGatewayEndpoint has the singular field model_config (mlflow/protos/service.proto:4799-4803), so the JSON is {\"endpoint_id\": \"<endpoint I can edit>\", \"model_config\": {\"model_definition_id\": \"<victim's model definition>\", ...}}. The validator validate_can_update_gateway_endpoint (mlflow/server/auth/__init__.py:1218-1229) first checks only UPDATE on that endpoint, then does model_configs = body.get(\"model_configs\", []) and returns _validate_can_use_model_definitions(model_configs); because the route sends \"model_config\" and not \"model_configs\", the list is always empty and _validate_can_use_model_definitions returns True on the empty list (mlflow/server/auth/__init__.py:1162-1163). Nothing else stops it: the handler at mlflow/server/handlers.py:4899-4905 parses GatewayEndpointModelConfig.from_proto(request_message.model_config) and calls store.attach_model_to_endpoint(endpoint_id=..., model_config=...) with no permission check of its own, and the store layer performs no authorization. The user then calls their own endpoint through the guarded gateway routes (mlflow/server/gateway_api.py:375 _create_provider_from_endpoint_name -> mlflow/store/tracking/gateway/config_resolver.py:145-241), which resolves the newly attached model definition's secret_id and decrypts the secret to call the upstream provider.\nImpact: privilege escalation and cross-tenant credential use. The attacker's endpoint now runs on another user's/team's model definition, so every invocation is billed to and authorized by the victim's provider API key (or Azure api_base/deployment from the victim's auth_config), consuming their quota and allowing use of a private provider endpoint the attacker has no USE permission on, exactly the boundary the USE permission on gateway secrets/model definitions exists to enforce. It also lets the attacker silently repoint their endpoint's traffic through the victim's account and observe responses generated with the victim's credentials.\nFix: give AttachModelToGatewayEndpoint its own validator that reads the referenced model definition from the singular model_config (or the flat model_definition_id) and requires USE permission on it via _get_permission_from_store_or_default / _workspace_permission_for_gateway_model_definition, in addition to UPDATE on the endpoint; and make _validate_can_use_model_definitions fail closed (return False) when no model definition id can be extracted, instead of returning True for an empty or unrecognized list."
+        },
+        {
+          "key": "mlflow-083eac9c|injection|mlflow/gateway/providers/litellm.py|LiteLLMProvider._build_litellm_kwargs|85",
+          "matched": false,
+          "verdict": null,
+          "class": "injection",
+          "severity": "high",
+          "file": "mlflow/gateway/providers/litellm.py",
+          "lines": [
+            85,
+            91
+          ],
+          "symbol": "LiteLLMProvider._build_litellm_kwargs",
+          "title": "Caller-controlled api_base in LiteLLM passthrough enables SSRF and key leak",
+          "description": "Entry: mlflow/server/gateway_api.py:570-586 (POST /gateway/openai/v1/chat/completions; same pattern in openai_passthrough_embeddings 632-653, openai_passthrough_responses 678-719, anthropic_passthrough_messages 744-785, gemini routes 812-831/858-871), where the raw request body is read and passed as payload=body into provider.passthrough.\nAttacker: any user who can call a gateway endpoint backed by the LiteLLM fallback provider (a user with USE permission, or any caller when auth is off), crossing the boundary that the server should only ever contact the operator-configured provider endpoint with the operator-configured credentials.\nPath: gateway_api.py passes the unvalidated JSON body to LiteLLMProvider._passthrough (litellm.py:381-419), which calls _build_litellm_kwargs(payload) (litellm.py:85-91): kwargs = {**payload} first, then only the keys present in litellm_config.litellm_auth_config are overwritten. A typical secret supplies only api_key, so client-supplied routing kwargs such as api_base, base_url, custom_llm_provider, headers, aws_region_name or vertex_credentials are left intact and then splatted into litellm.acompletion(**kwargs) / litellm.aresponses(**kwargs) / litellm.anthropic.messages.acreate(**kwargs) (litellm.py:104, 167, 428, 456; the provider tests confirm api_base is forwarded verbatim to litellm).\nWhy nothing stops it: the passthrough handlers do not validate the body against a schema (unlike the unified invocations path, which uses chat.RequestPayload), and _build_litellm_kwargs has no allow-list or reserved-key stripping; only exact keys present in the stored auth config are overridden, so api_base in particular is caller-controlled.\nImpact: the MLflow server issues an outbound HTTP request to an attacker-chosen URL while attaching the configured provider API key (it is part of the same kwargs), giving the caller SSRF into the server's network (e.g. cloud metadata or internal services) and exfiltration of the stored provider secret to a server the caller controls.\nFix: never merge raw client input into SDK kwargs. Build the litellm call from an explicit allow-list of request fields (messages/input/model/stream/temperature/...), and unconditionally overwrite or strip all connection/auth keys (api_base, base_url, custom_llm_provider, headers, api_key, aws_*/vertex_* credentials) from the client payload before calling litellm."
+        },
+        {
+          "key": "mlflow-083eac9c|injection|mlflow/gateway/providers/openai.py|OpenAIProvider._get_headers|359",
+          "matched": false,
+          "verdict": null,
+          "class": "injection",
+          "severity": "high",
+          "file": "mlflow/gateway/providers/openai.py",
+          "lines": [
+            359,
+            366
+          ],
+          "symbol": "OpenAIProvider._get_headers",
+          "title": "MLflow caller's Authorization and Cookie headers leaked to upstream LLM provider",
+          "description": "Entry: mlflow/server/gateway_api.py:578 (also 640, 686, 752, 818, 864), where each passthrough handler does headers = dict(request.headers) and passes the caller's headers into provider.passthrough(..., headers=headers).\nAttacker: the upstream LLM provider (untrusted third party, or anyone who can observe traffic/logs there) obtains the MLflow caller's credentials; the boundary crossed is that MLflow Basic-auth credentials and session cookies must never leave the MLflow server.\nPath: _get_headers (openai.py:342-366, mirrored in anthropic.py:398-433 and gemini.py) copies the client headers, drops only 'host' and 'content-length', and merges with result_headers = client_headers | result_headers. The provider's own auth headers are lowercase ('authorization', 'api-key'/'x-api-key'), while HTTP header names are case-insensitive but Python dict keys are not, so a client sending the conventional 'Authorization' (or 'X-Api-Key') key does not collide with the provider key; both entries survive and are handed to aiohttp's ClientSession (mlflow/gateway/providers/utils.py:14), which sends both values upstream.\nWhy nothing stops it: there is no allow-list of forwardable headers, and the intended precedence ('provider headers take precedence', per the code comment) only works for identical-case keys; Authorization is included in dict(request.headers) because the FastAPI auth middleware requires it on these routes.\nImpact: every passthrough call leaks the caller's MLflow username/password (Base64 Basic header), cookies and any other caller headers to the external LLM provider, and lets the caller smuggle extra headers into the upstream request (the case-variant Authorization can also be used to override the provider credential at upstreams that read the first header value).\nFix: do not forward the client's headers wholesale. Forward only an explicit allow-list of provider-relevant headers (e.g. anthropic-beta) with normalized, lower-cased names, and always delete Authorization, Cookie, X-Api-Key, Proxy-* and hop-by-hop headers before the merge."
+        },
+        {
+          "key": "mlflow-083eac9c|ssrf|mlflow/gateway/providers/litellm.py|LiteLLMProvider._passthrough_openai_chat|493",
+          "matched": false,
+          "verdict": null,
+          "class": "ssrf",
+          "severity": "critical",
+          "file": "mlflow/gateway/providers/litellm.py",
+          "lines": [
+            493,
+            501
+          ],
+          "symbol": "LiteLLMProvider._passthrough_openai_chat",
+          "title": "Client-supplied api_base in gateway passthrough enables full SSRF",
+          "description": "Entry: mlflow/server/gateway_api.py:551 (openai_passthrough_chat; same pattern at lines 617, 659, 725, 793, 839). Attacker: any caller who can reach a gateway passthrough route, crossing from the public API into the server's internal network. The handler reads the raw JSON body with no schema validation (gateway_api.py:570-574, _get_request_body at line 63 only requires a 'model' key), pops 'model', and passes every other key as `payload=body` into provider.passthrough (gateway_api.py:584-586, 651-653, 692-694, 758-760, 869-871). LiteLLMProvider._passthrough (litellm.py:381-419) calls _build_litellm_kwargs (litellm.py:85-91), which is `kwargs = {**payload}` updated with the endpoint's auth_config, so a client-supplied `api_base` survives into the kwargs; the kwargs are then splatted into `await litellm.acompletion(**kwargs)` at line 500 (and the equivalent calls at lines 428, 443, 456, 465, 476, 487). LiteLLM treats `api_base` as the provider base URL, so the server issues its outbound POST to the attacker's URL with the endpoint's configured provider credentials attached. Nothing on the path validates the URL, resolves DNS against a deny-list, or blocks localhost/169.254.169.254/private ranges, and aiohttp/httpx defaults allow redirects, so an allowed host can also bounce the request inward. The endpoint must be LiteLLM-backed (any provider outside openai/anthropic/mistral/gemini, per gateway_api.py:222-233), which any caller can create in a default deployment and any authenticated user can create in a basic-auth deployment. Impact: full read SSRF from an arbitrary request body - cloud metadata theft (IAM credentials), internal service probing and data exfiltration, since the upstream JSON is returned verbatim to the caller. Fix: strip or reject request-body keys such as api_base/base_url before building LiteLLM kwargs, validate the effective base URL against an allow-list, and block internal/metadata address ranges after DNS resolution (with redirects disabled)."
+        },
+        {
+          "key": "mlflow-083eac9c|ssrf|mlflow/gateway/providers/openai.py|OpenAIProvider.base_url|294",
+          "matched": false,
+          "verdict": null,
+          "class": "ssrf",
+          "severity": "critical",
+          "file": "mlflow/gateway/providers/openai.py",
+          "lines": [
+            294,
+            302
+          ],
+          "symbol": "OpenAIProvider.base_url",
+          "title": "SSRF via unvalidated gateway secret api_base to internal network and metadata",
+          "description": "Entry: mlflow/server/handlers.py:4507 (_create_gateway_secret, POST /api/2.0/gateway/secrets/create). Attacker: any caller who can create a gateway secret (unauthenticated in a default deployment; any authenticated user under basic auth, since CreateGatewaySecret has no BEFORE_REQUEST permission validator in mlflow/server/auth/__init__.py - only the after-create MANAGE grant at line 2157), crossing from the API into the server's internal network and its stored secrets. The secret handler accepts the caller's `auth_config` map unvalidated (handlers.py:4518-4524); mlflow/store/tracking/gateway/config_resolver.py:115 reads it back and _build_endpoint_config copies `auth_config['api_base']` straight into `openai_api_base` (gateway_api.py:186-192 for the azure branch and 203 for the azure provider). OpenAIProvider.base_url then returns that caller-chosen string (openai.py:295-302), and the invocation routes (gateway_api.py:412, 489, 548-886) reach `session.post(url, json=payload, ...)` in mlflow/gateway/providers/utils.py:14-18 with the provider's Authorization/api-key header attached. Nothing validates that api_base is an https provider URL, is on an allow-list, or resolves to a public address, and redirects are followed by default. The same unvalidated secret value is merged into `litellm_auth_config` (gateway_api.py:226-232, litellm.py:88-89), giving the identical SSRF through the LiteLLM provider for any non-native provider. Impact: the server can be steered to internal endpoints and to the cloud metadata service, and the stored provider API key is sent to the attacker-controlled host; the upstream response (including metadata contents) is returned through the invocation response. Fix: validate/allow-list `api_base` when the secret or model definition is created and again before each outbound call, reject non-http(s) schemes and internal, loopback, link-local and metadata addresses after DNS resolution, and disable redirect following on the provider HTTP clients."
+        },
+        {
+          "key": "mlflow-083eac9c|data_exposure|mlflow/server/gateway_api.py|anthropic_passthrough_messages|752",
+          "matched": false,
+          "verdict": null,
+          "class": "data_exposure",
+          "severity": "medium",
+          "file": "mlflow/server/gateway_api.py",
+          "lines": [
+            752,
+            759
+          ],
+          "symbol": "anthropic_passthrough_messages",
+          "title": "MLflow user credentials forwarded to upstream LLM provider",
+          "description": "Entry: mlflow/server/gateway_api.py:752 (headers = dict(request.headers)) inside the POST /gateway/anthropic/v1/messages handler registered at line 722; the same pattern is at lines 578, 640, 686, 818 and 864 for the OpenAI and Gemini passthrough routes.\nAttacker: the configured upstream LLM provider (or anyone who can read its request logs), crossing the boundary that the caller's MLflow credentials never leave the MLflow server.\nPath: request.headers -> dict(request.headers) -> provider.passthrough(action=..., payload=body, headers=headers) -> AnthropicProvider._get_headers (mlflow/gateway/providers/anthropic.py:427-431), which only pops 'host' and 'content-length' and then does client_headers | result_headers. Anthropic's own header dict (anthropic.py:384-386) contains only x-api-key/anthropic-version, so the caller's Authorization header (the Basic credentials used to authenticate to MLflow) and Cookie are forwarded verbatim to api.anthropic.com. For the OpenAI passthrough (line 578) the provider's lowercase 'authorization' happens to collide and win, but the caller's Cookie and every other non-colliding sensitive header still reach api.openai.com, and Gemini (lines 818/864) likewise receives the caller's Authorization and Cookie.\nNothing on the path removes these headers: dict(request.headers) keeps them, BaseProvider.passthrough/BaseProvider._passthrough pass the dict through unchanged (mlflow/gateway/providers/base.py:156-166), and the merge logic only drops host/content-length. The gateway auth middleware never sanitizes headers either.\nImpact: for every passthrough call, the user's MLflow Basic credentials (or browser session cookie) are disclosed to a third-party service, so a compromised or merely logging upstream provider can replay them against the MLflow server as that user, including admin users.\nFix: do not forward the client's raw headers; forward only an explicit allow-list of provider-relevant headers (e.g. anthropic-beta, openai-beta), and explicitly strip authorization, cookie, proxy-authorization, x-api-key and hop-by-hop headers in every provider _get_headers implementation, merging case-insensitively."
+        }
+      ],
+      "surface": {
+        "errors": []
+      },
+      "coverage": {
+        "modelCalls": {
+          "security-scan-map": 1,
+          "security-scan-authz": 6,
+          "security-scan-authz-verify": 10,
+          "security-scan-finalize": 30,
+          "security-scan-injection": 5,
+          "security-scan-injection-recovery": 2,
+          "security-scan-data_exposure": 5,
+          "security-scan-injection-verify": 3,
+          "security-scan-ssrf": 2,
+          "security-scan-data_exposure-verify": 7,
+          "security-scan-ssrf-verify": 3,
+          "security-scan-misconfiguration": 4,
+          "security-scan-secret_identity": 2,
+          "security-scan-resource_exhaustion": 2,
+          "security-scan-secret_identity-verify": 5,
+          "security-scan-resource_exhaustion-verify": 4,
+          "security-scan-misconfiguration-verify": 7
+        },
+        "units": 2000,
+        "done": 2,
+        "failed": 1,
+        "skippedByBudget": 1997,
+        "stoppedByBudget": true
+      },
+      "spend": {
+        "usd": 2.792684520000002,
+        "inputTokens": 32379623,
+        "outputTokens": 986043,
+        "requests": 958
+      },
+      "requestFailures": {
+        "total": 6,
+        "rateLimited": 0
+      },
+      "ms": 1175274
+    }
+  ]
+}

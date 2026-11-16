@@ -1,0 +1,92 @@
+{
+  "method": "Twenty smallest SHA-256(seed + NUL + key) off-list findings per language within each group, or all if fewer. Fixed before inspecting descriptions.",
+  "group": "confirmation",
+  "seed": "wellington-review-2451-2026-11-16-confirmation",
+  "case": "mlflow-083eac9c",
+  "language": "python",
+  "sourceResult": "results/2026-11-16-review/vm-followup.cases/mlflow-083eac9c.json",
+  "sourceResultSha256": "aa5acd7a0eb05c3a1fffa0c8761948ed111910d098193cec423c74b49e2964ab",
+  "offListPopulation": 16,
+  "selected": [
+    {
+      "index": 15,
+      "key": "mlflow-083eac9c|ssrf|mlflow/gateway/providers/openai.py|OpenAIProvider.base_url|294",
+      "hash": "0d5daed61252968497d23f366387537f38922299cad1a719d8e2ff0649117eea"
+    },
+    {
+      "index": 8,
+      "key": "mlflow-083eac9c|resource_exhaustion|mlflow/server/handlers.py|_search_logged_models|4235",
+      "hash": "1bb3aaa994f1f4528191a4376f210f4d35b8fd68273058989ddbfe04851d6bb4"
+    },
+    {
+      "index": 10,
+      "key": "mlflow-083eac9c|resource_exhaustion|mlflow/server/handlers.py|_get_dataset_records_handler|5613",
+      "hash": "523e22e9091d104ab6f648ffd2021bbf26581f6caf4b1eeefc79d015c8bf4996"
+    },
+    {
+      "index": 14,
+      "key": "mlflow-083eac9c|ssrf|mlflow/gateway/providers/litellm.py|LiteLLMProvider._passthrough_openai_chat|493",
+      "hash": "68100bb43b71b8393943421e4e6a0c95d69eb9f875796a2aa7709cdb13d702b6"
+    },
+    {
+      "index": 2,
+      "key": "mlflow-083eac9c|data_exposure|mlflow/server/auth/__init__.py||2680",
+      "hash": "68514df475534ca8342077b8e7359f564545c0d3362d24d4c466fc11b013c573"
+    },
+    {
+      "index": 13,
+      "key": "mlflow-083eac9c|injection|mlflow/gateway/providers/openai.py|OpenAIProvider._get_headers|359",
+      "hash": "70220461afa234f66b446b73142ac23c64ccb4b828d3a684576c962cf7e34772"
+    },
+    {
+      "index": 5,
+      "key": "mlflow-083eac9c|authz|mlflow/server/handlers.py|get_trace_artifact_handler|3805",
+      "hash": "78eaebd5b8eebae1abd8f1cda2910edb0e10cb245cbd827a80a1c2a1163e0781"
+    },
+    {
+      "index": 9,
+      "key": "mlflow-083eac9c|resource_exhaustion|mlflow/server/handlers.py|_query_trace_metrics|3840",
+      "hash": "902cf3f379c2fdac63ea4206fbc83839de5b0a1ef1c270c3902d2aeae89cfe22"
+    },
+    {
+      "index": 1,
+      "key": "mlflow-083eac9c|authz|mlflow/server/auth/__init__.py|validate_gateway_proxy|1414",
+      "hash": "a1824c1849d839d7b032d60fdd1a210bf8fd3e2c8ad8033363a9090fafd4d970"
+    },
+    {
+      "index": 16,
+      "key": "mlflow-083eac9c|data_exposure|mlflow/server/gateway_api.py|anthropic_passthrough_messages|752",
+      "hash": "a3c2e15fa41fb4085c636274980273fa09eca07ac443890b283a21c2eee85d13"
+    },
+    {
+      "index": 3,
+      "key": "mlflow-083eac9c|secret_identity|mlflow/server/auth/basic_auth.ini||4",
+      "hash": "ab2585bd73b7b37645afceda15156890204fdbe4744161ea91b42be721adc49e"
+    },
+    {
+      "index": 6,
+      "key": "mlflow-083eac9c|authz|mlflow/server/handlers.py|get_logged_model_artifact_handler|4101",
+      "hash": "b286bbb5563cff79d7772551085e58afd561edefb78dc1e75e0bb87cb6760af0"
+    },
+    {
+      "index": 12,
+      "key": "mlflow-083eac9c|injection|mlflow/gateway/providers/litellm.py|LiteLLMProvider._build_litellm_kwargs|85",
+      "hash": "b2b4aa5a3cf0f6065da0ea4728089fcb1ce3ff1df8447b7630389c7c801cf02a"
+    },
+    {
+      "index": 7,
+      "key": "mlflow-083eac9c|resource_exhaustion|mlflow/server/handlers.py|get_metric_history_bulk_handler|1848",
+      "hash": "bc0826695bc0b49bb95a92364277f929d99d6db20f9556f6e9b701bae5c91a43"
+    },
+    {
+      "index": 11,
+      "key": "mlflow-083eac9c|authz|mlflow/server/handlers.py|_attach_model_to_gateway_endpoint|4899",
+      "hash": "d08e7c4456b4660cec8fae3bf566bfcaa320207a9c1dc7d8a6258f2ea31b0ac7"
+    },
+    {
+      "index": 4,
+      "key": "mlflow-083eac9c|injection|mlflow/server/handlers.py|gateway_proxy_handler|2038",
+      "hash": "d671ee2bc91afa570af410801c854ac1b499aa35e0149260cc9b247d01a1b685"
+    }
+  ]
+}

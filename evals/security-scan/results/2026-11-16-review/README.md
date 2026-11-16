@@ -146,8 +146,10 @@ passes on the clean candidate (`contracts/library-candidate-validation.log`).
 The bounded diagnostic preload also passes scripted wiring
 (`contracts/library-observed-wiring.log`); its source/hash and forwarding
 contract are frozen in the measurement plan. It records failure categories
-without model bodies or error messages. Those checks establish wiring, not
-model quality.
+without model bodies or error messages. An injected real HTTP 429 is recorded
+while the original no-paid-call failure contract still passes
+(`contracts/candidate-observer-contract.json`). These checks establish wiring,
+not model quality.
 
 `library-candidate-measurement-plan.json` freezes conditional measurement:
 finish the active six-case queue, then measure all four controls on the
