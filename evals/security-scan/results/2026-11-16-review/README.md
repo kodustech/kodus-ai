@@ -279,6 +279,8 @@ retain their behavior. The same input, model, tools, meter, cancellation and
 deadline apply to both attempts. A second missing result stays incomplete;
 prose is never converted into examined coverage. This is additional work:
 each invocation retains 30 steps, with up to two invocations for that class.
+The retry bound applies within a unit's slice; an interrupted class follows
+the existing resume rules, still under the scan-wide persisted spend cap.
 The shared library paragraph also requires a shipped less-trusted source
 for symbol/accessor/callback/custom-prototype values; it names no benchmark
 repository, function or advisory and preserves real restricted-host paths.
@@ -341,6 +343,12 @@ no complete mutation score. These checks precede revised prompt `5617eab0a`.
 `contracts/ci-backend-299.json` records a later full backend pass on
 `29995cefe`: 20,203 tests and eight snapshots, plus full wiring/type/DI gates.
 It precedes the bounded retry and capability-origin clarification.
+`contracts/ci-backend-72.json` records their full backend pass: 1,391 suites,
+20,215 tests and eight snapshots. Full wiring, type/DI, permissions,
+environment, feature gate and preview checks pass too.
+`contracts/final-source-equivalence.json` verifies the subsequent interrupted
+measurement artifacts and judgments do not change that application source,
+the eval executable/matcher, targets or cases.
 
 ## Contracts and scope
 

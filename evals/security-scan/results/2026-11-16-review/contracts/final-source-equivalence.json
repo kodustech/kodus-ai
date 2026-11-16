@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-11-16T20:45:01Z",
+  "ciCommit": "72c3036adcb98554541b369f4899531261d0826c",
+  "evidenceHeadBeforeThisRecord": "ecf464e4882a1bfc4b75897db1a657180f1f3fc2",
+  "applicationSourceChanged": false,
+  "scanEvalExecutablesTargetsAndCasesChanged": false,
+  "adjudicationsUpdated": true,
+  "purpose": "Final interrupted-run artifacts/labels do not alter the app source validated by backend CI and the in-progress manual Kody review. No new model measurement is claimed.",
+  "criticalSourceHashes": {
+    "libs/security-scan/application/security-scan-engine.ts": "ea120251cf5abf1ed184e574bc9b50ebb14903d0c368a9d5fed4f003171ebb5e",
+    "libs/security-scan/domain/scan-prompts.ts": "5dfdc288f15bb102ff0bf39be4327a50a068410405b7b8c9f61cc67f15a247c3",
+    "evals/security-scan/run.js": "a571d251a82ac2ec49fbbe25aa56ab09cb6b4d1956be48b73667767295ef9d75",
+    "evals/security-scan/scan-repo.js": "20470e9388f24dbefb944a8d70d8d3ce17350e31238cf41ec3c8b41be501e933",
+    "evals/security-scan/scoring.js": "d6bc9cabca5ae11af8178baf6673e2aa41fbb4b1dd8c812f20c0a655061094c0",
+    "evals/security-scan/targets.json": "480ec1c30051969ccf7ee89718eb289a117e3ff0021c90dc5b97cf6aa6dec581",
+    "evals/security-scan/vulngym-cases.json": "782e60de00d6de9f4d6518a87e5a45b8284c67da3dde447fe6c717de347e774e",
+    "evals/security-scan/clean-controls.json": "cea9ef1a799f44969e14a62e61e6501f3dec519dccf5224c4f8071234fd0c80f"
+  }
+}
