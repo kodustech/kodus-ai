@@ -2,7 +2,7 @@
 export class ScanFailure extends Error {}
 
 export const SCAN_NO_AREA_EXAMINED_MESSAGE =
-    'No area could be examined: every model request failed. Check your model in AI providers, then run the scan again; it picks up the areas that failed.';
+    'The scan could not finish examining any area. Findings and coverage are preserved; run it again to retry failed or incomplete areas.';
 
 export const SCAN_MAP_FAILED_MESSAGE =
     "Kody could not read the repository's code to map it. Run the scan again; if it keeps failing, contact support.";

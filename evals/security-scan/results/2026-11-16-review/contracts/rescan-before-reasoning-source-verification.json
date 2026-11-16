@@ -1,0 +1,19 @@
+{
+  "localCommit": "65f1326bf2bba422a66a8b61369f2c4edb059440",
+  "runtimeFiles": 286,
+  "mismatches": [],
+  "untrackedGeneratedFiles": [
+    "libs/ee/configs/environment/environment.ts"
+  ],
+  "checks": {
+    "bothCompleted": true,
+    "sameCommit": true,
+    "sameIssueIds": true,
+    "nonVacuous": true,
+    "noNewIssues": true,
+    "noResolvedIssues": true,
+    "foundAgain": true,
+    "capsHeld": true
+  },
+  "probeMatches": true
+}

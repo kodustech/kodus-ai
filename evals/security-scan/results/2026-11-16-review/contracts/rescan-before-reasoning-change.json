@@ -1,0 +1,558 @@
+{
+  "kind": "contract-with-real-model",
+  "provenance": {
+    "measuredAt": "2026-11-16T12:23:08.477Z",
+    "engineCommit": "a40dc2af165222d88c6d6844784cd9a4b35d02e5",
+    "dirty": true,
+    "datasets": {},
+    "scoringVersion": 2,
+    "probeSha256": "8d16a045c2081e3fa72241b9921387966771e43a88fa9ff80b38026d112e655e"
+  },
+  "runtimeSources": {
+    "libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner.ts": "9e9cf793d72488b2a84cfe6e8bbf242f0ec073a07cd7d4c12cc1df3f925ddfaa",
+    "libs/agent-harness/infrastructure/ai-sdk/ai-sdk-tool-registry.ts": "cb8866f9b6fb19e1b4a6c5235809cf8382ebc56c8d2cd98660230c64fcf3710a",
+    "libs/agent-harness/infrastructure/compression/context-compressor.ts": "002091b905ed2cda28b87e28d72c63b5b0886189ec702e8be0b8001058868c4e",
+    "libs/agent-harness/infrastructure/compression/context-window-compressor.ts": "dbca8fc4a784e590a1411e4eb7294002856bc3565995f03d1de6906df5affeb9",
+    "libs/agent-harness/infrastructure/compression/token-estimator.ts": "a5a3615149326bf31e6e7d4c5cce362f8cece834d9b86659e1e42ea4f8c23af5",
+    "libs/agent-harness/infrastructure/orchestration/verification-pass.ts": "d6648ed4c0ca5f0902406436b8b3c288a77e39fe54442bef07b7a058c86dffb0",
+    "libs/agent-harness/infrastructure/policies/budget.policy.ts": "03334d2dcb75052cdb518b2f9da68889e4933e05cd1cfa29d4f038aaaff0749c",
+    "libs/agent-harness/infrastructure/policies/completion-gate.policy.ts": "ba0172e2c742673df2385d3a46e658d11b651e21a0f3de43316e0af0eb6fa94c",
+    "libs/agent-harness/infrastructure/policies/compression.policy.ts": "681dde06f21a06a2e46cb753ee6ea9875b9b4de4e9461fbe9865a153885e750b",
+    "libs/agent-harness/infrastructure/policies/force-finalize.policy.ts": "72a954106b118fe01a7c671d7bdd14cf334503faba093cc76b7562e4191cc16a",
+    "libs/agent-harness/infrastructure/policies/force-text-finalize.policy.ts": "9b46d077078469b7d71cb93b0aafd171c681434c55ee9dc84084832c26035e5b",
+    "libs/agent-harness/infrastructure/tools/caching-tool.decorator.ts": "7b63d4f90437c45cdc908909ef064c5bd06679719c4309b4169dc2acd7e2780f",
+    "libs/agent-harness/infrastructure/tools/in-memory-tool-registry.ts": "4c1492f318a2d6ef526816f813f26357f6ad0d8d806d9b95316fc6829c54ba20",
+    "libs/agent-harness/infrastructure/verify/llm-verdict.ts": "900486c9252257c9f012808b5cc5f372a5f4e5bbbc865acfdc753fffae7049df",
+    "libs/analytics/application/spend-limit/spend-limit-config.service.ts": "ef1ae794bda6ef3da9f2bb339779dd97ab39ae408fffc86fbd7ff99b68e55629",
+    "libs/analytics/application/use-cases/usage/model-cost-calculator.ts": "2bd5da330ceda83e611c921ae1c75298348444b0e3ab6db5e413e257419924f9",
+    "libs/analytics/application/use-cases/usage/pricing-resolver.ts": "6d107a290119f39054b41432cda5a84f67978deee1065731811dec79daac8052",
+    "libs/analytics/application/use-cases/usage/token-pricing.use-case.ts": "f1f2c7f708b87488b5c9a46bf92ec299c446a9e0c9bb6ce0f85069654600d63d",
+    "libs/automation/infrastructure/adapters/services/processAutomation/config/codeReview/labels.json": "3101404cf23e17132b8e60b0402450386fab26db51f99939dbd2fdedfcfbf9c0",
+    "libs/code-review/domain/contracts/KodyIssuesManagement.contract.ts": "93486848fad8499591ba849cb39d5a5a0b146e0e125afc7e0e45ef775bd0da6a",
+    "libs/code-review/infrastructure/adapters/services/shell-quote.ts": "e4bd80b4338989867c7754c5a56e73a7b907c05b5e2b00e3e82ccb43c9182921",
+    "libs/code-review/infrastructure/agents/adapters/diff-coverage-ledger.adapter.ts": "8f7698f7fff65a0d2e08ec871633539445ee04653d47cf798e5d48003889e322",
+    "libs/code-review/infrastructure/agents/adapters/finder-tools.adapter.ts": "3d7740e433eefc11e6933fb7f20955c55cb701a3500b97f8c8c155b5515b43f8",
+    "libs/code-review/infrastructure/agents/adapters/outline-first-read.decorator.ts": "b22efe8776795eb2a82bbb9cfc3711712a537ed6864c6ed87ee9d54829f4d642",
+    "libs/code-review/infrastructure/agents/adapters/repo-instruction-tool.ts": "541e7546c50cc5a1c3edf96013d4492e6c7c3f44206984954a46334d6fa002ee",
+    "libs/code-review/infrastructure/agents/collaborators/context-fit-planner.ts": "8f4ff1c58ea82c0ce2d7a97b2d6d3c843c2e76b99b1355853b38ec2ba84c6bca",
+    "libs/code-review/infrastructure/agents/collaborators/model-factory.ts": "800dc31db1fab3e5f372f28ba20d910fac45eaac412c2fa9851cf16801592a7b",
+    "libs/code-review/infrastructure/agents/collaborators/repo-instructions.ts": "2106d15076b6f6fd7b63f2caa514fad91cababe37d7d4e2087946bb4928bc43c",
+    "libs/code-review/infrastructure/agents/core/agent-anomalies.ts": "e780a1cf5cb804d4cb51f9a6c320c414cbcafceab595c100bb134faefe547b46",
+    "libs/code-review/infrastructure/agents/core/convention-check.ts": "8076155e4b540e0076c42aff6517e6c39cfad690e1f5092f31e7d4eb822fb53a",
+    "libs/code-review/infrastructure/agents/core/convention-verifier.agent.ts": "545afd5fb6eb3a72c6bcc6d88a2ff42486d20ed9155eef1aa6aabfd47e89a1fb",
+    "libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.ts": "5ce5440cf2adbef4162de271ff53e12a91102f2bc19d2796b30c64d3b63a2bb8",
+    "libs/code-review/infrastructure/agents/core/finder-model-profile.ts": "2141c1ad97cb4009880607dc0b858b372c2567e6fe1fbc5f7580aa258867d672",
+    "libs/code-review/infrastructure/agents/core/finder-output-schema.ts": "eff3f0f772867ef7de85557e14880530d8c97b6867c1a56b669fdbc0c8baf9ce",
+    "libs/code-review/infrastructure/agents/core/finder.agent.ts": "7662c7d623f81b93073531da21155f4d571112929d427f6f3e96bacff2e46a81",
+    "libs/code-review/infrastructure/agents/core/findings-schema.ts": "6ad3cf2ba9769f18df879e71371249187405b902fd1865fdd6881ef1da58f7d4",
+    "libs/code-review/infrastructure/agents/core/model-strictness.ts": "0bb88564b60a725aa0300d4e73edde128237ea4515a7eb08fa3f8e1d0445271d",
+    "libs/code-review/infrastructure/agents/core/overflow-recovering-runner.ts": "0f2ce534a677747f2303b72cd8874a3003e42e568ad75f4984a4e5f82a31d5c9",
+    "libs/code-review/infrastructure/agents/core/review-finding.ts": "1c4e2c89770b77988c1cb3cff4eddc73a5d79eb4a9aff3f1abc55340b2b502e0",
+    "libs/code-review/infrastructure/agents/core/verifier.agent.ts": "3dcce3fb1f7708473c3f9229cc6725c122812aa71163e2156fc757495307c6fa",
+    "libs/code-review/infrastructure/agents/custom-agents/custom-agent-presentation.ts": "31536300bc5cfedc8d65496c0489a25df125dbc4849d1b5f70b9304468f91882",
+    "libs/code-review/infrastructure/agents/engine/agent-tools.factory.ts": "185f5db17ddc776523f79b9179d7d54b9b87c48cd30595395eec52d6b1af5f1f",
+    "libs/code-review/infrastructure/agents/engine/coverage-ledger.ts": "878df3f0f398490a3eba258d5c132e0eee04f40dd0af198bab73efc9b971e0ee",
+    "libs/code-review/infrastructure/agents/engine/dedup-prompt.ts": "59f6d2250ccf25f3534625aa1d280ef2c74bd62c61f32cd3ec7e1854f4ce92d3",
+    "libs/code-review/infrastructure/agents/engine/finding-dedup.ts": "7171e3905822aed442e28f6de73ab6bd07f85743d4b859114be77e80ffde1b9b",
+    "libs/code-review/infrastructure/agents/engine/finding-labels.ts": "7bb70c15321a119179cf3101c05c01b366b52f75a951e3e3c89c3d84efe776e4",
+    "libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep.ts": "9c5d0de61815d9ce272c656ecdea5f032664791efa59b1018b5edbc1efd97bed",
+    "libs/code-review/infrastructure/agents/engine/prefer-specific-keep.ts": "bd36516f632e1ab131fb880a631f490d7300f2c1e5ff3c098bd01f1c53c89374",
+    "libs/code-review/infrastructure/agents/engine/restates-analyzer-finding.ts": "2f0a4dc0be53f88cd40006e81c41f538c31c59b2e2a0fe8fc06b74b7d40bc551",
+    "libs/code-review/infrastructure/agents/engine/secret-files.ts": "cd097f0c9bbeeefba175b9675c241cedb13717694f960a963bf939479c767a23",
+    "libs/code-review/infrastructure/agents/engine/uninitialized-submodules.ts": "4701cda0104420de5ff0fb9ffc19af00b9fd2afd40a72bca2f13bd64123f265a",
+    "libs/code-review/infrastructure/agents/engine/unverified-typecheck.ts": "061bed075ef64af8f685ad3610dc80a101e2f2dcd2d9848a2558efd2e300013d",
+    "libs/code-review/infrastructure/agents/prompts/convention-verifier-prompt.ts": "8867f888bff132ae0fc4e41070259d405d5f019d2dfa20706311d6014c43cac0",
+    "libs/code-review/infrastructure/agents/prompts/one-problem-rule.ts": "335f9f51f65b652ba33f08ae2753a1fd0a755de9814860b90db24d1ad6db5518",
+    "libs/code-review/infrastructure/agents/prompts/prompt-builder.ts": "67357c3949090e5fb6cbf358d636bd8aff41eda85d128d29646e04117fcc71f3",
+    "libs/code-review/infrastructure/agents/prompts/verifier-prompt.ts": "0d238a834421a5f28f50f98996999f52bcb1b25e43ebcd54755b81e3b556e335",
+    "libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions.ts": "591f87a3b95d08b0985e98089af2d91108a5dc1528f11ddd8b057794d180af63",
+    "libs/common/schemas/codereview.json": "8c507bcdfbf111742f82d157bcea8a6564d5caaa01f15f02c3db92660a1fa03d",
+    "libs/common/utils/canonical-model.ts": "503615d4d5a98841e21fdee599fa738ed99a7c4810be8439c150753bf6b2db9d",
+    "libs/common/utils/codeManagement/labels.ts": "3fe927b5607b0a48e710a71b9f5281cf50a5e9596d87a167adcd811f7ca4f8af",
+    "libs/common/utils/codeManagement/suggestion-body-shape.ts": "d36897dc328281af9ebe203c5f6e01a7916137f3ada55737806cb3a552f414c2",
+    "libs/common/utils/codeManagement/suggestion-title.ts": "c27f41613fb0222048e3b28298699804948b55b68734cb12f211ffe236448a97",
+    "libs/common/utils/codeReview/v2Defaults.ts": "a5ad2ff2005db3ff93af562dda00bdeb586d4b1639df649ce400fda501e4c87c",
+    "libs/common/utils/crypto.ts": "ab3f28201fa9b88d98b0dc829545a2f4a851a34e2e0427fd486e8636fe44f6b9",
+    "libs/common/utils/document.ts": "1cd1954c6074d9062a0f0442ab4928fb6997b97b67b5f359bbdf23d9f5f77c81",
+    "libs/common/utils/enums/severityLevel.enum.ts": "8c5ab932a4888dd538d150af58f96d4f9ed6a01b6f7e86dc9ca12e0ee3955c84",
+    "libs/common/utils/glob-pattern-validation.ts": "a8821cd6572e0077d784f5eee582105c2e280b55a41a329d694cc6214fd93647",
+    "libs/common/utils/glob-utils.ts": "17886f18de40419bf635dcc4a2dd927fc88809a4b47a97255eb4e9cf3152ad69",
+    "libs/common/utils/kody-rules/file-patterns.ts": "e722fd7006d4ddf7427973fb414fcd37d3114ca2fb676d1ab16011b038044012",
+    "libs/common/utils/markdown-fence.ts": "8a641fe53187c45eee44a943c2b0fa5f211be2e3971f3d4213d2a405a0e04875",
+    "libs/common/utils/parent-signal-compose.ts": "58aeffc46264171ce2fde373326048e0a8eb9783d58eed6f2d5ee82774373a63",
+    "libs/common/utils/polling/exponential-backoff.ts": "df8ee67c662568db8417aaa637afb2d34412a7b871af287950e32ac64682f705",
+    "libs/common/utils/polling/index.ts": "e5f4cbc321b594eea8ce27e0c43b9f62ef3d305d02b40082e7d5f15157bdea41",
+    "libs/common/utils/polling/retry-with-backoff.ts": "2a0a7528fb693f8beb569b1a320e20ce9f7a3461496b2aeab5eaef03ae4ed1bd",
+    "libs/common/utils/repository-grep.ts": "3df64ab500fc85c4a0c766f9d7f2253a326bc66985dfd7b9697591cb3d5a0349",
+    "libs/common/utils/tiptap-json.ts": "fc913654274b8c25c1e153762af8c568c70cd84518d4bcf567baa07816a8318a",
+    "libs/common/utils/validateCodeReviewConfigFile.ts": "21051e7b0c69287c34859da7200a2640cefc49738540853d2bdb638d599a6367",
+    "libs/common/utils/writing-guidelines.ts": "34f24d876aaf9a83280c73c9478e4a2959fd5777c42f6bc13e8fc27283dd1150",
+    "libs/core/domain/enums/Integration-config-key.enum.ts": "2089728b8960c60a2e1ce642e2142975b05cc033fa6dde437494f94dbc7ddb64",
+    "libs/core/domain/enums/agent-execute-type.enum.ts": "0049936782132a891b5f8298095574d12d71d6eafe711be91ad086e76847ac2a",
+    "libs/core/domain/enums/auth-provider.enum.ts": "ac063d9403dd6a520eb143f1fc556f0db388b5cdff0ebdef148218c319fe8df5",
+    "libs/core/domain/enums/automations-level.enum.ts": "a0d981ce03f6d342f9348a42ac4ef7e26491721ca4b879111d54de4dace726ae",
+    "libs/core/domain/enums/code-review.enum.ts": "bd8e7deb3d826635b6c621c15115b2d3b34b6f80d29d54412d5b82a3300b82d7",
+    "libs/core/domain/enums/create-auth-integration-status.enum.ts": "60c685d412f6dc4e218082594c6accfb16975e27e6c34b53e30969d559515ae6",
+    "libs/core/domain/enums/github-installation-status.enum.ts": "c9844f16dc20bd5debf78a340798ba4fc67f31a3970b51f270deea4cad655d17",
+    "libs/core/domain/enums/global-parameters-key.enum.ts": "5bb0526701f8b8195348905e9c5195ad993282ed04c043a285067db4a13b3cd6",
+    "libs/core/domain/enums/index.ts": "a0460fb95c615b463b30311b8e47b029fb76ebbab8bcf56f7179a0a8a89b2c35",
+    "libs/core/domain/enums/integration-category.enum.ts": "e21f178cf5ad93732f3155cc8e065cf6f3aa5168076593ff8e7cddc13a069d83",
+    "libs/core/domain/enums/language-parameter.enum.ts": "e98cce72516a3212b3f24ed2c525b6d85a3af81cf416d3ed8c8fbce4d1f327ed",
+    "libs/core/domain/enums/organization-parameters-key.enum.ts": "f617851c17422b27f2b925fc4e7e2c01608988c3232514ac6ce6981f4a7e08e5",
+    "libs/core/domain/enums/parameters-key.enum.ts": "7f83cf5c2bedfe69402bf6ac626f244a5fbee434dab273575c657586d750859a",
+    "libs/core/domain/enums/platform-type.enum.ts": "2eabaf2d4cd36483bdb5a980ef20730eac4541b254d8f5665e936d14718f48c2",
+    "libs/core/domain/enums/programming-language.enum.ts": "ae6dd4814efb66627810acb846e2efc174b0656e41c1b856aa859ee4c81289e5",
+    "libs/core/domain/enums/pullRequestState.enum.ts": "97d720df806fbce75976b4d96768b68436e7432a7de8b28c28af572fa4063a64",
+    "libs/core/domain/enums/status-category-azure-boards.enum.ts": "316a0f1cb8e756e17f2ca17a4615e1fbc0cd21674292b522655131b8ac919961",
+    "libs/core/domain/enums/timezones.enum.ts": "6cb1b1642f07519269d9304971924a85e3888d0a84707e0f0325d0b880449533",
+    "libs/core/infrastructure/config/types/general/approval-policies.ts": "2516252102ab037ff466b6d24fee5d390a38acf108e4473803ef4b38dd9b2396",
+    "libs/core/infrastructure/config/types/general/cli-env-guard.ts": "3fc03dd92578306402b5d6fca974e27b9c5b08a3d18c9323f078f807a0aaeb49",
+    "libs/core/infrastructure/config/types/general/cli-install.ts": "7ead8edfd6af63d719bddcd672b997b584e5fbe2198d0af86373869107e9e665",
+    "libs/core/infrastructure/config/types/general/codeReview.type.ts": "86a5a6f9ec36d0cff3e13900f368169168a1da9dc80e1f420f31fcce9af3a8d5",
+    "libs/core/infrastructure/config/types/general/file-pattern-schema.ts": "92c71c1a4811d2830cdf7f583652338f5c3e2f9dd495f955c3a46461e61f2bbc",
+    "libs/core/infrastructure/config/types/general/issues.type.ts": "d18d740bbebda107e1ce1a4f1cef944fa26f51310477ea615e826792361b7f17",
+    "libs/core/infrastructure/config/types/general/risk-assessment.ts": "2398ee4c5b39058dc7a9277f985f50a57e2e7a72dcc5be19006527853536be98",
+    "libs/core/infrastructure/repositories/mappers.ts": "b264ad946da795a5e13fa2a24e2799f0b2549f99b72e02a7a2a5d5c352c32188",
+    "libs/core/infrastructure/repositories/model/mongodb/index.ts": "ad11b5db8784e47f75f57593113921e2a3eaf6d47b5d1b196d7e6ed9fc59ceaf",
+    "libs/core/log/langfuse.ts": "941442f2620ae6145138364af45898b1c5df8dc42aa782edca0da46efea6cfc7",
+    "libs/core/log/logger.ts": "a5b470a0e05d5bd3221a5d01b19851ce27f8ab13c728b5e805d37d58ae8cb730",
+    "libs/core/workflow/domain/contracts/job-queue.service.contract.ts": "82c2fa99a1aef39084ac8d0ec830c8b52814b66372520231bc21035695a611a0",
+    "libs/core/workflow/domain/contracts/workflow-job.repository.contract.ts": "7b41fd50af8ef52c03bb98bcc20a559e037bb8612be94fce1052c2648ef4415b",
+    "libs/core/workflow/domain/enums/error-classification.enum.ts": "82859015a164dbc2486e60463d867b4d2276ae98c4cd8ccc3798a9941f047de6",
+    "libs/core/workflow/domain/enums/handler-type.enum.ts": "7690e5814cbdb0df62ab718471ce648f2fc3bdd88a118f090d19abde56ef587e",
+    "libs/core/workflow/domain/enums/job-status.enum.ts": "968102b069f7b7b5067bd8a7742b3fdfeca93fc36d53d2a3d717a25b54f52dc5",
+    "libs/core/workflow/domain/enums/workflow-type.enum.ts": "c1e0f1f66177fa2969a8a00eaf9d1beb0ed47d833d67e97d8692c13ce8cd8f46",
+    "libs/core/workflow/infrastructure/abort-signal-race.ts": "1307d38bf9033e52b11ea4e72d9cca60f7e257c8317940d66818da815d6cba18",
+    "libs/ee/configs/environment/environment.ts": "748849608dc0f9990fdc8b7abe00983275753d68289cd2a6a89a54b1bd8a25e1",
+    "libs/ee/configs/environment/index.ts": "171da45f03138dd179f38bf328ad6210a72203d5957a46b312f59ec1ddd061b2",
+    "libs/ee/heavy-mode/heavy-lens-passes.ts": "01d955737e7799bf5d90be1c06559f9d7f7cf58b13bd9b6341afbc81e37dfb49",
+    "libs/ee/heavy-mode/heavy-lenses.ts": "bf19b3533858b0532d6a5cdd5c68d6e1de0758749a746c6a4a133a9255b782f5",
+    "libs/ee/license/interfaces/license.interface.ts": "1b4df5309d4b507b168ae4450e909dea2afdd9c338d63e88ce7d84712e9bc089",
+    "libs/ee/shared/services/permissionValidation.service.ts": "f7e4d000d3643d5ad6b4835df75efb9e5d37138c5ce0eec4a3d8eae2ec918d80",
+    "libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts.ts": "f1f37233c1f9569f91b0ea51cc549951c756b73c6cec1ec0150df3457e42bf6e",
+    "libs/issues/domain/contracts/issues.repository.ts": "ff99f4fdb240a75022ca866b6ffca596791d14641c380d1d62cce20fb03a9593",
+    "libs/issues/domain/contracts/issues.service.contract.ts": "12da9d7b19e8618847f83671315d127c65cf3ba1c81da449dc673b4a3a66bc7c",
+    "libs/issues/domain/entities/issues.entity.ts": "04ee71ae3cf59ca18b53b6b0ecbd25adfeccb00dd497b1b12ba747f686c331b9",
+    "libs/issues/domain/interfaces/issues.interface.ts": "db6e217d656ef283a234fa21505c40f3774ccb181a237ccf9cdfd1c068363e3e",
+    "libs/issues/domain/scan-fingerprint.ts": "7fc7ddfbfa7c02d47d8123c1369e403e2ab5a54176df2412648e5dc0f7d6b193",
+    "libs/issues/infrastructure/adapters/repositories/issues.repository.ts": "3c58c201bb76e9d4a392b677dc8c7b29bca63b244b444ae7f3bdb501747b9b1c",
+    "libs/issues/infrastructure/adapters/repositories/schemas/issues.model.ts": "11999079c4412a970c71fe15f65dcabe8c181f9308cf8a7519f9921db4454de1",
+    "libs/issues/infrastructure/adapters/service/issues.service.ts": "a570701fa6cc5d1fd7487f69545d90172a1fd180aa2411456a29d319430f40a0",
+    "libs/llm/aborted-in-flight.ts": "f0a215badd4a6072294d1e0743f17d4a49de0f4889d8696b006e025804dbdeca",
+    "libs/llm/agent-loop-call.ts": "9f322d4ccf2ceb325f077052cb8bf4a376913c2ac78eff9fe0efc85edcd73a8c",
+    "libs/llm/agent-model.ts": "091e197d7b26f503b667e6d82e81cf0fa521e8d6bdd6953131666f24081d8ec1",
+    "libs/llm/agent-run-context.ts": "9f61b8a10baf6fe5bf9e079901c0ca5b18a4f433667824f5c8cd2702e61c4e62",
+    "libs/llm/ai-sdk-usage.ts": "618574505cb787c113072818b1b495fd7f1404ec529ebd7601f1574ca34a3cd8",
+    "libs/llm/base-url-hygiene.ts": "466a0e622d09baf5f2da0746c6a0039c2ce7046c569d700a7760f06d13d4f051",
+    "libs/llm/bedrock-model-id.ts": "f1deedc42ecfdf3c0d4c17707d1def69941c07c6534ad0b49039c4e38b0b03f8",
+    "libs/llm/byok-config.ts": "a498bab7065eb7abb14cd278d379f5f8183520f8ea349a8452a32e50f5ab58ee",
+    "libs/llm/byok-defaults.ts": "b4d9c67926d7ccdabef07565cd5d393dc4fb18f3ea9e84e9110b88b995602702",
+    "libs/llm/byok-limiter.ts": "f2fec2d01deba36cf43b6b150626724af92cad6cfba1993a708a18efd8928d6c",
+    "libs/llm/byok-model-wrapper.ts": "a734abb095c2bbe4a99f8b422b7d6e7d22cd722f6d3399fbdf2404bb599d7d6b",
+    "libs/llm/byok-to-vercel.ts": "b8cc656d7a887098b04eefcdfd7f47b0ca781bb60918114b70aea72d3437e337",
+    "libs/llm/context-overflow.ts": "03eb0766740bdd5f06ac6e3b57fc0a08aca2a133355c2d2936063c74deb4378b",
+    "libs/llm/env-declared-provider.ts": "5cac1561a20965f975a9fe7a70e9cc78a5e6c61a588cd65ea20c435db22640b5",
+    "libs/llm/error-classifier.ts": "e481f5da9eda35c1cf26094c3b66097475a9f88700f94b4931dec6b764995733",
+    "libs/llm/errors.ts": "84a800834f01f1516f99423e1161e300ee8f3514584aa10e46a366534a543fb6",
+    "libs/llm/llm-call.ts": "4bfe7167d0ec5b2ecfef8929327719a3a83227ff5b8a380b17461360bb490f00",
+    "libs/llm/llm-observability.ts": "07a7a4259f063d247dad2bead46c477eb18d8733be5637fc18b0d11275d234bb",
+    "libs/llm/llm-tasks.ts": "1600f62fd21ddffbf63352bc4a9975d392b535163a92ed45ccabe61213d50e92",
+    "libs/llm/llm.ts": "318a8e775a5c5d15ec4f9ab8aa6ae94a5017576188dba8e49a75b9980ea4c014",
+    "libs/llm/log-tags.ts": "841ab45a052460abcc567e8cc6222522a0aea84dd988277f49edc28e4a57a5ea",
+    "libs/llm/managed-slot.ts": "ca58a3826d22cd8f4068bf34305254002ab15253d9221d070dcfaf7dbcc5731b",
+    "libs/llm/model-builders.ts": "a8c0388b19bfff15f5ad18020cc0af69d83355b214c2aa2746db6b887e6bbc78",
+    "libs/llm/model-context-window.ts": "c28373e30363f543f9a8e33e16d77c41381a2b4d88db11a579e4d3c5bd111cc5",
+    "libs/llm/model-context-windows.json": "14e12fcaa240ea00509d1a14453383701c71fa1e51a9c4b95c47f6f289dad1dd",
+    "libs/llm/model-failover.ts": "8b1cce9204c58e6dc9d90b49cffc0b10201015754da15f9e31523ce64d26d9dc",
+    "libs/llm/model-identity.ts": "7d6973ff09f6bd3126b285375b6eb2271a826be3d2f0b29e666ab2add56c55df",
+    "libs/llm/model-invocation.ts": "c888cf468a29483882a1677f87ed2c80d663ebd79d9cb99e6878ba7f94028b90",
+    "libs/llm/model-providers.ts": "61bc6fe80bd11ba7e1a6aac28b44e335705847d945c50c9fb77ed27b7f58e6ab",
+    "libs/llm/opencode-go.ts": "1e21e1f4a41aea1cf251f6c62b4204df348d637562cba365647fc159485036d4",
+    "libs/llm/platform-funded-provider.ts": "390c0e75be4f8cb4ead6e03efa76eb3a687e99d6eb6923b02c29d29f539a6113",
+    "libs/llm/prompt-cache-boundary.ts": "b9a5a1a86017489d15655442190fdee880e12418ec1dd655c555ec9bf9ed0c14",
+    "libs/llm/prompt-cache.ts": "aba9ce93d6da88018b76ba3d0a35322e4f05d56641c35575127d2129479f74ba",
+    "libs/llm/providers/anthropic/brand.ts": "c187535e0f6ec5a4aa03421165bbd6d0ec0ef8940351568a0bcc45d39e6b8f09",
+    "libs/llm/providers/anthropic/index.ts": "93e0995a617747cd7c3f11ca449f97507a5ca5e5a4b8a4398d5e10049076012e",
+    "libs/llm/providers/anthropic/listing.ts": "329253d73b48a5ad3d63ef9417df4d2dc4ae398ed5ea8b46a91d70c8b98a7b61",
+    "libs/llm/providers/anthropic/thinking-repair.ts": "4d9db7b98392fba9a48f3406a20e7d9c5b84937592d48ba1516e70ce7006dca7",
+    "libs/llm/providers/anthropic/traits.ts": "5dfdca53198e5f2eb3488e93c626bbbab060ff38c811831138436a8822bcd5af",
+    "libs/llm/providers/azure/index.ts": "4bb31f1488eda4f23325a970bf1f8ee1c35037625d09dcae8aeea81cd07b8865",
+    "libs/llm/providers/bedrock/index.ts": "fc9f940115bcb63864151746edadebd229a81aa138cea7d93d670495112db5d8",
+    "libs/llm/providers/bedrock/listing.ts": "edb2a50513efe721168801c73b855fcc7f90f14b8f54eb6aaa64bc97caa70abe",
+    "libs/llm/providers/curated-catalog.ts": "4857f061c6eb83d6af0ff557c813f432076c82192a216105b10facdea116e232",
+    "libs/llm/providers/google-gemini/index.ts": "d0e29a2b9eacc34b89eb75fa794089ef0d5340b2d9033ed1ebbdafe4ba7a69df",
+    "libs/llm/providers/google-gemini/listing.ts": "19ea7b179686f261ade5bd7f5dfaa69a18328eb5702eb88a6a24d41c8fc2e45d",
+    "libs/llm/providers/google-gemini/reasoning.ts": "e5ae2f8e52b138c9369e30e07a2e27137fda3d0235f7e2ad70103d9c64e6d829",
+    "libs/llm/providers/index.ts": "2c0404a468b4ee77cd0af3e7ccd128189da3d74b5924944af3b3ad5835f479bd",
+    "libs/llm/providers/kernel/anthropic-cache.ts": "3031a1555a4c5416ebd29961c21796466febbf935306608aa5cfc7d0846682c6",
+    "libs/llm/providers/kernel/effort-budget.ts": "92ecbf23d1cae2c4166a29e290b0ae13834c890104230a00a82569db05a77dad",
+    "libs/llm/providers/kernel/listing-helpers.ts": "61ce6961104641e13ec07a6eb1ee3937d13a9ccdd6c8de6caed587ccba57abbf",
+    "libs/llm/providers/kernel/model-family.ts": "21f03923d0e2a22bf521ec2533d440cfee5ef4e731b761e65ab17eea59736810",
+    "libs/llm/providers/kernel/model-label.ts": "54bac13cf4d2b7d4d858de129e11e0bdf1b0a8b6fb8d933edec0e54347248253",
+    "libs/llm/providers/kernel/model-reasoning.ts": "032be8aadfdaab0ddb07c3424ddcfe0e3c08a2b5dd49a21f560c59f332fe3e33",
+    "libs/llm/providers/kernel/override-wire-spelling.ts": "4315d4c8e6f33f21206a22e3339cfd275068c94d7c7d9a5f7125d70e9697439a",
+    "libs/llm/providers/kernel/reasoning-traits.ts": "663c17bb326d579369a78447b92376b38cb793f70706c7d7c8d6b9b1b3ddeed9",
+    "libs/llm/providers/kernel/registry.ts": "dca542fd2019ae6a76d75ff1edb51f163e3e3931ead5eebab0cd424b808f9514",
+    "libs/llm/providers/kernel/structured-output.ts": "0da7a35f4d4a934caf3e92728bb9501012f31656738a44e41e76a762b568262c",
+    "libs/llm/providers/kernel/temperature.ts": "5a137b47cf2f65c60e4e13865556dcfe7a6e73b886aca4f6e2fad3709f336f8f",
+    "libs/llm/providers/kernel/types.ts": "0f4c8cee22c7ebe8db527ef1fae4ce958a2a811d11846f2802fb06a292225fa8",
+    "libs/llm/providers/kernel/usage.ts": "8563715d41c53797a19080c7917624dd7443ca6225c954adcb76c31962441737",
+    "libs/llm/providers/kodus/catalog.ts": "98317fd580e498960da5d852a810686bd43c27058ed40c1d940d29083747481a",
+    "libs/llm/providers/kodus/index.ts": "312a3d43a1fa15171198a1353100a650fc94a9f8a85fd6d23e127949d098fd00",
+    "libs/llm/providers/kodus/model-id.ts": "6de4a3d500b0d53615d354b1342f204364103af744568a35a53eb747fd328979",
+    "libs/llm/providers/moonshot/index.ts": "2ccfe8e52cea5c930e58344864c803c00a7226b30f31a0e8ad1f4d7b93b3f2b3",
+    "libs/llm/providers/moonshot/listing.ts": "47bcf8514748d92f63afb94c35af6721583a16ce5332d928aeb06178d9ff0bc6",
+    "libs/llm/providers/novita/index.ts": "4dd1c84273baa7a5faeb0f02a79415c9716136767ad86f3d9fc784b48f38ba12",
+    "libs/llm/providers/novita/listing.ts": "b3ecf02719423db32057e417b886081a300082e131956cf0153dc1c8c37bd10f",
+    "libs/llm/providers/openai/endpoint.ts": "89db0efd07783e211f32b5c7797abb479cf197f807b1c69aafc8f2c007bd7389",
+    "libs/llm/providers/openai/index.ts": "2d104fb67c406be3ec9e2c7e6ceb50d88e56f7fdb217d27f8997933334dfe4ed",
+    "libs/llm/providers/openai/listing.ts": "22fccca6382ce7924c0e07fb8905e3588b6e4a06c2e377c617178f49b8d022ae",
+    "libs/llm/providers/openai/not-stored.ts": "cc137829ca2a0b562addf3902ce2c4f1b180d6bf04ad04da0f761426926a454c",
+    "libs/llm/providers/openai/reasoning.ts": "d01f2365a047aa504e8f1ea7b89ed6a372f9a18a230ea49bca8bdd5c12afa1fb",
+    "libs/llm/providers/openrouter/index.ts": "19fa587f717021a6ad5ad81666a7006b931b9c63342262b2640b260196bad76e",
+    "libs/llm/providers/openrouter/listing.ts": "fdf5825d1008c974100a58a6d9daef608c3ef5fab16ef6e9678de5980442dc8b",
+    "libs/llm/providers/vertex/index.ts": "2d6a01be216a630212ea168c6a25fac0703ea9c841ab60c82015053171cefd58",
+    "libs/llm/providers/vertex/listing.ts": "a328234b3d18f305e46b1a8e876de87bbf0549681a22c1b41c78f35ae7712730",
+    "libs/llm/providers/zai/index.ts": "a7b2f56d598eda5d4fc28b6735087f96343ce3ac4e74a1753288da10b4fc0f47",
+    "libs/llm/reasoning-budget.ts": "1951789620506d7613ffece783bb76c4fed519d56d2087f20dab3288008438d2",
+    "libs/llm/reasoning-options.ts": "9c3b4f08eb3404965c0b7530ab0defb09945c79ecc3bf2b61f91efd90d7871fb",
+    "libs/llm/rejected-reasoning-field.ts": "8e69727e87f9194967dcb6b4ccc0767c9f17ba7c5c8ef85b6a8b5805b7a31419",
+    "libs/llm/repair-tool-call.ts": "fd55bcc405dd6b0e69ddb43cc11952a89aa329bb67821fc84b09277e3bcc67db",
+    "libs/llm/resolve-model-slot.ts": "cd5f5ca14b99a0d2f9ad6fb17e87e7a5bcf4b73be3d7d35fb7ebdccbd515551f",
+    "libs/llm/resolve-task-invocation.ts": "e0c6bcc6c1a50c4bff961c8883700432e7b222a4abea50f546a6437155c7b2f9",
+    "libs/llm/resolve-task-model.ts": "a0a2a1dcf9416c5b654f2ee54d602855210ec47a2d64cf39c585ceee487dc590",
+    "libs/llm/retry-policy.ts": "addffa3de2be0c8a89f639c55c9cde32a387540935c973712bea6533953bc47b",
+    "libs/llm/review-error-diagnostics.ts": "c6d2765be31e9dff2cd71842ade522d39bccd0d7cae96d85379d881bd7e62d20",
+    "libs/llm/routing-strategy.ts": "2ca4788a008247f2c52210c765ae856a9f74e20c13f3fd49ceea3346960ae541",
+    "libs/llm/sampling-params.ts": "71c2f2f0c2a1bcbf71ef537086c5e2d5b3eb38650e2edcb6260a7068ebb86621",
+    "libs/llm/served-slot.ts": "7d5553a92e73f3521bcbf7ca2404f3417aace4a00d52776da4fd9337f73a170c",
+    "libs/llm/slot-auth.ts": "e233ef62160be6fb2f51e14820b8672328ea923ca2b6277ef11a03eaf0898847",
+    "libs/llm/slot-call-options.ts": "5b7dff348eabc4b8af4ae5fc649df2fc470935874b22997f0cf0373002a1ae37",
+    "libs/llm/static-task-strategy.ts": "3b6101e128ef8f08e076f3456f6706a2c8be9171f32f00d3c1e59358185d8d09",
+    "libs/llm/strict-wire-schema.ts": "df7d0ce9c3d8c80dc8bcb247b0331b7a36e77be6bcf7517bc763850fb9709c28",
+    "libs/llm/structured-output-gate.ts": "9bd36ab406e324fd2b5903cfcdb4245156e7814b8f2ab7037557806b030a66bc",
+    "libs/llm/structured-output-repair.ts": "facb80808040458d587b5f6dab1ebfb6bbfe6958e363d4b65b1a782e1dc93f3a",
+    "libs/llm/structured-review-call.ts": "d761fac135507d3eda3d9cadb2e1f17ba513486eb3dca9c9477c0a74470aa6b2",
+    "libs/llm/system-cache.ts": "584625e05ca2c1282bfe384bad9163b7ab525e4aa5d346b64f8d2db7303d36fb",
+    "libs/llm/token-estimate.ts": "e16d66ac29be37b98a61a05373700dc936d8652746a195492f1b861ea13259d0",
+    "libs/llm/usage-meter.ts": "9736b9ed4116de896a1b60352e78382179cd39903d4a1b27a62eea6f40cee4e4",
+    "libs/organization/domain/global-parameters/contracts/global-parameters.service.contract.ts": "e1b5563efb28e947776d0214076d73d785feb9ce8336a39d7d18d90400825b8f",
+    "libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract.ts": "2bc34853d2c8248da7a5a09b29b54782e5704bffad4daa6fbacb37cd62548ae2",
+    "libs/platformData/domain/pullRequests/enums/deliveryStatus.enum.ts": "c7ddb7a5d912a8a2649eb4fe4f9e6eb56e78183dfecdbc7d0aeffbf9b3351f44",
+    "libs/platformData/domain/pullRequests/enums/priorityStatus.enum.ts": "5e14b8efa382ec8cae3fffdfa327e8ffe6dee58af3194c05bdcd97da9d1010c4",
+    "libs/sandbox/domain/contracts/sandbox-lease-manager.contract.ts": "f795bc03ecd33699d56acaa9cbb83cf90333af2e504395c1f0383054716206ce",
+    "libs/sandbox/domain/contracts/sandbox.provider.ts": "c6f80f92728b42739b843c76441be607c315d7cc9404ec81a6462454d174b24d",
+    "libs/sandbox/infrastructure/providers/e2b-sandbox.service.ts": "3e3cf01e8e9c0ea86356d975e7df71cb0ddcee16fc5f6dfe08672711a1e99bb0",
+    "libs/sandbox/infrastructure/providers/git-auth-header.ts": "5e3af7c34f3dd9fbe8c7e77499d8d5207c2164fc0184e709da4552afbbf5f4f1",
+    "libs/sandbox/infrastructure/providers/local-sandbox.service.ts": "3513e767e41e62bc97ada7bfb63cf601151c621be88d1ef6488075c0535074d2",
+    "libs/sandbox/infrastructure/providers/null-sandbox.service.ts": "83897648dd83a99d7631e4047d602f3b7df7714f052afd94a823b264f5909cfd",
+    "libs/sandbox/infrastructure/providers/path-segments.ts": "e217ef8524d97b1fb4dd5a2b94f491dd1f2194291fa82f6944fd61d8da727386",
+    "libs/sandbox/infrastructure/providers/read-within-root.ts": "f52bbd10a7a5af74c84bb769d21aa4355d8f85341a80e6693297a668b73bcf8e",
+    "libs/sandbox/infrastructure/providers/review-user-privileges.ts": "9493e4a33295a46050c292942761341dc34f0d7c848d19f234888e876e1e0772",
+    "libs/sandbox/infrastructure/providers/submodule-fetch.ts": "1b42a360405c5f325d18bad88e9e57997c1771b25375a68c8caf4bfb19ae4bcc",
+    "libs/sandbox/infrastructure/repositories/sandbox-lease.repository.ts": "176550edcab0cde14339d3d19846b42565385c6d91242cc376d183bb41956c38",
+    "libs/sandbox/infrastructure/repositories/schemas/sandbox-lease.model.ts": "46bed83f786e1fbd402e9bc7c732efb061df88e7b44dd52a201f383752c62224",
+    "libs/sandbox/infrastructure/services/local-sandbox-cleanup.service.ts": "ace2060bccd476b4a249e0596d4a4bde3d7b967f390cd4b57392735ac10d923f",
+    "libs/sandbox/infrastructure/services/sandbox-concurrency-config.service.ts": "e6fb487bbb9ef0d1080d8af73333dd24a133830704ba3e3aeaaee8730060855d",
+    "libs/sandbox/infrastructure/services/sandbox-concurrency-limiter.ts": "170656e53b483cc95f203e96f55d6abb6f9f9d86dfdfbb5057b3201f776f1b41",
+    "libs/sandbox/infrastructure/services/sandbox-create-circuit-breaker.ts": "02708f3f44306b2c6c602564e52dd699d56871eac6e09e7f3be5046619190e8a",
+    "libs/sandbox/infrastructure/services/sandbox-lease-manager.service.ts": "d93e085aec47e6a36a0bc8974037aa58c943ba3e90881f9b1c2e3c10407e694b",
+    "libs/security-scan/application/get-security-scans.use-case.ts": "fb8eeb5ec306e2ec9fc01f26c93695d092537daa0c1ec82c3c8b0b62172b9868",
+    "libs/security-scan/application/scan-model.ts": "a6742b4a0e1fc3fcd291081cb793a662154a1a9e0ac78af075f0819398f4606e",
+    "libs/security-scan/application/scan-owner-resolver.ts": "41acb0f75adc00697d0bedbe7817ed157bcde65b23c3fb137e998cab615c1054",
+    "libs/security-scan/application/security-scan-engine.ts": "ecc49a54995d40ff1331cdecf280636bb7897028916f9a0f5b5660da61cc7fdc",
+    "libs/security-scan/application/security-scan-job.processor.ts": "0d050f6eb45aa3ec9b3f73db0afcd19beca2010f96218a5175f073ea22cd6578",
+    "libs/security-scan/application/start-security-scan.use-case.ts": "56db05c6b2edc8aa93c56a107ecbc36b36464805892cec3552abfdea3e1e1030",
+    "libs/security-scan/domain/budget-meter.ts": "701936e54342ccda526c106c0718fc14ff00fbd2a452487141afc0a988bb838e",
+    "libs/security-scan/domain/codeowners.ts": "fcd0f323a845e0351797872f88b3a9a0d7ac322840e1bec8d9d3146ffb3c0ad3",
+    "libs/security-scan/domain/enclosing-symbol.ts": "5ee6f62f701ed1b5345cf84123cc693c3f4a6d6da9cda785f2eda6093d95044d",
+    "libs/security-scan/domain/finding-fingerprint.ts": "48d6d7cd229c206d20a767c9629cbe24b56b5aa7ac9d50cb61ea1af2469f0c66",
+    "libs/security-scan/domain/finding-path.ts": "42578b80320a94507f44857b39073284b53adae65b44334e27a6e6cb4f7b125b",
+    "libs/security-scan/domain/scan-failure.ts": "96d7e8ecd3ed717b4dc4116c48e52778a4c14f5109be5e9a0004268b6902e357",
+    "libs/security-scan/domain/scan-prompts.ts": "80175572440d03680ecf1aa529d233fe06eec2d099ad2133244dbce0f9b99d86",
+    "libs/security-scan/domain/scan-units.ts": "bd52a40f3604a90583c8aa1d4a8ed00034457263e0c313622e871273946e7bd1",
+    "libs/security-scan/domain/security-scan.types.ts": "9ded23c3dd199af28de291a7db495e6046ff9399fa151b7db8b2f8952727c559",
+    "libs/security-scan/domain/surface/collect-surface.ts": "792394f98615aa6668b69843961de2aad7b4a571f29ba15327beea081d563957",
+    "libs/security-scan/domain/surface/languages/bash.surface.ts": "295e205bc63f8cd7cb492468fd4b660a74e30248b82a4137975e988026030f89",
+    "libs/security-scan/domain/surface/languages/c-family.shared.ts": "f7e4c9ed8ec3e842d02c3716b1c469d8a127e7a1dd0ac4f325423f15b1a27172",
+    "libs/security-scan/domain/surface/languages/c.surface.ts": "e2a1b7276e294f7e037f6a896f910ca339d7b54f78d1717c102cc32a026db8f7",
+    "libs/security-scan/domain/surface/languages/cpp.surface.ts": "cc2aa21290ce97145cd56acde879c525b5e8b12e6a0aee77328896a568649ab0",
+    "libs/security-scan/domain/surface/languages/csharp.surface.ts": "eb64a25b800e50b2d95e976693bb206e39d87cbd43505b272826ddd75668e896",
+    "libs/security-scan/domain/surface/languages/dart.surface.ts": "b1c53f4a51e83d30c6de2baeaac0f8ab892190bb914d404ee296c47877cdd54a",
+    "libs/security-scan/domain/surface/languages/elixir.surface.ts": "f988a26e2e1600e61c5ced1a8d6628628955aedb7d042ee38ca5b219f5171473",
+    "libs/security-scan/domain/surface/languages/go.surface.ts": "ffecaf9071de73b308ec1ccf53e9b3d28025786710cf245ef5b49bc3ca0f3efe",
+    "libs/security-scan/domain/surface/languages/index.ts": "481fb9a304caf2f259ad7020630f7a9391e5946f27e89947f4c0251a6c151d80",
+    "libs/security-scan/domain/surface/languages/java.surface.ts": "67d7b5567a7520ccd7c583d93ccbe2ed894db4f4833d30573d230fb06c16b837",
+    "libs/security-scan/domain/surface/languages/jvm.shared.ts": "68297b59a70ee234ec97735d5221502bffcf8bcc0cb126a0da2229145706b05d",
+    "libs/security-scan/domain/surface/languages/kotlin.surface.ts": "063387b64c306f5a19b0ef55e302caad5c680d4add782da444e9c81dabdf54b3",
+    "libs/security-scan/domain/surface/languages/php.surface.ts": "5c10e344d0aed7fa6ec2ec1f9a8ea2856a06f005e3853b5ebf3a2b62ee0f797c",
+    "libs/security-scan/domain/surface/languages/python.surface.ts": "a588ed18a032fbe96a66f1326c006e7820f92a97835a489a7c6331acdfda4de6",
+    "libs/security-scan/domain/surface/languages/ruby.surface.ts": "4480f76f81eb5da3323ae51408af7188842c8e3cda7b5a9a1c4555ae80cf7c52",
+    "libs/security-scan/domain/surface/languages/rust.surface.ts": "c3976355644441d34bc6fa9b0fdf712bcae8c679996cec04f95689734d4c5849",
+    "libs/security-scan/domain/surface/languages/scala.surface.ts": "fd9942098a3b26d78e69e08d7825f810882b18c60e839f7015f7684ba96d76c2",
+    "libs/security-scan/domain/surface/languages/shared.ts": "d9d498c61e99c9d30210c4c480e3830c04c0fbac45f98498d55ded99a892fbd6",
+    "libs/security-scan/domain/surface/languages/swift.surface.ts": "912e450cd896aed26961e737e73985218bb835f8f428dee1983b9414ae91b07a",
+    "libs/security-scan/domain/surface/languages/typescript.surface.ts": "c5d819bd0e2b896ea136ea975c4faccd6640b152c031d5fa071015fe76bbb155",
+    "libs/security-scan/infrastructure/security-scan.model.ts": "0a9addf0c2e6424e41103fcb113224edfbd702e532c9b30dd047f8effaa99426",
+    "libs/security-scan/infrastructure/security-scan.repository.ts": "c889e7033732f0a25a645b5163c350113beb350a2398c56e793ca028a1931301"
+  },
+  "runtime": {
+    "node": "v22.23.4",
+    "platform": "linux"
+  },
+  "model": "deepseek-v4-flash@fireworks",
+  "repository": {
+    "commit": "107e5a7e94c0c54925fc860412776537d88e97a5",
+    "files": {
+      "package.json": "{\"name\":\"scan-rescan-contract\",\"private\":true,\"dependencies\":{\"express\":\"4.21.2\",\"pg\":\"8.13.3\"}}",
+      "src/products.ts": "import express from 'express';\nimport { Pool } from 'pg';\nconst app = express();\nconst database = new Pool({ connectionString: process.env.DATABASE_URL });\n// Public product catalog. Customer and payment tables are private.\napp.get('/products/:category', async function products(req, res) {\n    const rows = await database.query(\"SELECT id, name FROM products WHERE category = '\" + req.params.category + \"'\");\n    res.json(rows.rows);\n});\napp.listen(Number(process.env.PORT || 3000));\n"
+    }
+  },
+  "boundaries": "Production start/processor/engine/BYOK/meter/local sandbox/lease manager/scan and issue Mongo repositories; fixture workflow envelopes, integration and cache gateways. No HTTP, RabbitMQ or PostgreSQL.",
+  "checks": {
+    "bothCompleted": true,
+    "sameCommit": true,
+    "sameIssueIds": true,
+    "nonVacuous": true,
+    "noNewIssues": true,
+    "noResolvedIssues": true,
+    "foundAgain": true,
+    "capsHeld": true
+  },
+  "passed": true,
+  "rounds": [
+    {
+      "round": 1,
+      "commitSha": "107e5a7e94c0c54925fc860412776537d88e97a5",
+      "status": "completed",
+      "outcome": {
+        "created": 1,
+        "stillOpen": 0,
+        "reopened": 0,
+        "dismissed": 0,
+        "resolved": 0
+      },
+      "spend": {
+        "usd": 0.049862412,
+        "inputTokens": 78297,
+        "outputTokens": 36470,
+        "requests": 30
+      },
+      "budgetUsd": 1,
+      "coverage": {
+        "examinedFiles": [
+          "src/products.ts",
+          "package.json"
+        ],
+        "examinedByClass": [
+          {
+            "vulnerabilityClass": "authz",
+            "filePaths": [
+              "src/products.ts"
+            ]
+          },
+          {
+            "vulnerabilityClass": "injection",
+            "filePaths": [
+              "src/products.ts"
+            ]
+          },
+          {
+            "vulnerabilityClass": "misconfiguration",
+            "filePaths": [
+              "src/products.ts"
+            ]
+          },
+          {
+            "vulnerabilityClass": "resource_exhaustion",
+            "filePaths": [
+              "src/products.ts"
+            ]
+          }
+        ],
+        "inheritedExaminedByClass": [],
+        "unitsTotal": 1,
+        "unitsDone": 1,
+        "unitsFailed": 0,
+        "unitsSkippedByBudget": 0,
+        "languages": [
+          "typescript"
+        ],
+        "mapFailedLanguages": [],
+        "filesBeyondPlan": 0
+      },
+      "issueCount": 1,
+      "addedIdentities": 1,
+      "removedIdentities": 0,
+      "issues": [
+        {
+          "id": "6afaf6747b882ec1ea355150",
+          "fingerprint": "f68ec4955a0fafdd8dc6ef28843bea2a92d08a4c64bb54e8a4ffddad8c9c42d6",
+          "status": "open",
+          "lastSeenScanId": "6afaf5ae7b882ec1ea35514f",
+          "consecutiveScanMisses": 0,
+          "file": "src/products.ts",
+          "symbol": "app.get(\"/products/:category\")",
+          "cwe": "CWE-89"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "commitSha": "107e5a7e94c0c54925fc860412776537d88e97a5",
+      "status": "completed",
+      "outcome": {
+        "created": 0,
+        "stillOpen": 1,
+        "reopened": 0,
+        "dismissed": 0,
+        "resolved": 0
+      },
+      "spend": {
+        "usd": 0.037698935999999995,
+        "inputTokens": 75709,
+        "outputTokens": 26406,
+        "requests": 30
+      },
+      "budgetUsd": 1,
+      "coverage": {
+        "examinedFiles": [
+          "src/products.ts",
+          "package.json"
+        ],
+        "examinedByClass": [
+          {
+            "vulnerabilityClass": "authz",
+            "filePaths": [
+              "src/products.ts"
+            ]
+          },
+          {
+            "vulnerabilityClass": "injection",
+            "filePaths": [
+              "src/products.ts"
+            ]
+          },
+          {
+            "vulnerabilityClass": "misconfiguration",
+            "filePaths": [
+              "src/products.ts"
+            ]
+          },
+          {
+            "vulnerabilityClass": "resource_exhaustion",
+            "filePaths": [
+              "src/products.ts"
+            ]
+          }
+        ],
+        "inheritedExaminedByClass": [],
+        "unitsTotal": 1,
+        "unitsDone": 1,
+        "unitsFailed": 0,
+        "unitsSkippedByBudget": 0,
+        "languages": [
+          "typescript"
+        ],
+        "mapFailedLanguages": [],
+        "filesBeyondPlan": 0
+      },
+      "issueCount": 1,
+      "addedIdentities": 0,
+      "removedIdentities": 0,
+      "issues": [
+        {
+          "id": "6afaf6747b882ec1ea355150",
+          "fingerprint": "f68ec4955a0fafdd8dc6ef28843bea2a92d08a4c64bb54e8a4ffddad8c9c42d6",
+          "status": "open",
+          "lastSeenScanId": "6afaf6757b882ec1ea355151",
+          "consecutiveScanMisses": 0,
+          "file": "src/products.ts",
+          "symbol": "app.get(\"/products/:category\")",
+          "cwe": "CWE-89"
+        }
+      ]
+    }
+  ],
+  "tokens": {
+    "in": 154006,
+    "out": 62876,
+    "cacheRead": 115958,
+    "cacheWrite": 0,
+    "calls": 27,
+    "ms": 341297,
+    "callMs": [
+      17664,
+      6860,
+      656,
+      5808,
+      5658,
+      1967,
+      7805,
+      689,
+      9377,
+      2165,
+      5184,
+      85001,
+      48605,
+      20349,
+      4845,
+      2456,
+      7568,
+      4222,
+      1842,
+      6197,
+      5321,
+      4307,
+      3158,
+      4418,
+      1617,
+      75867,
+      1691
+    ],
+    "efforts": {
+      "security-scan-map": [
+        "high"
+      ],
+      "security-scan-authz": [
+        "off"
+      ],
+      "security-scan-authz-recovery": [
+        "high"
+      ],
+      "security-scan-injection": [
+        "off"
+      ],
+      "security-scan-injection-verify": [
+        "off"
+      ],
+      "security-scan-finalize": [
+        "high"
+      ],
+      "security-scan-misconfiguration": [
+        "off"
+      ],
+      "security-scan-misconfiguration-recovery": [
+        "high"
+      ],
+      "security-scan-resource_exhaustion": [
+        "off"
+      ],
+      "security-scan-resource_exhaustion-recovery": [
+        "high"
+      ],
+      "security-scan-resource_exhaustion-verify": [
+        "off"
+      ],
+      "security-scan-repro": [
+        "high"
+      ],
+      "security-scan-misconfiguration-verify": [
+        "off"
+      ],
+      "code-review-dedup": [
+        "high"
+      ]
+    }
+  }
+}

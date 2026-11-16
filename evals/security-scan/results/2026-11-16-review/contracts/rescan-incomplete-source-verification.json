@@ -1,0 +1,23 @@
+{
+  "verifiedAgainst": "e64b84cb0eb5a18e46ee05c7038ada9b3cb93bba",
+  "runtimeFiles": 286,
+  "mismatches": [],
+  "generatedFiles": [
+    {
+      "path": "libs/ee/configs/environment/environment.ts",
+      "matchesLocalGeneratedFile": true
+    }
+  ],
+  "probeMatches": true,
+  "checks": {
+    "bothCompleted": false,
+    "sameCommit": true,
+    "sameIssueIds": true,
+    "nonVacuous": true,
+    "noNewIssues": true,
+    "noResolvedIssues": true,
+    "foundAgain": true,
+    "capsHeld": true
+  },
+  "passed": false
+}
