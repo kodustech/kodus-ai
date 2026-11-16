@@ -446,6 +446,14 @@ services:
             - CHOKIDAR_USEPOLLING=false
             - NODE_ENV=development
             - NEXT_TELEMETRY_DISABLED=1
+            # `next dev` answers 403 on /_next/* to an origin it was not told
+            # about (apps/web/next.config.js allowedDevOrigins). A stack opened
+            # by its IP or a public host, as the self-hosted Runo recipe does
+            # (.kodus/workspace.selfhosted.yaml), never hydrates without it:
+            # the sign-up form renders and does nothing. Read from the shell
+            # or the compose environment (the recipe's services.compose.env);
+            # unset, the container has none.
+            - ALLOWED_DEV_ORIGINS
         deploy:
             resources:
                 limits:
