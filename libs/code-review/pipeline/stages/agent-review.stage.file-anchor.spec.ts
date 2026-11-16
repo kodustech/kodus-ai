@@ -141,7 +141,7 @@ const run = async (
 
 const inlineSuggestionsOf = (result: any): any[] =>
     (result.fileAnalysisResults ?? []).flatMap(
-        (f: any) => f.codeReviewModelUsed?.suggestions ?? f.suggestions ?? [],
+        (f: any) => f.validSuggestionsToAnalyze ?? [],
     );
 
 let runSpy: jest.SpyInstance;
@@ -459,5 +459,15 @@ describe('a finding on a file whose diff the host withheld', () => {
         });
 
         expect(result.validSuggestionsByPR ?? []).toEqual([]);
+        for (const inline of [
+            result.validSuggestions ?? [],
+            inlineSuggestionsOf(result),
+        ]) {
+            expect(inline).toHaveLength(1);
+            expect(inline[0]).toMatchObject({
+                relevantFile: LOCKFILE,
+                relevantLinesStart: 11,
+            });
+        }
     });
 });

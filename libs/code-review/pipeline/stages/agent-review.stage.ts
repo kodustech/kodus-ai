@@ -2058,15 +2058,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     // An analyzer body opens with its own title, which the
                     // PR-level comment already shows as its heading, and
                     // continues with a list that cannot follow a dash.
-                    const analyzerBody = (s: Partial<CodeSuggestion>) => {
-                        const content = s.suggestionContent || '';
-                        const title = s.oneSentenceSummary;
-                        return title && content.startsWith(title)
-                            ? content
-                                  .slice(title.length)
-                                  .replace(/^[.:]?\s*/, '')
-                            : content;
-                    };
+                    const withoutTitle = (text: string, title?: string) =>
+                        title && text.startsWith(title)
+                            ? text.slice(title.length).replace(/^[.:]?\s*/, '')
+                            : text;
                     const cite = (
                         s: Partial<CodeSuggestion>,
                         text: string,
@@ -2075,7 +2070,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             ? `\`${s.relevantFile}:${s.relevantLinesStart}\``
                             : `\`${s.relevantFile}\``;
                         return isAnalyzerSuggestion(s)
-                            ? `${where}\n\n${analyzerBody(s)}`
+                            ? `${where}\n\n${withoutTitle(text, s.oneSentenceSummary)}`
                             : `${where} — ${text}`;
                     };
                     draft.validSuggestionsByPR.push(
