@@ -93,19 +93,24 @@ function remember(text: string, tokens: number): number {
     return tokens;
 }
 
-/** Token count of a single string, tokenizer-backed with a safe fallback. */
-export function estimateTextTokens(text: string): number {
+/** Token count of a single string; transient slices can bypass the shared memo. */
+export function estimateTextTokens(
+    text: string,
+    options?: { cache?: boolean },
+): number {
     if (!text) {
         return 0;
     }
-    const hit = memo.get(text);
+    const useMemo = options?.cache !== false;
+    const hit = useMemo ? memo.get(text) : undefined;
     if (hit !== undefined) {
         return hit;
     }
     const enc = getEncoder();
     if (enc) {
         try {
-            return remember(text, enc.encode_ordinary(text).length);
+            const tokens = enc.encode_ordinary(text).length;
+            return useMemo ? remember(text, tokens) : tokens;
         } catch {
             // fall through to the char estimate
         }

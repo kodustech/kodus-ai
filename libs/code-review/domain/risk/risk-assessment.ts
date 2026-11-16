@@ -33,6 +33,7 @@ export type RiskAssessmentResult =
               category: string;
               errorName: string;
               httpStatus?: number;
+              code?: 'diff_too_large';
           };
       };
 
