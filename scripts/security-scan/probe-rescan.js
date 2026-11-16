@@ -265,7 +265,9 @@ async function main() {
             sameCommit: rounds.every((r) => r.commitSha === commit),
             sameIssueIds:
                 first.issues.length === second.issues.length &&
-                first.issues.every((a) => second.issues.some((b) => a.id === b.id)),
+                first.issues.every((a) =>
+                    second.issues.some((b) => a.id === b.id),
+                ),
             nonVacuous: first.issueCount > 0 && first.outcome?.created > 0,
             noNewIssues:
                 second.addedIdentities === 0 && second.outcome?.created === 0,
@@ -279,6 +281,28 @@ async function main() {
         result = {
             kind: 'contract-with-real-model',
             provenance,
+            // runo syncs source without moving the VM's Git HEAD. Preserve its
+            // dirty provenance and record the loaded source hashes so the
+            // caller can verify them against the committed local checkout.
+            runtimeSources: Object.fromEntries(
+                Object.keys(require.cache)
+                    .filter((file) =>
+                        file.startsWith(
+                            path.resolve(__dirname, '../../libs') + path.sep,
+                        ),
+                    )
+                    .sort()
+                    .map((file) => [
+                        path
+                            .relative(path.resolve(__dirname, '../..'), file)
+                            .split(path.sep)
+                            .join('/'),
+                        createHash('sha256')
+                            .update(fs.readFileSync(file))
+                            .digest('hex'),
+                    ]),
+            ),
+            runtime: { node: process.version, platform: process.platform },
             model,
             repository: { commit, files },
             boundaries:
