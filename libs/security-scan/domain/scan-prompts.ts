@@ -137,7 +137,7 @@ Report every distinct vulnerability in these files that meets this bar, up to 15
 - relevantFile / relevantLinesStart / relevantLinesEnd: the dangerous operation itself (the query, the exec, the fetch, the missing check), not the entry point.
 - suggestionContent: start with one line "Entry: <file>:<line>", then one line "Attacker: <who>, crossing <which boundary>", then the path the input takes, then why nothing on the path stops it, then the impact for this application, then the fix. Plain sentences, no headings.
 
-If you find nothing that meets this bar, submit an empty list. An empty list is a correct answer; a guess is not.`;
+When you have finished investigating, call the submitResult tool with an object containing reasoning and suggestions. If nothing meets this bar, set suggestions to an empty array. Do not end with only prose or a bare list: neither delivers the structured result this scan requires. An empty suggestions array after completing the investigation is a correct answer; a guess is not.`;
 }
 
 /**
