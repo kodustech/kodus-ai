@@ -1,0 +1,17 @@
+{
+  "method": "All control findings; otherwise the 20 smallest SHA-256(seed + NUL + finding key) off-list findings, or all when fewer. Fixed before viewing selected descriptions.",
+  "group": "control",
+  "seed": "wellington-review-2451-2026-11-16",
+  "case": "itsdangerous-control",
+  "language": "python",
+  "sourceResult": "results/2026-11-16-review/fresh.cases/itsdangerous-control.json",
+  "sourceResultSha256": "608a93a69173346cffea40d0bb748e08779c4b7ba8e1c0f1e01206a2847aaf9e",
+  "offListPopulation": 1,
+  "selected": [
+    {
+      "index": 0,
+      "key": "itsdangerous-control|resource_exhaustion|src/itsdangerous/url_safe.py|URLSafeSerializerMixin.load_payload|44",
+      "hash": "43927b8ebfd1d15c6c26b0f9792afd2ab6ade938fa40da9e73d463132bd280a0"
+    }
+  ]
+}
