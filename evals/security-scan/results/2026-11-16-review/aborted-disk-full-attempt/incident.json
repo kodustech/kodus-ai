@@ -1,0 +1,21 @@
+{
+  "kind": "interrupted-measurement",
+  "model": "deepseek-v4-flash@fireworks",
+  "engineCommit": "f7723e64b4f8e8046ddd63550403061570e4bb30",
+  "startedAt": "2026-11-16T14:00:27.685Z",
+  "recoveryObservedAt": "2026-11-16T16:17:35Z",
+  "reason": "Local filesystem ENOSPC. No final positive/confirmation report was retained.",
+  "completedCases": [
+    "is-control",
+    "itsdangerous-control",
+    "uuid-control"
+  ],
+  "completedCaseSnapshotsMatchCheckpoint": true,
+  "partialSha256": "3038189ead85841d5281bb3d79dbb6bcfe2012d90423d758c7d3c0872846d596",
+  "logSha256": "06c3ce340a9b31cab8f91f44ab1d8c787678e73d425e0f87315ba5246b4abe25",
+  "finalRawOutputExists": false,
+  "overallRunCompleted": false,
+  "releaseGateMeasured": false,
+  "aggregateSpendKnown": false,
+  "note": "Keep original checkpoint counters as captured. Aggregate counters are not a final bill or spend attributable only to completed cases. Per-case retained spend remains in each immutable snapshot. No missing positive case is counted as a passing or clean measurement."
+}

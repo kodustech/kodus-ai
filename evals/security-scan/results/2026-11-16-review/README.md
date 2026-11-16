@@ -8,8 +8,8 @@ preserved separately from later scoring. The model is
 Each public repository has the same $3 request-level cap.
 
 Release state: the last valid precision baseline fails Python and Go. The
-fresh development/confirmation measurement is pending; no passing release
-claim is made from interrupted attempts.
+fresh development/confirmation attempt stopped on local ENOSPC, without a
+retained final positive report. No passing release claim is made.
 
 ## Development baseline
 
@@ -72,7 +72,7 @@ languages. It is not an unbiased estimate for every language or repository.
 The historical RealVuln leaderboard claims were removed from the PR because
 their original output could not be recovered; they are not reused here.
 
-The fresh run is still in progress. Its first three immutable case snapshots
+The fresh attempt stopped on local disk exhaustion. Its three immutable case snapshots
 and their selections are in `fresh.cases/`, committed before inspection.
 The is control completed 3/3 planned units and reported one false positive;
 itsdangerous completed 7/10 units and reported one false positive. Its three
@@ -82,6 +82,10 @@ by the library; the underlying regex/decompression behavior is real, but
 the claimed security boundary is not established. Exact-claim source
 judgments remain in `../../adjudications.json`. These checkpoints are not
 a passing quality gate or a completed development/confirmation measurement.
+`aborted-disk-full-attempt/` retains the original incomplete checkpoint,
+compressed complete log and incident metadata. All three frozen cases match
+that checkpoint exactly. No completed positive/confirmation result or final
+aggregate spend was retained; those missing cases remain unmeasured.
 
 The uuid control completed 14/16 units with two unfinished, and reported two
 findings for $2.855392944, with no provider request failures. Its v1 MAC/token
