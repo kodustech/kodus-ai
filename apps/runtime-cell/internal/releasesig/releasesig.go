@@ -189,26 +189,41 @@ func ParseManifest(text []byte, file string) (map[string]string, error) {
 // release or a key that is not pinned, or does not verify. It reads no
 // listed file: CheckFile does, as each is installed.
 func Verify(dir, release string, keys []PublicKey) (map[string]string, error) {
+	m, _, err := VerifySigned(dir, release, keys)
+	return m, err
+}
+
+// VerifySigned is Verify that also names the key that signed the release,
+// for the release index's revocation check.
+func VerifySigned(dir, release string, keys []PublicKey) (map[string]string, string, error) {
+	m, keyID, err := verify(dir, release, keys)
+	if err != nil {
+		return nil, "", err
+	}
+	return m, keyID, nil
+}
+
+func verify(dir, release string, keys []PublicKey) (map[string]string, string, error) {
 	if len(keys) == 0 {
-		return nil, refuse("", "no release key is pinned: nothing can be verified")
+		return nil, "", refuse("", "no release key is pinned: nothing can be verified")
 	}
 	manifestPath, sigPath := filepath.Join(dir, ManifestName), filepath.Join(dir, SignatureName)
 	manifest, err := readSmall(manifestPath)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	sigText, err := readSmall(sigPath)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	keyID, signedRelease, sig, err := parseSignature(sigText, sigPath)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	// Only the name is bound here: an older release asked by its own name
 	// verifies. Ordering against the installed release is cellupdate's.
 	if signedRelease != release {
-		return nil, refuse(sigPath, "signed for release %q, not %q", signedRelease, release)
+		return nil, "", refuse(sigPath, "signed for release %q, not %q", signedRelease, release)
 	}
 	var pub ed25519.PublicKey
 	for _, k := range keys {
@@ -217,12 +232,13 @@ func Verify(dir, release string, keys []PublicKey) (map[string]string, error) {
 		}
 	}
 	if pub == nil {
-		return nil, refuse(sigPath, "signed with key %s, which is not pinned", keyID)
+		return nil, "", refuse(sigPath, "signed with key %s, which is not pinned", keyID)
 	}
 	if !ed25519.Verify(pub, Message(release, manifest), sig) {
-		return nil, refuse(sigPath, "the signature does not verify against %s with key %s", ManifestName, keyID)
+		return nil, "", refuse(sigPath, "the signature does not verify against %s with key %s", ManifestName, keyID)
 	}
-	return ParseManifest(manifest, manifestPath)
+	m, err := ParseManifest(manifest, manifestPath)
+	return m, keyID, err
 }
 
 func parseSignature(text []byte, file string) (keyID, release string, sig []byte, err error) {

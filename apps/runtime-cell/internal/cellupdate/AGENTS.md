@@ -5,6 +5,7 @@
 ## Owns
 - `cellupdate.go` `Install`: copy each `Required` command into `<root>/releases/<release>-<id>/bin/`, match every file against the signed manifest, then swap the links. `Options.VerifyOnly` checks and installs nothing.
 - `Run`: the command's flags and exit codes (0 installed or verified, 1 refused, 2 usage).
+- `index_state.go`: the release index gate. A release installs only under a current signed index (`releasesig.VerifyIndex`, `-index`, default `-from`) that allows it (`allowedByIndex`: between `minimum` and `latest`, or exactly `latest` when not semver), signed by a key no index ever revoked. `<root>/release-index.state` keeps the latest `issued` and every revoked key the host saw: an older index is refused, a revocation is never forgotten, an unreadable state is refused rather than read as empty.
 - `order.go` `checkOrder`: downgrade protection. Release names are ordered as semver; a lower release, or one that cannot be ordered against the installed one, is refused unless `-allow-downgrade`.
 
 ## Does not own
@@ -28,7 +29,7 @@
 
 ## Module map
 
-Files (2, tests apart): `cellupdate.go`, `order.go`
+Files (3, tests apart): `cellupdate.go`, `index_state.go`, `order.go`
 
 Imports these Runtime modules:
 

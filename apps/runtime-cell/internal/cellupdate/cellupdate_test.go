@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/releasesig"
 )
@@ -53,7 +54,28 @@ func (s signer) release(t *testing.T, name string) string {
 	if err := os.WriteFile(filepath.Join(dir, releasesig.SignatureName), sig, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// The release workflow publishes the index next to the release, naming it the latest.
+	s.index(t, dir, releasesig.Index{Issued: time.Now().Add(-time.Minute), Expires: time.Now().Add(30 * 24 * time.Hour), Latest: name, Minimum: name})
 	return dir
+}
+
+// index writes a signed RELEASE-INDEX into dir, replacing one there.
+func (s signer) index(t *testing.T, dir string, ix releasesig.Index) {
+	t.Helper()
+	text, err := releasesig.MarshalIndex(ix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig, err := releasesig.SignIndex(s.priv, text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, releasesig.IndexName), text, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, releasesig.IndexSignatureName), sig, 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 type state struct{ current, previous, releases string }
@@ -115,6 +137,8 @@ func TestAnUpdateThatDoesNotVerifyChangesNothing(t *testing.T) {
 		}, "v2.0.0"},
 		{"a key that is not pinned", func(t *testing.T) (string, string) {
 			dir := other.release(t, "v2.0.0")
+			// The index is the pinned key's: the refusal is the release's own signature.
+			s.index(t, dir, releasesig.Index{Issued: time.Now().Add(-time.Minute), Expires: time.Now().Add(24 * time.Hour), Latest: "v2.0.0", Minimum: "v2.0.0"})
 			return dir, filepath.Join(dir, releasesig.SignatureName)
 		}, "v2.0.0"},
 		{"an older signed release asked as a newer one", func(t *testing.T) (string, string) {

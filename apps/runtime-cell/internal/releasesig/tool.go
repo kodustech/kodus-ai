@@ -9,13 +9,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 )
 
 // RunTool is cmd/release-sign: generate a key pair, or sign a release
 // directory's SHA256SUMS into SHA256SUMS.sig. Exit 0 done, 1 failed, 2 usage.
 func RunTool(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		_, _ = fmt.Fprintln(stderr, "usage: release-sign generate -private FILE -public FILE | sign -key FILE -release NAME -dir DIR")
+		_, _ = fmt.Fprintln(stderr, "usage: release-sign generate -private FILE -public FILE | sign -key FILE -release NAME -dir DIR | index -key FILE -latest NAME -minimum NAME [-valid-days 90] [-revoke ID,ID] -dir DIR")
 		return 2
 	}
 	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
@@ -41,6 +43,33 @@ func RunTool(args []string, stdout, stderr io.Writer) int {
 		}
 		if err = signDir(*key, *release, *dir); err == nil {
 			_, _ = fmt.Fprintf(stdout, "signed %s for release %s\n", filepath.Join(*dir, ManifestName), *release)
+		}
+	case "index":
+		key := fs.String("key", "", "the private key file")
+		latest := fs.String("latest", "", "the latest release (the one just published)")
+		minimum := fs.String("minimum", "", "the lowest release a cell may install (a known-bad one below it is refused)")
+		days := fs.Int("valid-days", 90, "how long the index holds; a cell refuses an expired one, so it must be re-issued before")
+		revoke := fs.String("revoke", "", "comma-separated key ids to revoke")
+		dir := fs.String("dir", "", "where RELEASE-INDEX and RELEASE-INDEX.sig go")
+		if fs.Parse(args[1:]) != nil || *key == "" || *latest == "" || *minimum == "" || *dir == "" || *days < 1 {
+			return 2
+		}
+		var revoked []string
+		for _, k := range strings.Split(*revoke, ",") {
+			if k = strings.TrimSpace(k); k != "" {
+				revoked = append(revoked, k)
+			}
+		}
+		var keyText []byte
+		if keyText, err = os.ReadFile(*key); err == nil { //nolint:gosec // G304: the key file the release job wrote
+			var priv ed25519.PrivateKey
+			if priv, err = ParsePrivateKey(keyText); err == nil {
+				now := time.Now().UTC()
+				err = signIndexFile(priv, *dir, Index{Issued: now, Expires: now.Add(time.Duration(*days) * 24 * time.Hour), Latest: *latest, Minimum: *minimum, RevokedKeys: revoked})
+			}
+		}
+		if err == nil {
+			_, _ = fmt.Fprintf(stdout, "signed %s: latest %s, minimum %s, valid %d days\n", filepath.Join(*dir, IndexName), *latest, *minimum, *days)
 		}
 	default:
 		_, _ = fmt.Fprintf(stderr, "release-sign: unknown command %q\n", args[0])

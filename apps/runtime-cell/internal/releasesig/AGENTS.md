@@ -5,8 +5,9 @@ Signing and verifying a cell release offline (S-17 (a), [`docs/runtime/isolation
 ## Owns
 - The signed message and its checks: `releasesig.go` `Message` (a fixed prefix, the release name, the manifest's bytes), `Sign`, `Verify`, `ParseManifest`, `Error`.
 - Keys: `PublicKey`, `KeyID`, `FormatPublicKey`, `ParsePublicKeys`, `FormatPrivateKey`, `ParsePrivateKey`; the compiled-in keys `pinned.go` `Pinned` (`keys/cell-release.pub`).
+- The release index: `index.go` `Index`, `MarshalIndex`, `SignIndex`, `VerifyIndex` (TUF-lite: latest, minimum, revoked keys, issued, expires at most `MaxIndexValidity`), signed under its own prefix so a release signature never passes for an index one. `VerifySigned` names the key a release was signed with.
 - Installing a listed file: `CopyChecked` (hashes the bytes it writes, never replaces), `CheckFile`.
-- The release tool: `tool.go` `RunTool` (generate a key pair, sign a directory).
+- The release tool: `tool.go` `RunTool` (generate a key pair, sign a directory, sign a release index).
 
 ## Does not own
 - Swapping `current` and `previous` in the installer's layout: `internal/cellupdate`.
@@ -16,6 +17,8 @@ Signing and verifying a cell release offline (S-17 (a), [`docs/runtime/isolation
 - Only the standard library's `crypto/ed25519` and `crypto/sha256`.
 - The name inside the signature stops a validly signed older release from being installed as a newer one; the prefix keeps the key from signing anything else.
 - `Verify` refuses with no key pinned, a missing or malformed manifest or signature, another release's name or an unpinned key. It reads no listed file: each is hashed as it is installed.
+- An index expires (freeze defense): the release owner re-issues it before `expires` (`scripts/sign-release.sh index`), or hosts stop installing.
+- An index never revokes the key that signs it.
 - `keys/cell-release.pub` holds no key yet, so `cell update` refuses every release until the release owner generates one. The private half never enters this tree.
 
 ## Tests
@@ -25,7 +28,7 @@ Signing and verifying a cell release offline (S-17 (a), [`docs/runtime/isolation
 
 ## Module map
 
-Files (3, tests apart): `pinned.go`, `releasesig.go`, `tool.go`
+Files (4, tests apart): `index.go`, `pinned.go`, `releasesig.go`, `tool.go`
 
 Imports these Runtime modules:
 
