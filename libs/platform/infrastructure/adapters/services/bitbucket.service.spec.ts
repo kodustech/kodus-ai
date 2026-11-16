@@ -17,6 +17,7 @@ describe('BitbucketService — deterministic logic', () => {
             {} as any,
             {} as any,
             {} as any,
+            {} as any,
         );
     });
 

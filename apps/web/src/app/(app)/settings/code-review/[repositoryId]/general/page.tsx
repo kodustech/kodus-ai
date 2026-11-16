@@ -3,9 +3,7 @@
 import { useState } from "react";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
-import { ConfirmModal } from "@components/ui/confirm-modal";
 import { Link } from "@components/ui/link";
-import { magicModal } from "@components/ui/magic-modal";
 import { Page } from "@components/ui/page";
 import { toast } from "@components/ui/toaster/use-toast";
 import { createOrUpdateParameter } from "@services/parameters/fetch";
@@ -25,7 +23,6 @@ import {
     useWatch,
 } from "react-hook-form";
 import {
-    useCodeReviewModelData,
     useFeatureFlags,
     usePlatformConfig,
 } from "src/app/(app)/settings/_components/context";
@@ -49,7 +46,6 @@ import {
 import { ApprovalPolicySettings } from "./_components/approval-policy";
 import { AutomatedReviewActive } from "./_components/automated-review-active";
 import { BaseBranches } from "./_components/base-branches";
-import { BYOKModelSelectorSection } from "./_components/byok-model-selector";
 import { CentralizedConfigModal } from "./_components/centralized-config-modal";
 import { EnableCommittableSuggestions } from "./_components/enable-committable-suggestions";
 import { IgnorePaths } from "./_components/ignore-paths";
@@ -58,40 +54,12 @@ import { IsRequestChangesActive } from "./_components/is-request-changes-active"
 import { KodusConfigFileOverridesWebPreferences } from "./_components/kodus-config-file-overrides-web-preferences";
 import { LanguageSelector } from "./_components/language-selector";
 import { PullRequestApprovalActive } from "./_components/pull-request-approval-active";
-import { ReviewMode } from "./_components/review-mode";
+import { ReviewRoutingSummary } from "./_components/review-routing-summary";
 import { RunOnDraft } from "./_components/run-on-draft";
 import { ShowStatusFeedback } from "./_components/show-status-feedback";
 
-/**
- * Speed-bump before saving a `byokModel` override that isn't in the provider's
- * known-models list — we can't verify it, and a wrong id makes reviews fail (or
- * fall back). Preserves the escape hatch for legit custom/proxy model ids.
- */
-const confirmOffCatalogModelSave = (model: string): Promise<boolean> =>
-    new Promise((resolve) => {
-        magicModal.show(() => (
-            <ConfirmModal
-                open
-                title="Save an unverified model id?"
-                description={`"${model}" isn't in your BYOK provider's model list, so we can't verify it. If the id is wrong, reviews on this scope will fail (or fall back to your BYOK fallback model). Tip: use "Test model" to check it against your provider first.`}
-                confirmText="Save anyway"
-                cancelText="Go back"
-                variant="primary-dark"
-                onConfirm={() => {
-                    resolve(true);
-                    magicModal.hide();
-                }}
-                onCancel={() => {
-                    resolve(false);
-                    magicModal.hide();
-                }}
-            />
-        ));
-    });
-
 export default function General() {
     const platformConfig = usePlatformConfig();
-    const { byokModels } = useCodeReviewModelData();
     const form = useFormContext<CodeReviewFormType>();
     const { license } = useSubscriptionContext();
     const conditionalApprovalBetaEnabled =
@@ -151,20 +119,6 @@ export default function General() {
         currentLevel === FormattedConfigLevel.GLOBAL;
 
     const handleSubmit = form.handleSubmit(async (formData) => {
-        // Gate an off-catalog byokModel override behind an explicit confirm so
-        // a mistyped id can't be saved by skimming past the warning. Only when
-        // we HAVE a catalog to judge against — an unlistable provider (empty
-        // catalog) is left to the "Test model" check, no false prompts.
-        const byokModelValue = (formData.byokModel?.value ?? "").trim();
-        const isOffCatalog =
-            byokModelValue.length > 0 &&
-            byokModels.length > 0 &&
-            !byokModels.some((m) => m.id === byokModelValue);
-        if (isOffCatalog) {
-            const confirmed = await confirmOffCatalogModelSave(byokModelValue);
-            if (!confirmed) return;
-        }
-
         const { language, ...config } = formData;
 
         // Remove reviewCadence when automation is disabled
@@ -294,14 +248,8 @@ export default function General() {
                 <div
                     data-field-name="reviewMode"
                     className="border-card-lv3/60 bg-card-lv1 min-w-0 overflow-hidden rounded-xl border">
-                    <ReviewMode />
+                    <ReviewRoutingSummary />
                 </div>
-
-                {repositoryId !== "global" && (
-                    <div data-field-name="byokModel">
-                        <BYOKModelSelectorSection />
-                    </div>
-                )}
 
                 {currentLevel !== FormattedConfigLevel.GLOBAL && (
                     <div
@@ -332,13 +280,13 @@ export default function General() {
                                     </div>
                                     <div className="min-w-0">
                                         <div className="text-text-primary flex items-center gap-2 text-sm font-semibold">
-                                            Conditional approval{" "}
+                                            Approval policies{" "}
                                             <Badge>Beta</Badge>
                                         </div>
                                         <p className="text-text-secondary mt-1 max-w-2xl text-sm leading-5">
                                             {conditionalApprovalPlanAllowed
-                                                ? "Beta access is not enabled for this workspace yet. Automatic approval without conditions remains available."
-                                                : "Choose which PRs Kody may approve using labels and authors. Require a person for sensitive paths or higher-risk changes."}
+                                                ? "Approval policies are not available for this workspace."
+                                                : "Add approval policies on Teams or Enterprise."}
                                         </p>
                                     </div>
                                 </div>

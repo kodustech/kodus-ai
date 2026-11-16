@@ -726,18 +726,35 @@ export function getModelName(
     slot?: NormalizedModel,
     defaultModelOverride?: string,
 ): string {
+    // Built from getModelId so the label and the id the context window is
+    // sized by cannot drift apart.
+    const id = getModelId(slot, defaultModelOverride);
     if (slot) {
-        return `${slot.provider}:${slot.model}`;
+        return `${slot.provider}:${id}`;
+    }
+    const env = resolveEnvProvider();
+    return env && env.kind !== 'invalid' ? `${env.name}:${id}` : id;
+}
+
+/**
+ * The bare model id `getModelName` labels, without its `provider:` prefix — the
+ * name the context-window mirror is keyed by. The label cannot stand in for it:
+ * `openai:gpt-6.1-sol` misses the exact and normalized lookups and lands on
+ * whichever substring row is longest.
+ */
+export function getModelId(
+    slot?: NormalizedModel,
+    defaultModelOverride?: string,
+): string {
+    if (slot) {
+        return slot.model;
     }
 
-    // Same single-source cascade the model is BUILT from (resolveManagedSlot),
-    // so the telemetry name always matches the model actually used.
     const env = resolveEnvProvider();
     if (env) {
-        // An invalid config can come from `auto` with no model set.
         return env.kind === 'invalid'
             ? process.env.API_LLM_PROVIDER_MODEL?.trim() || 'auto'
-            : `${env.name}:${env.model ?? process.env.API_LLM_PROVIDER_MODEL}`;
+            : (env.model ?? process.env.API_LLM_PROVIDER_MODEL ?? '');
     }
 
     return defaultModelOverride || DEFAULT_MODEL.model;

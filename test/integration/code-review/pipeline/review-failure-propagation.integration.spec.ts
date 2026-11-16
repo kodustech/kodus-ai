@@ -32,6 +32,7 @@ import { ObservabilityService } from '@libs/core/log/observability.service';
 import { FeatureGateService } from '@libs/feature-gate';
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-author-recipient.resolver';
+import { OwnChangeRequestService } from '@libs/code-review/pipeline/services/own-change-request.service';
 import { ORGANIZATION_SERVICE_TOKEN } from '@libs/organization/domain/organization/contracts/organization.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { PostTracePrCommentUseCase } from '@libs/cli-review/application/use-cases/post-trace-pr-comment.use-case';
@@ -187,6 +188,12 @@ describe('review failure propagation (agent → summary → approve → check)',
                 {
                     provide: PrAuthorRecipientResolver,
                     useValue: { resolve: jest.fn().mockResolvedValue(null) },
+                },
+                {
+                    provide: OwnChangeRequestService,
+                    useValue: {
+                        record: jest.fn().mockResolvedValue(undefined),
+                    },
                 },
                 {
                     provide: ObservabilityService,

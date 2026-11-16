@@ -1,3 +1,4 @@
+import { ROUTING_TASKS, RISK_RUN_NAMES } from '@libs/core/log/token-usage-tu';
 /**
  * Backfills the indexable `attributes.tu` sub-doc onto historical
  * `observability_telemetry` spans so the Token Usage screen's covered
@@ -41,18 +42,9 @@ export const BACKFILL_SUGGESTION_RUN_NAMES = [
     'repeatedCodeReviewSuggestionClustering',
 ];
 
-// Valid routing tasks — mirror of ROUTING_TASKS in token-usage-tu.ts (LlmTask).
+// Share the write path’s routing task allowlist.
 // Guards `tu.route`: a value outside this set is not trusted (→ area de-para).
-export const BACKFILL_ROUTING_TASKS = [
-    'codeReview',
-    'codeReviewHeavy',
-    'kodyRulesReview',
-    'ruleGeneration',
-    'businessValidation',
-    'prSummary',
-    'conversation',
-    'customAgent',
-];
+export const BACKFILL_ROUTING_TASKS = [...ROUTING_TASKS];
 
 // Mirror of CUSTOM_AGENT_RUN_PREFIX in token-usage-tu.ts (asserted equal by
 // token-usage-tu.spec.ts).
@@ -98,10 +90,17 @@ const areaExpr = {
             },
             {
                 case: {
-                    $regexMatch: {
-                        input: rn,
-                        regex: '^(code-review|analyzeCodeWithAI)',
-                    },
+                    $or: [
+                        {
+                            $regexMatch: {
+                                input: rn,
+                                regex: '^(code-review|analyzeCodeWithAI)',
+                            },
+                        },
+                        {
+                            $in: [rn, [...RISK_RUN_NAMES]],
+                        },
+                    ],
                 },
                 then: 'review',
             },

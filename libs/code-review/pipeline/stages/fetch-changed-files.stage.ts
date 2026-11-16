@@ -140,6 +140,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
                     totalFilesBeforeFilter: filesToProcess?.length || 0,
                     ignorePaths,
                     technicalReason,
+                    customAgentRiskSkips: context.customAgentRiskSkips,
                     ...metadata,
                 },
             });
@@ -147,7 +148,9 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             return this.updateContext(context, (draft) => {
                 draft.statusInfo = {
                     status: AutomationStatus.SKIPPED,
-                    message: message,
+                    message: context.customAgentRiskSkips?.length
+                        ? `${message} Risk-conditioned agents require confirmed PR risk.`
+                        : message,
                 };
                 draft.ignoredFiles = ignoredList?.map((f) => f.filename) || [];
                 draft.ignoredFileChanges =

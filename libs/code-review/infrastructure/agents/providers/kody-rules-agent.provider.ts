@@ -18,8 +18,6 @@ import {
     SHARD_CONCURRENCY_DEFAULT,
     FILE_CONTENT_MAX_LINES,
     FILE_CONTENT_BUDGET_CHARS,
-    inlineRuleReferences,
-    inlineLoadedReferences,
     findUnresolvedReferenceRules,
     buildShardViolationsWireSchema,
     type ShardReplyReshape,
@@ -28,6 +26,12 @@ import {
     type ShardViolation,
 } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
 import { resolveLanguageLabel } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import {
+    collectLoadedReferences,
+    loadRuleSourceReferences,
+    mergeRuleReferences,
+    type RuleReferenceIndex,
+} from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-references';
 import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/adapters/services/externalReferenceLoader.service';
 import { buildDetectorCandidates } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
 import { checkClaims } from '@libs/code-review/infrastructure/agents/collaborators/claim-checker';
@@ -341,24 +345,40 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 }
             };
 
-            // T2a — inline the rule's own `sourcePath` (IDE-sync / centralized)
-            // via the sandbox read so the judge sees the full convention.
-            let rulesForJudge = await inlineRuleReferences(
-                judgeRules,
-                input.remoteCommands?.read?.bind(input.remoteCommands),
-                this.shardLogger,
-            );
-
-            // T2b — inline the `@file:` citations authored in the rule BODY.
-            // Current-arch rules store these as a `contextReferenceId` (Context
-            // OS), NOT an inline field, and the review path reads rules raw — so
-            // the sharded judge used to see the bare "@file:X" marker and judge
-            // blind. Resolve them through the same loader the PR-level path uses
-            // (contextReferenceId -> ContextPack -> file content, same or cross
-            // repo). Best-effort: any failure degrades to the rule text alone.
-            rulesForJudge = await this.inlineContextOsReferences(
-                rulesForJudge,
-                input,
+            // The files the rules point at, so the judge sees the full
+            // convention. Two sources: the rule's own `sourcePath` (IDE sync /
+            // centralized config), read through the sandbox at the PR head; and
+            // the `@file:` citations in the rule body, stored as a
+            // `contextReferenceId` and resolved through the Context OS at the
+            // base branch. Both are keyed by rule uuid and printed once per
+            // shard, never appended to the rule text: a rule decomposed into
+            // atoms reaches here as one unit per atom, all sharing the parent's
+            // uuid and references (#2508). Best-effort: any failure leaves the
+            // rule judged on its text alone.
+            const rulesForJudge = judgeRules;
+            const logMetadata = {
+                organizationAndTeamData: input.organizationAndTeamData,
+                prNumber: input.prNumber,
+            };
+            const loaded = await Promise.allSettled([
+                loadRuleSourceReferences(
+                    judgeRules,
+                    input.remoteCommands?.read?.bind(input.remoteCommands),
+                    { logger: this.shardLogger, logMetadata },
+                ),
+                this.loadContextOsReferences(judgeRules, input),
+            ]);
+            const references = mergeRuleReferences(
+                ...loaded.map((result, i) => {
+                    if (result.status === 'fulfilled') return result.value;
+                    const source = i === 0 ? 'rule source file' : 'Context OS';
+                    this.shardLogger.warn({
+                        message: `[kody-rules-shard] ${source} reference load failed for PR#${input.prNumber}; judging without those references: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
+                        context: this.getIdentity().name,
+                        metadata: { ...logMetadata, err: result.reason },
+                    });
+                    return new Map();
+                }),
             );
 
             // ── issue #1826, step 1: the file shard carries its file whole ──
@@ -627,6 +647,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         contextSlices,
                         unmetRules,
                         fileContents,
+                        references,
                         // Issue #1313 Fase 1b: this override bypasses
                         // super.execute (see class docstring) and never went
                         // through base-code-review-agent.provider.ts, so
@@ -638,6 +659,15 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             judgeViolations = result.violations;
             shardsRun = result.shardsRun;
             shardsErrored = result.shardsErrored;
+
+            const { referenceStats } = result;
+            if (referenceStats?.shards > 0) {
+                this.shardLogger.log?.({
+                    message: `[kody-rules-shard] printed ${referenceStats.entries} reference file(s) across ${referenceStats.shards} shard(s); per-rule inlining would have printed ${referenceStats.perUnitCopies}`,
+                    context: this.getIdentity().name,
+                    metadata: { ...logMetadata, ...referenceStats },
+                });
+            }
 
             // Escalate a TOTAL shard failure. When every judge shard errored
             // (e.g. an OpenAI-strict wire-schema 400 for a BYOK org, which
@@ -990,23 +1020,30 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
 
     /**
      * Resolve each rule's `@file:` citations from the Context OS
-     * (`contextReferenceId`) and inline the fetched content into the rule text,
-     * so the sharded judge sees the authoritative convention instead of the bare
-     * marker. Uses the SAME loader the PR-level path uses (handles same- and
-     * cross-repo via `getRepositoryContentFile`). No-op when the loader isn't
-     * wired (unit tests) or no rule carries a `contextReferenceId`. Best-effort:
-     * any failure degrades to the rule text alone.
+     * (`contextReferenceId`), keyed by rule uuid, so the sharded judge sees the
+     * authoritative convention instead of the bare marker. Uses the SAME loader
+     * the PR-level path uses (handles same- and cross-repo via
+     * `getRepositoryContentFile`). Empty when the loader isn't wired (unit
+     * tests) or no rule carries a `contextReferenceId`. Best-effort: any
+     * failure leaves the rules judged on their text alone.
      */
-    private async inlineContextOsReferences(
+    private async loadContextOsReferences(
         rules: Partial<IKodyRule>[],
         input: ReviewAgentInput,
-    ): Promise<Partial<IKodyRule>[]> {
-        if (!this.externalReferenceLoaderService) return rules;
+    ): Promise<RuleReferenceIndex> {
+        if (!this.externalReferenceLoaderService) return new Map();
         // Pre-filter: only rules that actually cite an external reference reach
-        // the loader — each resolution is an (uncached) network round-trip, so
-        // don't pay it for rules that carry no contextReferenceId.
-        const refRules = rules.filter((r) => r.contextReferenceId);
-        if (refRules.length === 0) return rules;
+        // the loader, once per rule uuid — each resolution is an (uncached)
+        // network round-trip, and every atom of a decomposed rule carries the
+        // same contextReferenceId.
+        const refRules = [
+            ...new Map(
+                rules
+                    .filter((r) => r.contextReferenceId && r.uuid)
+                    .map((r) => [r.uuid!, r] as const),
+            ).values(),
+        ];
+        if (refRules.length === 0) return new Map();
 
         try {
             const analysisContext = {
@@ -1040,7 +1077,7 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
                 );
 
             // Surface rules whose reference failed to resolve — otherwise the
-            // judge-blind degradation is invisible (inlineLoadedReferences logs
+            // judge-blind degradation is invisible (collectLoadedReferences logs
             // only on success, and the loader swallows per-rule fetch errors).
             const unresolved = findUnresolvedReferenceRules(
                 refRules,
@@ -1059,11 +1096,18 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
                 });
             }
 
-            return inlineLoadedReferences(
-                rules,
-                referencesMap,
-                this.shardLogger,
-            );
+            return collectLoadedReferences(referencesMap, {
+                prRepository: {
+                    id: input.repositoryId,
+                    name: input.repositoryFullName?.split('/').pop(),
+                    fullName: input.repositoryFullName,
+                },
+                logger: this.shardLogger,
+                logMetadata: {
+                    organizationAndTeamData: input.organizationAndTeamData,
+                    prNumber: input.prNumber,
+                },
+            });
         } catch (err) {
             this.shardLogger.warn({
                 message: `[kody-rules-shard] Context OS reference load failed for PR#${input.prNumber}; judging without external refs: ${err instanceof Error ? err.message : String(err)}`,
@@ -1074,7 +1118,7 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
                     err,
                 },
             });
-            return rules;
+            return new Map();
         }
     }
 
@@ -1142,8 +1186,8 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
                 const anchor = rule.sourceAnchor
                     ? ` (section: ${rule.sourceAnchor})`
                     : '';
-                // No tool hint here. `inlineLoadedReferences` has already put
-                // this file's content into the rule, so pointing the model at a
+                // No tool hint here. The sharded judge already prints this
+                // file's content with the rule, so pointing the model at a
                 // fetch it cannot perform only invites it to pretend it did.
                 parts.push(
                     `**Reference**: \`${rule.sourcePath}\`${anchor} — its content is inlined with this rule`,

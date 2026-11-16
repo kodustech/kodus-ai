@@ -1,3 +1,4 @@
+import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import {
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
@@ -7,6 +8,7 @@ import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
+import pLimit from 'p-limit';
 import { v4 } from 'uuid';
 
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
@@ -109,6 +111,9 @@ export class BitbucketDataCenterService implements Omit<
     | 'minimizeComment'
 > {
     private readonly logger = createLogger(BitbucketDataCenterService.name);
+
+    /** Per-file PR diff reads run at most this many at a time. */
+    private static readonly PER_FILE_DIFF_CONCURRENCY = 5;
 
     constructor(
         @Inject(INTEGRATION_SERVICE_TOKEN)
@@ -1340,6 +1345,46 @@ export class BitbucketDataCenterService implements Omit<
         return 1;
     }
 
+    /**
+     * Clears the NEEDS_WORK status `requestChangesPullRequest` sets, on the
+     * same participant path it used.
+     */
+    async dismissOwnPullRequestChangeRequests(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        const state = await this.getReviewStatusByPullRequest({
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        });
+        if (state === null) {
+            throw new Error(
+                `Could not read Kody's change request on PR #${prNumber}`,
+            );
+        }
+        if (state !== PullRequestReviewState.CHANGES_REQUESTED) return 0;
+        const [authDetails, repoConfig, currentUser] = await Promise.all([
+            this.getAuthDetails(organizationAndTeamData),
+            this.getRepoConfig(
+                organizationAndTeamData,
+                repository.id || repository.name,
+            ),
+            this.getCurrentUser({ organizationAndTeamData }),
+        ]);
+        if (!authDetails || !repoConfig || !currentUser) {
+            throw new Error('Bitbucket Data Center repository not found');
+        }
+        await this.getAxiosInstance(authDetails).put(
+            `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/pull-requests/${prNumber}/participants/${currentUser.id}`,
+            { user: { name: currentUser.id }, status: 'UNAPPROVED' },
+        );
+        return 1;
+    }
+
     async approvePullRequest(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
@@ -1424,89 +1469,46 @@ export class BitbucketDataCenterService implements Omit<
 
             const files = changesResponse.data.values || [];
 
-            // 3. Map through files in parallel to fetch raw content and reconstruct the diff patch
-            const prFilesWithDiffAndContents = await Promise.all(
-                files.map(async (file: any) => {
-                    const filePath = file.path.toString;
-                    const isRemoved =
-                        file.type === 'DELETE' || file.type === 'REMOVED';
+            // 3. One diff for the whole PR, split per file. Only a file it
+            // does not cover (or the whole read, when the host cut it short)
+            // is read on its own, a few at a time. Contents are not read
+            // here: callers fetch them per kept file (getRepositoryContentFile).
+            const repoPath = `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}`;
+            const patches = await this.readPullRequestPatches({
+                axiosClient,
+                repoPath,
+                prNumber,
+                paths: files.map((file: any) => file.path.toString),
+                organizationAndTeamData,
+            });
 
-                    let content = null;
-                    let patch = '';
-                    let additions = 0;
-                    let deletions = 0;
-
-                    // Fetch Raw Content (Skip if the file was deleted)
-                    if (!isRemoved && sourceCommit) {
-                        try {
-                            const rawRes = await axiosClient.get(
-                                `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/raw/${filePath}`,
-                                {
-                                    params: { at: sourceCommit },
-                                    responseType: 'text',
-                                },
-                            );
-                            content = rawRes.data;
-                        } catch (err) {
-                            this.logger.error({
-                                message: `Could not fetch raw content for ${filePath} at commit ${sourceCommit}`,
-                                context: BitbucketDataCenterService.name,
-                                metadata: { filePath, sourceCommit },
-                                error: err,
-                            });
-                        }
-                    }
-
-                    // Fetch JSON Diff and Reconstruct Unified Patch String
-                    try {
-                        const diffRes = await axiosClient.get(
-                            `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/pull-requests/${prNumber}/diff`,
-                            {
-                                params: { path: filePath, limit: 1000 },
-                            },
-                        );
-
-                        const diffs = diffRes.data.diffs || [];
-
-                        for (const diff of diffs) {
-                            const unified = this.toUnifiedPatch(diff);
-                            patch += unified.patch;
-                            additions += unified.additions;
-                            deletions += unified.deletions;
-                        }
-                    } catch (err) {
-                        this.logger.error({
-                            message: `Could not fetch diff for ${filePath}`,
-                            context: BitbucketDataCenterService.name,
-                            metadata: { filePath, prNumber },
-                            error: err,
-                        });
-                    }
-
-                    return {
-                        filename: filePath,
-                        previous_filename: file.srcPath?.toString,
-                        sha: sourceCommit,
-                        status:
-                            file.type === 'MODIFY'
-                                ? 'modified'
-                                : file.type === 'ADD'
-                                  ? 'added'
-                                  : 'removed',
-                        additions,
-                        deletions,
-                        changes: additions + deletions,
-                        patch: patch || null,
-                        content: content,
-                        blob_url: null,
-                        contents_url: null,
-                        raw_url: null,
-                    };
-                }),
-            );
-
-            return prFilesWithDiffAndContents;
+            return files.map((file: any) => {
+                const filePath = file.path.toString;
+                const unified = patches.get(filePath);
+                return {
+                    filename: filePath,
+                    previous_filename: file.srcPath?.toString,
+                    sha: sourceCommit,
+                    status:
+                        file.type === 'MODIFY'
+                            ? 'modified'
+                            : file.type === 'ADD'
+                              ? 'added'
+                              : 'removed',
+                    additions: unified?.additions ?? 0,
+                    deletions: unified?.deletions ?? 0,
+                    changes:
+                        (unified?.additions ?? 0) + (unified?.deletions ?? 0),
+                    patch: unified?.patch || null,
+                    content: null,
+                    blob_url: null,
+                    contents_url: null,
+                    raw_url: null,
+                };
+            });
         } catch (error) {
+            // A rate-limited listing is not a PR with no files
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message: `Error getting fully populated files for DC PR #${params.prNumber}`,
                 context: BitbucketDataCenterService.name,
@@ -1514,6 +1516,101 @@ export class BitbucketDataCenterService implements Omit<
             });
             return null;
         }
+    }
+
+    /**
+     * Patches for a PR's files keyed by path: the PR's whole diff in one
+     * request, then a per-file read (at most PER_FILE_DIFF_CONCURRENCY at a
+     * time) for any path it does not cover, or for all of them when the host
+     * truncated it or the read failed. A 429 is rethrown, never turned into
+     * an empty patch.
+     */
+    private async readPullRequestPatches(params: {
+        axiosClient: { get: (url: string, config?: any) => Promise<any> };
+        repoPath: string;
+        prNumber: number;
+        paths: string[];
+        organizationAndTeamData: OrganizationAndTeamData;
+    }): Promise<
+        Map<string, { patch: string; additions: number; deletions: number }>
+    > {
+        const { axiosClient, repoPath, prNumber, paths } = params;
+        const logMetadata = {
+            organizationId: params.organizationAndTeamData.organizationId,
+            teamId: params.organizationAndTeamData.teamId,
+            repoPath,
+            prNumber,
+        };
+        const patches = new Map<
+            string,
+            { patch: string; additions: number; deletions: number }
+        >();
+        const add = (path: string, diff: any) => {
+            const unified = this.toUnifiedPatch(diff);
+            const previous = patches.get(path);
+            patches.set(path, {
+                patch: (previous?.patch ?? '') + unified.patch,
+                additions: (previous?.additions ?? 0) + unified.additions,
+                deletions: (previous?.deletions ?? 0) + unified.deletions,
+            });
+        };
+
+        try {
+            const { data } = await axiosClient.get(
+                `${repoPath}/pull-requests/${prNumber}/diff`,
+            );
+            const diffs = data?.diffs || [];
+            if (data?.truncated || diffs.some((diff) => diff?.truncated)) {
+                this.logger.warn({
+                    message: `Whole diff of PR#${prNumber} was truncated; reading files one by one`,
+                    context: BitbucketDataCenterService.name,
+                    metadata: { ...logMetadata, files: paths.length },
+                });
+            } else {
+                for (const diff of diffs) {
+                    const path =
+                        diff.destination?.toString ?? diff.source?.toString;
+                    if (path) add(path, diff);
+                }
+            }
+        } catch (error) {
+            if (is429Error(error)) throw error;
+            this.logger.warn({
+                message: `Whole diff of PR#${prNumber} failed; reading files one by one`,
+                context: BitbucketDataCenterService.name,
+                error,
+                metadata: { ...logMetadata, files: paths.length },
+            });
+        }
+
+        const missing = paths.filter((path) => !patches.has(path));
+        const limit = pLimit(
+            BitbucketDataCenterService.PER_FILE_DIFF_CONCURRENCY,
+        );
+        await Promise.all(
+            missing.map((path) =>
+                limit(async () => {
+                    try {
+                        const { data } = await axiosClient.get(
+                            `${repoPath}/pull-requests/${prNumber}/diff`,
+                            { params: { path, limit: 1000 } },
+                        );
+                        for (const diff of data?.diffs || []) add(path, diff);
+                    } catch (error) {
+                        // A rate limit is not an empty diff: let the job retry
+                        if (is429Error(error)) throw error;
+                        this.logger.error({
+                            message: `Could not fetch diff for ${path}`,
+                            context: BitbucketDataCenterService.name,
+                            metadata: { ...logMetadata, filePath: path },
+                            error,
+                        });
+                    }
+                }),
+            ),
+        );
+
+        return patches;
     }
 
     /** Data Center returns diffs as JSON hunks; rebuilds the unified patch. */
@@ -3005,7 +3102,9 @@ export class BitbucketDataCenterService implements Omit<
                     )
                     .join('\n');
 
-                const bodyFormatted = `${title}\n\n${listOfCriticalIssues}`;
+                const bodyFormatted = withChangeRequestExitNote(
+                    `${title}\n\n${listOfCriticalIssues}`,
+                );
 
                 await this.createCommentInPullRequest({
                     organizationAndTeamData,
@@ -3509,6 +3608,8 @@ export class BitbucketDataCenterService implements Omit<
         repository: { name: string; id: string };
         prNumber: number;
         lastCommit: any;
+        /** Also the files deleted since the review that the PR no longer lists. */
+        keepRemovedFiles?: boolean;
     }): Promise<any | null> {
         try {
             const {
@@ -3516,6 +3617,7 @@ export class BitbucketDataCenterService implements Omit<
                 repository,
                 prNumber,
                 lastCommit,
+                keepRemovedFiles,
             } = params;
             const authDetails = await this.getAuthDetails(
                 organizationAndTeamData,
@@ -3573,8 +3675,14 @@ export class BitbucketDataCenterService implements Omit<
                 prChanges.values.map((change: any) => change.path?.toString),
             );
 
+            // A file the PR added and a later push deleted is no longer in
+            // the PR's changes; a caller that asks for removed files gets it.
             return compared.values
-                .filter((change: any) => prPaths.has(change.path?.toString))
+                .filter(
+                    (change: any) =>
+                        prPaths.has(change.path?.toString) ||
+                        (keepRemovedFiles && change.type === 'DELETE'),
+                )
                 .map((change: any) => ({
                     filename: change.path.toString,
                     sha: latestPrCommit,
@@ -3591,6 +3699,7 @@ export class BitbucketDataCenterService implements Omit<
                     content: null,
                 }));
         } catch (error) {
+            // A rate-limited listing is not "nothing changed": let the job retry
             if (is429Error(error)) throw error;
             this.logger.error({
                 message:

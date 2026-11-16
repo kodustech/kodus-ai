@@ -17,6 +17,10 @@ export interface LoadedReference {
     filePath: string;
     content: string;
     description?: string;
+    /** Where the file was read from: two repositories can hold the same path. */
+    repositoryId?: string;
+    repositoryName?: string;
+    lineRange?: { start: number; end: number };
 }
 
 export interface LoadedReferencesResult {
@@ -108,35 +112,8 @@ export class ExternalReferenceLoaderService {
                 }
                 if (Array.isArray(layer.content)) {
                     for (const entry of layer.content) {
-                        if (
-                            entry &&
-                            typeof entry === 'object' &&
-                            typeof (entry as Record<string, unknown>)
-                                .filePath === 'string' &&
-                            typeof (entry as Record<string, unknown>)
-                                .content === 'string' &&
-                            // Reject empty/whitespace-only content: it inlines
-                            // nothing downstream, so keeping it would leave a
-                            // map entry that reads as "resolved" while the rule
-                            // is actually judged blind.
-                            (
-                                (entry as Record<string, unknown>)
-                                    .content as string
-                            ).trim().length > 0
-                        ) {
-                            references.push({
-                                filePath: (entry as Record<string, unknown>)
-                                    .filePath as string,
-                                content: (entry as Record<string, unknown>)
-                                    .content as string,
-                                description:
-                                    typeof (entry as Record<string, unknown>)
-                                        .description === 'string'
-                                        ? ((entry as Record<string, unknown>)
-                                              .description as string)
-                                        : undefined,
-                            });
-                        }
+                        const reference = toLoadedReference(entry);
+                        if (reference) references.push(reference);
                     }
                 }
             }
@@ -227,4 +204,38 @@ export class ExternalReferenceLoaderService {
 
         return { referencesMap, mcpResultsMap, rulesWithoutFileReferences };
     }
+}
+
+/**
+ * One knowledge-layer entry as a loaded reference, or null when it has no path
+ * or no text. Empty and whitespace-only content is rejected: it inlines nothing
+ * downstream, so keeping it would leave a map entry that reads as "resolved"
+ * while the rule is actually judged blind.
+ */
+function toLoadedReference(entry: unknown): LoadedReference | null {
+    if (!entry || typeof entry !== 'object') return null;
+    const e = entry as Record<string, unknown>;
+    if (typeof e.filePath !== 'string' || typeof e.content !== 'string') {
+        return null;
+    }
+    if (e.content.trim().length === 0) return null;
+
+    const reference: LoadedReference = {
+        filePath: e.filePath,
+        content: e.content,
+    };
+    if (typeof e.description === 'string') {
+        reference.description = e.description;
+    }
+    if (typeof e.repositoryId === 'string') {
+        reference.repositoryId = e.repositoryId;
+    }
+    if (typeof e.repositoryName === 'string') {
+        reference.repositoryName = e.repositoryName;
+    }
+    const range = e.lineRange as { start?: unknown; end?: unknown } | undefined;
+    if (typeof range?.start === 'number' && typeof range?.end === 'number') {
+        reference.lineRange = { start: range.start, end: range.end };
+    }
+    return reference;
 }

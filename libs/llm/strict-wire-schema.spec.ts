@@ -10,6 +10,8 @@ import { decomposeOutputSchema } from '@libs/kodyRules/infrastructure/adapters/s
 import { shardViolationsWireSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
 import { REPEAT_CHECK_SCHEMA } from '@libs/code-review/infrastructure/agents/engine/repeat-check';
 import { approvalRiskOutputSchema } from '@libs/code-review/domain/approval/assess-approval-risk';
+import { prRiskOutputSchema } from '@libs/code-review/domain/risk/assess-pr-risk';
+import { policyEligibilityOutputSchema } from '@libs/code-review/domain/approval/assess-policy-eligibility';
 
 // Phase 3 consumer-migration call sites — schemas defined INLINE in the
 // consumer files (now exported so this governance suite can prove them
@@ -94,6 +96,8 @@ describe('zodToStrictWireSchema', () => {
     // BEFORE it 400s a BYOK-OpenAI customer's shards.
     const realSchemas: Array<[string, z.ZodType]> = [
         ['approvalRiskOutputSchema', approvalRiskOutputSchema],
+        ['prRiskOutputSchema', prRiskOutputSchema],
+        ['policyEligibilityOutputSchema', policyEligibilityOutputSchema],
         [
             'kodyRulesIDEGeneratorSchema (guidance-file extraction)',
             kodyRulesIDEGeneratorSchema,
@@ -305,7 +309,8 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
     // covered above. Keep this in lockstep with the schema lists — the scan
     // below fails if a call site appears in a file that isn't listed here.
     const REGISTERED_CALL_SITE_FILES = new Set<string>([
-        'libs/code-review/domain/approval/assess-approval-risk.ts', // approvalRiskOutputSchema
+        'libs/code-review/domain/risk/assess-change-risk.ts', // approvalRiskOutputSchema (shared evaluator)
+        'libs/code-review/domain/approval/assess-policy-eligibility.ts', // policyEligibilityOutputSchema
         'libs/ee/kodyRules/service/kody-rule-detector-compiler.service.ts', // compilerOutputSchema
         'libs/ee/kodyRules/service/kodyRules.service.ts', // kodyRulesRecommendationSchema, kodyMemoryResolutionSchema
         'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts', // shardViolationsWireSchema

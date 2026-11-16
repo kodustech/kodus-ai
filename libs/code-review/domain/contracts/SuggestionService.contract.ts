@@ -55,6 +55,8 @@ export interface ISuggestionService {
         changedFiles: Pick<FileChange, 'filename' | 'patch'>[];
         savedSuggestions: Partial<ISuggestion>[];
         diffSource?: ChangedFilesSource;
+        /** Files the diff deleted: not in `changedFiles`, which leaves them out. */
+        removedFiles?: string[];
     }): Promise<ImplementationCheckResult>;
 
 

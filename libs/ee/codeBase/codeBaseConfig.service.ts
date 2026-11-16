@@ -29,8 +29,18 @@ import { ValidateCodeManagementIntegration } from '@libs/common/utils/decorators
 import { deepMerge } from '@libs/common/utils/deep';
 import { withDirectoryAgentLists } from '@libs/code-review/domain/custom-agents/directory-cascade';
 import {
+    resolveReviewSettings,
+    resolveRiskActivation,
+} from '@libs/code-review/domain/approval/migrate-review-settings';
+import {
+    riskCriteriaSchema,
+    riskReviewRoutingSchema,
+} from '@libs/core/infrastructure/config/types/general/risk-assessment';
+import { unavailableReviewSettings } from '@libs/code-review/domain/approval/unavailable-review-settings';
+import {
     buildDefaultGlobalCodeReviewConfig,
     getDefaultKodusConfigFile,
+    validateRiskApprovalSettings,
 } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { CacheService } from '@libs/core/cache/cache.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
@@ -61,6 +71,8 @@ import {
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { KodyRulesValidationService } from '../kodyRules/service/kody-rules-validation.service';
+import { approvalPolicyProviderError } from '@libs/code-review/domain/approval/approval-policy-provider';
+import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/general/approval-policies';
 
 const IP_E2B_CACHE_KEY = 'global:ip_e2b';
 const IP_E2B_CACHE_TTL = 604800000; // 1 week
@@ -97,7 +109,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
     async getConfig(
         organizationAndTeamData: OrganizationAndTeamData,
         repository: { name: string; id: string },
-        preliminaryFiles?: FileChange[],
+        preliminaryFiles?: Pick<FileChange, 'filename'>[],
     ): Promise<CodeReviewConfig> {
         try {
             const [
@@ -216,7 +228,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             });
 
             if (!parameter?.configValue) {
-                return this.DEFAULT_CONFIG;
+                return this.mergeReviewSettings();
             }
 
             const globalDelta = parameter.configValue?.configs;
@@ -246,17 +258,12 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             const directoryDelta = directoryConfig?.configs;
 
             const merged = withDirectoryAgentLists(
-                deepMerge(
-                    this.DEFAULT_CONFIG,
+                this.mergeReviewSettings(
                     globalDelta || {},
                     repoDelta || {},
                     directoryDelta || {},
                 ),
-                deepMerge(
-                    this.DEFAULT_CONFIG,
-                    globalDelta || {},
-                    repoDelta || {},
-                ),
+                this.mergeReviewSettings(globalDelta || {}, repoDelta || {}),
                 directoryDelta,
             );
 
@@ -401,10 +408,14 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         repository: { name: string; id: string },
         parameter: CodeReviewParameter,
         defaultBranch: string,
-        preliminaryFiles?: FileChange[],
+        preliminaryFiles?: Pick<FileChange, 'filename'>[],
     ): Promise<CodeReviewConfigWithoutLLMProvider> {
         if (!parameter) {
-            return this.DEFAULT_CONFIG;
+            const config = this.mergeReviewSettings();
+            return {
+                ...config,
+                riskAssessmentMayBeActive: config.riskAssessmentActive === true,
+            };
         }
 
         const globalDelta = parameter?.configs;
@@ -439,6 +450,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             repository,
             defaultBranch,
             overrideConfig: this.getFileOverridePreference(repoConfig),
+            tolerateReviewSettingsErrors: true,
             onDroppedKeys,
         });
 
@@ -455,6 +467,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                       directoryConfig,
                   ),
                   onDroppedKeys,
+                  tolerateReviewSettingsErrors: true,
               })
             : undefined;
 
@@ -462,22 +475,32 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         // loader drops them), so the directory's stored delta is their only
         // directory-level source.
         const merged = withDirectoryAgentLists(
-            deepMerge(
-                this.DEFAULT_CONFIG,
+            this.mergeReviewSettings(
                 globalDelta || {},
                 repoDelta || {},
                 repositoryFileDelta || {},
                 directoryDelta || {},
                 directoryFileDelta || {},
             ),
-            deepMerge(
-                this.DEFAULT_CONFIG,
+            this.mergeReviewSettings(
                 globalDelta || {},
                 repoDelta || {},
                 repositoryFileDelta || {},
             ),
             directoryDelta,
         );
+        if (merged.reviewSettingsError)
+            this.logger.warn({
+                message: 'Invalid risk or approval settings',
+                context: CodeBaseConfigService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository.id,
+                    repositoryName: repository.name,
+                    defaultBranch,
+                    directoryId: directoryConfig?.id,
+                },
+            });
 
         let configLevel = ConfigLevel.GLOBAL;
         let directoryId: string | undefined = undefined;
@@ -492,6 +515,52 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
 
         return {
             ...merged,
+            approvalSettingsMayVaryByDirectory: (
+                repoConfig.directories ?? []
+            ).some(
+                (directory) =>
+                    this.getFileOverridePreference(repoConfig, directory) ||
+                    [
+                        'pullRequestApprovalActive',
+                        'approvalPolicies',
+                        'approvalLabels',
+                        'approvalAuthors',
+                        'approvalSensitivePaths',
+                    ].some((key) => directory.configs?.[key] !== undefined),
+            ),
+            // A later incremental push may no longer touch a risk-enabled
+            // directory. Inspect possible scopes before omitting the full diff.
+            riskAssessmentMayBeActive:
+                !!merged.reviewSettingsError ||
+                merged.riskAssessmentActive === true ||
+                (repoConfig.directories ?? []).some((directory) => {
+                    if (this.getFileOverridePreference(repoConfig, directory))
+                        return true;
+                    const delta = directory.configs || {};
+                    // Only a directory's own fields need validation here;
+                    // common policies/agents were already resolved once above.
+                    if (
+                        (delta.riskCriteria !== undefined &&
+                            !riskCriteriaSchema.safeParse(delta.riskCriteria)
+                                .success) ||
+                        (delta.riskReviewRouting !== undefined &&
+                            !riskReviewRoutingSchema.safeParse(
+                                delta.riskReviewRouting,
+                            ).success)
+                    )
+                        return true;
+                    try {
+                        return resolveRiskActivation(
+                            this.DEFAULT_CONFIG,
+                            globalDelta || {},
+                            repoDelta || {},
+                            repositoryFileDelta || {},
+                            delta,
+                        ).active;
+                    } catch {
+                        return true;
+                    }
+                }),
             configLevel,
             directoryId,
             directoryPath,
@@ -524,6 +593,20 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         }
 
         return this.DEFAULT_CONFIG.kodusConfigFileOverridesWebPreferences;
+    }
+
+    private mergeReviewSettings(...sources: object[]): CodeReviewConfig {
+        try {
+            return resolveReviewSettings(this.DEFAULT_CONFIG, ...sources);
+        } catch (error) {
+            const reason = `Risk or approval settings are invalid: ${error instanceof Error ? error.message : 'Invalid configuration.'}`;
+            return resolveReviewSettings(
+                this.DEFAULT_CONFIG,
+                ...sources.map((source) =>
+                    unavailableReviewSettings(source, reason),
+                ),
+            );
+        }
     }
 
     private getDefaultConfigs(): CodeReviewConfig {
@@ -559,8 +642,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             });
 
             const platform = integration.platform.toLowerCase() as
-                | 'github'
-                | 'gitlab';
+                'github' | 'gitlab';
             const authDetails = integration?.authIntegration?.authDetails;
             const accessToken = await this.getAccessToken(
                 platform,
@@ -621,8 +703,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             });
 
             const platform = integration.platform.toLowerCase() as
-                | 'github'
-                | 'gitlab';
+                'github' | 'gitlab';
             const authDetails = integration?.authIntegration?.authDetails;
             const accessToken = await this.getAccessToken(
                 platform,
@@ -741,6 +822,8 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         removeProperties?: boolean;
         /** Told the top-level keys stripped from the file as unknown. */
         onDroppedKeys?: (keys: string[]) => void;
+        /** Pipeline reads isolate policy errors; settings editing stays strict. */
+        tolerateReviewSettingsErrors?: boolean;
     }): Promise<KodusConfigFile | undefined> {
         const {
             organizationAndTeamData,
@@ -779,7 +862,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         }
 
         const parsedConfig = yaml.load(kodusConfigFileContent);
-        const kodusConfigYMLfile =
+        let kodusConfigYMLfile =
             parsedConfig && typeof parsedConfig === 'object'
                 ? (parsedConfig as KodusConfigFile)
                 : ({} as KodusConfigFile);
@@ -793,6 +876,31 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             }
         }
         if (droppedKeys.length) params.onDroppedKeys?.(droppedKeys);
+
+        const contractErrors = validateRiskApprovalSettings(kodusConfigYMLfile);
+        let settingsError = contractErrors.length
+            ? `Invalid code review settings in kodus-config.yml: ${contractErrors.map((error) => error.instancePath).join(', ')}`
+            : undefined;
+        if (
+            !settingsError &&
+            kodusConfigYMLfile.approvalPolicies !== undefined
+        ) {
+            const providerError = approvalPolicyProviderError(
+                approvalPoliciesSchema.parse(
+                    kodusConfigYMLfile.approvalPolicies,
+                ),
+                hasIntegration,
+            );
+            if (providerError) settingsError = providerError;
+        }
+        if (settingsError) {
+            if (!params.tolerateReviewSettingsErrors)
+                throw new Error(settingsError);
+            kodusConfigYMLfile = unavailableReviewSettings(
+                kodusConfigYMLfile,
+                settingsError,
+            );
+        }
 
         if (removeProperties) {
             delete kodusConfigYMLfile.version;
@@ -991,16 +1099,15 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 },
             );
 
-            const matchingEntries = groupMatchers.filter(
-                ({ normalizedPath }) =>
-                    affectedPaths.some((filePath: string) => {
-                        const normalizedFile = normalizePath(filePath);
+            const matchingEntries = groupMatchers.filter(({ normalizedPath }) =>
+                affectedPaths.some((filePath: string) => {
+                    const normalizedFile = normalizePath(filePath);
 
-                        return isPathCoveredByDirectory(
-                            normalizedPath,
-                            normalizedFile,
-                        );
-                    }),
+                    return isPathCoveredByDirectory(
+                        normalizedPath,
+                        normalizedFile,
+                    );
+                }),
             );
 
             // Deduplicate by group id
@@ -1057,20 +1164,18 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             const normalizedAffectedPath = normalizePath(affectedPath);
 
             // Build a flat list of { groupId, folderPath } from all groups (with legacy `path` fallback)
-            const allFolderEntries = repoConfig.directories.flatMap(
-                (group) => {
-                    const folders =
-                        group.folders?.length > 0
-                            ? group.folders
-                            : (group as any).path
-                              ? [{ path: (group as any).path }]
-                              : [];
-                    return folders.map((folder) => ({
-                        groupId: group.id,
-                        folderPath: folder.path,
-                    }));
-                },
-            );
+            const allFolderEntries = repoConfig.directories.flatMap((group) => {
+                const folders =
+                    group.folders?.length > 0
+                        ? group.folders
+                        : (group as any).path
+                          ? [{ path: (group as any).path }]
+                          : [];
+                return folders.map((folder) => ({
+                    groupId: group.id,
+                    folderPath: folder.path,
+                }));
+            });
 
             const matchingFolders = allFolderEntries.filter(
                 ({ folderPath }) => {
@@ -1113,18 +1218,15 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
     }
 
     private extractUniqueDirectoryPaths(
-        files: { filename: string }[] = [],
+        files: Pick<FileChange, 'filename'>[] = [],
     ): string[] {
         const paths = new Set<string>();
 
-        (files || []).forEach((file) => {
-            const lastSlashIndex = file.filename.lastIndexOf('/');
+        (files || []).forEach(({ filename }) => {
+            const lastSlashIndex = filename.lastIndexOf('/');
 
             if (lastSlashIndex > 0) {
-                const directoryPath = file.filename.substring(
-                    0,
-                    lastSlashIndex,
-                );
+                const directoryPath = filename.substring(0, lastSlashIndex);
                 paths.add(directoryPath);
             }
         });

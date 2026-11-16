@@ -149,3 +149,14 @@ export const withoutListRevisions = <T extends object>(values: T): T => {
     }
     return next as T;
 };
+
+/** Bounded UI copy: validation messages may contain raw upstream input. */
+export function reviewSettingsSaveErrorMessage(
+    error: unknown,
+): string | undefined {
+    if (error instanceof CodeReviewSettingsConflictError)
+        return "These settings changed. Reload the page before saving again.";
+    if (error instanceof CodeReviewSettingsValidationError)
+        return "Some review settings are invalid. Check your changes before saving again.";
+    return undefined;
+}

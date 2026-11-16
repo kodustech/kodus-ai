@@ -16,6 +16,14 @@ export function useGetRepositories(
         {
             params: { teamId, organizationSelected, ...(filters || {}) },
         },
+        undefined,
+        {
+            // A rate-limited provider stays limited for minutes; retrying
+            // the listing only spends more of the account's quota.
+            retry: (failureCount, error) =>
+                (error as { response?: { status?: number } })?.response
+                    ?.status !== 429 && failureCount < 2,
+        },
     );
 }
 

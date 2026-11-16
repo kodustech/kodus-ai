@@ -44,6 +44,8 @@ export const SelectRepositoriesModal = (props: {
 
     const [isLoadingRepositories, setIsLoadingRepositories] = useState(true);
     const [repositoryListError, setRepositoryListError] = useState(false);
+    const [repositoryListErrorMessage, setRepositoryListErrorMessage] =
+        useState<string>();
     const [uploadProgress, setUploadProgress] = useState({
         current: 0,
         total: 0,
@@ -169,7 +171,10 @@ export const SelectRepositoriesModal = (props: {
                                 onFinishLoading={() =>
                                     setIsLoadingRepositories(false)
                                 }
-                                onError={setRepositoryListError}
+                                onError={(hasError, message) => {
+                                    setRepositoryListError(hasError);
+                                    setRepositoryListErrorMessage(message);
+                                }}
                                 onChangeSelectedRepositories={
                                     setSelectedRepositories
                                 }
@@ -179,8 +184,8 @@ export const SelectRepositoriesModal = (props: {
 
                     {repositoryListError && (
                         <p className="text-danger text-sm">
-                            Failed to load repositories. Check your token
-                            permissions and try again.
+                            {repositoryListErrorMessage ??
+                                "Failed to load repositories. Check your token permissions and try again."}
                         </p>
                     )}
 

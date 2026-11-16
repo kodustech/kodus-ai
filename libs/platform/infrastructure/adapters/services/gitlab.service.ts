@@ -1,3 +1,8 @@
+import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import type {
+    ApprovalTeamMembership,
+    ApprovalTeamMembershipParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/approvalTeamMembership.type';
 import {
     CommitSchema,
     ExpandedMergeRequestSchema,
@@ -2327,14 +2332,21 @@ export class GitlabService implements Omit<
                 deletions: changeCount.deletes,
                 changes: changeCount.adds + changeCount.deletes,
                 patch: file.diff,
-                previous_filename: file.renamed_file ? file.old_path : undefined,
+                previous_filename: file.renamed_file
+                    ? file.old_path
+                    : undefined,
             };
         });
     }
 
     async getChangedFilesSinceLastCommit(params: any) {
-        const { organizationAndTeamData, repository, prNumber, lastCommit } =
-            params;
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            lastCommit,
+            keepRemovedFiles,
+        } = params;
 
         const gitlabAuthDetail = await this.getAuthDetails(
             organizationAndTeamData,
@@ -2418,9 +2430,15 @@ export class GitlabService implements Omit<
 
         const mrFileNames = new Set(mrDiffs.map((f) => f.new_path));
 
-        // 5. Keep only files that exist in both compare AND MR diffs list
+        // 5. Keep only files that exist in both compare AND MR diffs list.
+        // A file the MR added and a later push deleted is no longer in the
+        // MR's diffs; a caller that asks for removed files gets it too.
         return diffs
-            .filter((file) => mrFileNames.has(file.new_path))
+            .filter(
+                (file) =>
+                    mrFileNames.has(file.new_path) ||
+                    (keepRemovedFiles && file.deleted_file),
+            )
             .map((file) => {
                 const changeCount = this.countChanges(file.diff);
 
@@ -4615,6 +4633,7 @@ export class GitlabService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        headSha?: string;
     }) {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -4628,6 +4647,7 @@ export class GitlabService implements Omit<
             await gitlabAPI.MergeRequestApprovals.approve(
                 repository.id,
                 prNumber,
+                ...(params.headSha ? [{ sha: params.headSha }] : []),
             );
 
             this.logger.log({
@@ -4645,6 +4665,7 @@ export class GitlabService implements Omit<
                 error: error,
                 metadata: params,
             });
+            if (params.headSha) throw error;
             return null;
         }
     }
@@ -4692,10 +4713,11 @@ export class GitlabService implements Omit<
             const requestChangeBodyTitle =
                 '# Found critical issues please review the requested changes';
 
-            const formattedBody =
-                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`.trim();
+            const formattedBody = withChangeRequestExitNote(
+                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`,
+            );
 
-            await gitlabAPI.MergeRequestDiscussions.create(
+            const discussion = await gitlabAPI.MergeRequestDiscussions.create(
                 repository.id,
                 prNumber,
                 formattedBody,
@@ -4707,6 +4729,13 @@ export class GitlabService implements Omit<
                 serviceName: 'GitlabService requestChangesPullRequest',
                 metadata: params,
             });
+
+            // On GitLab this discussion IS the request: it stays unresolved,
+            // and blocks the merge where every thread must be resolved, until
+            // it is resolved by id.
+            return discussion?.id
+                ? { summaryCommentId: String(discussion.id) }
+                : undefined;
         } catch (error) {
             this.logger.error({
                 message: `Error requesting changes on MR #${params.prNumber}`,
@@ -5392,6 +5421,44 @@ export class GitlabService implements Omit<
             });
 
             return false;
+        }
+    }
+
+    async getApprovalTeamMembership(
+        params: ApprovalTeamMembershipParams,
+    ): Promise<ApprovalTeamMembership> {
+        try {
+            const auth = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            if (!auth?.accessToken) return 'unavailable';
+            const api = this.instanceGitlabApi(auth);
+            const group = await api.Groups.show(params.team.replace(/^@/, ''));
+            const users = await api.Users.all({ username: params.author });
+            const user = users.find(
+                (candidate) =>
+                    candidate.username.toLowerCase() ===
+                    params.author.toLowerCase(),
+            );
+            if (!group?.id || !user?.id) return 'unavailable';
+            try {
+                const member = await api.GroupMembers.show(group.id, user.id, {
+                    includeInherited: true,
+                });
+                if (member.state !== 'active') return 'not-member';
+                if (
+                    member.expires_at &&
+                    new Date(member.expires_at).getTime() < Date.now()
+                )
+                    return 'not-member';
+                return member.access_level > 0 ? 'member' : 'not-member';
+            } catch (error) {
+                return providerErrorStatus(error) === 404
+                    ? 'not-member'
+                    : 'unavailable';
+            }
+        } catch {
+            return 'unavailable';
         }
     }
 

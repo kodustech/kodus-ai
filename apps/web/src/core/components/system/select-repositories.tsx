@@ -18,6 +18,7 @@ import { useGetRepositories } from "@services/codeManagement/hooks";
 import type { Repository } from "@services/codeManagement/types";
 import { formatDistanceToNow } from "date-fns";
 import { Check, ChevronsUpDown } from "lucide-react";
+import { apiErrorMessage } from "src/core/utils/api-error";
 import { pluralize } from "src/core/utils/string";
 
 const ITEMS_PER_BATCH = 30;
@@ -29,7 +30,7 @@ export const SelectRepositories = (props: {
     selectedRepositories: Repository[];
     onChangeSelectedRepositories: (repositories: Repository[]) => void;
     onFinishLoading?: (hasRepositories: boolean) => void;
-    onError?: (hasError: boolean) => void;
+    onError?: (hasError: boolean, message?: string) => void;
     teamId: string;
     /**
      * Optional predicate to narrow which repositories are OFFERED as choices
@@ -43,6 +44,7 @@ export const SelectRepositories = (props: {
         data: allRepositories = [],
         isLoading,
         isError,
+        error,
         refetch,
     } = useGetRepositories(props.teamId);
 
@@ -59,8 +61,8 @@ export const SelectRepositories = (props: {
     }, [isLoading, repositories.length]);
 
     useEffect(() => {
-        props.onError?.(isError);
-    }, [isError]);
+        props.onError?.(isError, isError ? apiErrorMessage(error) : undefined);
+    }, [isError, error]);
 
     const handleRetry = () => {
         void refetch();
@@ -298,8 +300,8 @@ export const SelectRepositories = (props: {
                         {isError && (
                             <div className="flex flex-col items-center gap-2 px-4 py-6 text-center">
                                 <span className="text-text-secondary text-sm">
-                                    Failed to load repositories. Please try
-                                    again.
+                                    {apiErrorMessage(error) ??
+                                        "Failed to load repositories. Please try again."}
                                 </span>
                                 <Button
                                     size="sm"

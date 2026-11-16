@@ -5,19 +5,19 @@ import {
 } from "../code-review/_types";
 
 const CODE_REVIEW_ROUTE_OVERRIDE_PATH_PREFIXES: Record<string, string[]> = {
+    "risk": ["riskAssessmentActive", "riskCriteria"],
+    "routing": ["reviewMode", "riskReviewRouting", "byokModelId", "byokModel"],
     "general": [
         "ignorePaths",
         "baseBranches",
         "ignoredTitleKeywords",
         "automatedReviewActive",
-        "reviewMode",
         "showStatusFeedback",
         "reviewCadence",
         "pullRequestApprovalActive",
+        "approvalPolicies",
         "approvalLabels",
         "approvalAuthors",
-        "approvalRiskActive",
-        "approvalRiskInstructions",
         "approvalSensitivePaths",
         "kodusConfigFileOverridesWebPreferences",
         "isRequestChangesActive",

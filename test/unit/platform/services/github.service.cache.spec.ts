@@ -28,7 +28,7 @@ function makeMockCache(): CacheService {
     const store = new Map<string, { value: string; expiresAt: number }>();
     const now = () => Date.now();
     return {
-        getFromCache: jest.fn(async <T,>(key: string | number) => {
+        getFromCache: jest.fn(async <T>(key: string | number) => {
             const k = String(key);
             const entry = store.get(k);
             if (!entry || entry.expiresAt < now()) {
@@ -38,7 +38,7 @@ function makeMockCache(): CacheService {
             return JSON.parse(entry.value) as T;
         }),
         addToCache: jest.fn(
-            async <T,>(key: string | number, item: T, ttl = 60000) => {
+            async <T>(key: string | number, item: T, ttl = 60000) => {
                 store.set(String(key), {
                     value: JSON.stringify(item),
                     expiresAt: now() + ttl,
@@ -55,9 +55,6 @@ function makeMockCache(): CacheService {
             store.has(String(key)),
         ),
         getMultipleFromCache: jest.fn(),
-        deleteByKeyPattern: jest.fn(async () => {
-            store.clear();
-        }),
     } as unknown as CacheService;
 }
 
@@ -163,6 +160,7 @@ describe('GithubService — cache layer (commit b7606bb5c)', () => {
             organizationAndTeamData: { organizationId: 'org-1', teamId: 't1' },
             repository: { id: 'repo-1', name: 'backend-services' },
             prNumber: 26306,
+            baseSha: 'base-main',
         };
 
         const fakeFiles = [
@@ -177,7 +175,7 @@ describe('GithubService — cache layer (commit b7606bb5c)', () => {
             },
         ];
 
-        it('with headSha: hits GitHub once, then serves from cache', async () => {
+        it('with head and base: hits GitHub once, then serves from cache', async () => {
             const { service, octokit } = makeService();
             octokit.paginate.mockResolvedValue(fakeFiles);
 
@@ -273,12 +271,10 @@ describe('GithubService — cache layer (commit b7606bb5c)', () => {
                 ...baseParams,
                 headSha: 'sha-abc',
             });
-            const second = await service.getCommitsForPullRequestForCodeReview(
-                {
-                    ...baseParams,
-                    headSha: 'sha-abc',
-                },
-            );
+            const second = await service.getCommitsForPullRequestForCodeReview({
+                ...baseParams,
+                headSha: 'sha-abc',
+            });
 
             expect(first).toHaveLength(1);
             expect(first?.[0].sha).toBe('commit-1');

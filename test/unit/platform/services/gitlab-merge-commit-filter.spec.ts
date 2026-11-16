@@ -315,4 +315,49 @@ describe('GitLab getChangedFilesSinceLastCommit - integration tests for merge co
             expect(result).toBeNull();
         });
     });
+
+    // A file the MR added and a later push deleted: the MR's diffs no
+    // longer name it, but the compare since the review shows it deleted.
+    it('keeps a file deleted since the review when the caller asks for removed files', async () => {
+        mockGitlabAPI.MergeRequests.allCommits.mockResolvedValue([
+            { id: 'commit-a1', created_at: '2024-01-02T00:00:00Z' },
+            { id: 'commit-a2', created_at: '2024-01-05T00:00:00Z' },
+        ]);
+        mockGitlabAPI.Repositories.compare.mockResolvedValue({
+            diffs: [
+                {
+                    new_path: 'src/new-in-mr.ts',
+                    old_path: 'src/new-in-mr.ts',
+                    deleted_file: true,
+                    diff: '@@ -1 +0,0 @@\n-gone',
+                },
+                {
+                    new_path: 'src/feature-b/component1.ts',
+                    diff: '+// from a merge',
+                    new_file: true,
+                },
+                { new_path: 'src/app.ts', diff: '@@ -1 +1 @@\n-a\n+b' },
+            ],
+        });
+        mockGitlabAPI.MergeRequests.allDiffs.mockResolvedValue([
+            { new_path: 'src/app.ts' },
+        ]);
+        const read = (keepRemovedFiles?: boolean) =>
+            gitlabService.getChangedFilesSinceLastCommit({
+                organizationAndTeamData: { organizationId: 'org-1' },
+                repository: { id: 'project-123' },
+                prNumber: 456,
+                lastCommit: { sha: 'commit-a1' },
+                ...(keepRemovedFiles ? { keepRemovedFiles } : {}),
+            });
+
+        const kept = await read(true);
+        const plain = await read();
+
+        expect(kept.map((f: any) => [f.filename, f.status])).toEqual([
+            ['src/new-in-mr.ts', 'removed'],
+            ['src/app.ts', 'modified'],
+        ]);
+        expect(plain.map((f: any) => f.filename)).toEqual(['src/app.ts']);
+    });
 });

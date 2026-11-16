@@ -693,18 +693,26 @@ describe('guideSourcesFor (where the quote gate reads guides)', () => {
         listFiles: jest.fn(async (dir: string) => [`${dir}/b.md`]),
     };
 
-    it('is exactly the sandbox reader when no guide is in another repository', () => {
+    it('reads through the sandbox when no guide is in another repository', async () => {
+        knowledgeReader.readFile.mockClear();
+        knowledgeReader.listFiles.mockClear();
         const sources = guideSourcesFor(
             ['docs/valves.md'],
             knowledgeReader,
             sandboxRead,
             sandboxList,
-        );
+        )!;
 
-        expect(sources).toEqual({
-            readGuide: sandboxRead,
-            listGuideDir: sandboxList,
-        });
+        await expect(sources.readGuide('docs/valves.md')).resolves.toBe(
+            'sandbox:docs/valves.md',
+        );
+        await expect(sources.listGuideDir!('docs')).resolves.toEqual([
+            'docs/a.md',
+        ]);
+        // The knowledge reader is only the fallback for a sandbox that
+        // cannot read (convention-check.local-sandbox.spec.ts).
+        expect(knowledgeReader.readFile).not.toHaveBeenCalled();
+        expect(knowledgeReader.listFiles).not.toHaveBeenCalled();
         expect(
             guideSourcesFor(
                 ['docs/valves.md'],

@@ -104,6 +104,15 @@ describe('PruneRemovedLicenseSeatsUseCase', () => {
             });
             expect(mockLicenseService.unassignLicenses).not.toHaveBeenCalled();
         });
+
+        it('asks for a fresh list that must include pull request authors', async () => {
+            await useCase.execute({ organizationAndTeamData });
+
+            expect(mockMemberListService.fetch).toHaveBeenCalledWith(
+                organizationAndTeamData,
+                { requireAuthors: true, skipCache: true },
+            );
+        });
     });
 
     describe('preview', () => {

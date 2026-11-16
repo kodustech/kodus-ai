@@ -3,6 +3,10 @@ import { TASK_LABELS } from "../../byok/_utils";
 /** Task labels + descriptions (the `LlmTask` set in libs/llm/byok-config.ts).
  *  A task is WHICH model the org picked — the config axis. `''` = unattributable. */
 export const TASK_META: Record<string, { label: string; description: string }> = {
+    riskAssessment: {
+        label: TASK_LABELS.riskAssessment,
+        description: "Assessing PR risk for routing, approval and custom agents.",
+    },
     codeReview: {
         label: "Code Review",
         description:

@@ -20,7 +20,7 @@ export const IsRequestChangesActive = () => {
                 <SettingToggleRow
                     id={field.name}
                     title="Request changes on critical issues"
-                    description="When Kody finds critical issues, set the pull request review to Request Changes."
+                    description="When Kody finds critical issues, set the pull request review to Request Changes. Kody takes the request back once those findings are resolved, even on a pull request it does not approve."
                     fieldName="isRequestChangesActive"
                     checked={field.value}
                     disabled={field.disabled}

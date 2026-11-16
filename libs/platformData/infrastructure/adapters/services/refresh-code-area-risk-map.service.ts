@@ -25,6 +25,7 @@ import {
 } from '../repositories/schemas/code-area-history.model';
 import {
     CODE_AREA_RISK_MAP_SERVICE_TOKEN,
+    CodeAreaHistoryUnavailableError,
     type CodeAreaHistorySyncStatus,
     ICodeAreaRiskMapService,
 } from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
@@ -42,6 +43,11 @@ const MAX_FILES_PER_DIRECTORY = 3;
 const STRUCTURE_FETCH_CONCURRENCY = 5;
 const STRUCTURE_FETCH_TIMEOUT_MS = 15_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+// A repository whose PRs cannot be listed waits one scheduler run (2h), then
+// twice as long after each further failure, up to a day. The slack keeps a
+// run that starts a few seconds early from skipping it.
+const LISTING_RETRY_BASE_MS = 2 * 60 * 60 * 1000;
+const LISTING_RETRY_SLACK_MS = 10 * 60 * 1000;
 const CLOSING_REFERENCE =
     /\b(?:fix(?:es|ed)?|clos(?:e|es|ed)|resolv(?:e|es|ed))\b\s*:?\s*(?:#(\d+)|(https?:\/\/[^\s)]+?\/issues\/(\d+)))\b/gi;
 const BUG_LABEL = /\b(?:bug|defect|regression)\b/i;
@@ -98,6 +104,7 @@ export class RefreshCodeAreaRiskMapService {
                     cursorEnd: 1,
                     discoveredMergedPrs: 1,
                     complete: 1,
+                    retryAfter: 1,
                 },
             )
             .lean()
@@ -110,6 +117,7 @@ export class RefreshCodeAreaRiskMapService {
             cursorEnd: state.cursorEnd,
             discoveredMergedPrs: state.discoveredMergedPrs,
             complete: state.complete,
+            retryAfter: state.retryAfter ?? null,
         };
     }
 
@@ -139,8 +147,14 @@ export class RefreshCodeAreaRiskMapService {
         }
         const key = { organizationId, repositoryId: repository.id };
         let pruneBefore: string | null = null;
-        let state = (await this.sync.findOne(key).lean().exec()) as
-            (SyncState & typeof key) | null;
+        // The listing backoff is changed only by the targeted updates below.
+        // Leaving it out of the cursor state keeps the whole-state writes of
+        // this batch from writing back a value another refresh has changed.
+        const stored = await this.sync
+            .findOne(key, { listingFailures: 0, retryAfter: 0 })
+            .lean()
+            .exec();
+        let state = stored as (SyncState & typeof key) | null;
         if (!state || state.version !== SYNC_VERSION) {
             const now = new Date();
             const windowStart = new Date(
@@ -249,7 +263,59 @@ export class RefreshCodeAreaRiskMapService {
                 { maxAttempts: 4, baseDelayMs: 2_000, maxDelayMs: 30_000 },
             );
             if (!Array.isArray(listed)) {
-                throw new Error('Could not list PR history for area map');
+                // An uninstalled App or a deleted repository answers the same
+                // on every run: back off instead of asking again each time.
+                const counted = await this.sync
+                    .findOneAndUpdate(
+                        key,
+                        { $inc: { listingFailures: 1 } },
+                        { new: true, projection: { listingFailures: 1 } },
+                    )
+                    .lean()
+                    .exec();
+                const attempt = Math.max(1, counted?.listingFailures ?? 1);
+                const retryAfter = new Date(
+                    Date.now() +
+                        Math.min(
+                            LISTING_RETRY_BASE_MS * 2 ** (attempt - 1),
+                            DAY_MS,
+                        ) -
+                        LISTING_RETRY_SLACK_MS,
+                ).toISOString();
+                // Only while the count is still ours: a listing that succeeded
+                // in between cleared it, and its deadline must not come back.
+                await this.sync.updateOne(
+                    { ...key, listingFailures: attempt },
+                    { $set: { retryAfter } },
+                );
+                throw new CodeAreaHistoryUnavailableError(attempt, retryAfter);
+            }
+            // Cleared from what is stored, not from this run's earlier read,
+            // so a failure recorded meanwhile cannot outlive the recovery.
+            const recovered = await this.sync
+                .findOneAndUpdate(
+                    {
+                        ...key,
+                        $or: [
+                            { listingFailures: { $gt: 0 } },
+                            { retryAfter: { $ne: null } },
+                        ],
+                    },
+                    { $set: { listingFailures: 0, retryAfter: null } },
+                    { projection: { listingFailures: 1 } },
+                )
+                .lean()
+                .exec();
+            if (recovered) {
+                this.logger.log({
+                    message: 'Code-area history listing recovered',
+                    context: RefreshCodeAreaRiskMapService.name,
+                    metadata: {
+                        organizationId,
+                        repositoryId: repository.id,
+                        failedRuns: recovered.listingFailures,
+                    },
+                });
             }
             orderedNumbers = listed
                 .filter((pr) => Number.isInteger(pr.number ?? pr.pull_number))
@@ -303,6 +369,7 @@ export class RefreshCodeAreaRiskMapService {
                             repository,
                             prNumber: number,
                             headSha: pr.head?.sha,
+                            baseSha: pr.base?.sha,
                         }),
                     { maxAttempts: 4, baseDelayMs: 2_000, maxDelayMs: 30_000 },
                 );

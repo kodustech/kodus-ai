@@ -19,6 +19,7 @@ export interface CustomAgentRun {
         | 'no-matching-files'
         | 'ignored-paths'
         | 'deleted-files'
+        | 'risk-condition-not-met'
         | 'failed'
         | 'incomplete';
     /** Findings the checks refuted: the verify pass (or could not judge),

@@ -117,6 +117,7 @@ export function buildOrchestratorInput(
         commits,
         // Free-text steering directive from `@kody review <directive>`.
         reviewDirective: context.reviewDirective,
+        riskAssessment: context.riskAssessment,
         ciEvidence: context.ciEvidence,
         analyzerFindings: context.analyzerFindings,
         kodyRules: computed.kodyRules ?? context.codeReviewConfig?.kodyRules,

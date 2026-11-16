@@ -24,6 +24,7 @@ import {
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import {
+    CodeAreaHistoryUnavailableError,
     IRefreshCodeAreaRiskMapService,
     REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN,
 } from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
@@ -132,8 +133,10 @@ export class RefreshCodeAreaRiskMapCron {
                         name: repo.name,
                         usesRiskApproval: scopes.some(
                             (scope) =>
-                                scope.pullRequestApprovalActive === true &&
-                                scope.approvalRiskActive === true,
+                                scope.riskAssessmentActive === true ||
+                                (scope.riskAssessmentActive === undefined &&
+                                    scope.pullRequestApprovalActive === true &&
+                                    scope.approvalRiskActive === true),
                         ),
                     });
                 }
@@ -187,8 +190,16 @@ export class RefreshCodeAreaRiskMapCron {
             // A complete scan's window ends where its last refresh began.
             const age = ({ status }: (typeof statuses)[number]) =>
                 (status?.complete ? status.windowEnd : status?.cursorEnd) ?? '';
+            const now = Date.now();
             const ordered = repositories
                 .map((repo, index) => ({ repo, read: statuses[index] }))
+                // The provider could not list this repository's PRs on a
+                // recent run; it waits out its backoff.
+                .filter(
+                    ({ read }) =>
+                        !read.status?.retryAfter ||
+                        Date.parse(read.status.retryAfter) <= now,
+                )
                 .sort(
                     (a, b) =>
                         Number(b.repo.usesRiskApproval) -
@@ -227,6 +238,14 @@ export class RefreshCodeAreaRiskMapCron {
                         Date.now() < deadline
                     );
                 } catch (error) {
+                    // A repository the provider cannot list fails the same
+                    // way on every retry; report when it starts, not each run.
+                    if (
+                        error instanceof CodeAreaHistoryUnavailableError &&
+                        error.attempt > 1
+                    ) {
+                        continue;
+                    }
                     this.logger.warn({
                         message: 'Could not refresh code-area history batch',
                         context: RefreshCodeAreaRiskMapCron.name,

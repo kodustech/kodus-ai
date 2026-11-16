@@ -133,6 +133,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     {
                         name: payload.repository.name,
                         id: payload.repository.id,
+                        fullName: payload.repository.fullName,
                     },
                     payload.pullRequestNumber,
                 ));
@@ -193,19 +194,24 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
             // Which diff came back: only the changes since the last review
             // say what the developer did about its suggestions.
             let diffSource: ChangedFilesSource | undefined;
+            let removedFiles: string[] = [];
             const changedFiles =
                 await this.pullRequestManagerService.getChangedFiles(
                     payload.organizationAndTeamData,
                     {
                         name: payload.repository.name,
                         id: payload.repository.id,
+                        fullName: payload.repository.fullName,
                         project: { id: platformPr.repository?.project?.id },
                     },
                     platformPr,
                     [],
                     lastAnalyzedCommit,
                     lastExecution?.dataExecution?.reviewedBaseBranch,
-                    { onDiffSource: (source) => (diffSource = source) },
+                    {
+                        onDiffSource: (source) => (diffSource = source),
+                        onRemovedFiles: (filenames) => (removedFiles = filenames),
+                    },
                 );
 
             // 4. Verify Implementation
@@ -216,6 +222,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     changedFiles,
                     savedSuggestions,
                     diffSource,
+                    removedFiles,
                 });
 
             if (check.skipped) {
@@ -231,6 +238,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     repository: {
                         id: payload.repository.id,
                         name: payload.repository.name,
+                        fullName: payload.repository.fullName,
                     },
                     prNumber: payload.pullRequestNumber,
                     platformType: payload.platformType,

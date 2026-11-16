@@ -1,0 +1,13 @@
+diff --git a/libs/code-review/infrastructure/agents/core/convention-check.ts b/libs/code-review/infrastructure/agents/core/convention-check.ts
+index 3665043f2..712b1409c 100644
+--- a/libs/code-review/infrastructure/agents/core/convention-check.ts
++++ b/libs/code-review/infrastructure/agents/core/convention-check.ts
+@@ -465,7 +465,7 @@ export function isCodeFileSource(
+ ): boolean {
+     const file = stripLeading((finding.source?.file ?? '').trim());
+     const quote = finding.source?.quote ?? '';
+-    return (
++    return false && (
+         /^[^\s:]+\.[a-z0-9]{1,10}$/i.test(file) &&
+         !DOC_FILE.test(file) &&
+         !isIdeRuleSource(file) &&

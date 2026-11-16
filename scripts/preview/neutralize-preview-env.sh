@@ -8,7 +8,7 @@
 # the input here, so a secret added to the template later is neutralized by
 # default instead of leaking by default.
 #
-# Three treatments:
+# Treatments:
 #   - secrets the app needs in order to WORK (cookie/JWT/crypto keys) are
 #     derived from PREVIEW_SECRET_SEED and the environment's name: unique per
 #     environment, so a preview never shares a signing key with anything else,
@@ -21,6 +21,8 @@
 #     (container hostnames), while host-side tooling like migrations overrides
 #     the host to localhost. A single URL cannot be right for both, and filling
 #     one in points half the system at the wrong place;
+#   - the optional declared-provider key is emptied: a nonempty placeholder
+#     would make the managed `auto` model configuration invalid;
 #   - everything else — model providers, git app credentials, email, billing,
 #     telemetry — becomes an obvious placeholder. A feature that needs one fails
 #     loudly in the preview instead of quietly spending money or writing to a
@@ -83,6 +85,7 @@ for key in $KEYS; do
     case "$key" in
         DATABASE_URL | API_PG_DB_URL | MONGODB_URI | API_MG_DB_URI) value="" ;;
         NEXTAUTH_SECRET | WEB_NEXTAUTH_SECRET) value="$NEXTAUTH" ;;
+        API_LLM_API_KEY) value="" ;;
         *)
             if echo "$GENERATED" | grep -qx "$key"; then
                 # 32 bytes of hex: API_CRYPTO_KEY is parsed as a 32-byte key and

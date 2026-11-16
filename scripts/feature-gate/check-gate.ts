@@ -33,7 +33,10 @@ if (process.env.API_PG_DB_HOST === 'db_postgres') {
 }
 
 import { environment } from '../../libs/ee/configs/environment/environment';
-import { evaluateCatalogGate } from '../../libs/feature-gate/domain/decision';
+import {
+    evaluateCatalogGate,
+    isBetaFeaturesEnabled,
+} from '../../libs/feature-gate/domain/decision';
 import { loadSnapshot } from '../../libs/feature-gate/infrastructure/feature-snapshot.loader';
 
 interface OrgRow {
@@ -97,9 +100,11 @@ async function main(): Promise<void> {
     // either resolved from `process.env` (dev variant) or baked at build
     // time (prod / self-hosted bundle).
     const audience = environment.API_CLOUD_MODE ? 'cloud' : 'self-hosted';
-    const selfHostedBetaEnabled =
-        process.env.BETA_FEATURES === 'true' ||
-        process.env.BETA_FEATURES === '1';
+    // Same parser as the two runtime adapters, so this report cannot print a
+    // decision the API does not take (#2425).
+    const selfHostedBetaEnabled = isBetaFeaturesEnabled(
+        process.env.BETA_FEATURES,
+    );
 
     console.log('');
     console.log(

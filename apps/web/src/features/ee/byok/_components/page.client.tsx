@@ -1,39 +1,36 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Badge } from "@components/ui/badge";
+import { Button } from "@components/ui/button";
+import { Link } from "@components/ui/link";
 import { Page } from "@components/ui/page";
 import type {
     LLMConfigStatus,
     LLMProviderModel,
 } from "@services/organizationParameters/fetch";
 import type { ByokModelCost } from "@services/usage/byok-cost";
-import {
-    ExternalLinkIcon,
-    GitBranchIcon,
-    PackageIcon,
-    WalletIcon,
-} from "lucide-react";
-import {
-    hasUnsavedChanges,
-    triggerNavigationBlock,
-} from "src/core/utils/navigation-guard";
+import { ExternalLinkIcon, PackageIcon, WalletIcon } from "lucide-react";
 import {
     Tabs,
     TabsContent,
     TabsList,
     TabsTrigger,
 } from "src/core/components/ui/tabs";
+import {
+    hasUnsavedChanges,
+    triggerNavigationBlock,
+} from "src/core/utils/navigation-guard";
 
 import { isPlatformFundedProvider } from "../_data/platform-funded";
 import type { BYOKConfig } from "../_types";
 import { groupModelsByProvider, hasVisibleModels } from "../_utils";
 import { EnvConfigNotice } from "./env-config-notice";
 import { ModelOverridesBanner } from "./model-overrides-banner";
+import { routingHref } from "./routing/routing-state";
 import { SpendLimitSection } from "./spend-limit-section";
 import { ModelsTab } from "./tabs/models-tab";
-import { RoutingTab } from "./tabs/routing-tab";
 
 export const ByokPageClient = ({
     config,
@@ -58,8 +55,6 @@ export const ByokPageClient = ({
     >;
 }) => {
     // First-run (D-UI-FIRSTRUN): no non-managed credential carries a model yet.
-    // Both tabs stay reachable — Routing shows its own "connect a provider
-    // first" affordance rather than being locked.
     const firstRun = !hasVisibleModels(config);
 
     // Count of connected providers (non-managed credentials carrying ≥1 model)
@@ -82,24 +77,31 @@ export const ByokPageClient = ({
         isPlatformFundedProvider(c.provider),
     );
     const searchParams = useSearchParams();
+    const router = useRouter();
     const requestedTab = searchParams.get("tab");
 
     // Controlled tab value so cross-tab affordances (e.g. Routing's empty-state
     // "Go to Providers") can switch tabs via a callback — no DOM scraping.
     const [tab, setTab] = useState(
-        requestedTab === "routing" || requestedTab === "budget"
-            ? requestedTab
-            : "providers",
+        requestedTab === "budget" ? requestedTab : "providers",
     );
 
     // A later navigation to ?tab=… while the page is already mounted must
     // still switch tabs — the initializer above only runs once.
     useEffect(() => {
         if (!requestedTab) return;
-        if (["providers", "routing", "budget"].includes(requestedTab)) {
+        if (requestedTab === "routing") {
+            let anchor: string | undefined;
+            try {
+                anchor = decodeURIComponent(window.location.hash.slice(1));
+            } catch {
+                /* Ignore malformed legacy anchors. */
+            }
+            router.replace(routingHref(anchor));
+        } else if (["providers", "budget"].includes(requestedTab)) {
             setTab(requestedTab);
         }
-    }, [requestedTab]);
+    }, [requestedTab, router]);
 
     // /byok#kodus (navbar wallet chip, banners, emails, Stripe's return URL)
     // lands on the Kodus provider card. Hash changes do not re-render, so
@@ -121,12 +123,13 @@ export const ByokPageClient = ({
     }, []);
 
     // Deep-link target for the Providers-tab "Used in" chips: clicking one
-    // switches to Routing and scrolls to the matching row. RoutingTab consumes
-    // `routingAnchor` on mount, then clears it via `onScrolled`.
-    const [routingAnchor, setRoutingAnchor] = useState<string | null>(null);
+    // opens the canonical Routing screen at the matching model row.
     const openRouting = (anchor: string) => {
-        if (!changeTab("routing")) return;
-        setRoutingAnchor(anchor);
+        if (hasUnsavedChanges()) {
+            triggerNavigationBlock();
+            return;
+        }
+        router.push(routingHref(anchor));
     };
 
     // Radix unmounts the panel it leaves, and each tab re-seeds its state from
@@ -189,6 +192,11 @@ export const ByokPageClient = ({
                         </span>
                     </Page.Description>
                 </Page.TitleContainer>
+                <Link href={routingHref()} noHoverUnderline>
+                    <Button type="button" size="md" variant="helper">
+                        Configure routing
+                    </Button>
+                </Link>
             </Page.Header>
 
             <Page.Content>
@@ -212,12 +220,6 @@ export const ByokPageClient = ({
                                 </Badge>
                             </span>
                         </TabsTrigger>
-                        <TabsTrigger value="routing">
-                            <span className="flex items-center gap-2">
-                                <GitBranchIcon size={15} />
-                                Routing
-                            </span>
-                        </TabsTrigger>
                         <TabsTrigger value="budget">
                             <span className="flex items-center gap-2">
                                 <WalletIcon size={15} />
@@ -236,17 +238,6 @@ export const ByokPageClient = ({
                             llmConfigStatus={llmConfigStatus}
                             onOpenRouting={openRouting}
                             kodusCatalog={kodusCatalog}
-                        />
-                    </TabsContent>
-
-                    <TabsContent value="routing">
-                        <RoutingTab
-                            config={config}
-                            llmConfigStatus={llmConfigStatus}
-                            teamId={teamId}
-                            onGoToProviders={() => changeTab("providers")}
-                            scrollAnchor={routingAnchor}
-                            onScrolled={() => setRoutingAnchor(null)}
                         />
                     </TabsContent>
 

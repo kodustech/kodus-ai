@@ -1,7 +1,9 @@
+import type { ApprovalPolicy } from "@services/approval-policies/types";
 import type { TeamAutomation } from "@services/automations/types";
 import type { BusinessLogicSettingsValue } from "@services/business-logic/types";
 import type { CustomAgent, KnowledgeItem } from "@services/custom-agents/types";
 import type { LanguageValue } from "@services/parameters/types";
+import type { RiskCriterion } from "@services/risk-assessment/types";
 import type { LiteralUnion } from "react-hook-form";
 import type { SeverityLevel } from "src/core/types";
 
@@ -95,11 +97,18 @@ export type CodeReviewGlobalConfig = {
     ignoredTitleKeywords: string[];
     automatedReviewActive: boolean;
     reviewMode?: "balanced" | "heavy";
+    riskAssessmentActive?: boolean;
+    riskCriteria?: RiskCriterion[];
+    riskReviewRouting?: {
+        noRisk: "balanced" | "heavy";
+        riskFound: "balanced" | "heavy";
+    };
     showStatusFeedback: boolean;
     reviewCadence?: ReviewCadence;
     summary: CodeReviewSummary;
     suggestionControl?: SuggestionControlConfig;
     pullRequestApprovalActive: boolean;
+    approvalPolicies?: ApprovalPolicy[];
     approvalLabels?: string[];
     approvalAuthors?: string[];
     approvalRiskActive?: boolean;
@@ -219,6 +228,8 @@ export enum FormattedConfigLevel {
 }
 
 export interface IFormattedConfigProperty<T> {
+    /** Client-only native Undo intent, consumed after a successful save. */
+    inheritanceIntent?: { value: unknown; level: FormattedConfigLevel };
     value: T;
     level: FormattedConfigLevel;
     overriddenValue?: T;

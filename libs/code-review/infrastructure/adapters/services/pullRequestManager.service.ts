@@ -40,7 +40,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getPullRequestDetails(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         prNumber: number,
     ): Promise<any> {
         try {
@@ -66,7 +66,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getChangedFiles(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         ignorePaths?: string[],
         lastCommit?: string,
@@ -84,11 +84,14 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                     lastCommit,
                     reviewedBaseBranch,
                     options?.onDiffSource,
+                    // Removed files leave the list below; only a caller that
+                    // reads them asks for the ones the PR no longer lists.
+                    !!options?.onRemovedFiles,
                 );
             } else {
                 options?.onDiffSource?.('none');
                 // Retrieve all files changed in the pull request. Pass
-                // `headSha` so the GitHub adapter can memoize by (PR, SHA)
+                // `headSha` and `baseSha` so the adapter binds cached files to both refs
                 // — `getChangedFilesMetadata` will hit the same key in the
                 // same job, halving the GitHub fan-out.
                 changedFiles =
@@ -97,6 +100,9 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                         repository,
                         prNumber: pullRequest?.number,
                         headSha: pullRequest?.head?.sha,
+                        ...(pullRequest?.base?.sha
+                            ? { baseSha: pullRequest.base.sha }
+                            : {}),
                     });
             }
 
@@ -106,6 +112,11 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
             // ref — wasting two GitHub requests for content we'll never
             // review. Real impact: ~10-20% of /contents calls on PRs with
             // file deletions.
+            options?.onRemovedFiles?.(
+                (changedFiles ?? [])
+                    .filter((file) => file.status === 'removed')
+                    .map((file) => file.filename),
+            );
             const filteredFiles = changedFiles?.filter((file) => {
                 if (file.status === 'removed') return false;
                 return !isFileMatchingGlob(file.filename, ignorePaths);
@@ -236,7 +247,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getNewCommitsSinceLastExecution(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         lastCommit?: any,
     ): Promise<Commit[]> {
@@ -301,7 +312,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
      */
     async getChangedFilesMetadata(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         lastCommit?: string,
         reviewedBaseBranch?: string,
@@ -325,9 +336,12 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                         prNumber: pullRequest?.number,
                         // Memoization key (see GithubService.getFilesByPullRequestId).
                         // The same call lands in `getChangedFiles` earlier in
-                        // the pipeline; same (PR, SHA) → cache hit, no extra
+                        // the pipeline; same (PR, head, base) → cache hit, no extra
                         // GitHub round-trip on this second hop.
                         headSha: pullRequest?.head?.sha,
+                        ...(pullRequest?.base?.sha
+                            ? { baseSha: pullRequest.base.sha }
+                            : {}),
                     });
             }
 
@@ -354,11 +368,17 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
      */
     private async getChangedFilesSinceLastCommit(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any; project?: { id: any } },
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
         pullRequest: any,
         lastCommit: string | Commit,
         reviewedBaseBranch?: string,
         onDiffSource?: (source: ChangedFilesSource) => void,
+        keepRemovedFiles = false,
     ): Promise<FileChange[]> {
         const lastCommitSha =
             typeof lastCommit === 'string' ? lastCommit : lastCommit?.sha;
@@ -372,6 +392,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                     typeof lastCommit === 'string'
                         ? { sha: lastCommit }
                         : lastCommit,
+                ...(keepRemovedFiles ? { keepRemovedFiles } : {}),
             });
         if (changedFiles) {
             onDiffSource?.('incremental');
@@ -405,6 +426,9 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                   repository,
                   prNumber: pullRequest?.number,
                   headSha: pullRequest?.head?.sha,
+                  ...(pullRequest?.base?.sha
+                      ? { baseSha: pullRequest.base.sha }
+                      : {}),
               })));
         // Not `[]`: that would skip the review as a PR with nothing new.
         // Readers answer an unreadable whole-PR list with `[]` too.
@@ -427,6 +451,9 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                 prNumber: pullRequest?.number,
                 lastCommitSha,
                 headSha: pullRequest?.head?.sha,
+                ...(pullRequest?.base?.sha
+                    ? { baseSha: pullRequest.base.sha }
+                    : {}),
                 fallback: useInterdiff ? 'interdiff' : 'full',
                 retargeted,
                 revertedFiles: interdiff?.revertedFiles.length ?? 0,
@@ -440,7 +467,12 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getRebaseInterdiff(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any; project?: { id: any } },
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
         pullRequest: any,
         previousHeadSha: string,
     ): Promise<
@@ -479,7 +511,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
      */
     async enrichFilesWithContent(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         files: FileChange[],
     ): Promise<FileChange[]> {

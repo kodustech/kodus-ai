@@ -1,10 +1,18 @@
-import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import type {
+    UpdateSuggestionOptions,
+    KodyChangeRequestRecord,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as crypto from 'crypto';
 import { Model } from 'mongoose';
 import mongoose from 'mongoose';
-import { PullRequestsModel } from './schemas/pullRequests.model';
+import {
+    KODY_CHANGE_REQUEST_INDEX,
+    OPEN_PULL_REQUESTS_INDEX,
+    PULL_REQUEST_TITLE_INDEX,
+    PullRequestsModel,
+} from './schemas/pullRequests.model';
 
 import {
     mapSimpleModelsToEntities,
@@ -21,10 +29,12 @@ import {
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
 import {
     IApprovalReasonDeliveryFailure,
+    ApprovalReasonDeliveryGuard,
     IFile,
     IPullRequests,
     IPullRequestUserMapping,
     IPullRequestWithDeliveredSuggestions,
+    IPullRequestWithKodyChangeRequest,
     ISuggestion,
     ISuggestionByPR,
     SuggestionCountsBySeverity,
@@ -40,6 +50,29 @@ import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mong
 // aggregation itself, instead of fetching a whole PR's suggestion history and
 // discarding most of it in JS.
 const PER_FILE_HISTORY_LIMIT = 5;
+
+/**
+ * mongod's answer to a `hint` naming an index the collection does not have
+ * ("hint provided does not correspond to an existing index", code 2).
+ */
+function isUnknownIndexHint(error: unknown): boolean {
+    const message = (error as { message?: string } | null)?.message ?? '';
+    return /hint provided does not correspond to an existing index/i.test(
+        message,
+    );
+}
+
+/** A pull request that is neither merged nor closed. */
+const OPEN_PULL_REQUEST_MATCH = {
+    merged: { $ne: true },
+    status: { $nin: ['closed'] },
+} as const;
+
+/** The part of a mongoose query `withIndexHint` drives. */
+type HintableQuery<T> = {
+    hint(indexName: string): HintableQuery<T>;
+    maxTimeMS(ms: number): { exec(): Promise<T> };
+};
 
 @Injectable()
 export class PullRequestsRepository implements IPullRequestsRepository {
@@ -57,21 +90,161 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         repositoryId: string,
         prNumber: number,
         failure: IApprovalReasonDeliveryFailure | null,
+        guard?: ApprovalReasonDeliveryGuard,
+    ): Promise<boolean> {
+        // A repair belongs to the original attempt. Advancing its watermark
+        // to the repair time could suppress a newer publication still in flight.
+        const eventAt =
+            guard?.expectedFailure?.occurredAt ??
+            failure?.occurredAt ??
+            guard?.notAfter ??
+            new Date().toISOString();
+        const expected = guard?.expectedFailure;
+        const result = await this.pullRequestsModel.updateOne(
+            {
+                organizationId,
+                'repository.id': repositoryId,
+                'number': prNumber,
+                '$and': [
+                    {
+                        $or: [
+                            {
+                                approvalReasonDeliveryUpdatedAt: {
+                                    $exists: false,
+                                },
+                            },
+                            {
+                                approvalReasonDeliveryUpdatedAt: {
+                                    $lte: eventAt,
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        $or: [
+                            { approvalReasonDeliveryFailure: null },
+                            {
+                                'approvalReasonDeliveryFailure.occurredAt': {
+                                    $exists: false,
+                                },
+                            },
+                            {
+                                'approvalReasonDeliveryFailure.occurredAt': {
+                                    $lte: eventAt,
+                                },
+                            },
+                        ],
+                    },
+                ],
+                ...(expected
+                    ? Object.fromEntries(
+                          Object.entries(expected)
+                              .filter(([, value]) => value !== undefined)
+                              .map(([key, value]) => [
+                                  `approvalReasonDeliveryFailure.${key}`,
+                                  value,
+                              ]),
+                      )
+                    : {}),
+            },
+            {
+                $set: {
+                    approvalReasonDeliveryFailure: failure,
+                    approvalReasonDeliveryUpdatedAt: eventAt,
+                },
+            },
+        );
+        return result.matchedCount > 0;
+    }
+
+    async recordKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        request: KodyChangeRequestRecord,
     ): Promise<boolean> {
         const result = await this.pullRequestsModel.updateOne(
             {
                 organizationId,
                 'repository.id': repositoryId,
-                number: prNumber,
-                // Clearing a notice that does not exist should leave the PR
-                // untouched, including its updatedAt timestamp.
-                ...(failure === null
-                    ? { approvalReasonDeliveryFailure: { $ne: null } }
-                    : {}),
+                'number': prNumber,
             },
-            { $set: { approvalReasonDeliveryFailure: failure } },
+            {
+                $set: { 'kodyChangeRequest.requestedAt': request.requestedAt },
+                $addToSet: {
+                    'kodyChangeRequest.commentIds': {
+                        $each: request.commentIds,
+                    },
+                    ...(request.summaryCommentId
+                        ? {
+                              'kodyChangeRequest.summaryCommentIds':
+                                  request.summaryCommentId,
+                          }
+                        : {}),
+                },
+            },
         );
-        return failure === null || result.matchedCount > 0;
+        return result.matchedCount > 0;
+    }
+
+    async clearKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        const result = await this.pullRequestsModel.updateOne(
+            {
+                organizationId,
+                'repository.id': repositoryId,
+                'number': prNumber,
+                'kodyChangeRequest.requestedAt': requestedAt,
+            },
+            // Unset, not null: the partial index and the list below key on
+            // the field existing.
+            { $unset: { kodyChangeRequest: '' } },
+        );
+        return result.modifiedCount > 0;
+    }
+
+    async hasOpenKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        const found = await this.pullRequestsModel.exists({
+            organizationId,
+            'repository.id': repositoryId,
+            'number': prNumber,
+            'status': PullRequestState.OPENED,
+            'kodyChangeRequest.requestedAt': requestedAt,
+        });
+        return found !== null;
+    }
+
+    async findOpenPullRequestsWithKodyChangeRequest(
+        organizationId: string,
+    ): Promise<IPullRequestWithKodyChangeRequest[]> {
+        return this.withIndexHint(KODY_CHANGE_REQUEST_INDEX, () =>
+            this.pullRequestsModel
+                .find(
+                    {
+                        organizationId,
+                        'kodyChangeRequest.requestedAt': { $exists: true },
+                        'status': PullRequestState.OPENED,
+                    },
+                    {
+                        '_id': 0,
+                        'number': 1,
+                        'provider': 1,
+                        'repository.id': 1,
+                        'repository.name': 1,
+                        'kodyChangeRequest': 1,
+                    },
+                )
+                .lean<IPullRequestWithKodyChangeRequest[]>(),
+        );
     }
 
     //#region Create
@@ -128,13 +301,23 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             filter['repository.id'] = { $in: repositoryIds };
         }
 
-        const results = await this.pullRequestsModel
-            .find(filter, { 'number': 1, 'repository.id': 1 })
-            .lean()
-            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
-            .exec();
+        // The title lives in no other index, so this used to fetch every PR
+        // document of the organization — files and patches included — to test
+        // its title, once per search. The title index holds every field the
+        // query reads, so with `_id` projected out the documents are never
+        // loaded. Hinted: the planner prefers an index that leads with the
+        // repository, which brings the fetch back.
+        const results = await this.withIndexHint(PULL_REQUEST_TITLE_INDEX, () =>
+            this.pullRequestsModel
+                .find(filter, {
+                    'number': 1,
+                    'repository.id': 1,
+                    '_id': 0,
+                })
+                .lean(),
+        );
 
-        return results.map((doc) => ({
+        return results.map((doc: any) => ({
             number: doc.number,
             repositoryId: doc.repository?.id || '',
         }));
@@ -787,8 +970,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         const match: Record<string, any> = {
             organizationId,
             openedAt: { $gte: since },
-            merged: { $ne: true },
-            status: { $nin: ['closed'] },
+            ...OPEN_PULL_REQUEST_MATCH,
         };
 
         if (repositoryIds?.length) {
@@ -806,6 +988,70 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 number: r.number,
                 repositoryId: r.repository.id,
             }));
+    }
+
+    // Everyone who opened a PR on these repositories since `since`, keyed by
+    // the provider's user id: the same id a license seat carries, so the
+    // member list and the seat prune can match on it.
+    async findPullRequestAuthorsOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>> {
+        if (!repositoryIds.length) {
+            return [];
+        }
+
+        const rows = await this.pullRequestsModel
+            .aggregate([
+                {
+                    $match: {
+                        organizationId,
+                        'repository.id': { $in: repositoryIds },
+                        // A PR is stored after it opens, so createdAt >=
+                        // openedAt: this only bounds the index scan, openedAt
+                        // still decides the result.
+                        'createdAt': { $gte: new Date(since) },
+                        'openedAt': { $gte: since },
+                        'user.id': { $nin: [null, ''] },
+                    },
+                },
+                {
+                    $group: {
+                        _id: '$user.id',
+                        name: { $first: '$user.name' },
+                        username: { $first: '$user.username' },
+                    },
+                },
+            ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .exec();
+
+        return rows.map((r: any) => ({
+            id: String(r._id),
+            name: r.name ?? '',
+            username: r.username ?? '',
+        }));
+    }
+
+    async hasStoredPullRequests(
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<boolean> {
+        if (!repositoryIds.length) {
+            return false;
+        }
+
+        const doc = await this.pullRequestsModel
+            .findOne(
+                { organizationId, 'repository.id': { $in: repositoryIds } },
+                { _id: 1 },
+            )
+            .lean()
+            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+            .exec();
+
+        return !!doc;
     }
 
     // Distinct PR authors (by display name) for the org/team repo scope — powers
@@ -893,6 +1139,117 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             openOnly?: boolean;
         },
     ): Promise<number> {
+        const filter = this.buildDeliveredPullRequestsFilter(
+            organizationId,
+            repositoryIds,
+            opts,
+        );
+        const count = () => this.pullRequestsModel.countDocuments(filter);
+
+        if (!opts.openOnly) {
+            return count().maxTimeMS(MONGO_QUERY_MAX_TIME_MS).exec();
+        }
+
+        // Open PRs are a small slice of an organization's history, and the
+        // open-PR index reaches exactly that slice. Left to choose, the planner
+        // also tries the delivered-suggestion index, which leads to every PR
+        // that ever delivered a suggestion; on a large organization that trial
+        // alone outran the time limit ("error while multiplanner was selecting
+        // best plan"), so the count failed before it started.
+        return this.withIndexHint(OPEN_PULL_REQUESTS_INDEX, count);
+    }
+
+    /**
+     * Keys of the organization's open pull requests, optionally only those
+     * that still carry a delivered suggestion nobody applied — the same PRs
+     * `countDeliveredPullRequests({ openOnly, unresolvedOnly })` counts.
+     *
+     * The Reviews list uses it to turn "needs attention" and "open" from a
+     * walk over the team's whole review history (fetch a page of executions,
+     * load their PRs, throw most away, repeat) into a lookup of exactly these
+     * PRs. `truncated` means there are more than `limit`, in which case the
+     * keys are not the whole set and must not be used to narrow anything.
+     */
+    async findOpenPullRequestKeys(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: { unresolvedOnly?: boolean; limit: number },
+    ): Promise<{
+        keys: Array<{ number: number; repositoryId: string }>;
+        truncated: boolean;
+    }> {
+        let filter: Record<string, any>;
+        if (opts.unresolvedOnly) {
+            // The count's own filter, so the two cannot drift apart.
+            filter = this.buildDeliveredPullRequestsFilter(
+                organizationId,
+                repositoryIds,
+                { openOnly: true, unresolvedOnly: true },
+            );
+        } else {
+            filter = { organizationId, ...OPEN_PULL_REQUEST_MATCH };
+            if (repositoryIds?.length) {
+                filter['repository.id'] = { $in: repositoryIds };
+            }
+        }
+
+        const rows = await this.withIndexHint(OPEN_PULL_REQUESTS_INDEX, () =>
+            this.pullRequestsModel
+                .find(filter, { 'number': 1, 'repository.id': 1, '_id': 0 })
+                .limit(opts.limit + 1)
+                .lean(),
+        );
+
+        const keys = rows
+            .filter((row: any) => row?.number != null && row?.repository?.id)
+            .map((row: any) => ({
+                number: row.number as number,
+                repositoryId: String(row.repository.id),
+            }));
+
+        return {
+            keys: keys.slice(0, opts.limit),
+            truncated: rows.length > opts.limit,
+        };
+    }
+
+    /**
+     * Runs a query with an index hint, and without it on a deployment that
+     * does not have the index (its build has not finished, or failed): the
+     * same query, the planner's choice.
+     */
+    private async withIndexHint<T>(
+        indexName: string,
+        build: () => HintableQuery<T>,
+    ): Promise<T> {
+        const run = (hint?: string) => {
+            const query = build();
+            return (hint ? query.hint(hint) : query)
+                .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+                .exec();
+        };
+
+        try {
+            return await run(indexName);
+        } catch (error) {
+            if (!isUnknownIndexHint(error)) {
+                throw error;
+            }
+
+            return run();
+        }
+    }
+
+    private buildDeliveredPullRequestsFilter(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: {
+            severities?: string[];
+            authorEmail?: string;
+            unresolvedOnly?: boolean;
+            openOnly?: boolean;
+        },
+    ): Record<string, any> {
         const filter: Record<string, any> = { organizationId };
         if (repositoryIds?.length) {
             filter['repository.id'] = { $in: repositoryIds };
@@ -906,8 +1263,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             };
         }
         if (opts.openOnly) {
-            filter.merged = { $ne: true };
-            filter.status = { $nin: ['closed'] };
+            Object.assign(filter, OPEN_PULL_REQUEST_MATCH);
         }
 
         // Count each qualifying PR once, WITHOUT $unwind of files×suggestions —
@@ -941,10 +1297,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             filter['files.suggestions.deliveryStatus'] = DeliveryStatus.SENT;
         }
 
-        return this.pullRequestsModel
-            .countDocuments(filter)
-            .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
-            .exec();
+        return filter;
     }
 
     async findFileWithSuggestions(
@@ -1368,6 +1721,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         'files.suggestions.id': 1,
                         'files.suggestions.deliveryStatus': 1,
                         'files.suggestions.comment': 1,
+                        'approvalReasonDeliveryFailure': 1,
                     },
                 },
                 {
@@ -1396,6 +1750,9 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         repositoryId: { $first: '$repository.id' },
                         repositoryName: { $first: '$repository.name' },
                         provider: { $first: '$provider' },
+                        approvalReasonDeliveryFailure: {
+                            $first: '$approvalReasonDeliveryFailure',
+                        },
                         suggestions: {
                             $push: {
                                 id: '$files.suggestions.id',
@@ -1418,6 +1775,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         },
                         provider: 1,
                         suggestions: 1,
+                        approvalReasonDeliveryFailure: 1,
                     },
                 },
             ])
@@ -1491,6 +1849,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         'provider': 1,
                         'repository.id': 1,
                         'repository.name': 1,
+                        'approvalReasonDeliveryFailure': 1,
                     },
                 )
                 .sort({ _id: 1 })
@@ -1505,6 +1864,8 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     organizationId: doc.organizationId,
                     status: doc.status,
                     provider: doc.provider,
+                    approvalReasonDeliveryFailure:
+                        doc.approvalReasonDeliveryFailure,
                     repository: {
                         id: doc.repository.id,
                         name: doc.repository.name,
@@ -2268,13 +2629,34 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         organizationAndTeamData: OrganizationAndTeamData,
         options?: UpdateSuggestionOptions,
     ): Promise<PullRequestsEntity | null> {
+        const path = (key: string) =>
+            `files.$[file].suggestions.$[suggestion].${key}`;
         const updateFields = Object.entries(updateData).reduce(
             (acc, [key, value]) => {
-                acc[`files.$[file].suggestions.$[suggestion].${key}`] = value;
+                acc[path(key)] = value;
                 return acc;
             },
             {},
         );
+        const update = {
+            ...(Object.keys(updateFields).length ? { $set: updateFields } : {}),
+            ...(options?.addToSet
+                ? {
+                      $addToSet: Object.fromEntries(
+                          Object.entries(options.addToSet).map(
+                              ([key, values]) => [path(key), { $each: values }],
+                          ),
+                      ),
+                  }
+                : {}),
+            ...(options?.unset?.length
+                ? {
+                      $unset: Object.fromEntries(
+                          options.unset.map((key) => [path(key), '']),
+                      ),
+                  }
+                : {}),
+        };
 
         // With a condition, a suggestion whose stored status is one of the
         // excluded ones matches nothing, so a concurrent check that already
@@ -2300,7 +2682,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                           'organizationId':
                               organizationAndTeamData.organizationId,
                       },
-                { $set: updateFields },
+                update,
                 {
                     arrayFilters: suggestionMatch
                         ? [
@@ -2322,10 +2704,17 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                           ],
                     new: true,
                     // Callers that only need to know a suggestion was written
-                    // skip the whole PR document coming back.
-                    ...(options?.returnDocument === false
-                        ? { projection: { _id: 1 } }
-                        : {}),
+                    // skip the whole PR document coming back. Paths asked for
+                    // win: dropping them would hand back only the id.
+                    ...(options?.projection?.length
+                        ? {
+                              projection: Object.fromEntries(
+                                  options.projection.map((path) => [path, 1]),
+                              ),
+                          }
+                        : options?.returnDocument === false
+                          ? { projection: { _id: 1 } }
+                          : {}),
                 },
             )
             .exec();

@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
 import {
     BadRequestException,
@@ -5,6 +6,7 @@ import {
     ForbiddenException,
     Inject,
     Injectable,
+    Optional,
 } from '@nestjs/common';
 
 import { produce } from 'immer';
@@ -120,6 +122,23 @@ import {
     isHeavyModePlanAllowed,
 } from '@libs/ee/heavy-mode/heavy-mode-plan';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { approvalPolicyProviderError } from '@libs/code-review/domain/approval/approval-policy-provider';
+import {
+    migratedReviewSettings,
+    resolveReviewSettings,
+} from '@libs/code-review/domain/approval/migrate-review-settings';
+import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/general/approval-policies';
+import { REVIEW_SETTINGS_INHERITABLE_FIELDS } from '@libs/core/infrastructure/config/types/general/risk-assessment';
+
+const INHERITABLE_REVIEW_FIELDS = new Set<string>(
+    REVIEW_SETTINGS_INHERITABLE_FIELDS,
+);
+const LEGACY_REVIEW_FIELDS: Readonly<Record<string, readonly string[]>> = {
+    riskAssessmentActive: ['approvalRiskActive'],
+    riskCriteria: ['approvalRiskInstructions'],
+    approvalPolicies: ['approvalLabels', 'approvalAuthors'],
+};
 
 @Injectable()
 export class UpdateOrCreateCodeReviewParameterUseCase {
@@ -146,6 +165,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService: ILicenseService,
         private readonly telemetry: TelemetryService,
+        @Optional() private readonly codeManagement?: CodeManagementService,
     ) {}
 
     async execute(
@@ -166,6 +186,46 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     > {
         try {
             const { organizationAndTeamData, configValue, repositoryId } = body;
+            if (
+                body.inheritFields !== undefined &&
+                (!Array.isArray(body.inheritFields) ||
+                    (body.inheritFields.length &&
+                        (!repositoryId || repositoryId === 'global')) ||
+                    body.inheritFields.length >
+                        REVIEW_SETTINGS_INHERITABLE_FIELDS.length ||
+                    body.inheritFields.some(
+                        (field) => !INHERITABLE_REVIEW_FIELDS.has(field),
+                    ))
+            )
+                throw new BadRequestException(
+                    'Invalid scoped review settings to inherit.',
+                );
+            if (body.inheritFields?.length) {
+                const aliases = new Set(
+                    body.inheritFields.flatMap(
+                        (field) => LEGACY_REVIEW_FIELDS[field] ?? [],
+                    ),
+                );
+                if (
+                    Object.entries(configValue).some(
+                        ([key, value]) =>
+                            value !== undefined && aliases.has(key),
+                    )
+                )
+                    throw new BadRequestException(
+                        'Do not combine inheritance with legacy review overrides.',
+                    );
+            }
+            // An empty ID explicitly requests inheritance; pairing it with a
+            // legacy model name is still a contradictory write.
+            if (
+                configValue.byokModelId !== undefined &&
+                configValue.byokModel
+            ) {
+                throw new BadRequestException(
+                    'Use byokModelId or byokModel, not both.',
+                );
+            }
             let directoryPath = body.directoryPath;
             let directoryId = body.directoryId;
             let previousFolders: Array<{ path: string }> | undefined;
@@ -244,6 +304,31 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     resource: ResourceType.CodeReviewSettings,
                     repoIds: [repositoryId],
                 });
+            }
+
+            if (configValue.approvalPolicies !== undefined) {
+                const parsed = approvalPoliciesSchema.safeParse(
+                    configValue.approvalPolicies,
+                );
+                if (!parsed.success)
+                    throw new BadRequestException(
+                        'Approval policies are invalid.',
+                    );
+                const needsProvider = parsed.data.some(
+                    (policy) =>
+                        policy.labels?.length || policy.authorTeams?.length,
+                );
+                if (needsProvider) {
+                    const provider =
+                        await this.codeManagement?.getTypeIntegration(
+                            organizationAndTeamData,
+                        );
+                    const error = approvalPolicyProviderError(
+                        parsed.data,
+                        provider,
+                    );
+                    if (error) throw new BadRequestException(error);
+                }
             }
 
             const codeReviewConfigs = await this.getCodeReviewConfigs(
@@ -616,6 +701,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 body.requestUser,
                 previousFolders,
                 previousRulesFileNames,
+                body.inheritFields,
             );
 
             if (!directoryId) {
@@ -868,6 +954,10 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         const updatedConfigValue = this.stripCustomMessagesFromConfig(
             deepDifference(defaultConfig, sanitizedConfigValue),
         );
+        this.preserveCanonicalReviewChoices(
+            updatedConfigValue,
+            sanitizedConfigValue,
+        );
 
         const centralizedPr = await this.createCentralizedMutationIfEnabled({
             organizationAndTeamData,
@@ -921,6 +1011,55 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         codeReviewConfigs.repositories = updatedRepositories;
     }
 
+    // Canonical choices retain precedence over legacy aliases even when they
+    // equal the raw parent. Only explicit inheritance removes ownership.
+    private preserveCanonicalReviewChoices(
+        delta: ConfigDelta,
+        owned: Pick<
+            ConfigDelta,
+            | 'riskAssessmentActive'
+            | 'approvalPolicies'
+            | 'riskCriteria'
+            | 'riskReviewRouting'
+            | 'reviewMode'
+        >,
+    ) {
+        for (const key of [
+            'riskAssessmentActive',
+            'approvalPolicies',
+            'riskCriteria',
+            'riskReviewRouting',
+            'reviewMode',
+        ] as const) {
+            if (owned[key] !== undefined)
+                Object.assign(delta, { [key]: owned[key] });
+        }
+    }
+
+    private withoutInheritedReviewOverrides(
+        config: object,
+        fields: string[],
+    ): ConfigDelta {
+        const next = { ...config };
+        for (const field of fields) {
+            const [key, leaf] = field.split('.');
+            if (leaf) {
+                next[key] = { ...next[key] };
+                delete next[key][leaf];
+                // An empty canonical routing object inherits both routes without
+                // reactivating the legacy reviewMode-to-route mapping.
+                if (
+                    !Object.keys(next[key]).length &&
+                    key !== 'riskReviewRouting'
+                )
+                    delete next[key];
+            } else delete next[key];
+            for (const alias of LEGACY_REVIEW_FIELDS[field] ?? [])
+                delete next[alias];
+        }
+        return next;
+    }
+
     /** A prompt sent back unchanged is not stored as the team's own text; record when that happens. */
     private logAlignedPromptOverrides(
         alignedPaths: string[],
@@ -959,6 +1098,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             review?: Array<{ fileName: string; content: string }>;
             memories?: Array<{ fileName: string; content: string }>;
         },
+        inheritFields: string[] = [],
     ) {
         const resolver = new ConfigResolver(codeReviewConfigs);
 
@@ -1010,14 +1150,61 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         // we ignore the previous database state and rebuild the resolved config
         // from the file content plus the parent defaults. This ensures that
         // properties removed from the file are also removed from the database.
+        // Split the legacy default/mode mapping before editing either route.
+        // Restoring or editing one route must leave the other route unchanged.
+        const ownsLegacyMode =
+            oldConfig.reviewMode !== undefined &&
+            oldConfig.riskReviewRouting === undefined;
+        const editsRouting =
+            sanitizedIncomingConfig.riskReviewRouting !== undefined ||
+            inheritFields.some((field) =>
+                field.startsWith('riskReviewRouting.'),
+            );
+        const ancestorRouting =
+            !ownsLegacyMode || !editsRouting || level === ConfigLevel.GLOBAL
+                ? undefined
+                : deepMerge(
+                      codeReviewConfigs.configs ?? {},
+                      ...(level === ConfigLevel.DIRECTORY
+                          ? [repository!.configs ?? {}]
+                          : []),
+                  ).riskReviewRouting;
+        const oldReviewConfig =
+            ownsLegacyMode &&
+            editsRouting &&
+            ancestorRouting?.noRisk === undefined
+                ? {
+                      ...oldConfig,
+                      riskReviewRouting: {
+                          noRisk:
+                              oldConfig.reviewMode === 'heavy'
+                                  ? ('heavy' as const)
+                                  : ('balanced' as const),
+                      },
+                  }
+                : oldConfig;
+        const mergeOldConfig = this.withoutInheritedReviewOverrides(
+            oldReviewConfig,
+            inheritFields,
+        );
+        const mergeIncomingConfig = this.withoutInheritedReviewOverrides(
+            sanitizedIncomingConfig,
+            inheritFields,
+        );
         const newResolvedConfig = this.stripCustomMessagesFromConfig(
             actor?.source === 'sync'
-                ? deepMerge(parentConfig, sanitizedIncomingConfig)
-                : deepMerge(parentConfig, oldConfig, sanitizedIncomingConfig),
+                ? deepMerge(parentConfig, mergeIncomingConfig)
+                : deepMerge(parentConfig, mergeOldConfig, mergeIncomingConfig),
         );
 
         const newDelta = this.stripCustomMessagesFromConfig(
             deepDifference(parentConfig, newResolvedConfig),
+        );
+        this.preserveCanonicalReviewChoices(
+            newDelta,
+            actor?.source === 'sync'
+                ? mergeIncomingConfig
+                : deepMerge(mergeOldConfig, mergeIncomingConfig),
         );
 
         // An empty byok model override means "inherit" — it must never be stored
@@ -1030,9 +1217,81 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 delete (newDelta as Record<string, unknown>)[key];
             }
         }
+        if (sanitizedIncomingConfig.byokModelId !== undefined)
+            delete newDelta.byokModel;
+
+        // Changing approval never changes the independent engine seen by the user.
+        // Keep even an explicit false: diffing against an old default could otherwise erase it.
+        if (
+            actor?.source !== 'sync' &&
+            !inheritFields.includes('riskAssessmentActive') &&
+            sanitizedIncomingConfig.pullRequestApprovalActive !== undefined &&
+            sanitizedIncomingConfig.riskAssessmentActive === undefined
+        ) {
+            newDelta.riskAssessmentActive = resolveReviewSettings(
+                getDefaultKodusConfigFile(),
+                codeReviewConfigs.configs ?? {},
+                repository?.configs ?? {},
+                directory?.configs ?? {},
+            ).riskAssessmentActive;
+        }
 
         const pathsChanged = !!previousFolders && previousFolders.length > 0;
+        // A parent edit must not invalidate legacy restrictions in its children.
+        const defaults = getDefaultKodusConfigFile();
+        const globalDelta =
+            level === ConfigLevel.GLOBAL
+                ? newDelta
+                : (codeReviewConfigs.configs ?? {});
+        try {
+            resolveReviewSettings(
+                defaults,
+                globalDelta,
+                ...(level !== ConfigLevel.GLOBAL
+                    ? [
+                          level === ConfigLevel.REPOSITORY
+                              ? newDelta
+                              : (repository!.configs ?? {}),
+                      ]
+                    : []),
+                ...(level === ConfigLevel.DIRECTORY ? [newDelta] : []),
+            );
+            const approvalChanged = [
+                'approvalPolicies',
+                'approvalLabels',
+                'approvalAuthors',
+            ].some((key) => !isDeepStrictEqual(oldConfig[key], newDelta[key]));
+            const repositoriesToValidate = !approvalChanged
+                ? []
+                : level === ConfigLevel.GLOBAL
+                  ? (codeReviewConfigs.repositories ?? [])
+                  : [repository!];
+            for (const childRepo of repositoriesToValidate) {
+                const repoDelta =
+                    level === ConfigLevel.REPOSITORY
+                        ? newDelta
+                        : (childRepo.configs ?? {});
+                resolveReviewSettings(defaults, globalDelta, repoDelta);
+                for (const childDir of level === ConfigLevel.DIRECTORY
+                    ? directory
+                        ? [directory]
+                        : []
+                    : (childRepo.directories ?? [])) {
+                    resolveReviewSettings(
+                        defaults,
+                        globalDelta,
+                        repoDelta,
+                        level === ConfigLevel.DIRECTORY
+                            ? newDelta
+                            : (childDir.configs ?? {}),
+                    );
+                }
+            }
+        } catch (error) {
+            throw new BadRequestException(error.message);
+        }
         const isSelectionOnlyPayload =
+            inheritFields.length === 0 &&
             this.isSelectionOnlyConfigPayload(sanitizedIncomingConfig) &&
             level !== ConfigLevel.GLOBAL &&
             !pathsChanged;
@@ -1302,6 +1561,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             this.hasNoScopedConfigChanges(
                 existingScopedConfigFileContent,
                 configFileContent,
+                params.level === ConfigLevel.GLOBAL,
             )
         ) {
             return {
@@ -1938,7 +2198,28 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     private hasNoScopedConfigChanges(
         existingScopedConfig: Record<string, any> | null | undefined,
         nextScopedConfig: Record<string, any>,
+        globalScope = false,
     ): boolean {
+        if (globalScope) {
+            const defaults = getDefaultKodusConfigFile();
+            const existing = existingScopedConfig ?? {};
+            return this.isDeepEqualIgnoringEmpty(
+                {
+                    ...existing,
+                    ...migratedReviewSettings(
+                        deepMerge(defaults, existing),
+                        existing,
+                    ),
+                },
+                {
+                    ...nextScopedConfig,
+                    ...migratedReviewSettings(
+                        deepMerge(defaults, nextScopedConfig),
+                        nextScopedConfig,
+                    ),
+                },
+            );
+        }
         return this.isDeepEqualIgnoringEmpty(
             existingScopedConfig || {},
             nextScopedConfig || {},

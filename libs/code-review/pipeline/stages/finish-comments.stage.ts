@@ -33,6 +33,7 @@ import { PostTracePrCommentUseCase } from '@libs/cli-review/application/use-case
 import { resolveBusinessLogicSettings } from '@libs/agents/business-validation/settings';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { retryWithBackoff } from '@libs/common/utils/polling';
+import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import {
     is429Error,
     isTransientFetchError,
@@ -48,21 +49,30 @@ import {
  * so a summary-only failure has nothing to do with whether the review itself
  * is trustworthy. #1844.
  */
-export const SUMMARY_GENERATION_FAILED_REASON = 'summary_generation_failed';
+import { SUMMARY_GENERATION_FAILED_REASON } from '../constants/error-reasons';
+import { prRiskDescriptionKey } from '@libs/code-review/domain/risk/risk-configuration';
 
 /** The steps of the PR summary: read the PR and its changes, ask the model, write it to the PR. */
-type SummaryStep = 'collect' | 'generate' | 'publish';
+type SummaryStep = 'collect' | 'generate' | 'publish' | 'confirm';
 
 const SUMMARY_STEP_FAILURE: Record<SummaryStep, string> = {
     collect: 'Failed to read the pull request for the summary',
     generate: 'Failed to generate summary',
     publish: 'Failed to publish summary to the pull request',
+    confirm: 'Could not confirm the published summary',
 };
+
+class SummaryPrUnavailableError extends Error {
+    constructor() {
+        super('The current pull request could not be read for the summary.');
+    }
+}
 
 /** A 429, a 5xx or a dropped connection: the same read may succeed a moment later. */
 function isTransientCodeHostError(error: unknown): boolean {
     const status = extractHttpStatus(error);
     return (
+        error instanceof SummaryPrUnavailableError ||
         is429Error(error) ||
         (status !== undefined && status >= 500) ||
         isTransientFetchError(error)
@@ -88,52 +98,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         private readonly codeManagementService: CodeManagementService,
     ) {
         super();
-    }
-
-    private async postHoldReasonIfNeeded(
-        context: CodeReviewPipelineContext,
-        reviewFailed: boolean,
-        reviewHasPartialErrors: boolean,
-    ): Promise<CodeReviewPipelineContext> {
-        if (
-            context.approvalDecision?.kind !== 'hold' ||
-            reviewFailed ||
-            reviewHasPartialErrors
-        ) {
-            return context;
-        }
-        try {
-            await this.commentManagerService.postApprovalReason(
-                context.organizationAndTeamData,
-                context.pullRequest.number,
-                context.repository,
-                context.approvalDecision.reason,
-                'hold',
-            );
-        } catch (error) {
-            this.logger.warn({
-                message: 'Could not publish automatic approval hold reason',
-                context: this.stageName,
-                error,
-                metadata: {
-                    organizationId:
-                        context.organizationAndTeamData.organizationId,
-                    teamId: context.organizationAndTeamData.teamId,
-                    repositoryId: context.repository.id,
-                    prNumber: context.pullRequest.number,
-                },
-            });
-            return this.updateContext(context, (draft) => {
-                draft.errors ??= [];
-                draft.errors.push({
-                    stage: this.stageName,
-                    substage: 'approval-hold-reason-publication',
-                    severity: 'partial',
-                    error,
-                });
-            });
-        }
-        return context;
     }
 
     /**
@@ -167,6 +131,26 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 outcome,
             },
         });
+    }
+
+    private readSummaryPullRequest(
+        request: Parameters<CodeManagementService['getPullRequestByNumber']>[0],
+        normalized: boolean,
+    ) {
+        return retryWithBackoff(
+            async () => {
+                const pr = normalized
+                    ? await this.codeManagementService.getPullRequest(request)
+                    : await this.codeManagementService.getPullRequestByNumber(
+                          request,
+                      );
+                // Normalized adapters return null for transport failures too.
+                // Retry without confusing an unreadable PR with a changed PR.
+                if (normalized && !pr) throw new SummaryPrUnavailableError();
+                return pr;
+            },
+            { maxAttempts: 3, shouldRetry: isTransientCodeHostError },
+        );
     }
 
     protected async executeStage(
@@ -308,17 +292,14 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 // The description may have changed since the webhook, and the
                 // summary keeps or replaces it. Read here, not inside the model
                 // call, so a code-host failure is reported as one.
-                const currentPR = await retryWithBackoff(
-                    () =>
-                        this.codeManagementService.getPullRequestByNumber({
-                            organizationAndTeamData,
-                            repository,
-                            prNumber: pullRequest.number,
-                        }),
-                    {
-                        maxAttempts: 3,
-                        shouldRetry: isTransientCodeHostError,
-                    },
+                const summaryRequest = {
+                    organizationAndTeamData,
+                    repository,
+                    prNumber: pullRequest.number,
+                };
+                const currentPR = await this.readSummaryPullRequest(
+                    summaryRequest,
+                    context.riskAssessment?.status === 'assessed',
                 );
 
                 summaryStep = 'generate';
@@ -327,8 +308,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     await this.commentManagerService.generateSummaryPR(
                         {
                             ...pullRequest,
-                            // Some code hosts answer a failed read with null; the
-                            // webhook's description beats replacing it with none.
+                            // Legacy raw reads can return null. Assessed PRs
+                            // require a current snapshot before replacing human context.
                             body: currentPR ? currentPR.body : pullRequest.body,
                         },
                         repository,
@@ -351,12 +332,73 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
 
                 summaryStep = 'publish';
 
+                // A summary is Kody's own write, including replace mode. Bind
+                // that known transformation only if the assessed human context
+                // and both commits are still current immediately before it.
+                const risk = context.riskAssessment;
+                let expectedPublishedBodies: string[] | undefined;
+                if (
+                    summaryPR &&
+                    risk?.status === 'assessed' &&
+                    currentPR &&
+                    risk.snapshot.descriptionKey ===
+                        prRiskDescriptionKey(currentPR)
+                ) {
+                    const beforePublish = await this.readSummaryPullRequest(
+                        summaryRequest,
+                        true,
+                    );
+                    if (
+                        beforePublish?.head?.sha === risk.snapshot.headSha &&
+                        beforePublish?.base?.sha === risk.snapshot.baseSha &&
+                        prRiskDescriptionKey(beforePublish) ===
+                            risk.snapshot.descriptionKey
+                    ) {
+                        // Data Center preserves the body; other adapters may
+                        // apply the shared size limit. Trust only these exact writes.
+                        expectedPublishedBodies = [
+                            summaryPR,
+                            fitPRDescription(summaryPR, platformType),
+                        ];
+                    } else {
+                        throw new Error(
+                            'The PR changed while Kody was generating its summary.',
+                        );
+                    }
+                }
+
                 await this.commentManagerService.updateSummarizationInPR(
                     organizationAndTeamData,
                     pullRequest.number,
                     repository,
                     summaryPR,
                 );
+                if (
+                    expectedPublishedBodies !== undefined &&
+                    risk?.status === 'assessed'
+                ) {
+                    // Hosts may trim descriptions. Confirm the exact write and
+                    // both refs before treating it as Kody's own transformation.
+                    summaryStep = 'confirm';
+                    const published = await this.readSummaryPullRequest(
+                        summaryRequest,
+                        true,
+                    );
+                    if (
+                        published?.head?.sha === risk.snapshot.headSha &&
+                        published?.base?.sha === risk.snapshot.baseSha &&
+                        published.title === currentPR.title &&
+                        expectedPublishedBodies.includes(published.body)
+                    ) {
+                        const publishedDescriptionKey =
+                            prRiskDescriptionKey(published);
+                        context = this.updateContext(context, (draft) => {
+                            if (draft.riskAssessment?.status === 'assessed')
+                                draft.riskAssessment.snapshot.descriptionKey =
+                                    publishedDescriptionKey;
+                        });
+                    }
+                }
             } catch (error) {
                 // Terminal BYOK (suspended key / no credit) on the model call →
                 // warn: user's provider config, not a Kodus fault. A git
@@ -464,14 +506,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             context.pullRequestMessagesConfig?.endReviewMessage;
 
         if (!endReviewMessage) {
-            // The default completion comment is updated in place. Keep the
-            // separate approval status current when a later review holds a PR
-            // that Kody previously approved.
-            context = await this.postHoldReasonIfNeeded(
-                context,
-                reviewFailed,
-                reviewHasPartialErrors,
-            );
             await this.commentManagerService.updateOverallComment(
                 organizationAndTeamData,
                 pullRequest.number,
@@ -490,7 +524,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
                 !!context.onlyCustomAgent,
-                context.approvalDecision,
             );
             return context;
         }
@@ -499,11 +532,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             endReviewMessage.status === PullRequestMessageStatus.OFF ||
             endReviewMessage.status === PullRequestMessageStatus.INACTIVE
         ) {
-            context = await this.postHoldReasonIfNeeded(
-                context,
-                reviewFailed,
-                reviewHasPartialErrors,
-            );
             return context;
         }
 
@@ -512,11 +540,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 PullRequestMessageStatus.ONLY_WHEN_OPENED &&
             context.lastExecution
         ) {
-            context = await this.postHoldReasonIfNeeded(
-                context,
-                reviewFailed,
-                reviewHasPartialErrors,
-            );
             return context;
         }
 
@@ -573,7 +596,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
                 !!context.onlyCustomAgent,
-                context.approvalDecision,
             );
             return context;
         }
@@ -594,15 +616,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     context.lastExecution))
         ) {
             const finalCommentBody = endReviewMessage.content;
-
-            // End-review messages can be created on every push. Keep the
-            // approval reason in its marked comment so an older message does
-            // not keep showing a stale hold after a later review.
-            context = await this.postHoldReasonIfNeeded(
-                context,
-                reviewFailed,
-                reviewHasPartialErrors,
-            );
 
             await this.commentManagerService.createComment(
                 organizationAndTeamData,
