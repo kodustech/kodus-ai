@@ -123,47 +123,86 @@ describe('GithubService addresses a repository by its own owner', () => {
         );
     });
 
-    it('ignores an owner no connected repository has, as a forged payload would carry', async () => {
+    it('addresses a connected repository by its own owner and ignores an owner no connected repository has', async () => {
         const get = jest.fn().mockResolvedValue({ data: null });
         const service = makeService({ pulls: { get } });
 
         await service.getPullRequest({
             organizationAndTeamData,
+            repository: orgRepository,
+            prNumber: 1,
+        });
+        expect(get).toHaveBeenLastCalledWith(
+            expect.objectContaining({ owner: 'Novaorg01' }),
+        );
+
+        // The owner can come from a webhook payload: one the saved
+        // selection does not have must not steer the token.
+        await service.getPullRequest({
+            organizationAndTeamData,
             repository: {
-                id: '1460230740',
-                name: 'qa2004-empty',
+                ...orgRepository,
                 fullName: 'SomeoneElse/qa2004-empty',
             },
             prNumber: 1,
         });
-
-        expect(get).toHaveBeenCalledWith(
+        expect(get).toHaveBeenLastCalledWith(
             expect.objectContaining({ owner: 'Wellington01' }),
         );
     });
 
     it('keeps an App installation on its own account', async () => {
         const get = jest.fn().mockResolvedValue({ data: null });
-        const service = makeService({ pulls: { get } }, 'Novaorg01', 'oauth');
+        const app = makeService({ pulls: { get } }, 'Novaorg01', 'oauth');
+        const readSelection = jest.spyOn(
+            app as any,
+            'findOneByOrganizationAndTeamDataAndConfigKey',
+        );
+
+        await app.getPullRequest({
+            organizationAndTeamData,
+            repository: { id: '1', name: 'api', fullName: 'SomeoneElse/api' },
+            prNumber: 1,
+        });
+
+        expect(get).toHaveBeenLastCalledWith(
+            expect.objectContaining({ owner: 'Novaorg01' }),
+        );
+        expect(readSelection).not.toHaveBeenCalled();
+    });
+
+    it('fails when the saved selection cannot be read, instead of treating it as empty', async () => {
+        const service = makeService({});
+        jest.spyOn(
+            service as any,
+            'findOneByOrganizationAndTeamDataAndConfigKey',
+        ).mockRejectedValue(new Error('connection reset'));
+
+        await expect(
+            service.getGithubAuthDetails(organizationAndTeamData),
+        ).rejects.toThrow('connection reset');
+    });
+
+    it('reads the saved selection once for the calls of a review step', async () => {
+        const get = jest.fn().mockResolvedValue({ data: null });
+        const service = makeService({ pulls: { get } });
         const readSelection = jest.spyOn(
             service as any,
             'findOneByOrganizationAndTeamDataAndConfigKey',
         );
 
-        await service.getPullRequest({
-            organizationAndTeamData,
-            repository: {
-                id: '1',
-                name: 'api',
-                fullName: 'SomeoneElse/api',
-            },
-            prNumber: 1,
-        });
+        for (let i = 0; i < 3; i++) {
+            await service.getPullRequest({
+                organizationAndTeamData,
+                repository: orgRepository,
+                prNumber: 1,
+            });
+        }
 
-        expect(get).toHaveBeenCalledWith(
+        expect(readSelection).toHaveBeenCalledTimes(1);
+        expect(get).toHaveBeenLastCalledWith(
             expect.objectContaining({ owner: 'Novaorg01' }),
         );
-        expect(readSelection).not.toHaveBeenCalled();
     });
 
     it('falls back to the recorded account when the full name holds no real owner', async () => {

@@ -515,6 +515,12 @@ export class GithubService
                     params.type,
                 );
 
+            if (params.configKey === IntegrationConfigKey.REPOSITORIES) {
+                this.connectedOwnersByTeam.delete(
+                    GithubService.teamKey(params.organizationAndTeamData),
+                );
+            }
+
             if (shouldRefreshTokenWebhooks) {
                 // The config update does not return the saved row
                 // (`integrationConfig.repository.ts` update needs the
@@ -1991,6 +1997,23 @@ export class GithubService
     private readonly connectedOwners = new WeakMap<object, Set<string>>();
 
     /**
+     * The same owners per organization and team, so a review step does not
+     * re-read the selection on every GitHub call. Dropped when this instance
+     * saves the selection; another instance sees a change after the TTL.
+     */
+    private readonly connectedOwnersByTeam = new Map<
+        string,
+        { owners: Set<string>; expiresAt: number }
+    >();
+    private static readonly CONNECTED_OWNERS_TTL_MS = 60_000;
+
+    private static teamKey(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): string {
+        return `${organizationAndTeamData?.organizationId}:${organizationAndTeamData?.teamId}`;
+    }
+
+    /**
      * The account GitHub addresses a repository under. A token integration
      * records one account as `org` (for a fine-grained token or a personal
      * account, the user's login), while its repositories can belong to an
@@ -2046,33 +2069,36 @@ export class GithubService
         return authDetail;
     }
 
+    /**
+     * A failed read throws: an unreadable selection is not an empty one, and
+     * resolving it as empty would quietly send every call to the recorded
+     * account.
+     */
     private async readConnectedOwners(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<Set<string>> {
-        try {
-            const repositories =
-                await this.findOneByOrganizationAndTeamDataAndConfigKey(
-                    organizationAndTeamData,
-                    IntegrationConfigKey.REPOSITORIES,
-                );
-            return new Set(
-                (Array.isArray(repositories) ? repositories : [])
-                    .map((repository) =>
-                        GithubService.recordedOwnerOf(repository),
-                    )
-                    .filter(Boolean)
-                    .map((owner) => owner.toLowerCase()),
-            );
-        } catch (error) {
-            this.logger.warn({
-                message:
-                    'Could not read the connected repositories; GitHub calls use the recorded account',
-                context: GithubService.name,
-                error,
-                metadata: { organizationAndTeamData },
-            });
-            return new Set();
+        const key = GithubService.teamKey(organizationAndTeamData);
+        const cached = this.connectedOwnersByTeam.get(key);
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.owners;
         }
+
+        const repositories =
+            await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                organizationAndTeamData,
+                IntegrationConfigKey.REPOSITORIES,
+            );
+        const owners = new Set(
+            (Array.isArray(repositories) ? repositories : [])
+                .map((repository) => GithubService.recordedOwnerOf(repository))
+                .filter(Boolean)
+                .map((owner) => owner.toLowerCase()),
+        );
+        this.connectedOwnersByTeam.set(key, {
+            owners,
+            expiresAt: Date.now() + GithubService.CONNECTED_OWNERS_TTL_MS,
+        });
+        return owners;
     }
 
     /**
