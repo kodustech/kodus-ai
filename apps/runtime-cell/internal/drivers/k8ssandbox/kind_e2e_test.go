@@ -24,6 +24,9 @@ import (
 // KODY_E2E_K8S_CONTEXT the kubectl context to exec with,
 // KODY_E2E_K8S_SANDBOX_IMAGE the sandbox image loaded on the nodes, and
 // KODY_E2E_K8S_RUNTIME_CLASS the RuntimeClass (kind: one with handler runc).
+// With KODY_E2E_K8S_POOL_NODE, the RuntimeClass's scheduling (node selector
+// and tolerations of a tainted sandbox pool) must place every sandbox on that
+// node: the driver sets none of it, the class does.
 func TestOnAClusterASandboxWithSecretsTrustsTheCellCA(t *testing.T) {
 	api, kctx, image, rc := os.Getenv("KODY_E2E_K8S_API"), os.Getenv("KODY_E2E_K8S_CONTEXT"), os.Getenv("KODY_E2E_K8S_SANDBOX_IMAGE"), os.Getenv("KODY_E2E_K8S_RUNTIME_CLASS")
 	if api == "" || kctx == "" || image == "" || rc == "" {
@@ -81,6 +84,12 @@ func TestOnAClusterASandboxWithSecretsTrustsTheCellCA(t *testing.T) {
 		}
 		t.Cleanup(func() { _ = d.Destroy(context.Background(), ref) })
 		_, name := split(ref)
+		if pool := os.Getenv("KODY_E2E_K8S_POOL_NODE"); pool != "" {
+			node, err := exec.Command("kubectl", "--context", kctx, "-n", ns, "get", "pod", name, "-o", "jsonpath={.spec.nodeName}").Output()
+			if err != nil || strings.TrimSpace(string(node)) != pool {
+				t.Errorf("%s ran on %q, not the sandbox pool node %s (%v)", claim, node, pool, err)
+			}
+		}
 		out, err := exec.Command("kubectl", "--context", kctx, "-n", ns, "exec", name, "-c", containerSandbox, "--", "python3", "-c", probe).CombinedOutput()
 		if err != nil {
 			t.Fatalf("%s: exec: %v: %s", claim, err, out)
