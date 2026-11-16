@@ -53,20 +53,28 @@ export const getRepositorySelection = async (
     );
 };
 
-export const fetchRepositorySelection = (teamId: string) =>
-    axiosAuthorized.fetcher<RepositorySelection>(
-        CODE_MANAGEMENT_API_PATHS.REPOSITORY_SELECTION,
-        { params: { teamId } },
-    );
+// `axiosAuthorized.fetcher` resolves to the response body, which the API
+// wraps as `{ data, statusCode, type }`; callers want `data`.
+export const fetchRepositorySelection = async (
+    teamId: string,
+): Promise<RepositorySelection> => {
+    const { data } = await axiosAuthorized.fetcher<{
+        data: RepositorySelection;
+    }>(CODE_MANAGEMENT_API_PATHS.REPOSITORY_SELECTION, { params: { teamId } });
+    return data;
+};
 
-export const previewRepositorySelection = (
+export const previewRepositorySelection = async (
     teamId: string,
     includeForksAndMirrors: boolean,
-) =>
-    axiosAuthorized.fetcher<RepositorySelectionPreview>(
-        CODE_MANAGEMENT_API_PATHS.REPOSITORY_SELECTION_PREVIEW,
-        { params: { teamId, includeForksAndMirrors } },
-    );
+): Promise<RepositorySelectionPreview> => {
+    const { data } = await axiosAuthorized.fetcher<{
+        data: RepositorySelectionPreview;
+    }>(CODE_MANAGEMENT_API_PATHS.REPOSITORY_SELECTION_PREVIEW, {
+        params: { teamId, includeForksAndMirrors },
+    });
+    return data;
+};
 
 export const setRepositorySelection = (params: {
     teamId: string;

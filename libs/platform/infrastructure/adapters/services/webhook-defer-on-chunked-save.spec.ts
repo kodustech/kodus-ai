@@ -157,7 +157,11 @@ describe('webhook setup is deferred until a chunked save is complete', () => {
             expect(createPullRequestWebhook).not.toHaveBeenCalled();
         });
 
-        it('reconciles on the final chunk', async () => {
+        it('reconciles on the final chunk without removing a repository the append keeps', async () => {
+            // An append only adds to the selection: repo-b stays selected,
+            // so its webhook must stay too. Deleting it here and recreating
+            // it right after is the churn QA saw on #2004 (new hook ids, and
+            // PR events lost in between).
             await service.createOrUpdateIntegrationConfig({
                 configKey: IntegrationConfigKey.REPOSITORIES,
                 configValue: [{ id: 'repo-a', name: 'frontend-app' }],
@@ -166,6 +170,29 @@ describe('webhook setup is deferred until a chunked save is complete', () => {
             });
 
             expect(createPullRequestWebhook).toHaveBeenCalledTimes(1);
+            expect(deleteWebhook).not.toHaveBeenCalled();
+        });
+
+        it('keeps every selected webhook when one repository is appended', async () => {
+            await service.createOrUpdateIntegrationConfig({
+                configKey: IntegrationConfigKey.REPOSITORIES,
+                configValue: [{ id: 'repo-c', name: 'billing' }],
+                type: 'append',
+                organizationAndTeamData: orgTeam,
+            });
+
+            expect(deleteWebhook).not.toHaveBeenCalled();
+            expect(createPullRequestWebhook).toHaveBeenCalledTimes(1);
+        });
+
+        it('still removes the webhook of a repository a replace leaves out', async () => {
+            await service.createOrUpdateIntegrationConfig({
+                configKey: IntegrationConfigKey.REPOSITORIES,
+                configValue: [{ id: 'repo-a', name: 'frontend-app' }],
+                type: 'replace',
+                organizationAndTeamData: orgTeam,
+            });
+
             expect(deleteWebhook).toHaveBeenCalledTimes(1);
             expect(deleteWebhook.mock.calls[0][0].repositories).toEqual([
                 { id: 'repo-b', name: 'backend-api' },
