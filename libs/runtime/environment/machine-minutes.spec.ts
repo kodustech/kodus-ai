@@ -1,4 +1,4 @@
-import { claimCeilingSeconds, decideMachineMinutes, machineMinutesExhausted, remainingMachineMinutes } from './machine-minutes';
+import { claimCeilingSeconds, decideMachineMinutes, effectiveMachineMinuteLimit, machineMinutesExhausted, remainingMachineMinutes } from './machine-minutes';
 
 describe('org machine-minute budget', () => {
     it('admits a claim whose ceiling fits in what is left of the org day', () => {
@@ -40,5 +40,22 @@ describe('org machine-minute budget', () => {
                 },
             ],
         });
+    });
+
+    it("lets an org lower the deployment's daily machine minutes but never raise them", () => {
+        expect(effectiveMachineMinuteLimit(10_000, 600)).toBe(600);
+        expect(effectiveMachineMinuteLimit(500, 600)).toBe(500);
+        expect(effectiveMachineMinuteLimit(10_000, null)).toBe(10_000);
+    });
+
+    it('holds an org to its own daily machine minutes on a deployment without a limit', () => {
+        expect(effectiveMachineMinuteLimit(0, 600)).toBe(600);
+        expect(effectiveMachineMinuteLimit(0, null)).toBe(0);
+    });
+
+    it("names the org's own setting in a refusal the org's limit caused", () => {
+        const refusal = machineMinutesExhausted({ allowed: false, spentMinutes: 590, limitMinutes: 600, needMinutes: 60, source: 'org' });
+        expect(refusal.blockers[0].message).toContain('Runtime settings');
+        expect(refusal.blockers[0].message).not.toContain('RUNTIME_MACHINE_MINUTES_PER_ORG_DAY');
     });
 });

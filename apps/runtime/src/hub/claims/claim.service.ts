@@ -1,7 +1,7 @@
 import { type ClaimState, isClaimStateIn, isFinalClaimState, LIVE_CLAIM_STATES, MACHINE_HOLDING_CLAIM_STATES, OPEN_CLAIM_STATES } from '@libs/runtime/contracts/enums';
 import { type AcquireRequest, type Blocked, type Claim, claimCeilingSeconds, isolationUnavailable, machineMinutesExhausted, readyTimeoutMinutes } from '@libs/runtime/environment';
 import { isolationSatisfies } from '@libs/runtime/contracts/isolation';
-import type { ClaimRepo, ClaimSecret, Envelope, MessageBody, RepoRef } from '@libs/runtime/protocol';
+import type { ClaimRepo, ClaimRunIdentity, ClaimSecret, Envelope, MessageBody, RepoRef } from '@libs/runtime/protocol';
 import { redactPatterns } from '@libs/runtime/redaction';
 import { bootOutputOf } from '@libs/runtime/run/boot-failure';
 import { memberAliasOfReason } from '@libs/runtime/run/run-workspace';
@@ -603,6 +603,8 @@ export class ClaimService {
         // The Run's decoys, to a cell that plants them; never logged here. A cell that
         // cannot read the field plants none, and the worker still checks every boundary for them.
         const canaries = req.consumer !== 'setup' && req.canaries?.length && supports(session, 'canaries') ? req.canaries.map((c) => ({ slot: c.slot, value: c.value })) : [];
+        // The Run's drawn identifiers (S-36), to a cell that sets them; the claim says whether it did.
+        const identity = runIdentityFor(session, req);
         // The org's secrets by reference, to a cell that gives each a placeholder; never their value.
         const secrets = await this.secretsFor(session, req, ids);
         let reply: Envelope;
@@ -649,6 +651,7 @@ export class ClaimService {
                     // The environment's machine size, which the cell grants (checked above).
                     ...(req.size ? { size: { memoryMb: req.size.memoryMb, cpus: req.size.cpus } } : {}),
                     ...(canaries.length ? { canaries } : {}),
+                    ...(identity ? { identity } : {}),
                     // Only to a cell whose hello names workspace (refused before admission otherwise).
                     ...(req.repos?.length ? { repos: req.repos.map((r) => ({ alias: r.alias, repo: r.repo, sha: r.sha, repoToken: r.repoToken })) } : {}),
                     ...(secrets.length ? { secrets } : {}),
@@ -804,6 +807,7 @@ export class ClaimService {
             cellId,
             cellOwner: session.owner,
             ...(session.features?.includes('browserExplore') ? { capabilities: { browserExplore: 'v1' as const } } : {}),
+            ...withRunIdentity(runIdentityFor(session, req)),
             leaseExpiresAt,
             hardExpiresAt,
             observer: { id: observer.id, state: observer.state },
@@ -1032,3 +1036,16 @@ function sandboxSnapshotFields(s: AcquireInput['sandboxSnapshot'], cellKeepsSnap
     if (s.resumeFrom) return { resumeFrom: s.resumeFrom };
     return { ...(s.prepares ? { prepares: true as const } : {}), ...(s.templateKey ? { templateKey: s.templateKey } : {}) };
 }
+
+/**
+ * The Run's drawn identifiers a claim carries (S-36): a Run's claim on a cell
+ * that names runIdentity, never a setup's (its workload may be baked) nor an
+ * older cell's (its strict decoder refuses the field). The Claim says the
+ * same, so the probes expect the values only where the cell set them.
+ */
+function runIdentityFor(session: CellSession, req: AcquireInput): ClaimRunIdentity | undefined {
+    if (req.consumer !== 'runtime' || !req.identity || !supports(session, 'runIdentity')) return undefined;
+    return { hostname: req.identity.hostname, user: req.identity.user, domain: req.identity.domain };
+}
+
+const withRunIdentity = (identity: ClaimRunIdentity | undefined) => (identity ? { identity } : {});

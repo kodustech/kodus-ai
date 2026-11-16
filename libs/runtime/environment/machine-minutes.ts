@@ -14,7 +14,29 @@ export const DEFAULT_MACHINE_MINUTES_PER_ORG_DAY = 10_000;
 /** The blocker signature of a claim the org's daily machine minutes cannot hold. */
 export const MACHINE_MINUTES_EXHAUSTED = 'machine_minutes_exhausted';
 
-export type MachineMinutesDecision = { allowed: true } | { allowed: false; spentMinutes: number; limitMinutes: number; needMinutes: number };
+/** Which limit refused: the deployment's (RUNTIME_MACHINE_MINUTES_PER_ORG_DAY) or the org's own (Runtime settings). */
+export type MachineMinuteLimitSource = 'deployment' | 'org';
+
+export type MachineMinutesDecision =
+    | { allowed: true }
+    | { allowed: false; spentMinutes: number; limitMinutes: number; needMinutes: number; source?: MachineMinuteLimitSource };
+
+/** The org's own daily machine minutes (Runtime settings): a positive whole number, at most a day of 10 000 machines. */
+export const MAX_ORG_MACHINE_MINUTES_PER_DAY = 14_400_000;
+
+/**
+ * The limit the hub holds an org to: the org's own setting can lower the
+ * deployment's RUNTIME_MACHINE_MINUTES_PER_ORG_DAY, never raise it; on a
+ * deployment without one (0) the org's setting alone applies. 0 = unlimited.
+ */
+export function effectiveMachineMinuteLimit(deploymentMinutes: number, orgMinutes: number | null | undefined): number {
+    if (!orgMinutes || orgMinutes <= 0) return Math.max(0, deploymentMinutes);
+    return deploymentMinutes > 0 ? Math.min(deploymentMinutes, orgMinutes) : orgMinutes;
+}
+
+/** Which of the two limits effectiveMachineMinuteLimit took. */
+export const machineMinuteLimitSource = (deploymentMinutes: number, orgMinutes: number | null | undefined): MachineMinuteLimitSource =>
+    orgMinutes && orgMinutes > 0 && (deploymentMinutes <= 0 || orgMinutes < deploymentMinutes) ? 'org' : 'deployment';
 
 const minutesOf = (seconds: number) => Math.ceil(Math.max(0, seconds) / 60);
 
@@ -42,7 +64,7 @@ export function machineMinutesExhausted(refused: Extract<MachineMinutesDecision,
             {
                 kind: 'resources',
                 signature: MACHINE_MINUTES_EXHAUSTED,
-                message: `the organization used ${refused.spentMinutes} of its ${refused.limitMinutes} machine minutes today (UTC) and this machine may run up to ${refused.needMinutes}; nothing was started. The budget resets at 00:00 UTC (RUNTIME_MACHINE_MINUTES_PER_ORG_DAY)`,
+                message: `the organization used ${refused.spentMinutes} of its ${refused.limitMinutes} machine minutes today (UTC) and this machine may run up to ${refused.needMinutes}; nothing was started. The budget resets at 00:00 UTC (${refused.source === 'org' ? "the organization's limit in Runtime settings" : 'RUNTIME_MACHINE_MINUTES_PER_ORG_DAY'})`,
             },
         ],
     };

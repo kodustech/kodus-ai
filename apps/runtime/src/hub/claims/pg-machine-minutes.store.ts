@@ -1,7 +1,7 @@
 import { Pool, type PoolClient } from 'pg';
 
 import { inTransaction, lockKey, lockStatement, withTransaction } from '@libs/runtime/run/adapters/advisory-lock';
-import { decideMachineMinutes, type MachineMinutesDecision } from '@libs/runtime/environment';
+import { decideMachineMinutes, effectiveMachineMinuteLimit, machineMinuteLimitSource, type MachineMinutesDecision } from '@libs/runtime/environment';
 
 import type { MachineMinuteStore } from './machine-minutes';
 
@@ -41,8 +41,15 @@ export class PgMachineMinuteStore implements MachineMinuteStore {
                 [input.organizationId, day, input.claimId],
             );
             const held = Number(r.rows[0].mine ?? 0);
-            const decision = decideMachineMinutes({ spentSeconds: Number(r.rows[0].others) + held, needSeconds: input.needSeconds, limitMinutes: input.limitMinutes });
-            if (!decision.allowed) return decision;
+            // The org's own limit (runtime_org_machine_budget), read in this transaction: a change applies to the next reserve.
+            const own = await db.query<{ minutes_per_day: number | null }>(
+                `SELECT minutes_per_day FROM runtime.runtime_org_machine_budget WHERE organization_id = $1`,
+                [input.organizationId],
+            );
+            const orgMinutes = own.rows[0]?.minutes_per_day ?? null;
+            const limitMinutes = effectiveMachineMinuteLimit(input.limitMinutes, orgMinutes);
+            const decision = decideMachineMinutes({ spentSeconds: Number(r.rows[0].others) + held, needSeconds: input.needSeconds, limitMinutes });
+            if (!decision.allowed) return { ...decision, source: machineMinuteLimitSource(input.limitMinutes, orgMinutes) };
             await db.query(
                 `INSERT INTO runtime.runtime_machine_reservations (claim_id, org_id, day, settled_seconds, round_started_at, round_reserved_seconds)
                  VALUES ($1, $2, $3::date, 0, now(), $4)
@@ -59,6 +66,12 @@ export class PgMachineMinuteStore implements MachineMinuteStore {
     }
 
     /** What the org's UTC day counts now (ended rounds at what they held, rounds in flight at their ceiling), and how many are in flight. */
+    /** The org's own daily machine minutes; null = the deployment's limit. */
+    async orgLimit(organizationId: string): Promise<number | null> {
+        const r = await this.db.query<{ minutes_per_day: number | null }>(`SELECT minutes_per_day FROM runtime.runtime_org_machine_budget WHERE organization_id = $1`, [organizationId]);
+        return r.rows[0]?.minutes_per_day ?? null;
+    }
+
     async spentToday(organizationId: string): Promise<{ seconds: number; openClaims: number }> {
         const r = await this.db.query<{ seconds: string; open: string }>(
             `SELECT COALESCE(SUM(seconds), 0) AS seconds, COUNT(*) FILTER (WHERE open) AS open

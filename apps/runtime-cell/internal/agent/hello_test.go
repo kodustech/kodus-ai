@@ -29,7 +29,7 @@ func TestHelloAdvertisesFeaturesAndTheDriversMaxClaimSize(t *testing.T) {
 			if !reflect.DeepEqual(hello.Features, []string{
 				protocol.FeatureSeedsCache, protocol.FeatureClaimSize, protocol.FeatureEgressAllow, protocol.FeaturePoolMachineSize, protocol.FeatureAuthoredFiles, protocol.FeatureReadyBuildSteps, protocol.FeatureBootPhases, protocol.FeatureCellMemory,
 				protocol.FeatureTimedRequests, protocol.FeatureServiceLogs, protocol.FeatureDBEffects, protocol.FeatureOutboundCalls, protocol.FeatureExecCast, protocol.FeatureBrowser, protocol.FeatureCanaries, protocol.FeatureSecrets,
-				protocol.FeatureReadyStart, protocol.FeatureTraceContext, protocol.FeatureEgressTiers,
+				protocol.FeatureReadyStart, protocol.FeatureTraceContext, protocol.FeatureEgressTiers, protocol.FeatureRunIdentity,
 			}) {
 				t.Fatalf("features %v", hello.Features)
 			}

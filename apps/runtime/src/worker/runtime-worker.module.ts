@@ -43,6 +43,7 @@ import { HubPhysicalAdmissionClient } from './env/physical-admission-client';
 import { HubClaimReleaser, HubClient, HubEgressPolicyPusher, HubPoolTargetSender, HubRunEventSink } from './env/hub-environment-runtime';
 import { EVIDENCE_CONFIG, EVIDENCE_STORE, RuntimeEvidenceService } from './evidence/evidence.service';
 import { PgRunClaims } from './persistence/pg-run-claims';
+import { PgStabilityHistory } from './run/pg-stability-history';
 import { AmqpPublishRequester } from './publish/amqp-publish-requester';
 import { SealedSecretOpener, SECRET_OPENER } from './secrets/sealed-tokens';
 import { ENVIRONMENT_SETUP_SERVICE, EnvironmentSetupService, type SetupOptions, setupOptionsFrom } from './setup/environment-setup.service';
@@ -189,13 +190,14 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                         const environment =
                             config.envDriver === 'fake'
                                 ? await fakeEnvironments() // dev only: the production image refuses RUNTIME_ENV_DRIVER=fake
-                                : hubEnvironments(hub, secrets, config.git, poolCellOf(setups));
+                                : hubEnvironments(hub, secrets, config.git, poolCellOf(setups), setups);
                         return new RunDependenciesFactory({
                             environment,
                             allowUnrenewedClaims: config.envDriver === 'fake',
                             projection,
                             // A Run of a head already planned takes that Run's accepted plan from its workflow's steps.
                             pastPlans: new StepPastPlans(projection, async (id) => (await DBOS.listWorkflowSteps(id))?.map((s) => ({ name: s.name, output: s.output }))),
+                            stability: new PgStabilityHistory(pool),
                             claims: new PgRunClaims(pool),
                             releaser: new HubClaimReleaser(hub),
                             publisher: new AmqpPublishRequester(amqp),

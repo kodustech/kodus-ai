@@ -44,6 +44,7 @@ import {
     SANDBOX_LIST_MAX_ENTRIES,
     SANDBOX_PATH_MAX,
 } from '../sandbox';
+import { RUN_IDENTITY_ENV } from '../messages';
 import { RESERVED_JSON_KEYS } from '../strict-json';
 
 /** One Go declaration: a const (number or string), a pattern (a string const for regexp.MustCompile) or a []string. */
@@ -81,6 +82,9 @@ const SECRETS = 'libs/runtime/api/domain/secrets.ts';
 /** Everything constants_gen.go declares besides the hello features, in file order. */
 export function goConstants(): GoConstant[] {
     return [
+        { go: 'RunIdentityHostnameEnv', from: 'RUN_IDENTITY_ENV.hostname (libs/runtime/protocol/messages.ts)', doc: "the env var a Run's drawn hostname is set in", value: RUN_IDENTITY_ENV.hostname },
+        { go: 'RunIdentityUserEnv', from: 'RUN_IDENTITY_ENV.user (libs/runtime/protocol/messages.ts)', doc: "the env var a Run's drawn seed user is set in", value: RUN_IDENTITY_ENV.user },
+        { go: 'RunIdentityDomainEnv', from: 'RUN_IDENTITY_ENV.domain (libs/runtime/protocol/messages.ts)', doc: "the env var a Run's drawn seed domain is set in", value: RUN_IDENTITY_ENV.domain },
         { go: 'SecurityViolationSignaturePattern', from: 'SECURITY_VIOLATION_SIGNATURE (libs/runtime/contracts/enums.ts)', doc: 'the signature of a security_violation blocker', pattern: SECURITY_VIOLATION_SIGNATURE },
         { go: 'TraceparentShapePattern', from: 'TRACEPARENT_SHAPE (libs/runtime/contracts/trace-context.ts)', doc: 'a W3C traceparent of version 00, without the all-zero rule', pattern: TRACEPARENT_SHAPE },
         { go: 'PreviewIDPattern', from: 'PREVIEW_ID_PATTERN (libs/runtime/contracts/preview.ts)', doc: 'a preview id', pattern: PREVIEW_ID_PATTERN },

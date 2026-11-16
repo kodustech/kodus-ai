@@ -1,9 +1,9 @@
 import type { BrowserExploreRequest, BrowserExploreResult } from '@libs/runtime/contracts/browser-exploration';
-import type { CellOwner, ClaimConsumer, ClaimSide, Expose as SharedExpose, VmHealth as SharedVmHealth } from '@libs/runtime/contracts/enums';
+import type { BlockerKind, CellOwner, ClaimConsumer, ClaimSide, Expose as SharedExpose, VmHealth as SharedVmHealth } from '@libs/runtime/contracts/enums';
 import type { EvidenceRef, Probe, ProbeResult } from '@libs/runtime/probe';
 import type { MachineSize } from '@libs/runtime/contracts/machine-size';
 import type { IsolationMinimum } from '@libs/runtime/contracts/isolation';
-import type { BootPhases, BuildSteps, ClaimCanary, EvidenceRequest, FailureBundle } from '@libs/runtime/protocol';
+import type { BootPhases, BuildSteps, ClaimCanary, ClaimRunIdentity, EvidenceRequest, FailureBundle } from '@libs/runtime/protocol';
 
 // The one door every consumer uses to get "this app up at this SHA"
 // (docs §5, ADR-002). The control plane never talks to a cloud or a machine:
@@ -45,6 +45,11 @@ export interface AcquireRequest {
      */
     canaries?: ClaimCanary[];
     /**
+     * The Run's drawn identifiers (S-36, runIdentityOf): the same on both sides, set by a cell
+     * that names runIdentity in every service's env and as the hostname. Only a Run's claims carry them.
+     */
+    identity?: ClaimRunIdentity;
+    /**
      * The PR side of a pull request from a fork: code nobody in the org wrote.
      * The environment's approved egress hosts never reach its claim.
      */
@@ -69,6 +74,11 @@ export interface RecipeForClaim {
 export interface Claim {
     /** Only when the owning cell negotiated local native browser exploration. */
     capabilities?: { browserExplore: 'v1' };
+    /**
+     * The Run's drawn identifiers the cell set in this claim's workload (AcquireRequest.identity);
+     * absent when it did not (an older cell, a setup): the workload keeps the recipe's own values.
+     */
+    identity?: ClaimRunIdentity;
     claimId: string;
     cellId: string;
     cellOwner: CellOwner;
@@ -209,7 +219,40 @@ export type EnvError =
     | { code: 'timeout'; afterMs: number }
     | { code: 'transport_lost'; stepId: string }
     /** The cell saw the claim's code exfiltrate (blocked security_violation): the claim runs nothing more. */
-    | { code: 'security_violation'; claimId: string; signature: string };
+    | { code: 'security_violation'; claimId: string; signature: string }
+    /** The claim's cell cannot take files (it answered the upload not_implemented or not_supported): nothing was written. */
+    | { code: 'upload_unavailable' };
+
+/**
+ * upload (docs §5): files written into the claim's checkout from the evidence
+ * store, the protocol's `upload` frame. stepId is the cell's idempotency key;
+ * each path is relative to the checkout (no `.` or `..` segment), at most 256 files.
+ */
+export interface UploadRequest {
+    stepId: string;
+    files: Array<{ path: string; contentRef: string; mode?: number }>;
+}
+
+/**
+ * status (docs §5): how an environment boots, from what the product already
+ * keeps (its setup record: state, image, cell, the week's setup boots, the open
+ * blockers); never a call to a cell or a cloud. not_set_up: no setup of that org's
+ * environment was ever recorded.
+ */
+export interface EnvironmentHealth {
+    environmentId: string;
+    state: 'setting_up' | 'active' | 'blocked' | 'not_set_up';
+    /** Setup boots of the last 7 days. */
+    boots7d: number;
+    /** The share of them that became ready; absent: no boot in the week. */
+    bootRate7d?: number;
+    /** Their median time to ready; absent: none became ready. */
+    readyP50Ms?: number;
+    imageId?: string;
+    cellId?: string;
+    /** Grouped by signature, the most frequent first. */
+    blockers: Array<{ signature: string; kind: BlockerKind; count: number; lastAt: string }>;
+}
 
 export interface ExecRequest {
     /** Hub-side execution policy only; never sent in a cell frame. */
@@ -273,6 +316,10 @@ export interface EnvironmentRuntime {
      */
     snapshotRound?(claimId: string, stepId: string): Promise<{ id: string; ms: number } | EnvError>;
     release(claimId: string): Promise<void>;
+    /** Writes files into the claim's checkout (the protocol's upload); absent where a driver has none. */
+    upload?(claimId: string, req: UploadRequest): Promise<void | EnvError>;
+    /** The environment's health (EnvironmentHealth), read only for that org; absent where a driver has none. */
+    status?(req: { organizationId: string; environmentId: string }): Promise<EnvironmentHealth>;
     /** claim.renew: more lease for a claim its owner still uses, never past its hard ceiling; absent where leases are not renewed. */
     renew?(claimId: string, consumer: Consumer): Promise<LeaseRenewal | EnvError>;
     /** Asks the cell to bake the environment image (S-52); absent where there is no bake. */

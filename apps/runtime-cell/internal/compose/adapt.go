@@ -60,6 +60,20 @@ func (p *Project) PublishOnLoopback(ports []Port) ([]PublishedPort, error) {
 	return published, err
 }
 
+// DefaultHostname sets hostname on every service that names none (a Run's
+// drawn hostname); a service's own stays. Empty: nothing changes.
+func (p *Project) DefaultHostname(hostname string) error {
+	if hostname == "" {
+		return nil
+	}
+	return p.eachService(func(_ string, svc map[string]any) error {
+		if _, own := svc["hostname"]; !own {
+			svc["hostname"] = hostname
+		}
+		return nil
+	})
+}
+
 // DropContainerNames lets compose name the containers after the project:
 // a fixed container_name collides between claims.
 func (p *Project) DropContainerNames() error {

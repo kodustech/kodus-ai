@@ -522,6 +522,10 @@ export class CellHub {
     previewUnroute(ref: ClaimRef, previewId: string): Promise<void> {
         return this.previews.unroute(ref, previewId);
     }
+    /** upload: files into the claim's checkout (the protocol's upload frame). */
+    upload(ref: ClaimRef, req: MessageBody<'upload'>): Promise<{ ok: true } | EnvError> {
+        return this.steps.upload(ref, req);
+    }
     reset(ref: ClaimRef, imageId: string, stepId?: string, roundSnapshotId?: string, timeoutMs?: number): Promise<{ ok: true; durationMs?: number } | EnvError> {
         return this.steps.reset(ref, imageId, stepId, roundSnapshotId, timeoutMs);
     }

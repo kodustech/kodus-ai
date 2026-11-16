@@ -82,6 +82,13 @@ export interface GateOptions {
      * inconclusive instead of being masked away.
      */
     isDecisiveField?: (field: string) => boolean;
+    /**
+     * Fields earlier Runs saw vary on this probe's base (stability.ts, the
+     * runtime_stability history): masked as if this Run's base varied on them.
+     * Decisive ones make the probe inconclusive; they count toward the masked
+     * ceiling; a PR that differs only on one of them is never decided on it.
+     */
+    knownUnstableFields?: string[];
 }
 
 /**
@@ -119,6 +126,8 @@ const verdict = (
 });
 
 const healthy = (s: GateStep) => s.transport === 'ok' && s.vmHealth === 'ok' && !s.timedOut;
+/** A step whose observer answered: transport kept, machine up, no timeout. */
+export const healthyStep = healthy;
 /** The machine itself failed (not the observer's link to it). */
 const machineLost = (s: GateStep) => s.vmHealth !== 'ok' || (s.timedOut && s.transport === 'ok');
 
@@ -188,6 +197,9 @@ export function decideProbe(steps: GateStep[], opts: GateOptions): GateDecision 
     const stepsAgree = rounds.every((s) => s.fields.steps === base[0].fields.steps);
     for (const f of [...fields]) if (isMeasureField(f) && (!stepsAgree || rounds.some((s) => !(f in s.fields)))) fields.delete(f);
     const masked = [...fields].filter((f) => new Set(base.map((s) => s.fields[f])).size > 1);
+    // Fields the history names that this Run's base happened to agree on are masked too (ADR-050 history).
+    const fromHistory = (opts.knownUnstableFields ?? []).filter((f) => fields.has(f) && !masked.includes(f));
+    masked.push(...fromHistory);
     const maskedDecisive = masked.filter(isDecisive);
     if (maskedDecisive.length > 0) {
         return verdict('inconclusive', `the base itself varies on ${maskedDecisive.join(', ')}, which the verdict rests on`, { maskedFields: masked });
@@ -211,6 +223,14 @@ export function decideProbe(steps: GateStep[], opts: GateOptions): GateDecision 
     const compared = [...fields].filter((f) => !masked.includes(f));
     if (compared.filter((f) => !isVersion(f)).length === 0) {
         return verdict('inconclusive', 'no behavior field is left to compare once the varying and build fields are set aside', { maskedFields: masked });
+    }
+
+    // A field only the history masks that differs on the PR: the base may vary on it again, or the PR changed it.
+    // Neither is told apart by masking it away, so the base plays again and, at the ceiling, the probe stays inconclusive.
+    const historyDiffers = fromHistory.filter((f) => !isVersion(f) && pr.some((s) => s.fields[f] !== base[0].fields[f]));
+    if (historyDiffers.length > 0) {
+        if (base.length < maxRounds) return { kind: 'more_rounds', base: 1, pr: 0, reason: `the PR differs on ${historyDiffers.join(', ')}, which earlier Runs saw vary on the base` };
+        return verdict('inconclusive', `the PR differs only where earlier Runs saw the base vary (${historyDiffers.join(', ')})`, { maskedFields: masked });
     }
 
     const differs = (s: GateStep) =>

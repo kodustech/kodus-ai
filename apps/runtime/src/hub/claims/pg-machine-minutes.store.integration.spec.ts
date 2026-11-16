@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 
 import { Pool } from 'pg';
 
+import { PgCommandStore } from '../../shared/persistence/pg-command-store';
 import { ensureRuntimeSchema } from '../../shared/persistence/runtime-schema';
 import { isolatedDatabase } from '../../testing/isolated-database';
 import { PgHubStore } from '../hub-store';
@@ -62,12 +63,62 @@ const HOUR = 3_600;
                 new PgMachineMinuteStore(b).reserve({ claimId: `c-${randomUUID()}`, organizationId: orgId, needSeconds: HOUR, limitMinutes }),
             ]);
             expect(outcomes.filter((o) => o.allowed)).toHaveLength(1);
-            expect(outcomes.find((o) => !o.allowed)).toEqual({ allowed: false, spentMinutes: 60, limitMinutes: 90, needMinutes: 60 });
+            expect(outcomes.find((o) => !o.allowed)).toEqual({ allowed: false, spentMinutes: 60, limitMinutes: 90, needMinutes: 60, source: 'deployment' });
         } finally {
             a.release();
             b.release();
         }
         expect(await budget.spentToday(orgId)).toEqual({ seconds: HOUR, openClaims: 1 });
+    });
+
+    /** The org's own limit as the runtime-worker records it from runtime.org.machine_minutes_changed. */
+    let changes = 0;
+    const setOrgLimit = (orgId: string, minutes: number | null) =>
+        new PgCommandStore(pool).recordMachineMinuteLimit({ organizationId: orgId, minutesPerDay: minutes, updatedBy: 'owner-1', updatedAt: new Date(Date.UTC(2026, 10, 16, 0, 0, ++changes)).toISOString() });
+
+    it('keeps the newer limit when an older change is recorded after it', async () => {
+        const orgId = org();
+        const commands = new PgCommandStore(pool);
+        await commands.recordMachineMinuteLimit({ organizationId: orgId, minutesPerDay: 300, updatedBy: 'u', updatedAt: '2026-11-16T12:00:00.000Z' });
+        await commands.recordMachineMinuteLimit({ organizationId: orgId, minutesPerDay: 900, updatedBy: 'u', updatedAt: '2026-11-16T09:00:00.000Z' });
+        expect(await commands.machineMinuteLimit(orgId)).toBe(300);
+    });
+
+    it("refuses a claim the org's own daily limit cannot hold, under a deployment limit that could", async () => {
+        const orgId = org();
+        await setOrgLimit(orgId, 90);
+        expect(await budget.reserve({ claimId: `c-${randomUUID()}`, organizationId: orgId, needSeconds: HOUR, limitMinutes: 10_000 })).toEqual({ allowed: true });
+        expect(await budget.reserve({ claimId: `c-${randomUUID()}`, organizationId: orgId, needSeconds: HOUR, limitMinutes: 10_000 })).toEqual({
+            allowed: false,
+            spentMinutes: 60,
+            limitMinutes: 90,
+            needMinutes: 60,
+            source: 'org',
+        });
+        expect(await budget.orgLimit(orgId)).toBe(90);
+    });
+
+    it("never lets an org's own limit raise the deployment's", async () => {
+        const orgId = org();
+        await setOrgLimit(orgId, 1_000);
+        await budget.reserve({ claimId: `c-${randomUUID()}`, organizationId: orgId, needSeconds: HOUR, limitMinutes: 90 });
+        expect(await budget.reserve({ claimId: `c-${randomUUID()}`, organizationId: orgId, needSeconds: HOUR, limitMinutes: 90 })).toMatchObject({ allowed: false, limitMinutes: 90, source: 'deployment' });
+    });
+
+    it("holds an org to its own limit on a deployment without one, and to nothing once the org clears it", async () => {
+        const orgId = org();
+        await setOrgLimit(orgId, 60);
+        await budget.reserve({ claimId: `c-${randomUUID()}`, organizationId: orgId, needSeconds: HOUR, limitMinutes: 0 });
+        expect(await budget.reserve({ claimId: `c-${randomUUID()}`, organizationId: orgId, needSeconds: HOUR, limitMinutes: 0 })).toMatchObject({ allowed: false, limitMinutes: 60, source: 'org' });
+        await setOrgLimit(orgId, null);
+        expect(await budget.reserve({ claimId: `c-${randomUUID()}`, organizationId: orgId, needSeconds: HOUR, limitMinutes: 0 })).toEqual({ allowed: true });
+    });
+
+    it("does not hold an org to another org's own limit", async () => {
+        const [tight, other] = [org(), org()];
+        await setOrgLimit(tight, 30);
+        expect(await budget.reserve({ claimId: `c-${randomUUID()}`, organizationId: other, needSeconds: HOUR, limitMinutes: 10_000 })).toEqual({ allowed: true });
+        expect(await budget.orgLimit(other)).toBeNull();
     });
 
     it('counts a claim that ended by the minutes it held, not by the ceiling it reserved', async () => {

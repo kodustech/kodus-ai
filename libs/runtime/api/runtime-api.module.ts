@@ -90,6 +90,7 @@ import {
 import {
     GetRuntimeSettingsUseCase,
     GetRuntimeMachineMinutesUseCase,
+    UpdateRuntimeMachineMinutesUseCase,
     UpdateRuntimeOrgSettingsUseCase,
     UpdateRuntimeRepositorySettingsUseCase,
 } from './application/use-cases/settings.use-cases';
@@ -218,6 +219,7 @@ const useCases = [
     UpdateEnvironmentSettingsUseCase,
     GetRuntimeSettingsUseCase,
     GetRuntimeMachineMinutesUseCase,
+    UpdateRuntimeMachineMinutesUseCase,
     GetRuntimeUsageReportUseCase,
     GetRuntimeHealthUseCase,
     UpdateRuntimeOrgSettingsUseCase,

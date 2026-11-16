@@ -4,10 +4,12 @@ The body of a Run: the DBOS workflow code that boots base and PR, plans probes, 
 
 ## Owns
 - The workflow: `run-orchestrator.ts` `runRuntimeRun` (`startRun`, `endBeforeBoot`, `bootSides`, `settleBoot`, `testSides`, `reportVerdict`, `finishRun`), the fork gate `awaitForkApproval` and `finalizeStoppedRun` for a stopped Run. `QUEUE_TIMEOUT_MS` (30 min) and `RUN_TIMEOUT_MS` (45 min).
-- Boot: `acquireRequest` (carries the Run's canaries, derived again on every replay), `bootBoth` (base first, `BASE_FIRST_MAX_MS`), waiting for room on a cell (ADR-070), one more try per side on a lost cell, the image pin from the acquired manifests, `releaseClaims`.
+- Boot: `acquireRequest` (carries the Run's canaries, derived again on every replay, and the Run's drawn identity, `run-identity.ts` `runIdentityOf`: an HMAC of the runId under the runToken, the same on both sides, S-36), `bootBoth` (base first, `BASE_FIRST_MAX_MS`), waiting for room on a cell (ADR-070), one more try per side on a lost cell, the image pin from the acquired manifests, `releaseClaims`.
 - Planning while the PR boots: `early-plan.ts` (the plan step and the base's first rounds, `FirstBaseRounds`); reusing a past accepted plan: `plan-reuse.ts` `planReuseKey`, `StepPastPlans`; an external finding's closed plan: `external-verification.ts` `externalVerificationPlan`.
 - Replay: `replay.ts` (base twice and PR once per probe, plus the gate's extra rounds; `runBatch` plays base and PR side by side; `playFirstBaseRound`; browser probes on a fixed clock), `probe-fields.ts` `toGateStep`.
+- Stability history (ADR-050): `run-orchestrator.ts` `replayProbes` reads it in one step (`stability:read`) before the first replay and records each probe's outcome in one step (`stability:record`) after the last verdict, only when `RunDeps.stability` is wired; every verdict carries `normalizerVersion` and `stabilityPolicy`. Port `ports.ts` `StabilityHistory`; Postgres store `pg-stability-history.ts` (`runtime.runtime_stability`, org + environment + probe key, 90 days).
 - The structured result: `report.ts` `buildReport`, `uncoveredOf`, `bootBlockerOf`; `comment.ts` `buildComment`; `publish` and the progress comment in `run-orchestrator.ts`; `run-estimates.ts` `phaseEstimates`; `build-steps.ts`.
+- Drawn identity: a probe names the seeded user, the seed's e-mail domain and the hostname by `RUN_IDENTITY_TOKENS` (`{{run.user}}`, `{{run.domain}}`, `{{run.hostname}}`), never by value; the replay swaps in the base claim's `Claim.identity` (`withRunIdentity`) for every round of both sides, so a reused plan stays right. A claim from a cell without `runIdentity` has none, and the tokens stay.
 - Halts: `security-violation.ts` `SecurityViolationError` (a cell's `security_violation` from boot, a step or a hub blocker) and canary leaks (`worker/canary`), both a failing check.
 - Leases while the Run works: `lease-keeper.ts` `ClaimLeaseKeeper`, outside the DBOS journal by design.
 - Recipe facts of the request: `recipe-change.ts` `recipeChangedInPr`, `changesOnlyTheRecipe`, `memberNotBootedOf`.
@@ -40,7 +42,7 @@ The body of a Run: the DBOS workflow code that boots base and PR, plans probes, 
 
 ## Module map
 
-Files (18, tests apart): `build-steps.ts`, `comment.ts`, `early-plan.ts`, `external-verification.ts`, `lease-keeper.ts`, `plan-reuse.ts`, `ports.ts`, `probe-fields.ts`, `recipe-change.ts`, `replay.ts`, `report.ts`, `run-estimates.ts`, `run-evidence.ts`, `run-log.ts`, `run-orchestrator.ts`, `security-violation.ts`, `step-id.ts`, `testing.ts`
+Files (20, tests apart): `build-steps.ts`, `comment.ts`, `early-plan.ts`, `external-verification.ts`, `lease-keeper.ts`, `pg-stability-history.ts`, `plan-reuse.ts`, `ports.ts`, `probe-fields.ts`, `recipe-change.ts`, `replay.ts`, `report.ts`, `run-estimates.ts`, `run-evidence.ts`, `run-identity.ts`, `run-log.ts`, `run-orchestrator.ts`, `security-violation.ts`, `step-id.ts`, `testing.ts`
 
 Imports these Runtime modules:
 

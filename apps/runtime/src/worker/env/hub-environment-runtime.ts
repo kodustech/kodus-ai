@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { request as httpRequest } from 'http';
 import { Agent as HttpsAgent, request as httpsRequest } from 'https';
 
-import type { AcquireOptions, AcquireRequest, BakeOutcome, BakeRequest, Blocked, Blocker, Claim, ClaimProgress, Consumer, EnvError, EnvironmentRuntime, ExecRequest, LeaseRenewal, PoolTargetRequest, ProbeOutcome, StepResult } from '@libs/runtime/environment';
-import { bootTimedOut, isolationUnavailable, readyTimeoutMinutes } from '@libs/runtime/environment';
+import type { AcquireOptions, AcquireRequest, BakeOutcome, BakeRequest, Blocked, Blocker, Claim, ClaimProgress, Consumer, EnvError, EnvironmentHealth, EnvironmentRuntime, ExecRequest, LeaseRenewal, PoolTargetRequest, ProbeOutcome, StepResult, UploadRequest } from '@libs/runtime/environment';
+import { bootTimedOut, environmentHealthOf, isolationUnavailable, readyTimeoutMinutes } from '@libs/runtime/environment';
 import type { Probe } from '@libs/runtime/probe';
 import type { ClaimRepo, EvidenceRequest, RepoRef } from '@libs/runtime/protocol';
 import { type ClaimWorkspace, type RunStreamEvent, workspaceSideOf } from '@libs/runtime/run';
@@ -252,6 +252,11 @@ export interface HubRunContext {
      * first among the eligible cells. Any failure finding it is no preference.
      */
     preferCell?: (organizationId: string, environmentId: string) => Promise<string | undefined>;
+    /**
+     * The health of an environment of this org (EnvironmentRuntime.status), from
+     * what the worker already keeps (the setup record); absent: not_set_up.
+     */
+    health?: (organizationId: string, environmentId: string) => Promise<EnvironmentHealth>;
 }
 
 /**
@@ -330,6 +335,9 @@ function workspacePrimaryAlias(alias: string, fullName: string): Blocked {
     };
     return { status: 'blocked', blockers: [blocker] };
 }
+
+/** How long the cell may take to write an upload's files (each fetched from the evidence store). */
+export const UPLOAD_TIMEOUT_MS = 120_000;
 
 /** One EnvironmentRuntime per Run (or setup), over the hub's internal listener. */
 export class HubEnvironmentClient implements EnvironmentRuntime {
@@ -507,6 +515,19 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
             if (e instanceof HubRefused) return { code: 'transport_lost', stepId };
             throw e;
         }
+    }
+
+    /** upload through the claim's replica (the protocol's upload frame); a cell that cannot take files answers upload_unavailable. */
+    async upload(claimId: string, req: UploadRequest): Promise<void | EnvError> {
+        const r = await this.onClaim<{ ok?: boolean; code?: string }>(claimId, '/upload', { stepId: req.stepId, files: req.files }, TIMEOUT.step(UPLOAD_TIMEOUT_MS));
+        if (r && 'code' in r && r.code) return r as EnvError;
+    }
+
+    /** status of an environment of this client's org only; another org's reads as never set up. */
+    async status(req: { organizationId: string; environmentId: string }): Promise<EnvironmentHealth> {
+        const none = environmentHealthOf({ environmentId: req.environmentId }, new Date());
+        if (req.organizationId !== this.run.organizationId || !this.run.health) return none;
+        return this.run.health(req.organizationId, req.environmentId);
     }
 
     async release(claimId: string): Promise<void> {

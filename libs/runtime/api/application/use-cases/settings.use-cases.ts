@@ -3,7 +3,9 @@ import { BadRequestException, Inject, Injectable, NotFoundException, ServiceUnav
 import { Action, ResourceType } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import type { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
-import { DEFAULT_MACHINE_MINUTES_PER_ORG_DAY } from '@libs/runtime/environment/machine-minutes';
+import { IOutboxMessageRepository, OUTBOX_MESSAGE_REPOSITORY_TOKEN } from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
+import { RuntimeCommandName, runtimeCommandOutboxMessage } from '@libs/runtime/contracts/runtime-commands';
+import { DEFAULT_MACHINE_MINUTES_PER_ORG_DAY, MAX_ORG_MACHINE_MINUTES_PER_DAY } from '@libs/runtime/environment/machine-minutes';
 
 import { machineMinutesToday, type RuntimeMachineMinutesToday } from '../../domain/machine-minutes-today';
 import {
@@ -105,6 +107,37 @@ export class GetRuntimeMachineMinutesUseCase {
         const today = await this.usage.today(organizationId);
         if (!today) throw new ServiceUnavailableException('Runtime machine minutes are not readable on this deployment');
         return machineMinutesToday(today, this.config.machineMinutesPerOrgDay ?? DEFAULT_MACHINE_MINUTES_PER_ORG_DAY, this.clock());
+    }
+}
+
+/**
+ * PATCH /runtime/settings/machine-minutes { minutesPerDay: positive integer | null } — org admin (spec v18 PR 2).
+ * The org's own daily machine minutes lower the deployment's RUNTIME_MACHINE_MINUTES_PER_ORG_DAY, never raise it;
+ * null goes back to the deployment's. It reaches the hub as runtime.org.machine_minutes_changed (the Runtime
+ * Postgres is the hub's; the API only reads it), so the hub applies it from the next claim round.
+ */
+@Injectable()
+export class UpdateRuntimeMachineMinutesUseCase {
+    constructor(
+        @Inject(OUTBOX_MESSAGE_REPOSITORY_TOKEN)
+        private readonly outbox: Pick<IOutboxMessageRepository, 'create'>,
+        @Inject(RUNTIME_CLOCK)
+        private readonly clock: Clock,
+    ) {}
+
+    async execute(input: { user: Partial<IUser>; body: unknown }): Promise<{ minutesPerDay: number | null; changedAt: string }> {
+        const organizationId = orgOf(input.user);
+        const v = ((input.body ?? {}) as Record<string, unknown>).minutesPerDay;
+        if (v !== null && !(typeof v === 'number' && Number.isInteger(v) && v > 0 && v <= MAX_ORG_MACHINE_MINUTES_PER_DAY)) {
+            throw new BadRequestException(`minutesPerDay must be a whole number of minutes from 1 to ${MAX_ORG_MACHINE_MINUTES_PER_DAY}, or null`);
+        }
+        const changedAt = this.clock().toISOString();
+        const key = `machine-minutes:${organizationId}:${changedAt}`;
+        const changedBy = { userId: input.user.uuid!, ...(input.user.email ? { email: input.user.email } : {}) };
+        await this.outbox.create(
+            runtimeCommandOutboxMessage(RuntimeCommandName.MachineMinutesChanged, { organizationId, minutesPerDay: v as number | null, changedBy, changedAt, key }, key),
+        );
+        return { minutesPerDay: v as number | null, changedAt };
     }
 }
 

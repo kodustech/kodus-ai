@@ -207,6 +207,46 @@ describe('HubEnvironmentClient', () => {
         expect(calls).toHaveLength(0);
     });
 
+    it("an upload goes to the claim's replica with the tenant, the step and the files; a cell that cannot take files is upload_unavailable", async () => {
+        const calls: Call[] = [];
+        const files = [{ path: 'fixtures/a.json', contentRef: 'ref-1' }];
+        expect(await runtime(client(recording(calls, 200, '{"ok":true}'))).upload('c1', { stepId: 's1', files })).toBeUndefined();
+        expect(calls[0].url).toBe('https://hub-1/internal/claims/c1/upload');
+        expect(calls[0].body).toEqual({ organizationId: 'org-a', runId: 'run-1', stepId: 's1', files });
+        expect(await runtime(client(recording([], 200, '{"code":"upload_unavailable"}'))).upload('c1', { stepId: 's2', files })).toEqual({ code: 'upload_unavailable' });
+        expect(await runtime(client(recording([]), null)).upload('c1', { stepId: 's3', files })).toEqual({ code: 'cell_unavailable', cellId: 'unknown' });
+    });
+
+    it("status reads the health of an environment of the Run's own org only, from the health reader it was given", async () => {
+        const asked: string[][] = [];
+        const env = new HubEnvironmentClient(client(recording([])), secrets, {
+            correlationId: 'corr',
+            organizationId: 'org-a',
+            repo: { provider: 'github', fullName: 'acme/shop', apiBase: 'https://api.github.com' } as any,
+            sealedRepoToken: secrets.seal('ghs_plain', 'k'),
+            tokenBinding: 'k',
+            imageId: 'img',
+            expose: [],
+            health: async (org, id) => {
+                asked.push([org, id]);
+                return { environmentId: id, state: 'active', boots7d: 3, bootRate7d: 1, blockers: [] };
+            },
+        });
+        expect(await env.status({ organizationId: 'org-a', environmentId: 'env-1' })).toMatchObject({ state: 'active', boots7d: 3 });
+        expect(await env.status({ organizationId: 'org-b', environmentId: 'env-1' })).toEqual({ environmentId: 'env-1', state: 'not_set_up', boots7d: 0, blockers: [] });
+        expect(await runtime(client(recording([]))).status({ organizationId: 'org-a', environmentId: 'env-2' })).toEqual({ environmentId: 'env-2', state: 'not_set_up', boots7d: 0, blockers: [] });
+        expect(asked).toEqual([['org-a', 'env-1']]);
+    });
+
+    it('the production factory reads health from the setup record of the same org', async () => {
+        const rec = { organizationId: 'org-a', environmentId: 'env-1', state: 'active', imageId: 'img-1', blockers: [], boots: [] };
+        const make = hubEnvironments(client(recording([])), secrets, { provider: 'github', apiBase: 'https://api.github.com' } as any, undefined, { get: async () => rec as any });
+        const env = make({ correlationId: 'c', organizationId: 'org-a', fullName: 'acme/shop', sealedRepoToken: secrets.seal('t', 'k'), tokenBinding: 'k', imageId: 'img', expose: [] } as any);
+        expect(await env.status!({ organizationId: 'org-a', environmentId: 'env-1' })).toMatchObject({ state: 'active', imageId: 'img-1' });
+        const other = make({ correlationId: 'c', organizationId: 'org-b', fullName: 'acme/shop', sealedRepoToken: secrets.seal('t', 'k'), tokenBinding: 'k', imageId: 'img', expose: [] } as any);
+        expect(await other.status!({ organizationId: 'org-b', environmentId: 'env-1' })).toMatchObject({ state: 'not_set_up' });
+    });
+
     it('every claim call names its tenant: the org and the Run (null for a setup)', async () => {
         const calls: Call[] = [];
         await runtime(client(recording(calls))).probe('c1', { id: 'p', spec: { timeoutMs: 1_000 } } as any, 's1');

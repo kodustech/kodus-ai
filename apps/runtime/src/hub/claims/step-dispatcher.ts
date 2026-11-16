@@ -28,7 +28,7 @@ import type { ClaimService } from './claim.service';
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 
-type StepKind = 'probe.run' | 'exec' | 'machine.reset' | 'browser.explore' | 'sandbox.op' | 'claim.snapshot';
+type StepKind = 'probe.run' | 'exec' | 'machine.reset' | 'browser.explore' | 'sandbox.op' | 'claim.snapshot' | 'upload';
 // Known cell admission failures only. A customer's arbitrary nack code is not
 // diagnostic data and must not reach a stream, span or structured log.
 const STEP_REFUSALS = new Set([
@@ -121,6 +121,8 @@ export class StepDispatcher {
                 this.hubMetrics.step(durationMs, { kind: type, outcome: 'refused' });
                 this.log('warn', 'step.refused', { ...ids, code, durationMs });
                 await this.appendStepEvent(claim.orgId, claim.runId, { type: 'step.finished', data: { stepId, outcome: 'refused', transport: 'ok', code, durationMs } }, `step:${stepId}:finished`);
+                // A cell that cannot take files said so: the caller can tell it from a lost connection.
+                if (type === 'upload' && (result.code === 'not_implemented' || result.code === 'not_supported')) return { code: 'upload_unavailable' };
                 switch (result.code) {
                     case 'claim_compromised':
                         return { code: 'security_violation', claimId: claim.claimId, signature: (await this.claims.violationOf(claim.claimId)) ?? 'unknown' };
@@ -384,5 +386,16 @@ export class StepDispatcher {
             return { code: 'transport_lost', stepId };
         }
         return { ok: true, ...(r.body.durationMs !== undefined ? { durationMs: r.body.durationMs } : {}) };
+    }
+
+    /**
+     * upload: the files written into the claim's checkout from the evidence
+     * store (docs §5). The command hash covers every path and ref, so a stepId
+     * sent again with other files is a reused step.
+     */
+    async upload(ref: ClaimRef, req: MessageBody<'upload'>, timeoutMs: number = 120_000): Promise<{ ok: true } | EnvError> {
+        const r = await this.sendStep(ref, 'upload', { stepId: req.stepId, files: req.files }, `upload:${JSON.stringify(req.files)}`, timeoutMs);
+        if ('code' in r) return r;
+        return { ok: true };
     }
 }

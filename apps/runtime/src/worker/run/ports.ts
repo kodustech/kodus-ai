@@ -84,6 +84,31 @@ export interface RunLog {
 }
 
 import type { PastPlans } from './plan-reuse';
+import type { StabilityRecord } from '@libs/runtime/gate';
+
+/** One probe's outcome in a Run, as the runtime_stability history keeps it (ADR-050). */
+export interface StabilityOutcome {
+    probeKey: string;
+    /** The probe's index in the plan: one Run may play the same shape twice. */
+    probeIndex: number;
+    normalizerVersion: string;
+    /** Fields that varied between this Run's healthy base rounds; never the PR's (S-36). */
+    unstableFields: string[];
+    verdict: StabilityRecord['verdict'];
+    baseRounds: number;
+    prRounds: number;
+}
+
+/**
+ * The versioned stability history, org-scoped and by environment and probe shape
+ * (runtime_stability, §8, 90 days). Both calls run inside a step of the Run.
+ */
+export interface StabilityHistory {
+    /** The records of each key within retention, newest first, at most a bounded number per key. */
+    read(scope: { orgId: string; environmentId: string }, probeKeys: string[]): Promise<Record<string, StabilityRecord[]>>;
+    /** Idempotent per Run and probe index: a retried step writes nothing twice. */
+    record(scope: { orgId: string; environmentId: string; runId: string }, outcomes: StabilityOutcome[]): Promise<void>;
+}
 
 export interface RunDeps {
     step: StepRunner;
@@ -123,4 +148,6 @@ export interface RunDeps {
     roundSnapshots?: boolean;
     /** Earlier Runs' accepted plans, for a Run of the same head (plan-reuse.ts); absent: every Run plans. */
     pastPlans?: PastPlans;
+    /** The probes' stability history (ADR-050); absent: every probe starts with the table's default and nothing is recorded. */
+    stability?: StabilityHistory;
 }

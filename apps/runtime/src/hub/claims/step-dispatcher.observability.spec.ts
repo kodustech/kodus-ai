@@ -27,11 +27,13 @@ describe('step dispatch diagnostics', () => {
         conn.helloDone = true;
         const events: Array<{ type: string; data: Record<string, unknown> }> = [];
         const logs: Array<Record<string, unknown>> = [];
+        const sent: Array<{ type: string; body: Record<string, unknown> }> = [];
         const connections = {
             get: () => conn,
             envelope: (cellId, type, body, extra) => ({ v: 1, id: randomUUID(), cellId, type, body, ...extra }),
             ack: () => {},
             send: (_conn, frame) => {
+                sent.push(frame);
                 if (response === 'timeout') return true;
                 void Promise.resolve().then(async () => {
                     if (response === 'lost') {
@@ -63,7 +65,8 @@ describe('step dispatch diagnostics', () => {
         );
         const req = { stepId: randomUUID(), command: 'fixture command', timeoutMs: 1000 };
         return {
-            req, events, logs,
+            req, events, logs, sent,
+            upload: () => dispatcher.upload({ claimId: claim.claimId, organizationId: claim.orgId }, { stepId: req.stepId, files: [{ path: 'fixtures/a.json', contentRef: 'ref-1' }] }),
             exec: () => dispatcher.exec({ claimId: claim.claimId, organizationId: claim.orgId }, req),
             probe: () => dispatcher.probe({ claimId: claim.claimId, organizationId: claim.orgId }, { id: 'probe-fixture', origin: 'agent', spec: { kind: 'http', target: { service: 'app', port: 3000 }, method: 'GET', path: '/', timeoutMs: 1000 }, purpose: 'fixture', expected: '200', compare: ['status'] }, req.stepId),
             reset: () => dispatcher.reset({ claimId: claim.claimId, organizationId: claim.orgId }, 'image-fixture', req.stepId),
@@ -124,5 +127,21 @@ describe('step dispatch diagnostics', () => {
     ])('never treats an unsuccessful reset as a completed clean round: %j', async failure => {
         const f = fixture({ stepId: randomUUID(), executor: 'vm', imageId: 'image-fixture', ...failure });
         expect(await f.reset()).toMatchObject({ code: 'transport_lost' });
+    });
+
+    it('an upload is one upload frame with the step and the files; the cell\'s result is ok', async () => {
+        const f = fixture({ stepId: 'x', executor: 'vm', vmHealth: 'ok' } as MessageBody<'step.result'>);
+        expect(await f.upload()).toEqual({ ok: true });
+        expect(f.sent).toEqual([expect.objectContaining({ type: 'upload', body: { stepId: f.req.stepId, files: [{ path: 'fixtures/a.json', contentRef: 'ref-1' }] } })]);
+    });
+
+    it.each(['not_implemented', 'not_supported'])('a cell that answers an upload %s is upload_unavailable, never a lost transport', async (code) => {
+        const f = fixture({ refused: code });
+        expect(await f.upload()).toEqual({ code: 'upload_unavailable' });
+    });
+
+    it('an exec the cell answers not_implemented stays a lost transport', async () => {
+        const f = fixture({ refused: 'not_implemented' });
+        expect(await f.exec()).toMatchObject({ code: 'transport_lost' });
     });
 });

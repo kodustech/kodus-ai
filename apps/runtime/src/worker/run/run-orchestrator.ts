@@ -1,7 +1,7 @@
 import { coveredEntryPoint, diffRefOf, extractEntryPoints, noRuntimeEffectOf } from '@libs/runtime/entry-points';
 import { exercisedOf } from '@libs/runtime/probe/exercised';
 import { AcquireRequest, Blocked, Claim, isBlocked, isCapacityWait, readyDeadlineOf } from '@libs/runtime/environment';
-import { browserStepKindsOf, decideIntendedChange, decideNewEndpoint, GateStep, LATEST_IMAGE, markUnbackedClaims } from '@libs/runtime/gate';
+import { baseUnstableFields, browserStepKindsOf, decideIntendedChange, decideNewEndpoint, GateStep, LATEST_IMAGE, markUnbackedClaims, NORMALIZER_VERSION, probeKeyOf, StabilityRecord, stabilityPolicyFor } from '@libs/runtime/gate';
 import {
     canTransition,
     decideRunVerdict,
@@ -38,12 +38,13 @@ import { buildComment } from './comment';
 import { changesOnlyTheRecipe, memberNotBootedOf, recipeChangedInPr } from './recipe-change';
 import { planReuseKey } from './plan-reuse';
 import { TEST_PLANNER_VERSION } from '@libs/runtime/planner/test-planner.agent';
-import type { ForkApprovals, RunDeps } from './ports';
+import type { ForkApprovals, RunDeps, StabilityOutcome } from './ports';
 import { RunLeaseHolds } from './lease-keeper';
 import { checkClaimLease, type ClaimLeaseFailed, throwClaimLeaseFailure } from '../env/claim-liveness';
 import { isCancellation } from '../workflow-cancellation';
 import { type SecurityViolation, SecurityViolationError } from './security-violation';
 import { playFirstBaseRound, replayProbe, type RoundOut } from './replay';
+import { runIdentityOf, withRunIdentity } from './run-identity';
 import { stableStepId } from './step-id';
 import { claimIdFor } from '../../shared/claim-id';
 import { externalVerificationPlan } from './external-verification';
@@ -161,6 +162,8 @@ export function acquireRequest(req: RuntimeRunRequested, side: 'base' | 'pr', re
         ...(req.environment.size ? { size: req.environment.size } : {}),
         // Planted by the cell in both sides' workloads: a sighting anywhere halts the Run.
         ...(canaries.length ? { canaries: canaries.map((c) => ({ slot: c.slot, value: c.value })) } : {}),
+        // The Run's drawn hostname, seed user and domain (S-36): the same on both sides.
+        identity: runIdentityOf(req),
         // The PR side of a fork runs code nobody in the org wrote: the environment's approved egress hosts never reach it.
         ...(side === 'pr' && req.pullRequest.fork ? { forkPullRequest: true } : {}),
     };
@@ -1184,7 +1187,8 @@ async function baseAhead(run: RunScope, firstBase: Promise<AcquireTry>, plan: Ag
             out = await playFirstBaseRound({
                 run: { runId: req.runId, attempt: req.attempt },
                 index,
-                probe: planned.probe,
+                // The Run's drawn identifiers in place of their tokens, as the base claim set them (S-36).
+                probe: withRunIdentity(planned.probe, base.identity),
                 assertions: planned.assertions,
                 securityOf,
                 baseClaimId: base.claimId,
@@ -1264,12 +1268,22 @@ async function replayProbes(run: RunScope, ready: ReadySides, t: TestedRun, beha
         const diffRef = diffRefOf({ entryPoint, via, entryPoints: t.entryPoints, files: req.diff });
         return diffRef ? { diffRef } : {};
     };
+    // The probes' stability history (ADR-050): read once, in one step, before the first replay.
+    const scope = { orgId: req.organizationId, environmentId: req.environment.environmentId };
+    const keys = plan.probes.map((p) => probeKeyOf(p.probe.spec));
+    const wanted = [...new Set(keys.filter((k): k is string => !!k))].sort();
+    const stability = deps.stability;
+    const history: Record<string, StabilityRecord[]> = stability && wanted.length ? await deps.step('stability:read', () => stability.read(scope, wanted)) : {};
+    const outcomes: StabilityOutcome[] = [];
     for (const [index, planned] of plan.probes.entries()) {
+        const key = keys[index];
+        const policy = stabilityPolicyFor(key ? (history[key] ?? []) : []);
         const replayed = await run.span('runtime.run.replay')(() =>
             replayProbe({
                 run: { runId: req.runId, attempt: req.attempt },
                 index,
-                probe: planned.probe,
+                // As the first base round played it: the base claim's identity, the same probe on both sides (S-36).
+                probe: withRunIdentity(planned.probe, ready.base.identity),
                 assertions: planned.assertions,
                 securityOf,
                 claims: { base: ready.base.claimId, pr: ready.pr.claimId },
@@ -1281,9 +1295,21 @@ async function replayProbes(run: RunScope, ready: ReadySides, t: TestedRun, beha
                 ...(req.environment.ready ? { ready: req.environment.ready } : {}),
                 ...(deps.evidence ? { evidence: runEvidence(deps, req, 'probe') } : {}),
                 ...withFirstBaseRound(firstBaseRoundOf(run, ready, index)),
+                stability: policy,
             }),
         );
         const { steps, lanes, responseDiff } = replayed;
+        if (key) {
+            outcomes.push({
+                probeKey: key,
+                probeIndex: index,
+                normalizerVersion: NORMALIZER_VERSION,
+                unstableFields: baseUnstableFields(steps),
+                verdict: replayed.decision.verdict,
+                baseRounds: steps.filter((x) => x.side === 'base').length,
+                prRounds: steps.filter((x) => x.side === 'pr').length,
+            });
+        }
         t.allSteps.push(...steps);
         // What the probe covered comes from the observer's request log on both
         // sides, never from the label the agent wrote.
@@ -1312,6 +1338,8 @@ async function replayProbes(run: RunScope, ready: ReadySides, t: TestedRun, beha
             reason: intendedChange ? redactPatterns(decision.reason).text : decision.reason,
             ...(intendedChange ? { intendedChange } : {}),
             differingFields: decision.differingFields,
+            normalizerVersion: NORMALIZER_VERSION,
+            stabilityPolicy: policy.snapshot,
             baseStepIds: steps.filter((x) => x.side === 'base').map((x) => x.stepId),
             prStepIds: steps.filter((x) => x.side === 'pr').map((x) => x.stepId),
             ...(lanes ? { lanes } : {}),
@@ -1320,6 +1348,7 @@ async function replayProbes(run: RunScope, ready: ReadySides, t: TestedRun, beha
         });
         deps.metrics.recordVerdict(decision.verdict, { orgId: req.organizationId });
     }
+    if (stability && outcomes.length) await deps.step('stability:record', () => stability.record({ ...scope, runId: req.runId }, outcomes));
 }
 
 /** A finding the diff already explains is intended: no classifier turn is spent on it. */

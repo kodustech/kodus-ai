@@ -9,6 +9,7 @@ import {
     RuntimeEgressApprovedSchema,
     RuntimeEgressRevokedSchema,
     RuntimeEgressSettingsChangedSchema,
+    RuntimeMachineMinutesChangedSchema,
     RuntimeLessonUpdateRequestedSchema,
     RuntimeEnvironmentPoolRequestedSchema,
     RuntimeEnvironmentSetupRequestedSchema,
@@ -138,6 +139,19 @@ export class EgressSettingsChangedHandler implements CommandHandler {
             key: d.key, organizationId: d.organizationId, action: 'settings', actor: d.changedBy.userId, source: 'settings',
             recommendedVersion: RECOMMENDED_EGRESS_VERSION, detail: { recommendedEnabled: d.recommendedEnabled, whoMayAdd: d.whoMayAdd }, at: d.changedAt,
         });
+    }
+}
+
+/** The org's own daily machine minutes (spec v18 PR 2): the hub reads it under the org day's lock on the next claim round. */
+export class MachineMinutesChangedHandler implements CommandHandler {
+    readonly event = RuntimeCommandName.MachineMinutesChanged;
+    constructor(private readonly commands: Pick<CommandStore, 'recordMachineMinuteLimit'>) {}
+
+    async handle(body: Record<string, unknown>) {
+        const p = RuntimeMachineMinutesChangedSchema.safeParse(body);
+        if (!p.success) return invalid('invalid machine minutes', p.error.message);
+        const d = p.data;
+        await this.commands.recordMachineMinuteLimit({ organizationId: d.organizationId, minutesPerDay: d.minutesPerDay, updatedBy: d.changedBy.userId, updatedAt: d.changedAt });
     }
 }
 

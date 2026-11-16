@@ -115,6 +115,13 @@ export interface ProbeVerdict {
     intent?: FindingIntent;
     reason: string;
     differingFields?: string[];
+    /**
+     * The field extraction the verdict compared with (gate/stability.ts NORMALIZER_VERSION)
+     * and the stability policy it started from, history included, as one snapshot (ADR-050).
+     * Absent on verdicts decided before they were recorded.
+     */
+    normalizerVersion?: string;
+    stabilityPolicy?: string;
     /** Observer steps of each side, for the evidence links. */
     baseStepIds?: string[];
     prStepIds?: string[];

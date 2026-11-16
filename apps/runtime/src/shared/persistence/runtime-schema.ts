@@ -1,6 +1,8 @@
 import { inTransaction, lockKey, lockStatement } from '@libs/runtime/run/adapters/advisory-lock';
 import type { Pool } from 'pg';
 
+import { STABILITY_RETENTION_DAYS } from '@libs/runtime/gate/stability';
+
 // Tables of the Runtime database next to the DBOS system tables (docs §8).
 // The hub writes runtime_cell_sessions and runtime_steps_index. One exception:
 // the worker's PgCellDirectory (cell-directory.ts) decrements a session's
@@ -741,6 +743,45 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         // a Run's PR side whose cold build would pass its ready wait (claim.service.ts, architecture review P3).
         sql: `ALTER TABLE runtime.runtime_build_state_evictions ADD COLUMN IF NOT EXISTS rebuild_seconds integer;`,
     },
+    {
+        version: 35,
+        name: "the org's own daily machine minutes",
+        // Spec v18 PR 2 "teto de minutos de execução por org": an org admin lowers the deployment's
+        // RUNTIME_MACHINE_MINUTES_PER_ORG_DAY for the org (PATCH /runtime/settings machineMinutesPerDay). The API sends
+        // runtime.org.machine_minutes_changed; the runtime-worker writes this row; the hub reads it under the org day's
+        // lock in every reserve (pg-machine-minutes.store.ts). NULL = the deployment's limit.
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_org_machine_budget (
+            organization_id text PRIMARY KEY,
+            minutes_per_day integer CHECK (minutes_per_day IS NULL OR minutes_per_day > 0),
+            updated_by      text NOT NULL,
+            updated_at      timestamptz NOT NULL
+        );`,
+    },
+    {
+        // 35 is the org machine-minute budget (kr/minutes-cap); this one takes 36, applied in version order.
+        version: 36,
+        name: 'the versioned stability history of each probe shape',
+        // §8 and ADR-050: what varied on each probe's base, by org, environment and probe shape
+        // (gate/stability.ts probeKeyOf), with the normalizer version its field names belong to.
+        // One row per Run and probe index; only the base's varying fields, never the PR's (S-36).
+        // 90 days (applyRetention, STABILITY_RETENTION_DAYS), read by (org, environment, key, newest).
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_stability (
+            org_id text NOT NULL,
+            environment_id text NOT NULL,
+            run_id text NOT NULL,
+            probe_index integer NOT NULL,
+            probe_key text NOT NULL,
+            normalizer_version text NOT NULL,
+            unstable_fields text[] NOT NULL DEFAULT '{}',
+            verdict text NOT NULL,
+            base_rounds integer NOT NULL,
+            pr_rounds integer NOT NULL,
+            recorded_at timestamptz NOT NULL DEFAULT now(),
+            PRIMARY KEY (org_id, run_id, probe_index)
+        );
+        CREATE INDEX IF NOT EXISTS runtime_stability_key_idx ON runtime.runtime_stability (org_id, environment_id, probe_key, recorded_at DESC);
+        CREATE INDEX IF NOT EXISTS runtime_stability_recorded_brin ON runtime.runtime_stability USING brin (recorded_at);`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */
@@ -795,6 +836,8 @@ export async function applyRetention(pool: Pick<Pool, 'query'>, days = 30, batch
     ]) {
         removed += (await pool.query(sql, [days])).rowCount ?? 0;
     }
+    // The stability history keeps its own 90 days (§8), whatever the stream's retention.
+    removed += (await pool.query(`DELETE FROM runtime.runtime_stability WHERE recorded_at < now() - make_interval(days => $1)`, [STABILITY_RETENTION_DAYS])).rowCount ?? 0;
     // The stream is the big table: oldest seq first, in batches, until a batch comes back short.
     for (;;) {
         const n =

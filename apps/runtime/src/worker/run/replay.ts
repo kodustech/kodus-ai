@@ -1,4 +1,4 @@
-import { decideProbe, GateDecision, GateStep } from '@libs/runtime/gate';
+import { decideProbe, GateDecision, GateStep, StabilityPolicy } from '@libs/runtime/gate';
 import { EnvironmentRuntime, isEnvError } from '@libs/runtime/environment';
 import type { ProbeOutcome } from '@libs/runtime/environment';
 import type { Probe } from '@libs/runtime/probe';
@@ -81,6 +81,12 @@ export interface ReplayArgs {
     env: EnvironmentRuntime;
     step: StepRunner;
     maxRoundsPerSide?: number;
+    /**
+     * The probe's stability policy from its history (gate/stability.ts): how many base
+     * rounds it starts with and the fields known to vary on the base. Absent: the table's
+     * default, two base rounds and nothing known.
+     */
+    stability?: Pick<StabilityPolicy, 'baseRounds' | 'knownUnstableFields'>;
     onStep?: (s: GateStep) => Promise<void>;
     /** The Run's canaries: one in the observer's result stops the replay (ADR-043). */
     canaries?: Canary[];
@@ -274,10 +280,12 @@ export async function replayProbe(args: ReplayArgs): Promise<ReplayResult> {
         rounds.base = 1;
         await keepStep(await applyRound({ side: 'base', out: args.firstBaseRound }));
     }
-    let pending = { base: 2 - rounds.base, pr: 1 };
+    const knownUnstableFields = args.stability?.knownUnstableFields ?? [];
+    const startBase = Math.min(Math.max(2, args.stability?.baseRounds ?? 2), maxRounds);
+    let pending = { base: startBase - rounds.base, pr: 1 };
     for (let guard = 0; guard < maxRounds * 2 + 2; guard++) {
         await runBatch(pending);
-        const d = decideProbe(steps, { pinnedImageId: args.pinnedImageId, maxRoundsPerSide: maxRounds });
+        const d = decideProbe(steps, { pinnedImageId: args.pinnedImageId, maxRoundsPerSide: maxRounds, ...(knownUnstableFields.length ? { knownUnstableFields } : {}) });
         if (d.kind === 'verdict') return { decision: d, steps, ...lanesOf(d.differingFields), ...diffOf(d.differingFields, d.maskedFields) };
         if (rounds.base + d.base > maxRounds || rounds.pr + d.pr > maxRounds) break;
         pending = { base: d.base, pr: d.pr };

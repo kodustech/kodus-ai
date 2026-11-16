@@ -10,13 +10,16 @@ import {
     Blocked,
     Claim,
     EnvError,
+    EnvironmentHealth,
     EnvironmentRuntime,
     ExecRequest,
     ProbeOutcome,
     HARD_EXPIRY_MINUTES,
     LEASE_TTL_MINUTES,
     StepResult,
+    UploadRequest,
 } from './environment-runtime';
+import { environmentHealthOf, type EnvironmentHealthInput } from './environment-health';
 import { isolationUnavailable } from './isolation-blocker';
 
 export interface FakeEnvironment {
@@ -40,6 +43,10 @@ export class FakeEnvironmentRuntime implements EnvironmentRuntime {
     readonly resetRounds: Array<string | undefined> = [];
     /** The round snapshots taken, by claim. */
     readonly rounds = new Map<string, string>();
+    /** Every upload a live claim took, in order. */
+    readonly uploads: Array<{ claimId: string } & UploadRequest> = [];
+    /** Each acquire this fake answered with a claim or a blocker, by org and environment: what status reads. */
+    private readonly boots = new Map<string, Array<{ at: string; outcome: 'ready' | 'failed'; ms: number; signature?: string; kind?: string }>>();
 
     constructor(
         private readonly envs: Record<string, FakeEnvironment>,
@@ -49,6 +56,15 @@ export class FakeEnvironmentRuntime implements EnvironmentRuntime {
     async acquire(req: AcquireRequest): Promise<Claim | Blocked> {
         const existing = this.byKey.get(req.idempotencyKey);
         if (existing) return this.claims.get(existing)!.claim;
+        const r = await this.boot(req);
+        const key = `${req.organizationId}\u0000${req.environmentId}`;
+        const at = this.now().toISOString();
+        const b = 'blockers' in r ? r.blockers[0] : undefined;
+        this.boots.set(key, [...(this.boots.get(key) ?? []), b ? { at, outcome: 'failed', ms: 0, signature: b.signature, kind: b.kind } : { at, outcome: 'ready', ms: 0 }]);
+        return r;
+    }
+
+    private async boot(req: AcquireRequest): Promise<Claim | Blocked> {
 
         const env = this.envs[req.environmentId];
         if (!env) {
@@ -66,6 +82,8 @@ export class FakeEnvironmentRuntime implements EnvironmentRuntime {
             claimId,
             cellId: 'fake-cell',
             cellOwner: 'kodus',
+            // As the hub: a Run's claim carries the drawn identity its cell set (S-36).
+            ...(req.consumer === 'runtime' && req.identity ? { identity: req.identity } : {}),
             leaseExpiresAt: new Date(at + LEASE_TTL_MINUTES[req.consumer] * 60_000).toISOString(),
             hardExpiresAt: new Date(at + HARD_EXPIRY_MINUTES[req.consumer] * 60_000).toISOString(),
             observer: { id: `${claimId}-observer`, state: 'ready' },
@@ -127,6 +145,25 @@ export class FakeEnvironmentRuntime implements EnvironmentRuntime {
         const id = `ksn-${createHash('sha256').update(claimId).digest('hex').slice(0, 32)}`;
         this.rounds.set(claimId, id);
         return { id, ms: 1 };
+    }
+
+    async upload(claimId: string, req: UploadRequest): Promise<void | EnvError> {
+        if (!this.live(claimId)) return { code: 'lease_expired' };
+        this.uploads.push({ claimId, ...req });
+    }
+
+    /** The health of that org's environment from the boots this fake answered (the last one sets the state). */
+    async status(req: { organizationId: string; environmentId: string }): Promise<EnvironmentHealth> {
+        const boots = this.boots.get(`${req.organizationId}\u0000${req.environmentId}`) ?? [];
+        const last = boots[boots.length - 1];
+        const input: EnvironmentHealthInput = { environmentId: req.environmentId, boots };
+        if (last) {
+            input.state = last.outcome === 'ready' ? 'active' : 'blocked';
+            if (last.outcome === 'failed' && last.signature) input.blockers = [{ kind: last.kind ?? 'unknown', signature: last.signature, at: last.at }];
+            const env = this.envs[req.environmentId];
+            if (last.outcome === 'ready' && env) Object.assign(input, { imageId: env.imageId, cellId: 'fake-cell' });
+        }
+        return environmentHealthOf(input, this.now());
     }
 
     async release(claimId: string): Promise<void> {

@@ -1155,6 +1155,7 @@ describe('CellHub', () => {
                 seedsCache?: boolean;
                 size?: { memoryMb: number; cpus: number };
                 canaries?: { slot: 'npmrc' | 'config' | 'seed'; value: string }[];
+                identity?: { hostname: string; user: string; domain: string };
                 key: string;
             },
             reply: (claimId: string) => string,
@@ -1174,6 +1175,7 @@ describe('CellHub', () => {
                 ...(over.seedsCache ? { seedsCache: true } : {}),
                 ...(over.size ? { size: over.size } : {}),
                 ...(over.canaries ? { canaries: over.canaries } : {}),
+                ...(over.identity ? { identity: over.identity } : {}),
             });
             await tick();
             await tick();
@@ -1219,6 +1221,25 @@ describe('CellHub', () => {
             const older = await acquireAs(old, oc, { side: 'pr', consumer: 'runtime', runId: 'run-1', key: 'run-1:pr:1', canaries }, ready);
             expect(older.req.body).not.toHaveProperty('canaries');
             for (const v of canaries) expect(JSON.stringify([ctx.logs, old.logs])).not.toContain(v.value);
+        });
+
+        it("S-36: hands a Run's drawn identity to a cell that sets it and says so on the claim, never to an older cell or a setup", async () => {
+            const identity = { hostname: 'kr-3f9a1c0b', user: 'u3f9a1c0b7d', domain: 'd7e2b9a41c.test' };
+            const ctx = setup();
+            const c = await ctx.connect('cell-a', 'kodus', { ...CURRENT_CELL, features: [...CURRENT_CELL.features, 'runIdentity'] });
+            const run = await acquireAs(ctx, c, { side: 'pr', consumer: 'runtime', runId: 'run-1', key: 'run-1:pr:1', identity }, ready);
+            expect(run.req.body.identity).toEqual(identity);
+            expect(run.claim.identity).toEqual(identity);
+            // A setup's workload may be baked: a Run's values in it would be every later Run's.
+            const setupClaim = await acquireAs(ctx, c, { side: 'setup', consumer: 'setup', key: 'setup:c', identity }, ready);
+            expect(setupClaim.req.body).not.toHaveProperty('identity');
+            expect(setupClaim.claim).not.toHaveProperty('identity');
+            // A cell built before the field: its strict decoder would refuse the claim, and the probes must not expect the values.
+            const old = setup();
+            const oc = await old.connect('cell-a', 'kodus', CURRENT_CELL);
+            const older = await acquireAs(old, oc, { side: 'pr', consumer: 'runtime', runId: 'run-1', key: 'run-1:pr:1', identity }, ready);
+            expect(older.req.body).not.toHaveProperty('identity');
+            expect(older.claim).not.toHaveProperty('identity');
         });
 
         it('S-52: sends image.bake for a setup claim and returns what the cell answered', async () => {

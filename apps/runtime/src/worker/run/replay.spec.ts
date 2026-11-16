@@ -361,3 +361,25 @@ describe('base and PR rounds side by side', () => {
         expect(prEnded).toBe(true);
     });
 });
+
+describe('stability history (ADR-050)', () => {
+    const plain: StepRunner = (_name, fn) => fn();
+
+    it('a probe known unstable on the base starts with three base rounds; without history, two', async () => {
+        const rounds = async (stability?: { baseRounds: number; knownUnstableFields: string[] }) => {
+            const env = new FakeEnvironmentRuntime(SCENARIOS);
+            const claims = await shopClaims(env);
+            const { steps } = await replayProbe({ run: RUN, index: 0, probe, claims, pinnedImageId: 'img-shop-1', env, step: plain, ...(stability ? { stability } : {}) });
+            return steps.filter((s) => s.side === 'base').length;
+        };
+        expect(await rounds()).toBe(2);
+        expect(await rounds({ baseRounds: 3, knownUnstableFields: [] })).toBe(3);
+    });
+
+    it('never starts below the two base rounds the table needs, nor above the ceiling', async () => {
+        const env = new FakeEnvironmentRuntime(SCENARIOS);
+        const claims = await shopClaims(env);
+        const { steps } = await replayProbe({ run: RUN, index: 0, probe, claims, pinnedImageId: 'img-shop-1', env, step: plain, stability: { baseRounds: 0, knownUnstableFields: [] } });
+        expect(steps.filter((s) => s.side === 'base').length).toBe(2);
+    });
+});

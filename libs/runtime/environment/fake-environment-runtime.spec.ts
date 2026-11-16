@@ -106,4 +106,31 @@ describe('FakeEnvironmentRuntime', () => {
         await env2.release(c2.claimId);
         expect(await env2.reset(c2.claimId)).toEqual({ code: 'lease_expired' });
     });
+
+    it('takes the files of an upload on a live claim, and refuses one on a released claim', async () => {
+        const env = make();
+        const c = await env.acquire(req('base'));
+        if (isBlocked(c)) throw new Error('blocked');
+        const files = [{ path: 'fixtures/a.json', contentRef: 'ref-1', mode: 0o644 }];
+        expect(await env.upload(c.claimId, { stepId: STEP, files })).toBeUndefined();
+        expect(env.uploads).toEqual([{ claimId: c.claimId, stepId: STEP, files }]);
+        await env.release(c.claimId);
+        expect(await env.upload(c.claimId, { stepId: STEP, files })).toEqual({ code: 'lease_expired' });
+    });
+
+    it('status reads the boots this fake answered for that org and environment only', async () => {
+        const env = make();
+        await env.acquire(req('base'));
+        await env.acquire({ ...req('base', 'b2'), environmentId: 'broken' });
+        await env.acquire({ ...req('base', 'b3'), environmentId: 'broken' });
+        await env.acquire({ ...req('base', 'other-org'), organizationId: 'org-2', environmentId: 'broken' });
+        expect(await env.status({ organizationId: 'org-1', environmentId: 'shop' })).toMatchObject({ environmentId: 'shop', state: 'active', boots7d: 1, bootRate7d: 1, imageId: 'ami-1', blockers: [] });
+        expect(await env.status({ organizationId: 'org-1', environmentId: 'broken' })).toMatchObject({
+            state: 'blocked',
+            boots7d: 2,
+            bootRate7d: 0,
+            blockers: [{ signature: 'STRIPE_KEY', kind: 'missing_env', count: 2 }],
+        });
+        expect(await env.status({ organizationId: 'org-3', environmentId: 'shop' })).toEqual({ environmentId: 'shop', state: 'not_set_up', boots7d: 0, blockers: [] });
+    });
 });

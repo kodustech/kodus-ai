@@ -251,6 +251,8 @@ export function envErrorEvidence(e: EnvError): { code: EnvError['code']; reason:
             return { code: e.code, reason: 'the connection to the machine was lost during the step' };
         case 'security_violation':
             return { code: e.code, reason: "the cell saw this claim's code exfiltrate; the claim runs nothing more" };
+        case 'upload_unavailable':
+            return { code: e.code, reason: "the claim's cell cannot take files; nothing was written" };
     }
 }
 

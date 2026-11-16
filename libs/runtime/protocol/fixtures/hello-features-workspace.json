@@ -45,7 +45,8 @@
         "snapshots",
         "snapshotForget",
         "hostHardening",
-        "buildStateRebuildCost"
+        "buildStateRebuildCost",
+        "runIdentity"
       ],
       "maxClaimSize": {
         "memoryMb": 16384,

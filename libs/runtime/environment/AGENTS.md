@@ -3,9 +3,10 @@
 The one port for "this app up at this SHA" (docs §5, ADR-002): `EnvironmentRuntime`, which every consumer of a claim (a Run, a setup, an env session, a sandbox, a preview) calls in the runtime-worker. The control plane never talks to a cloud or a machine; the port's implementation sends messages through the hub to the cell. This module is the port, its types and the claim ceilings, plus an in-memory driver.
 
 ## Owns
-- The port: `environment-runtime.ts` `EnvironmentRuntime` (`acquire`, `probe`, `exec`, `reset`, `release`, and the optional `exploreBrowser`, `snapshotRound`, `renew`, `bake`, `poolTarget`, `progress`), with `AcquireRequest`, `Claim`, `Blocked`, `EnvError`, `ProbeOutcome`, `StepResult`.
+- The port: `environment-runtime.ts` `EnvironmentRuntime` (`acquire`, `probe`, `exec`, `reset`, `release`, and the optional `exploreBrowser`, `snapshotRound`, `renew`, `bake`, `poolTarget`, `progress`, `upload`, `status`), with `AcquireRequest`, `Claim`, `Blocked`, `EnvError`, `ProbeOutcome`, `StepResult`.
+- The health of an environment (`status`, docs §5): `EnvironmentHealth` in `environment-runtime.ts`, computed by `environment-health.ts` `environmentHealthOf` from what is already kept (the setup record's state, image, cell, the week's setup boots, its open blockers), never a cell or cloud call; a blocker kind outside `BLOCKER_KINDS` reads `unknown`. `UploadRequest` mirrors the protocol's `upload` frame; a cell that cannot take files is `EnvError` `upload_unavailable`.
 - Claim ceilings per consumer: `LEASE_TTL_MINUTES`, `HARD_EXPIRY_MINUTES`, `READY_TIMEOUT_MINUTES`, `readyTimeoutMinutes`, `readyDeadlineOf`, `bootTimedOut`.
-- Capacity refusals: `isCapacityWait`, `CAPACITY_WAIT_SIGNATURES`; `isolation-blocker.ts` `isolationUnavailable`; the org's daily machine minutes, `machine-minutes.ts` `decideMachineMinutes`, `claimCeilingSeconds`, `machineMinutesExhausted`.
+- Capacity refusals: `isCapacityWait`, `CAPACITY_WAIT_SIGNATURES`; `isolation-blocker.ts` `isolationUnavailable`; the org's daily machine minutes, `machine-minutes.ts` `decideMachineMinutes`, `effectiveMachineMinuteLimit` (the org's own limit lowers the deployment's, never raises it), `claimCeilingSeconds`, `machineMinutesExhausted` (names which limit refused).
 - The in-memory driver: `fake-environment-runtime.ts` `FakeEnvironmentRuntime` (scenarios, deterministic clock), used by specs, the fake cell (`apps/runtime/src/fake-cell`) and the worker's dev fake driver.
 
 ## Does not own
@@ -30,7 +31,7 @@ The one port for "this app up at this SHA" (docs §5, ADR-002): `EnvironmentRunt
 
 ## Module map
 
-Files (6, tests apart): `environment-runtime.ts`, `fake-environment-runtime.ts`, `index.ts`, `isolation-blocker.ts`, `machine-minutes.ts`, `testing.ts`
+Files (7, tests apart): `environment-health.ts`, `environment-runtime.ts`, `fake-environment-runtime.ts`, `index.ts`, `isolation-blocker.ts`, `machine-minutes.ts`, `testing.ts`
 
 Imports these Runtime modules:
 

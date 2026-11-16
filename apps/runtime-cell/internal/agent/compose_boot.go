@@ -70,6 +70,16 @@ func (a *Agent) bootCompose(ctx context.Context, c *claims.Claim, workload drive
 	if err := proj.AddEnvironment(secretEnv(c)); err != nil {
 		return blockerErr(protocol.BlockerKindPlatform, "compose_load", err)
 	}
+	// The Run's drawn identifiers (S-36): every service's env, after the
+	// recipe's so no checkout can pin them, and the hostname of a service
+	// that names none.
+	idEnv, idHost := claimIdentity(c.Acquire)
+	if err := proj.AddEnvironment(idEnv); err != nil {
+		return blockerErr(protocol.BlockerKindPlatform, "compose_load", err)
+	}
+	if err := proj.DefaultHostname(idHost); err != nil {
+		return blockerErr(protocol.BlockerKindPlatform, "compose_load", err)
+	}
 	// The Run's decoys (ADR-043): the config slot in every service's env,
 	// after the recipe's so no recipe can hide it; the driver plants the
 	// rest (the credentials file) at Up.

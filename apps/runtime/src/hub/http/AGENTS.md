@@ -4,7 +4,7 @@ The runtime-hub's HTTP routes on its two listeners: the public one for cells (re
 
 ## Owns
 - `public-cell.controller.ts` `PublicCellController`: `POST /cells/register` (rate limited per client address), `POST /cells/renew` (over mTLS with the current certificate), `GET /health` (says nothing about connected cells).
-- `internal.controller.ts` `InternalController`: every worker route (acquire, sandbox, sandbox-op, progress, probe, browser-explore, exec, reset, snapshot, bake, forget-sessions, pool-target, release, renew, preview-route/unroute, egress-policy, admission reserve/redeem/cancel/retarget-setup, `runs/:runId/events`, `GET /internal/health`) and their body schemas; `mapped` turns `ClaimScopeError` into 404, `CellUnavailableError` and `MemberCleanupPendingError` into 503.
+- `internal.controller.ts` `InternalController`: every worker route (acquire, sandbox, sandbox-op, progress, probe, browser-explore, exec, upload (the protocol's `upload` body plus the tenant), reset, snapshot, bake, forget-sessions, pool-target, release, renew, preview-route/unroute, egress-policy, admission reserve/redeem/cancel/retarget-setup, `runs/:runId/events`, `GET /internal/health`) and their body schemas; `mapped` turns `ClaimScopeError` into 404, `CellUnavailableError` and `MemberCleanupPendingError` into 503.
 - `admission.schema.ts`: `PhysicalAdmissionRequestSchema`, `PhysicalAdmissionTicketSchema`.
 - `registration-rate-limit.ts` `RegistrationRateLimit`: 10 attempts per address per minute, per replica.
 - `trace-context.interceptor.ts` `TraceContextInterceptor`: the worker's W3C `traceparent` joins hub spans to the Run's trace.

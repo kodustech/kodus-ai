@@ -21,6 +21,11 @@ export class PgRuntimeMachineUsageReader implements RuntimeMachineUsageReader {
                 [organizationId],
             )
         ).rows[0] as { seconds: string; held: string; open: string } | undefined;
-        return { seconds: Number(row?.seconds ?? 0), heldSeconds: Number(row?.held ?? 0), openRounds: Number(row?.open ?? 0) };
+        // The org's own limit (v35, granted in scripts/runtime/runtime-reader-grants.sql).
+        const own =
+            ((await this.db.query(`SELECT minutes_per_day FROM runtime.runtime_org_machine_budget WHERE organization_id = $1`, [organizationId])).rows[0] as
+                | { minutes_per_day: number | null }
+                | undefined)?.minutes_per_day ?? null;
+        return { seconds: Number(row?.seconds ?? 0), heldSeconds: Number(row?.held ?? 0), openRounds: Number(row?.open ?? 0), orgLimitMinutes: own };
     }
 }

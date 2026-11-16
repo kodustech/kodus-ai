@@ -1,8 +1,10 @@
 import { readFileSync } from 'fs';
 
 import type { PastPlans } from '../run/plan-reuse';
+import type { StabilityHistory } from '../run/ports';
 
-import type { Claim, EnvironmentRuntime } from '@libs/runtime/environment';
+import type { Claim, EnvironmentHealthInput, EnvironmentRuntime } from '@libs/runtime/environment';
+import { environmentHealthOf } from '@libs/runtime/environment';
 import type { RepoRef } from '@libs/runtime/protocol';
 import { type ClaimWorkspace, memberPullRequestAliasOf, type RunProjectionStore, runClaimWorkspace, type RuntimeRunRequested } from '@libs/runtime/run';
 import type { RuntimeMetrics } from '@libs/runtime/telemetry';
@@ -43,6 +45,8 @@ export interface HardExpiredClaims {
 export interface RunDependenciesOptions {
     /** Earlier Runs' accepted plans, for a Run of the same head (run/plan-reuse.ts). */
     pastPlans?: PastPlans;
+    /** The probes' versioned stability history (runtime_stability, ADR-050); absent: every probe starts with the table's default. */
+    stability?: StabilityHistory;
     /** The EnvironmentRuntime of a Run or a setup: the hub client in production, a fake in tests. */
     environment: (ctx: EnvironmentContext) => EnvironmentRuntime;
     /** Explicit development/test fake path only; production environments must implement claim renewal. */
@@ -112,7 +116,9 @@ export function hubEnvironments(
     secrets: SecretOpener,
     git: { provider: RepoRef['provider']; apiBase: string },
     preferCell?: (organizationId: string, environmentId: string) => Promise<string | undefined>,
+    setups?: { get(environmentId: string): Promise<EnvironmentHealthInput & { organizationId: string } | null> },
 ) {
+    const health = setups ? healthOfSetup(setups) : undefined;
     return (ctx: EnvironmentContext): EnvironmentRuntime =>
         new HubEnvironmentClient(hub, secrets, {
             correlationId: ctx.correlationId,
@@ -129,8 +135,17 @@ export function hubEnvironments(
             ...(ctx.execRepository ? { execRepository: ctx.execRepository } : {}),
             ...(ctx.admissionTicket ? { admissionTicket: ctx.admissionTicket } : {}),
             ...(preferCell ? { preferCell } : {}),
+            ...(health ? { health } : {}),
         });
 }
+
+/** EnvironmentRuntime.status from the environment's setup record, only from a record of the same org. */
+export const healthOfSetup =
+    (setups: { get(environmentId: string): Promise<EnvironmentHealthInput & { organizationId: string } | null> }) =>
+    async (organizationId: string, environmentId: string) => {
+        const rec = await setups.get(environmentId);
+        return environmentHealthOf(rec?.organizationId === organizationId ? rec : { environmentId }, new Date());
+    };
 
 /** The canary key, derived from the sealing key (one secret to manage, separate purposes). */
 export { canaryKeyFrom } from '@libs/runtime/canary';
@@ -162,6 +177,7 @@ export class RunDependenciesFactory implements RunDepsFactory {
             ...(this.deps.log ? { log: this.deps.log } : {}),
             ...(this.deps.roundSnapshots ? { roundSnapshots: true } : {}),
             ...(this.deps.pastPlans ? { pastPlans: this.deps.pastPlans } : {}),
+            ...(this.deps.stability ? { stability: this.deps.stability } : {}),
         };
     }
 

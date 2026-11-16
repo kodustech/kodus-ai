@@ -7,6 +7,7 @@ The verdict of one probe: a pure function that compares the normalized fields of
 - `gate.ts` `decideNewEndpoint`: a route the diff adds is new behavior, not a regression.
 - `intended-change.ts` `decideIntendedChange`: a difference the diff spells out literally is marked intended.
 - `probe-fields.ts`: an observer result as the fields the gate compares (`normalizeFields`, `effectiveCompare`, `expectedHolds`); `html-fields.ts` for an HTML body.
+- `stability.ts`: the versioned stability history read as a policy (ADR-050): `NORMALIZER_VERSION` (bump when a compared field's name or normalization changes; older history is then ignored), `stabilityPolicyFor` (history → base rounds, known unstable fields, the `snapshot` every verdict records), `baseUnstableFields` (what a Run writes: base rounds only, never the PR's, S-36), `probeKeyOf` (the probe shape history is kept by). The store is `apps/runtime/src/worker/run/pg-stability-history.ts`.
 - `gate.ts` `markUnbackedClaims`: what the agent says it proved stays `unverified` unless a step backs it.
 
 ## Does not own
@@ -18,6 +19,7 @@ The verdict of one probe: a pure function that compares the normalized fields of
 - Pure: no I/O, no clock, no text read as an instruction. Only fields of steps the observer produced on the pinned image decide.
 - Anything it cannot decide is `inconclusive`; nothing unknown becomes `not_reproduced`.
 - A decisive field (no dot: `status`, `exit`, `json`…) that varies on the base is never masked away. At most 5 masked fields; 4 rounds per side by default.
+- History only makes the gate more careful: `knownUnstableFields` are masked (decisive ones make it `inconclusive`, they count toward the ceiling), and a PR that differs only on one of them gets more base rounds, then `inconclusive`; a probe with unstable history starts with 3 base rounds instead of 2.
 - Pixel-only differences never fail a check (`inconclusive` with the visual question).
 
 ## Where new code goes
@@ -31,15 +33,17 @@ The verdict of one probe: a pure function that compares the normalized fields of
 
 ## Module map
 
-Files (5, tests apart): `gate.ts`, `html-fields.ts`, `index.ts`, `intended-change.ts`, `probe-fields.ts`
+Files (6, tests apart): `gate.ts`, `html-fields.ts`, `index.ts`, `intended-change.ts`, `probe-fields.ts`, `stability.ts`
 
 Imports these Runtime modules:
 
 - [`libs/runtime/contracts`](../contracts/AGENTS.md)
 - [`libs/runtime/probe`](../probe/AGENTS.md)
+- [`libs/runtime/redaction`](../redaction/AGENTS.md)
 
 Imported by:
 
+- [`apps/runtime/src/shared/persistence`](../../../apps/runtime/src/shared/persistence/AGENTS.md)
 - [`apps/runtime/src/worker/agent`](../../../apps/runtime/src/worker/agent/AGENTS.md)
 - [`apps/runtime/src/worker/run`](../../../apps/runtime/src/worker/run/AGENTS.md)
 - [`apps/runtime/src/worker/setup`](../../../apps/runtime/src/worker/setup/AGENTS.md)

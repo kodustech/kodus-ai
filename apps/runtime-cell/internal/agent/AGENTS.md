@@ -9,7 +9,7 @@ The cell agent: the application of the cell process ([architecture.md](../../../
 - What a prepare failure says: `blocker.go` `blockerErr` (kind and stable signature), `bundle.go` `collectBundle` (a setup's failure bundle, 1 MiB), `hold.go` `startHold` (a failed clean setup kept until its ceiling).
 - Egress: `egress_policy.go` `EgressRules.ClaimPolicy`, `PolicySpec`, `InspectRulesFor`; `egress_sync.go` (store and push the hub's allowlist); `recipe_requirements.go` `CheckRecipeEgress`.
 - Images and the pool: `image_policy.go` (`bake`, `bakeSource`, `poolTarget`, taint checks), `pool_claims.go`, `sandbox_pool.go` (blank sandboxes).
-- Sandboxes: `sandbox.go` (`sandbox.acquire`, the guest clients), `org_secrets.go` (placeholders per claim, cell trust), `canaries.go`.
+- Sandboxes: `sandbox.go` (`sandbox.acquire`, the guest clients), `org_secrets.go` (placeholders per claim, cell trust), `canaries.go`, `run_identity.go` (a Run's drawn hostname, seed user and seed domain: every service's env under `KODUS_RUN_*`, after the recipe's, and the hostname of a service that names none; never on a setup claim).
 - Memory and disk: `memory.go` (what a claim is counted for, the heartbeat's memory; `countReady` asks `Parts.ReadyMemory` to lower a ready claim's ceiling before counting it lower), `disk_watch.go` (free disk of Docker's data root).
 - Alerts and frames out: `alerts.go` `watchAlerts`, `onExfiltration`; `source_health.go` (work admitted only while every alert feed answers); `redaction.go` `claimRedactor`, `redactOutbound`; `settle.go` `deliver`, `deliverOnce`; `progress.go` (`claim.progress`); `manifest.go` `readyBody`.
 - Previews: `preview.go` (tunnel, routes, `previewTargetExposed`). Multi-repository claims: `workspace.go`.
@@ -36,7 +36,7 @@ The cell agent: the application of the cell process ([architecture.md](../../../
 
 ## Module map
 
-Files (38, tests apart): `acquire.go`, `agent.go`, `alerts.go`, `blocker.go`, `browser.go`, `browser_explore.go`, `bundle.go`, `canaries.go`, `compose_boot.go`, `config.go`, `disk_watch.go`, `egress_policy.go`, `egress_sync.go`, `evidence_claim.go`, `handle.go`, `hold.go`, `image_policy.go`, `manifest.go`, `memory.go`, `metrics.go`, `observer_sql.go`, `org_secrets.go`, `pool_claims.go`, `prepare.go`, `preview.go`, `progress.go`, `recipe_fakes.go`, `recipe_requirements.go`, `redaction.go`, `release.go`, `sandbox.go`, `sandbox_pool.go`, `session.go`, `settle.go`, `snapshots.go`, `source_health.go`, `steps.go`, `workspace.go`
+Files (39, tests apart): `acquire.go`, `agent.go`, `alerts.go`, `blocker.go`, `browser.go`, `browser_explore.go`, `bundle.go`, `canaries.go`, `compose_boot.go`, `config.go`, `disk_watch.go`, `egress_policy.go`, `egress_sync.go`, `evidence_claim.go`, `handle.go`, `hold.go`, `image_policy.go`, `manifest.go`, `memory.go`, `metrics.go`, `observer_sql.go`, `org_secrets.go`, `pool_claims.go`, `prepare.go`, `preview.go`, `progress.go`, `recipe_fakes.go`, `recipe_requirements.go`, `redaction.go`, `release.go`, `run_identity.go`, `sandbox.go`, `sandbox_pool.go`, `session.go`, `settle.go`, `snapshots.go`, `source_health.go`, `steps.go`, `workspace.go`
 
 Imports these Runtime modules:
 

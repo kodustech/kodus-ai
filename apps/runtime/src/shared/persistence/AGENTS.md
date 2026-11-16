@@ -3,7 +3,7 @@
 The Runtime Postgres as both control-plane apps use it: the schema and its migrations, cluster-wide locks, and the stores whose rows more than one process writes or reads (commands from the API, previews, snapshot placements, the cell directory). Adapters only: the rules they apply come from `libs/runtime`, and the claim store itself is the hub's (`hub/hub-store.ts`).
 
 ## Owns
-- Schema: `runtime-schema.ts` `RUNTIME_SCHEMA_SQL` (the baseline), `RUNTIME_MIGRATIONS`, `ensureRuntimeSchema` (pending migrations, each in its own transaction, under the migration advisory lock), `applyRetention` (30 days, the Run stream in batches of `RUN_EVENTS_RETENTION_BATCH`), `ensureDatabase` (local and self-hosted bootstrap).
+- Schema: `runtime-schema.ts` `RUNTIME_SCHEMA_SQL` (the baseline), `RUNTIME_MIGRATIONS`, `ensureRuntimeSchema` (pending migrations, each in its own transaction, under the migration advisory lock), `applyRetention` (30 days, the Run stream in batches of `RUN_EVENTS_RETENTION_BATCH`; `runtime_stability` keeps 90, `STABILITY_RETENTION_DAYS`), `ensureDatabase` (local and self-hosted bootstrap).
 - Locks: `locks.ts` `DistributedLocks`, `PgDistributedLocks` (session advisory locks on a dedicated connection; `withLock`, `tryWithLock`, `currentClient`). `lock-scoped-pg.ts` `LockScopedPg`: a store that joins the lock's live connection instead of taking a second pool slot, and refuses nested transactions.
 - Commands the API decided: `pg-command-store.ts` `PgCommandStore` (`CommandStore`: fork and egress approvals, egress audit and settings, stops, cell tokens, `revokeCell`), `egressScopes`.
 - Cell choice: `cell-directory.ts` `PgCellDirectory` (`reserveCell`, `replicaForClaim`, `replicaForCell`), `reserveCellFor` / `reserveCellCapped` (the capped, org-locked reservation in `runtime_cell_reservations`), `reserveCellRow` (the hub's uncapped one), and the SQL they share (`RESERVE_CELL_SQL`, `CELL_CAPACITY_SQL`, `BEST_CELL_SQL`).
@@ -41,6 +41,7 @@ Imports these Runtime modules:
 
 - [`libs/runtime/api/domain`](../../../../../libs/runtime/api/domain/AGENTS.md)
 - [`libs/runtime/contracts`](../../../../../libs/runtime/contracts/AGENTS.md)
+- [`libs/runtime/gate`](../../../../../libs/runtime/gate/AGENTS.md)
 - [`libs/runtime/protocol`](../../../../../libs/runtime/protocol/AGENTS.md)
 - [`libs/runtime/run/adapters`](../../../../../libs/runtime/run/adapters/AGENTS.md)
 

@@ -4,7 +4,7 @@ import { Body, Controller, Get, HttpCode, HttpException, Inject, NotFoundExcepti
 import { z } from 'zod';
 
 import { ProbeSchema } from '@libs/runtime/probe';
-import { CANARY_SLOTS, ClaimCanarySchema, ClaimRecipeSchema, ClaimRepoSchema, claimReposError, EvidenceRequestSchema, MachineSizeSchema, RepoRefSchema, SandboxOpCheckedSchema, sandboxSnapshotError, SNAPSHOT_PURPOSES, SnapshotIdSchema, SnapshotKeySchema } from '@libs/runtime/protocol';
+import { CANARY_SLOTS, ClaimCanarySchema, ClaimRecipeSchema, ClaimRepoSchema, ClaimRunIdentitySchema, claimReposError, EvidenceRequestSchema, MachineSizeSchema, MessageBodySchemas, RepoRefSchema, SandboxOpCheckedSchema, sandboxSnapshotError, SNAPSHOT_PURPOSES, SnapshotIdSchema, SnapshotKeySchema } from '@libs/runtime/protocol';
 import { CLAIM_CONSUMERS } from '@libs/runtime/contracts/enums';
 import { MAX_HEALTH_TIMEOUT_SECONDS } from '@libs/runtime/protocol/recipe';
 import { PreviewIdSchema } from '@libs/runtime/contracts/preview';
@@ -47,6 +47,7 @@ const AcquireBody = z.strictObject({
     recipe: ClaimRecipeSchema.optional(),
     size: MachineSizeSchema.optional(),
     canaries: z.array(ClaimCanarySchema).max(CANARY_SLOTS.length).optional(),
+    identity: ClaimRunIdentitySchema.optional(),
     admission: PhysicalAdmissionTicketSchema.optional(),
     forkPullRequest: z.boolean().optional(),
     previewSecrets: z.boolean().optional(),
@@ -233,6 +234,14 @@ export class InternalController {
         return this.hub
             .exec(ref(claimId, b), { stepId: b.stepId, command: b.command, cwd: b.cwd, timeoutMs: b.timeoutMs, ...(b.evidence ? { evidence: b.evidence } : {}), ...(b.executionScope ? {executionScope:b.executionScope} : {}), ...(b.repository ? { repository: b.repository } : {}) })
             .catch(mapped);
+    }
+
+    /** upload: files into the claim's checkout from the evidence store (the protocol's frame, same limits); upload_unavailable when the cell cannot take them. */
+    @Post('claims/:claimId/upload')
+    @HttpCode(200)
+    async upload(@Param('claimId') claimId: string, @Body() body: unknown) {
+        const b = parseBody(MessageBodySchemas.upload.extend(Tenant), body);
+        return this.hub.upload(ref(claimId, b), { stepId: b.stepId, files: b.files }).catch(mapped);
     }
 
     @Post('claims/:claimId/reset')

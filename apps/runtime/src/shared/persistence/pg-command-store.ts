@@ -24,6 +24,9 @@ export interface CommandStore {
     recordEgressAudit(a: EgressAuditRecord): Promise<void>;
     /** The org's outbound access settings (D2, D3); a change older than the stored one changes nothing. */
     recordEgressSettings(s: { organizationId: string; recommendedEnabled: boolean; whoMayAdd: string; updatedBy: string; updatedAt: string }): Promise<void>;
+    /** The org's own daily machine minutes (null = the deployment's); a change older than the stored one changes nothing. */
+    recordMachineMinuteLimit(s: { organizationId: string; minutesPerDay: number | null; updatedBy: string; updatedAt: string }): Promise<void>;
+    machineMinuteLimit(organizationId: string): Promise<number | null>;
     /** Every host approved for an environment and the org list, none revoked: the egress allowlist its live claims get. */
     approvedHosts(organizationId: string, environmentId: string): Promise<string[]>;
     recordStop(s: { scope: 'org' | 'global'; organizationId?: string; requestedBy: string; requestedAt: string }): Promise<void>;
@@ -119,6 +122,18 @@ export class PgCommandStore implements CommandStore, CellTokenStore {
               WHERE runtime_egress_settings.updated_at <= EXCLUDED.updated_at`,
             [s.organizationId, s.recommendedEnabled, s.whoMayAdd, s.updatedBy, s.updatedAt],
         );
+    }
+    async recordMachineMinuteLimit(s: { organizationId: string; minutesPerDay: number | null; updatedBy: string; updatedAt: string }) {
+        await this.pool.query(
+            `INSERT INTO runtime.runtime_org_machine_budget (organization_id, minutes_per_day, updated_by, updated_at) VALUES ($1, $2, $3, $4)
+             ON CONFLICT (organization_id) DO UPDATE SET minutes_per_day = EXCLUDED.minutes_per_day, updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at
+              WHERE runtime_org_machine_budget.updated_at <= EXCLUDED.updated_at`,
+            [s.organizationId, s.minutesPerDay, s.updatedBy, s.updatedAt],
+        );
+    }
+    async machineMinuteLimit(organizationId: string) {
+        const r = await this.pool.query(`SELECT minutes_per_day FROM runtime.runtime_org_machine_budget WHERE organization_id = $1`, [organizationId]);
+        return r.rows[0]?.minutes_per_day ?? null;
     }
     async approvedHosts(organizationId: string, environmentId: string) {
         const r = await this.pool.query(

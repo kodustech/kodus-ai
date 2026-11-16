@@ -23,6 +23,7 @@ export const RuntimeCommandName = {
     EgressApproved: 'runtime.environment.egress_approved',
     EgressRevoked: 'runtime.environment.egress_revoked',
     EgressSettingsChanged: 'runtime.org.egress_settings_changed',
+    MachineMinutesChanged: 'runtime.org.machine_minutes_changed',
     StopRequested: 'runtime.stop.requested',
     StopCleared: 'runtime.stop.cleared',
     EnvironmentSetupRequested: 'runtime.environment.setup_requested',
@@ -131,6 +132,20 @@ export const RuntimeEgressSettingsChangedSchema = z.strictObject({
     key: z.string().min(1).max(400),
 });
 export type RuntimeEgressSettingsChanged = z.infer<typeof RuntimeEgressSettingsChangedSchema>;
+
+/**
+ * The org's own daily machine minutes (spec v18 PR 2, PATCH /runtime/settings machineMinutesPerDay): it lowers the
+ * deployment's RUNTIME_MACHINE_MINUTES_PER_ORG_DAY for the org, never raises it; null = the deployment's limit.
+ * Bounded like MAX_ORG_MACHINE_MINUTES_PER_DAY (libs/runtime/environment/machine-minutes.ts).
+ */
+export const RuntimeMachineMinutesChangedSchema = z.strictObject({
+    organizationId: id,
+    minutesPerDay: z.number().int().positive().max(14_400_000).nullable(),
+    changedBy: actor,
+    changedAt: z.iso.datetime(),
+    key: z.string().min(1).max(400),
+});
+export type RuntimeMachineMinutesChanged = z.infer<typeof RuntimeMachineMinutesChangedSchema>;
 
 const stopCommon = {
     requestedBy: actor,
@@ -382,6 +397,7 @@ export interface RuntimeCommandPayloads {
     'runtime.environment.egress_approved': RuntimeEgressApproved;
     'runtime.environment.egress_revoked': RuntimeEgressRevoked;
     'runtime.org.egress_settings_changed': RuntimeEgressSettingsChanged;
+    'runtime.org.machine_minutes_changed': RuntimeMachineMinutesChanged;
     'runtime.stop.requested': RuntimeStopRequested;
     'runtime.stop.cleared': RuntimeStopCleared;
     'runtime.environment.setup_requested': RuntimeEnvironmentSetupRequested;
@@ -397,6 +413,7 @@ const SCHEMAS: Record<RuntimeCommandEventName, z.ZodType> = {
     [RuntimeCommandName.EgressApproved]: RuntimeEgressApprovedSchema,
     [RuntimeCommandName.EgressRevoked]: RuntimeEgressRevokedSchema,
     [RuntimeCommandName.EgressSettingsChanged]: RuntimeEgressSettingsChangedSchema,
+    [RuntimeCommandName.MachineMinutesChanged]: RuntimeMachineMinutesChangedSchema,
     [RuntimeCommandName.StopRequested]: RuntimeStopRequestedSchema,
     [RuntimeCommandName.StopCleared]: RuntimeStopClearedSchema,
     [RuntimeCommandName.EnvironmentSetupRequested]: RuntimeEnvironmentSetupRequestedSchema,

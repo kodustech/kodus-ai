@@ -118,6 +118,27 @@ export const ClaimCanarySchema = z.strictObject({
 export type ClaimCanary = z.infer<typeof ClaimCanarySchema>;
 
 /**
+ * A Run's drawn identifiers (spec §4 Replay, S-36, ADR-039): the hostname
+ * of the workload's services, the seed's user name and the seed's e-mail
+ * domain. The worker draws them per Run from the Run's secret
+ * (runIdentityOf), the same for both sides, so base and PR stay comparable
+ * and a PR cannot hardcode the values its probes will use. The cell sets
+ * them in every service's env under RUN_IDENTITY_ENV (a recipe's seed reads
+ * them there) and as the hostname of a service that names none. Not a
+ * secret, never a label.
+ */
+export const RUN_IDENTITY_ENV = { hostname: 'KODUS_RUN_HOSTNAME', user: 'KODUS_RUN_USER', domain: 'KODUS_RUN_DOMAIN' } as const;
+export const RUN_IDENTITY_HOSTNAME_PATTERN = /^[a-z][a-z0-9-]{1,61}[a-z0-9]$/;
+export const RUN_IDENTITY_USER_PATTERN = /^[a-z][a-z0-9_]{2,31}$/;
+export const RUN_IDENTITY_DOMAIN_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}(\.[a-z0-9][a-z0-9-]{0,62}){1,4}$/;
+export const ClaimRunIdentitySchema = z.strictObject({
+    hostname: z.string().regex(RUN_IDENTITY_HOSTNAME_PATTERN),
+    user: z.string().regex(RUN_IDENTITY_USER_PATTERN),
+    domain: z.string().max(253).regex(RUN_IDENTITY_DOMAIN_PATTERN),
+});
+export type ClaimRunIdentity = z.infer<typeof ClaimRunIdentitySchema>;
+
+/**
  * One other repository of a multi-repository claim (claim.acquire repos):
  * fetched like `repo`, at its own commit, with a download token for that
  * repository only, into the workspace directory named by its alias.
@@ -223,6 +244,10 @@ export function claimSecretsError(secrets: readonly { id: string; name: string }
  *     reads any of them.
  *   - canaries: claim.acquire canaries (the Run's decoys, ADR-043). A cell
  *     without it plants none; the worker still checks every boundary.
+ *   - runIdentity: claim.acquire identity (the Run's drawn hostname, seed
+ *     user and seed domain). A cell without it gets none, and the hub
+ *     reports the claim without it (Claim.identity), so the probes keep the
+ *     recipe's own values on both sides.
  *   - browser: the cell plays browser probes in its browser runner (ADR-071).
  *     Both ways: the hub sends the browser capture, its upload grants and
  *     the baseline screenshots only to a cell that names it, and the cell
@@ -308,6 +333,7 @@ export const CELL_FEATURES = [
     // accepts it.
     'hostHardening',
     'buildStateRebuildCost',
+    'runIdentity',
 ] as const;
 export type CellFeature = (typeof CELL_FEATURES)[number];
 
@@ -683,6 +709,10 @@ export const MessageBodySchemas = {
         // plants them in the workload (env and a credentials file), never
         // in a label, a log or anything it sends back.
         canaries: z.array(ClaimCanarySchema).max(CANARY_SLOTS.length).optional(),
+        // The Run's drawn identifiers (feature runIdentity), the same on
+        // both sides: every service's env (RUN_IDENTITY_ENV) and the hostname
+        // of a service that names none. A cell ignores it on a setup claim.
+        identity: ClaimRunIdentitySchema.optional(),
         // The other repositories of a multi-repository environment (feature
         // workspace), the claim's own repository being `repo`. Absent for an
         // environment of one repository.

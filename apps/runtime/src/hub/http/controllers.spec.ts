@@ -164,4 +164,19 @@ describe('hub HTTP', () => {
         const lost = new InternalController({ renewLease: async () => Promise.reject(new CellUnavailableError('cell-a')) } as any);
         expect(await status(lost.renew('c1', { organizationId: 'org-a', consumer: 'runtime' }))).toBe(503);
     });
+
+    it('the upload route takes the tenant, a uuid step and checkout-relative files only, and maps scope like every claim route', async () => {
+        const seen: unknown[] = [];
+        const c = new InternalController({ upload: async (ref: unknown, req: unknown) => (seen.push([ref, req]), { ok: true }) } as any);
+        const stepId = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
+        const files = [{ path: 'fixtures/a.json', contentRef: 'ref-1', mode: 0o644 }];
+        expect(await c.upload('c1', { organizationId: 'org-a', runId: 'run-1', stepId, files })).toEqual({ ok: true });
+        expect(seen).toEqual([[{ claimId: 'c1', organizationId: 'org-a', runId: 'run-1' }, { stepId, files }]]);
+        expect(await status(c.upload('c1', { organizationId: 'org-a', stepId, files: [{ path: '../etc/passwd', contentRef: 'r' }] }))).toBe(400);
+        expect(await status(c.upload('c1', { organizationId: 'org-a', stepId: 'not-a-uuid', files }))).toBe(400);
+        expect(await status(c.upload('c1', { stepId, files }))).toBe(400);
+        const refused = new InternalController({ upload: async () => Promise.reject(new ClaimScopeError('x')) } as any);
+        expect(await status(refused.upload('c1', { organizationId: 'org-b', stepId, files }))).toBe(404);
+    });
 });
+

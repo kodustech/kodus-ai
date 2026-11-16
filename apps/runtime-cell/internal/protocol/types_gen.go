@@ -243,6 +243,12 @@ type ClaimAcquireBodyCanariesItem struct {
 	Value string                           `json:"value"`
 }
 
+type ClaimAcquireBodyIdentity struct {
+	Hostname string `json:"hostname"`
+	User     string `json:"user"`
+	Domain   string `json:"domain"`
+}
+
 type ClaimAcquireBodyReposItem struct {
 	Alias     string  `json:"alias"`
 	Repo      RepoRef `json:"repo"`
@@ -277,6 +283,7 @@ type ClaimAcquireBody struct {
 	EgressRecommended *bool                               `json:"egressRecommended,omitempty"`
 	Size              *MachineSize                        `json:"size,omitempty"`
 	Canaries          []ClaimAcquireBodyCanariesItem      `json:"canaries,omitempty"`
+	Identity          *ClaimAcquireBodyIdentity           `json:"identity,omitempty"`
 	Repos             []ClaimAcquireBodyReposItem         `json:"repos,omitempty"`
 	Secrets           []ClaimAcquireBodySecretsItem       `json:"secrets,omitempty"`
 }

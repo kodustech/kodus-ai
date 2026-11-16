@@ -35,6 +35,7 @@ const (
 	FeatureSnapshotForget        = "snapshotForget"
 	FeatureHostHardening         = "hostHardening"
 	FeatureBuildStateRebuildCost = "buildStateRebuildCost"
+	FeatureRunIdentity           = "runIdentity"
 )
 
 // CellFeatures is CELL_FEATURES (libs/runtime/protocol/messages.ts), in order.
@@ -69,6 +70,7 @@ var CellFeatures = []string{
 	FeatureSnapshotForget,
 	FeatureHostHardening,
 	FeatureBuildStateRebuildCost,
+	FeatureRunIdentity,
 }
 
 // HubAcceptedFeatures is HUB_ACCEPTED_FEATURES (libs/runtime/protocol/messages.ts):
@@ -90,6 +92,15 @@ var HubAcceptedFeatures = []string{
 	FeatureHostHardening,
 	FeatureBuildStateRebuildCost,
 }
+
+// RunIdentityHostnameEnv is RUN_IDENTITY_ENV.hostname (libs/runtime/protocol/messages.ts): the env var a Run's drawn hostname is set in.
+const RunIdentityHostnameEnv = "KODUS_RUN_HOSTNAME"
+
+// RunIdentityUserEnv is RUN_IDENTITY_ENV.user (libs/runtime/protocol/messages.ts): the env var a Run's drawn seed user is set in.
+const RunIdentityUserEnv = "KODUS_RUN_USER"
+
+// RunIdentityDomainEnv is RUN_IDENTITY_ENV.domain (libs/runtime/protocol/messages.ts): the env var a Run's drawn seed domain is set in.
+const RunIdentityDomainEnv = "KODUS_RUN_DOMAIN"
 
 // SecurityViolationSignaturePattern is SECURITY_VIOLATION_SIGNATURE (libs/runtime/contracts/enums.ts): the signature of a security_violation blocker.
 const SecurityViolationSignaturePattern = `^[a-z][a-z0-9_]{0,63}$`

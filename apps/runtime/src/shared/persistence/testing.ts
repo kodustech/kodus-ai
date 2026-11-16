@@ -49,6 +49,7 @@ export class InMemoryCommandStore implements CommandStore {
     }
     egressAudit: EgressAuditRecord[] = [];
     egressSettings = new Map<string, { recommendedEnabled: boolean; whoMayAdd: string; updatedAt: string }>();
+    machineMinuteLimits = new Map<string, { minutesPerDay: number | null; updatedAt: string }>();
     async recordEgressApproval(a: EgressApprovalRecord) {
         const same = (e: any) => e.organizationId === a.organizationId && e.environmentId === a.environmentId && e.host === a.host.toLowerCase();
         const old = this.egress.find(same);
@@ -70,6 +71,14 @@ export class InMemoryCommandStore implements CommandStore {
         const old = this.egressSettings.get(s.organizationId);
         if (old && old.updatedAt > s.updatedAt) return;
         this.egressSettings.set(s.organizationId, s);
+    }
+    async recordMachineMinuteLimit(s: { organizationId: string; minutesPerDay: number | null; updatedBy: string; updatedAt: string }) {
+        const old = this.machineMinuteLimits.get(s.organizationId);
+        if (old && old.updatedAt > s.updatedAt) return;
+        this.machineMinuteLimits.set(s.organizationId, { minutesPerDay: s.minutesPerDay, updatedAt: s.updatedAt });
+    }
+    async machineMinuteLimit(organizationId: string) {
+        return this.machineMinuteLimits.get(organizationId)?.minutesPerDay ?? null;
     }
     async approvedHosts(orgId: string, envId: string) {
         const scopes = egressScopes(envId);
