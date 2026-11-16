@@ -171,6 +171,12 @@ export interface VerdictInput {
     dependencyChangeUntested?: boolean;
     /** The product could not hand the whole diff (file or size cap): what was cut is untested. */
     diffTruncated?: boolean;
+    /**
+     * The two sides' claims did not carry the same drawn identity (S-36): one
+     * cell did not set it, or the two differ. The probes that use its tokens
+     * are already inconclusive; the Run is partly tested at best.
+     */
+    identityMismatch?: boolean;
 }
 
 export interface VerdictOutcome {
@@ -209,13 +215,14 @@ export function decideRunVerdict(input: VerdictInput): VerdictOutcome {
 
     let verdictState: VerdictOutcome['verdictState'];
     if (unintended.length > 0) verdictState = 'regression';
-    else if (intended.length > 0 || uncovered.length > 0 || input.entryPoints.length === 0 || input.diffTruncated) verdictState = 'partly_tested';
+    else if (intended.length > 0 || uncovered.length > 0 || input.entryPoints.length === 0 || input.diffTruncated || input.identityMismatch) verdictState = 'partly_tested';
     else verdictState = 'no_regressions';
 
     const forcedNeutral: string[] = [];
     if (input.blockedOutbound) forcedNeutral.push(`${input.blockedOutbound} blocked outbound request${input.blockedOutbound > 1 ? 's' : ''}`);
     if (input.dependencyChangeUntested) forcedNeutral.push('dependency change not behavior-tested');
     if (input.diffTruncated) forcedNeutral.push('diff too large to test whole');
+    if (input.identityMismatch) forcedNeutral.push('the two sides ran with different drawn identities');
 
     const newEndpoints = input.probes.filter((p) => p.verdict === 'new_endpoint');
     return { verdictState, findings: unintended, intendedFindings: intended, newEndpoints, uncoveredEntryPoints: uncovered, forcedNeutral };

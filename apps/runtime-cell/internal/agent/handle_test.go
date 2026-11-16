@@ -48,7 +48,7 @@ func TestHandleAnswers(t *testing.T) {
 		{"exec cwd absolute", "claim-1", protocol.MessageTypeExec, exec(str("/etc")), "invalid_body"},
 		{"exec cwd inside", "claim-1", protocol.MessageTypeExec, exec(str("src/app")), ""},
 		{"egress.policy for an unknown claim", "claim-x", protocol.MessageTypeEgressPolicy, &protocol.EgressPolicyBody{Allow: []string{}, IssuedAt: "2030-01-01T00:00Z"}, "unknown_claim"},
-		{"upload", "claim-1", protocol.MessageTypeUpload, &protocol.UploadBody{}, "not_implemented"},
+		{"upload without files", "claim-1", protocol.MessageTypeUpload, &protocol.UploadBody{}, "invalid_body"},
 		{"a cell frame from the hub", "", protocol.MessageTypeHeartbeat, &protocol.HeartbeatBody{}, "unexpected_type"},
 		{"acquire without claimId", "", protocol.MessageTypeClaimAcquire, h.acquireBody(), "invalid_envelope"},
 		{"acquire of a held id, another commit", "claim-1", protocol.MessageTypeClaimAcquire, otherSha(h.acquireBody()), "claim_exists"},

@@ -117,6 +117,7 @@ export function hubEnvironments(
     git: { provider: RepoRef['provider']; apiBase: string },
     preferCell?: (organizationId: string, environmentId: string) => Promise<string | undefined>,
     setups?: { get(environmentId: string): Promise<EnvironmentHealthInput & { organizationId: string } | null> },
+    evidenceReads?: EvidenceUploads,
 ) {
     const health = setups ? healthOfSetup(setups) : undefined;
     return (ctx: EnvironmentContext): EnvironmentRuntime =>
@@ -136,6 +137,7 @@ export function hubEnvironments(
             ...(ctx.admissionTicket ? { admissionTicket: ctx.admissionTicket } : {}),
             ...(preferCell ? { preferCell } : {}),
             ...(health ? { health } : {}),
+            ...(evidenceReads ? { evidenceReads } : {}),
         });
 }
 

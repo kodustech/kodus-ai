@@ -169,10 +169,10 @@ describe('hub HTTP', () => {
         const seen: unknown[] = [];
         const c = new InternalController({ upload: async (ref: unknown, req: unknown) => (seen.push([ref, req]), { ok: true }) } as any);
         const stepId = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
-        const files = [{ path: 'fixtures/a.json', contentRef: 'ref-1', mode: 0o644 }];
+        const files = [{ path: 'fixtures/a.json', contentRef: 'ref-1', url: 'https://evidence.example/ref-1?exp=1&sig=s', mode: 0o644 }];
         expect(await c.upload('c1', { organizationId: 'org-a', runId: 'run-1', stepId, files })).toEqual({ ok: true });
         expect(seen).toEqual([[{ claimId: 'c1', organizationId: 'org-a', runId: 'run-1' }, { stepId, files }]]);
-        expect(await status(c.upload('c1', { organizationId: 'org-a', stepId, files: [{ path: '../etc/passwd', contentRef: 'r' }] }))).toBe(400);
+        expect(await status(c.upload('c1', { organizationId: 'org-a', stepId, files: [{ path: '../etc/passwd', contentRef: 'r', url: 'https://evidence.example/r?sig=s' }] }))).toBe(400);
         expect(await status(c.upload('c1', { organizationId: 'org-a', stepId: 'not-a-uuid', files }))).toBe(400);
         expect(await status(c.upload('c1', { stepId, files }))).toBe(400);
         const refused = new InternalController({ upload: async () => Promise.reject(new ClaimScopeError('x')) } as any);

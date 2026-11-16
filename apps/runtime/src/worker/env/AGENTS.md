@@ -4,7 +4,7 @@ How the runtime-worker reaches cells: the adapter of the `EnvironmentRuntime` po
 
 ## Owns
 - The HTTP client to the hub: `hub-environment-runtime.ts` `HubClient.post` (mTLS with the worker certificate, `mtlsPost`; per-route deadlines; a refused connection sent again for about a minute and a half, `HUB_REFUSED_RETRY_MS`; 409 as `HubRefused`, 502/503/504 as `CellUnavailableError`, a dropped connection as `HubUnreachableError`), and finding the replica that holds a cell or claim (`replicaForCell`, `replicaForClaim`, `reserveCell` over `CellDirectory`).
-- One environment client per Run or setup: `HubEnvironmentClient` (`acquire`, `progress`, `probe`, `exec`, `exploreBrowser`, `reset`, `snapshotRound`, `renew`, `upload` (`/internal/claims/:id/upload`), `status` (only the client's own org, from `HubRunContext.health`, which `run-deps.factory.ts` `healthOfSetup` builds from the setup record of the same org), `release`, `bake`, `poolTarget`). The acquire picks the cell (the pool's cell first, the other side's backend for a Run's second side, `sameBackendAs`), opens the repo token, and blocks before sending anything when a workspace member has no token (`workspaceTokenMissing`), the primary's alias does not match (`workspacePrimaryAlias`) or no cell has room (`capacityBlocked`).
+- One environment client per Run or setup: `HubEnvironmentClient` (`acquire`, `progress`, `probe`, `exec`, `exploreBrowser`, `reset`, `snapshotRound`, `renew`, `upload` (`/internal/claims/:id/upload`), `status` (only the client's own org, from `HubRunContext.health`, which `run-deps.factory.ts` `healthOfSetup` builds from the setup record of the same org), `release`, `bake`, `poolTarget`). The acquire picks the cell (the pool's cell first, the other side's backend for a Run's second side, `sameBackendAs`), opens the repo token, and blocks before sending anything when a workspace member has no token (`workspaceTokenMissing`), the primary's alias does not match (`workspacePrimaryAlias`) or no cell has room (`capacityBlocked`). Every blocked acquire it returns goes through `libs/runtime/environment/typed-blocker.ts` `typedBlocked`: a kind this worker does not know reads `unknown`, and each blocker carries the catalog's `title`, `evidence` and `fixes`.
 - Hub calls that are not one claim: `HubEgressPolicyPusher` (egress allowlist to every replica), `HubPoolTargetSender`, `HubClaimReleaser`, `HubRunEventSink` (Run events to the hub's stream; dropped and counted after a few tries).
 - Waiting for room: `capacity-wait.ts` `acquireWaitingForRoom` asks again with the same idempotency key on a capacity refusal and on `cell_lost` (`CELL_LOST_WAIT_MS`), and stops on cancellation or deadline.
 - A restored claim's lease: `claim-liveness.ts` `checkClaimLease` renews it inside the work step and records failures as closed data (`ClaimLeaseFailure`), thrown outside the checkpoint (`throwClaimLeaseFailure`).
@@ -16,6 +16,7 @@ How the runtime-worker reaches cells: the adapter of the `EnvironmentRuntime` po
 - The port and its result types: `libs/runtime/environment`. Errors shared with the hub: `shared/errors.ts`.
 
 ## Rules and limits
+- `upload` signs one read URL per file (`run-evidence.ts` `evidenceReadUrl`, the same store as the upload grants, at most 5 minutes) only for a `contentRef` that is a canonical evidence key of the client's own org; any other is `upload_failed` before the hub. No evidence store (`evidenceReads` unset): `upload_unavailable`.
 - The repo token is opened only inside `HubEnvironmentClient.acquire`, and only after the tenant, the workspace and any admission ticket are checked ([apps/runtime/AGENTS.md](../../../AGENTS.md) "Secrets", [README "Sealed tokens"](../../../README.md#sealed-tokens)).
 - Every claim route carries `organizationId` (and the Run) ([apps/runtime/AGENTS.md](../../../AGENTS.md) "Tenant scope").
 - Only `ECONNREFUSED` is retried by `HubClient.post`: the request never reached the hub. Network errors are decided on the error `code`, never the message (`isNetworkError`).
@@ -40,6 +41,7 @@ Imports these Runtime modules:
 
 - [`apps/runtime/src/shared`](../../shared/AGENTS.md)
 - [`apps/runtime/src/shared/admission`](../../shared/admission/AGENTS.md)
+- [`apps/runtime/src/shared/evidence`](../../shared/evidence/AGENTS.md)
 - [`apps/runtime/src/shared/persistence`](../../shared/persistence/AGENTS.md)
 - [`apps/runtime/src/worker`](../AGENTS.md)
 - [`apps/runtime/src/worker/run`](../run/AGENTS.md)

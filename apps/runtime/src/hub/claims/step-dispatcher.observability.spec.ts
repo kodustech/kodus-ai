@@ -66,7 +66,7 @@ describe('step dispatch diagnostics', () => {
         const req = { stepId: randomUUID(), command: 'fixture command', timeoutMs: 1000 };
         return {
             req, events, logs, sent,
-            upload: () => dispatcher.upload({ claimId: claim.claimId, organizationId: claim.orgId }, { stepId: req.stepId, files: [{ path: 'fixtures/a.json', contentRef: 'ref-1' }] }),
+            upload: () => dispatcher.upload({ claimId: claim.claimId, organizationId: claim.orgId }, { stepId: req.stepId, files: [{ path: 'fixtures/a.json', contentRef: 'ref-1', url: 'https://evidence.example/ref-1?exp=1&sig=s' }] }),
             exec: () => dispatcher.exec({ claimId: claim.claimId, organizationId: claim.orgId }, req),
             probe: () => dispatcher.probe({ claimId: claim.claimId, organizationId: claim.orgId }, { id: 'probe-fixture', origin: 'agent', spec: { kind: 'http', target: { service: 'app', port: 3000 }, method: 'GET', path: '/', timeoutMs: 1000 }, purpose: 'fixture', expected: '200', compare: ['status'] }, req.stepId),
             reset: () => dispatcher.reset({ claimId: claim.claimId, organizationId: claim.orgId }, 'image-fixture', req.stepId),
@@ -132,12 +132,19 @@ describe('step dispatch diagnostics', () => {
     it('an upload is one upload frame with the step and the files; the cell\'s result is ok', async () => {
         const f = fixture({ stepId: 'x', executor: 'vm', vmHealth: 'ok' } as MessageBody<'step.result'>);
         expect(await f.upload()).toEqual({ ok: true });
-        expect(f.sent).toEqual([expect.objectContaining({ type: 'upload', body: { stepId: f.req.stepId, files: [{ path: 'fixtures/a.json', contentRef: 'ref-1' }] } })]);
+        expect(f.sent).toEqual([expect.objectContaining({ type: 'upload', body: { stepId: f.req.stepId, files: [{ path: 'fixtures/a.json', contentRef: 'ref-1', url: 'https://evidence.example/ref-1?exp=1&sig=s' }] } })]);
     });
 
     it.each(['not_implemented', 'not_supported'])('a cell that answers an upload %s is upload_unavailable, never a lost transport', async (code) => {
         const f = fixture({ refused: code });
         expect(await f.upload()).toEqual({ code: 'upload_unavailable' });
+    });
+
+    it('an upload the cell could not write is upload_failed; a machine that did not answer is a lost transport', async () => {
+        const failed = fixture({ stepId: 'x', executor: 'vm', imageId: 'image-fixture', vmHealth: 'ok', exec: { exitCode: 1, stdout: '', stderr: 'a.json: bytes do not match the digest', truncated: false, durationMs: 3 } });
+        expect(await failed.upload()).toEqual({ code: 'upload_failed', stepId: failed.req.stepId, reason: 'a.json: bytes do not match the digest' });
+        const lost = fixture({ stepId: 'x', executor: 'vm', imageId: 'image-fixture', vmHealth: 'unreachable' });
+        expect(await lost.upload()).toMatchObject({ code: 'transport_lost' });
     });
 
     it('an exec the cell answers not_implemented stays a lost transport', async () => {

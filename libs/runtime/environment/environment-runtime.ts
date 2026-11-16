@@ -1,3 +1,4 @@
+import type { BlockerFixView } from '@libs/runtime/blockers/catalog';
 import type { BrowserExploreRequest, BrowserExploreResult } from '@libs/runtime/contracts/browser-exploration';
 import type { BlockerKind, CellOwner, ClaimConsumer, ClaimSide, Expose as SharedExpose, VmHealth as SharedVmHealth } from '@libs/runtime/contracts/enums';
 import type { EvidenceRef, Probe, ProbeResult } from '@libs/runtime/probe';
@@ -112,16 +113,40 @@ export type ClaimTiming = NonNullable<Claim['timing']>;
  */
 export type LeaseRenewal = { status: 'renewed'; leaseExpiresAt: string; hardExpiresAt: string; atCeiling: boolean } | { status: 'gone' };
 
+/**
+ * Why a claim did not come up, typed (docs §5 Blocker). `kind` is one of
+ * BLOCKER_KINDS; a kind this side does not know reads `unknown`
+ * (typed-blocker.ts blockerKindOf, at the worker's border with the hub).
+ * `title`, `evidence` and `fixes` are the shared catalog's card
+ * (libs/runtime/blockers/catalog.ts), filled where the blocker is classified;
+ * absent on a blocker nothing classified yet. The blocker's id, state and
+ * seen counts live in the setup record, never here.
+ */
 export interface Blocker {
-    kind: string;
+    kind: BlockerKind;
     signature: string;
     message: string;
+    /** The card's plain-language title (a template of checked identifiers, S-23). */
+    title?: string;
+    evidence?: BlockerEvidenceOfClaim;
+    /** The catalog's fixes, in order, the first one recommended. */
+    fixes?: BlockerFixView[];
     /** The repository of a multi-repository environment the blocker is about (its alias); absent: the claim's own, or not known. */
     alias?: string;
     /** The cell's redacted failure bundle of a setup claim. */
     bundle?: FailureBundle;
     /** Where the failed boot spent its time until it stopped (claim.failed phases). */
     phases?: BootPhases;
+}
+
+/** What the blocker was read from (docs §5 evidence): the matched lines, redacted by the cell. */
+export interface BlockerEvidenceOfClaim {
+    /** The step whose output the lines came from, when a step was the source. */
+    stepId?: string;
+    lines: string[];
+    /** The egress proxy's lines about the denied hosts, when the blocker is outbound access. */
+    proxyLog?: string[];
+    service?: string;
 }
 
 export interface Blocked {
@@ -221,7 +246,9 @@ export type EnvError =
     /** The cell saw the claim's code exfiltrate (blocked security_violation): the claim runs nothing more. */
     | { code: 'security_violation'; claimId: string; signature: string }
     /** The claim's cell cannot take files (it answered the upload not_implemented or not_supported): nothing was written. */
-    | { code: 'upload_unavailable' };
+    | { code: 'upload_unavailable' }
+    /** An upload that wrote nothing: a ref that is no object of the claim's org, or bytes the cell refused (over the bound, not the digest, a write the machine refused). */
+    | { code: 'upload_failed'; stepId: string; reason: string };
 
 /**
  * upload (docs §5): files written into the claim's checkout from the evidence
@@ -230,7 +257,7 @@ export type EnvError =
  */
 export interface UploadRequest {
     stepId: string;
-    files: Array<{ path: string; contentRef: string; mode?: number }>;
+    files: Array<{ path: string; contentRef: string; sha256?: string; mode?: number }>;
 }
 
 /**

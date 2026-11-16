@@ -102,7 +102,14 @@ func (a *Agent) Handle(ctx context.Context, m *protocol.Message) error {
 		}
 		return nil
 	case *protocol.UploadBody:
-		return nack("not_implemented", "upload needs the evidence store (contentRef)")
+		if err := a.refusedOnSandbox(claimID, m.Envelope.Type); err != nil {
+			return err
+		}
+		if err := checkUpload(b); err != nil {
+			return nack("invalid_body", "%v", err)
+		}
+		return a.admitStep(stepAdmission{trace: tctx, kind: m.Envelope.Type, claimID: claimID, stepID: b.StepID, canon: uploadCanon(b)},
+			func(ctx context.Context, c *claims.Claim) { a.runUpload(ctx, c, b) })
 	case *protocol.ImageBakeBody:
 		return a.bake(tctx, claimID, *b)
 	case *protocol.PoolTargetBody:

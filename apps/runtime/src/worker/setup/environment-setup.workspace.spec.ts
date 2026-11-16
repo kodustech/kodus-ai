@@ -113,7 +113,7 @@ describe('a setup of a multi-repository environment', () => {
     });
 
     it("a boot blocker about one repository keeps that repository's alias", async () => {
-        const blocker = { kind: 'other_repo', signature: 'recipe_needs', message: 'billing cannot boot beside this repository', alias: 'billing' };
+        const blocker = { kind: 'other_repo' as const, signature: 'recipe_needs', message: 'billing cannot boot beside this repository', alias: 'billing' };
         const { env } = fakeEnv({ status: 'blocked', blockers: [blocker] });
         const rec = await testSetupService({ envForSetup: () => env }, new InMemoryEnvironmentSetupStore()).run(cmd());
         expect(rec.state).toBe('blocked');

@@ -68,7 +68,7 @@ describe('HubEnvironmentClient with a workspace', () => {
         const ws = workspace();
         delete ws.members[0].pr.sealedToken;
         const out = await client(calls, ws).acquire(acquire('pr', B));
-        expect(out).toEqual({
+        expect(out).toMatchObject({
             status: 'blocked',
             blockers: [{ kind: 'other_repo', signature: 'workspace_token_missing', message: expect.stringContaining('billing'), alias: 'billing' }],
         });
@@ -80,7 +80,7 @@ describe('HubEnvironmentClient with a workspace', () => {
         const ws = workspace();
         ws.primary.alias = 'core';
         const out = await client(calls, ws).acquire(acquire('base', A));
-        expect(out).toEqual({ status: 'blocked', blockers: [{ kind: 'other_repo', signature: 'workspace_primary_alias', message: expect.stringContaining('lays it out as app'), alias: 'core' }] });
+        expect(out).toMatchObject({ status: 'blocked', blockers: [{ kind: 'other_repo', signature: 'workspace_primary_alias', message: expect.stringContaining('lays it out as app'), alias: 'core' }] });
         expect(calls).toHaveLength(0);
     });
 

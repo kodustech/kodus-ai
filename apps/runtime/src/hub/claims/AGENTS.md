@@ -11,7 +11,7 @@ Everything the runtime-hub does with a claim: acquire, the cell's outcome, relea
 - Approved egress hosts: `claim-egress.service.ts` `ClaimEgressService`, `receivesApprovedHosts`, `egressBodyFor`.
 - Bakes, pool targets and session forgets: `claim-image.service.ts` `ClaimImageService`.
 - Preview routes: `claim-preview.service.ts` `ClaimPreviewService` (`route`, `unroute`, the tunnel ticket).
-- Steps at most once per `stepId`: `step-dispatcher.ts` `StepDispatcher` (`probe`, `exec`, `reset`, `exploreBrowser`, `sandboxOp`, `snapshot`, `upload` (a cell's `not_implemented`/`not_supported` answer is `upload_unavailable`, not a lost transport), `onStepReply`, `onStepFrame`).
+- Steps at most once per `stepId`: `step-dispatcher.ts` `StepDispatcher` (`probe`, `exec`, `reset`, `exploreBrowser`, `sandboxOp`, `snapshot`, `upload` (a cell's `not_implemented`/`not_supported` answer is `upload_unavailable`, not a lost transport; a nonzero exec in its result is `upload_failed`; the command hash leaves out each file's read grant `url`), `onStepReply`, `onStepFrame`).
 - Boot progress for the setup view: `claim-progress.ts` `ClaimProgressBook`.
 - The org's daily machine minutes: `machine-minutes.ts` (port), `pg-machine-minutes.store.ts` `PgMachineMinuteStore`. `reserve` reads the org's own limit (`runtime_org_machine_budget`, written by the runtime-worker from `runtime.org.machine_minutes_changed`) under the org day's lock and holds the org to the lower of it and `RUNTIME_MACHINE_MINUTES_PER_ORG_DAY`.
 - The org's secrets by reference: `org-secret-refs.ts` `PgOrgSecretRefs` (names and hosts, never a value).

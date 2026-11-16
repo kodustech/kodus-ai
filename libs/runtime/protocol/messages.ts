@@ -850,6 +850,12 @@ export const MessageBodySchemas = {
                         .max(1_024)
                         .regex(new RegExp(`^${FILE_SEGMENT}(/${FILE_SEGMENT})*$`)),
                     contentRef: z.string().min(1).max(1_024),
+                    // The read grant of contentRef the worker signed (an
+                    // evidence read URL, at most 5 minutes, that one object
+                    // only): the cell GETs it over its own path, never the machine.
+                    url: z.string().min(1).max(4_096).regex(/^https?:\/\/[^\s]+$/),
+                    // The object's digest when the caller knows it: the cell refuses other bytes.
+                    sha256: z.string().regex(/^[0-9a-f]{64}$/).optional(),
                     mode: z.number().int().min(0).max(0o777).optional(),
                 }),
             )

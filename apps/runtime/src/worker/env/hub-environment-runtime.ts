@@ -5,7 +5,8 @@ import { request as httpRequest } from 'http';
 import { Agent as HttpsAgent, request as httpsRequest } from 'https';
 
 import type { AcquireOptions, AcquireRequest, BakeOutcome, BakeRequest, Blocked, Blocker, Claim, ClaimProgress, Consumer, EnvError, EnvironmentHealth, EnvironmentRuntime, ExecRequest, LeaseRenewal, PoolTargetRequest, ProbeOutcome, StepResult, UploadRequest } from '@libs/runtime/environment';
-import { bootTimedOut, environmentHealthOf, isolationUnavailable, readyTimeoutMinutes } from '@libs/runtime/environment';
+import { bootTimedOut, environmentHealthOf, isBlocked, isolationUnavailable, readyTimeoutMinutes } from '@libs/runtime/environment';
+import { typedBlocked } from '@libs/runtime/environment/typed-blocker';
 import type { Probe } from '@libs/runtime/probe';
 import type { ClaimRepo, EvidenceRequest, RepoRef } from '@libs/runtime/protocol';
 import { type ClaimWorkspace, type RunStreamEvent, workspaceSideOf } from '@libs/runtime/run';
@@ -20,6 +21,8 @@ import { CellUnavailableError, HubRefused, HubUnreachableError, MemberCleanupPen
 export { HubRefused } from '../../shared/errors';
 import type { PhysicalAdmissionTicket } from '../../shared/admission/admission-contract';
 import type { ClaimReleaser, RunEventSink } from '../run/ports';
+import { evidenceReadUrl, type EvidenceUploads } from '../run/run-evidence';
+import { canonicalEvidenceKey } from '../../shared/evidence/file-evidence-store';
 import type { SecretOpener } from '../secrets/sealed-tokens';
 
 // EnvironmentRuntime over the hub (docs §1b "Do worker ao hub"): the worker
@@ -257,6 +260,8 @@ export interface HubRunContext {
      * what the worker already keeps (the setup record); absent: not_set_up.
      */
     health?: (organizationId: string, environmentId: string) => Promise<EnvironmentHealth>;
+    /** Where a cell reads evidence objects (the store its upload grants go to): absent, an upload is upload_unavailable. */
+    evidenceReads?: EvidenceUploads;
 }
 
 /**
@@ -359,6 +364,12 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
      * boot_timeout, never a dropped call that is asked again.
      */
     async acquire(req: AcquireRequest, opts: AcquireOptions = {}): Promise<Claim | Blocked> {
+        const out = await this.acquireUntyped(req, opts);
+        // The border with the hub (docs §5): a kind this worker does not know reads unknown, and every blocker carries the catalog's card.
+        return isBlocked(out) ? typedBlocked(out) : out;
+    }
+
+    private async acquireUntyped(req: AcquireRequest, opts: AcquireOptions): Promise<Claim | Blocked> {
         const { readyBy } = opts;
         if (readyBy === undefined) return this.sendAcquire(req, TIMEOUT.acquire(req.consumer, req.ref?.side));
         const leftMs = readyBy - Date.now();
@@ -517,9 +528,27 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
         }
     }
 
-    /** upload through the claim's replica (the protocol's upload frame); a cell that cannot take files answers upload_unavailable. */
+    /**
+     * upload through the claim's replica (the protocol's upload frame). Each
+     * contentRef must be an evidence key of this client's org; the worker
+     * signs a read URL of that one key (at most 5 minutes) per file, which
+     * the cell GETs over its own path. No evidence store a cell can read
+     * from, or a cell that cannot take files: upload_unavailable.
+     */
     async upload(claimId: string, req: UploadRequest): Promise<void | EnvError> {
-        const r = await this.onClaim<{ ok?: boolean; code?: string }>(claimId, '/upload', { stepId: req.stepId, files: req.files }, TIMEOUT.step(UPLOAD_TIMEOUT_MS));
+        if (!this.run.evidenceReads) return { code: 'upload_unavailable' };
+        const files: Array<UploadRequest['files'][number] & { url: string }> = [];
+        for (const [i, f] of req.files.entries()) {
+            let key: string;
+            try {
+                key = canonicalEvidenceKey(f.contentRef);
+            } catch {
+                key = '';
+            }
+            if (!key || key.split('/')[0] !== this.run.organizationId) return { code: 'upload_failed', stepId: req.stepId, reason: `files[${i}].contentRef is not an object of this org` };
+            files.push({ ...f, url: evidenceReadUrl(this.run.evidenceReads, key) });
+        }
+        const r = await this.onClaim<{ ok?: boolean; code?: string }>(claimId, '/upload', { stepId: req.stepId, files }, TIMEOUT.step(UPLOAD_TIMEOUT_MS));
         if (r && 'code' in r && r.code) return r as EnvError;
     }
 

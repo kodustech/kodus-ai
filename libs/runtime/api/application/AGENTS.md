@@ -11,7 +11,7 @@ The application layer of the product's Runtime API: the services the use cases s
 - Model call budgets: `llm-run-budget.ts` `liveRunFor`, `withReservation`; `model-input-bytes.ts`.
 - Costs and the warm pool: `run-cost.service.ts` `RuntimeRunCostService`, `pool-controller.service.ts` `RuntimePoolController`.
 - Lost webhooks: `webhook-reconciler.service.ts` `RuntimeWebhookReconciler` (hands the PR trigger a missed head; never decides a Run).
-- The /mcp/env tools: `env-tools.service.ts` `RuntimeEnvToolsService` (team keys only). External findings and their verification: `external-findings.service.ts`, `external-verification-reconciler.ts`.
+- The /mcp/env tools: `env-tools.service.ts` `RuntimeEnvToolsService` (team keys only); `env_status` is `environmentHealthOf` over the org's setup record (read-only Runtime Postgres), never a cell call. External findings and their verification: `external-findings.service.ts`, `external-verification-reconciler.ts`.
 - Small shared rules: `asked-runs.ts` (one limit on Runs asked by hand), `recipe-inference.reader.ts`, `run-public-view.ts`, `failure-context.ts`.
 
 ## Does not own
@@ -43,6 +43,7 @@ Imports these Runtime modules:
 - [`libs/runtime/api/domain`](../domain/AGENTS.md)
 - [`libs/runtime/blockers`](../../blockers/AGENTS.md)
 - [`libs/runtime/contracts`](../../contracts/AGENTS.md)
+- [`libs/runtime/environment`](../../environment/AGENTS.md)
 - [`libs/runtime/probe`](../../probe/AGENTS.md)
 - [`libs/runtime/protocol`](../../protocol/AGENTS.md)
 - [`libs/runtime/redaction`](../../redaction/AGENTS.md)

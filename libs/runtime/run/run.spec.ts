@@ -133,6 +133,15 @@ describe('decideRunVerdict and checkConclusionFor', () => {
         expect(v.forcedNeutral).toContain('diff too large to test whole');
     });
 
+    it('a Run whose two sides ran with different drawn identities is partly tested at best (S-36)', () => {
+        const v = decideRunVerdict({ entryPoints: ['GET /a'], probes: [nr('GET /a')], identityMismatch: true });
+        expect(v.verdictState).toBe('partly_tested');
+        expect(v.forcedNeutral).toContain('the two sides ran with different drawn identities');
+        // A finding still wins: what the two sides were sent was the same.
+        const f = decideRunVerdict({ entryPoints: ['GET /a'], probes: [{ probeId: 'p1', entryPoint: 'GET /a', verdict: 'finding', intent: 'unintended', reason: 'status 500' }], identityMismatch: true });
+        expect(f.verdictState).toBe('regression');
+    });
+
     // kr-shop#4: two probes of POST /orders/preview, 404 on main (no such route), 200 and 400 on the PR.
     const newEndpoint = (probeId: string) => ({ probeId, entryPoint: 'POST /orders/preview', verdict: 'new_endpoint' as const, reason: 'main has no such route (404)' });
 

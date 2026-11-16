@@ -12,7 +12,8 @@
         {
           "path": "node_modules/@scope/pkg/index.js",
           "contentRef": "ref-1",
-          "mode": 420
+          "mode": 420,
+          "url": "https://evidence.example/org-a/run-1/base/0b9c8d7e-6f50-4a1b-9c2d-3e4f5a6b7c8d/output?exp=1&sig=x"
         }
       ]
     }

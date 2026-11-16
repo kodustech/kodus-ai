@@ -140,12 +140,16 @@ function baselineOf(ev: RunEvidence, up: EvidenceUploads, runId: string, baselin
         return {
             step: s.step,
             screenshot: s.screenshot,
-            url:
-                'presigner' in up
-                    ? up.presigner.readUrl(key, EVIDENCE_MAX_TTL_SECONDS, up.now?.())
-                    : signEvidenceUrl({ baseUrl: up.baseUrl, key, secret: up.secret, ttlSeconds: EVIDENCE_MAX_TTL_SECONDS, now: up.now?.() }).url,
+            url: evidenceReadUrl(up, key),
         };
     });
+}
+
+/** A read URL of one exact key as a cell reaches the store (at most 5 minutes, §7): the evidence server's signed GET, or S3's presigned one. */
+export function evidenceReadUrl(up: EvidenceUploads, key: string): string {
+    return 'presigner' in up
+        ? up.presigner.readUrl(key, EVIDENCE_MAX_TTL_SECONDS, up.now?.())
+        : signEvidenceUrl({ baseUrl: up.baseUrl, key, secret: up.secret, ttlSeconds: EVIDENCE_MAX_TTL_SECONDS, now: up.now?.() }).url;
 }
 
 /**
@@ -253,6 +257,8 @@ export function envErrorEvidence(e: EnvError): { code: EnvError['code']; reason:
             return { code: e.code, reason: "the cell saw this claim's code exfiltrate; the claim runs nothing more" };
         case 'upload_unavailable':
             return { code: e.code, reason: "the claim's cell cannot take files; nothing was written" };
+        case 'upload_failed':
+            return { code: e.code, reason: `the upload wrote nothing: ${e.reason}` };
     }
 }
 

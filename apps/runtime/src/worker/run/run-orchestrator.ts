@@ -44,7 +44,7 @@ import { checkClaimLease, type ClaimLeaseFailed, throwClaimLeaseFailure } from '
 import { isCancellation } from '../workflow-cancellation';
 import { type SecurityViolation, SecurityViolationError } from './security-violation';
 import { playFirstBaseRound, replayProbe, type RoundOut } from './replay';
-import { runIdentityOf, withRunIdentity } from './run-identity';
+import { type RunIdentityMismatch, runIdentityMismatchOf, runIdentityOf, skewedByIdentity, usesRunIdentity, withRunIdentity } from './run-identity';
 import { stableStepId } from './step-id';
 import { claimIdFor } from '../../shared/claim-id';
 import { externalVerificationPlan } from './external-verification';
@@ -707,6 +707,11 @@ interface ReadySides {
     rounds: { base?: string; pr?: string };
     baseMs: number;
     applyMs: number;
+    /**
+     * The two claims did not carry the same drawn identity (S-36): the probes
+     * that use its tokens are inconclusive and the Run is partly tested at best.
+     */
+    identityMismatch?: RunIdentityMismatch;
 }
 
 /** What the test phase found; partial when a canary or a security violation stopped it early. */
@@ -975,7 +980,10 @@ async function settleBoot(run: RunScope, b: BootedSides): Promise<ReadySides | {
     // Both claims are bound and kept leased since each one's boot (bootBoth), never past their hard ceiling.
     await deps.step('cell-owner', async () => deps.projection.upsert(req.runId, { cellOwner: base.cellOwner }));
     const rounds = { ...(booted.base.roundSnapshotId ? { base: booted.base.roundSnapshotId } : {}), ...(booted.pr.roundSnapshotId ? { pr: booted.pr.roundSnapshotId } : {}) };
-    return { base, pr, pinnedImageId, rounds, baseMs: b.baseMs, applyMs: b.applyMs };
+    // The probes are played with the base's identity on both sides (S-36): a PR cell that set none, or another, skews them.
+    const identityMismatch = runIdentityMismatchOf(base, pr);
+    if (identityMismatch) deps.log?.warn({ msg: 'run.identity_mismatch', runId: req.runId, mismatch: identityMismatch, baseCellId: base.cellId, prCellId: pr.cellId });
+    return { base, pr, pinnedImageId, rounds, baseMs: b.baseMs, applyMs: b.applyMs, ...(identityMismatch ? { identityMismatch } : {}) };
 }
 
 /** The agent's plan (or the external finding's), once both claims are still alive. */
@@ -1299,7 +1307,9 @@ async function replayProbes(run: RunScope, ready: ReadySides, t: TestedRun, beha
             }),
         );
         const { steps, lanes, responseDiff } = replayed;
-        if (key) {
+        // A probe sent the base's drawn identity on a Run whose sides do not share one: its result never enters the history.
+        const skewed = !!ready.identityMismatch && usesRunIdentity(planned.probe);
+        if (key && !skewed) {
             outcomes.push({
                 probeKey: key,
                 probeIndex: index,
@@ -1319,10 +1329,11 @@ async function replayProbes(run: RunScope, ready: ReadySides, t: TestedRun, beha
         const addedByDiff = t.entryPoints.some((e) => e.id === entryPoint && e.added === true);
         const added = decideNewEndpoint(replayed.decision, steps, { addedByDiff });
         // A difference the diff's own lines spell out is the PR's intended change, never a regression (decideIntendedChange).
-        const decision = decideIntendedChange(added, steps, {
+        const intended = decideIntendedChange(added, steps, {
             diff: req.diff,
             ...(planned.probe.spec.kind === 'browser' ? { browserStepKinds: browserStepKindsOf(planned.probe.spec.steps) } : {}),
         });
+        const decision = skewedByIdentity(intended, planned.probe, ready.identityMismatch);
         const intendedChange = decision.intendedChange?.map((c) => ({ ...c, base: redactPatterns(c.base).text, pr: redactPatterns(c.pr).text }));
         // What was sent, from the typed spec: shown on the comment and the page, never coverage.
         const exercised = exercisedOf(planned.probe.spec);
@@ -1494,6 +1505,7 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
         dependencyChangeUntested: ctx.dependencyChangeUntested,
         // A diff the product cut is partly tested at best.
         diffTruncated: req.diffTruncated === true,
+        identityMismatch: !!ready.identityMismatch,
     });
     tally.findings = verdict.findings.length;
     if (ctx.securityViolation) await securityViolationEvent(deps, req, ctx.securityViolation);

@@ -66,7 +66,7 @@ const BUILD_FAILED: Blocked = {
     ],
     cellId: 'cell-1',
 };
-const blockedOn = (kind: string, signature: string, message = 'the boot failed'): Blocked => ({ status: 'blocked', blockers: [{ kind, signature, message }], cellId: 'cell-1' });
+const blockedOn = (kind: Blocked['blockers'][number]['kind'], signature: string, message = 'the boot failed'): Blocked => ({ status: 'blocked', blockers: [{ kind, signature, message }], cellId: 'cell-1' });
 
 type Boot = 'ok' | 'not_ready' | Blocked | (() => never);
 
@@ -279,7 +279,7 @@ describe('repairs of a recipe Kody wrote, inside one setup', () => {
             ['the boot outliving the setup', blockedOn('resources', 'boot_timeout', 'the boot did not finish in 44 min, the most a setup waits')],
             ['the machine memory', blockedOn('resources', 'out_of_memory', 'the build was killed: memory passed 4g')],
             ['a credential sent out', blockedOn('security_violation', 'canary_egress')],
-            ['no cell connected', blockedOn('cell_unavailable', 'cell_unavailable')],
+            ['no cell connected', blockedOn('platform', 'cell_unavailable')],
         ])('after a failure on %s', async (_name, boot) => {
             const { a } = await noRepair(boot);
             expect(a.calls).toHaveLength(1);

@@ -55,6 +55,7 @@ Imported by:
 - [`libs/runtime/api/infrastructure`](../api/infrastructure/AGENTS.md)
 - [`libs/runtime/blockers/rules`](rules/AGENTS.md)
 - [`libs/runtime/contracts/views`](../contracts/views/AGENTS.md)
+- [`libs/runtime/environment`](../environment/AGENTS.md)
 - [`libs/runtime/protocol/scripts`](../protocol/scripts/AGENTS.md)
 - [`libs/runtime/run`](../run/AGENTS.md)
 

@@ -20,6 +20,7 @@ The Run and the setup as both sides of the queue see them: the outbox messages b
 - `repoToken` and `runToken` are refused unless sealed; a token is opened only inside the step that uses it.
 - No agent or app prose reaches the PR through the report; values in lanes, diffs and boot failures are redacted and cut.
 - The diff is capped at 16 MiB and carries `diffTruncated`.
+- `decideRunVerdict` `identityMismatch`: the two sides' claims did not carry the same drawn identity (S-36); the Run is partly tested at best, as with `diffTruncated`.
 - `index.ts` re-exports `adapters/file-run-stream.store.ts` (`fs`) from the barrel of this pure module, and the API module takes `FileRunStreamStore` from it.
 - `run-stream.ts`'s header says the hub writes the stream to an object store; the hub writes Postgres (`adapters/pg-run-stream.store.ts`) or a local file.
 

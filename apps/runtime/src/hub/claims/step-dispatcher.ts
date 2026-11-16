@@ -390,12 +390,16 @@ export class StepDispatcher {
 
     /**
      * upload: the files written into the claim's checkout from the evidence
-     * store (docs §5). The command hash covers every path and ref, so a stepId
-     * sent again with other files is a reused step.
+     * store (docs §5). The command hash covers every path, ref, digest and
+     * mode, so a stepId sent again with other files is a reused step; never
+     * the read grant, which the worker signs again on a retry. A write the
+     * cell refused is upload_failed with its reason (it never names a grant).
      */
     async upload(ref: ClaimRef, req: MessageBody<'upload'>, timeoutMs: number = 120_000): Promise<{ ok: true } | EnvError> {
-        const r = await this.sendStep(ref, 'upload', { stepId: req.stepId, files: req.files }, `upload:${JSON.stringify(req.files)}`, timeoutMs);
+        const r = await this.sendStep(ref, 'upload', { stepId: req.stepId, files: req.files }, `upload:${JSON.stringify(req.files.map(({ url: _grant, ...f }) => f))}`, timeoutMs);
         if ('code' in r) return r;
+        if (r.body.vmHealth !== 'ok') return { code: 'transport_lost', stepId: req.stepId };
+        if (r.body.exec && r.body.exec.exitCode !== 0) return { code: 'upload_failed', stepId: req.stepId, reason: r.body.exec.stderr.slice(0, 500) };
         return { ok: true };
     }
 }

@@ -33,6 +33,7 @@ Imports these Runtime modules:
 
 Imported by:
 
+- [`apps/runtime-cell/internal/agent`](../agent/AGENTS.md)
 - [`apps/runtime-cell/internal/dockercli`](../dockercli/AGENTS.md)
 - [`apps/runtime-cell/internal/drivers/dockergvisor`](../drivers/dockergvisor/AGENTS.md)
 - [`apps/runtime-cell/internal/drivers/localdocker`](../drivers/localdocker/AGENTS.md)

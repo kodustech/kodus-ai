@@ -28,6 +28,8 @@ import {
 } from '@libs/runtime/contracts/env-session';
 import { RepositoryAliasSchema } from '@libs/runtime/contracts/workspace';
 import { redactPatterns } from '@libs/runtime/redaction';
+import { environmentHealthOf } from '@libs/runtime/environment/environment-health';
+import type { EnvironmentHealth } from '@libs/runtime/environment/environment-runtime';
 
 import {
     ENV_AUDIT_MAX_COMMAND,
@@ -403,6 +405,20 @@ export class RuntimeEnvToolsService {
             },
             blockers: groups.map(({ recipeChanges: _, ...view }) => view),
         };
+    }
+
+    /**
+     * env_status: the environment's health (EnvironmentHealth, docs §5): state, the week's setup boots,
+     * time to ready, image, cell and blockers by signature. Read from the setup record the Runtime keeps
+     * (runtime_environment_setups, read-only and org-scoped), never a cell. A record of another org or
+     * another environment reads as never set up.
+     */
+    async status(p: EnvKeyPrincipal, target: EnvTarget): Promise<EnvironmentHealth> {
+        this.require(p, TEAM_CLI_KEY_CAPABILITIES.ENV_EXEC, TEAM_CLI_KEY_CAPABILITIES.ENV_FIX);
+        const env = await this.resolve(p, target);
+        const rec = await this.views.setup(env.organizationId, env.environmentId);
+        const ours = rec && rec.organizationId === env.organizationId && rec.environmentId === env.environmentId ? rec : null;
+        return environmentHealthOf(ours ?? { environmentId: env.environmentId }, this.now());
     }
 
     /**

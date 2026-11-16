@@ -109,7 +109,13 @@ function harness(
         findByRepository: async (org: string, repo: string) => environments.find((e) => e.organizationId === org && e.repositoryId === repo) ?? null,
         listByOrganization: async (org: string) => environments.filter((e) => e.organizationId === org),
     };
-    const views = { setup: async () => (opts.setup === undefined ? blockedSetup : opts.setup), environmentRuns: async () => [] } as any;
+    const setupReads: Array<{ organizationId: string; environmentId: string }> = [];
+    const views = {
+        setup: async (organizationId: string, environmentId: string) => (
+            setupReads.push({ organizationId, environmentId }), opts.setup === undefined ? blockedSetup : opts.setup
+        ),
+        environmentRuns: async () => [],
+    } as any;
     const sessions = new FakeEnvSessionPort();
     const audit = new InMemoryRuntimeEnvAuditStore();
     const tokens: string[] = [];
@@ -136,7 +142,7 @@ function harness(
         undefined,
         opts.membership ? new RuntimeEnvironmentMembers(products, opts.membership) : undefined,
     );
-    return { service, sessions, audit, setupRequests, prs, tokens, advance: (ms: number) => (now = new Date(now.getTime() + ms)) };
+    return { service, sessions, audit, setupRequests, setupReads, prs, tokens, advance: (ms: number) => (now = new Date(now.getTime() + ms)) };
 }
 
 describe('RuntimeEnvToolsService (/mcp/env)', () => {
@@ -251,6 +257,84 @@ describe('RuntimeEnvToolsService (/mcp/env)', () => {
         await expect(h.service.blockers({ ...KEY, capabilities: ['runs:read'] }, { environmentId: 'env-a' })).rejects.toBeInstanceOf(ForbiddenException);
         expect((await h.service.blockers({ ...KEY, capabilities: ['env:fix'] }, { environmentId: 'env-a' })).blockers.length).toBeGreaterThan(0);
         expect((await h.service.blockers({ ...KEY, capabilities: ['env:exec'] }, { environmentId: 'env-a' })).environment.environmentId).toBe('env-a');
+    });
+
+    describe('env_status', () => {
+        const DAY = 24 * 3_600_000;
+        const at = (msAgo: number) => new Date(Date.parse('2026-11-03T12:00:00.000Z') - msAgo).toISOString();
+        const activeSetup: EnvironmentSetupRecord = {
+            ...blockedSetup,
+            state: 'active',
+            imageId: 'img-1',
+            cellId: 'cell-1',
+            blockers: [],
+            boots: [
+                { at: at(DAY), outcome: 'ready', ms: 40_000 },
+                { at: at(2 * DAY), outcome: 'failed', ms: 9_000, signature: 'missing_env' },
+                { at: at(3 * DAY), outcome: 'ready', ms: 60_000 },
+                { at: at(8 * DAY), outcome: 'ready', ms: 1_000 },
+            ],
+        } as EnvironmentSetupRecord;
+
+        it("answers the org's own environment from its setup record, read for the caller's org", async () => {
+            const h = harness({ setup: activeSetup });
+            const health = await h.service.status(KEY, { environmentId: 'env-a' });
+            expect(health).toEqual({
+                environmentId: 'env-a',
+                state: 'active',
+                boots7d: 3,
+                bootRate7d: 2 / 3,
+                readyP50Ms: 40_000,
+                imageId: 'img-1',
+                cellId: 'cell-1',
+                blockers: [{ signature: 'missing_env', kind: 'unknown', count: 1, lastAt: at(2 * DAY) }],
+            });
+            expect(h.setupReads).toEqual([{ organizationId: ORG, environmentId: 'env-a' }]);
+        });
+
+        it('a blocked setup names its open blockers with their kind', async () => {
+            const h = harness();
+            const health = await h.service.status(KEY, { repositoryId: 'repo-a' });
+            expect(health.state).toBe('blocked');
+            expect(health.boots7d).toBe(0);
+            expect(health.bootRate7d).toBeUndefined();
+            expect(health.blockers.map((b) => [b.signature, b.kind])).toEqual(
+                expect.arrayContaining([
+                    ['missing_env', 'missing_env'],
+                    ['kodus_step', 'platform'],
+                ]),
+            );
+        });
+
+        it('an environment never set up reads not_set_up', async () => {
+            const h = harness({ setup: null });
+            expect(await h.service.status(KEY, { environmentId: 'env-a' })).toEqual({ environmentId: 'env-a', state: 'not_set_up', boots7d: 0, blockers: [] });
+        });
+
+        it("a setup record of another org reads not_set_up: nothing of it reaches the answer", async () => {
+            const h = harness({ setup: { ...activeSetup, organizationId: 'org-b' } });
+            const health = await h.service.status(KEY, { environmentId: 'env-a' });
+            expect(health).toEqual({ environmentId: 'env-a', state: 'not_set_up', boots7d: 0, blockers: [] });
+            expect(JSON.stringify(health)).not.toContain('img-1');
+        });
+
+        it.each([
+            ['another org', 'env-b'],
+            ['a repo the key does not list', 'env-c'],
+            ['an unknown id', 'env-z'],
+        ])('S-46: %s is 404 and no setup is read', async (_name, environmentId) => {
+            const h = harness({ setup: activeSetup });
+            await expect(h.service.status(KEY, { environmentId })).rejects.toBeInstanceOf(NotFoundException);
+            expect(h.setupReads).toHaveLength(0);
+        });
+
+        it('takes env:exec or env:fix, nothing else', async () => {
+            const h = harness({ setup: activeSetup });
+            await expect(h.service.status({ ...KEY, capabilities: ['runs:read'] }, { environmentId: 'env-a' })).rejects.toBeInstanceOf(ForbiddenException);
+            expect(h.setupReads).toHaveLength(0);
+            expect((await h.service.status({ ...KEY, capabilities: ['env:fix'] }, { environmentId: 'env-a' })).state).toBe('active');
+            expect((await h.service.status({ ...KEY, capabilities: ['env:exec'] }, { environmentId: 'env-a' })).state).toBe('active');
+        });
     });
 
     it.each([

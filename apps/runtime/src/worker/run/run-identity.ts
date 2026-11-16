@@ -38,3 +38,46 @@ export function withRunIdentity(probe: Probe, identity: ClaimRunIdentity | undef
     const deep = (v: unknown): unknown => (typeof v === 'string' ? swap(v) : Array.isArray(v) ? v.map(deep) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, deep(x)])) : v);
     return { ...probe, spec: deep(probe.spec) as Probe['spec'] };
 }
+
+/**
+ * How the two sides' claims differ in the drawn identity their cells set
+ * (Claim.identity): `base_unset` or `pr_unset`, that side's cell did not set
+ * it (no runIdentity feature) while the other did; `differ`, both set one and
+ * they are not the same. Undefined: both set the same, or neither did (both
+ * workloads kept the recipe's values and the probes keep their tokens on both).
+ */
+export type RunIdentityMismatch = 'base_unset' | 'pr_unset' | 'differ';
+
+export function runIdentityMismatchOf(base: { identity?: ClaimRunIdentity }, pr: { identity?: ClaimRunIdentity }): RunIdentityMismatch | undefined {
+    const b = base.identity;
+    const p = pr.identity;
+    if (!b && !p) return undefined;
+    if (!b) return 'base_unset';
+    if (!p) return 'pr_unset';
+    return b.hostname === p.hostname && b.user === p.user && b.domain === p.domain ? undefined : 'differ';
+}
+
+/** Whether a probe names a drawn identifier through a {{run.*}} token anywhere in its spec. */
+export function usesRunIdentity(probe: Probe): boolean {
+    const spec = JSON.stringify(probe.spec);
+    return Object.values(RUN_IDENTITY_TOKENS).some((token) => spec.includes(token));
+}
+
+export const IDENTITY_MISMATCH_REASON = 'the probe uses the Run\'s drawn identity, and the two sides did not run with the same one';
+
+/**
+ * A probe that sends a drawn identifier, on a Run whose sides do not share
+ * one, was sent the base's values on a PR side that does not hold them (or
+ * the reverse): its comparison proves nothing, so it is inconclusive, never
+ * a finding or a not_reproduced (the gate fails closed). Any other probe sent
+ * the same request to both sides and keeps its decision.
+ */
+export function skewedByIdentity<D extends { verdict: string; reason: string; findingKind?: unknown; differingFields?: string[]; intendedChange?: unknown }>(
+    decision: D,
+    probe: Probe,
+    mismatch: RunIdentityMismatch | undefined,
+): D {
+    if (!mismatch || !usesRunIdentity(probe)) return decision;
+    const { findingKind: _kind, intendedChange: _change, ...rest } = decision;
+    return { ...rest, verdict: 'inconclusive', reason: IDENTITY_MISMATCH_REASON, differingFields: [] } as unknown as D;
+}

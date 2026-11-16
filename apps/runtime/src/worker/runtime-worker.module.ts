@@ -1,3 +1,4 @@
+import type { EvidenceUploads } from './run/run-evidence';
 import { LOCK_SCOPED_PG, LockScopedPg } from '../shared/persistence/lock-scoped-pg';
 import { PR_ADMISSION_STORE, PgPrAdmissionStore } from '../shared/admission/pr-admission-store';
 import { AmqpConnection, RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
@@ -187,10 +188,18 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                         secrets: SealedSecretOpener,
                         setups: EnvironmentSetupStore,
                     ) => {
+                        // S3: presigned PUTs to the bucket. File: grants only where a cell can reach this
+                        // evidence server and it is up to take them. The same store gives an upload its reads.
+                        const evidenceUploads: EvidenceUploads | undefined =
+                            store instanceof S3EvidenceStore
+                                ? { presigner: store }
+                                : store && config.evidence.uploadUrl && config.evidence.secret && config.evidence.port
+                                  ? { baseUrl: config.evidence.uploadUrl, secret: config.evidence.secret }
+                                  : undefined;
                         const environment =
                             config.envDriver === 'fake'
                                 ? await fakeEnvironments() // dev only: the production image refuses RUNTIME_ENV_DRIVER=fake
-                                : hubEnvironments(hub, secrets, config.git, poolCellOf(setups), setups);
+                                : hubEnvironments(hub, secrets, config.git, poolCellOf(setups), setups, evidenceUploads);
                         return new RunDependenciesFactory({
                             environment,
                             allowUnrenewedClaims: config.envDriver === 'fake',
@@ -216,13 +225,7 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                                     ? logger.warn({ msg: 'claim.renew_missed', runId, claimId: e.claimId, error: e.error })
                                     : logger.log({ msg: `claim.renew.${e.type}`, runId, claimId: e.claimId, ...(e.type === 'renewed' ? { leaseExpiresAt: e.leaseExpiresAt, atCeiling: e.atCeiling } : {}) }),
                             ...(store ? { evidence: store } : {}),
-                            // S3: presigned PUTs to the bucket. File: grants only where a cell can reach this
-                            // evidence server and it is up to take them.
-                            ...(store instanceof S3EvidenceStore
-                                ? { evidenceUploads: { presigner: store } }
-                                : store && config.evidence.uploadUrl && config.evidence.secret && config.evidence.port
-                                  ? { evidenceUploads: { baseUrl: config.evidence.uploadUrl, secret: config.evidence.secret } }
-                                  : {}),
+                            ...(evidenceUploads ? { evidenceUploads } : {}),
                             log: { info: (e) => logger.log(e), warn: (e) => logger.warn(e) },
                             ...(config.roundSnapshots ? { roundSnapshots: true } : {}),
                         });

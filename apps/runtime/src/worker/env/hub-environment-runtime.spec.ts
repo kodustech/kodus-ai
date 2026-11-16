@@ -6,6 +6,8 @@ import { hubEnvironments, poolCellOf } from '../dbos/run-deps.factory';
 import { SealedSecretOpener } from '../secrets/sealed-tokens';
 import { HubClaimReleaser, HubClient, HubEnvironmentClient, HubPoolTargetSender, HubRequestTimeoutError, HubRunEventSink, isNetworkError, mtlsPost } from './hub-environment-runtime';
 import { createServer } from 'node:http';
+import { verifyEvidenceSignature } from '@libs/runtime/contracts/evidence';
+import type { EvidenceUploads } from '../run/run-evidence';
 import type { AddressInfo } from 'node:net';
 
 const secrets = new SealedSecretOpener(devSealKey());
@@ -21,8 +23,9 @@ const recording = (calls: Call[], status = 200, text = '{}') => async (url: stri
     return { status, text };
 };
 const reset = () => Promise.reject(Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }));
-const runtime = (hub: HubClient, runId: string | null = 'run-1') =>
+const runtime = (hub: HubClient, runId: string | null = 'run-1', evidenceReads?: EvidenceUploads) =>
     new HubEnvironmentClient(hub, secrets, {
+        ...(evidenceReads ? { evidenceReads } : {}),
         correlationId: 'corr',
         organizationId: 'org-a',
         ...(runId ? { runId } : {}),
@@ -207,14 +210,30 @@ describe('HubEnvironmentClient', () => {
         expect(calls).toHaveLength(0);
     });
 
-    it("an upload goes to the claim's replica with the tenant, the step and the files; a cell that cannot take files is upload_unavailable", async () => {
+    it("an upload carries a read grant per file of the Run's org to the claim's replica; a cell that cannot take files is upload_unavailable", async () => {
+        const reads = { baseUrl: 'https://evidence.cell', secret: 's'.repeat(32), now: () => new Date('2026-11-16T00:00:00Z') };
+        const ref = 'org-a/run-1/base/0b9c8d7e-6f50-4a1b-9c2d-3e4f5a6b7c8d/output';
         const calls: Call[] = [];
-        const files = [{ path: 'fixtures/a.json', contentRef: 'ref-1' }];
-        expect(await runtime(client(recording(calls, 200, '{"ok":true}'))).upload('c1', { stepId: 's1', files })).toBeUndefined();
+        const files = [{ path: 'fixtures/a.json', contentRef: ref, mode: 0o644 }];
+        expect(await runtime(client(recording(calls, 200, '{"ok":true}')), 'run-1', reads).upload('c1', { stepId: 's1', files })).toBeUndefined();
         expect(calls[0].url).toBe('https://hub-1/internal/claims/c1/upload');
-        expect(calls[0].body).toEqual({ organizationId: 'org-a', runId: 'run-1', stepId: 's1', files });
-        expect(await runtime(client(recording([], 200, '{"code":"upload_unavailable"}'))).upload('c1', { stepId: 's2', files })).toEqual({ code: 'upload_unavailable' });
-        expect(await runtime(client(recording([]), null)).upload('c1', { stepId: 's3', files })).toEqual({ code: 'cell_unavailable', cellId: 'unknown' });
+        const sent = calls[0].body as { files: Array<{ url: string }> };
+        expect(sent).toEqual({ organizationId: 'org-a', runId: 'run-1', stepId: 's1', files: [{ ...files[0], url: expect.any(String) }] });
+        const url = new URL(sent.files[0].url);
+        expect(url.origin + url.pathname).toBe(`https://evidence.cell/${ref}`);
+        expect(verifyEvidenceSignature({ key: ref, exp: Number(url.searchParams.get('exp')), sig: url.searchParams.get('sig')!, secret: reads.secret, now: reads.now() })).toBe(true);
+        expect(await runtime(client(recording([], 200, '{"code":"upload_unavailable"}')), 'run-1', reads).upload('c1', { stepId: 's2', files })).toEqual({ code: 'upload_unavailable' });
+        expect(await runtime(client(recording([]), null), 'run-1', reads).upload('c1', { stepId: 's3', files })).toEqual({ code: 'cell_unavailable', cellId: 'unknown' });
+    });
+
+    it('an upload of another org\'s object, of a ref that is not an evidence key, or with no evidence store to read from never reaches the hub', async () => {
+        const reads = { baseUrl: 'https://evidence.cell', secret: 's'.repeat(32) };
+        const calls: Call[] = [];
+        const step = '0b9c8d7e-6f50-4a1b-9c2d-3e4f5a6b7c8d';
+        expect(await runtime(client(recording(calls)), 'run-1', reads).upload('c1', { stepId: 's1', files: [{ path: 'a', contentRef: `org-b/run-1/base/${step}/output` }] })).toEqual({ code: 'upload_failed', stepId: 's1', reason: 'files[0].contentRef is not an object of this org' });
+        expect(await runtime(client(recording(calls)), 'run-1', reads).upload('c1', { stepId: 's2', files: [{ path: 'a', contentRef: 'ref-1' }] })).toEqual({ code: 'upload_failed', stepId: 's2', reason: 'files[0].contentRef is not an object of this org' });
+        expect(await runtime(client(recording(calls))).upload('c1', { stepId: 's3', files: [{ path: 'a', contentRef: `org-a/run-1/base/${step}/output` }] })).toEqual({ code: 'upload_unavailable' });
+        expect(calls).toHaveLength(0);
     });
 
     it("status reads the health of an environment of the Run's own org only, from the health reader it was given", async () => {

@@ -2464,6 +2464,16 @@
                 "minLength": 1,
                 "maxLength": 1024
               },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "pattern": "^https?:\\/\\/[^\\s]+$"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
               "mode": {
                 "type": "integer",
                 "minimum": 0,
@@ -2472,7 +2482,8 @@
             },
             "required": [
               "path",
-              "contentRef"
+              "contentRef",
+              "url"
             ],
             "additionalProperties": false
           }

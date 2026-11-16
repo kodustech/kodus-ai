@@ -746,9 +746,11 @@ type ExecBody struct {
 }
 
 type UploadFile struct {
-	Path       string `json:"path"`
-	ContentRef string `json:"contentRef"`
-	Mode       *int64 `json:"mode,omitempty"`
+	Path       string  `json:"path"`
+	ContentRef string  `json:"contentRef"`
+	URL        string  `json:"url"`
+	Sha256     *string `json:"sha256,omitempty"`
+	Mode       *int64  `json:"mode,omitempty"`
 }
 
 type UploadBody struct {
