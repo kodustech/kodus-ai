@@ -101,6 +101,8 @@ const CLASS_BRIEF: Record<
     },
 };
 
+const LIBRARY_BOUNDARY = `Some repositories ship a library rather than an application. Read its public API contract and use that contract as the boundary. Do not invent a downstream web endpoint, credential consumer or constrained plugin host. A time-based identifier or non-cryptographic checksum does not promise secrecy or unguessability. Misuse becomes a finding when a shipped caller relies on that missing guarantee. Intentionally unsafe or diagnostic behavior does not break a guarantee the API explicitly omits; it can still break another guarantee. Libraries can have intrinsic security defects under supported use, including violated validation, memory safety or shared identifier integrity. Distinguish ordinary untrusted data from caller-supplied code: an attacker who must already execute getters, callbacks or unrestricted code needs an actual additional restriction to bypass. Name the violated guarantee and extra capability or corruption; do not infer them from a possible future application.`;
+
 export function buildLensSystemPrompt(vulnClass: VulnClass): string {
     const brief = CLASS_BRIEF[vulnClass];
     return `You are a security engineer auditing a repository for ONE class of vulnerability: ${brief.name}.
@@ -119,6 +121,8 @@ Name the attacker first, and the boundary they cross. The attacker is someone th
 - What an administrator or the operator configures at run time (environment variables, admin settings, admin-only routes, admin-installed plugins) is trusted. A secret written into the repository is not configuration: whoever reads the code holds it. Nor is an insecure default the code ships with (debug on, CSRF off, permissive CORS, TLS verification off): every deployment that does not override it is exposed.
 - A command-line tool, a developer script or a desktop app run by a user on their own machine attacks only that user; so does a local file or socket only the same OS user can reach.
 - Data that is public anyway, or a token whose guessing space and lifetime make guessing it impractical, gives the attacker nothing.
+
+${LIBRARY_BOUNDARY}
 
 A finding must be exploitable, not merely possible:
 1. Name where the attacker's input enters (the route, handler, resolver, consumer or CLI argument), with its file and line. Read it; do not guess it.
@@ -148,6 +152,7 @@ Outside the focus, however real the code smell: a capability the application alr
 Within the focus: getting around a limit the application itself enforces (a sandbox around user code, a block on internal or metadata addresses, a per-user folder, an allow-list), a secret committed to the repository, and an insecure default the code ships with that a remote attacker can use (a CSRF from another site, a debug console, a cross-origin read, a cookie stolen over plain HTTP).
 Class-specific exclusions (these also apply when the code smell exists):
 ${brief.notIt}
+${LIBRARY_BOUNDARY}
 The finding's assertion of a boundary is not evidence of one. Read the entry point, its guards and the relevant callers before accepting that this caller lacks the reported capability. A flow editor intentionally allowed to run unsandboxed code or configure arbitrary servers gains no new host/network power from another path doing the same. A public resource or a random job handle returned only to its initiator is not another user's private data. Keep only a concrete attack path; a hypothetical additional compromise, unknown external behavior or an operator choosing a weak secret does not establish it.`;
 }
 
