@@ -10,7 +10,7 @@ Each public repository has the same $3 request-level cap.
 Release state: the original precision baseline fails Python and Go. The
 local follow-up stopped on ENOSPC. A clean `e5223d6a0` checkout is now measuring
 the six missing development/confirmation cases on the VM, in one paid queue.
-The frozen TypeScript/Python samples are judged; the other four cases and
+The frozen three development samples are judged; confirmation scoring and
 valid negative-control evidence remain pending. No release pass is claimed.
 
 ## Development baseline
@@ -111,19 +111,25 @@ case budgets), one runner and two repositories at a time. Completed case
 snapshots and hash-selected samples are retained in `vm-followup.cases/` and
 were committed before their descriptions were inspected.
 
-The first two completed cases have the following **partial** source judgments.
-They do not include controls or the remaining four cases:
+The three completed development cases have the following **partial** source
+judgments. They do not include controls or the separate confirmation group:
 
 | Case | Real/listed | Judged | Precision | Unjudged | Coverage | Recall |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Flowise (TypeScript) | 17 | 21 | 81.0% | 16 | 7/1,405 done; 2 failed | 1/5 |
 | Langflow (Python) | 17 | 20 | 85.0% | 1 | 4/1,843 done | 0/1 |
+| WeKnora (Go) | 13 | 20 | 65.0% | 6 | 5/372 done | 0/1 |
 
-Both stopped within their cap: $2.992663248 and $2.915709216. Those coverage
-limits matter; this is not a complete audit of either repository. Call-failure
+All stopped within their caps: $2.992663248, $2.915709216 and $2.987613012.
+The strict advisory-matcher recall is 1/7 versus 3/7 in the original baseline,
+with much less completed coverage. Higher sampled precision does not establish
+better overall detection. Dataset language means the repository primary
+language; WeKnora includes findings in its Python docreader component.
+`vm-development.partial-summary.json` retains the case hashes and unjudged
+counts. This is not a complete audit of these repositories. Call-failure
 counters include budget admission/cancellation errors and must not all be
-called provider failures. No exhausted HTTP 429 was recorded in either case.
-The 40 new judgments preserve every previous exact-claim record and leave the
+called provider failures. No exhausted HTTP 429 was recorded in these cases.
+The 60 new judgments preserve every previous exact-claim record and leave the
 original failing baseline unchanged (`contracts/adjudication-history-invariant.json`).
 The judge remains Codex inspecting pinned source, not an independent human.
 `contracts/express4-query-provenance.json` supports rejecting one report that
@@ -137,7 +143,11 @@ the finder and verifier. It names no benchmark repository, case or advisory.
 only by that paragraph; other prompt exports and all positive cases are
 unchanged. Existing prompt/engine tests pass (81), and scripted-model wiring
 passes on the clean candidate (`contracts/library-candidate-validation.log`).
-Those checks establish wiring, not model quality.
+The bounded diagnostic preload also passes scripted wiring
+(`contracts/library-observed-wiring.log`); its source/hash and forwarding
+contract are frozen in the measurement plan. It records failure categories
+without model bodies or error messages. Those checks establish wiring, not
+model quality.
 
 `library-candidate-measurement-plan.json` freezes conditional measurement:
 finish the active six-case queue, then measure all four controls on the

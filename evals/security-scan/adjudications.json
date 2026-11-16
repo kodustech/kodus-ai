@@ -1009,33 +1009,62 @@
         ],
         "verdict": "false"
       },
-      "weknora-a20541cd|secret_identity|internal/application/service/user.go|userService.ChangePassword|228": {
-        "sourceResult": "results/2026-11-16-review/positive.raw.json",
-        "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
-        "findingSha256": "ca9ad1b2c0a84821c7a8d6cf506c9ef6d81041f616549c0497fead3c250240ba",
-        "judge": "Codex",
-        "date": "2026-11-16",
-        "reason": "Changing a compromised account's password updates only PasswordHash. Existing access/refresh rows remain unrevoked and are accepted by both token paths; the implemented RevokeTokensByUserID mechanism is not used here, so credential rotation does not evict a stolen refresh session.",
-        "sources": [
-          {
-            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L228",
-            "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
-          },
-          {
-            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L347",
-            "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
-          },
-          {
-            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L387",
-            "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
-          },
-          {
-            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/repository/user.go#L150",
-            "sha256": "fb5d49b99a1b6393ddd5b010bd29d3682a2718c8d5436567762b9d86b0192980"
-          }
-        ],
-        "verdict": "real"
-      },
+      "weknora-a20541cd|secret_identity|internal/application/service/user.go|userService.ChangePassword|228": [
+        {
+          "sourceResult": "results/2026-11-16-review/positive.raw.json",
+          "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
+          "findingSha256": "ca9ad1b2c0a84821c7a8d6cf506c9ef6d81041f616549c0497fead3c250240ba",
+          "judge": "Codex",
+          "date": "2026-11-16",
+          "reason": "Changing a compromised account's password updates only PasswordHash. Existing access/refresh rows remain unrevoked and are accepted by both token paths; the implemented RevokeTokensByUserID mechanism is not used here, so credential rotation does not evict a stolen refresh session.",
+          "sources": [
+            {
+              "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L228",
+              "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
+            },
+            {
+              "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L347",
+              "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
+            },
+            {
+              "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L387",
+              "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
+            },
+            {
+              "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/repository/user.go#L150",
+              "sha256": "fb5d49b99a1b6393ddd5b010bd29d3682a2718c8d5436567762b9d86b0192980"
+            }
+          ],
+          "verdict": "real"
+        },
+        {
+          "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+          "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+          "findingSha256": "4cc0aecbcce433ed9985adeca99bd020209d187c78834eec2f8a5435442b5bfb",
+          "verdict": "real",
+          "judge": "Codex",
+          "date": "2026-11-16",
+          "reason": "Password change updates only the password hash. Existing access/refresh rows remain accepted, and refresh generates a new pair without a password-version or active-session check. A stolen refresh credential therefore survives the explicit credential-rotation action.",
+          "sources": [
+            {
+              "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L228",
+              "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
+            },
+            {
+              "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L347",
+              "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
+            },
+            {
+              "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L387",
+              "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
+            },
+            {
+              "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/repository/user.go#L149",
+              "sha256": "fb5d49b99a1b6393ddd5b010bd29d3682a2718c8d5436567762b9d86b0192980"
+            }
+          ]
+        }
+      ],
       "weknora-a20541cd|misconfiguration|.env.example||67": {
         "sourceResult": "results/2026-11-16-review/positive.raw.json",
         "sourceResultSha256": "77cb40981a9246644e85d707f3119c5e618422d0f3af5f566adf9e9edec12f54",
@@ -2562,6 +2591,587 @@
             "sha256": "c79f5767b782f8e8d77c3725d65fe1922bb816e15c6091db10c46b8c55f994f9"
           }
         ]
+      },
+      "weknora-a20541cd|authz|internal/application/service/user.go|userService.RevokeToken|408": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "e22f8421a1944473ad8501e77356f8a8c4dfcb265d70f30c124172d2ec055020",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "Logout revokes only the submitted access-token row. The separate refresh-token row is not revoked and the public refresh route accepts it, revokes that old refresh row and creates a fresh pair. Thus a retained/stolen refresh token survives logout; this is a session-termination defect, not ordinary token theft by itself.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/auth.go#L160",
+            "sha256": "c702b41d113f8d8d0a08305e9ede22b7d51ed027f6485eb840289e65eb556208"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L308",
+            "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L387",
+            "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L408",
+            "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/middleware/auth.go#L23",
+            "sha256": "3e3c834b2c5e1d2b9deac82c1854038254718b3cbe3b75ae6221a97edef95f49"
+          }
+        ]
+      },
+      "weknora-a20541cd|authz|internal/application/service/user.go|userService.ValidateToken|342": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "5ce628058c23ae5d4f77e8f9a83073900b2ab5c04a569fc34ee4458f1f82b193",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "Login explicitly rejects IsActive=false, but ValidateToken returns the current user row without checking that flag, and the middleware immediately admits that principal. Deactivating an account does not enforce the same account-state restriction on its existing token.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L150",
+            "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L347",
+            "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/repository/user.go#L34",
+            "sha256": "fb5d49b99a1b6393ddd5b010bd29d3682a2718c8d5436567762b9d86b0192980"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/middleware/auth.go#L82",
+            "sha256": "3e3c834b2c5e1d2b9deac82c1854038254718b3cbe3b75ae6221a97edef95f49"
+          }
+        ]
+      },
+      "weknora-a20541cd|injection|internal/agent/tools/database_query.go|NewSQLSecurityValidator|32": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "f53d4640ae5899c7547d2811fbc049a54ab4242cbdb42a64c59eb9ded1ef85ca",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "embeddings is an allowed SQL table but has no injected tenant predicate or tenant_id column. The tool executes the returned SQL raw, exposing other tenants' stored chunk text. This violates the tool's explicit tenant-scoping policy; the reported injection label/location describes an authorization defect rather than ordinary query-string injection.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L24",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L744",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L231",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/migrations/versioned/000002_embeddings.up.sql#L23",
+            "sha256": "8fa21195be5633c922a37f532a2b074edc09427d4a2dacd16a915b4f9ae91a93"
+          }
+        ]
+      },
+      "weknora-a20541cd|resource_exhaustion|internal/middleware/logger.go|loggerResponseBodyWriter.Write|29": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "2d67aa788f262655e092b665d4a2621c0859449928669863c0212053caeae6cf",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The logger really buffers the whole response before truncating logged text. The claimed attack downloads a large file the authenticated user supplied or intentionally streams that user's own output; it identifies no amplification, retained leak or enforced response-size boundary beyond that authorized data transfer. Under the frozen resource lens, heavy work on an authenticated caller's own data and a generic size-cap recommendation are outside scope.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/middleware/logger.go#L29",
+            "sha256": "65c5cb561e94829244111e22c6538db97310619aa381a8e9cdfa1fe0a3d3d178"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/middleware/logger.go#L145",
+            "sha256": "65c5cb561e94829244111e22c6538db97310619aa381a8e9cdfa1fe0a3d3d178"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/middleware/logger.go#L178",
+            "sha256": "65c5cb561e94829244111e22c6538db97310619aa381a8e9cdfa1fe0a3d3d178"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/knowledge.go#L514",
+            "sha256": "6bcb7eb06fa51e1ce1932656839c8f900451242a39e74982c048d381fad51abc"
+          }
+        ]
+      },
+      "weknora-a20541cd|injection|internal/application/service/knowledge.go|knowledgeService.CreateKnowledgeFromURL|370": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "bdaf16df5409968d992c9567cf7a4e53be3c8f6d67926ddc65b8b0fd93eed250",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The URL import accepts arbitrary destinations, but the named authenticated tenant can already configure arbitrary MCP HTTP endpoints and stdio programs through the same authenticated role. No enforced network allow-list, sandbox or narrower role is bypassed by this import. The network request is real; the report does not establish an additional capability. Its injection label is also inaccurate.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/knowledge.go#L356",
+            "sha256": "da2d9ae81927fac15a468c70ed34e1eeb36c9b05a02c084df97d94ef8ebdd935"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/router/router.go#L378",
+            "sha256": "3c8b711e3409d2dc525a68e81ce12bdc333939a3012bfa969dd87942d3de4dd8"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/mcp_service.go#L37",
+            "sha256": "2f25778f8a225cc4eade6a21b38777a10876422072ce24591a4088f96feb6c08"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/mcp_service.go#L232",
+            "sha256": "1a39c14e25794cc458a15ca0988248ca49c6f599c20d697a5a203b2cff0d49de"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/mcp/client.go#L93",
+            "sha256": "18ae185069de3aa0e774db92654d3615d53b1ac2e0ab8459d2f465e12284c470"
+          }
+        ]
+      },
+      "weknora-a20541cd|authz|internal/handler/knowledgebase.go|KnowledgeBaseHandler.CopyKnowledgeBase|371": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "8cc6537029778e580123f8125eb09143b6ed3506c64ff073f0b10b2d767cabc4",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The clone handler accepts any source/target ids, and the worker carries only the caller's tenant into unscoped KB lookups. The copy service creates a caller-owned KB from the foreign source configuration without an ownership check, unlike the normal KB handler. This establishes cross-tenant configuration disclosure/copy; a complete successful document clone was not executed here.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/knowledgebase.go#L351",
+            "sha256": "b4e27607d98bbc551d94c84b84c20ca260e58cc90e7083255f00f6eb24c531b6"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/knowledgebase.go#L164",
+            "sha256": "b4e27607d98bbc551d94c84b84c20ca260e58cc90e7083255f00f6eb24c531b6"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/knowledge.go#L5283",
+            "sha256": "da2d9ae81927fac15a468c70ed34e1eeb36c9b05a02c084df97d94ef8ebdd935"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/knowledgebase.go#L392",
+            "sha256": "a681752964cd91a79a1bc98163bc4e133721910862e4eb4087c9e85749a54e18"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/repository/knowledgebase.go#L30",
+            "sha256": "e818d4cd186686cf63ef92e4b87b11a7a5ddb0154cf80032942496bec4aab876"
+          }
+        ]
+      },
+      "weknora-a20541cd|injection|internal/agent/tools/database_query.go|SQLSecurityValidator.validateNode|529": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "2cc894aebca7b26e7290d0619ae6250cfdb979e33da9a08d50278c92920f72ad",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "validateNode returns success for unhandled AST node types, including the array expression wrapping a SubLink. The outer FROM whitelist and tenant injection never visit that nested SELECT, and the deparsed query is executed raw. A scalar subquery inside ARRAY can therefore bypass the tool's explicit subquery/table/tenant restrictions. This is source-inspected, not a claim that the example was executed against a live database.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L393",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L529",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L637",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L363",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L231",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          }
+        ]
+      },
+      "weknora-a20541cd|ssrf|internal/agent/tools/web_fetch.go|WebFetchTool.fetchWithTimeout|449": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "36fb15c5f76b16c26e3c2e0d88775d16af2b828a21b92f631443841876c860dc",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The HTTP fetch lacks private-address filtering, but the same tenant role can intentionally configure unrestricted MCP HTTP endpoints and stdio commands. The report's authenticated-user path confers no new server/network power and bypasses no enforced destination restriction. It does not establish a separate lower-privileged actor and exfiltration path for its optional prompt-injection wording.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/web_fetch.go#L246",
+            "sha256": "55bf6743088dfe6d9b7c42b92062491107541ecc75c918397385346574ab240c"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/web_fetch.go#L449",
+            "sha256": "55bf6743088dfe6d9b7c42b92062491107541ecc75c918397385346574ab240c"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/router/router.go#L378",
+            "sha256": "3c8b711e3409d2dc525a68e81ce12bdc333939a3012bfa969dd87942d3de4dd8"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/mcp_service.go#L37",
+            "sha256": "2f25778f8a225cc4eade6a21b38777a10876422072ce24591a4088f96feb6c08"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/mcp_service.go#L232",
+            "sha256": "1a39c14e25794cc458a15ca0988248ca49c6f599c20d697a5a203b2cff0d49de"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/mcp/client.go#L93",
+            "sha256": "18ae185069de3aa0e774db92654d3615d53b1ac2e0ab8459d2f465e12284c470"
+          }
+        ]
+      },
+      "weknora-a20541cd|injection|docreader/parser/caption.py|Caption._call_openai_api|327": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "9e8f074491e6f7c4bf2aed19f006d1e3df0aa1e35e5b4b8177fc7d5eee445906",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The provided ReadConfig explicitly selects the caller's VLM endpoint/model/key, and this API intentionally contacts that configured server; the same caller already has arbitrary URL reading. The finding names no actual restriction that the fixed /chat/completions POST bypasses and instead asserts that configurable model connections should not exist. Lack of gRPC authentication/exposure is a separate deployment boundary, not proof of the particular additional capability claimed here.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/docreader/main.py#L106",
+            "sha256": "de549dd2767be68195140bfb45204a4787083191106df6e3ed620b5fe324b173"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/docreader/parser/base_parser.py#L117",
+            "sha256": "6ef3eecb7c26c99e14df8e9501cb4090b25a49ae797d4cfe59fc1af152daa625"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/docreader/parser/caption.py#L178",
+            "sha256": "2f7b6aff7ad26eb636ed9ad7d23f0b4a0f2e1953268c354217f63a66c4238119"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/docreader/parser/caption.py#L327",
+            "sha256": "2f7b6aff7ad26eb636ed9ad7d23f0b4a0f2e1953268c354217f63a66c4238119"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/docreader/main.py#L193",
+            "sha256": "de549dd2767be68195140bfb45204a4787083191106df6e3ed620b5fe324b173"
+          }
+        ]
+      },
+      "weknora-a20541cd|injection|internal/agent/tools/database_query.go|SQLSecurityValidator.injectTenantConditions|756": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "b2c40b9f85f065550ebf0e825db36b8ca188d2d296aaf296516a0729733f6c3f",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "A quoted PostgreSQL alias can contain SQL syntax. Validation retains the alias text and deparses it safely, then injectTenantConditions interpolates the unquoted raw alias into a new WHERE string after that safety step. The report's tautological alias therefore defeats the explicit tenant predicate on otherwise allowed tables.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L490",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L363",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L756",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L231",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          }
+        ]
+      },
+      "weknora-a20541cd|authz|internal/handler/tenant.go|TenantHandler.GetTenant|116": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "c7f39d2d1cd057d735910505cd0b5e2d84c9ca92276a0fddf05945c708732e74",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The tenant route accepts an enumerable foreign id, loads it by id only and returns the full tenant including api_key. The X-Tenant-ID cross-tenant privilege check does not compare this path parameter, while list/search explicitly check the privilege. The returned valid key is accepted by the API-key authentication door.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/router/router.go#L295",
+            "sha256": "3c8b711e3409d2dc525a68e81ce12bdc333939a3012bfa969dd87942d3de4dd8"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/tenant.go#L106",
+            "sha256": "4436ddc85c0f69e2400cd7435adf440280df6694f367303d0a702bc9b0909ee9"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/repository/tenant.go#L35",
+            "sha256": "158ba75791200d9805732df5a0387811193fe2647060e1ad301ccb3f234fc944"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/types/tenant.go#L61",
+            "sha256": "d831340e78be247a54fca1e588c1415961432b45dc1d987cf764e354911f2b02"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/middleware/auth.go#L148",
+            "sha256": "3e3c834b2c5e1d2b9deac82c1854038254718b3cbe3b75ae6221a97edef95f49"
+          }
+        ]
+      },
+      "weknora-a20541cd|authz|internal/handler/tenant.go|TenantHandler.UpdateTenant|159": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "9ea19f1c94e58648fb10f99945df1f7ae6faac47dfba5db0451b011c62afa868",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The update route binds all tenant fields for a foreign path id without ownership checks. An omitted/empty api_key causes the service to generate and return a valid new key for that victim id, so the authenticated attacker can obtain a working foreign credential. An arbitrary malformed chosen string would not itself satisfy the encrypted-id API-key parser; the generated-key branch is the concrete takeover path.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/tenant.go#L152",
+            "sha256": "4436ddc85c0f69e2400cd7435adf440280df6694f367303d0a702bc9b0909ee9"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/tenant.go#L188",
+            "sha256": "4436ddc85c0f69e2400cd7435adf440280df6694f367303d0a702bc9b0909ee9"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/tenant.go#L114",
+            "sha256": "342a7eef2e65a241f0fac3682a9efc607aaac6c63bc36ada8f5fc6c43ed114e0"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/repository/tenant.go#L95",
+            "sha256": "158ba75791200d9805732df5a0387811193fe2647060e1ad301ccb3f234fc944"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/middleware/auth.go#L148",
+            "sha256": "3e3c834b2c5e1d2b9deac82c1854038254718b3cbe3b75ae6221a97edef95f49"
+          }
+        ]
+      },
+      "weknora-a20541cd|data_exposure|internal/handler/auth.go|AuthHandler.Register|77": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "35e8402fb097f468ac80d689010c3b0cac00c381d71159cd9681e20ec3fecbc7",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The public signup route deliberately reports availability validation for the email/username in the caller's own request. Responses differ, but no private profile/token/tenant data or policy promising secret account membership is established. Genericizing the two details alone still distinguishes failed registration from successful creation. Treating ordinary public-signup availability as a medium-severity private-data breach is outside this scan's concrete-boundary focus.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/auth.go#L63",
+            "sha256": "c702b41d113f8d8d0a08305e9ede22b7d51ed027f6485eb840289e65eb556208"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L76",
+            "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/auth.go#L77",
+            "sha256": "c702b41d113f8d8d0a08305e9ede22b7d51ed027f6485eb840289e65eb556208"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/middleware/auth.go#L19",
+            "sha256": "3e3c834b2c5e1d2b9deac82c1854038254718b3cbe3b75ae6221a97edef95f49"
+          }
+        ]
+      },
+      "weknora-a20541cd|injection|internal/agent/tools/database_query.go|NewSQLSecurityValidator|26": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "4e6305e37e6e918d53ff20f512bbf9199aa7eb690029fe2a088d319812af639f",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "messages is explicitly allowed but omitted from tenant-condition injection; its schema links to a tenant only through sessions. A direct SELECT of message content/session ids passes unchanged and executes with the application database connection, exposing foreign chat history despite the SQL tool's tenant-isolation contract.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L24",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L744",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/database_query.go#L231",
+            "sha256": "31d6d768b7d988424aeecba3b2a2b352cbfc4d62c2619295bc074cc193163f21"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/migrations/versioned/000000_init.up.sql#L159",
+            "sha256": "f38616878b0b13eb12ea503c314cbbabd11c00c02ac6ba4a74e75eb09d5a6934"
+          }
+        ]
+      },
+      "weknora-a20541cd|authz|internal/handler/knowledgebase.go|KnowledgeBaseHandler.HybridSearch|77": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "d495115757d9f3cd1951f7c236da70e342084f64813235d1e03cd9d509b69041",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "HybridSearch skips the normal ownership helper and performs an id-only KB lookup. A caller can set DisableVectorMatch to avoid the tenant-scoped model lookup and reach keyword retrieval, whose predicates contain KB/document ids rather than tenant id. Thus foreign indexed content is retrievable despite ordinary KB routes enforcing ownership.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/knowledgebase.go#L77",
+            "sha256": "b4e27607d98bbc551d94c84b84c20ca260e58cc90e7083255f00f6eb24c531b6"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/knowledgebase.go#L164",
+            "sha256": "b4e27607d98bbc551d94c84b84c20ca260e58cc90e7083255f00f6eb24c531b6"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/knowledgebase.go#L456",
+            "sha256": "a681752964cd91a79a1bc98163bc4e133721910862e4eb4087c9e85749a54e18"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/knowledgebase.go#L467",
+            "sha256": "a681752964cd91a79a1bc98163bc4e133721910862e4eb4087c9e85749a54e18"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/knowledgebase.go#L506",
+            "sha256": "a681752964cd91a79a1bc98163bc4e133721910862e4eb4087c9e85749a54e18"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/repository/retriever/postgres/repository.go#L170",
+            "sha256": "da31d8d1b4ba0af76b36da25878dc650765468e6a91a81354c4115f33e0e24be"
+          }
+        ]
+      },
+      "weknora-a20541cd|ssrf|internal/agent/tools/web_fetch.go|WebFetchTool.fetchWithChromedp|414": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "4a022a788292d4d37728e635679558c16ab809bac2e991c1b71c1bc5bbb18b45",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "Chrome can browse private destinations, but the named authenticated tenant already has unrestricted MCP HTTP/stdio configuration under the same role. No enforced network policy is bypassed by this browser path. A hypothetical webpage attacker is not given a separate demonstrated exfiltration path in this report, so it does not establish the asserted extra privilege.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/web_fetch.go#L246",
+            "sha256": "55bf6743088dfe6d9b7c42b92062491107541ecc75c918397385346574ab240c"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/web_fetch.go#L366",
+            "sha256": "55bf6743088dfe6d9b7c42b92062491107541ecc75c918397385346574ab240c"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/agent/tools/web_fetch.go#L414",
+            "sha256": "55bf6743088dfe6d9b7c42b92062491107541ecc75c918397385346574ab240c"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/router/router.go#L378",
+            "sha256": "3c8b711e3409d2dc525a68e81ce12bdc333939a3012bfa969dd87942d3de4dd8"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/mcp_service.go#L37",
+            "sha256": "2f25778f8a225cc4eade6a21b38777a10876422072ce24591a4088f96feb6c08"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/mcp/client.go#L93",
+            "sha256": "18ae185069de3aa0e774db92654d3615d53b1ac2e0ab8459d2f465e12284c470"
+          }
+        ]
+      },
+      "weknora-a20541cd|authz|internal/handler/tenant.go|TenantHandler.DeleteTenant|210": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "f6cb6dfa0388f762603ed161b9f97340f3cd5ffe857d6935e2f0483a3c7b3afb",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "The globally authenticated delete route passes any enumerable tenant id to an id-only delete. It does not enforce the CanAccessAllTenants policy used by list/search or compare the path id to the caller's tenant. The unauthorized foreign-record deletion is real; complete destruction of all related document data is not separately certified.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/router/router.go#L297",
+            "sha256": "3c8b711e3409d2dc525a68e81ce12bdc333939a3012bfa969dd87942d3de4dd8"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/tenant.go#L205",
+            "sha256": "4436ddc85c0f69e2400cd7435adf440280df6694f367303d0a702bc9b0909ee9"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/tenant.go#L142",
+            "sha256": "342a7eef2e65a241f0fac3682a9efc607aaac6c63bc36ada8f5fc6c43ed114e0"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/repository/tenant.go#L100",
+            "sha256": "158ba75791200d9805732df5a0387811193fe2647060e1ad301ccb3f234fc944"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/middleware/auth.go#L41",
+            "sha256": "3e3c834b2c5e1d2b9deac82c1854038254718b3cbe3b75ae6221a97edef95f49"
+          }
+        ]
+      },
+      "weknora-a20541cd|authz|internal/handler/auth.go|AuthHandler.Logout|183": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "0ea0a0e75ac629c2cd4a87246bfb2d0d34a60fb1bf965c28dc3ae44a4e1ea4df",
+        "verdict": "false",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "If the presented victim token is valid, it is itself the authenticated credential and revoking it is normal bearer-token logout. The API-key fallback only matters when that token already fails validation (expired/revoked/unusable); the report requires obtaining the full token string and identifies no additional loss of a usable session caused by that fallback. Token ownership assertions do not prove a cross-user capability beyond holding the bearer credential.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/middleware/auth.go#L78",
+            "sha256": "3e3c834b2c5e1d2b9deac82c1854038254718b3cbe3b75ae6221a97edef95f49"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/middleware/auth.go#L148",
+            "sha256": "3e3c834b2c5e1d2b9deac82c1854038254718b3cbe3b75ae6221a97edef95f49"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/handler/auth.go#L160",
+            "sha256": "c702b41d113f8d8d0a08305e9ede22b7d51ed027f6485eb840289e65eb556208"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L347",
+            "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/internal/application/service/user.go#L408",
+            "sha256": "18c9ed71619a13a360a46172467126db2587beb5fd85bd3058daad296c9e1e12"
+          }
+        ]
+      },
+      "weknora-a20541cd|authz|docreader/parser/base_parser.py||708": {
+        "sourceResult": "results/2026-11-16-review/vm-followup.cases/weknora-a20541cd.json",
+        "sourceResultSha256": "4b37027105a4901813cab6c9abaadc6d015e81896b0eb4900c5e65423516f59b",
+        "findingSha256": "f298414ff52663cf93ced26b2b9005e646eac411e56c29528468fc45835c80be",
+        "verdict": "real",
+        "judge": "Codex",
+        "date": "2026-11-16",
+        "reason": "Untrusted document image text is treated as a server-local path: an existing valid image is opened and its original bytes uploaded using caller-selected storage credentials. The gRPC service is unauthenticated and the shipped Compose file publishes its port. This creates unauthorized local-image read/exfiltration when a readable image path is known, unlike caller-selected remote model configuration. PIL validation limits it to images; arbitrary non-image secrets and the claimed critical severity are not established.",
+        "sources": [
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/docreader/main.py#L135",
+            "sha256": "de549dd2767be68195140bfb45204a4787083191106df6e3ed620b5fe324b173"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/docreader/main.py#L294",
+            "sha256": "de549dd2767be68195140bfb45204a4787083191106df6e3ed620b5fe324b173"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/docreader/parser/base_parser.py#L631",
+            "sha256": "6ef3eecb7c26c99e14df8e9501cb4090b25a49ae797d4cfe59fc1af152daa625"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/docreader/parser/base_parser.py#L708",
+            "sha256": "6ef3eecb7c26c99e14df8e9501cb4090b25a49ae797d4cfe59fc1af152daa625"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/docreader/parser/storage.py#L66",
+            "sha256": "4777fb7b008ea083ead417bc77b8f6bcae6fb4744ce6f41e517d54d5c74d5fae"
+          },
+          {
+            "url": "https://github.com/Tencent/WeKnora/blob/a20541cd9d0a54dbff0b9112f1299c64347370ff/docker-compose.yml#L117",
+            "sha256": "ad64423ed667f196a4c5cf56a3af6e0f6848cafb0a2752313568c11421d94d13"
+          }
+        ]
       }
     }
   },
@@ -2666,5 +3276,24 @@
   "flowise-f0c12941|resource_exhaustion|packages/server/src/routes/oauth2/index.ts|router.post(\"/refresh/:credentialId\")|355": "false",
   "flowise-f0c12941|authz|packages/server/src/enterprise/controllers/organization.controller.ts|OrganizationController.read|30": "real",
   "flowise-f0c12941|injection|packages/server/src/routes/oauth2/index.ts|router.get(\"/callback\")|284": "real",
-  "flowise-f0c12941|authz|packages/server/src/enterprise/middleware/passport/index.ts|verifyTokenForBullMQDashboard|433": "real"
+  "flowise-f0c12941|authz|packages/server/src/enterprise/middleware/passport/index.ts|verifyTokenForBullMQDashboard|433": "real",
+  "weknora-a20541cd|authz|internal/application/service/user.go|userService.RevokeToken|408": "real",
+  "weknora-a20541cd|authz|internal/application/service/user.go|userService.ValidateToken|342": "real",
+  "weknora-a20541cd|injection|internal/agent/tools/database_query.go|NewSQLSecurityValidator|32": "real",
+  "weknora-a20541cd|resource_exhaustion|internal/middleware/logger.go|loggerResponseBodyWriter.Write|29": "false",
+  "weknora-a20541cd|injection|internal/application/service/knowledge.go|knowledgeService.CreateKnowledgeFromURL|370": "false",
+  "weknora-a20541cd|authz|internal/handler/knowledgebase.go|KnowledgeBaseHandler.CopyKnowledgeBase|371": "real",
+  "weknora-a20541cd|injection|internal/agent/tools/database_query.go|SQLSecurityValidator.validateNode|529": "real",
+  "weknora-a20541cd|ssrf|internal/agent/tools/web_fetch.go|WebFetchTool.fetchWithTimeout|449": "false",
+  "weknora-a20541cd|injection|docreader/parser/caption.py|Caption._call_openai_api|327": "false",
+  "weknora-a20541cd|injection|internal/agent/tools/database_query.go|SQLSecurityValidator.injectTenantConditions|756": "real",
+  "weknora-a20541cd|authz|internal/handler/tenant.go|TenantHandler.GetTenant|116": "real",
+  "weknora-a20541cd|authz|internal/handler/tenant.go|TenantHandler.UpdateTenant|159": "real",
+  "weknora-a20541cd|data_exposure|internal/handler/auth.go|AuthHandler.Register|77": "false",
+  "weknora-a20541cd|injection|internal/agent/tools/database_query.go|NewSQLSecurityValidator|26": "real",
+  "weknora-a20541cd|authz|internal/handler/knowledgebase.go|KnowledgeBaseHandler.HybridSearch|77": "real",
+  "weknora-a20541cd|ssrf|internal/agent/tools/web_fetch.go|WebFetchTool.fetchWithChromedp|414": "false",
+  "weknora-a20541cd|authz|internal/handler/tenant.go|TenantHandler.DeleteTenant|210": "real",
+  "weknora-a20541cd|authz|internal/handler/auth.go|AuthHandler.Logout|183": "false",
+  "weknora-a20541cd|authz|docreader/parser/base_parser.py||708": "real"
 }

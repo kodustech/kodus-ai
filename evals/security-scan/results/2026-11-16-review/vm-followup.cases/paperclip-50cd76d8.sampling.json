@@ -1,0 +1,112 @@
+{
+  "method": "Twenty smallest SHA-256(seed + NUL + key) off-list findings per language within each group, or all if fewer. Fixed before inspecting descriptions.",
+  "group": "confirmation",
+  "seed": "wellington-review-2451-2026-11-16-confirmation",
+  "case": "paperclip-50cd76d8",
+  "language": "typescript",
+  "sourceResult": "results/2026-11-16-review/vm-followup.cases/paperclip-50cd76d8.json",
+  "sourceResultSha256": "6bf64477412c946f373251c9d169c2a1916ecbb7d4db0b9af8594a69fb30c72b",
+  "offListPopulation": 31,
+  "selected": [
+    {
+      "index": 2,
+      "key": "paperclip-50cd76d8|injection|server/src/services/plugin-loader.ts|loadManifestFromPath|928",
+      "hash": "1233f9ddc5b625a60bbfc586adae9e510a8ee97e8e887357ffd08c70d578df23"
+    },
+    {
+      "index": 9,
+      "key": "paperclip-50cd76d8|authz|server/src/routes/access.ts|probeInviteResolutionTarget|1512",
+      "hash": "224eff1c732f296e3122d8b0f519594f29951e23d259b832b8c2ebaf5610ca37"
+    },
+    {
+      "index": 29,
+      "key": "paperclip-50cd76d8|authz|server/src/routes/plugins.ts|router.post(\"/plugins/:pluginId/config\")|1582",
+      "hash": "2ba5ae7e98f6d713e26464ce9724eab3868d5dd84a51f06fc60c911748e96aea"
+    },
+    {
+      "index": 20,
+      "key": "paperclip-50cd76d8|authz|server/src/services/plugin-secrets-handler.ts|resolve|306",
+      "hash": "3e4b4ed354a286fab532743a96e905121b0f67728e3e6acc3f83e855570f3622"
+    },
+    {
+      "index": 14,
+      "key": "paperclip-50cd76d8|authz|server/src/routes/companies.ts|router.post(\"/:companyId/export\")|165",
+      "hash": "40e231d18fd4cf27bad99ec1b3791962badfb918f91782af8c80c972533cf857"
+    },
+    {
+      "index": 3,
+      "key": "paperclip-50cd76d8|injection|server/src/services/plugin-loader.ts|cleanupInstallArtifacts|1385",
+      "hash": "41a3649fed4510eac8423feaeab7e851374cfbdd0a54747241f45e43e6b8dff6"
+    },
+    {
+      "index": 10,
+      "key": "paperclip-50cd76d8|secret_identity|server/src/board-claim.ts||89",
+      "hash": "47cbef940a139795332075017d8a585adcee91bf618ccc5b2de1684dbcc49707"
+    },
+    {
+      "index": 30,
+      "key": "paperclip-50cd76d8|authz|server/src/routes/assets.ts|router.post(\"/companies/:companyId/assets/images\")|141",
+      "hash": "4c067d56050f68f85dcdfeeebdcf99877991d62ab9e0374860dce3b321c71db0"
+    },
+    {
+      "index": 22,
+      "key": "paperclip-50cd76d8|resource_exhaustion|server/src/services/secrets.ts|normalizeEnvConfig|108",
+      "hash": "52923b55453f2648e57fefd00f363a036f37849970ab913e9501a64f319f7037"
+    },
+    {
+      "index": 27,
+      "key": "paperclip-50cd76d8|authz|server/src/routes/plugins.ts|router.post(\"/plugins/:pluginId/actions/:key\")|1074",
+      "hash": "602f28f3c546135dd295dc979f79a0126cb410bd2c1a7c6e7928b039318d54e6"
+    },
+    {
+      "index": 16,
+      "key": "paperclip-50cd76d8|secret_identity|server/src/index.ts|startServer|371",
+      "hash": "6e842cad025d0207f39f86857cd20d69eccd4072596e86df5cf7b0cb264b3759"
+    },
+    {
+      "index": 1,
+      "key": "paperclip-50cd76d8|authz|server/src/services/plugin-host-services.ts||499",
+      "hash": "897772b8f3e6cedfaa256cd8242159f5322aeabf60e519da0b9b0c0b4743fff8"
+    },
+    {
+      "index": 5,
+      "key": "paperclip-50cd76d8|ssrf|server/src/services/plugin-host-services.ts|fetch|578",
+      "hash": "8c084f4e96ed6515fc02361333f6fea80028367aaffa3c89ebcbb397b31a6df8"
+    },
+    {
+      "index": 11,
+      "key": "paperclip-50cd76d8|secret_identity|server/src/board-claim.ts|getChallengeStatus|34",
+      "hash": "8e8ecf4a6d1bf428982c0fb6d0ed5d82dd60f234cc11c034437653c10a74067e"
+    },
+    {
+      "index": 28,
+      "key": "paperclip-50cd76d8|authz|server/src/routes/plugins.ts|router.post(\"/plugins/tools/execute\")|553",
+      "hash": "9db54c4798d0ab4a276f3c5a2db8ae56b6cd1ce7a6a60e2d8b2f4fb6d9535de0"
+    },
+    {
+      "index": 25,
+      "key": "paperclip-50cd76d8|authz|server/src/routes/plugins.ts|router.post(\"/plugins/:pluginId/bridge/action\")|912",
+      "hash": "a66f765296613b8a599b8cc1ab16a4c4f4bc18d41e7ce3f8b195f766fe7d788e"
+    },
+    {
+      "index": 4,
+      "key": "paperclip-50cd76d8|ssrf|server/src/routes/plugin-ui-static.ts|router.get(\"/_plugins/:pluginId/ui/*filePath\")|358",
+      "hash": "bccff74d3d16dc03e9336fd1ebc82e396400f34fa97fb6eda81ef761fb41f82a"
+    },
+    {
+      "index": 13,
+      "key": "paperclip-50cd76d8|resource_exhaustion|server/src/routes/access.ts|probeInviteResolutionTarget|1512",
+      "hash": "bcf6bf3d7536acb91ad3fde967597e51fa1865441372fb3235a946386eeccb47"
+    },
+    {
+      "index": 21,
+      "key": "paperclip-50cd76d8|secret_identity|server/src/secrets/local-encrypted-provider.ts|createVersion|127",
+      "hash": "bd96cdf67130c0ef8c926243bb6bcf2f4cffde470eeb0e1f26d11ddc7e95645d"
+    },
+    {
+      "index": 17,
+      "key": "paperclip-50cd76d8|misconfiguration|server/src/routes/assets.ts|router.get(\"/assets/:assetId/content\")|321",
+      "hash": "bec9cd3123ea8f4a151a9e95fde5ba91e4e1fedc6a1e5f6d9315fda5d23bc2e5"
+    }
+  ]
+}
