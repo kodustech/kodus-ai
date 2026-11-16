@@ -10,10 +10,10 @@ jest.mock('@libs/mcp-server/services/mcp-manager.service', () => ({
  * A token integration records one account as `org` (for a fine-grained token
  * or a personal account, the user's login), but its repositories can belong
  * to other owners: an organization the token was scoped to, or one the user
- * is a member of. Seen on QA for #2004: a fine-grained token scoped to
- * `Novaorg01` was recorded as `org: Wellington01`, and every review call for
- * `Novaorg01/qa2004-empty` asked GitHub for `/repos/Wellington01/qa2004-empty`
- * and got 404, so the review was skipped.
+ * is a member of. Seen on a self-hosted test of #2004: a fine-grained token
+ * scoped to `Novaorg01` was recorded as `org: Wellington01`, and every review
+ * call for `Novaorg01/qa2004-empty` asked GitHub for
+ * `/repos/Wellington01/qa2004-empty` and got 404, so the review was skipped.
  *
  * GitHub addresses a repository by its own owner, so calls take it from the
  * repository and fall back to the recorded account only when the repository
@@ -123,21 +123,44 @@ describe('GithubService addresses a repository by its own owner', () => {
         );
     });
 
-    it('addresses a connected repository by its own owner and ignores an owner no connected repository has', async () => {
+    it('addresses a repository passed as { id, name } by the owner its saved record holds', async () => {
+        // Seen on QA (#2004): about a hundred callers rebuild the repository
+        // as `{ id, name }`, so the owner never reaches GithubService. With
+        // the token recorded under the user's login, every review call for
+        // `kodus-qa/school` asked for `/repos/<login>/school` and got 404.
         const get = jest.fn().mockResolvedValue({ data: null });
-        const service = makeService({ pulls: { get } });
+        const createForIssue = jest.fn().mockResolvedValue({ data: {} });
+        const service = makeService({
+            pulls: { get },
+            rest: { reactions: { createForIssue } },
+        });
+        const bare = { id: orgRepository.id, name: orgRepository.name };
 
         await service.getPullRequest({
             organizationAndTeamData,
-            repository: orgRepository,
+            repository: bare,
             prNumber: 1,
         });
+        await service.addReactionToPR({
+            organizationAndTeamData,
+            repository: bare,
+            prNumber: 1,
+            reaction: 'eyes',
+        } as any);
+
         expect(get).toHaveBeenLastCalledWith(
             expect.objectContaining({ owner: 'Novaorg01' }),
         );
+        expect(createForIssue).toHaveBeenLastCalledWith(
+            expect.objectContaining({ owner: 'Novaorg01' }),
+        );
+    });
 
-        // The owner can come from a webhook payload: one the saved
-        // selection does not have must not steer the token.
+    it('takes the owner from the saved record, not from the payload', async () => {
+        const get = jest.fn().mockResolvedValue({ data: null });
+        const service = makeService({ pulls: { get } });
+
+        // A payload can name any owner: a saved repository keeps its own.
         await service.getPullRequest({
             organizationAndTeamData,
             repository: {
@@ -147,7 +170,52 @@ describe('GithubService addresses a repository by its own owner', () => {
             prNumber: 1,
         });
         expect(get).toHaveBeenLastCalledWith(
+            expect.objectContaining({ owner: 'Novaorg01' }),
+        );
+
+        // One outside the selection, under an owner it does not have, gets
+        // the recorded account.
+        await service.getPullRequest({
+            organizationAndTeamData,
+            repository: {
+                id: '7',
+                name: 'other',
+                fullName: 'SomeoneElse/other',
+            },
+            prNumber: 1,
+        });
+        expect(get).toHaveBeenLastCalledWith(
             expect.objectContaining({ owner: 'Wellington01' }),
+        );
+    });
+
+    it('does not guess between two saved repositories that share a name', async () => {
+        const get = jest.fn().mockResolvedValue({ data: null });
+        const service = makeService({ pulls: { get } });
+        jest.spyOn(
+            service as any,
+            'findOneByOrganizationAndTeamDataAndConfigKey',
+        ).mockResolvedValue([
+            { id: '1', name: 'api', full_name: 'Novaorg01/api' },
+            { id: '2', name: 'api', full_name: 'OtherOrg/api' },
+        ]);
+
+        await service.getPullRequest({
+            organizationAndTeamData,
+            repository: { name: 'api' } as any,
+            prNumber: 1,
+        });
+        expect(get).toHaveBeenLastCalledWith(
+            expect.objectContaining({ owner: 'Wellington01' }),
+        );
+
+        await service.getPullRequest({
+            organizationAndTeamData,
+            repository: { id: '2', name: 'api' },
+            prNumber: 1,
+        });
+        expect(get).toHaveBeenLastCalledWith(
+            expect.objectContaining({ owner: 'OtherOrg' }),
         );
     });
 

@@ -175,6 +175,12 @@ import {
     contentRateLimitKey,
 } from './content-rate-limit-gate';
 
+interface ConnectedSelection {
+    ownerById: Map<string, string>;
+    ownerByName: Map<string, string>;
+    owners: Set<string>;
+}
+
 interface GitHubAuthResponse {
     token: string;
     expiresAt: string;
@@ -516,7 +522,7 @@ export class GithubService
                 );
 
             if (params.configKey === IntegrationConfigKey.REPOSITORIES) {
-                this.connectedOwnersByTeam.delete(
+                this.connectedSelectionByTeam?.delete(
                     GithubService.teamKey(params.organizationAndTeamData),
                 );
             }
@@ -1104,7 +1110,11 @@ export class GithubService
                 githubAuthDetail,
             );
 
-            const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
+            const owner = await this.ownerFor(
+                repository,
+                githubAuthDetail,
+                octokit,
+            );
 
             // A freshly created repository has no ref for its default branch
             // yet, so branch creation and the PR below fail with "Git
@@ -1249,7 +1259,11 @@ export class GithubService
                 githubAuthDetail,
             );
 
-            const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
+            const owner = await this.ownerFor(
+                repository,
+                githubAuthDetail,
+                octokit,
+            );
 
             const { data: baseRef } = await octokit.rest.git.getRef({
                 owner,
@@ -1851,12 +1865,17 @@ export class GithubService
             }
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
-            const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
+            const fallbackOwner = await this.getCorrectOwner(
+                githubAuthDetail,
+                octokit,
+            );
 
             const promises = reposToProcess.map((repo) =>
                 this.getCommitsByRepo({
                     octokit,
-                    owner,
+                    owner:
+                        this.trustedOwnerOf(repo, githubAuthDetail) ||
+                        fallbackOwner,
                     repo: repo.name,
                     filters,
                 }),
@@ -1990,22 +2009,26 @@ export class GithubService
     }
 
     /**
-     * Owners of the repositories connected to a token integration, read from
-     * the saved selection when its auth details are loaded. Keyed by the auth
-     * details object, so a copy of it falls back to the recorded account.
+     * The saved selection of a token integration, as owners: by repository
+     * id, by repository name (only names a single owner holds) and the set
+     * of owners. Read when the auth details are loaded and keyed by that
+     * object, so a copy of it falls back to the recorded account.
      */
-    private readonly connectedOwners = new WeakMap<object, Set<string>>();
+    private readonly connectedSelection = new WeakMap<
+        object,
+        ConnectedSelection
+    >();
 
     /**
-     * The same owners per organization and team, so a review step does not
-     * re-read the selection on every GitHub call. Dropped when this instance
-     * saves the selection; another instance sees a change after the TTL.
+     * The same selection per organization and team, so a review step does
+     * not re-read it on every GitHub call. Dropped when this instance saves
+     * the selection; another instance sees a change after the TTL.
      */
-    private readonly connectedOwnersByTeam = new Map<
+    private readonly connectedSelectionByTeam = new Map<
         string,
-        { owners: Set<string>; expiresAt: number }
+        { selection: ConnectedSelection; expiresAt: number }
     >();
-    private static readonly CONNECTED_OWNERS_TTL_MS = 60_000;
+    private static readonly CONNECTED_SELECTION_TTL_MS = 60_000;
 
     private static teamKey(
         organizationAndTeamData: OrganizationAndTeamData,
@@ -2014,27 +2037,81 @@ export class GithubService
     }
 
     /**
-     * The account GitHub addresses a repository under. A token integration
-     * records one account as `org` (for a fine-grained token or a personal
-     * account, the user's login), while its repositories can belong to an
-     * organization. The repository's owner is used only when it is the
-     * recorded account or the owner of a connected repository: the owner can
-     * come from a webhook payload, and must not steer the token anywhere the
-     * saved selection does not reach. Anything else gets the recorded account.
+     * The owner GitHub addresses a repository under, when one can be
+     * trusted; undefined otherwise.
+     *
+     * A token integration records one account as `org` (for a fine-grained
+     * token or a personal account, the user's login), while its repositories
+     * can belong to an organization. Callers often pass only `{ id, name }`,
+     * and a webhook payload can carry any owner, so the saved selection is
+     * the source: the record with the repository's id, then the owner the
+     * repository names when it is the recorded account or a connected owner,
+     * then the record with the repository's name when one owner holds it.
+     * An App installation has no selection here and keeps its own account.
      */
+    private trustedOwnerOf(
+        repository: Parameters<typeof GithubService.recordedOwnerOf>[0],
+        githubAuthDetail: { org?: string } | null | undefined,
+    ): string | undefined {
+        const org = githubAuthDetail?.org;
+        const selection = githubAuthDetail
+            ? this.connectedSelection?.get(githubAuthDetail)
+            : undefined;
+        const record =
+            repository && typeof repository === 'object'
+                ? (repository as { id?: unknown; name?: string })
+                : undefined;
+
+        if (selection && record?.id !== undefined && record?.id !== null) {
+            const byId = selection.ownerById.get(String(record.id));
+            if (byId) {
+                return byId;
+            }
+        }
+
+        const owner = GithubService.recordedOwnerOf(repository);
+        if (owner && owner.toLowerCase() === org?.toLowerCase()) {
+            return owner;
+        }
+        if (owner && selection?.owners.has(owner.toLowerCase())) {
+            return owner;
+        }
+
+        const name = typeof repository === 'string' ? repository : record?.name;
+        const bareName = name?.split('/').pop()?.toLowerCase();
+        if (selection && bareName) {
+            const byName = selection.ownerByName.get(bareName);
+            if (byName) {
+                return byName;
+            }
+        }
+
+        return undefined;
+    }
+
     private ownerOf(
         repository: Parameters<typeof GithubService.recordedOwnerOf>[0],
         githubAuthDetail: { org?: string } | null | undefined,
     ): string {
-        const org = githubAuthDetail?.org;
-        const owner = GithubService.recordedOwnerOf(repository);
-        if (!owner || owner.toLowerCase() === org?.toLowerCase()) {
-            return owner || org;
-        }
-        const connected = githubAuthDetail
-            ? this.connectedOwners.get(githubAuthDetail)
-            : undefined;
-        return connected?.has(owner.toLowerCase()) ? owner : org;
+        return (
+            this.trustedOwnerOf(repository, githubAuthDetail) ||
+            githubAuthDetail?.org
+        );
+    }
+
+    /**
+     * `ownerOf` for the calls that fell back to `getCorrectOwner`, which
+     * reads the authenticated user for a personal account.
+     */
+    private async ownerFor(
+        repository: Parameters<typeof GithubService.recordedOwnerOf>[0],
+        githubAuthDetail: GithubAuthDetail,
+        octokit: any,
+    ): Promise<string> {
+        return (
+            this.trustedOwnerOf(repository, githubAuthDetail) ||
+            (await this.getCorrectOwner(githubAuthDetail, octokit))
+        );
     }
 
     /**
@@ -2060,9 +2137,9 @@ export class GithubService
         // An App installation only reaches its own account's repositories,
         // so only a token can need another owner.
         if (authDetail.authMode === AuthMode.TOKEN) {
-            this.connectedOwners.set(
+            this.connectedSelection?.set(
                 authDetail,
-                await this.readConnectedOwners(organizationAndTeamData),
+                await this.readConnectedSelection(organizationAndTeamData),
             );
         }
 
@@ -2074,13 +2151,13 @@ export class GithubService
      * resolving it as empty would quietly send every call to the recorded
      * account.
      */
-    private async readConnectedOwners(
+    private async readConnectedSelection(
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<Set<string>> {
+    ): Promise<ConnectedSelection> {
         const key = GithubService.teamKey(organizationAndTeamData);
-        const cached = this.connectedOwnersByTeam.get(key);
+        const cached = this.connectedSelectionByTeam?.get(key);
         if (cached && cached.expiresAt > Date.now()) {
-            return cached.owners;
+            return cached.selection;
         }
 
         const repositories =
@@ -2088,17 +2165,45 @@ export class GithubService
                 organizationAndTeamData,
                 IntegrationConfigKey.REPOSITORIES,
             );
-        const owners = new Set(
-            (Array.isArray(repositories) ? repositories : [])
-                .map((repository) => GithubService.recordedOwnerOf(repository))
-                .filter(Boolean)
-                .map((owner) => owner.toLowerCase()),
-        );
-        this.connectedOwnersByTeam.set(key, {
-            owners,
-            expiresAt: Date.now() + GithubService.CONNECTED_OWNERS_TTL_MS,
+
+        const selection: ConnectedSelection = {
+            ownerById: new Map(),
+            ownerByName: new Map(),
+            owners: new Set(),
+        };
+        const ambiguousNames = new Set<string>();
+        for (const repository of Array.isArray(repositories)
+            ? repositories
+            : []) {
+            const owner = GithubService.recordedOwnerOf(repository);
+            if (!owner) {
+                continue;
+            }
+            selection.owners.add(owner.toLowerCase());
+            if (repository?.id !== undefined && repository?.id !== null) {
+                selection.ownerById.set(String(repository.id), owner);
+            }
+            const name = String(repository?.name ?? '')
+                .split('/')
+                .pop()
+                ?.toLowerCase();
+            if (!name || ambiguousNames.has(name)) {
+                continue;
+            }
+            const held = selection.ownerByName.get(name);
+            if (held && held.toLowerCase() !== owner.toLowerCase()) {
+                selection.ownerByName.delete(name);
+                ambiguousNames.add(name);
+            } else {
+                selection.ownerByName.set(name, owner);
+            }
+        }
+
+        this.connectedSelectionByTeam?.set(key, {
+            selection,
+            expiresAt: Date.now() + GithubService.CONNECTED_SELECTION_TTL_MS,
         });
-        return owners;
+        return selection;
     }
 
     /**
@@ -2213,7 +2318,12 @@ export class GithubService
             }
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
-            const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
+            const fallbackOwner = await this.getCorrectOwner(
+                githubAuthDetail,
+                octokit,
+            );
+            const ownerOfRepo = (repo: Repositories) =>
+                this.trustedOwnerOf(repo, githubAuthDetail) || fallbackOwner;
 
             // If URL filter is provided, try to extract PR info from URL for optimization
             if (filters.url) {
@@ -2229,7 +2339,7 @@ export class GithubService
                     if (specificRepo) {
                         const directResult = await this.getPullRequestsByRepo({
                             octokit,
-                            owner,
+                            owner: ownerOfRepo(specificRepo),
                             repo: specificRepo.name,
                             filters: { ...filters, number: urlInfo.prNumber },
                         });
@@ -2248,7 +2358,7 @@ export class GithubService
             const promises = reposToProcess.map((r) =>
                 this.getPullRequestsByRepo({
                     octokit,
-                    owner,
+                    owner: ownerOfRepo(r),
                     repo: r.name,
                     filters,
                 }),
@@ -6248,7 +6358,11 @@ This is an experimental feature that generates committable changes. Review the d
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
 
-            const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
+            const owner = await this.ownerFor(
+                repository,
+                githubAuthDetail,
+                octokit,
+            );
 
             // Defensive: extract repo name in case fullName (owner/name) is passed
             const repoName = extractRepoName(repository?.name);
@@ -6513,7 +6627,11 @@ This is an experimental feature that generates committable changes. Review the d
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
 
-            const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
+            const owner = await this.ownerFor(
+                repository,
+                githubAuthDetail,
+                octokit,
+            );
 
             const updated = await octokit.pulls.updateReviewComment({
                 owner,
@@ -6887,7 +7005,7 @@ This is an experimental feature that generates committable changes. Review the d
             }
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
-            const owner = await this.getCorrectOwner(authDetails, octokit);
+            const owner = await this.ownerFor(repository, authDetails, octokit);
 
             const {
                 filePatterns,
@@ -7053,7 +7171,7 @@ This is an experimental feature that generates committable changes. Review the d
             }
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
-            const owner = await this.getCorrectOwner(authDetails, octokit);
+            const owner = await this.ownerFor(repository, authDetails, octokit);
 
             let { branch } = filters ?? {};
 
@@ -8448,7 +8566,11 @@ This is an experimental feature that generates committable changes. Review the d
                 return false;
             }
 
-            const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
+            const owner = await this.ownerFor(
+                repository,
+                githubAuthDetail,
+                octokit,
+            );
 
             const { data: webhooks } = await octokit.repos.listWebhooks({
                 owner,
@@ -8505,7 +8627,11 @@ This is an experimental feature that generates committable changes. Review the d
             );
             const owner =
                 params.repository.owner ||
-                (await this.getCorrectOwner(githubAuthDetail, octokit));
+                (await this.ownerFor(
+                    params.repository,
+                    githubAuthDetail,
+                    octokit,
+                ));
             const { data } =
                 await octokit.rest.repos.getCollaboratorPermissionLevel({
                     owner,
@@ -8556,7 +8682,11 @@ This is an experimental feature that generates committable changes. Review the d
             // read as "cannot read" and a false NOT RUNNING.
             const owner =
                 params.repository.fullName?.split('/')[0] ||
-                (await this.getCorrectOwner(githubAuthDetail, octokit));
+                (await this.ownerFor(
+                    params.repository,
+                    githubAuthDetail,
+                    octokit,
+                ));
             const repo = params.repository.name;
             const isApp = githubAuthDetail.authMode === AuthMode.OAUTH;
 
@@ -8709,13 +8839,18 @@ This is an experimental feature that generates committable changes. Review the d
                     ));
 
                 if (repositories) {
-                    // Usar método centralizado para determinar o owner correto
-                    const owner = await this.getCorrectOwner(
+                    // Records of the selection (saved or being removed): the
+                    // hook lives under each repository's own owner.
+                    const fallbackOwner = await this.getCorrectOwner(
                         authDetails,
                         octokit,
                     );
 
                     for (const repo of repositories) {
+                        const owner =
+                            GithubService.recordedOwnerOf(repo) ||
+                            this.trustedOwnerOf(repo, authDetails) ||
+                            fallbackOwner;
                         try {
                             const { data: webhooks } =
                                 await octokit.repos.listWebhooks({
@@ -8807,7 +8942,11 @@ This is an experimental feature that generates committable changes. Review the d
                 return [];
             }
 
-            const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
+            const owner = await this.ownerFor(
+                repository,
+                githubAuthDetail,
+                octokit,
+            );
 
             // Get repository info to find the default branch
             const repoResponse = await octokit.rest.repos.get({
@@ -9002,7 +9141,11 @@ This is an experimental feature that generates committable changes. Review the d
             );
             if (!repository) return [];
 
-            const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
+            const owner = await this.ownerFor(
+                repository,
+                githubAuthDetail,
+                octokit,
+            );
 
             const repoResponse = await octokit.rest.repos.get({
                 owner,
