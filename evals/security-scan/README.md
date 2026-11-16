@@ -35,11 +35,19 @@ is recorded in `adjudications.json`. New judgments must record the source
 result's hash, judge and date in `_metadata`. Scores before this migration
 are not comparable to scores after it without rescoring the original output.
 
-`--set=negative` scans the three pinned library controls in `clean-controls.json`
+`--set=negative` scans the pinned candidate library controls in `clean-controls.json`
 with the same engine and limits. `--gate` fails if a control reports a finding;
 inspect that finding against its pinned source before labelling it false.
 Runs record the engine commit, dirty state, dataset hashes, served model and
 measurement time. `--rescore` keeps the original measurement provenance.
+
+The UUID candidate contains a confirmed uniqueness defect, so its original
+expected-zero diagnostic is retained but cannot certify a clean negative.
+The preregistered supplemental case is xxhash. A valid-negative check selects
+`--cases=is-control,itsdangerous-control,xxhash-control`; UUID must still be
+measured and its real/false reports retained separately, including in any
+aggregate precision report. Inspect every finding before assuming a control
+is clean; adding this case does not replace any historical measurement.
 
 `--set=all --cases=<ids>` puts vulnerable cases and clean controls in one
 bounded queue (default two repositories at a time); avoid parallel runner

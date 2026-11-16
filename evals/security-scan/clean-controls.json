@@ -24,6 +24,14 @@
             "commit": "e9c026c611c1160eaad50da00be4e676b626018f",
             "advisories": [],
             "expectedFindings": 0
+        },
+        {
+            "id": "xxhash-control",
+            "repo": "cespare/xxhash",
+            "language": "go",
+            "commit": "998dce232f17418a7a5721ecf87ca714025a3243",
+            "advisories": [],
+            "expectedFindings": 0
         }
     ]
 }
