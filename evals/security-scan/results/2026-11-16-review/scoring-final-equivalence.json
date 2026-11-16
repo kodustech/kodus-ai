@@ -1,0 +1,63 @@
+{
+  "kind": "scoring-equivalence",
+  "before": "baseline.scored.json",
+  "afterSource": "scoring.js after early unjudged guard and behavior-level regression assertions",
+  "unchanged": {
+    "metric": true,
+    "precision": true,
+    "byLanguage": true,
+    "byClass": true
+  },
+  "beforeScoring": {
+    "version": 4,
+    "matcherSha256": "983c861cfcf927f39ce1544650f5d197cbdf410b5d7df4a11f2b5a453c1c68d7",
+    "adjudicationsSha256": "3b8cfda2a2427c30dcad55a4afa138964a2cbfd28c39aef881e4beb9ba4dcb33"
+  },
+  "afterScoring": {
+    "version": 4,
+    "matcherSha256": "d6bc9cabca5ae11af8178baf6673e2aa41fbb4b1dd8c812f20c0a655061094c0",
+    "adjudicationsSha256": "67dc6365d1ae8f564986f4e8f7696237da3574ec609e054644603205fe2e429d"
+  },
+  "byLanguage": {
+    "typescript": {
+      "recall": 0.4,
+      "hits": 2,
+      "total": 5,
+      "precision": {
+        "listed": 2,
+        "real": 14,
+        "falseCount": 6,
+        "unjudged": 44,
+        "judged": 22,
+        "value": 0.7272727272727273
+      }
+    },
+    "python": {
+      "recall": 0,
+      "hits": 0,
+      "total": 1,
+      "precision": {
+        "listed": 0,
+        "real": 8,
+        "falseCount": 13,
+        "unjudged": 52,
+        "judged": 21,
+        "value": 0.38095238095238093
+      }
+    },
+    "go": {
+      "recall": 1,
+      "hits": 1,
+      "total": 1,
+      "precision": {
+        "listed": 1,
+        "real": 11,
+        "falseCount": 9,
+        "unjudged": 29,
+        "judged": 21,
+        "value": 0.5714285714285714
+      }
+    }
+  },
+  "note": "No model calls. Baseline still fails Python and Go; unknown findings are unchanged."
+}

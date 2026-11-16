@@ -118,6 +118,22 @@ by a test-only transform, with the original lifecycle case still passing.
 `contracts/isolation.kody.json` records an executed, successful real E2B probe
 at the clean correction commit, with zero model calls and no raw output fields.
 
+The second Kody pass corrected the private reproduction test's call signature
+and made its namespace attempt explicit. Scorer tests now exercise actual
+cross-form judgment lookup and reject stale claim hashes; unjudged findings
+return before hashing. The observer's submittedResult field is already a
+boolean completion flag, computed by the production adapter, not model prose.
+`contracts/kody-second-round-final.log` records 107 Jest and 12 scorer tests
+passing against the final source hashes. The baseline metrics remain identical
+in `scoring-final-equivalence.json`; the failing quality floors are unchanged.
+
+`contracts/ci-backend-ca2.json` links the successful full backend CI run:
+1,391 suites, 20,203 tests and eight snapshots passed. The subsequent code
+changes affect tests and the eval-only early guard; application runtime source
+is unchanged. A rate-limit test that mixed wall time with an injected clock
+now gives both components the same controlled clock; its 30 tests pass.
+The clean-cache Mongo/Issues rerun also passes all 35 assertions.
+
 ## Contracts and scope
 
 `contracts/` contains the E2B isolation result, validation logs, graph probe,

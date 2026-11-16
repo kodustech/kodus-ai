@@ -56,6 +56,7 @@ function judgmentFor(caseId, finding, adjudications) {
     const key = findingKey(caseId, asFinding);
     const saved = adjudications._metadata?.judgments?.[key];
     const records = Array.isArray(saved) ? saved : saved ? [saved] : [];
+    if (records.length === 0) return undefined;
     const digest = judgmentDigest(finding);
     const record = records.find(r => r.findingSha256 === digest &&
         /^[a-f0-9]{64}$/.test(r.sourceResultSha256 ?? '') && r.judge && r.date);

@@ -2887,7 +2887,8 @@ describe('slice cancellation', () => {
         sandbox.run.mockImplementation(async (command: string, opts: any) => command.includes('unshare --net') ? {exitCode: 1, stdout: ''} : original(command, opts));
         const engine = new SecurityScanEngine() as any;
         const record = {path: 'test.repro.ts', content: '', command: 'npx jest test.repro.ts', executed: false};
-        await engine.runReproduction({sandbox}, 'typescript', record);
+        await engine.runReproduction({sandbox}, record);
+        expect(sandbox.run.mock.calls.some(([command]: any) => command.includes('unshare --net'))).toBe(true);
         expect(record.executed).toBe(false);
         expect(sandbox.run.mock.calls.some(([command]: any) => command.includes('npx jest'))).toBe(false);
     });

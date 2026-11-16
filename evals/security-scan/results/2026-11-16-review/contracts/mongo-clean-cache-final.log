@@ -1,0 +1,12 @@
+SOURCE_SHA256 libs/issues/infrastructure/adapters/repositories/issues.repository.ts 3c58c201bb76e9d4a392b677dc8c7b29bca63b244b444ae7f3bdb501747b9b1c
+PASS libs/issues/infrastructure/adapters/repositories/issues-scan-findings.repository.spec.ts
+(node:870332) [MONGOOSE] Warning: mongoose: the `new` option for `findOneAndUpdate()` and `findOneAndReplace()` is deprecated. Use `returnDocument: 'after'` instead.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:870332) [MONGOOSE] Warning: mongoose: the `new` option for `findOneAndUpdate()` and `findOneAndReplace()` is deprecated. Use `returnDocument: 'after'` instead.
+PASS test/integration/issues/security-scan-lifecycle.integration.spec.ts
+
+Test Suites: 2 passed, 2 total
+Tests:       35 passed, 35 total
+Snapshots:   0 total
+Time:        2.508 s
+Ran all test suites within paths "test/integration/issues/security-scan-lifecycle.integration.spec.ts", "libs/issues/infrastructure/adapters/repositories/issues-scan-findings.repository.spec.ts".

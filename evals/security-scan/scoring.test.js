@@ -44,14 +44,20 @@ test('different measured claims under the same key keep separate verdict history
     assert.equal(judgmentFor('repo', report, judgments), 'real');
     assert.equal(judgmentFor('repo', changed, judgments), 'false');
 });
-test('engine and saved-result forms have the same content digest', () => {
-    assert.equal(judgmentDigest({...finding, title: report.title, description: report.description}), judgmentDigest(report));
+test('a judgment recorded from the engine also applies when rescoring its saved result', () => {
+    const engineReport = {...finding, title: report.title, description: report.description};
+    const judgments = withRecords(record(engineReport));
+    assert.equal(judgmentFor('repo', engineReport, judgments), 'real');
+    assert.equal(judgmentFor('repo', report, judgments), 'real');
 });
 test('missing source provenance cannot certify a finding', () => {
     const bad = {...record(report), sourceResultSha256: ''};
     assert.equal(judgmentFor('repo', report, withRecords(bad)), undefined);
     assert.equal(judgmentFor('repo', report, withRecords({...record(report), judge: ''})), undefined);
 });
-test('rescoring metadata cannot change the content a judgment was about', () => {
-    assert.equal(judgmentDigest(report), judgmentDigest({...report, matched: false, verdict: 'false', key: 'display only'}));
+test('saved scoring labels cannot override a source judgment or certify a stale digest', () => {
+    const display = {...report, matched: false, verdict: 'real', key: 'display only'};
+    assert.equal(judgmentFor('repo', display, withRecords(record(report, 'false'))), 'false');
+    const engineReport = {...finding, title: report.title, description: report.description};
+    assert.equal(judgmentFor('repo', engineReport, withRecords({...record(engineReport), findingSha256: '0'.repeat(64)})), undefined);
 });
